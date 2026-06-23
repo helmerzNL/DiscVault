@@ -58,6 +58,11 @@ try:
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
+    from .next_metadata import _clean_scanned_title
+    from .next_metadata import _parse_import_country
+    from .next_metadata import _SCANNED_TITLE_NOISE_RE
+    from .next_metadata import normalize_list_field
+    from .next_metadata import ensure_remote_media_asset
     from .next_metadata import metadata_result_summary
     from .next_metadata import apply_metadata_proposal
     from .next_metadata import preview_movie_metadata
@@ -233,6 +238,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
+    from next_metadata import _clean_scanned_title
+    from next_metadata import _parse_import_country
+    from next_metadata import _SCANNED_TITLE_NOISE_RE
+    from next_metadata import normalize_list_field
+    from next_metadata import ensure_remote_media_asset
     from next_metadata import metadata_result_summary
     from next_metadata import apply_metadata_proposal
     from next_metadata import preview_movie_metadata
@@ -1780,6 +1790,11 @@ def selected_import_movie_candidate_from_body(body: dict[str, Any]) -> dict[str,
             candidate.get("detail_url"),
         ),
         "title": title,
+        "releaseTitle": first_value(
+            candidate.get("releaseTitle"),
+            candidate.get("release_title"),
+            movie_updates.get("release_title"),
+        ),
         "year": first_value(
             candidate.get("year"),
             candidate.get("releaseYear"),
@@ -1839,7 +1854,27 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
     provider = clean_text(candidate.get("provider")) or "selected_import_candidate"
     source_label = clean_text(candidate.get("sourceLabel")) or provider
     source_ref = clean_text(candidate.get("sourceRef"))
-    movie_updates: dict[str, Any] = {"title": clean_text(candidate.get("title"))}
+
+    # Split the clean film title from the raw scanned/packaging title so the saved
+    # Title field holds only the movie title while the full packaging string
+    # (e.g. "John Wick (4K Ultra HD + Blu-ray) (UK Import)") is preserved as the
+    # release title. This mirrors canonicalize_plugin_result, so a candidate
+    # selected during a barcode scan honours the same contract no matter which
+    # metadata source (or plugin order) produced it.
+    raw_candidate_title = clean_text(candidate.get("title"))
+    raw_release_title = clean_text(candidate.get("releaseTitle") or candidate.get("release_title"))
+    if not raw_release_title and raw_candidate_title and _SCANNED_TITLE_NOISE_RE.search(raw_candidate_title):
+        raw_release_title = raw_candidate_title
+    clean_title = _clean_scanned_title(raw_release_title) if raw_release_title else raw_candidate_title
+    movie_updates: dict[str, Any] = {"title": clean_title or raw_candidate_title}
+    technical_updates: dict[str, Any] = {}
+    if raw_release_title:
+        movie_updates["release_title"] = raw_release_title
+        import_country, import_region = _parse_import_country(raw_release_title)
+        if import_country:
+            movie_updates.setdefault("country", import_country)
+        if import_region:
+            technical_updates["regions"] = normalize_list_field("regions", import_region)
     if clean_text(candidate.get("year")):
         movie_updates["year"] = clean_text(candidate.get("year"))
     if clean_text(candidate.get("format")):
@@ -1899,6 +1934,18 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
                 "sourceRef": source_ref,
             }
         )
+    for field in technical_updates:
+        provenance.append(
+            {
+                "field": field,
+                "target": "technical",
+                "pluginId": provider,
+                "entrypoint": "selected_import_candidate",
+                "reason": "selected import match",
+                "sourceLabel": source_label,
+                "sourceRef": source_ref,
+            }
+        )
     for field in media_updates:
         provenance.append(
             {
@@ -1915,7 +1962,7 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
     return {
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
-        "technicalUpdates": {},
+        "technicalUpdates": technical_updates,
         "mediaUpdates": media_updates,
         "identifiers": candidate.get("identifiers") if isinstance(candidate.get("identifiers"), dict) else {},
         "provenance": provenance,
@@ -9810,6 +9857,101 @@ def ui_preview_html(
     .detail-card.full {
       grid-column: 1 / -1;
     }
+    .person-media-gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    .person-media-tile {
+      position: relative;
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .person-media-tile.is-primary {
+      border-color: var(--accent, #6ea8fe);
+      box-shadow: 0 0 0 2px var(--accent, #6ea8fe);
+    }
+    .person-media-tile img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      object-fit: cover;
+    }
+    .person-media-badge {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: .72rem;
+      background: var(--accent, #6ea8fe);
+      color: #08111f;
+    }
+    .person-media-set-primary {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      right: 6px;
+      font-size: .74rem;
+    }
+    .person-awards {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .person-award-group {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: var(--bg);
+    }
+    .person-award-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .person-award-summary {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .person-award-items {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .person-award-items li {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      font-size: .86rem;
+    }
+    .person-award-result {
+      flex: 0 0 auto;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .person-award-result.won {
+      background: rgba(120, 200, 120, 0.18);
+      color: #57c777;
+    }
+    .person-award-result.nominated {
+      background: rgba(160, 170, 190, 0.18);
+      color: var(--muted);
+    }
+    .person-award-detail {
+      color: var(--text);
+    }
     .detail-card h3 {
       margin: 0 0 12px;
       font-size: 1rem;
@@ -14282,6 +14424,10 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.originalTitle">Original title</span>
                       <input id="movieEditOriginalTitle" name="original_title" maxlength="300" autocomplete="off">
                     </label>
+                    <label for="movieEditReleaseTitle">
+                      <span data-next-i18n="movieDetail.releaseTitle">Release title</span>
+                      <input id="movieEditReleaseTitle" name="release_title" maxlength="300" autocomplete="off">
+                    </label>
                     <label for="movieEditSortTitle">
                       <span data-next-i18n="movieDetail.fieldSortTitle">Sort title</span>
                       <input id="movieEditSortTitle" name="sort_title" maxlength="300" autocomplete="off">
@@ -14715,6 +14861,14 @@ def ui_preview_html(
           <div class="detail-card">
             <h3 data-next-i18n="personDetail.identifiers">Identifiers</h3>
             <div class="detail-grid" id="personDetailIdentifiers"></div>
+          </div>
+          <div class="detail-card full hidden" id="personDetailMediaCard">
+            <h3 data-next-i18n="personDetail.media">Profile images</h3>
+            <div class="person-media-gallery" id="personDetailMedia"></div>
+          </div>
+          <div class="detail-card full hidden" id="personDetailAwardsCard">
+            <h3 data-next-i18n="personDetail.awards">Awards</h3>
+            <div class="person-awards" id="personDetailAwards"></div>
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
@@ -19246,7 +19400,15 @@ def ui_preview_html(
         appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
         if (input) input.value = "";
         renderAppAdminPlugins();
-        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginImported", "Plugin imported."), "good");
+        const importedPlugin = (payload && payload.plugin) || null;
+        const importedEnabled = !importedPlugin || importedPlugin.enabled !== false;
+        setAppAdminMessage(
+          "appAdminPluginsMessage",
+          importedEnabled
+            ? tNext("appAdmin.pluginImportedEnabled", "Plugin imported and enabled.")
+            : tNext("appAdmin.pluginImported", "Plugin imported."),
+          "good"
+        );
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -21945,6 +22107,7 @@ def ui_preview_html(
       const rows = [
         [tNext("movieDetail.title", "Title"), movie.title || metadata.title, metadata.title_source || metadata.source || "collection"],
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title || metadata.original_title || metadata.originalTitle, metadata.original_title_source || metadata.source || "collection"],
+        [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title || metadata.release_title || metadata.releaseTitle, metadata.release_title_source || metadata.source || "collection"],
         [tNext("movieDetail.fieldOverview", "Overview"), movie.overview || metadata.overview, metadata.overview_source || metadata.source || "collection"],
         [tNext("movieDetail.rating", "Rating"), movie.rating || metadata.rating, metadata.rating_source || metadata.source || "collection"],
         [tNext("movieDetail.technical", "Technical"), [technical.hdr, (technical.audio_tracks || []).slice(0, 2).join(", "), (technical.subtitles || []).slice(0, 2).join(", ")].filter(Boolean).join(" / "), technical.provider || metadata.technical_source || "metadata"]
@@ -22418,6 +22581,7 @@ def ui_preview_html(
       const fields = {
         movieEditTitle: movie.title || "",
         movieEditOriginalTitle: movie.original_title || "",
+        movieEditReleaseTitle: movie.release_title || "",
         movieEditSortTitle: movie.sort_title || "",
         movieEditYear: movie.year || "",
         movieEditBarcode: movie.barcode || "",
@@ -22624,6 +22788,7 @@ def ui_preview_html(
       const releasePackaging = specs.packaging || metadata.packaging || movie.edition_type || movie.edition;
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
+        [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title],
         [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
         [tNext("movieDetail.format", "Format"), movie.format],
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
@@ -23160,6 +23325,144 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `detail-message ${tone || ""}`.trim();
     }
+    function isIsoDateValue(value) {
+      return /^\\d{4}-\\d{2}-\\d{2}$/.test(String(value || "").slice(0, 10));
+    }
+    function formatPersonLongDate(value) {
+      if (!value) return "";
+      const text = String(value).slice(0, 10);
+      if (!isIsoDateValue(text)) return text;
+      try {
+        return new Intl.DateTimeFormat(localeState.locale || "en-US", {day: "numeric", month: "long", year: "numeric"}).format(new Date(`${text}T12:00:00`));
+      } catch (error) {
+        return text;
+      }
+    }
+    function personAgeYears(birthday, deathday) {
+      const birthText = String(birthday || "").slice(0, 10);
+      if (!isIsoDateValue(birthText)) return null;
+      const birth = new Date(`${birthText}T12:00:00`);
+      if (Number.isNaN(birth.getTime())) return null;
+      const deathText = String(deathday || "").slice(0, 10);
+      const end = isIsoDateValue(deathText) ? new Date(`${deathText}T12:00:00`) : new Date();
+      if (Number.isNaN(end.getTime())) return null;
+      let age = end.getFullYear() - birth.getFullYear();
+      const monthDiff = end.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && end.getDate() < birth.getDate())) age -= 1;
+      return age >= 0 && age < 200 ? age : null;
+    }
+    function personKnownForLabel(value) {
+      const key = String(value || "").trim();
+      if (!key) return "";
+      return tNext(`personDetail.department.${key.toLowerCase()}`, key);
+    }
+    function personBirthdayDisplay(detail, person) {
+      const birthday = detail.birthday || person.birth_date || "";
+      if (!birthday) return "";
+      const formatted = formatPersonLongDate(birthday);
+      const age = personAgeYears(birthday, detail.deathday || person.death_date);
+      if (age === null) return formatted;
+      const deceased = !!(detail.deathday || person.death_date);
+      const label = deceased
+        ? tNext("personDetail.ageAtDeath", "age at death {age}").replace("{age}", String(age))
+        : tNext("personDetail.ageYears", "{age} years").replace("{age}", String(age));
+      return `${formatted} (${label})`;
+    }
+    function personAlsoKnownAs(detail, metadata) {
+      const direct = Array.isArray(detail.alsoKnownAs) ? detail.alsoKnownAs : null;
+      const source = (direct && direct.length) ? direct : (metadata.alsoKnownAs || metadata.also_known_as || []);
+      return (Array.isArray(source) ? source : []).map((value) => String(value || "").trim()).filter(Boolean);
+    }
+    function personMentions(detail, counts) {
+      const numeric = (value) => {
+        const num = Number(value);
+        return Number.isFinite(num) && num >= 0 ? num : null;
+      };
+      let inVault = numeric(detail.mentionsInVault);
+      let total = numeric(detail.mentionsTotal);
+      if (inVault === null) inVault = (Number(counts.collection) || 0) + (Number(counts.digital) || 0);
+      if (total === null) total = Number(counts.filmography) || 0;
+      return {inVault, total};
+    }
+    function personMediaItems(detail) {
+      if (Array.isArray(detail.media) && detail.media.length) {
+        return detail.media.filter((item) => item && item.url);
+      }
+      const raw = Array.isArray(detail.personMedia) ? detail.personMedia : [];
+      return raw
+        .map((asset) => ({
+          id: asset.id || "",
+          url: asset.url || asset.source_url || "",
+          isPrimary: !!asset.is_primary,
+          sortOrder: asset.sort_order,
+          kind: asset.kind || "profile",
+          preview: !!asset.preview,
+        }))
+        .filter((item) => item.url);
+    }
+    function personMediaGalleryHtml(media, options = {}) {
+      if (!media.length) return "";
+      const canEdit = !!options.canEdit;
+      return media
+        .map((item) => {
+          const cls = item.isPrimary ? "person-media-tile is-primary" : "person-media-tile";
+          const badge = item.isPrimary
+            ? `<span class="person-media-badge">${escapeHtml(tNext("personDetail.primaryImage", "Primary"))}</span>`
+            : "";
+          const button = (canEdit && !item.isPrimary && item.id && !item.preview)
+            ? `<button type="button" class="secondary-button person-media-set-primary" data-person-media-primary="${escapeHtml(item.id)}">${escapeHtml(tNext("personDetail.setPrimaryImage", "Set as primary"))}</button>`
+            : "";
+          return `<figure class="${cls}"><img src="${escapeHtml(usableImage(item.url) || item.url)}" alt="" loading="lazy">${badge}${button}</figure>`;
+        })
+        .join("");
+    }
+    function personAwardGroupsList(detail) {
+      const groups = Array.isArray(detail.awardGroups) ? detail.awardGroups : [];
+      if (groups.length) return groups;
+      const metadata = (detail.person || {}).metadata || {};
+      return Array.isArray(metadata.awardGroups) ? metadata.awardGroups : [];
+    }
+    function personAwardsHtml(groups) {
+      if (!groups.length) return "";
+      return groups
+        .map((group) => {
+          const items = (Array.isArray(group.items) ? group.items.slice() : [])
+            .sort((a, b) => (Number(b.year) || 0) - (Number(a.year) || 0));
+          const wins = Number(group.wins) || 0;
+          const nominations = Number(group.nominations) || 0;
+          const summary = [];
+          if (wins) summary.push(`${wins} ${tNext("personDetail.awardWins", "wins")}`);
+          if (nominations) summary.push(`${nominations} ${tNext("personDetail.awardNominations", "nominations")}`);
+          const rows = items
+            .map((item) => {
+              const won = String(item.result || "") === "won";
+              const resultClass = won ? "person-award-result won" : "person-award-result nominated";
+              const resultLabel = won ? tNext("personDetail.awardWon", "Won") : tNext("personDetail.awardNominated", "Nominated");
+              const detailParts = [item.year ? String(item.year) : "", item.category || "", item.work || ""].filter(Boolean).map((part) => escapeHtml(part));
+              return `<li><span class="${resultClass}">${escapeHtml(resultLabel)}</span><span class="person-award-detail">${detailParts.join(" — ")}</span></li>`;
+            })
+            .join("");
+          return `<div class="person-award-group"><div class="person-award-head"><strong>${escapeHtml(group.award || "")}</strong><span class="person-award-summary">${escapeHtml(summary.join(" · "))}</span></div><ul class="person-award-items">${rows}</ul></div>`;
+        })
+        .join("");
+    }
+    async function setPrimaryPersonMedia(mediaId) {
+      if (!activePersonId || !mediaId) return;
+      setPersonDetailMessage(tNext("personDetail.updatingPrimaryImage", "Updating primary image..."), "info");
+      try {
+        await authApiJson(`/api/next/people/${encodeURIComponent(activePersonId)}/media/primary`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({mediaId})
+        });
+        const payload = await authApiJson(`/api/next/people/${encodeURIComponent(activePersonId)}`);
+        renderPersonDetail(payload.detail || {});
+        setPersonDetailMessage(tNext("personDetail.primaryImageUpdated", "Primary image updated."), "good");
+        peopleState.loaded = false;
+      } catch (error) {
+        setPersonDetailMessage(error.message || String(error), "bad");
+      }
+    }
     function renderPersonDetail(detail) {
       activePersonPayload = detail;
       const person = detail.person || {};
@@ -23183,23 +23486,43 @@ def ui_preview_html(
       }
       document.getElementById("personDetailTitle").textContent = name;
       document.getElementById("personDetailBiography").textContent = person.biography || tNext("personDetail.noBiography", "No biography imported yet.");
+      const knownForValue = person.known_for || metadata.knownFor || metadata.known_for || "";
+      const knownForLabel = personKnownForLabel(knownForValue);
+      const birthdayDisplay = personBirthdayDisplay(detail, person);
+      const deathdayDisplay = formatPersonLongDate(detail.deathday || person.death_date);
+      const alsoKnownAs = personAlsoKnownAs(detail, metadata);
+      const mentions = personMentions(detail, counts);
+      const mentionsText = `${mentions.inVault} / ${mentions.total}`;
+      const mentionsCaption = `${tNext("personDetail.mentionsInVault", "in collection")} / ${tNext("personDetail.mentionsTotal", "total")}`;
+      const hasMentions = (mentions.inVault > 0 || mentions.total > 0);
       document.getElementById("personDetailTags").innerHTML = detailTagHtml([
-        person.known_for,
-        person.birth_date,
-        person.death_date ? `${tNext("personDetail.died", "Died")} ${person.death_date}` : "",
-        (counts.collection || collectionCredits.length) ? `${counts.collection || collectionCredits.length} ${tNext("personDetail.credits", "credits")}` : "",
+        knownForLabel,
+        birthdayDisplay,
+        deathdayDisplay ? `${tNext("personDetail.died", "Died")} ${deathdayDisplay}` : "",
+        hasMentions ? `${mentionsText} ${tNext("personDetail.mentions", "mentions")}` : "",
         extendedPeople && digitalCredits.length ? `${digitalCredits.length} ${tNext("personDetail.digitalCollection", "Digital").toLowerCase()}` : "",
         extendedPeople && filmography.length ? `${filmography.length} ${tNext("personDetail.filmography", "Filmography").toLowerCase()}` : "",
         appDebugMode && person.id ? `Person ID ${person.id}` : ""
       ]);
       document.getElementById("personDetailFields").innerHTML = detailFieldRows([
-        [tNext("personDetail.knownFor", "Known for"), person.known_for],
-        [tNext("personDetail.birthDate", "Birth date"), person.birth_date],
-        [tNext("personDetail.deathDate", "Death date"), person.death_date],
+        [tNext("personDetail.knownFor", "Known for"), knownForLabel],
+        [tNext("personDetail.birthDate", "Birth date"), birthdayDisplay],
+        [tNext("personDetail.deathDate", "Death date"), deathdayDisplay],
         [tNext("personDetail.placeOfBirth", "Place of birth"), person.place_of_birth],
+        [tNext("personDetail.alsoKnownAs", "Also known as"), alsoKnownAs.join(", ")],
+        [tNext("personDetail.mentions", "Mentions"), hasMentions ? `${mentionsText} (${mentionsCaption})` : ""],
         [tNext("personDetail.publicId", "Public ID"), person.public_id],
         [appDebugMode ? tNext("personDetail.metadataProvenance", "Metadata provenance") : "", appDebugMode ? [metadata.person_metadata_source, metadata.person_metadata_source_ref, metadata.filmography_source_ref].filter(Boolean).join(" / ") : ""]
       ]);
+      const personMedia = personMediaItems(detail);
+      const canEditPersonMedia = hasPermission("metadata.refresh_one");
+      const mediaNode = document.getElementById("personDetailMedia");
+      if (mediaNode) mediaNode.innerHTML = personMediaGalleryHtml(personMedia, {canEdit: canEditPersonMedia});
+      document.getElementById("personDetailMediaCard")?.classList.toggle("hidden", personMedia.length === 0);
+      const awardGroups = personAwardGroupsList(detail);
+      const awardsNode = document.getElementById("personDetailAwards");
+      if (awardsNode) awardsNode.innerHTML = personAwardsHtml(awardGroups);
+      document.getElementById("personDetailAwardsCard")?.classList.toggle("hidden", awardGroups.length === 0);
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
         `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
         item.identifier
@@ -25634,6 +25957,60 @@ def ui_preview_html(
           ];
       return values.map((value) => usableImage(value)).find(Boolean) || "";
     }
+    const SCAN_TITLE_NOISE_RE = /blu[- ]?ray|ultra\\s*hd|\\buhd\\b|\\b4k\\b|\\bdvd\\b|\\b3d\\b|\\bvhs\\b|\\bhddvd\\b|hd[- ]?dvd|steel\\s*book|steelbook|limited\\s+edition|collector|special\\s+edition|digibook|mediabook|slipcover|slipcase|box\\s*set|boxset|gift\\s*set|\\bimport\\b|region[\\s-]*(?:free|locked|[abc]|[0-9])|\\bpal\\b|\\bntsc\\b|remaster|anniversary\\s+edition|uncut|extended\\s+edition|\\bocard\\b|o[- ]card|amaray|digipack|digipak/i;
+    const SCAN_REGION_META_WORDS = new Set(["uk","u.k.","british","england","us","u.s.","usa","american","italian","italy","german","germany","french","france","japanese","japan","spanish","spain","dutch","netherlands","belgian","belgium","korean","korea","swedish","sweden","danish","denmark","norwegian","norway","finnish","finland","australian","australia","canadian","canada","nordic","scandinavian","european","austrian","austria","polish","poland","portuguese","portugal","russian","russia","chinese","china","united","states","kingdom","great","britain","import","region","free","locked","a","b","c"]);
+    function scanGroupIsRegionMeta(inner) {
+      const tokens = String(inner || "").toLowerCase().match(/[a-z.]+/g);
+      if (!tokens || !tokens.length) return false;
+      return tokens.every((t) => SCAN_REGION_META_WORDS.has(t));
+    }
+    function cleanScannedTitle(rawTitle) {
+      let title = String(rawTitle || "").trim();
+      if (!title) return "";
+      const stripGroups = (text, groupRe) => {
+        let prev = null;
+        while (prev !== text) {
+          prev = text;
+          text = text.replace(groupRe, (m) => (SCAN_TITLE_NOISE_RE.test(m) ? " " : m));
+        }
+        return text;
+      };
+      const stripTrailingMetaGroups = (text) => {
+        const groupRe = /\\s*[([{]([^()[\\]{}]*)[)\\]}]\\s*$/;
+        let prev = null;
+        while (prev !== text) {
+          prev = text;
+          const m = text.match(groupRe);
+          if (!m) break;
+          if (SCAN_TITLE_NOISE_RE.test(m[1]) || scanGroupIsRegionMeta(m[1])) {
+            text = text.slice(0, m.index).replace(/\\s+$/, "");
+          } else {
+            break;
+          }
+        }
+        return text;
+      };
+      const tail = new RegExp(" [-|/] *[^-|/]*(?:" + SCAN_TITLE_NOISE_RE.source + ")[^-|/]*$", "i");
+      const bare = new RegExp("[ ,;:/+&-]+(?:" + SCAN_TITLE_NOISE_RE.source + ") *$", "i");
+      let cleaned = title;
+      let prevOuter = null;
+      while (prevOuter !== cleaned) {
+        prevOuter = cleaned;
+        cleaned = stripGroups(cleaned, /\\(([^()]*)\\)/g);
+        cleaned = stripGroups(cleaned, /\\[([^\\[\\]]*)\\]/g);
+        cleaned = stripGroups(cleaned, /\\{([^{}]*)\\}/g);
+        cleaned = stripTrailingMetaGroups(cleaned);
+        cleaned = cleaned.replace(tail, " ");
+        let barePrev = null;
+        while (barePrev !== cleaned) {
+          barePrev = cleaned;
+          cleaned = cleaned.replace(bare, "").replace(/\\s+$/, "");
+        }
+        cleaned = cleaned.trim();
+      }
+      cleaned = cleaned.replace(/\\s{2,}/g, " ").replace(/^[\\s\\-_/|,;:+&]+|[\\s\\-_/|,;:+&]+$/g, "");
+      return cleaned || title;
+    }
     function normalizeLookupMovieCandidate(result, resultIndex, candidate, candidateIndex) {
       if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result))) return null;
       const movieUpdates = result?.movieUpdates && typeof result.movieUpdates === "object" ? result.movieUpdates : {};
@@ -25643,7 +26020,7 @@ def ui_preview_html(
       const rawIdentifiers = candidate.identifiers && typeof candidate.identifiers === "object"
         ? candidate.identifiers
         : (result?.identifiers && typeof result.identifiers === "object" ? result.identifiers : {});
-      const title = String(
+      const rawTitle = String(
         candidate.title
         || candidate.originalTitle
         || candidate.original_title
@@ -25654,7 +26031,16 @@ def ui_preview_html(
         || movieUpdates.original_title
         || ""
       ).trim();
-      if (!title) return null;
+      if (!rawTitle) return null;
+      const explicitReleaseTitle = String(
+        candidate.releaseTitle
+        || candidate.release_title
+        || movieUpdates.release_title
+        || ""
+      ).trim();
+      const rawReleaseTitle = explicitReleaseTitle || (SCAN_TITLE_NOISE_RE.test(rawTitle) ? rawTitle : "");
+      const title = (rawReleaseTitle ? cleanScannedTitle(rawReleaseTitle) : rawTitle) || rawTitle;
+      const releaseTitle = rawReleaseTitle;
       const provider = String(candidate.provider || candidate.pluginId || candidate.providerId || result?.pluginId || result?.provider || result?.providerId || "").trim();
       const sourceLabel = pluginDisplayName(provider, String(candidate.sourceLabel || candidate.providerLabel || result?.sourceLabel || result?.providerLabel || provider || "").trim());
       const sourceRef = String(candidate.sourceRef || candidate.sourceUrl || candidate.source_url || candidate.detailUrl || candidate.detail_url || result?.sourceRef || result?.sourceUrl || result?.source_url || "").trim();
@@ -25686,6 +26072,7 @@ def ui_preview_html(
         sourceLabel,
         sourceRef,
         title,
+        releaseTitle,
         year,
         format,
         barcode,
@@ -27730,6 +28117,7 @@ def ui_preview_html(
       const body = {
         title,
         originalTitle: formTextValue("movieEditOriginalTitle"),
+        releaseTitle: formTextValue("movieEditReleaseTitle"),
         sortTitle: formTextValue("movieEditSortTitle"),
         year: formTextValue("movieEditYear"),
         barcode: formTextValue("movieEditBarcode"),
@@ -30590,6 +30978,12 @@ def ui_preview_html(
       });
       document.getElementById("personDetailBackButton")?.addEventListener("click", () => closeAppPersonDetail());
       document.getElementById("personDetailPage")?.addEventListener("click", (event) => {
+        const primaryButton = event.target.closest("[data-person-media-primary]");
+        if (primaryButton) {
+          event.preventDefault();
+          setPrimaryPersonMedia(primaryButton.dataset.personMediaPrimary);
+          return;
+        }
         const movieLink = event.target.closest("[data-open-movie]");
         if (!movieLink) return;
         event.preventDefault();
@@ -38805,6 +39199,7 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "title": payload.get("title"),
         "sort_title": payload.get("sortTitle") or payload.get("sort_title"),
         "original_title": payload.get("originalTitle") or payload.get("original_title"),
+        "release_title": payload.get("releaseTitle") or payload.get("release_title"),
         "year": payload.get("year"),
         "release_date": release_date,
         "format": payload.get("format"),
@@ -38827,6 +39222,7 @@ MOVIE_EDIT_FIELD_LIMITS = {
     "title": 300,
     "sort_title": 300,
     "original_title": 300,
+    "release_title": 300,
     "year": 40,
     "barcode": 160,
     "format": 80,
@@ -38978,6 +39374,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
         SET title=%s,
             sort_title=%s,
             original_title=%s,
+            release_title=%s,
             year=%s,
             barcode=%s,
             release_date=%s,
@@ -38997,6 +39394,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             payload["title"],
             payload["sort_title"],
             payload["original_title"],
+            payload["release_title"],
             payload["year"],
             payload["barcode"],
             payload["release_date"],
@@ -39061,6 +39459,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "title": title,
         "sort_title": pick_text("sort_title", "sortTitle"),
         "original_title": pick_text("original_title", "originalTitle"),
+        "release_title": pick_text("release_title", "releaseTitle"),
         "year": pick_text("year"),
         "barcode": pick_text("barcode"),
         "release_date": release_date,
@@ -39208,6 +39607,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 title,
                 sort_title,
                 original_title,
+                release_title,
                 year,
                 release_date,
                 format,
@@ -39695,6 +40095,8 @@ def personal_list_movie_snapshot(conn, movie_id: UUID) -> dict[str, Any]:
             "movie_title": movie.get("title"),
             "sort_title": movie.get("sort_title"),
             "original_title": movie.get("original_title"),
+            "release_title": movie.get("release_title"),
+            "releaseTitle": movie.get("release_title"),
             "year": movie.get("year"),
             "movie_year": movie.get("year"),
             "format": movie.get("format"),
@@ -40796,30 +41198,59 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
 
 
 
-def person_metadata_plugin(conn) -> dict[str, Any] | None:
+def person_metadata_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Person metadata sources in the shared provider priority order.
+
+    Mirrors ``metadata_source_plugins`` for movies/containers: installed
+    ``metadata_source`` plugins that expose a ``person_details`` entrypoint,
+    ordered by ``order_index`` so the highest-priority provider wins on conflicts.
+    """
     if not table_exists(conn, "plugins"):
-        return None
+        return []
     sync_metadata_plugin_registry(conn)
     registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugins: list[dict[str, Any]] = []
     for plugin in registry.get("plugins") or []:
-        runtime = plugin.get("runtime") or {}
-        entrypoints = runtime.get("entrypoints") or []
-        if plugin.get("id") == "tmdb" and "person_details" in entrypoints:
-            return plugin
-    return None
+        if not plugin.get("installed"):
+            continue
+        if not include_disabled and not plugin.get("enabled"):
+            continue
+        if "metadata_source" not in plugin_categories(plugin):
+            continue
+        if "person_details" not in plugin_runtime_entrypoints(plugin):
+            continue
+        plugins.append(plugin)
+    return plugins
+
+
+def person_filmography_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Filmography sources in the shared provider priority order."""
+    if not table_exists(conn, "plugins"):
+        return []
+    sync_metadata_plugin_registry(conn)
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugins: list[dict[str, Any]] = []
+    for plugin in registry.get("plugins") or []:
+        if not plugin.get("installed"):
+            continue
+        if not include_disabled and not plugin.get("enabled"):
+            continue
+        if "metadata_source" not in plugin_categories(plugin):
+            continue
+        if "person_filmography" not in plugin_runtime_entrypoints(plugin):
+            continue
+        plugins.append(plugin)
+    return plugins
+
+
+def person_metadata_plugin(conn) -> dict[str, Any] | None:
+    candidates = person_metadata_source_plugins(conn, include_disabled=True)
+    return candidates[0] if candidates else None
 
 
 def person_filmography_plugin(conn) -> dict[str, Any] | None:
-    if not table_exists(conn, "plugins"):
-        return None
-    sync_metadata_plugin_registry(conn)
-    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-    for plugin in registry.get("plugins") or []:
-        runtime = plugin.get("runtime") or {}
-        entrypoints = runtime.get("entrypoints") or []
-        if plugin.get("id") == "tmdb" and "person_filmography" in entrypoints:
-            return plugin
-    return None
+    candidates = person_filmography_source_plugins(conn, include_disabled=True)
+    return candidates[0] if candidates else None
 
 
 
@@ -40894,6 +41325,237 @@ def refresh_movie_person_metadata_cascade(
     return summary
 
 
+def sanitize_profile_urls(values: Any, *, cap: int = 12) -> list[str]:
+    """Return public https profile URLs: trimmed, deduped (order-preserving), capped.
+
+    Only ``https://`` URLs are accepted (no http, local, relative or signed paths)
+    so MovieVault/clients receive distributable public assets. The cap mirrors the
+    TMDb plugin ``_profile_urls`` limit.
+    """
+    urls: list[str] = []
+    for raw in values or []:
+        value = clean_text(raw) or ""
+        if not value.startswith("https://"):
+            continue
+        if value not in urls:
+            urls.append(value)
+        if len(urls) >= cap:
+            break
+    return urls
+
+
+def sync_person_profile_media(
+    conn,
+    person_id: UUID,
+    profile_urls: list[Any] | None,
+    *,
+    provider_id: str = "tmdb",
+) -> dict[str, Any] | None:
+    """Persist a person's profile image URLs as remote media assets.
+
+    Each unique https URL is upserted into ``media_assets`` (kind ``profile``)
+    and linked via ``entity_media`` (entity_type ``person``, role ``profile``).
+    The first asset is marked primary and stored on ``people.profile_asset_id``
+    unless the person already has a primary profile selected (which is left
+    untouched so a manual selection is not overwritten).
+    """
+    if not table_exists(conn, "people") or not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
+        return None
+    urls = sanitize_profile_urls(profile_urls)
+    if not urls:
+        return None
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT profile_asset_id FROM people WHERE id=%s", (person_id,))
+        row = cur.fetchone()
+        existing_primary = (row.get("profile_asset_id") if isinstance(row, dict) else (row[0] if row else None)) if row else None
+
+    assign_primary = existing_primary is None
+    primary_media_id = existing_primary
+    linked: list[str] = []
+    for index, url in enumerate(urls):
+        media_id = ensure_remote_media_asset(conn, kind="profile", source_url=url, provider_id=provider_id)
+        if not media_id:
+            continue
+        make_primary = assign_primary and primary_media_id is None
+        if make_primary:
+            primary_media_id = media_id
+        with conn.cursor() as cur:
+            if make_primary:
+                cur.execute(
+                    """
+                    UPDATE entity_media em
+                    SET is_primary=false,
+                        sort_order=GREATEST(em.sort_order, 1)
+                    FROM media_assets ma
+                    WHERE ma.id = em.media_id
+                      AND em.entity_type='person'
+                      AND em.entity_id=%s
+                      AND ma.kind='profile'
+                      AND em.is_primary=true
+                      AND em.media_id<>%s
+                    """,
+                    (person_id, media_id),
+                )
+            cur.execute(
+                """
+                INSERT INTO entity_media (
+                    entity_type,
+                    entity_id,
+                    media_id,
+                    role,
+                    is_primary,
+                    sort_order
+                )
+                VALUES ('person', %s, %s, 'profile', %s, %s)
+                ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                    is_primary=GREATEST(entity_media.is_primary::int, EXCLUDED.is_primary::int)::boolean,
+                    sort_order=LEAST(entity_media.sort_order, EXCLUDED.sort_order),
+                    deleted_at=NULL,
+                    deleted_by=NULL,
+                    purge_after=NULL,
+                    restore_metadata='{}'::jsonb
+                """,
+                (person_id, media_id, make_primary, 0 if make_primary else index + 1),
+            )
+        linked.append(str(media_id))
+
+    if assign_primary and primary_media_id is not None:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE people SET profile_asset_id=%s, updated_at=now() WHERE id=%s",
+                (primary_media_id, person_id),
+            )
+
+    return {
+        "primaryMediaId": str(primary_media_id) if primary_media_id else None,
+        "linked": linked,
+        "count": len(linked),
+    }
+
+
+def merge_person_awards(*award_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge award lists from multiple providers with the shared dedupe rules.
+
+    De-duplicates on ``(awardWikidataId or award, year, workWikidataId or work)``
+    and collapses a nomination into a win when both share that key. Earlier lists
+    take precedence on otherwise-identical (same-result) duplicates.
+    """
+    deduped: dict[tuple, dict[str, Any]] = {}
+    order: list[tuple] = []
+    for awards in award_lists:
+        for entry in awards or []:
+            if not isinstance(entry, dict):
+                continue
+            award = clean_text(entry.get("award"))
+            award_qid = clean_text(entry.get("awardWikidataId"))
+            if not award and not award_qid:
+                continue
+            work = clean_text(entry.get("work"))
+            work_qid = clean_text(entry.get("workWikidataId"))
+            year = entry.get("year")
+            result = clean_text(entry.get("result")).lower()
+            result = "won" if result == "won" else "nominated"
+            normalized = {
+                "award": award or award_qid,
+                "awardWikidataId": award_qid,
+                "category": clean_text(entry.get("category")),
+                "year": year,
+                "work": work,
+                "workWikidataId": work_qid,
+                "workTmdbId": entry.get("workTmdbId"),
+                "result": result,
+                "source": clean_text(entry.get("source")),
+                "sourceRef": clean_text(entry.get("sourceRef")),
+            }
+            key = (award_qid or award, year, work_qid or work)
+            existing = deduped.get(key)
+            if existing is None:
+                deduped[key] = normalized
+                order.append(key)
+            elif existing.get("result") == "nominated" and result == "won":
+                deduped[key] = normalized
+    return [deduped[key] for key in order]
+
+
+def group_person_awards(awards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group a flat award list by award name for display (mirrors wikidata_awards)."""
+    groups: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for award in awards or []:
+        key = clean_text(award.get("awardWikidataId")) or clean_text(award.get("award"))
+        if not key:
+            continue
+        if key not in groups:
+            groups[key] = {
+                "award": award.get("award") or "",
+                "awardWikidataId": award.get("awardWikidataId") or "",
+                "items": [],
+            }
+            order.append(key)
+        groups[key]["items"].append(award)
+    result = []
+    for key in order:
+        group = groups[key]
+        group["items"].sort(key=lambda item: -(item.get("year") or 0))
+        group["wins"] = sum(1 for item in group["items"] if item.get("result") == "won")
+        group["nominations"] = sum(1 for item in group["items"] if item.get("result") == "nominated")
+        result.append(group)
+    return result
+
+
+def person_receiver_contribution_payload(
+    *,
+    person_id: UUID | str,
+    person: dict[str, Any],
+    tmdb_id: str,
+    updates: dict[str, Any],
+    localizations: list[dict[str, Any]],
+    source_providers: list[str],
+) -> dict[str, Any]:
+    """Build a person contribution envelope mirroring the movie receiver payload."""
+    tmdb_text = str(tmdb_id) if tmdb_id else ""
+    public: dict[str, Any] = {
+        "name": updates.get("name") or clean_text(person.get("name")),
+        "tmdbId": tmdb_text,
+        "biography": updates.get("biography"),
+        "birthday": updates.get("birth_date"),
+        "deathday": updates.get("death_date"),
+        "placeOfBirth": updates.get("place_of_birth"),
+        "knownFor": updates.get("known_for"),
+        "profileUrl": updates.get("profile_url"),
+        "photoUrl": updates.get("profile_url"),
+    }
+    for localization in localizations or []:
+        lang = clean_text(localization.get("lang"))
+        biography = clean_text(localization.get("biography"))
+        if not lang or not biography:
+            continue
+        public[f"biography_{lang.lower()}"] = biography
+        short = lang.lower().split("-")[0]
+        if short:
+            public.setdefault(f"biography_{short}", biography)
+    public = {key: value for key, value in public.items() if value not in (None, "", [], {})}
+    identity = str(person.get("public_id") or person_id)
+    return {
+        "entityType": "person",
+        "identity": identity,
+        "sourceRef": identity,
+        "sourceReference": {
+            "type": "discvault_person",
+            "key": str(person_id),
+            "publicId": person.get("public_id"),
+            "tmdbId": tmdb_text,
+        },
+        "payload": public,
+        "metadata": {
+            "personId": str(person_id),
+            "sourceProviders": sorted({str(item) for item in (source_providers or []) if item}),
+            "tmdbId": tmdb_text,
+        },
+    }
+
+
 def refresh_person_metadata(
     conn,
     person_id: UUID,
@@ -40907,33 +41569,174 @@ def refresh_person_metadata(
     tmdb_id = detail.get("tmdbId") or ""
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
-    plugin = person_metadata_plugin(conn)
-    if not plugin:
+
+    candidates = person_metadata_source_plugins(conn, include_disabled=True)
+    if not candidates:
         raise NextApiError("No enabled person metadata plugin is available", 503)
-    if not plugin.get("enabled"):
-        raise NextApiError("TMDb plugin must be enabled before refreshing person metadata", 409)
-    config = plugin_config_from_db(conn, str(plugin["id"]))
-    if plugin_requires_config_for_entrypoint(plugin, config, "person_details"):
-        raise NextApiError("TMDb plugin configuration is incomplete", 409)
+    enabled_candidates = [plugin for plugin in candidates if plugin.get("enabled")]
+    if not enabled_candidates:
+        raise NextApiError("Person metadata plugin must be enabled before refreshing person metadata", 409)
+    top_config = plugin_config_from_db(conn, str(enabled_candidates[0]["id"]))
+    if plugin_requires_config_for_entrypoint(enabled_candidates[0], top_config, "person_details"):
+        raise NextApiError("Person metadata plugin configuration is incomplete", 409)
 
-    context = plugin_execution_context(conn, plugin, config, actor)
-    execution = run_plugin_entrypoint(str(plugin["id"]), "person_details", {"tmdbId": tmdb_id}, context)
-    result = execution.get("result") or {}
-    if execution.get("status") != "ok":
-        raise NextApiError(execution.get("error") or "Person metadata plugin execution failed", 422)
+    merged: dict[str, Any] = {}
+    localizations_by_lang: dict[str, dict[str, str]] = {}
+    source_providers: list[str] = []
+    merged_aliases: list[str] = []
+    merged_imdb = ""
+    merged_profiles: list[Any] = []
+    provider_source_awards: list[dict[str, Any]] = []
+    primary_plugin: dict[str, Any] | None = None
+    primary_execution: dict[str, Any] = {}
+    primary_result: dict[str, Any] = {}
+    primary_context: dict[str, Any] | None = None
+    primary_language = ""
+    last_error = ""
 
+    def _accept(key: str, value: Any) -> None:
+        if value in (None, "", [], {}):
+            return
+        if merged.get(key) in (None, "", [], {}):
+            merged[key] = value
+
+    for plugin in enabled_candidates:
+        config = plugin_config_from_db(conn, str(plugin["id"]))
+        if plugin_requires_config_for_entrypoint(plugin, config, "person_details"):
+            continue
+        context = plugin_execution_context(conn, plugin, config, actor)
+        execution = run_plugin_entrypoint(str(plugin["id"]), "person_details", {"tmdbId": tmdb_id}, context)
+        if execution.get("status") != "ok":
+            last_error = execution.get("error") or last_error
+            continue
+        result = execution.get("result") or {}
+        normalized = {
+            "name": clean_text(result.get("name")),
+            "birth_date": clean_text(result.get("birthday") or result.get("birthDate")),
+            "death_date": clean_text(result.get("deathday") or result.get("deathDate")),
+            "place_of_birth": clean_text(result.get("placeOfBirth") or result.get("place_of_birth")),
+            "known_for": clean_text(result.get("knownFor") or result.get("known_for")),
+            "biography": clean_text(result.get("biography")),
+            "profile_url": first_usable_image(
+                result.get("profileUrl"),
+                result.get("profile_url"),
+                result.get("photoUrl"),
+                result.get("photo_url"),
+            ),
+        }
+        provider_aliases = [
+            clean_text(a) for a in (result.get("alsoKnownAs") or result.get("also_known_as") or []) if clean_text(a)
+        ]
+        provider_imdb = clean_text(result.get("imdbId") or result.get("imdb_id"))
+        provider_profiles = list(result.get("profiles") or [])
+        provider_localizations = result.get("localizations") or []
+        provider_awards = [item for item in (result.get("awards") or []) if isinstance(item, dict)]
+        if not (
+            any(normalized.values())
+            or provider_aliases
+            or provider_imdb
+            or provider_profiles
+            or provider_localizations
+            or provider_awards
+        ):
+            continue
+        if primary_plugin is None:
+            primary_plugin = plugin
+            primary_execution = execution
+            primary_result = result
+            primary_context = context
+            primary_language = clean_text(result.get("language")) or "en-US"
+        if str(plugin["id"]) not in source_providers:
+            source_providers.append(str(plugin["id"]))
+        for key, value in normalized.items():
+            _accept(key, value)
+        if not merged_aliases and provider_aliases:
+            merged_aliases = provider_aliases
+        if not merged_imdb and provider_imdb:
+            merged_imdb = provider_imdb
+        if not merged_profiles and provider_profiles:
+            merged_profiles = provider_profiles
+        if provider_awards:
+            provider_source_awards.extend(provider_awards)
+        provider_language = clean_text(result.get("language")) or primary_language or "en-US"
+        for localization in provider_localizations:
+            lang = clean_text(localization.get("lang"))
+            biography = clean_text(localization.get("biography"))
+            if not lang or not biography:
+                continue
+            localizations_by_lang.setdefault(lang.lower(), {"lang": lang, "biography": biography})
+        if normalized["biography"]:
+            localizations_by_lang.setdefault(
+                provider_language.lower(),
+                {"lang": provider_language, "biography": normalized["biography"]},
+            )
+
+    if primary_plugin is None:
+        raise NextApiError(last_error or "Person metadata plugin returned no usable data", 422)
+
+    language = primary_language or "en-US"
     updates = {
-        "name": clean_text(result.get("name")),
-        "birth_date": clean_text(result.get("birthday") or result.get("birthDate")),
-        "death_date": clean_text(result.get("deathday") or result.get("deathDate")),
-        "place_of_birth": clean_text(result.get("placeOfBirth") or result.get("place_of_birth")),
-        "known_for": clean_text(result.get("knownFor") or result.get("known_for")),
-        "biography": clean_text(result.get("biography")),
-        "profile_url": first_usable_image(result.get("profileUrl"), result.get("profile_url"), result.get("photoUrl"), result.get("photo_url")),
-        "language": clean_text(result.get("language")) or "en-US",
-        "source": clean_text(result.get("provider")) or plugin.get("id"),
-        "source_ref": clean_text(result.get("sourceRef")) or f"tmdb:person:{tmdb_id}",
+        "name": merged.get("name") or "",
+        "birth_date": merged.get("birth_date") or "",
+        "death_date": merged.get("death_date") or "",
+        "place_of_birth": merged.get("place_of_birth") or "",
+        "known_for": merged.get("known_for") or "",
+        "biography": merged.get("biography") or "",
+        "profile_url": merged.get("profile_url") or "",
+        "language": language,
+        "source": clean_text(primary_result.get("provider")) or primary_plugin.get("id"),
+        "source_ref": clean_text(primary_result.get("sourceRef")) or f"tmdb:person:{tmdb_id}",
     }
+    if updates["biography"]:
+        localizations_by_lang.setdefault(language.lower(), {"lang": language, "biography": updates["biography"]})
+    localizations = list(localizations_by_lang.values())
+
+    aliases = merged_aliases[:50]
+    imdb_id = merged_imdb
+    profile_candidates = list(merged_profiles)
+    if updates["profile_url"]:
+        profile_candidates.insert(0, updates["profile_url"])
+    profile_urls = sanitize_profile_urls(profile_candidates)
+
+    # Awards run as an independent best-effort sub-step on the primary provider: a
+    # slow/flaky Wikidata provider must never fail the metadata mapping, and a
+    # transient empty/miss must not wipe awards that were previously stored.
+    awards_status = "skipped"
+    awards_state = None
+    awards_hit = False
+    awards: list[Any] = []
+    award_groups: list[Any] = []
+    awards_result: dict[str, Any] = {}
+    try:
+        awards_execution = run_plugin_entrypoint(
+            str(primary_plugin["id"]),
+            "person_awards",
+            {"tmdbId": tmdb_id, "imdbId": imdb_id},
+            primary_context,
+        )
+        awards_status = awards_execution.get("status")
+        awards_state = awards_execution.get("state")
+        if awards_execution.get("status") == "ok":
+            awards_result = awards_execution.get("result") or {}
+            awards = awards_result.get("awards") or []
+            award_groups = awards_result.get("awardGroups") or []
+            awards_hit = bool(awards)
+    except Exception:
+        current_app.logger.warning(
+            "Person awards lookup failed for %s; keeping existing awards", person_id, exc_info=True
+        )
+        awards_status = "error"
+
+    # Fold awards that arrived inline from metadata-source providers (e.g. MovieVault
+    # person_details) into the Wikidata substep output, de-duplicated with the shared
+    # won>nominated rules. Only engage the merge when a provider actually supplied
+    # awards so the single-source Wikidata behaviour stays byte-identical otherwise.
+    if provider_source_awards:
+        merged_awards = merge_person_awards(awards, provider_source_awards)
+        awards = merged_awards
+        award_groups = group_person_awards(merged_awards)
+        awards_hit = bool(merged_awards)
+
     preview_detail = json_ready(detail)
     preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
     preview_metadata = preview_person.get("metadata") if isinstance(preview_person.get("metadata"), dict) else {}
@@ -40947,12 +41750,32 @@ def refresh_person_metadata(
     if updates["biography"]:
         preview_person["biography"] = updates["biography"]
         preview_metadata["biography"] = updates["biography"]
+    if aliases:
+        preview_metadata["alsoKnownAs"] = aliases
+    if imdb_id:
+        preview_metadata["imdbId"] = imdb_id
+    if profile_urls:
+        preview_metadata["profiles"] = profile_urls
+    if awards_hit:
+        preview_metadata["awards"] = awards
+        preview_metadata["awardGroups"] = award_groups
+        preview_metadata["awards_source"] = (
+            clean_text(awards_result.get("provider"))
+            or clean_text((awards[0] if awards else {}).get("source"))
+            or "wikidata"
+        )
+        preview_metadata["awards_source_ref"] = clean_text(awards_result.get("sourceRef"))
+        preview_metadata["awards_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     preview_metadata["person_metadata_source"] = updates["source"]
     preview_metadata["person_metadata_source_ref"] = updates["source_ref"]
+    preview_metadata["person_metadata_sources"] = sorted({str(item) for item in source_providers if item})
     preview_metadata["person_metadata_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     preview_person["metadata"] = preview_metadata
     preview_detail["person"] = preview_person
+    if localizations:
+        preview_detail["localizations"] = [dict(item) for item in localizations]
 
+    receiver_summary: dict[str, Any] | None = None
     if not dry_run:
         with conn.cursor() as cur:
             cur.execute(
@@ -40978,33 +41801,101 @@ def refresh_person_metadata(
                     person_id,
                 ),
             )
-            if updates["biography"] and table_exists(conn, "person_localizations"):
-                cur.execute(
-                    """
-                    INSERT INTO person_localizations (person_id, lang, biography, updated_at)
-                    VALUES (%s, %s, %s, now())
-                    ON CONFLICT (person_id, lang) DO UPDATE
-                    SET biography=EXCLUDED.biography, updated_at=now()
-                    """,
-                    (person_id, updates["language"], updates["biography"]),
-                )
+            if localizations and table_exists(conn, "person_localizations"):
+                for localization in localizations:
+                    lang = clean_text(localization.get("lang"))
+                    biography = clean_text(localization.get("biography"))
+                    if not lang or not biography:
+                        continue
+                    cur.execute(
+                        """
+                        INSERT INTO person_localizations (person_id, lang, biography, updated_at)
+                        VALUES (%s, %s, %s, now())
+                        ON CONFLICT (person_id, lang) DO UPDATE
+                        SET biography=EXCLUDED.biography, updated_at=now()
+                        """,
+                        (person_id, lang, biography),
+                    )
+        try:
+            sync_person_profile_media(conn, person_id, profile_urls, provider_id=updates["source"])
+        except Exception:
+            current_app.logger.warning(
+                "Person profile media sync failed for %s", person_id, exc_info=True
+            )
         detail = person_detail_entity(conn, person_id) or preview_detail
+        if source_providers:
+            receiver_payload = person_receiver_contribution_payload(
+                person_id=person_id,
+                person=detail.get("person") if isinstance(detail.get("person"), dict) else {},
+                tmdb_id=tmdb_id,
+                updates=updates,
+                localizations=localizations,
+                source_providers=source_providers,
+            )
+            if receiver_payload.get("payload"):
+                try:
+                    receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
+                except Exception as exc:  # noqa: BLE001 - contribution must never break the refresh
+                    current_app.logger.warning(
+                        "Person receiver contribution failed for %s", person_id, exc_info=True
+                    )
+                    receiver_summary = {"status": "error", "error": str(exc)}
+                audit_event(
+                    conn,
+                    event_type="metadata.receiver_pushed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="person",
+                    target_id=person_id,
+                    summary=f"Pushed person metadata to receiver plugins for {updates.get('name') or tmdb_id}",
+                    metadata={
+                        "personId": str(person_id),
+                        "tmdbId": str(tmdb_id),
+                        "sourceProviders": sorted({str(item) for item in source_providers if item}),
+                        "fields": sorted((receiver_payload.get("payload") or {}).keys()),
+                        "receiverSummary": receiver_summary,
+                    },
+                )
     else:
+        if profile_urls:
+            existing_media = preview_detail.get("personMedia") if isinstance(preview_detail.get("personMedia"), list) else []
+            has_primary = any(isinstance(asset, dict) and asset.get("is_primary") for asset in existing_media)
+            preview_detail["personMedia"] = [
+                {
+                    "id": f"preview-{index}",
+                    "url": url,
+                    "source_url": url,
+                    "kind": "profile",
+                    "is_primary": (index == 0 and not has_primary),
+                    "sort_order": index,
+                    "preview": True,
+                }
+                for index, url in enumerate(profile_urls)
+            ]
         detail = preview_detail
 
     return {
         "dryRun": dry_run,
         "plugin": {
-            "id": plugin.get("id"),
-            "name": plugin.get("name"),
+            "id": primary_plugin.get("id"),
+            "name": primary_plugin.get("name"),
         },
+        "sourceProviders": sorted({str(item) for item in source_providers if item}),
         "execution": {
-            "status": execution.get("status"),
-            "state": execution.get("state"),
-            "elapsedMs": execution.get("elapsedMs"),
-            "entrypoint": execution.get("entrypoint"),
+            "status": primary_execution.get("status"),
+            "state": primary_execution.get("state"),
+            "elapsedMs": primary_execution.get("elapsedMs"),
+            "entrypoint": primary_execution.get("entrypoint"),
         },
-        "result": result,
+        "awards": {
+            "status": awards_status,
+            "state": awards_state,
+            "applied": awards_hit,
+            "count": len(awards),
+            "groups": len(award_groups),
+        },
+        "result": primary_result,
+        "receivers": receiver_summary,
         "detail": detail,
     }
 
@@ -41022,14 +41913,15 @@ def refresh_person_filmography(
     tmdb_id = detail.get("tmdbId") or ""
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
-    plugin = person_filmography_plugin(conn)
-    if not plugin:
+    candidates = person_filmography_source_plugins(conn, include_disabled=True)
+    if not candidates:
         raise NextApiError("No enabled filmography plugin is available", 503)
-    if not plugin.get("enabled"):
-        raise NextApiError("TMDb plugin must be enabled before refreshing filmography", 409)
+    plugin = next((candidate for candidate in candidates if candidate.get("enabled")), None)
+    if plugin is None:
+        raise NextApiError("Filmography plugin must be enabled before refreshing filmography", 409)
     config = plugin_config_from_db(conn, str(plugin["id"]))
     if plugin_requires_config_for_entrypoint(plugin, config, "person_filmography"):
-        raise NextApiError("TMDb plugin configuration is incomplete", 409)
+        raise NextApiError("Filmography plugin configuration is incomplete", 409)
 
     context = plugin_execution_context(conn, plugin, config, actor)
     execution = run_plugin_entrypoint(str(plugin["id"]), "person_filmography", {"tmdbId": tmdb_id}, context)
@@ -41198,6 +42090,101 @@ def set_primary_movie_media_asset(
     media["sort_order"] = 0
     media["url"] = media_asset_public_url(media)
     return {"movieId": str(movie_id), "kind": kind, "media": media, "revision": revision}
+
+
+def set_primary_person_media_asset(
+    conn,
+    *,
+    person_id: UUID,
+    media_id: UUID,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not table_exists(conn, "people") or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM people WHERE id=%s", (person_id,))
+        if not cur.fetchone():
+            raise NextApiError("Person not found", 404)
+        cur.execute(
+            """
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                em.role,
+                em.is_primary,
+                em.sort_order
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type='person'
+              AND em.entity_id=%s
+              AND em.media_id=%s
+              AND em.deleted_at IS NULL
+              AND ma.kind='profile'
+            """,
+            (person_id, media_id),
+        )
+        media = cur.fetchone()
+        if not media:
+            raise NextApiError("Media asset is not linked to this person", 404)
+        cur.execute(
+            """
+            UPDATE entity_media em
+            SET is_primary=false,
+                sort_order=GREATEST(em.sort_order, 1)
+            FROM media_assets ma
+            WHERE ma.id = em.media_id
+              AND em.entity_type='person'
+              AND em.entity_id=%s
+              AND em.deleted_at IS NULL
+              AND ma.kind='profile'
+              AND em.is_primary=true
+            """,
+            (person_id,),
+        )
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET is_primary=true,
+                sort_order=0
+            WHERE entity_type='person'
+              AND entity_id=%s
+              AND media_id=%s
+              AND deleted_at IS NULL
+            """,
+            (person_id, media_id),
+        )
+        media_metadata = media.get("metadata") if isinstance(media, dict) else {}
+        media_metadata = media_metadata if isinstance(media_metadata, dict) else {}
+        media_metadata.update(
+            {
+                "lockedPrimary": True,
+                "userSelectedPrimary": True,
+                "source": media_metadata.get("source") or "manual_selection",
+                "selectedBy": actor_job_payload(actor or {}) if actor else None,
+            }
+        )
+        cur.execute("UPDATE media_assets SET metadata=%s WHERE id=%s", (Jsonb(json_ready(media_metadata)), media_id))
+        cur.execute(
+            "UPDATE people SET profile_asset_id=%s, updated_at=now() WHERE id=%s",
+            (media_id, person_id),
+        )
+
+    media["is_primary"] = True
+    media["sort_order"] = 0
+    media["url"] = media_asset_public_url(media)
+    return {"personId": str(person_id), "kind": "profile", "media": media}
 
 
 def uploaded_artwork_file() -> tuple[Any, str | None]:
@@ -43238,6 +44225,7 @@ def apply_movie_upsert(
                 title,
                 sort_title,
                 original_title,
+                release_title,
                 year,
                 release_date,
                 format,
@@ -43258,7 +44246,7 @@ def apply_movie_upsert(
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -43266,6 +44254,7 @@ def apply_movie_upsert(
                 title=COALESCE(EXCLUDED.title, movies.title),
                 sort_title=COALESCE(EXCLUDED.sort_title, movies.sort_title),
                 original_title=COALESCE(EXCLUDED.original_title, movies.original_title),
+                release_title=COALESCE(EXCLUDED.release_title, movies.release_title),
                 year=COALESCE(EXCLUDED.year, movies.year),
                 release_date=COALESCE(EXCLUDED.release_date, movies.release_date),
                 format=COALESCE(EXCLUDED.format, movies.format),
@@ -43290,6 +44279,7 @@ def apply_movie_upsert(
                 title,
                 fields["sort_title"],
                 fields["original_title"],
+                fields["release_title"],
                 fields["year"],
                 fields["release_date"],
                 fields["format"],
@@ -46572,6 +47562,7 @@ def register_routes(flask_app: Flask) -> None:
                             title,
                             sort_title,
                             original_title,
+                            release_title,
                             year,
                             barcode,
                             release_date,
@@ -46587,7 +47578,7 @@ def register_routes(flask_app: Flask) -> None:
                             created_at,
                             updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             movie_id,
@@ -46595,6 +47586,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["title"],
                             payload["sort_title"],
                             payload["original_title"],
+                            payload["release_title"],
                             payload["year"],
                             payload["barcode"],
                             payload["release_date"],
@@ -47206,6 +48198,32 @@ def register_routes(flask_app: Flask) -> None:
                     sync_metadata_plugin_registry(conn)
                 else:
                     sync_plugin_registry(conn, table_exists, Jsonb)
+
+                imported_plugin_id = str(manifest["id"])
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT categories FROM plugins WHERE id=%s",
+                        (imported_plugin_id,),
+                    )
+                    imported_row = cur.fetchone()
+                imported_categories = (
+                    (imported_row.get("categories") if imported_row else None) or []
+                )
+                imported_is_metadata_plugin = bool(
+                    {"metadata_source", "metadata_receiver"}.intersection(
+                        set(imported_categories)
+                    )
+                )
+                with conn.cursor() as cur:
+                    if imported_is_metadata_plugin and table_exists(conn, "metadata_plugins"):
+                        cur.execute(
+                            "UPDATE metadata_plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                            (imported_plugin_id,),
+                        )
+                    cur.execute(
+                        "UPDATE plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                        (imported_plugin_id,),
+                    )
                 audit_event(
                     conn,
                     event_type="plugin.imported",
@@ -47220,6 +48238,7 @@ def register_routes(flask_app: Flask) -> None:
                         "version": manifest.get("version"),
                         "categories": manifest.get("categories"),
                         "installedPath": str(installed_path),
+                        "enabled": True,
                     },
                 )
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
@@ -48332,6 +49351,40 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={"dryRun": dry_run, "result": result},
                 )
         return response({"status": "ok", "filmography": result})
+
+    @flask_app.post("/api/next/people/<person_id>/media/primary")
+    def person_media_primary(person_id: str):
+        person_uuid = parse_uuid(person_id, "personId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media selection body must be an object", 400)
+        media_uuid = parse_uuid(body.get("mediaId") or body.get("media_id") or body.get("mediaAssetId"), "mediaId")
+        if not media_uuid:
+            raise NextApiError("mediaId is required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "people"):
+                raise NextApiError("People table is not available", 503)
+            if not actor_can_view_person(conn, actor, person_uuid):
+                raise NextApiError("Person not found", 404)
+            with conn.transaction():
+                result = set_primary_person_media_asset(
+                    conn,
+                    person_id=person_uuid,
+                    media_id=media_uuid,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="person.media_primary_changed",
+                    category="admin",
+                    actor=actor,
+                    target_type="person",
+                    target_id=person_uuid,
+                    summary="Changed primary person profile image",
+                    metadata={"mediaId": str(media_uuid), "result": result},
+                )
+        return response({"status": "ok", **result})
 
     @flask_app.post("/api/next/movies/<movie_id>/media/primary")
     def movie_media_primary(movie_id: str):

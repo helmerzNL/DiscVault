@@ -133,6 +133,29 @@ def _localizations(data):
     return rows
 
 
+def _person_localizations(data):
+    rows = []
+    seen = set()
+    for item in ((data.get("translations") or {}).get("translations") or []):
+        payload = item.get("data") or {}
+        biography = (payload.get("biography") or "").strip()
+        lang = _locale_key(item.get("iso_639_1"), item.get("iso_3166_1"))
+        if not lang or not biography:
+            continue
+        key = lang.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(
+            {
+                "lang": lang,
+                "biography": biography,
+                "source": "tmdb",
+            }
+        )
+    return rows
+
+
 def _normalize_details(data):
     genres = [item.get("name") for item in data.get("genres") or [] if item.get("name")]
     studios = [item.get("name") for item in data.get("production_companies") or [] if item.get("name")]
@@ -306,29 +329,121 @@ def movie_details(payload, context=None):
     return _normalize_details(_details(context or {}, items[0]["tmdbId"]))
 
 
+def _import_wikidata_awards():
+    try:
+        import wikidata_awards  # type: ignore
+
+        return wikidata_awards
+    except Exception:
+        import os
+        import sys
+
+        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+        try:
+            import wikidata_awards  # type: ignore
+
+            return wikidata_awards
+        except Exception:
+            return None
+
+
+def _profile_urls(images):
+    profiles = sorted(
+        (images or {}).get("profiles") or [],
+        key=lambda item: item.get("vote_average") or 0,
+        reverse=True,
+    )
+    urls = [_image(item.get("file_path")) for item in profiles[:12] if item.get("file_path")]
+    return urls
+
+
 def person_details(payload, context=None):
     tmdb_id = str((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id") or "").strip()
     if not tmdb_id:
         return {"status": "miss", "provider": "tmdb", "reason": "tmdbId is required"}
-    data = _request(context or {}, f"/person/{tmdb_id}", language=_language(context))
-    aliases = data.get("also_known_as") or [] if data else []
+    language = _language(context)
+    data = _request(
+        context or {},
+        f"/person/{tmdb_id}",
+        language=language,
+        append_to_response="images,external_ids,translations",
+    )
+    aliases = [str(a).strip() for a in (data.get("also_known_as") or []) if str(a or "").strip()]
     name = (data.get("name") if data else "") or (aliases[0] if aliases else "")
     profile_url = _image(data.get("profile_path")) if data.get("profile_path") else ""
+    profiles = _profile_urls(data.get("images") or {})
+    if profile_url and profile_url not in profiles:
+        profiles.insert(0, profile_url)
+    imdb_id = str((data.get("external_ids") or {}).get("imdb_id") or "").strip()
+    localizations = _person_localizations(data)
+    biography = (data.get("biography") or "").strip()
+    if not biography and localizations:
+        configured = str(language or "").strip().lower()
+        biography = next(
+            (row["biography"] for row in localizations if row["lang"].lower() == configured),
+            "",
+        ) or next(
+            (row["biography"] for row in localizations if row["lang"].lower().split("-")[0] == configured.split("-")[0]),
+            "",
+        ) or localizations[0]["biography"]
     return {
         "status": "hit" if name else "miss",
         "provider": "tmdb",
         "sourceLabel": "TMDb",
         "sourceRef": f"tmdb:person:{tmdb_id}",
         "tmdbId": tmdb_id,
+        "imdbId": imdb_id,
         "name": name,
-        "biography": data.get("biography") or "",
+        "biography": biography,
         "birthday": data.get("birthday") or "",
         "deathday": data.get("deathday") or "",
         "placeOfBirth": data.get("place_of_birth") or "",
         "knownFor": data.get("known_for_department") or "",
+        "alsoKnownAs": aliases,
         "profileUrl": profile_url,
         "profilePath": data.get("profile_path") or "",
-        "language": _language(context),
+        "profiles": profiles,
+        "localizations": localizations,
+        "language": language,
+    }
+
+
+def person_awards(payload, context=None):
+    """Fetch award/nomination history for a person from Wikidata.
+
+    Resolves the person via their TMDb id (Wikidata P4985) or IMDb id (P345)
+    and returns awards normalized and grouped by award.
+    """
+    payload = payload or {}
+    tmdb_id = str(payload.get("tmdbId") or payload.get("tmdb_id") or "").strip()
+    imdb_id = str(payload.get("imdbId") or payload.get("imdb_id") or "").strip()
+    wikidata_id = str(payload.get("wikidataId") or payload.get("wikidata_id") or "").strip()
+    if not (tmdb_id or imdb_id or wikidata_id):
+        return {"status": "miss", "provider": "wikidata", "reason": "tmdbId, imdbId or wikidataId is required"}
+    module = _import_wikidata_awards()
+    if module is None:
+        return {"status": "error", "provider": "wikidata", "reason": "wikidata_awards module unavailable"}
+    language = str(_settings(context).get("language") or "en").split("-")[0] or "en"
+    result = module.fetch_person_awards(
+        tmdb_id=tmdb_id or None,
+        imdb_id=imdb_id or None,
+        wikidata_id=wikidata_id or None,
+        language=language,
+    )
+    awards = result.get("awards") or []
+    return {
+        "status": "hit" if awards else "miss",
+        "provider": "wikidata",
+        "sourceLabel": "Wikidata",
+        "sourceRef": f"wikidata:{result.get('wikidataId') or ''}",
+        "tmdbId": tmdb_id,
+        "imdbId": imdb_id,
+        "wikidataId": result.get("wikidataId") or "",
+        "awards": awards,
+        "awardGroups": module.group_awards(awards),
+        "counts": {"awards": len(awards)},
     }
 
 

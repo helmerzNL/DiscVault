@@ -50,7 +50,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.4.0")
+        self.assertEqual(manifest["version"], "1.5.0")
         self.assertIn("connection_request", manifest["capabilities"])
         self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
@@ -58,6 +58,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertIn("prepare_container_update", manifest["capabilities"])
         self.assertIn("prepare_barcode_update", manifest["capabilities"])
         self.assertIn("member_intelligence", manifest["capabilities"])
+        self.assertIn("person_details", manifest["capabilities"])
 
     def test_movievault_26_runtime_exposes_receiver_observability_hooks(self):
         discovery = discover_plugins()
@@ -1255,6 +1256,53 @@ class ContributionFieldDiagnosticsTest(unittest.TestCase):
         )
         self.assertIn("title", accepted)
         self.assertEqual(dropped, [])
+
+
+class ContributionReleaseTitleTest(unittest.TestCase):
+    def test_release_entity_carries_physical_title_and_canonical_movie_title(self):
+        payload = {
+            "entityType": "release",
+            "payload": {
+                "title": "John Wick",
+                "release_title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+                "barcode": "5051888255889",
+                "format": "4K UHD",
+                "country": "United Kingdom",
+                "regions": ["Region B"],
+            },
+        }
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        # The release entity carries the full physical/packaging title...
+        self.assertEqual(
+            contribution_payload["title"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+        # ...while the canonical film title travels as movieTitle/tmdbTitle.
+        self.assertEqual(contribution_payload["movieTitle"], "John Wick")
+        self.assertEqual(contribution_payload["tmdbTitle"], "John Wick")
+        self.assertEqual(contribution_payload["country"], "United Kingdom")
+        self.assertEqual(contribution_payload["regions"], ["Region B"])
+        # The raw DiscVault-only key is not forwarded as its own field.
+        self.assertNotIn("release_title", contribution_payload)
+
+    def test_release_title_falls_back_to_clean_title(self):
+        payload = {"entityType": "release", "payload": {"title": "Heat", "format": "Blu-ray"}}
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        self.assertEqual(contribution_payload["title"], "Heat")
+        self.assertEqual(contribution_payload["movieTitle"], "Heat")
+        self.assertEqual(contribution_payload["tmdbTitle"], "Heat")
+
+    def test_movie_entity_keeps_only_clean_title(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "John Wick",
+                "release_title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+            },
+        }
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        self.assertEqual(contribution_payload["title"], "John Wick")
+        self.assertNotIn("movieTitle", contribution_payload)
 
 
 class ContributionLocalizedFieldsTest(unittest.TestCase):
