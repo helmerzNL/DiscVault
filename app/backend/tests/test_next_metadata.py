@@ -879,6 +879,26 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertEqual([item["entrypoint"] for item in plan], ["search_title", "movie_details", "box_set_candidates"])
 
+    def test_preview_barcode_and_title_is_title_driven(self):
+        query = query_from_payload({
+            "barcode": "5051892000000",
+            "title": "Lethal Weapon",
+            "detectBoxSets": True,
+            "previewMode": True,
+        })
+        plan = plugin_execution_plan(
+            {"capabilities": ["search_barcode", "search_title", "movie_details", "box_set_candidates"]},
+            query,
+        )
+
+        entrypoints = [item["entrypoint"] for item in plan]
+        self.assertEqual(entrypoints, ["search_title", "movie_details", "box_set_candidates"])
+        self.assertNotIn("search_barcode", entrypoints)
+        for item in plan:
+            self.assertNotIn("externalBarcode", item["payload"])
+            self.assertNotIn("barcode", item["payload"])
+            self.assertEqual(item["payload"].get("title"), "Lethal Weapon")
+
     def test_bootstrap_metadata_source_runs_for_public_barcode_queries(self):
         plugin = {
             "id": "upcitemdb",

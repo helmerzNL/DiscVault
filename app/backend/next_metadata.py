@@ -740,15 +740,24 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
 
     base_payload = dict(query)
     if query.get("previewMode"):
+        if title:
+            # A title search should drive the preview results even when a barcode
+            # is also supplied. Strip the barcode so the title lookup mirrors a
+            # title-only search (the barcode is still persisted on import). This
+            # keeps a scanned barcode's unrelated box-set from hiding the movie hits.
+            title_payload = {
+                key: value
+                for key, value in base_payload.items()
+                if key not in ("externalBarcode", "barcode")
+            }
+            if "search_title" in capabilities:
+                add("search_title", title_payload)
+            add("movie_details", title_payload)
+            if query.get("detectBoxSets"):
+                add("box_set_candidates", title_payload)
+            return plan
         if external_barcode:
             add("search_barcode", {**base_payload, "barcode": external_barcode})
-            if query.get("detectBoxSets"):
-                add("box_set_candidates", base_payload)
-            return plan
-        if title:
-            if "search_title" in capabilities:
-                add("search_title", base_payload)
-            add("movie_details", base_payload)
             if query.get("detectBoxSets"):
                 add("box_set_candidates", base_payload)
             return plan
