@@ -43,6 +43,10 @@ _TEMPLATE_CACHE = {}
 
 CLIENT_VERSION_UNSUPPORTED_CODE = "client_version_unsupported"
 
+RATE_LIMIT_MAX_RETRIES = 2
+RATE_LIMIT_BACKOFF_CAP = 5.0
+RATE_LIMIT_DEFAULT_DELAY = 1.0
+
 
 class MovieVaultClientVersionUnsupported(RuntimeError):
     """Raised when MovieVault rejects DiscVault with HTTP 426 / client_version_unsupported."""
@@ -51,6 +55,15 @@ class MovieVaultClientVersionUnsupported(RuntimeError):
         super().__init__(message)
         self.min_version = min_version
         self.detected_version = detected_version
+
+
+class MovieVaultRateLimited(RuntimeError):
+    """Raised when MovieVault throttles DiscVault with HTTP 429 / Too Many Requests."""
+
+    def __init__(self, message, *, retry_after=0.0, url=""):
+        super().__init__(message)
+        self.retry_after = retry_after
+        self.url = url
 
 
 def _settings(context):
@@ -98,6 +111,20 @@ def _status_code(response):
         return int(getattr(response, "status_code", 0) or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _retry_after_seconds(response, *, default=0.0):
+    headers = getattr(response, "headers", None) or {}
+    try:
+        raw = headers.get("Retry-After")
+    except AttributeError:
+        raw = None
+    if raw is None:
+        return default
+    try:
+        return max(0.0, float(str(raw).strip()))
+    except (TypeError, ValueError):
+        return default
 
 
 def _json(response):
@@ -288,7 +315,7 @@ def _contribution_signature_headers(signer, raw_body):
     }
 
 
-def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False, sign_body=False):
+def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False, sign_body=False, retry_429=RATE_LIMIT_MAX_RETRIES):
     headers = _headers(context)
     data = None
     if json_payload is not None:
@@ -329,7 +356,29 @@ def _request(method, url, *, context=None, params=None, json_payload=None, retry
                     retry_recovery=False,
                     allow_validation_error=allow_validation_error,
                     sign_body=sign_body,
+                    retry_429=retry_429,
                 )
+    if status_code == 429:
+        retry_after = _retry_after_seconds(response, default=RATE_LIMIT_DEFAULT_DELAY)
+        if retry_429 > 0:
+            delay = retry_after if retry_after > 0 else RATE_LIMIT_DEFAULT_DELAY
+            time.sleep(min(delay, RATE_LIMIT_BACKOFF_CAP))
+            return _request(
+                method,
+                url,
+                context=context,
+                params=params,
+                json_payload=json_payload,
+                retry_recovery=retry_recovery,
+                allow_validation_error=allow_validation_error,
+                sign_body=sign_body,
+                retry_429=retry_429 - 1,
+            )
+        raise MovieVaultRateLimited(
+            f"{PROVIDER_LABEL} is rate limiting requests (HTTP 429). Please retry later.",
+            retry_after=retry_after,
+            url=url,
+        )
     if status_code == 403 and _error_code(response) == "instance_revoked":
         mark_revoked = (context or {}).get("movievaultMarkRevoked")
         if callable(mark_revoked):
@@ -2388,14 +2437,23 @@ def receive_metadata(payload, context=None):
         "sourceReference": _source_reference(payload),
         "payload": contribution_payload,
     }
-    response_payload = _post_contribution(context, envelope)
-    if _validation_error(response_payload):
-        template = _contribution_template(context, force_refresh=True)
-        entity_type, contribution_payload = _contribution_payload(payload, template)
-        if not contribution_payload:
-            return {"status": "skipped", "provider": PROVIDER_ID, "reason": "empty_or_disallowed_payload"}
-        envelope["payload"] = contribution_payload
+    try:
         response_payload = _post_contribution(context, envelope)
+        if _validation_error(response_payload):
+            template = _contribution_template(context, force_refresh=True)
+            entity_type, contribution_payload = _contribution_payload(payload, template)
+            if not contribution_payload:
+                return {"status": "skipped", "provider": PROVIDER_ID, "reason": "empty_or_disallowed_payload"}
+            envelope["payload"] = contribution_payload
+            response_payload = _post_contribution(context, envelope)
+    except MovieVaultRateLimited as exc:
+        return {
+            "status": "skipped",
+            "provider": PROVIDER_ID,
+            "entityType": entity_type,
+            "reason": "rate_limited",
+            "retryAfter": exc.retry_after,
+        }
     accepted_fields, dropped_fields = _contribution_field_diagnostics(payload, template, contribution_payload)
     return {
         "status": "submitted",

@@ -693,6 +693,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Bidrag inaktiverat",
   "movieDetail.debugSourcesReasonNeedsConfig": "Tillägget behöver konfigureras",
   "movieDetail.debugSourcesReasonNoMatch": "Ingen träff",
+  "movieDetail.debugSourcesReasonRateLimited": "Hastighetsbegränsad – försök igen senare",
   "movieDetail.debugSourcesExcludedFields": "Uteslutna fält",
   "movieDetail.debugSourcesAcceptedFields": "Accepterade fält",
   "movieDetail.debugSourcesNotAcceptedFields": "Ej accepterat",

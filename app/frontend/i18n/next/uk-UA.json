@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Внесок вимкнено",
   "movieDetail.debugSourcesReasonNeedsConfig": "Плагін потребує налаштування",
   "movieDetail.debugSourcesReasonNoMatch": "Немає збігу",
+  "movieDetail.debugSourcesReasonRateLimited": "Обмежено – спробуйте пізніше",
   "movieDetail.debugSourcesExcludedFields": "Виключені поля",
   "movieDetail.debugSourcesAcceptedFields": "Прийняті поля",
   "movieDetail.debugSourcesNotAcceptedFields": "Не прийнято",

@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "贡献已禁用",
   "movieDetail.debugSourcesReasonNeedsConfig": "插件需要配置",
   "movieDetail.debugSourcesReasonNoMatch": "无匹配",
+  "movieDetail.debugSourcesReasonRateLimited": "请求受限 – 请稍后重试",
   "movieDetail.debugSourcesExcludedFields": "已排除的字段",
   "movieDetail.debugSourcesAcceptedFields": "已接受的字段",
   "movieDetail.debugSourcesNotAcceptedFields": "未接受",

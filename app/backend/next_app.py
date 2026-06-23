@@ -16122,7 +16122,8 @@ def ui_preview_html(
         needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
         not_configured: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
         no_match: tNext("movieDetail.debugSourcesReasonNoMatch", "No match"),
-        not_found: tNext("movieDetail.debugSourcesReasonNoMatch", "No match")
+        not_found: tNext("movieDetail.debugSourcesReasonNoMatch", "No match"),
+        rate_limited: tNext("movieDetail.debugSourcesReasonRateLimited", "Rate limited \u2013 retry later")
       };
       if (reason && reasonMap[reason]) return reasonMap[reason];
       if (state && reasonMap[state]) return reasonMap[state];

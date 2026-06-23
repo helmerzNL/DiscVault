@@ -693,6 +693,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Contributo disattivato",
   "movieDetail.debugSourcesReasonNeedsConfig": "Il plugin richiede configurazione",
   "movieDetail.debugSourcesReasonNoMatch": "Nessuna corrispondenza",
+  "movieDetail.debugSourcesReasonRateLimited": "Limite di richieste – riprova più tardi",
   "movieDetail.debugSourcesExcludedFields": "Campi esclusi",
   "movieDetail.debugSourcesAcceptedFields": "Campi accettati",
   "movieDetail.debugSourcesNotAcceptedFields": "Non accettati",

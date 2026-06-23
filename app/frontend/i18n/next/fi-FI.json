@@ -693,6 +693,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Osallistuminen poistettu käytöstä",
   "movieDetail.debugSourcesReasonNeedsConfig": "Laajennus vaatii määrityksen",
   "movieDetail.debugSourcesReasonNoMatch": "Ei osumaa",
+  "movieDetail.debugSourcesReasonRateLimited": "Nopeusrajoitus – yritä myöhemmin",
   "movieDetail.debugSourcesExcludedFields": "Pois jätetyt kentät",
   "movieDetail.debugSourcesAcceptedFields": "Hyväksytyt kentät",
   "movieDetail.debugSourcesNotAcceptedFields": "Ei hyväksytty",

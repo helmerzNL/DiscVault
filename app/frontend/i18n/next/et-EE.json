@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Panus on keelatud",
   "movieDetail.debugSourcesReasonNeedsConfig": "Plugin vajab seadistamist",
   "movieDetail.debugSourcesReasonNoMatch": "Vastet pole",
+  "movieDetail.debugSourcesReasonRateLimited": "Kiiruspiirang – proovige hiljem",
   "movieDetail.debugSourcesExcludedFields": "Välistatud väljad",
   "movieDetail.debugSourcesAcceptedFields": "Aktsepteeritud väljad",
   "movieDetail.debugSourcesNotAcceptedFields": "Vastu võtmata",

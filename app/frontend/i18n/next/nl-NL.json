@@ -968,6 +968,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Bijdrage uitgeschakeld",
   "movieDetail.debugSourcesReasonNeedsConfig": "Plug-in vereist configuratie",
   "movieDetail.debugSourcesReasonNoMatch": "Geen match",
+  "movieDetail.debugSourcesReasonRateLimited": "Snelheidslimiet – probeer later opnieuw",
   "movieDetail.debugSourcesExcludedFields": "Uitgesloten velden",
   "movieDetail.debugSourcesAcceptedFields": "Geaccepteerde velden",
   "movieDetail.debugSourcesNotAcceptedFields": "Niet geaccepteerd",

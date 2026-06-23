@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Príspevok zakázaný",
   "movieDetail.debugSourcesReasonNeedsConfig": "Plugin vyžaduje konfiguráciu",
   "movieDetail.debugSourcesReasonNoMatch": "Žiadna zhoda",
+  "movieDetail.debugSourcesReasonRateLimited": "Obmedzené – skúste neskôr",
   "movieDetail.debugSourcesExcludedFields": "Vylúčené polia",
   "movieDetail.debugSourcesAcceptedFields": "Prijaté polia",
   "movieDetail.debugSourcesNotAcceptedFields": "Neprijaté",

@@ -693,6 +693,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Bidrag deaktivert",
   "movieDetail.debugSourcesReasonNeedsConfig": "Programtillegg krever konfigurasjon",
   "movieDetail.debugSourcesReasonNoMatch": "Ingen treff",
+  "movieDetail.debugSourcesReasonRateLimited": "Hastighetsbegrenset – prøv igjen senere",
   "movieDetail.debugSourcesExcludedFields": "Ekskluderte felt",
   "movieDetail.debugSourcesAcceptedFields": "Aksepterte felter",
   "movieDetail.debugSourcesNotAcceptedFields": "Ikke akseptert",

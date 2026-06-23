@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Η συνεισφορά απενεργοποιήθηκε",
   "movieDetail.debugSourcesReasonNeedsConfig": "Το πρόσθετο χρειάζεται διαμόρφωση",
   "movieDetail.debugSourcesReasonNoMatch": "Καμία αντιστοίχιση",
+  "movieDetail.debugSourcesReasonRateLimited": "Περιορισμός ρυθμού – δοκιμάστε αργότερα",
   "movieDetail.debugSourcesExcludedFields": "Εξαιρούμενα πεδία",
   "movieDetail.debugSourcesAcceptedFields": "Αποδεκτά πεδία",
   "movieDetail.debugSourcesNotAcceptedFields": "Μη αποδεκτά",

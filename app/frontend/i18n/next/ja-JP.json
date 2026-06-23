@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "貢献が無効です",
   "movieDetail.debugSourcesReasonNeedsConfig": "プラグインの設定が必要です",
   "movieDetail.debugSourcesReasonNoMatch": "一致なし",
+  "movieDetail.debugSourcesReasonRateLimited": "レート制限 – 後で再試行してください",
   "movieDetail.debugSourcesExcludedFields": "除外されたフィールド",
   "movieDetail.debugSourcesAcceptedFields": "受け入れられたフィールド",
   "movieDetail.debugSourcesNotAcceptedFields": "受け入れ不可",
