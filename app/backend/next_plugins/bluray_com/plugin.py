@@ -105,54 +105,20 @@ def _clean_text(value):
     return re.sub(r"\s+", " ", str(value or "")).strip()
 
 
-_RELEASE_FORMAT_WORDS = (
-    r"4k|ultra\s*hd|uhd|blu[- ]?ray|dvd|hd\s*dvd|laser\s*disc|digital|3d|vhs|"
-    r"steel\s*book|steelbook|limited|collector'?s?|special|deluxe|ultimate|"
-    r"anniversary|remaster(?:ed)?|edition|combo|pack|slip(?:cover|case)?|"
-    r"digibook|mediabook|box\s*set|import|region"
-)
-_RELEASE_COUNTRY_WORDS = (
-    r"france|french|germany|german|italy|italian|spain|spanish|uk|u\.k\.|"
-    r"united\s+kingdom|england|british|great\s+britain|usa?|u\.s\.a?\.?|"
-    r"united\s+states|american|canada|canadian|netherlands|dutch|japan|japanese|"
-    r"korea|korean|sweden|swedish|denmark|danish|norway|norwegian|finland|finnish|"
-    r"australia|australian|nordic|scandinavia(?:n)?|europe(?:an)?|austria|austrian|"
-    r"poland|polish|portugal|portuguese|russia|russian|china|chinese|belgium|belgian"
-)
-# Trailing bracketed group that is purely format/region metadata, e.g.
-# "(4K Ultra HD + Blu-ray)", "(France)", "[UK Import]".
-_RELEASE_META_TAIL_RE = re.compile(
-    r"\s*[\(\[]\s*[^\(\)\[\]]*\b(?:" + _RELEASE_FORMAT_WORDS + r"|" + _RELEASE_COUNTRY_WORDS
-    + r")\b[^\(\)\[\]]*[\)\]]\s*$",
-    re.I,
-)
-# Bare trailing format token, e.g. "4K Blu-ray", "Ultra HD Blu-ray 3D", "DVD".
-_RELEASE_FORMAT_TAIL_RE = re.compile(
-    r"\s+(?:(?:4K\s*)?(?:Ultra\s*HD\s*)?Blu[- ]?ray(?:\s*3D)?(?:\s*\+\s*Blu[- ]?ray)?"
-    r"|4K(?:\s*Ultra\s*HD)?|Ultra\s*HD|HD\s*DVD|DVD|Laser\s*Disc|VCD/SVCD|Digital|3D|Review)\s*$",
-    re.I,
-)
-
-
 def _movie_title_from_release_title(value):
     title = _clean_text(value)
     if not title:
         return ""
-    # Drop a trailing year and anything following it ("Title (2010) Blu-ray").
     title = re.sub(r"\s+\((\d{4})\).*$", "", title).strip()
-    prev = None
-    while prev != title and title:
-        prev = title
-        # Peel trailing format/region brackets, e.g. "(4K Ultra HD + Blu-ray)"
-        # then "(France)", exposing the bare format token underneath.
-        stripped = _RELEASE_META_TAIL_RE.sub("", title).strip()
-        if stripped != title:
-            title = stripped
-            continue
-        # Peel a bare trailing format token like "4K Blu-ray" / "DVD".
-        stripped = _RELEASE_FORMAT_TAIL_RE.sub("", title).strip()
-        if stripped != title:
-            title = stripped
+    title = re.sub(r"\s+\((?:SteelBook|Steelbook|France|Germany|Italy|Spain|UK|US|USA|Canada|Netherlands|Import)\)\s*$", "", title, flags=re.I).strip()
+    title = re.sub(r"\s+\((?:SteelBook|Steelbook|France|Germany|Italy|Spain|UK|US|USA|Canada|Netherlands|Import)\)\s*$", "", title, flags=re.I).strip()
+    title = re.sub(
+        r"\s+(?:4K\s*)?(?:Ultra\s*HD\s*)?Blu[- ]?ray(?:\s*3D)?(?:\s*\+\s*Blu[- ]?ray)?\s*(?:Review)?\s*$",
+        "",
+        title,
+        flags=re.I,
+    ).strip()
+    title = re.sub(r"\s+(?:DVD|HD DVD|LaserDisc|VCD/SVCD|Digital|Review)\s*$", "", title, flags=re.I).strip()
     return title or _clean_text(value)
 
 
