@@ -708,44 +708,6 @@ class MovieVaultNextConnectionRoutingTests(unittest.TestCase):
         self.assertEqual(stored[0][1]["source"], "handshake")
         self.assertIn((self.nvc.LINK_STATUS_KEY, "active"), settings)
 
-    def test_sign_request_body_signs_exact_bytes_with_registered_key(self):
-        import base64
-
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-
-        private_key = Ed25519PrivateKey.generate()
-        private_key_pem = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
-        ).decode("ascii")
-        public_key = private_key.public_key()
-
-        stored_settings = {
-            self.nvc.INSTANCE_PRIVATE_KEY_KEY: private_key_pem,
-            self.nvc.INSTANCE_PUBLIC_KEY_ID_KEY: "dvpk_registered",
-        }
-        self.patch(
-            "_setting_value",
-            lambda _conn, key, default=None, include_secret=False: stored_settings.get(key, default),
-        )
-
-        raw_body = '{"entityType":"movie","payload":{"title":"Alien"}}'
-        result = self.nvc._sign_request_body("conn", raw_body)
-
-        self.assertEqual(result["keyId"], "dvpk_registered")
-        self.assertTrue(result["signature"].startswith("key-v1="))
-        encoded = result["signature"][len("key-v1=") :]
-        padding = "=" * (-len(encoded) % 4)
-        signature_bytes = base64.urlsafe_b64decode(encoded + padding)
-        signed_input = f"{result['timestamp']}.{result['nonce']}.".encode("utf-8") + raw_body.encode("utf-8")
-        public_key.verify(signature_bytes, signed_input)
-
-    def test_sign_request_body_returns_empty_without_registered_key(self):
-        self.patch("_setting_value", lambda _conn, key, default=None, include_secret=False: default)
-        self.assertEqual(self.nvc._sign_request_body("conn", "{}"), {})
-
 
 if __name__ == "__main__":
     unittest.main()

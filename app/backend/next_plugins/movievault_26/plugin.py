@@ -41,17 +41,6 @@ FORBIDDEN_CONTRIBUTION_KEYS = {
 }
 _TEMPLATE_CACHE = {}
 
-CLIENT_VERSION_UNSUPPORTED_CODE = "client_version_unsupported"
-
-
-class MovieVaultClientVersionUnsupported(RuntimeError):
-    """Raised when MovieVault rejects DiscVault with HTTP 426 / client_version_unsupported."""
-
-    def __init__(self, message, *, min_version="", detected_version=""):
-        super().__init__(message)
-        self.min_version = min_version
-        self.detected_version = detected_version
-
 
 def _settings(context):
     return (context or {}).get("settings") or {}
@@ -117,72 +106,6 @@ def _response_error(payload):
     return _text(payload.get("code") or payload.get("error")), _text(payload.get("message"))
 
 
-def _error_object(payload):
-    if not isinstance(payload, dict):
-        return {}
-    error = payload.get("error")
-    return error if isinstance(error, dict) else payload
-
-
-def _version_fields(payload):
-    error = _error_object(payload)
-    min_version = _text(error.get("minVersion") or error.get("min_version") or payload.get("minVersion"))
-    detected = _text(error.get("detectedVersion") or error.get("detected_version") or payload.get("detectedVersion"))
-    return min_version, detected
-
-
-def _is_client_version_unsupported(status_code, payload):
-    if int(status_code or 0) == 426:
-        return True
-    code, _message = _response_error(payload)
-    return code == CLIENT_VERSION_UNSUPPORTED_CODE
-
-
-def _client_version_unsupported_message(payload):
-    min_version, detected = _version_fields(payload)
-    if min_version:
-        message = (
-            f"This MovieVault server requires DiscVault version {min_version} or newer. "
-            "Please update DiscVault to keep syncing."
-        )
-    else:
-        message = (
-            "This MovieVault server requires a newer DiscVault version. "
-            "Please update DiscVault to keep syncing."
-        )
-    if detected:
-        message += f" (current version: {detected})"
-    return message
-
-
-def _body_client_version(body):
-    if not isinstance(body, dict):
-        return ""
-    software = body.get("software") if isinstance(body.get("software"), dict) else {}
-    for value in (
-        body.get("clientVersion"),
-        software.get("version"),
-        software.get("backendVersion"),
-        body.get("sourceVersion"),
-        body.get("instanceVersion"),
-    ):
-        text = _text(value)
-        if text:
-            return text
-    return ""
-
-
-def _ensure_client_version(body, context):
-    if not isinstance(body, dict):
-        return body
-    if _text(body.get("clientVersion")):
-        return body
-    version = _body_client_version(body) or _source_version(context)
-    if version:
-        body["clientVersion"] = version
-    return body
-
-
 def _error_code(response):
     payload = _json(response)
     code, _message = _response_error(payload)
@@ -193,16 +116,8 @@ def connection_recovery_action(payload, context=None):
     payload = payload or {}
     phase = _text(payload.get("phase")).lower()
     status_code = int(payload.get("statusCode") or payload.get("status_code") or 0)
-    response = payload.get("response") or {}
-    code, message = _response_error(response)
+    code, message = _response_error(payload.get("response") or {})
     lowered = message.lower()
-    if _is_client_version_unsupported(status_code, response):
-        return {
-            "action": "",
-            "reason": CLIENT_VERSION_UNSUPPORTED_CODE,
-            "terminal": True,
-            "message": _client_version_unsupported_message(response),
-        }
     if status_code == 400 and phase == "recovery" and code == "validation_error" and "bootstrap is required" in lowered:
         return {"action": "bootstrap", "reason": "server_requires_bootstrap"}
     if status_code == 400 and phase == "bootstrap" and code == "validation_error":
@@ -221,7 +136,6 @@ def connection_request(payload, context=None):
         request_body = dict(body)
         if public_key:
             request_body["publicKey"] = public_key
-        _ensure_client_version(request_body, context)
         return {
             "status": "ok",
             "provider": PROVIDER_ID,
@@ -246,7 +160,6 @@ def connection_request(payload, context=None):
             headers["X-DiscVault-Key-Id"] = key_id
         if signature:
             headers["X-DiscVault-Signature"] = signature if signature.startswith("key-v1=") else f"key-v1={signature}"
-        recovery_body = _ensure_client_version(dict(body), context)
         return {
             "status": "ok",
             "provider": PROVIDER_ID,
@@ -254,62 +167,22 @@ def connection_request(payload, context=None):
             "method": "POST",
             "path": HANDSHAKE_PATH,
             "headers": headers,
-            "body": recovery_body,
+            "body": dict(body),
             "auth": "signed_recovery",
             "requestedScopes": list(REQUESTED_SCOPES),
         }
     return {"status": "skipped", "provider": PROVIDER_ID, "reason": "unknown_connection_phase"}
 
 
-def _canonical_contribution_body(payload):
-    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-
-
-def _contribution_signature_headers(signer, raw_body):
-    if not callable(signer):
-        return {}
-    try:
-        result = signer(raw_body) or {}
-    except Exception:
-        return {}
-    if not isinstance(result, dict):
-        return {}
-    key_id = _text(result.get("keyId") or result.get("key_id"))
-    timestamp = _text(result.get("timestamp"))
-    nonce = _text(result.get("nonce"))
-    signature = _text(result.get("signature"))
-    if not (key_id and timestamp and nonce and signature):
-        return {}
-    return {
-        "X-DiscVault-Key-Id": key_id,
-        "X-DiscVault-Timestamp": timestamp,
-        "X-DiscVault-Nonce": nonce,
-        "X-DiscVault-Signature": signature if signature.startswith("key-v1=") else f"key-v1={signature}",
-    }
-
-
-def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False, sign_body=False):
+def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False):
     headers = _headers(context)
-    data = None
     if json_payload is not None:
         headers["Content-Type"] = "application/json"
-        if sign_body:
-            signer = (context or {}).get("movievaultSignRequest")
-            raw_body = _canonical_contribution_body(json_payload)
-            signature_headers = _contribution_signature_headers(signer, raw_body)
-            if signature_headers:
-                data = raw_body.encode("utf-8")
-                headers.update(signature_headers)
     request_func = getattr(requests, "request", None)
     if callable(request_func):
-        if data is not None:
-            response = request_func(method, url, params=params, data=data, headers=headers, timeout=10)
-        else:
-            response = request_func(method, url, params=params, json=json_payload, headers=headers, timeout=10)
+        response = request_func(method, url, params=params, json=json_payload, headers=headers, timeout=10)
     elif method.upper() == "GET":
         response = requests.get(url, params=params, headers=headers, timeout=10)
-    elif data is not None:
-        response = requests.post(url, data=data, headers=headers, timeout=10)
     else:
         response = requests.post(url, json=json_payload, headers=headers, timeout=10)
 
@@ -328,20 +201,11 @@ def _request(method, url, *, context=None, params=None, json_payload=None, retry
                     json_payload=json_payload,
                     retry_recovery=False,
                     allow_validation_error=allow_validation_error,
-                    sign_body=sign_body,
                 )
     if status_code == 403 and _error_code(response) == "instance_revoked":
         mark_revoked = (context or {}).get("movievaultMarkRevoked")
         if callable(mark_revoked):
             mark_revoked()
-    if _is_client_version_unsupported(status_code, _json(response)):
-        payload = _json(response)
-        min_version, detected = _version_fields(payload)
-        raise MovieVaultClientVersionUnsupported(
-            _client_version_unsupported_message(payload),
-            min_version=min_version,
-            detected_version=detected,
-        )
     if status_code == 404 or (allow_validation_error and status_code == 400 and _error_code(response) == "validation_error"):
         return response
     response.raise_for_status()
@@ -361,7 +225,6 @@ def _post_contribution(context, envelope):
             context=context,
             json_payload=envelope,
             allow_validation_error=True,
-            sign_body=True,
         )
     )
 
@@ -415,28 +278,6 @@ def _parse_year(value):
 def _image_url(value):
     text = _text(value)
     return text if text.startswith(("http://", "https://")) else ""
-
-
-def _resolve_asset_url(value, context=None):
-    """Return an absolute image URL.
-
-    MovieVault serves box-set artwork as root-relative asset paths
-    (e.g. ``/api/v1/assets/box_sets/.../poster/...``) so the URL stays portable
-    across hosts. Resolve those against the configured MovieVault base URL
-    instead of dropping them like :func:`_image_url` does for non-absolute
-    values; otherwise a box-set loses its own cover and falls back to a member
-    poster.
-    """
-    text = _text(value)
-    if not text:
-        return ""
-    if text.startswith(("http://", "https://")):
-        return text
-    if text.startswith("/"):
-        base = _base_url(context)
-        if base:
-            return f"{base}{text}"
-    return ""
 
 
 def _is_public_barcode(value):
@@ -547,42 +388,6 @@ def _box_set_payload_marker(item):
     ).casefold()
     type_key = type_text.replace("-", "_").replace(" ", "_")
     return type_key in {"box_set", "boxset"} or "box_set" in type_key or "boxset" in type_key
-
-
-def _explicit_box_set_marker(item):
-    """Deliberate box-set signals only.
-
-    Unlike :func:`_box_set_payload_marker`, this excludes weak hints (memberCount,
-    memberConfidence/source, boxSetTitle/collectionTitle) that a regular single-movie
-    payload can legitimately carry. A genuine box-set must declare itself through a
-    nested box-set object, an ``isBoxSet`` flag, ``detectedWithoutMembers`` or an
-    explicit box-set type/category.
-    """
-    if not isinstance(item, dict):
-        return False
-    if any(isinstance(item.get(key), dict) for key in _BOX_SET_DIRECT_KEYS):
-        return True
-    if item.get("isBoxSet") is True or item.get("is_box_set") is True:
-        return True
-    if item.get("detectedWithoutMembers") is True or item.get("detected_without_members") is True:
-        return True
-    type_text = _text(
-        _first_value(
-            item,
-            "entityType",
-            "entity_type",
-            "containerType",
-            "container_type",
-            "entityKind",
-            "entity_kind",
-            "releaseType",
-            "release_type",
-            "category",
-            "kind",
-            "type",
-        )
-    ).casefold().replace("-", "_").replace(" ", "_")
-    return "box_set" in type_text or "boxset" in type_text
 
 
 def _member_list(payload):
@@ -1053,16 +858,11 @@ def _normalize_box_set_proposal(payload, context=None):
             seen.update(keys)
         members.append(member)
 
-    if len(members) < 2 and not _explicit_box_set_marker(item):
-        return {}
-
     if not title and members:
         title = _text(item.get("boxSetTitle") or item.get("collectionTitle") or item.get("name"))
     if not title:
         return {}
 
-    box_set_poster = _resolve_asset_url(_first_value(item, "posterUrl", "poster_url", "poster", "image"), context)
-    box_set_backdrop = _resolve_asset_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop"), context)
     proposal = {
         "title": title,
         "name": title,
@@ -1073,11 +873,10 @@ def _normalize_box_set_proposal(payload, context=None):
         "year": _parse_year(_first_value(item, "year", "releaseYear", "release_year")),
         "year_range": _text(_first_value(item, "yearRange", "year_range")),
         "format": selected_format or _text(_first_value(item, "format", "mediaType", "media_type")),
-        "poster": box_set_poster,
-        "poster_url": box_set_poster,
-        "posterUrl": box_set_poster,
-        "backdrop": box_set_backdrop,
-        "backdrop_url": box_set_backdrop,
+        "poster": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
+        "poster_url": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
+        "backdrop": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
+        "backdrop_url": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
         "backdrop_urls": item.get("backdrop_urls") or item.get("backdropUrls") or [],
         "movies": members,
         "members": members,
@@ -1369,63 +1168,11 @@ def _box_set_proposal_key(proposal):
     )
 
 
-def _ingest_localizations(item):
-    if not isinstance(item, dict):
-        return []
-    raw = (
-        item.get("localizations")
-        or item.get("localisations")
-        or item.get("translations")
-    )
-    if isinstance(raw, dict):
-        expanded = []
-        for lang_key, value in raw.items():
-            if isinstance(value, dict):
-                entry = dict(value)
-                entry.setdefault("lang", lang_key)
-                expanded.append(entry)
-        raw = expanded
-    if not isinstance(raw, list):
-        return []
-    rows = []
-    seen = set()
-    for entry in raw:
-        if not isinstance(entry, dict):
-            continue
-        lang = _localized_language_code(
-            entry.get("lang")
-            or entry.get("language")
-            or entry.get("locale")
-            or entry.get("iso_639_1")
-        )
-        if not lang or lang in seen:
-            continue
-        if not (lang.isalpha() and len(lang) in (2, 3)):
-            continue
-        title = _text(entry.get("title") or entry.get("name"))
-        original_title = _text(entry.get("originalTitle") or entry.get("original_title"))
-        overview = _text(entry.get("overview") or entry.get("plot") or entry.get("description"))
-        edition = _text(entry.get("edition"))
-        if not (title or original_title or overview or edition):
-            continue
-        seen.add(lang)
-        row = {"lang": lang, "source": "movievault_26"}
-        if title:
-            row["title"] = title
-        if original_title:
-            row["originalTitle"] = original_title
-        if overview:
-            row["overview"] = overview
-        if edition:
-            row["edition"] = edition
-        rows.append(row)
-    return rows
-
-
 def _normalize_result(payload, *, source_ref=""):
     sources = _normalization_sources(payload)
     if not sources:
         return {"status": "miss", "provider": "movievault_26"}
+
     candidates = []
     seen_candidates = set()
     proposals = []
@@ -1475,11 +1222,6 @@ def _normalize_result(payload, *, source_ref=""):
         return {"status": "miss", "provider": "movievault_26"}
 
     source_item = first_item or (sources[0] if sources else {})
-    localizations = []
-    for candidate_source in ([source_item] + list(sources)):
-        localizations = _ingest_localizations(candidate_source)
-        if localizations:
-            break
     result = {
         "status": "hit",
         "provider": "movievault_26",
@@ -1492,8 +1234,6 @@ def _normalize_result(payload, *, source_ref=""):
         "items": candidates,
         "candidates": candidates,
     }
-    if localizations:
-        result["localizations"] = localizations
     if proposals:
         result["boxSetProposal"] = proposals[0]
         result["boxSetProposals"] = proposals
@@ -1638,196 +1378,6 @@ def box_set_candidates(payload, context=None):
     }
 
 
-def _person_results(payload):
-    """Normalize the people read-API response into a list of person objects.
-
-    ``/api/v1/people`` returns ``{"results": [...]}`` while ``/api/v1/people/{id}``
-    returns a single object (or a ``{"error": ...}`` envelope on 404).
-    """
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
-    if isinstance(payload, dict):
-        results = payload.get("results")
-        if isinstance(results, list):
-            return [item for item in results if isinstance(item, dict)]
-        if payload.get("error"):
-            return []
-        if payload.get("id") or payload.get("movieVaultId") or payload.get("movievault_id") or payload.get("name"):
-            return [payload]
-    return []
-
-
-def _person_localizations(item):
-    """Lift ``biography_<iso639-1>`` keys into localization rows."""
-    rows = []
-    seen = set()
-    for key, value in (item or {}).items():
-        if not isinstance(key, str):
-            continue
-        lowered = key.lower()
-        if not lowered.startswith("biography_"):
-            continue
-        lang = key[len("biography_"):].strip()
-        biography = _text(value)
-        if not lang or not biography:
-            continue
-        norm = lang.lower()
-        if norm in seen:
-            continue
-        seen.add(norm)
-        rows.append({"lang": lang, "biography": biography, "source": PROVIDER_ID})
-    return rows
-
-
-def _person_profiles(item):
-    """Public https-only, de-duplicated profile image URLs (cap 12)."""
-    urls = []
-    seen = set()
-    for value in (item.get("profiles") or []):
-        text = _text(value)
-        if not text.lower().startswith("https://"):
-            continue
-        if text in seen:
-            continue
-        seen.add(text)
-        urls.append(text)
-    return urls[:12]
-
-
-def _person_award_year(value):
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    text = _text(value)
-    return int(text) if text.isdigit() else None
-
-
-def _person_award_tmdb_id(value):
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    text = _text(value)
-    return int(text) if text.isdigit() else None
-
-
-def _person_awards(item):
-    """Normalize MovieVault person awards to the shared award schema."""
-    awards = []
-    for entry in (item.get("awards") or []):
-        if not isinstance(entry, dict):
-            continue
-        award = _text(entry.get("award"))
-        award_qid = _text(entry.get("awardWikidataId") or entry.get("award_wikidata_id"))
-        if not award and not award_qid:
-            continue
-        result = _text(entry.get("result")).lower()
-        awards.append(
-            {
-                "award": award or award_qid,
-                "awardWikidataId": award_qid,
-                "category": _text(entry.get("category")),
-                "year": _person_award_year(entry.get("year")),
-                "work": _text(entry.get("work")),
-                "workWikidataId": _text(entry.get("workWikidataId") or entry.get("work_wikidata_id")),
-                "workTmdbId": _person_award_tmdb_id(entry.get("workTmdbId") or entry.get("work_tmdb_id")),
-                "result": "won" if result == "won" else "nominated",
-                "source": _text(entry.get("source")) or PROVIDER_ID,
-                "sourceRef": _text(entry.get("sourceRef") or entry.get("source_ref")),
-            }
-        )
-    return awards
-
-
-def _person_payload(item, *, language="", source_ref=""):
-    name = _text(item.get("name"))
-    if not name:
-        return {"status": "miss", "provider": PROVIDER_ID, "reason": "not_found"}
-    localizations = _person_localizations(item)
-    configured = str(language or "").strip().lower()
-    bios_by_lang = {row["lang"].lower(): row["biography"] for row in localizations}
-    biography = _text(item.get("biography"))
-    preferred = bios_by_lang.get(configured) or next(
-        (bio for lang_key, bio in bios_by_lang.items() if lang_key.split("-")[0] == configured.split("-")[0]),
-        "",
-    )
-    if preferred:
-        biography = preferred
-    elif not biography and localizations:
-        biography = localizations[0]["biography"]
-    profile_url = _image_url(item.get("profileUrl") or item.get("profile_url"))
-    profiles = _person_profiles(item)
-    if profile_url and profile_url.lower().startswith("https://") and profile_url not in profiles:
-        profiles.insert(0, profile_url)
-    aliases = [_text(alias) for alias in (item.get("alsoKnownAs") or item.get("also_known_as") or []) if _text(alias)]
-    movievault_id = _text(item.get("id") or item.get("movieVaultId") or item.get("movievault_id"))
-    return {
-        "status": "hit",
-        "provider": PROVIDER_ID,
-        "sourceLabel": PROVIDER_LABEL,
-        "sourceRef": source_ref or (f"movievault:person:{movievault_id}" if movievault_id else ""),
-        "movieVaultId": movievault_id,
-        "tmdbId": _text(item.get("tmdbId") or item.get("tmdb_id")),
-        "imdbId": _text(item.get("imdbId") or item.get("imdb_id")),
-        "name": name,
-        "biography": biography,
-        "birthday": _text(item.get("birthday") or item.get("birthDate") or item.get("birth_date")),
-        "deathday": _text(item.get("deathday") or item.get("deathDate") or item.get("death_date")),
-        "placeOfBirth": _text(item.get("placeOfBirth") or item.get("place_of_birth")),
-        "knownFor": _text(item.get("knownFor") or item.get("known_for")),
-        "alsoKnownAs": aliases,
-        "profileUrl": profile_url,
-        "profiles": profiles,
-        "awards": _person_awards(item),
-        "localizations": localizations,
-        "language": _text(language),
-    }
-
-
-def person_details(payload, context=None):
-    payload = payload or {}
-    if not _movievault_enabled(context):
-        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "disabled"}
-    tmdb_id = _text(payload.get("tmdbId") or payload.get("tmdb_id"))
-    imdb_id = _text(payload.get("imdbId") or payload.get("imdb_id"))
-    movievault_id = _text(
-        payload.get("movieVaultId")
-        or payload.get("movievaultId")
-        or payload.get("movievault_id")
-        or payload.get("personId")
-        or payload.get("id")
-    )
-    name = _text(payload.get("name") or payload.get("q"))
-    language = _text(_settings(context).get("language")) or "en-US"
-    item = {}
-    source_ref = ""
-    if movievault_id.startswith("mv_person_"):
-        data = _get(context or {}, f"/api/v1/people/{quote(movievault_id)}")
-        results = _person_results(data)
-        if results:
-            item = results[0]
-            source_ref = f"movievault:person:{movievault_id}"
-    if not item and (tmdb_id or imdb_id or name):
-        data = _get(
-            context or {},
-            "/api/v1/people",
-            tmdbId=tmdb_id,
-            imdbId=imdb_id,
-            q="" if (tmdb_id or imdb_id) else name,
-        )
-        results = _person_results(data)
-        if results:
-            item = results[0]
-            if tmdb_id:
-                source_ref = f"movievault:person:tmdb:{tmdb_id}"
-            elif imdb_id:
-                source_ref = f"movievault:person:imdb:{imdb_id}"
-    if not item:
-        return {"status": "miss", "provider": PROVIDER_ID, "reason": "not_found"}
-    return _person_payload(item, language=language, source_ref=source_ref)
-
-
 def _safe_contribution_value(value):
     if isinstance(value, dict):
         clean = {}
@@ -1865,12 +1415,6 @@ def _contribution_template(context, *, force_refresh=False):
     template = _json(_request("GET", key, context=context))
     _TEMPLATE_CACHE[key] = {"fetchedAt": now, "template": template}
     return template
-
-
-def _cached_min_client_version(context):
-    cached = _TEMPLATE_CACHE.get(_template_cache_key(context))
-    template = (cached or {}).get("template") if isinstance(cached, dict) else {}
-    return _text((template or {}).get("minClientVersion"))
 
 
 def _allowed_fields(template, entity_type):
@@ -2095,7 +1639,7 @@ def _public_reference(reference):
 
 def _connection_details(context):
     connection = _movievault_context(context)
-    details = {
+    return {
         "name": PROVIDER_LABEL,
         "baseUrl": _base_url(context),
         "contributionUrl": _contribution_url(context),
@@ -2107,10 +1651,7 @@ def _connection_details(context):
         "sharingMode": _sharing_mode(context),
         "tokenPrefix": connection.get("tokenPrefix"),
         "tokenSet": bool(connection.get("tokenSet") or _token(context)),
-        "clientVersion": _source_version(context) or None,
-        "minClientVersion": _cached_min_client_version(context) or None,
     }
-    return details
 
 
 def _payload_identity(payload, contribution_payload):
@@ -2200,120 +1741,6 @@ def activity_summary(payload, context=None):
     return result
 
 
-_DEFAULT_LOCALIZED_FIELDS = ("title", "originalTitle", "overview", "edition", "description", "biography")
-_DEFAULT_LOCALIZED_FIELD_PATTERN = "<field>_<iso-639-1-language>"
-
-
-def _localized_language_code(value):
-    code = _text(value).strip().lower()
-    if not code:
-        return ""
-    for sep in ("-", "_"):
-        if sep in code:
-            code = code.split(sep, 1)[0]
-    return code.strip()
-
-
-def _iter_template_field_defs(template, entity_type):
-    candidates = []
-    fields = template.get("fields")
-    if isinstance(fields, dict):
-        candidates.append(fields)
-    for container_key in ("templates", "entities", "entityTypes"):
-        container = template.get(container_key)
-        if isinstance(container, dict):
-            entity_def = container.get(entity_type)
-            if isinstance(entity_def, dict) and isinstance(entity_def.get("fields"), dict):
-                candidates.append(entity_def["fields"])
-    for mapping in candidates:
-        for name, spec in mapping.items():
-            yield _text(name), spec
-
-
-def _localized_field_settings(template, entity_type):
-    pattern = _DEFAULT_LOCALIZED_FIELD_PATTERN
-    fields = set()
-    if isinstance(template, dict):
-        pattern = _text(template.get("localizedFieldPattern")) or pattern
-        explicit = template.get("localizedFields")
-        if isinstance(explicit, list):
-            fields = {_text(item) for item in explicit if _text(item)}
-        if not fields:
-            for name, spec in _iter_template_field_defs(template, entity_type):
-                if name and isinstance(spec, dict) and spec.get("localized"):
-                    fields.add(name)
-    if not fields:
-        fields = set(_DEFAULT_LOCALIZED_FIELDS)
-    return pattern, fields
-
-
-def _format_localized_key(pattern, base, lang):
-    key = pattern or _DEFAULT_LOCALIZED_FIELD_PATTERN
-    replacements = (
-        ("<field>", base),
-        ("<iso-639-1-language>", lang),
-        ("<iso-639-1>", lang),
-        ("<language>", lang),
-        ("<lang>", lang),
-    )
-    for token, value in replacements:
-        key = key.replace(token, value)
-    return _text(key)
-
-
-def _expand_localized_fields(entity_type, safe_payload, localizations, allowed, template):
-    if not isinstance(safe_payload, dict):
-        return safe_payload
-    if entity_type not in {"movie", "release", "box_set", "person"}:
-        return safe_payload
-    if not isinstance(localizations, list) or not localizations:
-        return safe_payload
-    pattern, localized_fields = _localized_field_settings(template, entity_type)
-    enriched = dict(safe_payload)
-    for entry in localizations:
-        if not isinstance(entry, dict):
-            continue
-        lang = _localized_language_code(
-            entry.get("lang") or entry.get("language") or entry.get("locale")
-        )
-        if not lang:
-            continue
-        for base in localized_fields:
-            if allowed and base not in allowed:
-                continue
-            value = _safe_contribution_value(entry.get(base))
-            if value in (None, "", [], {}):
-                continue
-            key = _format_localized_key(pattern, base, lang)
-            if not key or key in enriched:
-                continue
-            enriched[key] = value
-    return enriched
-
-
-def _with_release_title_mapping(entity_type, safe_payload):
-    """Map DiscVault's clean/raw titles onto the MovieVault release contract.
-
-    The MovieVault *release* entity carries the PHYSICAL/packaging title in
-    ``title`` while the canonical film title travels as ``movieTitle`` /
-    ``tmdbTitle``. DiscVault keeps the clean title in ``title`` and the raw
-    scanned title in ``release_title``, so swap them for release contributions."""
-    if entity_type != "release" or not isinstance(safe_payload, dict):
-        return safe_payload
-    enriched = dict(safe_payload)
-    clean_title = _text(enriched.get("title"))
-    raw_release_title = enriched.pop("release_title", None)
-    raw_release_title_camel = enriched.pop("releaseTitle", None)
-    scanned_title = _text(raw_release_title or raw_release_title_camel)
-    physical_title = scanned_title or clean_title
-    if physical_title:
-        enriched["title"] = physical_title
-    if clean_title:
-        enriched.setdefault("movieTitle", clean_title)
-        enriched.setdefault("tmdbTitle", clean_title)
-    return enriched
-
-
 def _contribution_payload(payload, template):
     entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
     if entity_type not in {"movie", "release", "box_set", "person"}:
@@ -2324,33 +1751,10 @@ def _contribution_payload(payload, template):
     safe_payload = _safe_contribution_value(raw_payload)
     allowed = _allowed_fields(template, entity_type)
     safe_payload = _with_box_set_member_aliases(entity_type, safe_payload, allowed)
-    safe_payload = _with_release_title_mapping(entity_type, safe_payload)
-    localizations = safe_payload.pop("localizations", None) if isinstance(safe_payload, dict) else None
     if allowed:
         safe_payload = {key: value for key, value in safe_payload.items() if key in allowed}
-    safe_payload = _expand_localized_fields(entity_type, safe_payload, localizations, allowed, template)
     safe_payload = _with_provider_title_hints(entity_type, safe_payload, payload, allowed)
     return entity_type, safe_payload
-
-
-def _contribution_field_diagnostics(payload, template, contribution_payload):
-    entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
-    raw_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
-    if not raw_payload:
-        raw_payload = {key: value for key, value in payload.items() if key not in {"entityType", "entity_type", "sourceReference", "source_reference", "force"}}
-    safe_incoming = _safe_contribution_value(raw_payload)
-    incoming_keys = {
-        _text(key)
-        for key, value in (safe_incoming.items() if isinstance(safe_incoming, dict) else [])
-        if _text(key) and _text(key) != "localizations" and value not in (None, "", [], {})
-    }
-    accepted_keys = {_text(key) for key in (contribution_payload or {}).keys() if _text(key)}
-    allowed = _allowed_fields(template, entity_type)
-    dropped = []
-    for key in sorted(incoming_keys - accepted_keys):
-        reason = "not_in_template" if allowed else "excluded"
-        dropped.append({"field": key, "reason": reason})
-    return sorted(accepted_keys), dropped
 
 
 def _validation_error(response_payload):
@@ -2396,14 +1800,11 @@ def receive_metadata(payload, context=None):
             return {"status": "skipped", "provider": PROVIDER_ID, "reason": "empty_or_disallowed_payload"}
         envelope["payload"] = contribution_payload
         response_payload = _post_contribution(context, envelope)
-    accepted_fields, dropped_fields = _contribution_field_diagnostics(payload, template, contribution_payload)
     return {
         "status": "submitted",
         "provider": PROVIDER_ID,
         "entityType": entity_type,
         "idempotencyPrefix": envelope["idempotencyKey"][:24],
         "templateVersion": template_version,
-        "acceptedFields": accepted_fields,
-        "droppedFields": dropped_fields,
         "response": response_payload,
     }

@@ -43,7 +43,6 @@ PLUGIN_ENTRYPOINTS = (
     "people_for_movie",
     "person_details",
     "person_filmography",
-    "person_awards",
     "images_for_movie",
     "videos_for_movie",
     "technical_specs",
@@ -716,69 +715,3 @@ def plugin_registry_row(row: dict[str, Any]) -> dict[str, Any]:
         "runtime": manifest.get("runtime") or {},
         "updatedAt": row.get("updated_at"),
     }
-
-
-# Metadata/integration plugins surfaced in the "plugins still not configured"
-# notice shown after a metadata refresh. Order is the order they appear in the
-# message. Adding a future integration is a single extra entry here.
-INTEGRATION_PLUGIN_NOTICE_IDS: tuple[str, ...] = (
-    "tmdb",
-    "bluray_com",
-    "plex",
-    "jellyfin",
-    "trakt",
-)
-
-# Display-name fallbacks used when a plugin has not been discovered/installed
-# yet (e.g. right after a version install), so it can never silently drop out
-# of the notice.
-INTEGRATION_PLUGIN_FALLBACK_NAMES: dict[str, str] = {
-    "tmdb": "TMDb",
-    "bluray_com": "Blu-ray.com",
-    "plex": "Plex",
-    "jellyfin": "Jellyfin",
-    "trakt": "Trakt",
-}
-
-
-def _plugin_has_required_settings(plugin: dict[str, Any]) -> bool:
-    schema = plugin.get("settingsSchema") or {}
-    settings = schema.get("settings") if isinstance(schema, dict) else None
-    if not isinstance(settings, list):
-        return False
-    return any(isinstance(item, dict) and item.get("required") for item in settings)
-
-
-def _plugin_is_active(plugin: dict[str, Any]) -> bool:
-    """A plugin counts as active/configured when it is enabled and any required
-    secrets/settings have been provided."""
-    if not plugin.get("enabled"):
-        return False
-    if plugin.get("requiresSecrets") and not plugin.get("secretsConfigured"):
-        return False
-    if _plugin_has_required_settings(plugin) and not plugin.get("settingsConfigured"):
-        return False
-    return True
-
-
-def unconfigured_integration_plugins(
-    conn, table_exists: TableExists, Jsonb: JsonbFactory
-) -> list[dict[str, str]]:
-    """Return display info for metadata/integration plugins that are still
-    disabled or not configured, in notice order. Each entry is
-    ``{"id": ..., "name": ...}``."""
-    try:
-        snapshot = plugin_registry_snapshot(conn, table_exists, Jsonb)
-    except Exception:
-        snapshot = {"plugins": []}
-    by_id = {plugin.get("id"): plugin for plugin in snapshot.get("plugins", [])}
-    result: list[dict[str, str]] = []
-    for plugin_id in INTEGRATION_PLUGIN_NOTICE_IDS:
-        plugin = by_id.get(plugin_id)
-        fallback_name = INTEGRATION_PLUGIN_FALLBACK_NAMES.get(plugin_id, plugin_id)
-        if plugin is None:
-            result.append({"id": plugin_id, "name": fallback_name})
-            continue
-        if not _plugin_is_active(plugin):
-            result.append({"id": plugin_id, "name": plugin.get("name") or fallback_name})
-    return result
