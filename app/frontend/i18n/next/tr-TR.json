@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Katkı devre dışı",
   "movieDetail.debugSourcesReasonNeedsConfig": "Eklenti yapılandırma gerektiriyor",
   "movieDetail.debugSourcesReasonNoMatch": "Eşleşme yok",
+  "movieDetail.debugSourcesReasonRateLimited": "Hız sınırı – daha sonra deneyin",
   "movieDetail.debugSourcesExcludedFields": "Hariç tutulan alanlar",
   "movieDetail.debugSourcesAcceptedFields": "Kabul edilen alanlar",
   "movieDetail.debugSourcesNotAcceptedFields": "Kabul edilmedi",

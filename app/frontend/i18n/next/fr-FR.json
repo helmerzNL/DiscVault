@@ -693,6 +693,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Contribution désactivée",
   "movieDetail.debugSourcesReasonNeedsConfig": "Le plug-in doit être configuré",
   "movieDetail.debugSourcesReasonNoMatch": "Aucune correspondance",
+  "movieDetail.debugSourcesReasonRateLimited": "Débit limité – réessayez plus tard",
   "movieDetail.debugSourcesExcludedFields": "Champs exclus",
   "movieDetail.debugSourcesAcceptedFields": "Champs acceptés",
   "movieDetail.debugSourcesNotAcceptedFields": "Non acceptés",

@@ -968,6 +968,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Contribution disabled",
   "movieDetail.debugSourcesReasonNeedsConfig": "Plugin needs configuration",
   "movieDetail.debugSourcesReasonNoMatch": "No match",
+  "movieDetail.debugSourcesReasonRateLimited": "Rate limited – retry later",
   "movieDetail.debugSourcesExcludedFields": "Excluded fields",
   "movieDetail.debugSourcesAcceptedFields": "Accepted fields",
   "movieDetail.debugSourcesNotAcceptedFields": "Not accepted",

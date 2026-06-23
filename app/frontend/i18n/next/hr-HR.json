@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Doprinos onemogućen",
   "movieDetail.debugSourcesReasonNeedsConfig": "Dodatak treba konfiguraciju",
   "movieDetail.debugSourcesReasonNoMatch": "Nema podudaranja",
+  "movieDetail.debugSourcesReasonRateLimited": "Ograničeno – pokušajte kasnije",
   "movieDetail.debugSourcesExcludedFields": "Isključena polja",
   "movieDetail.debugSourcesAcceptedFields": "Prihvaćena polja",
   "movieDetail.debugSourcesNotAcceptedFields": "Nije prihvaćeno",

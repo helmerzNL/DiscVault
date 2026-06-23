@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Prispevek onemogočen",
   "movieDetail.debugSourcesReasonNeedsConfig": "Vtičnik potrebuje konfiguracijo",
   "movieDetail.debugSourcesReasonNoMatch": "Ni ujemanja",
+  "movieDetail.debugSourcesReasonRateLimited": "Omejeno – poskusite pozneje",
   "movieDetail.debugSourcesExcludedFields": "Izključena polja",
   "movieDetail.debugSourcesAcceptedFields": "Sprejeta polja",
   "movieDetail.debugSourcesNotAcceptedFields": "Ni sprejeto",

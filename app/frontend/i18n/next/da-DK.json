@@ -693,6 +693,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Bidrag deaktiveret",
   "movieDetail.debugSourcesReasonNeedsConfig": "Plugin kræver konfiguration",
   "movieDetail.debugSourcesReasonNoMatch": "Intet match",
+  "movieDetail.debugSourcesReasonRateLimited": "Hastighedsbegrænset – prøv igen senere",
   "movieDetail.debugSourcesExcludedFields": "Ekskluderede felter",
   "movieDetail.debugSourcesAcceptedFields": "Accepterede felter",
   "movieDetail.debugSourcesNotAcceptedFields": "Ikke accepteret",

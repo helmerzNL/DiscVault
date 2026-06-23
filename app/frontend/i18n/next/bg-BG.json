@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Приносът е изключен",
   "movieDetail.debugSourcesReasonNeedsConfig": "Приставката изисква конфигуриране",
   "movieDetail.debugSourcesReasonNoMatch": "Няма съвпадение",
+  "movieDetail.debugSourcesReasonRateLimited": "Ограничения – опитайте по-късно",
   "movieDetail.debugSourcesExcludedFields": "Изключени полета",
   "movieDetail.debugSourcesAcceptedFields": "Приети полета",
   "movieDetail.debugSourcesNotAcceptedFields": "Неприети",

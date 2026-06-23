@@ -693,6 +693,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Contribución desactivada",
   "movieDetail.debugSourcesReasonNeedsConfig": "El complemento necesita configuración",
   "movieDetail.debugSourcesReasonNoMatch": "Sin coincidencia",
+  "movieDetail.debugSourcesReasonRateLimited": "Límite de solicitudes – inténtalo más tarde",
   "movieDetail.debugSourcesExcludedFields": "Campos excluidos",
   "movieDetail.debugSourcesAcceptedFields": "Campos aceptados",
   "movieDetail.debugSourcesNotAcceptedFields": "No aceptado",

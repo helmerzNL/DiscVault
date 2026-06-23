@@ -693,6 +693,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Contribuição desativada",
   "movieDetail.debugSourcesReasonNeedsConfig": "O plug-in precisa de configuração",
   "movieDetail.debugSourcesReasonNoMatch": "Sem correspondência",
+  "movieDetail.debugSourcesReasonRateLimited": "Limite de pedidos – tente mais tarde",
   "movieDetail.debugSourcesExcludedFields": "Campos excluídos",
   "movieDetail.debugSourcesAcceptedFields": "Campos aceites",
   "movieDetail.debugSourcesNotAcceptedFields": "Não aceite",

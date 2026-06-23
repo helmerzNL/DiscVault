@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Hozzájárulás letiltva",
   "movieDetail.debugSourcesReasonNeedsConfig": "A bővítmény beállítást igényel",
   "movieDetail.debugSourcesReasonNoMatch": "Nincs találat",
+  "movieDetail.debugSourcesReasonRateLimited": "Korlátozva – próbálja később",
   "movieDetail.debugSourcesExcludedFields": "Kizárt mezők",
   "movieDetail.debugSourcesAcceptedFields": "Elfogadott mezők",
   "movieDetail.debugSourcesNotAcceptedFields": "Nem elfogadott",

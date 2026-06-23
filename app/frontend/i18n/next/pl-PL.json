@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Wkład wyłączony",
   "movieDetail.debugSourcesReasonNeedsConfig": "Wtyczka wymaga konfiguracji",
   "movieDetail.debugSourcesReasonNoMatch": "Brak dopasowania",
+  "movieDetail.debugSourcesReasonRateLimited": "Ograniczenie – spróbuj później",
   "movieDetail.debugSourcesExcludedFields": "Wykluczone pola",
   "movieDetail.debugSourcesAcceptedFields": "Zaakceptowane pola",
   "movieDetail.debugSourcesNotAcceptedFields": "Nie zaakceptowano",

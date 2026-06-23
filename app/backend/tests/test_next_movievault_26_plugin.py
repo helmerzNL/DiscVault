@@ -831,6 +831,50 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(payload["members"][0]["title"], "Harry Potter and the Philosopher's Stone")
         self.assertNotIn("mv_live_test", str(posted[0]))
 
+    def test_receive_metadata_skips_gracefully_when_rate_limited(self):
+        attempts = []
+
+        class RateLimitedResponse(FakeResponse):
+            def __init__(self):
+                super().__init__(429, {"error": {"code": "rate_limited"}})
+                self.headers = {"Retry-After": "0"}
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(200, {"version": "tpl-1", "allowedFields": ["title"]})
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                attempts.append(url)
+                return RateLimitedResponse()
+            return FakeResponse(404, {})
+
+        original_requests = movievault_26.requests
+        original_cache = dict(movievault_26._TEMPLATE_CACHE)
+        original_sleep = movievault_26.time.sleep
+        try:
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26.requests = types.SimpleNamespace(request=fake_request)
+            movievault_26.time.sleep = lambda *_args, **_kwargs: None
+            result = movievault_26.receive_metadata(
+                {
+                    "entityType": "movie",
+                    "identity": "tt0078748",
+                    "payload": {"title": "Alien"},
+                },
+                {
+                    "secrets": {"token": "mv_live_test"},
+                    "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+                },
+            )
+        finally:
+            movievault_26.requests = original_requests
+            movievault_26.time.sleep = original_sleep
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26._TEMPLATE_CACHE.update(original_cache)
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "rate_limited")
+        self.assertEqual(len(attempts), movievault_26.RATE_LIMIT_MAX_RETRIES + 1)
+
     def test_describe_payload_summarizes_box_set_contribution(self):
         result = movievault_26.describe_payload(
             {

@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "Indėlis išjungtas",
   "movieDetail.debugSourcesReasonNeedsConfig": "Papildinį reikia sukonfigūruoti",
   "movieDetail.debugSourcesReasonNoMatch": "Nėra atitikmens",
+  "movieDetail.debugSourcesReasonRateLimited": "Apribota – bandykite vėliau",
   "movieDetail.debugSourcesExcludedFields": "Neįtraukti laukai",
   "movieDetail.debugSourcesAcceptedFields": "Priimti laukai",
   "movieDetail.debugSourcesNotAcceptedFields": "Nepriimta",

@@ -944,6 +944,7 @@
   "movieDetail.debugSourcesReasonDisabled": "기여 비활성화됨",
   "movieDetail.debugSourcesReasonNeedsConfig": "플러그인 구성이 필요함",
   "movieDetail.debugSourcesReasonNoMatch": "일치 없음",
+  "movieDetail.debugSourcesReasonRateLimited": "요청 제한 – 나중에 다시 시도하세요",
   "movieDetail.debugSourcesExcludedFields": "제외된 필드",
   "movieDetail.debugSourcesAcceptedFields": "수락된 필드",
   "movieDetail.debugSourcesNotAcceptedFields": "수락되지 않음",
