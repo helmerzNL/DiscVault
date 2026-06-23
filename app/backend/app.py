@@ -2629,15 +2629,21 @@ def _parse_import_country(raw_title: str) -> tuple[str, str]:
     if not text:
         return "", ""
 
-    for match in re.finditer(r'([A-Za-z.][A-Za-z. ]*?)\s+import\b', text, flags=re.I):
-        phrase = match.group(1).strip().lower()
+    for match in re.finditer(r'\bimport\b', text, flags=re.I):
+        end = match.start()
+        while end > 0 and text[end - 1].isspace():
+            end -= 1
+        start = end
+        while start > 0 and (text[start - 1].isalpha() or text[start - 1] in ". "):
+            start -= 1
+        phrase = text[start:end].strip().lower()
         token = phrase.split()[-1] if phrase.split() else phrase
         for key in (phrase, token):
             mapped = _IMPORT_COUNTRY_MAP.get(key)
             if mapped:
                 return mapped, ""
         if phrase:
-            return "", f"{match.group(1).strip().title()} Import"
+            return "", f"{text[start:end].strip().title()} Import"
 
     region_match = re.search(r'region[\s-]*(free|locked|[ABC]|[0-9])\b', text, flags=re.I)
     if region_match:

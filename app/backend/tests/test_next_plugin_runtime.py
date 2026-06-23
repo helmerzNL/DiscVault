@@ -43,6 +43,10 @@ from app.backend.next_plugins._collection_import_base import CollectionImportPlu
 from app.backend.next_plugins._collection_import_base import parse_release_date
 from app.backend.next_plugins.bluray_com.plugin import _movie_title_from_release_title
 from app.backend.next_plugins.trakt import plugin as trakt_plugin
+from app.backend.next_plugin_runtime import (
+    _plugin_is_active,
+    unconfigured_integration_plugins,
+)
 
 
 class FakeResponse:
@@ -453,6 +457,24 @@ class NextPluginRuntimeTests(unittest.TestCase):
                 plugin = plugins[plugin_id]
                 self.assertIn("personal_list_source", plugin.manifest["categories"])
                 self.assertIn("sync_personal_lists", plugin.runtime["entrypoints"])
+
+    def test_tmdb_exposes_person_awards_capability_and_entrypoint(self):
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        plugin = plugins["tmdb"]
+        self.assertIn("person_awards", plugin.manifest["capabilities"])
+        self.assertIn("person_awards", plugin.runtime["entrypoints"])
+        self.assertIn("person_details", plugin.runtime["entrypoints"])
+
+    def test_movievault_exposes_person_details_capability_and_entrypoint(self):
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        plugin = plugins["movievault_26"]
+        self.assertIn("metadata_source", plugin.manifest["categories"])
+        self.assertIn("person_details", plugin.manifest["capabilities"])
+        self.assertIn("person_details", plugin.runtime["entrypoints"])
 
     def test_upcitemdb_is_tagged_as_bootstrap_metadata_source(self):
         discovery = discover_plugins()
@@ -871,6 +893,106 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(item["format"], "Ultra HD Blu-ray")
         self.assertEqual(item["director"], "Denis Villeneuve")
         self.assertIn("Timothee", item["actor"])
+
+
+class UnconfiguredIntegrationPluginsTests(unittest.TestCase):
+    @staticmethod
+    def _plugin(plugin_id, name, *, enabled=True, requires_secrets=False,
+                secrets_configured=False, settings_schema=None, settings_configured=False):
+        return {
+            "id": plugin_id,
+            "name": name,
+            "enabled": enabled,
+            "requiresSecrets": requires_secrets,
+            "secretsConfigured": secrets_configured,
+            "settingsConfigured": settings_configured,
+            "settingsSchema": settings_schema or {},
+        }
+
+    def test_plugin_is_active_requires_enabled_and_secrets(self):
+        self.assertFalse(_plugin_is_active(self._plugin("tmdb", "TMDb", enabled=False)))
+        self.assertFalse(
+            _plugin_is_active(
+                self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=False)
+            )
+        )
+        self.assertTrue(
+            _plugin_is_active(
+                self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=True)
+            )
+        )
+
+    def test_plugin_is_active_requires_required_settings(self):
+        schema = {"settings": [{"name": "baseUrl", "required": True}]}
+        self.assertFalse(
+            _plugin_is_active(
+                self._plugin(
+                    "plex", "Plex", requires_secrets=True, secrets_configured=True,
+                    settings_schema=schema, settings_configured=False,
+                )
+            )
+        )
+        self.assertTrue(
+            _plugin_is_active(
+                self._plugin(
+                    "plex", "Plex", requires_secrets=True, secrets_configured=True,
+                    settings_schema=schema, settings_configured=True,
+                )
+            )
+        )
+
+    def test_unconfigured_lists_disabled_and_missing_plugins_in_order(self):
+        snapshot = {
+            "plugins": [
+                # tmdb fully configured -> excluded
+                self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=True),
+                # bluray disabled -> included
+                self._plugin("bluray_com", "Blu-ray.com", enabled=False),
+                # plex enabled but missing secrets -> included
+                self._plugin("plex", "Plex", requires_secrets=True, secrets_configured=False),
+                # jellyfin fully configured -> excluded
+                self._plugin(
+                    "jellyfin", "Jellyfin", requires_secrets=True, secrets_configured=True,
+                ),
+                # trakt not present in snapshot -> included via fallback name
+            ]
+        }
+        with patch(
+            "app.backend.next_plugin_runtime.plugin_registry_snapshot",
+            return_value=snapshot,
+        ):
+            result = unconfigured_integration_plugins(Mock(), Mock(), Mock())
+        self.assertEqual(
+            result,
+            [
+                {"id": "bluray_com", "name": "Blu-ray.com"},
+                {"id": "plex", "name": "Plex"},
+                {"id": "trakt", "name": "Trakt"},
+            ],
+        )
+
+    def test_unconfigured_empty_when_all_active(self):
+        snapshot = {
+            "plugins": [
+                self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=True),
+                self._plugin("bluray_com", "Blu-ray.com"),
+                self._plugin(
+                    "plex", "Plex", requires_secrets=True, secrets_configured=True,
+                ),
+                self._plugin(
+                    "jellyfin", "Jellyfin", requires_secrets=True, secrets_configured=True,
+                ),
+                self._plugin(
+                    "trakt", "Trakt", requires_secrets=True, secrets_configured=True,
+                ),
+            ]
+        }
+        with patch(
+            "app.backend.next_plugin_runtime.plugin_registry_snapshot",
+            return_value=snapshot,
+        ):
+            result = unconfigured_integration_plugins(Mock(), Mock(), Mock())
+        self.assertEqual(result, [])
 
 
 if __name__ == "__main__":
