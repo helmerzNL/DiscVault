@@ -417,6 +417,28 @@ def _image_url(value):
     return text if text.startswith(("http://", "https://")) else ""
 
 
+def _resolve_asset_url(value, context=None):
+    """Return an absolute image URL.
+
+    MovieVault serves box-set artwork as root-relative asset paths
+    (e.g. ``/api/v1/assets/box_sets/.../poster/...``) so the URL stays portable
+    across hosts. Resolve those against the configured MovieVault base URL
+    instead of dropping them like :func:`_image_url` does for non-absolute
+    values; otherwise a box-set loses its own cover and falls back to a member
+    poster.
+    """
+    text = _text(value)
+    if not text:
+        return ""
+    if text.startswith(("http://", "https://")):
+        return text
+    if text.startswith("/"):
+        base = _base_url(context)
+        if base:
+            return f"{base}{text}"
+    return ""
+
+
 def _is_public_barcode(value):
     text = _text(value)
     return text.isdigit() and len(text) in PUBLIC_BARCODE_LENGTHS
@@ -1039,6 +1061,8 @@ def _normalize_box_set_proposal(payload, context=None):
     if not title:
         return {}
 
+    box_set_poster = _resolve_asset_url(_first_value(item, "posterUrl", "poster_url", "poster", "image"), context)
+    box_set_backdrop = _resolve_asset_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop"), context)
     proposal = {
         "title": title,
         "name": title,
@@ -1049,11 +1073,11 @@ def _normalize_box_set_proposal(payload, context=None):
         "year": _parse_year(_first_value(item, "year", "releaseYear", "release_year")),
         "year_range": _text(_first_value(item, "yearRange", "year_range")),
         "format": selected_format or _text(_first_value(item, "format", "mediaType", "media_type")),
-        "poster": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
-        "poster_url": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
-        "posterUrl": _image_url(_first_value(item, "posterUrl", "poster_url", "poster", "image")),
-        "backdrop": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
-        "backdrop_url": _image_url(_first_value(item, "backdropUrl", "backdrop_url", "backdrop")),
+        "poster": box_set_poster,
+        "poster_url": box_set_poster,
+        "posterUrl": box_set_poster,
+        "backdrop": box_set_backdrop,
+        "backdrop_url": box_set_backdrop,
         "backdrop_urls": item.get("backdrop_urls") or item.get("backdropUrls") or [],
         "movies": members,
         "members": members,
