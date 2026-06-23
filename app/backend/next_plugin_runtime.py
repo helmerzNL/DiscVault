@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,11 @@ JsonbFactory = Callable[[Any], Any]
 TableExists = Callable[[Any, str], bool]
 
 DEFAULT_PLUGIN_DIR = Path(__file__).resolve().parent / "next_plugins"
+# Marker file written inside the writable plugin install directory once the
+# bundled default plugins have been seeded into it. Its presence means the
+# install directory is the authoritative plugin source and default plugins may
+# be deleted without reappearing on the next boot.
+PLUGIN_INITIALIZED_MARKER = ".initialized"
 VALID_CATEGORIES = {
     "metadata_source",
     "metadata_bootstrap",
@@ -81,9 +87,104 @@ def plugin_install_dir() -> Path:
     return Path(configured) if configured else data_dir / "plugins"
 
 
+def bundled_plugin_dir() -> Path:
+    raw = os.environ.get("DISCVAULT_BUNDLED_PLUGIN_DIR", "").strip()
+    return Path(raw).expanduser() if raw else DEFAULT_PLUGIN_DIR
+
+
+def plugin_dir_contains_plugins(path: Path) -> bool:
+    if not path.exists() or not path.is_dir():
+        return False
+    return any(item.is_dir() and (item / "manifest.json").exists() for item in path.iterdir())
+
+
+def bundled_default_plugin_dirs() -> list[Path]:
+    source_root = bundled_plugin_dir()
+    if not source_root.exists() or not source_root.is_dir():
+        return []
+    return sorted(
+        item
+        for item in source_root.iterdir()
+        if item.is_dir() and (item / "manifest.json").exists()
+    )
+
+
+def seed_default_plugins_if_needed() -> dict[str, Any]:
+    """Copy the bundled default plugins into the writable install directory once.
+
+    After seeding, a ``.initialized`` marker is written so the install directory
+    becomes the authoritative plugin source. This lets default plugins be
+    deleted (they live in a writable location) without reappearing on the next
+    boot, and gives a future plugin portal a single place to add plugins.
+
+    Seeding is skipped (leaving the bundled directory as a read fallback) when
+    the data directory is absent or read-only, so the app is never left without
+    plugins.
+    """
+
+    install_dir = plugin_install_dir()
+    marker = install_dir / PLUGIN_INITIALIZED_MARKER
+    result: dict[str, Any] = {
+        "path": str(install_dir),
+        "marker": str(marker),
+        "initialized": marker.exists(),
+        "seeded": [],
+        "skippedExisting": [],
+        "errors": [],
+    }
+    if result["initialized"]:
+        return result
+
+    # Do not fabricate a data root (e.g. "/data") that does not exist; that is
+    # the signal we are running without a writable data directory (such as in
+    # unit tests), where the bundled directory should remain the source.
+    if not install_dir.parent.exists():
+        return result
+
+    try:
+        install_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        result["errors"].append({"path": str(install_dir), "error": str(exc)})
+        return result
+
+    for source in bundled_default_plugin_dirs():
+        target = install_dir / source.name
+        if target.exists():
+            result["skippedExisting"].append(source.name)
+            continue
+        try:
+            shutil.copytree(source, target)
+            result["seeded"].append(source.name)
+        except OSError as exc:
+            result["errors"].append({"path": str(target), "error": str(exc)})
+
+    try:
+        marker.write_text(
+            json.dumps(
+                {
+                    "initializedAt": int(time.time()),
+                    "source": str(bundled_plugin_dir()),
+                    "seeded": result["seeded"],
+                }
+            ),
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        result["errors"].append({"path": str(marker), "error": str(exc)})
+
+    result["initialized"] = marker.exists()
+    return result
+
+
 def plugin_paths() -> list[Path]:
+    seed = seed_default_plugins_if_needed()
     configured = os.environ.get("DISCVAULT_PLUGIN_PATHS", "").strip()
-    paths = [plugin_install_dir(), DEFAULT_PLUGIN_DIR]
+    # The writable install directory is the authoritative source. The bundled
+    # directory is only used as a fallback when seeding did not complete, so a
+    # deleted default plugin does not reappear from the read-only image.
+    paths = [plugin_install_dir()]
+    if not seed.get("initialized"):
+        paths.append(DEFAULT_PLUGIN_DIR)
     if configured:
         for item in configured.split(os.pathsep):
             item = item.strip()
