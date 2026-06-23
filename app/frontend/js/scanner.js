@@ -431,9 +431,11 @@ async function doLookup(barcode) {
       const fmtLabel = _detectedFormat ? ` · ${_detectedFormat}` : '';
       showStatus('scanStatus', t('js.movieNotFound', barcode) + fmtLabel, 'error');
       currentBarcode = barcode;
-      currentMovieData = { title: finalData.raw_title || '', barcode };
+      const _cleanTitle = finalData.clean_title || finalData.raw_title || '';
+      currentMovieData = { title: _cleanTitle, barcode };
+      if (finalData.raw_title) currentMovieData.release_title = finalData.raw_title;
       if (_detectedFormat) currentMovieData.format = _detectedFormat;
-      document.getElementById('resultTitle').textContent = finalData.raw_title || barcode;
+      document.getElementById('resultTitle').textContent = _cleanTitle || barcode;
       const tags = document.getElementById('resultTags');
       tags.innerHTML = '';
       if (_detectedFormat) tags.innerHTML += `<span class="tag format">${_detectedFormat}</span>`;

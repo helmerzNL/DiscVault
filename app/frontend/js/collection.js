@@ -82,6 +82,7 @@ function movieMatchesSearch(m, q) {
     m.barcode,
     m.title,
     m.original_title,
+    m.release_title,
     m.director,
     m.actor,
     m.genre,
@@ -1907,6 +1908,7 @@ async function openMovieDetail(id, skipGroupRedirect) {
     row(t('detail.containers', 'Containers'), containerSummary, true),
     row(t('d.genre'),          movie.genre, true),
     row(t('d.origTitle'),movie.original_title),
+    row(t('d.releaseTitle', 'Release-titel'), movie.release_title),
     row(t('d.country'),           movie.country),
     row(t('d.language'),           movie.language),
     row(t('d.releaseDate'),   movie.release_date),
@@ -3179,6 +3181,7 @@ async function syncSingleMovieSource(source, buttonId) {
 const EDIT_FIELDS = {
   Title:              'title',
   OriginalTitle:      'original_title',
+  ReleaseTitle:       'release_title',
   SortTitle:          'sort_title',
   Year:               'year',
   ReleaseDate:        'release_date',
@@ -4185,6 +4188,8 @@ async function _fillAddFormFromTmdbId(tmdbId) {
 function _fillAddFields(movie) {
   document.getElementById('addTitle').value          = movie.title          || '';
   document.getElementById('addOriginalTitle').value  = movie.original_title || '';
+  const _addReleaseTitle = document.getElementById('addReleaseTitle');
+  if (_addReleaseTitle) _addReleaseTitle.value = movie.release_title || '';
   if (movie.format) { const s = document.getElementById('addFormat'); if (s) s.value = movie.format; }
   document.getElementById('addYear').value           = movie.year           || '';
   document.getElementById('addReleaseDate').value    = movie.release_date   || '';
@@ -4318,6 +4323,7 @@ async function _doSaveManual(barcode, title) {
   const payload = {
     barcode, title,
     original_title: document.getElementById('addOriginalTitle').value,
+    release_title:  (document.getElementById('addReleaseTitle') || {}).value || '',
     year:           document.getElementById('addYear').value,
     release_date:   document.getElementById('addReleaseDate').value,
     director:       document.getElementById('addDirector').value,
@@ -4361,7 +4367,7 @@ async function _doSaveManual(barcode, title) {
 }
 
 function clearManualForm() {
-  ['addBarcode','addTitle','addOriginalTitle','addYear','addReleaseDate',
+  ['addBarcode','addTitle','addOriginalTitle','addReleaseTitle','addYear','addReleaseDate',
    'addDirector','addActor','addProducer','addStudios','addGenre',
    'addRuntime','addRating','addHdr','addLanguage','addAudioTracks','addSubtitles',
    'addCountry','addPlot','addImdbId','addImdbUrl','addTmdbIdVisible','addTmdbUrl',

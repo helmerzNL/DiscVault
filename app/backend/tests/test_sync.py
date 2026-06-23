@@ -170,6 +170,69 @@ class SyncIntegrationTests(unittest.TestCase):
         self.assertEqual(release_payload["posterUrl"], "https://release.example.test/poster.jpg")
         self.assertEqual(release_payload["backdropUrls"], ["https://release.example.test/backdrop.jpg"])
 
+    def test_clean_scanned_title_strips_packaging_noise(self):
+        clean = self.backend._clean_scanned_title
+        self.assertEqual(
+            clean("John Wick (4K Ultra HD + Blu-ray) (UK Import)"),
+            "John Wick",
+        )
+        self.assertEqual(clean("Heat [Steelbook]"), "Heat")
+        self.assertEqual(clean("Blade Runner 2049 - 4K Ultra HD"), "Blade Runner 2049")
+        # A subtitle after a colon must be preserved.
+        self.assertEqual(clean("Mad Max: Fury Road (Blu-ray)"), "Mad Max: Fury Road")
+        # Titles without noise are returned unchanged.
+        self.assertEqual(clean("Inception"), "Inception")
+        # Never return an empty string when only noise is present.
+        self.assertTrue(clean("(Blu-ray)"))
+
+    def test_parse_import_country_maps_known_hints(self):
+        parse = self.backend._parse_import_country
+        self.assertEqual(parse("John Wick (UK Import)"), ("United Kingdom", ""))
+        self.assertEqual(parse("Suspiria (Italian Import)"), ("Italy", ""))
+        # Unknown nationality falls back to a free-text region note.
+        self.assertEqual(parse("Some Film (Brazilian Import)"), ("", "Brazilian Import"))
+        # Region codes land in the region note.
+        self.assertEqual(parse("Some Film (Region B)"), ("", "Region B"))
+        # No hint at all.
+        self.assertEqual(parse("Plain Title"), ("", ""))
+
+    def test_movievault_release_carries_physical_title_and_canonical_movie_title(self):
+        source = {
+            "title": "John Wick",
+            "release_title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+            "barcode": "5051888255889",
+            "format": "4K UHD",
+            "country": "United Kingdom",
+            "regions": "B",
+        }
+
+        release_payload = self.backend._movievault_raw_payload(source, "release")
+        movie_payload = self.backend._movievault_raw_payload(source, "movie")
+
+        # The release entity carries the full physical/packaging title...
+        self.assertEqual(
+            release_payload["title"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+        # ...while the canonical film title travels as movieTitle/tmdbTitle.
+        self.assertEqual(release_payload["movieTitle"], "John Wick")
+        self.assertEqual(release_payload["tmdbTitle"], "John Wick")
+        self.assertEqual(release_payload["country"], "United Kingdom")
+        self.assertEqual(release_payload["regions"], "B")
+
+        # The movie entity keeps only the clean canonical title.
+        self.assertEqual(movie_payload["title"], "John Wick")
+        self.assertNotIn("movieTitle", movie_payload)
+        self.assertNotIn("releaseTitle", movie_payload)
+        self.assertNotIn("release_title", movie_payload)
+
+    def test_movievault_release_title_falls_back_to_clean_title(self):
+        source = {"title": "Heat", "format": "Blu-ray"}
+        release_payload = self.backend._movievault_raw_payload(source, "release")
+        self.assertEqual(release_payload["title"], "Heat")
+        self.assertEqual(release_payload["movieTitle"], "Heat")
+        self.assertEqual(release_payload["tmdbTitle"], "Heat")
+
     def test_metadata_refresh_policy_keeps_existing_manual_fields(self):
         original_setting = self.backend._setting_value
 

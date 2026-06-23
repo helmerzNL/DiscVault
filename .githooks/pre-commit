@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+# DiscVault: keep app/VERSION in step with app/runtime changes so the version guard
+# (.github/workflows/version-guard.yml) never fails. Auto-bumps the patch version when a
+# protected path is staged without a version change. Never blocks a commit.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+
+if command -v python >/dev/null 2>&1; then
+  python app/scripts/bump_version.py || true
+elif command -v python3 >/dev/null 2>&1; then
+  python3 app/scripts/bump_version.py || true
+fi
+
+exit 0
