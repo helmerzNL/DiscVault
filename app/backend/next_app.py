@@ -19400,7 +19400,15 @@ def ui_preview_html(
         appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
         if (input) input.value = "";
         renderAppAdminPlugins();
-        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginImported", "Plugin imported."), "good");
+        const importedPlugin = (payload && payload.plugin) || null;
+        const importedEnabled = !importedPlugin || importedPlugin.enabled !== false;
+        setAppAdminMessage(
+          "appAdminPluginsMessage",
+          importedEnabled
+            ? tNext("appAdmin.pluginImportedEnabled", "Plugin imported and enabled.")
+            : tNext("appAdmin.pluginImported", "Plugin imported."),
+          "good"
+        );
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -48190,6 +48198,32 @@ def register_routes(flask_app: Flask) -> None:
                     sync_metadata_plugin_registry(conn)
                 else:
                     sync_plugin_registry(conn, table_exists, Jsonb)
+
+                imported_plugin_id = str(manifest["id"])
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT categories FROM plugins WHERE id=%s",
+                        (imported_plugin_id,),
+                    )
+                    imported_row = cur.fetchone()
+                imported_categories = (
+                    (imported_row.get("categories") if imported_row else None) or []
+                )
+                imported_is_metadata_plugin = bool(
+                    {"metadata_source", "metadata_receiver"}.intersection(
+                        set(imported_categories)
+                    )
+                )
+                with conn.cursor() as cur:
+                    if imported_is_metadata_plugin and table_exists(conn, "metadata_plugins"):
+                        cur.execute(
+                            "UPDATE metadata_plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                            (imported_plugin_id,),
+                        )
+                    cur.execute(
+                        "UPDATE plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                        (imported_plugin_id,),
+                    )
                 audit_event(
                     conn,
                     event_type="plugin.imported",
@@ -48204,6 +48238,7 @@ def register_routes(flask_app: Flask) -> None:
                         "version": manifest.get("version"),
                         "categories": manifest.get("categories"),
                         "installedPath": str(installed_path),
+                        "enabled": True,
                     },
                 )
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
