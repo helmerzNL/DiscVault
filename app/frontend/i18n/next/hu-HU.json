@@ -640,6 +640,8 @@
   "personDetail.acting": "Színészi munkák",
   "personDetail.crew": "Stáb",
   "personDetail.noBiography": "Még nincs importált életrajz.",
+  "personDetail.readMore": "Tovább",
+  "personDetail.readLess": "Kevesebb",
   "personDetail.died": "Elhunyt",
   "personDetail.credits": "kreditek",
   "personDetail.knownFor": "Ismert ezekről",

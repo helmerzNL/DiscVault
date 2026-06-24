@@ -640,6 +640,8 @@
   "personDetail.acting": "Aktorstwo",
   "personDetail.crew": "Ekipa",
   "personDetail.noBiography": "Biografia nie została jeszcze zaimportowana.",
+  "personDetail.readMore": "Czytaj więcej",
+  "personDetail.readLess": "Czytaj mniej",
   "personDetail.died": "Zmarł/a",
   "personDetail.credits": "role",
   "personDetail.knownFor": "Znany/a z",

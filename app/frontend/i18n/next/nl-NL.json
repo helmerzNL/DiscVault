@@ -663,6 +663,8 @@
   "personDetail.acting": "Acteren",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Nog geen biografie geimporteerd.",
+  "personDetail.readMore": "Lees meer",
+  "personDetail.readLess": "Lees minder",
   "personDetail.died": "Overleden",
   "personDetail.credits": "credits",
   "personDetail.knownFor": "Bekend van",

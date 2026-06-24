@@ -9828,6 +9828,45 @@ def ui_preview_html(
       color: rgba(255,255,255,.78);
       line-height: 1.55;
     }
+    .person-bio {
+      margin-top: 12px;
+      max-width: 78ch;
+    }
+    .person-bio-text {
+      margin: 0;
+      color: rgba(255,255,255,.78);
+      line-height: 1.55;
+      max-height: 7.8em;
+      overflow: hidden;
+      transition: max-height .2s ease;
+    }
+    .person-bio-text.is-expanded {
+      max-height: min(40vh, 20rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 8px;
+      scrollbar-gutter: stable;
+    }
+    .person-bio-text.has-overflow:not(.is-expanded) {
+      -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+      mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+    }
+    .person-bio-toggle {
+      margin-top: 6px;
+      background: none;
+      border: 0;
+      padding: 2px 0;
+      font: inherit;
+      font-weight: 600;
+      color: #7cc0ff;
+      cursor: pointer;
+    }
+    .person-bio-toggle:hover {
+      text-decoration: underline;
+    }
+    .person-bio-toggle.hidden {
+      display: none;
+    }
     .movie-detail-actions {
       display: flex;
       flex-wrap: wrap;
@@ -14598,7 +14637,7 @@ def ui_preview_html(
             <div class="metadata-compare-panel" id="movieMetadataComparePanel"></div>
           </div>
           <div class="detail-card full debug-card hidden" id="movieDetailDebugLocalizationsCard">
-            <details class="debug-card-details" open>
+            <details class="debug-card-details">
               <summary class="detail-card-head debug-card-summary">
                 <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
                 <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
@@ -14607,7 +14646,7 @@ def ui_preview_html(
             </details>
           </div>
           <div class="detail-card full debug-card hidden" id="movieDetailDebugMetadataCard">
-            <details class="debug-card-details" open>
+            <details class="debug-card-details">
               <summary class="detail-card-head debug-card-summary">
                 <h3 data-next-i18n="movieDetail.debugMetadataPanelTitle">Metadata debug</h3>
                 <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
@@ -14850,11 +14889,13 @@ def ui_preview_html(
               <div class="detail-fields" id="containerDetailMetadataDetails"></div>
             </div>
             <div class="detail-card full debug-card hidden" id="containerDetailDebugCard">
-              <div class="detail-card-head">
-                <h3 data-next-i18n="containerDetail.debugSources">Debug info: metadata sources</h3>
-                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
-              </div>
-              <div class="debug-sources" id="containerDetailDebugSources"></div>
+              <details class="debug-card-details">
+                <summary class="detail-card-head debug-card-summary">
+                  <h3 data-next-i18n="containerDetail.debugSources">Debug info: metadata sources</h3>
+                  <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+                </summary>
+                <div class="debug-sources" id="containerDetailDebugSources"></div>
+              </details>
             </div>
           </div>
         </section>
@@ -14868,7 +14909,10 @@ def ui_preview_html(
               <span class="eyebrow" data-next-i18n="personDetail.title">Person details</span>
               <h2 class="movie-detail-title" id="personDetailTitle">-</h2>
               <div class="hero-meta" id="personDetailTags"></div>
-              <p class="movie-detail-overview" id="personDetailBiography"></p>
+              <div class="person-bio" id="personDetailBiographyWrap">
+                <p class="person-bio-text" id="personDetailBiography"></p>
+                <button type="button" class="person-bio-toggle hidden" id="personDetailBiographyToggle" aria-expanded="false" aria-controls="personDetailBiography"></button>
+              </div>
               <div class="detail-message" id="personDetailMessage"></div>
             </div>
           </div>
@@ -22935,8 +22979,10 @@ def ui_preview_html(
       document.getElementById("movieListStateSummary").textContent = "";
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
       document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
+      document.getElementById("movieDetailDebugLocalizationsCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
       document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
       document.getElementById("movieDetailDebugMetadataCard")?.classList.add("hidden");
+      document.getElementById("movieDetailDebugMetadataCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
       const debugSourcesEl = document.getElementById("movieDetailDebugSources");
       if (debugSourcesEl) debugSourcesEl.innerHTML = "";
       dvMissingContributionReportData = null;
@@ -23290,6 +23336,7 @@ def ui_preview_html(
       document.getElementById("containerDetailIdentifiers").innerHTML = "";
       document.getElementById("containerDetailMetadata").innerHTML = "";
       document.getElementById("containerDetailMetadataDetails").innerHTML = "";
+      document.getElementById("containerDetailDebugCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
       document.getElementById("containerDetailPosterArtwork").innerHTML = "";
       document.getElementById("containerDetailBackdropArtwork").innerHTML = "";
       document.getElementById("containerDetailVideos").innerHTML = "";
@@ -23502,6 +23549,38 @@ def ui_preview_html(
         setPersonDetailMessage(error.message || String(error), "bad");
       }
     }
+    function setPersonBiographyToggleLabel(expanded) {
+      const toggle = document.getElementById("personDetailBiographyToggle");
+      if (!toggle) return;
+      toggle.textContent = expanded
+        ? tNext("personDetail.readLess", "Read less")
+        : tNext("personDetail.readMore", "Read more");
+      toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    }
+    function togglePersonBiography() {
+      const node = document.getElementById("personDetailBiography");
+      if (!node) return;
+      const expanded = node.classList.toggle("is-expanded");
+      setPersonBiographyToggleLabel(expanded);
+    }
+    function applyPersonBiography(text) {
+      const node = document.getElementById("personDetailBiography");
+      const toggle = document.getElementById("personDetailBiographyToggle");
+      if (!node) return;
+      node.textContent = text;
+      node.classList.remove("is-expanded", "has-overflow");
+      if (toggle) toggle.classList.add("hidden");
+      requestAnimationFrame(() => {
+        const current = document.getElementById("personDetailBiography");
+        if (current !== node) return;
+        const overflowing = node.scrollHeight - node.clientHeight > 4;
+        node.classList.toggle("has-overflow", overflowing);
+        if (toggle) {
+          toggle.classList.toggle("hidden", !overflowing);
+          if (overflowing) setPersonBiographyToggleLabel(false);
+        }
+      });
+    }
     function renderPersonDetail(detail) {
       activePersonPayload = detail;
       const person = detail.person || {};
@@ -23524,7 +23603,7 @@ def ui_preview_html(
         avatarNode.innerHTML = image ? `<img src="${escapeHtml(image)}" alt="">` : escapeHtml(initialsFromName(name));
       }
       document.getElementById("personDetailTitle").textContent = name;
-      document.getElementById("personDetailBiography").textContent = person.biography || tNext("personDetail.noBiography", "No biography imported yet.");
+      applyPersonBiography(person.biography || tNext("personDetail.noBiography", "No biography imported yet."));
       const knownForValue = person.known_for || metadata.knownFor || metadata.known_for || "";
       const knownForLabel = personKnownForLabel(knownForValue);
       const birthdayDisplay = personBirthdayDisplay(detail, person);
@@ -23585,7 +23664,7 @@ def ui_preview_html(
       activePersonPayload = null;
       document.getElementById("personDetailAvatar").innerHTML = "";
       document.getElementById("personDetailTitle").textContent = tNext("collection.loading", "Loading...");
-      document.getElementById("personDetailBiography").textContent = "";
+      applyPersonBiography("");
       document.getElementById("personDetailTags").innerHTML = "";
       document.getElementById("personDetailFields").innerHTML = "";
       document.getElementById("personDetailIdentifiers").innerHTML = "";
@@ -27219,7 +27298,7 @@ def ui_preview_html(
       return physical || digital ? `<span class="personal-list-version-badges">${digital}${physical}</span>` : "";
     }
     function unavailableMovieLabelHtml(entry) {
-      return personalListMovieExists(entry) ? "" : `<span class="tag warning">${escapeHtml(tNext("lists.movieUnavailable", "Movie no longer exists"))}</span>`;
+      return "";
     }
     function listMovieCardHtml(movie) {
       const poster = usableImage(movie.poster_url);
@@ -27384,8 +27463,7 @@ def ui_preview_html(
       const meta = [
         formatAppDate(entry.watched_at || entry.last_watched),
         entry.year,
-        physicalFormatLabel(personalListFormatValue(entry)),
-        exists ? "" : tNext("lists.movieUnavailable", "Movie no longer exists")
+        physicalFormatLabel(personalListFormatValue(entry))
       ].filter(Boolean).join(" / ");
       return `
         <button type="button" class="history-row" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
@@ -31034,6 +31112,7 @@ def ui_preview_html(
         openAppPersonDetail(person.dataset.openPerson, true, {view: "movie", movieId: activeDetailMovieId});
       });
       document.getElementById("personDetailBackButton")?.addEventListener("click", () => closeAppPersonDetail());
+      document.getElementById("personDetailBiographyToggle")?.addEventListener("click", () => togglePersonBiography());
       document.getElementById("personDetailPage")?.addEventListener("click", (event) => {
         const primaryButton = event.target.closest("[data-person-media-primary]");
         if (primaryButton) {

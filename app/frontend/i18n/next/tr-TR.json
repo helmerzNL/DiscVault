@@ -640,6 +640,8 @@
   "personDetail.acting": "Oyunculuk",
   "personDetail.crew": "Ekip",
   "personDetail.noBiography": "Henüz biyografi içe aktarılmadı.",
+  "personDetail.readMore": "Daha fazla",
+  "personDetail.readLess": "Daha az",
   "personDetail.died": "Öldü",
   "personDetail.credits": "katkılar",
   "personDetail.knownFor": "Bilinen",

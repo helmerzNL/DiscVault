@@ -479,6 +479,8 @@
   "personDetail.acting": "Jeu",
   "personDetail.crew": "Equipe",
   "personDetail.noBiography": "Aucune biographie importee pour le moment.",
+  "personDetail.readMore": "Lire la suite",
+  "personDetail.readLess": "Réduire",
   "personDetail.died": "Decede",
   "personDetail.credits": "credits",
   "personDetail.knownFor": "Connu pour",
