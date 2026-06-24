@@ -43833,6 +43833,231 @@ def container_aggregate_summary(movies: list[dict[str, Any]], assets: list[dict[
     }
 
 
+def box_set_metadata_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Installed ``metadata_source`` plugins exposing ``box_set_candidates``.
+
+    Ordered by ``order_index`` (highest priority first) like the other source
+    selectors, so the top provider (e.g. MovieVault) wins when several sources
+    return box-set artwork for the same container.
+    """
+    if not table_exists(conn, "plugins"):
+        return []
+    sync_metadata_plugin_registry(conn)
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugins: list[dict[str, Any]] = []
+    for plugin in registry.get("plugins") or []:
+        if not plugin.get("installed"):
+            continue
+        if not include_disabled and not plugin.get("enabled"):
+            continue
+        if "metadata_source" not in plugin_categories(plugin):
+            continue
+        if "box_set_candidates" not in plugin_runtime_entrypoints(plugin):
+            continue
+        plugins.append(plugin)
+    return plugins
+
+
+def link_container_media_option(
+    conn,
+    *,
+    container_id: UUID,
+    kind: str,
+    source_url: str,
+    provider_id: str,
+    sort_order: int,
+    primary: bool = False,
+) -> dict[str, Any] | None:
+    """Attach a remote box-set artwork URL to a container as a selectable option.
+
+    Mirrors ``link_media_option`` (movies) for ``entity_type='container'``.
+    Never demotes or overwrites an existing user-selected primary; when
+    ``primary`` is requested it is only honoured if the container has no other
+    primary artwork of this kind yet.
+    """
+    if kind not in {"poster", "backdrop"}:
+        return None
+    media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
+    if not media_id or not table_exists(conn, "entity_media"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT is_primary, deleted_at
+            FROM entity_media
+            WHERE entity_type='container'
+              AND entity_id=%s
+              AND media_id=%s
+              AND role=%s
+            """,
+            (container_id, media_id, kind),
+        )
+        row = cur.fetchone()
+        if row and (row["deleted_at"] if isinstance(row, dict) else row[1]):
+            return None
+        if row and bool(row["is_primary"] if isinstance(row, dict) else row[0]):
+            return None
+        make_primary = False
+        if primary:
+            cur.execute(
+                """
+                SELECT 1
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='container'
+                  AND em.entity_id=%s
+                  AND em.deleted_at IS NULL
+                  AND em.is_primary=true
+                  AND ma.kind=%s
+                """,
+                (container_id, kind),
+            )
+            make_primary = cur.fetchone() is None
+        cur.execute(
+            """
+            INSERT INTO entity_media (
+                entity_type,
+                entity_id,
+                media_id,
+                role,
+                is_primary,
+                sort_order
+            )
+            VALUES ('container', %s, %s, %s, %s, %s)
+            ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                sort_order=LEAST(entity_media.sort_order, EXCLUDED.sort_order)
+            """,
+            (container_id, media_id, kind, make_primary, sort_order),
+        )
+    return {
+        "kind": kind,
+        "mediaId": str(media_id),
+        "sourceUrl": source_url,
+        "providerId": provider_id,
+        "primary": make_primary,
+    }
+
+
+def fetch_box_set_artwork_from_sources(
+    conn,
+    container: dict[str, Any],
+    identifiers: list[dict[str, Any]] | None,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Pull the box-set's own poster/backdrop (and title/year) from sources.
+
+    Calls each enabled ``box_set_candidates`` source (e.g. MovieVault) with the
+    container's title/year/barcode/format and returns the artwork of the
+    best-matching proposal. Matching prefers an exact barcode or MovieVault id
+    match over a title match, so a refresh of *this* box-set never grabs another
+    set's artwork. Returns an empty dict when nothing matches.
+    """
+
+    plugins = box_set_metadata_source_plugins(conn)
+    if not plugins:
+        return {}
+
+    metadata = container.get("metadata") if isinstance(container.get("metadata"), dict) else {}
+    title = clean_text(container.get("title")) or clean_text(metadata.get("title"))
+    if not title:
+        return {}
+    barcode = clean_text(container.get("barcode")) or clean_text(metadata.get("barcode"))
+    year = clean_text(container.get("year")) or clean_text(metadata.get("year"))
+    fmt = clean_text(container.get("format")) or clean_text(metadata.get("format"))
+    movievault_id = clean_text(
+        metadata.get("movievault_id")
+        or metadata.get("movieVaultId")
+        or metadata.get("movievaultId")
+    )
+    for identifier in identifiers or []:
+        provider = str(identifier.get("provider_id") or "").lower()
+        if "movievault" in provider and clean_text(identifier.get("identifier")):
+            movievault_id = movievault_id or clean_text(identifier.get("identifier"))
+
+    payload = {
+        "title": title,
+        "year": year,
+        "barcode": barcode,
+        "format": fmt,
+        "mediaType": fmt,
+    }
+    if movievault_id:
+        payload["movieVaultId"] = movievault_id
+        payload["identity"] = movievault_id
+
+    norm_title = re.sub(r"[^a-z0-9]+", "", title.lower()) if title else ""
+
+    def _proposal_artwork(proposal: dict[str, Any], provider_id: str, score: int) -> dict[str, Any]:
+        poster = clean_text(
+            proposal.get("poster_url") or proposal.get("posterUrl") or proposal.get("poster")
+        )
+        backdrop = clean_text(
+            proposal.get("backdrop_url") or proposal.get("backdropUrl") or proposal.get("backdrop")
+        )
+        backdrops = [
+            clean_text(url)
+            for url in (proposal.get("backdrop_urls") or proposal.get("backdropUrls") or [])
+            if clean_text(url)
+        ]
+        return {
+            "poster_url": poster,
+            "backdrop_url": backdrop,
+            "backdrop_urls": backdrops,
+            "title": clean_text(proposal.get("title") or proposal.get("name")),
+            "year": clean_text(proposal.get("year")),
+            "provider_id": provider_id,
+            "sourceRef": clean_text(
+                proposal.get("movievault_id") or proposal.get("movieVaultId") or proposal.get("barcode")
+            ),
+            "_score": score,
+        }
+
+    best: dict[str, Any] = {}
+    for plugin in plugins:
+        plugin_id = str(plugin.get("id") or "")
+        config = plugin_config_from_db(conn, plugin_id)
+        if plugin_requires_config_for_entrypoint(plugin, config, "box_set_candidates"):
+            continue
+        context = plugin_execution_context(conn, plugin, config, actor, ensure_movievault_token=True)
+        execution = run_plugin_entrypoint(plugin_id, "box_set_candidates", payload, context)
+        if execution.get("status") != "ok":
+            continue
+        result = execution.get("result") or {}
+        proposals = result.get("boxSetProposals")
+        if not isinstance(proposals, list) or not proposals:
+            single = result.get("boxSetProposal")
+            proposals = [single] if isinstance(single, dict) and single else []
+        for proposal in proposals:
+            if not isinstance(proposal, dict):
+                continue
+            proposal_barcode = clean_text(proposal.get("barcode"))
+            proposal_mv = clean_text(proposal.get("movievault_id") or proposal.get("movieVaultId"))
+            proposal_title = re.sub(
+                r"[^a-z0-9]+", "", clean_text(proposal.get("title") or proposal.get("name")).lower()
+            )
+            score = 0
+            if barcode and proposal_barcode and proposal_barcode == barcode:
+                score = 3
+            elif movievault_id and proposal_mv and proposal_mv == movievault_id:
+                score = 3
+            elif norm_title and proposal_title and proposal_title == norm_title:
+                score = 2
+            elif norm_title and proposal_title and (norm_title in proposal_title or proposal_title in norm_title):
+                score = 1
+            # Require at least a fuzzy title (or stronger barcode/id) match so a
+            # refresh never adopts an unrelated box-set's artwork.
+            if score < 1:
+                continue
+            artwork = _proposal_artwork(proposal, plugin_id, score)
+            if not artwork.get("poster_url") and not artwork.get("backdrop_url"):
+                continue
+            if score > best.get("_score", -1):
+                best = artwork
+    if best:
+        best.pop("_score", None)
+    return best
+
+
 def refresh_container_metadata(
     conn,
     container_id: UUID,
@@ -43848,6 +44073,8 @@ def refresh_container_metadata(
     videos = container_aggregate_video_entities(movies)
     summary = container_aggregate_summary(movies, assets, videos)
     metadata = container.get("metadata") if isinstance(container.get("metadata"), dict) else {}
+    identifiers = container_identifier_entities(conn, container_id)
+    box_set_artwork = fetch_box_set_artwork_from_sources(conn, container, identifiers, actor)
     description = clean_text(container.get("description"))
     generated_description = ""
     if summary.get("memberTitles"):
@@ -43859,6 +44086,21 @@ def refresh_container_metadata(
         "aggregate": summary,
         "videos": videos[:80],
     }
+    # The box-set's own poster/backdrop fetched from a source (e.g. MovieVault)
+    # always wins over artwork aggregated from member movies, but never over a
+    # cover the container already owns or that the user locked.
+    has_own_poster = bool(clean_text(metadata.get("poster_url"))) and not metadata.get("poster_from_members")
+    has_own_backdrop = bool(clean_text(metadata.get("backdrop_url"))) and not metadata.get("backdrop_from_members")
+    box_set_poster = clean_text(box_set_artwork.get("poster_url")) if box_set_artwork else ""
+    box_set_backdrop = clean_text(box_set_artwork.get("backdrop_url")) if box_set_artwork else ""
+    if box_set_poster and not metadata.get("poster_locked") and not has_own_poster:
+        metadata_updates["poster_url"] = box_set_poster
+        metadata_updates["poster_from_members"] = False
+        has_own_poster = True
+    if box_set_backdrop and not metadata.get("backdrop_locked") and not has_own_backdrop:
+        metadata_updates["backdrop_url"] = box_set_backdrop
+        metadata_updates["backdrop_from_members"] = False
+        has_own_backdrop = True
     if assets:
         primary_poster = next((asset for asset in assets if asset.get("kind") == "poster"), None)
         primary_backdrop = next((asset for asset in assets if asset.get("kind") == "backdrop"), None)
@@ -43866,8 +44108,6 @@ def refresh_container_metadata(
         # its own. A box-set keeps its own poster/backdrop (e.g. from MovieVault) in
         # metadata; member artwork must never overwrite it. Artwork previously
         # aggregated from members is tagged so it can keep tracking member changes.
-        has_own_poster = bool(clean_text(metadata.get("poster_url"))) and not metadata.get("poster_from_members")
-        has_own_backdrop = bool(clean_text(metadata.get("backdrop_url"))) and not metadata.get("backdrop_from_members")
         if primary_poster and not metadata.get("poster_locked") and not has_own_poster:
             metadata_updates["poster_url"] = primary_poster.get("url")
             metadata_updates["poster_from_members"] = True
@@ -43881,6 +44121,7 @@ def refresh_container_metadata(
         "movieCount": summary.get("movieCount", 0),
         "metadataUpdates": metadata_updates,
         "description": description or generated_description,
+        "boxSetArtwork": box_set_artwork or {},
     }
     if dry_run:
         return {"dryRun": True, "changed": False, "proposal": proposal, "summary": summary}
@@ -43898,6 +44139,35 @@ def refresh_container_metadata(
             """,
             (Jsonb(json_ready(next_metadata)), generated_description or None, container_id),
         )
+    if box_set_artwork:
+        provider_id = clean_text(box_set_artwork.get("provider_id")) or "box_set"
+        if box_set_poster:
+            link_container_media_option(
+                conn,
+                container_id=container_id,
+                kind="poster",
+                source_url=box_set_poster,
+                provider_id=provider_id,
+                sort_order=0,
+                primary=not metadata.get("poster_locked"),
+            )
+        backdrop_options = []
+        if box_set_backdrop:
+            backdrop_options.append(box_set_backdrop)
+        for url in box_set_artwork.get("backdrop_urls") or []:
+            url = clean_text(url)
+            if url and url not in backdrop_options:
+                backdrop_options.append(url)
+        for index, url in enumerate(backdrop_options):
+            link_container_media_option(
+                conn,
+                container_id=container_id,
+                kind="backdrop",
+                source_url=url,
+                provider_id=provider_id,
+                sort_order=index,
+                primary=(index == 0) and not metadata.get("backdrop_locked"),
+            )
     revision = 0
     if table_exists(conn, "sync_changes"):
         revision = next_revision(conn)
