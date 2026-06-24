@@ -373,11 +373,30 @@ def execute_tool(name: str, args: dict, bearer: str | None = None) -> str:
     return _execute_tool_inner(name, args or {}, bearer)
 
 
-SERVER_INFO = {
-    "protocolVersion": "2025-11-05",
-    "capabilities": {"tools": {}},
-    "serverInfo": {"name": "discvault", "version": SERVER_VERSION},
-}
+# MCP protocol versions this server can speak, newest first. The default is the
+# version we advertise when the client does not request one (or requests an
+# unknown one). During `initialize` we echo the client's requested version when
+# it is one we support, so newer or older clients negotiate a common version
+# instead of being rejected.
+SUPPORTED_PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
+DEFAULT_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
+
+SERVER_CAPABILITIES = {"tools": {}}
+SERVER_DESCRIPTOR = {"name": "discvault", "version": SERVER_VERSION}
+
+
+def negotiate_protocol_version(requested: object) -> str:
+    if isinstance(requested, str) and requested in SUPPORTED_PROTOCOL_VERSIONS:
+        return requested
+    return DEFAULT_PROTOCOL_VERSION
+
+
+def build_server_info(requested: object = None) -> dict:
+    return {
+        "protocolVersion": negotiate_protocol_version(requested),
+        "capabilities": SERVER_CAPABILITIES,
+        "serverInfo": SERVER_DESCRIPTOR,
+    }
 
 
 def handle_message(msg: dict, bearer: str | None = None) -> dict | None:
@@ -386,7 +405,11 @@ def handle_message(msg: dict, bearer: str | None = None) -> dict | None:
     params = msg.get("params", {})
 
     if method == "initialize":
-        return {"jsonrpc": "2.0", "id": msg_id, "result": SERVER_INFO}
+        return {
+            "jsonrpc": "2.0",
+            "id": msg_id,
+            "result": build_server_info(params.get("protocolVersion")),
+        }
     if method == "notifications/initialized":
         return None
     if method == "tools/list":
