@@ -640,6 +640,8 @@
   "personDetail.acting": "Gluma",
   "personDetail.crew": "Ekipa",
   "personDetail.noBiography": "Biografija još nije uvezena.",
+  "personDetail.readMore": "Pročitaj više",
+  "personDetail.readLess": "Prikaži manje",
   "personDetail.died": "Preminuo/la",
   "personDetail.credits": "zasluge",
   "personDetail.knownFor": "Poznat/a po",

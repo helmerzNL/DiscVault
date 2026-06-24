@@ -640,6 +640,8 @@
   "personDetail.acting": "出演",
   "personDetail.crew": "スタッフ",
   "personDetail.noBiography": "まだ経歴はインポートされていません。",
+  "personDetail.readMore": "続きを読む",
+  "personDetail.readLess": "折りたたむ",
   "personDetail.died": "没年",
   "personDetail.credits": "クレジット",
   "personDetail.knownFor": "代表作",

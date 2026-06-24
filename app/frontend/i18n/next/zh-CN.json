@@ -640,6 +640,8 @@
   "personDetail.acting": "表演",
   "personDetail.crew": "剧组",
   "personDetail.noBiography": "尚未导入传记。",
+  "personDetail.readMore": "阅读更多",
+  "personDetail.readLess": "收起",
   "personDetail.died": "逝世",
   "personDetail.credits": "演职员记录",
   "personDetail.knownFor": "知名作品",

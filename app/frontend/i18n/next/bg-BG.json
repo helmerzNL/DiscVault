@@ -640,6 +640,8 @@
   "personDetail.acting": "Актьорство",
   "personDetail.crew": "Екип",
   "personDetail.noBiography": "Все още няма импортирана биография.",
+  "personDetail.readMore": "Прочетете повече",
+  "personDetail.readLess": "Покажи по-малко",
   "personDetail.died": "Починал/а",
   "personDetail.credits": "кредити",
   "personDetail.knownFor": "Известен/на с",

@@ -640,6 +640,8 @@
   "personDetail.acting": "Herectví",
   "personDetail.crew": "Štáb",
   "personDetail.noBiography": "Životopis zatím nebyl importován.",
+  "personDetail.readMore": "Číst více",
+  "personDetail.readLess": "Číst méně",
   "personDetail.died": "Zemřel/a",
   "personDetail.credits": "kredity",
   "personDetail.knownFor": "Známý/á pro",
