@@ -279,6 +279,85 @@ class NextBackupValidationTests(unittest.TestCase):
         for name in optional_tables:
             self.assertEqual(report["tables"][name]["count"], 0)
 
+    def test_validate_accepts_collection_only_backup_without_people_or_media(self):
+        movie_id = str(uuid.uuid4())
+        tables = empty_tables()
+        tables["movies"].append(
+            {
+                "id": movie_id,
+                "public_id": "unit-movie-1",
+                "barcode": None,
+                "title": "Unit Movie",
+                "sort_title": "Unit Movie",
+                "original_title": None,
+                "year": None,
+                "release_date": None,
+                "format": None,
+                "edition": None,
+                "edition_type": None,
+                "country": None,
+                "language": None,
+                "runtime_minutes": None,
+                "overview": None,
+                "notes": None,
+                "rating": None,
+                "purchase_date": None,
+                "purchase_price": None,
+                "location": None,
+                "owner_id": None,
+                "metadata": {},
+                "created_at": "2026-05-29T00:00:00Z",
+                "updated_at": "2026-05-29T00:00:00Z",
+            }
+        )
+        omit = {
+            "media_assets",
+            "entity_media",
+            "people",
+            "person_identifiers",
+            "person_localizations",
+            "movie_credits",
+            "media_groups",
+            "media_group_movies",
+            "media_group_members",
+            "users",
+            "roles",
+            "role_permissions",
+            "user_roles",
+            "recovery_codes",
+            "api_access_tokens",
+            "watchlist_items",
+            "watch_history",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "backup.zip")
+            write_backup(path, tables, omit_tables=omit)
+            report = validate_backup_zip(path)
+
+        self.assertTrue(report["valid"], report)
+        self.assertEqual(report["tables"]["movies"]["count"], 1)
+        self.assertEqual(report["tables"]["people"]["count"], 0)
+
+    def test_validate_accepts_legacy_format_version_one(self):
+        tables = empty_tables()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "backup.zip")
+            manifest = {
+                "format": BACKUP_FORMAT,
+                "formatVersion": 1,
+                "scope": "functional_collection",
+                "createdAt": "2026-05-29T00:00:00Z",
+                "tables": {name: {"count": 0} for name in tables},
+                "media": {"mode": "embedded_local_files"},
+            }
+            with zipfile.ZipFile(path, "w") as zf:
+                zf.writestr("manifest.json", json.dumps(manifest))
+                for name in BACKUP_TABLES:
+                    zf.writestr(f"data/{name}.json", json.dumps(tables[name]))
+            report = validate_backup_zip(path)
+
+        self.assertTrue(report["valid"], report)
+
 
 if __name__ == "__main__":
     unittest.main()
