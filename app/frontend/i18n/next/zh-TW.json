@@ -1734,5 +1734,17 @@
   "groups.removingMember": "正在移除成員...",
   "groups.memberRemoved": "成員已移除。",
   "auth.signInWithUsernamePassword": "使用使用者名稱/密碼登入",
-  "auth.password": "密碼"
+  "auth.password": "密碼",
+  "appAdmin.includePersonalLists": "Include watchlist and watched history",
+  "appAdmin.backupScopeTitle": "Include in backup",
+  "appAdmin.backupScopeCollection": "All films / containers (always included)",
+  "appAdmin.backupScopePeople": "All people",
+  "appAdmin.backupScopeFilmArtwork": "All film / container posters and backdrops",
+  "appAdmin.backupScopePeopleArtwork": "All people posters and backdrops",
+  "appAdmin.backupScopeMediaGroups": "All member groups and their relations",
+  "appAdmin.backupScopeUserAccounts": "All user accounts (incl. MCP / API configuration)",
+  "appAdmin.restoreModeTitle": "Restore type",
+  "appAdmin.restoreModeFull": "Full restore (wipe and replace)",
+  "appAdmin.restoreModePartial": "Partial restore (merge selected)",
+  "appAdmin.restoreScopeTitle": "Restore which parts"
 }

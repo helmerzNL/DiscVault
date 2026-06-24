@@ -1734,5 +1734,17 @@
   "groups.removingMember": "Removing member...",
   "groups.memberRemoved": "Member removed.",
   "auth.signInWithUsernamePassword": "Log ind med brugernavn/adgangskode",
-  "auth.password": "Adgangskode"
+  "auth.password": "Adgangskode",
+  "appAdmin.includePersonalLists": "Inkluder overvaagningsliste og visningshistorik",
+  "appAdmin.backupScopeTitle": "Inkluder i sikkerhedskopi",
+  "appAdmin.backupScopeCollection": "Alle film / beholdere (altid inkluderet)",
+  "appAdmin.backupScopePeople": "Alle personer",
+  "appAdmin.backupScopeFilmArtwork": "Alle plakater og baggrunde for film / beholdere",
+  "appAdmin.backupScopePeopleArtwork": "Alle plakater og baggrunde for personer",
+  "appAdmin.backupScopeMediaGroups": "Alle medlemsgrupper og deres relationer",
+  "appAdmin.backupScopeUserAccounts": "Alle brugerkonti (inkl. MCP / API-konfiguration)",
+  "appAdmin.restoreModeTitle": "Gendannelsestype",
+  "appAdmin.restoreModeFull": "Fuld gendannelse (ryd og erstat)",
+  "appAdmin.restoreModePartial": "Delvis gendannelse (flet valgte)",
+  "appAdmin.restoreScopeTitle": "Hvilke dele skal gendannes"
 }

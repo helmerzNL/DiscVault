@@ -1775,5 +1775,17 @@
   "movieDetail.playWithService": "Play with {service}",
   "movieDetail.multipleDigitalItems": "{count} items",
   "auth.signInWithUsernamePassword": "Sign in with username/password",
-  "auth.password": "Password"
+  "auth.password": "Password",
+  "appAdmin.includePersonalLists": "Include watchlist and watched history",
+  "appAdmin.backupScopeTitle": "Include in backup",
+  "appAdmin.backupScopeCollection": "All films / containers (always included)",
+  "appAdmin.backupScopePeople": "All people",
+  "appAdmin.backupScopeFilmArtwork": "All film / container posters and backdrops",
+  "appAdmin.backupScopePeopleArtwork": "All people posters and backdrops",
+  "appAdmin.backupScopeMediaGroups": "All member groups and their relations",
+  "appAdmin.backupScopeUserAccounts": "All user accounts (incl. MCP / API configuration)",
+  "appAdmin.restoreModeTitle": "Restore type",
+  "appAdmin.restoreModeFull": "Full restore (wipe and replace)",
+  "appAdmin.restoreModePartial": "Partial restore (merge selected)",
+  "appAdmin.restoreScopeTitle": "Restore which parts"
 }

@@ -1734,5 +1734,17 @@
   "groups.removingMember": "Removing member...",
   "groups.memberRemoved": "Member removed.",
   "auth.signInWithUsernamePassword": "Iniciar sesión con nombre de usuario/contraseña",
-  "auth.password": "Contraseña"
+  "auth.password": "Contraseña",
+  "appAdmin.includePersonalLists": "Incluir lista de seguimiento e historial de visionado",
+  "appAdmin.backupScopeTitle": "Incluir en la copia de seguridad",
+  "appAdmin.backupScopeCollection": "Todas las peliculas / contenedores (siempre incluido)",
+  "appAdmin.backupScopePeople": "Todas las personas",
+  "appAdmin.backupScopeFilmArtwork": "Todos los posters y fondos de peliculas / contenedores",
+  "appAdmin.backupScopePeopleArtwork": "Todos los posters y fondos de personas",
+  "appAdmin.backupScopeMediaGroups": "Todos los grupos de miembros y sus relaciones",
+  "appAdmin.backupScopeUserAccounts": "Todas las cuentas de usuario (incl. configuracion MCP / API)",
+  "appAdmin.restoreModeTitle": "Tipo de restauracion",
+  "appAdmin.restoreModeFull": "Restauracion completa (borrar y reemplazar)",
+  "appAdmin.restoreModePartial": "Restauracion parcial (combinar seleccion)",
+  "appAdmin.restoreScopeTitle": "Que partes restaurar"
 }

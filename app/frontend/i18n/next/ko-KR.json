@@ -1734,5 +1734,17 @@
   "groups.removingMember": "구성원 제거 중...",
   "groups.memberRemoved": "구성원이 제거되었습니다.",
   "auth.signInWithUsernamePassword": "사용자 이름/비밀번호로 로그인",
-  "auth.password": "비밀번호"
+  "auth.password": "비밀번호",
+  "appAdmin.includePersonalLists": "Include watchlist and watched history",
+  "appAdmin.backupScopeTitle": "Include in backup",
+  "appAdmin.backupScopeCollection": "All films / containers (always included)",
+  "appAdmin.backupScopePeople": "All people",
+  "appAdmin.backupScopeFilmArtwork": "All film / container posters and backdrops",
+  "appAdmin.backupScopePeopleArtwork": "All people posters and backdrops",
+  "appAdmin.backupScopeMediaGroups": "All member groups and their relations",
+  "appAdmin.backupScopeUserAccounts": "All user accounts (incl. MCP / API configuration)",
+  "appAdmin.restoreModeTitle": "Restore type",
+  "appAdmin.restoreModeFull": "Full restore (wipe and replace)",
+  "appAdmin.restoreModePartial": "Partial restore (merge selected)",
+  "appAdmin.restoreScopeTitle": "Restore which parts"
 }
