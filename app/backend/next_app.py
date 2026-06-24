@@ -14637,7 +14637,7 @@ def ui_preview_html(
             <div class="metadata-compare-panel" id="movieMetadataComparePanel"></div>
           </div>
           <div class="detail-card full debug-card hidden" id="movieDetailDebugLocalizationsCard">
-            <details class="debug-card-details" open>
+            <details class="debug-card-details">
               <summary class="detail-card-head debug-card-summary">
                 <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
                 <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
@@ -14646,7 +14646,7 @@ def ui_preview_html(
             </details>
           </div>
           <div class="detail-card full debug-card hidden" id="movieDetailDebugMetadataCard">
-            <details class="debug-card-details" open>
+            <details class="debug-card-details">
               <summary class="detail-card-head debug-card-summary">
                 <h3 data-next-i18n="movieDetail.debugMetadataPanelTitle">Metadata debug</h3>
                 <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
@@ -14889,11 +14889,13 @@ def ui_preview_html(
               <div class="detail-fields" id="containerDetailMetadataDetails"></div>
             </div>
             <div class="detail-card full debug-card hidden" id="containerDetailDebugCard">
-              <div class="detail-card-head">
-                <h3 data-next-i18n="containerDetail.debugSources">Debug info: metadata sources</h3>
-                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
-              </div>
-              <div class="debug-sources" id="containerDetailDebugSources"></div>
+              <details class="debug-card-details">
+                <summary class="detail-card-head debug-card-summary">
+                  <h3 data-next-i18n="containerDetail.debugSources">Debug info: metadata sources</h3>
+                  <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+                </summary>
+                <div class="debug-sources" id="containerDetailDebugSources"></div>
+              </details>
             </div>
           </div>
         </section>
@@ -22977,8 +22979,10 @@ def ui_preview_html(
       document.getElementById("movieListStateSummary").textContent = "";
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
       document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
+      document.getElementById("movieDetailDebugLocalizationsCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
       document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
       document.getElementById("movieDetailDebugMetadataCard")?.classList.add("hidden");
+      document.getElementById("movieDetailDebugMetadataCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
       const debugSourcesEl = document.getElementById("movieDetailDebugSources");
       if (debugSourcesEl) debugSourcesEl.innerHTML = "";
       dvMissingContributionReportData = null;
@@ -23332,6 +23336,7 @@ def ui_preview_html(
       document.getElementById("containerDetailIdentifiers").innerHTML = "";
       document.getElementById("containerDetailMetadata").innerHTML = "";
       document.getElementById("containerDetailMetadataDetails").innerHTML = "";
+      document.getElementById("containerDetailDebugCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
       document.getElementById("containerDetailPosterArtwork").innerHTML = "";
       document.getElementById("containerDetailBackdropArtwork").innerHTML = "";
       document.getElementById("containerDetailVideos").innerHTML = "";
