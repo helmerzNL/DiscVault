@@ -41,6 +41,22 @@ def _is_release_url(value):
     return bool(re.search(r"blu-ray\.com/(?:movies|dvd)/", value or "", flags=re.I))
 
 
+def _url_matches_section(url, section):
+    """Keep only release URLs that belong to the queried section.
+
+    Blu-ray.com serves DVD releases under ``/dvd/`` and Blu-ray / 4K UHD
+    releases under ``/movies/``. A ``dvdmovies`` quicksearch can still surface
+    ``/movies/`` cross-links (and vice versa); accepting those makes a DVD pick
+    up a Blu-ray release page, which the merge policy then blocks on a format
+    mismatch. Filtering per section keeps the format of the chosen release in
+    sync with the section that was searched.
+    """
+    value = str(url or "").lower()
+    if str(section or "").strip().lower() == "dvdmovies":
+        return "/dvd/" in value
+    return "/movies/" in value
+
+
 def _sections(query, preferred_format=""):
     preferred = _normalize_format(preferred_format)
     if preferred == "DVD":
@@ -56,9 +72,9 @@ def _sections(query, preferred_format=""):
 def _release_urls(query, preferred_format="", limit=8):
     urls = []
 
-    def add_url(value):
+    def add_url(value, section):
         value = _abs_url(str(value or "").strip().strip("'\""))
-        if _is_release_url(value) and value not in urls:
+        if _is_release_url(value) and _url_matches_section(value, section) and value not in urls:
             urls.append(value)
 
     for section in _sections(query, preferred_format):
@@ -73,7 +89,7 @@ def _release_urls(query, preferred_format="", limit=8):
                 match = re.search(r"var\s+urls\s*=\s*new\s+Array\(([^)]+)\)", response.text)
                 if match:
                     for item in match.group(1).split(","):
-                        add_url(item)
+                        add_url(item, section)
             if urls:
                 break
         except Exception:
@@ -91,7 +107,7 @@ def _release_urls(query, preferred_format="", limit=8):
                 if response.status_code == 200 and BeautifulSoup is not None:
                     soup = BeautifulSoup(response.text, "html.parser")
                     for link in soup.select('a[href*="/movies/"], a[href*="/dvd/"]'):
-                        add_url(link.get("href") or "")
+                        add_url(link.get("href") or "", section)
                         if len(urls) >= limit:
                             break
                 if urls:
