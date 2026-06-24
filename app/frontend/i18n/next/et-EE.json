@@ -640,6 +640,8 @@
   "personDetail.acting": "Näitlemine",
   "personDetail.crew": "Meeskond",
   "personDetail.noBiography": "Elulugu pole veel imporditud.",
+  "personDetail.readMore": "Loe rohkem",
+  "personDetail.readLess": "Näita vähem",
   "personDetail.died": "Suri",
   "personDetail.credits": "tiitrid",
   "personDetail.knownFor": "Tuntud",

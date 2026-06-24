@@ -479,6 +479,8 @@
   "personDetail.acting": "Skuespil",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Ingen biografi importeret endnu.",
+  "personDetail.readMore": "Læs mere",
+  "personDetail.readLess": "Læs mindre",
   "personDetail.died": "Doed",
   "personDetail.credits": "credits",
   "personDetail.knownFor": "Kendt for",

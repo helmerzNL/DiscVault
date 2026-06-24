@@ -640,6 +640,8 @@
   "personDetail.acting": "연기",
   "personDetail.crew": "제작진",
   "personDetail.noBiography": "아직 가져온 약력이 없습니다.",
+  "personDetail.readMore": "더 보기",
+  "personDetail.readLess": "간략히 보기",
   "personDetail.died": "사망",
   "personDetail.credits": "크레딧",
   "personDetail.knownFor": "대표작",

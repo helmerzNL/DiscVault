@@ -479,6 +479,8 @@
   "personDetail.acting": "Skadespel",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Ingen biografi importerad an.",
+  "personDetail.readMore": "Läs mer",
+  "personDetail.readLess": "Visa mindre",
   "personDetail.died": "Dod",
   "personDetail.credits": "credits",
   "personDetail.knownFor": "Kand for",

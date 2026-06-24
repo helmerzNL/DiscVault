@@ -640,6 +640,8 @@
   "personDetail.acting": "Aktierspēle",
   "personDetail.crew": "Komanda",
   "personDetail.noBiography": "Biogrāfija vēl nav importēta.",
+  "personDetail.readMore": "Lasīt vairāk",
+  "personDetail.readLess": "Rādīt mazāk",
   "personDetail.died": "Miris/mirusi",
   "personDetail.credits": "titri",
   "personDetail.knownFor": "Zināms/a ar",

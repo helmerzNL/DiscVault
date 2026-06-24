@@ -479,6 +479,8 @@
   "personDetail.acting": "Schauspiel",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Noch keine Biografie importiert.",
+  "personDetail.readMore": "Mehr anzeigen",
+  "personDetail.readLess": "Weniger anzeigen",
   "personDetail.died": "Gestorben",
   "personDetail.credits": "Credits",
   "personDetail.knownFor": "Bekannt fuer",
