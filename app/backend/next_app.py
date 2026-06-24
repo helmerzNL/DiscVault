@@ -27452,6 +27452,7 @@ def ui_preview_html(
       }
       document.querySelectorAll("[data-list-movie]").forEach((button) => {
         button.addEventListener("click", () => {
+          if (button.disabled || button.getAttribute("aria-disabled") === "true") return;
           const movieId = button.dataset.listMovie || "";
           if (movieId) openAppMovieDetail(movieId);
         });
