@@ -20,7 +20,8 @@ from uuid import UUID
 
 
 BACKUP_FORMAT = "discvault-next-functional-backup"
-BACKUP_FORMAT_VERSION = 1
+BACKUP_FORMAT_VERSION = 2
+SUPPORTED_BACKUP_FORMAT_VERSIONS = frozenset({1, 2})
 BACKUP_RESTORE_JOB_TYPE = "backup.restore_functional"
 
 EXCLUDED_SCOPES = (
@@ -44,6 +45,7 @@ class TableSpec:
     name: str
     columns: tuple[str, ...]
     jsonb_columns: frozenset[str] = frozenset()
+    conflict: tuple[str, ...] = ()
 
 
 CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
@@ -214,6 +216,60 @@ MEDIA_GROUP_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
         ("group_id", "movie_id", "metadata", "created_at", "updated_at"),
         frozenset({"metadata"}),
     ),
+    TableSpec(
+        "media_group_members",
+        ("group_id", "user_id", "role", "created_at"),
+    ),
+)
+
+USER_ACCOUNT_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
+    TableSpec(
+        "users",
+        (
+            "id",
+            "username",
+            "display_name",
+            "first_name",
+            "last_name",
+            "avatar_asset_id",
+            "status",
+            "created_at",
+            "updated_at",
+        ),
+    ),
+    TableSpec(
+        "roles",
+        ("id", "key", "name", "description", "system", "created_by", "created_at", "updated_at"),
+    ),
+    TableSpec(
+        "role_permissions",
+        ("role_id", "permission_key"),
+    ),
+    TableSpec(
+        "user_roles",
+        ("user_id", "role_id", "scope_type", "scope_id", "assigned_by", "assigned_at"),
+    ),
+    TableSpec(
+        "recovery_codes",
+        ("id", "user_id", "code_hash", "label", "created_at", "used_at", "expires_at"),
+    ),
+    TableSpec(
+        "api_access_tokens",
+        (
+            "id",
+            "user_id",
+            "name",
+            "token_hash",
+            "scopes",
+            "permission_keys",
+            "created_by",
+            "created_at",
+            "last_used_at",
+            "expires_at",
+            "revoked_at",
+        ),
+        frozenset({"scopes", "permission_keys"}),
+    ),
 )
 
 PERSONAL_LIST_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
@@ -232,15 +288,110 @@ PERSONAL_LIST_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
 BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
     *CORE_BACKUP_TABLE_SPECS,
     *MEDIA_GROUP_BACKUP_TABLE_SPECS,
+    *USER_ACCOUNT_BACKUP_TABLE_SPECS,
     *PERSONAL_LIST_BACKUP_TABLE_SPECS,
 )
 
 BACKUP_TABLES = tuple(spec.name for spec in BACKUP_TABLE_SPECS)
 TABLE_SPEC_BY_NAME = {spec.name: spec for spec in BACKUP_TABLE_SPECS}
-OPTIONAL_BACKUP_TABLES = tuple(
-    spec.name for spec in (*MEDIA_GROUP_BACKUP_TABLE_SPECS, *PERSONAL_LIST_BACKUP_TABLE_SPECS)
+
+# Upsert conflict targets (primary key / unique business key) per table. Used so a
+# merge restore can update existing rows and a full restore (after wipe) inserts
+# cleanly through the same code path.
+CONFLICT_KEYS: dict[str, tuple[str, ...]] = {
+    "media_assets": ("id",),
+    "movies": ("id",),
+    "movie_identifiers": ("movie_id", "provider_id", "identifier_type", "identifier"),
+    "movie_localizations": ("movie_id", "lang"),
+    "movie_technical_specs": ("movie_id",),
+    "people": ("id",),
+    "person_identifiers": ("person_id", "provider_id", "identifier_type", "identifier"),
+    "person_localizations": ("person_id", "lang"),
+    "movie_credits": ("id",),
+    "containers": ("id",),
+    "container_identifiers": ("container_id", "provider_id", "identifier_type", "identifier"),
+    "container_movies": ("container_id", "movie_id"),
+    "collection_items": ("collection_id", "item_type", "item_id"),
+    "entity_media": ("entity_type", "entity_id", "media_id", "role"),
+    "media_groups": ("id",),
+    "media_group_movies": ("group_id", "movie_id"),
+    "media_group_members": ("group_id", "user_id"),
+    "users": ("id",),
+    "roles": ("key",),
+    "role_permissions": ("role_id", "permission_key"),
+    "user_roles": ("user_id", "role_id", "scope_type", "scope_id"),
+    "recovery_codes": ("id",),
+    "api_access_tokens": ("id",),
+    "watchlist_items": ("id",),
+    "watch_history": ("id",),
+}
+
+# Selectable backup scopes. ``collection`` is mandatory; the rest are opt-in. The two
+# artwork scopes share the ``media_assets``/``entity_media`` tables but are filtered by
+# media ``kind`` / entity_media ``entity_type`` so film and people artwork stay
+# independently selectable.
+SCOPE_COLLECTION = "collection"
+SCOPE_PEOPLE = "people"
+SCOPE_FILM_ARTWORK = "film_artwork"
+SCOPE_PEOPLE_ARTWORK = "people_artwork"
+SCOPE_MEDIA_GROUPS = "media_groups"
+SCOPE_USER_ACCOUNTS = "user_accounts"
+SCOPE_PERSONAL_LISTS = "personal_lists"
+
+SCOPE_TABLES: dict[str, tuple[str, ...]] = {
+    SCOPE_COLLECTION: (
+        "movies",
+        "movie_identifiers",
+        "movie_localizations",
+        "movie_technical_specs",
+        "containers",
+        "container_identifiers",
+        "container_movies",
+        "collection_items",
+    ),
+    SCOPE_PEOPLE: ("people", "person_identifiers", "person_localizations", "movie_credits"),
+    SCOPE_MEDIA_GROUPS: ("media_groups", "media_group_movies", "media_group_members"),
+    SCOPE_USER_ACCOUNTS: (
+        "users",
+        "roles",
+        "role_permissions",
+        "user_roles",
+        "recovery_codes",
+        "api_access_tokens",
+    ),
+    SCOPE_PERSONAL_LISTS: ("watchlist_items", "watch_history"),
+}
+
+ARTWORK_SCOPES: dict[str, dict[str, frozenset[str]]] = {
+    SCOPE_FILM_ARTWORK: {
+        "kinds": frozenset({"poster", "backdrop", "still", "logo"}),
+        "entities": frozenset({"movie", "container"}),
+    },
+    SCOPE_PEOPLE_ARTWORK: {
+        "kinds": frozenset({"profile"}),
+        "entities": frozenset({"person"}),
+    },
+}
+
+ALL_SELECTABLE_SCOPES: tuple[str, ...] = (
+    SCOPE_COLLECTION,
+    SCOPE_PEOPLE,
+    SCOPE_FILM_ARTWORK,
+    SCOPE_PEOPLE_ARTWORK,
+    SCOPE_MEDIA_GROUPS,
+    SCOPE_USER_ACCOUNTS,
+    SCOPE_PERSONAL_LISTS,
 )
+
+# Tables that older (v1) backups always omitted, plus the new scope-gated tables, are
+# all optional members so any scope subset validates and restores. Only the mandatory
+# ``collection`` scope tables are strictly required.
+OPTIONAL_BACKUP_TABLES = tuple(
+    name for name in BACKUP_TABLES if name not in SCOPE_TABLES[SCOPE_COLLECTION]
+)
+
 RESTORE_DELETE_ORDER = (
+    "media_group_members",
     "media_group_movies",
     "watchlist_items",
     "watch_history",
@@ -260,6 +411,46 @@ RESTORE_DELETE_ORDER = (
 )
 RESTORE_INSERT_ORDER = tuple(spec.name for spec in CORE_BACKUP_TABLE_SPECS)
 PERSONAL_LIST_INSERT_ORDER = tuple(spec.name for spec in PERSONAL_LIST_BACKUP_TABLE_SPECS)
+
+
+def normalize_scopes(scopes: Any) -> list[str]:
+    """Return a validated, ordered scope list that always includes ``collection``."""
+    if scopes is None:
+        return list(ALL_SELECTABLE_SCOPES)
+    if isinstance(scopes, str):
+        requested = {scopes}
+    else:
+        requested = {str(scope) for scope in scopes}
+    requested.add(SCOPE_COLLECTION)
+    return [scope for scope in ALL_SELECTABLE_SCOPES if scope in requested]
+
+
+def scope_tables_for(scopes: list[str]) -> set[str]:
+    """All whole-table backup members covered by the selected scopes."""
+    names: set[str] = set()
+    for scope in scopes:
+        names.update(SCOPE_TABLES.get(scope, ()))
+    if any(scope in ARTWORK_SCOPES for scope in scopes):
+        names.update({"media_assets", "entity_media"})
+    return names
+
+
+def selected_media_kinds(scopes: list[str]) -> set[str]:
+    kinds: set[str] = set()
+    for scope in scopes:
+        if scope in ARTWORK_SCOPES:
+            kinds.update(ARTWORK_SCOPES[scope]["kinds"])
+    return kinds
+
+
+def selected_entity_types(scopes: list[str]) -> set[str]:
+    entities: set[str] = set()
+    for scope in scopes:
+        if scope in ARTWORK_SCOPES:
+            entities.update(ARTWORK_SCOPES[scope]["entities"])
+    return entities
+
+
 
 
 class BackupError(RuntimeError):
@@ -397,11 +588,10 @@ def fetch_table_rows(conn, spec: TableSpec) -> list[dict[str, Any]]:
         return [dict(row) for row in cur.fetchall()]
 
 
-def backup_specs(*, include_personal_lists: bool = False) -> tuple[TableSpec, ...]:
-    specs = (*CORE_BACKUP_TABLE_SPECS, *MEDIA_GROUP_BACKUP_TABLE_SPECS)
-    if include_personal_lists:
-        specs = (*specs, *PERSONAL_LIST_BACKUP_TABLE_SPECS)
-    return specs
+def backup_specs(scopes: list[str]) -> tuple[TableSpec, ...]:
+    """Return the table specs to export for the selected scopes, in dependency order."""
+    selected = scope_tables_for(scopes)
+    return tuple(spec for spec in BACKUP_TABLE_SPECS if spec.name in selected)
 
 
 def write_json(zf: zipfile.ZipFile, name: str, payload: Any) -> None:
@@ -469,18 +659,51 @@ def export_functional_backup(
     output_path: Path,
     *,
     data_dir: Path,
+    scopes: list[str] | None = None,
     include_personal_lists: bool = False,
     generator: dict[str, Any] | None = None,
     requested_by: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if scopes is None:
+        # Backward-compatible default: everything except user accounts; personal
+        # lists gated by the legacy flag.
+        scopes = [
+            SCOPE_COLLECTION,
+            SCOPE_PEOPLE,
+            SCOPE_FILM_ARTWORK,
+            SCOPE_PEOPLE_ARTWORK,
+            SCOPE_MEDIA_GROUPS,
+        ]
+        if include_personal_lists:
+            scopes.append(SCOPE_PERSONAL_LISTS)
+    scopes = normalize_scopes(scopes)
+    include_user_accounts = SCOPE_USER_ACCOUNTS in scopes
+    include_personal_lists = SCOPE_PERSONAL_LISTS in scopes
+    media_kinds = selected_media_kinds(scopes)
+    entity_types = selected_entity_types(scopes)
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tables: dict[str, list[dict[str, Any]]] = {}
     table_summary: dict[str, dict[str, Any]] = {}
-    for spec in backup_specs(include_personal_lists=include_personal_lists):
+    for spec in backup_specs(scopes):
         rows = fetch_table_rows(conn, spec)
-        if spec.name == "movies":
+        if spec.name == "media_assets":
+            rows = [row for row in rows if str(row.get("kind") or "") in media_kinds]
+        elif spec.name == "entity_media":
+            available = {
+                "movie": {str(r.get("id")) for r in tables.get("movies", []) if r.get("id")},
+                "container": {str(r.get("id")) for r in tables.get("containers", []) if r.get("id")},
+                "person": {str(r.get("id")) for r in tables.get("people", []) if r.get("id")},
+            }
+            rows = [
+                row
+                for row in rows
+                if str(row.get("entity_type") or "") in entity_types
+                and str(row.get("entity_id")) in available.get(str(row.get("entity_type") or ""), set())
+            ]
+        elif spec.name == "movies" and not include_user_accounts:
             rows = [{**row, "owner_id": None} for row in rows]
-        if spec.name == "media_groups":
+        elif spec.name == "media_groups" and not include_user_accounts:
             rows = [{**row, "created_by": None} for row in rows]
         tables[spec.name] = rows
         table_summary[spec.name] = {"count": len(rows)}
@@ -494,6 +717,7 @@ def export_functional_backup(
         "format": BACKUP_FORMAT,
         "formatVersion": BACKUP_FORMAT_VERSION,
         "scope": "functional_collection",
+        "scopes": list(scopes),
         "createdAt": utc_now(),
         "generator": generator or {},
         "requestedBy": {
@@ -501,7 +725,11 @@ def export_functional_backup(
         },
         "options": {
             "includePersonalLists": bool(include_personal_lists),
-            "includeMediaGroups": True,
+            "includeMediaGroups": SCOPE_MEDIA_GROUPS in scopes,
+            "includePeople": SCOPE_PEOPLE in scopes,
+            "includeFilmArtwork": SCOPE_FILM_ARTWORK in scopes,
+            "includePeopleArtwork": SCOPE_PEOPLE_ARTWORK in scopes,
+            "includeUserAccounts": include_user_accounts,
         },
         "excludedScopes": excluded_scopes,
         "tables": table_summary,
@@ -556,19 +784,19 @@ def load_backup_tables(zf: zipfile.ZipFile) -> dict[str, list[dict[str, Any]]]:
 
 def validate_relationships(tables: dict[str, list[dict[str, Any]]]) -> list[str]:
     errors: list[str] = []
-    movie_ids = {str(row.get("id")) for row in tables["movies"] if row.get("id")}
-    person_ids = {str(row.get("id")) for row in tables["people"] if row.get("id")}
-    container_ids = {str(row.get("id")) for row in tables["containers"] if row.get("id")}
+    movie_ids = {str(row.get("id")) for row in tables.get("movies", []) if row.get("id")}
+    person_ids = {str(row.get("id")) for row in tables.get("people", []) if row.get("id")}
+    container_ids = {str(row.get("id")) for row in tables.get("containers", []) if row.get("id")}
     media_group_ids = {str(row.get("id")) for row in tables.get("media_groups", []) if row.get("id")}
     container_type_by_id = {
         str(row.get("id")): str(row.get("container_type") or "")
-        for row in tables["containers"]
+        for row in tables.get("containers", [])
         if row.get("id")
     }
-    media_ids = {str(row.get("id")) for row in tables["media_assets"] if row.get("id")}
+    media_ids = {str(row.get("id")) for row in tables.get("media_assets", []) if row.get("id")}
 
     def check(table: str, column: str, valid: set[str], label: str) -> None:
-        for index, row in enumerate(tables[table], start=1):
+        for index, row in enumerate(tables.get(table, []), start=1):
             value = row.get(column)
             if value and str(value) not in valid:
                 errors.append(f"{table}[{index}].{column} references missing {label}: {value}")
@@ -587,12 +815,14 @@ def validate_relationships(tables: dict[str, list[dict[str, Any]]]) -> list[str]
     if tables.get("media_group_movies"):
         check("media_group_movies", "group_id", media_group_ids, "media group")
         check("media_group_movies", "movie_id", movie_ids, "movie")
+    if tables.get("media_group_members"):
+        check("media_group_members", "group_id", media_group_ids, "media group")
     if tables.get("watchlist_items"):
         check("watchlist_items", "movie_id", movie_ids, "movie")
     if tables.get("watch_history"):
         check("watch_history", "movie_id", movie_ids, "movie")
 
-    for index, row in enumerate(tables["containers"], start=1):
+    for index, row in enumerate(tables.get("containers", []), start=1):
         primary = row.get("primary_movie_id")
         if primary and str(primary) not in movie_ids:
             errors.append(f"containers[{index}].primary_movie_id references missing movie: {primary}")
@@ -603,7 +833,7 @@ def validate_relationships(tables: dict[str, list[dict[str, Any]]]) -> list[str]
         "box_set": container_ids,
         "collection": container_ids,
     }
-    for index, row in enumerate(tables["collection_items"], start=1):
+    for index, row in enumerate(tables.get("collection_items", []), start=1):
         item_type = str(row.get("item_type") or "")
         item_id = row.get("item_id")
         valid = valid_collection_item_sets.get(item_type)
@@ -623,7 +853,7 @@ def validate_relationships(tables: dict[str, list[dict[str, Any]]]) -> list[str]
         "person": person_ids,
         "container": container_ids,
     }
-    for index, row in enumerate(tables["entity_media"], start=1):
+    for index, row in enumerate(tables.get("entity_media", []), start=1):
         media_id = row.get("media_id")
         entity_type = str(row.get("entity_type") or "")
         entity_id = row.get("entity_id")
@@ -656,7 +886,7 @@ def validate_backup_zip(backup_zip: Path | str) -> dict[str, Any]:
             manifest = load_json_member(zf, "manifest.json")
             if manifest.get("format") != BACKUP_FORMAT:
                 errors.append(f"Unsupported backup format: {manifest.get('format')}")
-            if int(manifest.get("formatVersion") or 0) != BACKUP_FORMAT_VERSION:
+            if int(manifest.get("formatVersion") or 0) not in SUPPORTED_BACKUP_FORMAT_VERSIONS:
                 errors.append(f"Unsupported backup format version: {manifest.get('formatVersion')}")
             if manifest.get("scope") != "functional_collection":
                 errors.append(f"Unsupported backup scope: {manifest.get('scope')}")
@@ -674,7 +904,7 @@ def validate_backup_zip(backup_zip: Path | str) -> dict[str, Any]:
 
             missing_media = 0
             embedded_media = 0
-            for row in tables["media_assets"]:
+            for row in tables.get("media_assets", []):
                 if str(row.get("storage_backend") or "local") != "local":
                     continue
                 storage_key = clean_storage_key(row.get("storage_key"))
@@ -693,6 +923,7 @@ def validate_backup_zip(backup_zip: Path | str) -> dict[str, Any]:
                 "format": manifest.get("format"),
                 "formatVersion": manifest.get("formatVersion"),
                 "scope": manifest.get("scope"),
+                "scopes": manifest.get("scopes") if isinstance(manifest.get("scopes"), list) else None,
                 "createdAt": manifest.get("createdAt"),
                 "generator": manifest.get("generator") or {},
                 "excludedScopes": manifest.get("excludedScopes") or [],
@@ -792,7 +1023,7 @@ def restore_media_files(backup_zip: Path, data_dir: Path, tables: dict[str, list
     skipped = 0
     with zipfile.ZipFile(backup_zip) as zf:
         names = set(zf.namelist())
-        for row in tables["media_assets"]:
+        for row in tables.get("media_assets", []):
             if str(row.get("storage_backend") or "local") != "local":
                 skipped += 1
                 continue
@@ -827,6 +1058,80 @@ def adapt_value(spec: TableSpec, column: str, value: Any) -> Any:
 
         return Jsonb(value if value is not None else ({} if column in {"metadata", "content_ratings"} else []))
     return value
+
+
+def build_upsert_query(spec: TableSpec):
+    from psycopg import sql
+
+    columns = list(spec.columns)
+    conflict = CONFLICT_KEYS.get(spec.name, ())
+    insert = sql.SQL("INSERT INTO {table} ({columns}) VALUES ({placeholders})").format(
+        table=sql.Identifier(spec.name),
+        columns=sql.SQL(", ").join(sql.Identifier(column) for column in columns),
+        placeholders=sql.SQL(", ").join(sql.Placeholder() for _ in columns),
+    )
+    if not conflict:
+        return insert
+    update_cols = [col for col in columns if col not in conflict]
+    if not update_cols:
+        return insert + sql.SQL(" ON CONFLICT ({cols}) DO NOTHING").format(
+            cols=sql.SQL(", ").join(sql.Identifier(col) for col in conflict),
+        )
+    assignments = sql.SQL(", ").join(
+        sql.SQL("{col}=EXCLUDED.{col}").format(col=sql.Identifier(col)) for col in update_cols
+    )
+    return insert + sql.SQL(" ON CONFLICT ({cols}) DO UPDATE SET ").format(
+        cols=sql.SQL(", ").join(sql.Identifier(col) for col in conflict),
+    ) + assignments
+
+
+def upsert_rows(
+    conn,
+    spec: TableSpec,
+    rows: list[dict[str, Any]],
+    *,
+    transform=None,
+) -> dict[str, int]:
+    """Upsert rows one at a time, skipping any row that violates a constraint.
+
+    Each row runs inside its own savepoint so a single bad foreign-key or unique
+    collision is skipped instead of aborting the whole restore. This makes any
+    scope subset safe to restore in either full or merge mode.
+    """
+    if not rows or not table_exists(conn, spec.name):
+        return {"inserted": 0, "skipped": 0}
+    from psycopg import errors as pg_errors
+
+    query = build_upsert_query(spec)
+    columns = list(spec.columns)
+    inserted = 0
+    skipped = 0
+    with conn.cursor() as cur:
+        for row in rows:
+            data = transform(dict(row)) if transform else row
+            if data is None:
+                skipped += 1
+                continue
+            params = [adapt_value(spec, column, data.get(column)) for column in columns]
+            try:
+                with conn.transaction():
+                    cur.execute(query, params)
+                inserted += 1
+            except pg_errors.IntegrityError:
+                skipped += 1
+    return {"inserted": inserted, "skipped": skipped}
+
+
+def existing_id_set(conn, table: str, column: str = "id") -> set[str]:
+    if not table_exists(conn, table):
+        return set()
+    from psycopg import sql
+
+    with conn.cursor() as cur:
+        cur.execute(sql.SQL("SELECT {col} FROM {table}").format(
+            col=sql.Identifier(column), table=sql.Identifier(table)
+        ))
+        return {str(row[column]) for row in cur.fetchall() if row.get(column) is not None}
 
 
 def insert_rows(conn, spec: TableSpec, rows: list[dict[str, Any]]) -> int:
@@ -890,13 +1195,16 @@ def restore_media_group_links(
     tables: dict[str, list[dict[str, Any]]],
     *,
     group_resolution: dict[str, Any] | None = None,
+    restore_members: bool = False,
 ) -> dict[str, Any]:
     if not table_exists(conn, "media_groups") or not table_exists(conn, "media_group_movies"):
-        return {"groupsCreated": 0, "groupsMapped": 0, "groupsSkipped": 0, "linksRestored": 0, "missing": []}
+        return {"groupsCreated": 0, "groupsMapped": 0, "groupsSkipped": 0, "linksRestored": 0, "membersRestored": 0, "missing": []}
 
     resolution = normalize_group_resolution(group_resolution)
     backup_groups = tables.get("media_groups") or []
     links = tables.get("media_group_movies") or []
+    members = tables.get("media_group_members") or []
+    user_ids = existing_id_set(conn, "users")
     with conn.cursor() as cur:
         cur.execute("SELECT id, public_id, name FROM media_groups")
         existing_rows = [dict(row) for row in cur.fetchall()]
@@ -951,7 +1259,7 @@ def restore_media_group_links(
                 INSERT INTO media_groups (
                     id, public_id, name, created_by, hide_digital, metadata, created_at, updated_at
                 )
-                VALUES (%s, %s, %s, NULL, %s, %s, COALESCE(%s, now()), COALESCE(%s, now()))
+                VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, now()), COALESCE(%s, now()))
                 ON CONFLICT (public_id) DO UPDATE SET
                     name=EXCLUDED.name,
                     hide_digital=EXCLUDED.hide_digital,
@@ -963,6 +1271,7 @@ def restore_media_group_links(
                     group.get("id"),
                     public_id or f"restored-group-{source_id[:12]}",
                     name or "Restored group",
+                    group.get("created_by") if str(group.get("created_by") or "") in user_ids else None,
                     bool(group.get("hide_digital")),
                     adapt_value(TABLE_SPEC_BY_NAME["media_groups"], "metadata", group.get("metadata") or {}),
                     group.get("created_at"),
@@ -998,6 +1307,31 @@ def restore_media_group_links(
             )
             restored += 1
 
+        members_restored = 0
+        if restore_members and table_exists(conn, "media_group_members"):
+            for member in members:
+                target_group_id = group_map.get(str(member.get("group_id") or ""))
+                member_user_id = member.get("user_id")
+                if not target_group_id or not member_user_id:
+                    continue
+                if str(member_user_id) not in user_ids:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO media_group_members (group_id, user_id, role, created_at)
+                    VALUES (%s, %s, COALESCE(%s, 'member'), COALESCE(%s, now()))
+                    ON CONFLICT (group_id, user_id) DO UPDATE SET
+                        role=EXCLUDED.role
+                    """,
+                    (
+                        target_group_id,
+                        member_user_id,
+                        member.get("role"),
+                        member.get("created_at"),
+                    ),
+                )
+                members_restored += 1
+
     if missing:
         raise BackupError("Media group restore resolution is required")
     return {
@@ -1005,6 +1339,7 @@ def restore_media_group_links(
         "groupsMapped": mapped,
         "groupsSkipped": skipped,
         "linksRestored": restored,
+        "membersRestored": members_restored,
         "missing": missing,
     }
 
@@ -1102,12 +1437,142 @@ def bump_restore_revision(conn, summary: dict[str, Any]) -> int | None:
     return revision
 
 
+def restore_user_accounts(conn, tables: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    """Upsert user accounts: users, roles (remapped by key), permissions, recovery
+    codes and API tokens. Passkeys are never restored, so this cannot lock anyone out.
+    """
+    if not table_exists(conn, "users"):
+        return {"skipped": "users table missing"}
+    from psycopg import errors as pg_errors
+
+    summary: dict[str, Any] = {}
+    media_ids = existing_id_set(conn, "media_assets")
+
+    def user_transform(row: dict[str, Any]) -> dict[str, Any]:
+        if str(row.get("avatar_asset_id") or "") not in media_ids:
+            row["avatar_asset_id"] = None
+        return row
+
+    summary["users"] = upsert_rows(
+        conn, TABLE_SPEC_BY_NAME["users"], tables.get("users") or [], transform=user_transform
+    )
+
+    user_ids = existing_id_set(conn, "users")
+
+    # Roles: upsert by business key and build a source-id -> target-id remap so
+    # role_permissions / user_roles attach to the right (instance-specific) role ids.
+    role_remap: dict[str, Any] = {}
+    roles_inserted = 0
+    roles_skipped = 0
+    if table_exists(conn, "roles"):
+        with conn.cursor() as cur:
+            for role in tables.get("roles") or []:
+                key = role.get("key")
+                if not key:
+                    roles_skipped += 1
+                    continue
+                created_by = role.get("created_by") if str(role.get("created_by") or "") in user_ids else None
+                try:
+                    with conn.transaction():
+                        cur.execute(
+                            """
+                            INSERT INTO roles (id, key, name, description, system, created_by, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, now()), COALESCE(%s, now()))
+                            ON CONFLICT (key) DO UPDATE SET
+                                name=EXCLUDED.name,
+                                description=EXCLUDED.description,
+                                updated_at=now()
+                            RETURNING id
+                            """,
+                            (
+                                role.get("id"),
+                                key,
+                                role.get("name") or str(key),
+                                role.get("description"),
+                                bool(role.get("system")),
+                                created_by,
+                                role.get("created_at"),
+                                role.get("updated_at"),
+                            ),
+                        )
+                        target = cur.fetchone()
+                    if target:
+                        role_remap[str(role.get("id") or "")] = target["id"]
+                        roles_inserted += 1
+                except pg_errors.IntegrityError:
+                    roles_skipped += 1
+    summary["roles"] = {"inserted": roles_inserted, "skipped": roles_skipped}
+
+    def remap_role(row: dict[str, Any]) -> dict[str, Any] | None:
+        source = str(row.get("role_id") or "")
+        target = role_remap.get(source)
+        if not target:
+            return None
+        row["role_id"] = target
+        return row
+
+    summary["role_permissions"] = upsert_rows(
+        conn, TABLE_SPEC_BY_NAME["role_permissions"], tables.get("role_permissions") or [], transform=remap_role
+    )
+
+    def user_role_transform(row: dict[str, Any]) -> dict[str, Any] | None:
+        remapped = remap_role(row)
+        if remapped is None:
+            return None
+        if str(remapped.get("user_id") or "") not in user_ids:
+            return None
+        if str(remapped.get("assigned_by") or "") not in user_ids:
+            remapped["assigned_by"] = None
+        return remapped
+
+    summary["user_roles"] = upsert_rows(
+        conn, TABLE_SPEC_BY_NAME["user_roles"], tables.get("user_roles") or [], transform=user_role_transform
+    )
+
+    summary["recovery_codes"] = upsert_rows(
+        conn, TABLE_SPEC_BY_NAME["recovery_codes"], tables.get("recovery_codes") or []
+    )
+
+    def token_transform(row: dict[str, Any]) -> dict[str, Any]:
+        if str(row.get("created_by") or "") not in user_ids:
+            row["created_by"] = None
+        return row
+
+    summary["api_access_tokens"] = upsert_rows(
+        conn, TABLE_SPEC_BY_NAME["api_access_tokens"], tables.get("api_access_tokens") or [], transform=token_transform
+    )
+    return summary
+
+
+# Master FK-safe upsert order for the collection/people/artwork domains. User
+# accounts are inserted before movies (owner_id FK); media groups, personal lists
+# and people are handled by dedicated helpers / scope gating.
+COLLECTION_UPSERT_ORDER = (
+    "media_assets",
+    "movies",
+    "movie_identifiers",
+    "movie_localizations",
+    "movie_technical_specs",
+    "people",
+    "person_identifiers",
+    "person_localizations",
+    "movie_credits",
+    "containers",
+    "container_identifiers",
+    "container_movies",
+    "collection_items",
+    "entity_media",
+)
+
+
 def restore_functional_backup(
     conn,
     backup_zip: Path,
     *,
     data_dir: Path,
     dry_run: bool = False,
+    mode: str = "full",
+    scopes: Any | None = None,
     include_personal_lists: bool = False,
     personal_list_user_id: Any | None = None,
     group_resolution: dict[str, Any] | None = None,
@@ -1116,35 +1581,107 @@ def restore_functional_backup(
     if not report.get("valid"):
         raise BackupError("; ".join(report.get("errors") or ["Backup validation failed"]))
 
+    mode = "merge" if str(mode).lower() == "merge" else "full"
+
     with zipfile.ZipFile(backup_zip) as zf:
         tables = load_backup_tables(zf)
-    for row in tables.get("movies") or []:
-        row["owner_id"] = None
+
+    # Resolve which scopes to restore. Explicit selection wins; otherwise fall back to
+    # the backup manifest scopes, then to the legacy personal-lists flag.
+    if scopes is None:
+        manifest_scopes = report.get("scopes") if isinstance(report.get("scopes"), list) else None
+        if manifest_scopes:
+            scopes = manifest_scopes
+        else:
+            scopes = [
+                SCOPE_COLLECTION,
+                SCOPE_PEOPLE,
+                SCOPE_FILM_ARTWORK,
+                SCOPE_PEOPLE_ARTWORK,
+                SCOPE_MEDIA_GROUPS,
+            ]
+            if include_personal_lists:
+                scopes.append(SCOPE_PERSONAL_LISTS)
+    restore_scopes = normalize_scopes(scopes)
+
+    include_user_accounts = SCOPE_USER_ACCOUNTS in restore_scopes
+    include_people = SCOPE_PEOPLE in restore_scopes
+    include_groups = SCOPE_MEDIA_GROUPS in restore_scopes
+    include_personal = SCOPE_PERSONAL_LISTS in restore_scopes
+    include_artwork = any(scope in ARTWORK_SCOPES for scope in restore_scopes)
+    restore_tables = scope_tables_for(restore_scopes)
 
     if dry_run:
-        return {"validated": True, "dryRun": True, "report": report}
+        return {
+            "validated": True,
+            "dryRun": True,
+            "mode": mode,
+            "scopes": restore_scopes,
+            "report": report,
+        }
 
-    media_summary = restore_media_files(backup_zip, data_dir, tables)
-    counters: dict[str, int] = {}
+    media_summary = (
+        restore_media_files(backup_zip, data_dir, tables)
+        if include_artwork
+        else {"restored": 0, "missing": 0, "skipped": 0}
+    )
+    counters: dict[str, Any] = {}
     with conn.transaction():
-        clear_functional_tables(conn, include_personal_lists=include_personal_lists)
-        for table_name in RESTORE_INSERT_ORDER:
+        if mode == "full":
+            clear_functional_tables(conn, include_personal_lists=include_personal)
+
+        if include_user_accounts:
+            counters["user_accounts"] = restore_user_accounts(conn, tables)
+
+        owner_ids = existing_id_set(conn, "users") if include_user_accounts else set()
+        media_ids_after: set[str] = set()
+
+        def movie_transform(row: dict[str, Any]) -> dict[str, Any]:
+            if not include_user_accounts or str(row.get("owner_id") or "") not in owner_ids:
+                row["owner_id"] = None
+            return row
+
+        def person_transform(row: dict[str, Any]) -> dict[str, Any]:
+            if str(row.get("profile_asset_id") or "") not in media_ids_after:
+                row["profile_asset_id"] = None
+            return row
+
+        for table_name in COLLECTION_UPSERT_ORDER:
+            if table_name not in restore_tables:
+                continue
             spec = TABLE_SPEC_BY_NAME[table_name]
-            counters[table_name] = insert_rows(conn, spec, tables[table_name])
-        group_summary = restore_media_group_links(
-            conn,
-            tables,
-            group_resolution=group_resolution,
+            if table_name == "media_assets":
+                result = upsert_rows(conn, spec, tables.get(table_name) or [])
+                media_ids_after = existing_id_set(conn, "media_assets")
+            elif table_name == "movies":
+                result = upsert_rows(conn, spec, tables.get(table_name) or [], transform=movie_transform)
+            elif table_name == "people":
+                result = upsert_rows(conn, spec, tables.get(table_name) or [], transform=person_transform)
+            else:
+                result = upsert_rows(conn, spec, tables.get(table_name) or [])
+            counters[table_name] = result
+
+        group_summary = (
+            restore_media_group_links(
+                conn,
+                tables,
+                group_resolution=group_resolution,
+                restore_members=include_user_accounts,
+            )
+            if include_groups
+            else {"groupsCreated": 0, "groupsMapped": 0, "groupsSkipped": 0, "linksRestored": 0, "membersRestored": 0, "missing": []}
         )
         personal_summary = (
             restore_personal_lists(conn, tables, user_id=personal_list_user_id)
-            if include_personal_lists
+            if include_personal
             else {"watchlist_items": 0, "watch_history": 0}
         )
         revision = bump_restore_revision(
             conn,
             {
                 "backupFile": backup_zip.name,
+                "mode": mode,
+                "scopes": restore_scopes,
                 "tables": counters,
                 "media": media_summary,
                 "mediaGroups": group_summary,
@@ -1155,6 +1692,8 @@ def restore_functional_backup(
     return {
         "validated": True,
         "dryRun": False,
+        "mode": mode,
+        "scopes": restore_scopes,
         "backupFile": backup_zip.name,
         "tables": counters,
         "media": media_summary,
