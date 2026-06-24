@@ -1786,5 +1786,12 @@
   "appAdmin.restoreModeTitle": "Type herstel",
   "appAdmin.restoreModeFull": "Volledig herstel (wissen en vervangen)",
   "appAdmin.restoreModePartial": "Gedeeltelijk herstel (selectie samenvoegen)",
-  "appAdmin.restoreScopeTitle": "Welke onderdelen herstellen"
+  "appAdmin.restoreScopeTitle": "Welke onderdelen herstellen",
+  "appAdmin.createBackup": "Backup maken",
+  "appAdmin.startRestore": "Herstel starten",
+  "appAdmin.backupCreating": "Backup maken...",
+  "appAdmin.backupCreated": "Backup gemaakt.",
+  "appAdmin.backupCreateInProgress": "Backup wordt gemaakt...",
+  "appAdmin.backupCreateHint": "Dit kan even duren bij grote collecties.",
+  "appAdmin.backupRestoreFinished": "Herstel voltooid."
 }

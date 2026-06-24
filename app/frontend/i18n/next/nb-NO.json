@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Gjenopprettingstype",
   "appAdmin.restoreModeFull": "Full gjenoppretting (tom og erstatt)",
   "appAdmin.restoreModePartial": "Delvis gjenoppretting (slaa sammen valgte)",
-  "appAdmin.restoreScopeTitle": "Hvilke deler skal gjenopprettes"
+  "appAdmin.restoreScopeTitle": "Hvilke deler skal gjenopprettes",
+  "appAdmin.createBackup": "Opprett sikkerhetskopi",
+  "appAdmin.startRestore": "Start gjenoppretting",
+  "appAdmin.backupCreating": "Oppretter sikkerhetskopi...",
+  "appAdmin.backupCreated": "Sikkerhetskopi opprettet.",
+  "appAdmin.backupCreateInProgress": "Sikkerhetskopiering pagar...",
+  "appAdmin.backupCreateHint": "Det kan ta et oeyeblikk for store samlinger.",
+  "appAdmin.backupRestoreFinished": "Gjenoppretting fullfoert."
 }
