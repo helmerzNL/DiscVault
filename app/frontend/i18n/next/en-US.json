@@ -663,6 +663,8 @@
   "personDetail.acting": "Acting",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "No biography imported yet.",
+  "personDetail.readMore": "Read more",
+  "personDetail.readLess": "Read less",
   "personDetail.died": "Died",
   "personDetail.credits": "credits",
   "personDetail.knownFor": "Known for",

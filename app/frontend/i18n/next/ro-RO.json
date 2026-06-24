@@ -640,6 +640,8 @@
   "personDetail.acting": "Actorie",
   "personDetail.crew": "Echipă",
   "personDetail.noBiography": "Nu a fost importată încă nicio biografie.",
+  "personDetail.readMore": "Citește mai mult",
+  "personDetail.readLess": "Arată mai puțin",
   "personDetail.died": "Decedat/ă",
   "personDetail.credits": "credite",
   "personDetail.knownFor": "Cunoscut/ă pentru",

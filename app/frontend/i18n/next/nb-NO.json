@@ -479,6 +479,8 @@
   "personDetail.acting": "Skuespill",
   "personDetail.crew": "Crew",
   "personDetail.noBiography": "Ingen biografi importert enna.",
+  "personDetail.readMore": "Les mer",
+  "personDetail.readLess": "Vis mindre",
   "personDetail.died": "Doed",
   "personDetail.credits": "credits",
   "personDetail.knownFor": "Kjent for",

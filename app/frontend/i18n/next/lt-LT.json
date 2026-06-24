@@ -640,6 +640,8 @@
   "personDetail.acting": "Vaidyba",
   "personDetail.crew": "Komanda",
   "personDetail.noBiography": "Biografija dar neimportuota.",
+  "personDetail.readMore": "Skaityti daugiau",
+  "personDetail.readLess": "Rodyti mažiau",
   "personDetail.died": "Mirė",
   "personDetail.credits": "kreditai",
   "personDetail.knownFor": "Žinomas/a dėl",

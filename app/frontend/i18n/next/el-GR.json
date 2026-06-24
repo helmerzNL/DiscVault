@@ -640,6 +640,8 @@
   "personDetail.acting": "Υποκριτική",
   "personDetail.crew": "Συνεργείο",
   "personDetail.noBiography": "Δεν έχει εισαχθεί ακόμη βιογραφικό.",
+  "personDetail.readMore": "Διαβάστε περισσότερα",
+  "personDetail.readLess": "Δείτε λιγότερα",
   "personDetail.died": "Πέθανε",
   "personDetail.credits": "συντελεστές",
   "personDetail.knownFor": "Γνωστό για",

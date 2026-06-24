@@ -479,6 +479,8 @@
   "personDetail.acting": "Actuacion",
   "personDetail.crew": "Equipo",
   "personDetail.noBiography": "Todavia no se ha importado biografia.",
+  "personDetail.readMore": "Leer más",
+  "personDetail.readLess": "Leer menos",
   "personDetail.died": "Fallecido",
   "personDetail.credits": "creditos",
   "personDetail.knownFor": "Conocido por",

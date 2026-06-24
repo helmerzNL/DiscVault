@@ -640,6 +640,8 @@
   "personDetail.acting": "Igra",
   "personDetail.crew": "Ekipa",
   "personDetail.noBiography": "Biografija še ni uvožena.",
+  "personDetail.readMore": "Preberi več",
+  "personDetail.readLess": "Prikaži manj",
   "personDetail.died": "Umrl/a",
   "personDetail.credits": "zasluge",
   "personDetail.knownFor": "Znan/a po",

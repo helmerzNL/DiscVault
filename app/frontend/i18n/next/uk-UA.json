@@ -640,6 +640,8 @@
   "personDetail.acting": "Акторська гра",
   "personDetail.crew": "Знімальна група",
   "personDetail.noBiography": "Біографію ще не імпортовано.",
+  "personDetail.readMore": "Читати більше",
+  "personDetail.readLess": "Згорнути",
   "personDetail.died": "Помер/ла",
   "personDetail.credits": "ролі",
   "personDetail.knownFor": "Відомий/а за",
