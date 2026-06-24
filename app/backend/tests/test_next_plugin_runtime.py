@@ -47,6 +47,7 @@ from app.backend.next_worker import import_year
 from app.backend.next_plugins._collection_import_base import CollectionImportPlugin
 from app.backend.next_plugins._collection_import_base import parse_release_date
 from app.backend.next_plugins.bluray_com.plugin import _movie_title_from_release_title
+from app.backend.next_plugins.bluray_com import plugin as bluray_com_plugin
 from app.backend.next_plugins.trakt import plugin as trakt_plugin
 from app.backend.next_plugin_runtime import (
     _plugin_is_active,
@@ -386,6 +387,48 @@ class NextPluginRuntimeTests(unittest.TestCase):
             "A Minecraft Movie",
         )
         self.assertEqual(_movie_title_from_release_title("Back to the Future DVD"), "Back to the Future")
+
+    def test_bluray_dvd_section_search_ignores_bluray_cross_links(self):
+        captured_sections = []
+
+        def fake_post(url, data=None, headers=None, timeout=None):
+            captured_sections.append((data or {}).get("section"))
+            text = (
+                "var urls = new Array("
+                "'/movies/Lethal-Weapon-2-Blu-ray/12345/',"
+                "'/dvd/Lethal-Weapon-2-DVD/67890/'"
+                ")"
+            )
+            return types.SimpleNamespace(status_code=200, text=text)
+
+        original_requests = bluray_com_plugin.requests
+        try:
+            bluray_com_plugin.requests = types.SimpleNamespace(post=fake_post)
+            urls = bluray_com_plugin._release_urls("Lethal Weapon 2", preferred_format="DVD", limit=8)
+        finally:
+            bluray_com_plugin.requests = original_requests
+
+        self.assertEqual(captured_sections, ["dvdmovies"])
+        self.assertEqual(urls, ["https://www.blu-ray.com/dvd/Lethal-Weapon-2-DVD/67890/"])
+
+    def test_bluray_bluray_section_search_ignores_dvd_cross_links(self):
+        def fake_post(url, data=None, headers=None, timeout=None):
+            text = (
+                "var urls = new Array("
+                "'/dvd/Heat-DVD/111/',"
+                "'/movies/Heat-Blu-ray/222/'"
+                ")"
+            )
+            return types.SimpleNamespace(status_code=200, text=text)
+
+        original_requests = bluray_com_plugin.requests
+        try:
+            bluray_com_plugin.requests = types.SimpleNamespace(post=fake_post)
+            urls = bluray_com_plugin._release_urls("Heat", preferred_format="Blu-ray", limit=8)
+        finally:
+            bluray_com_plugin.requests = original_requests
+
+        self.assertEqual(urls, ["https://www.blu-ray.com/movies/Heat-Blu-ray/222/"])
 
     def test_legacy_import_plugin_is_not_bundled(self):
         discovery = discover_plugins()
