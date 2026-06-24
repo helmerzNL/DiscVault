@@ -1734,5 +1734,17 @@
   "groups.removingMember": "Usuwanie członka...",
   "groups.memberRemoved": "Członek usunięty.",
   "auth.signInWithUsernamePassword": "Zaloguj się przy użyciu nazwy użytkownika/hasła",
-  "auth.password": "Hasło"
+  "auth.password": "Hasło",
+  "appAdmin.includePersonalLists": "Dolacz liste obserwowanych i historie ogladania",
+  "appAdmin.backupScopeTitle": "Dolacz do kopii zapasowej",
+  "appAdmin.backupScopeCollection": "Wszystkie filmy / kontenery (zawsze dolaczone)",
+  "appAdmin.backupScopePeople": "Wszystkie osoby",
+  "appAdmin.backupScopeFilmArtwork": "Wszystkie plakaty i tla filmow / kontenerow",
+  "appAdmin.backupScopePeopleArtwork": "Wszystkie plakaty i tla osob",
+  "appAdmin.backupScopeMediaGroups": "Wszystkie grupy czlonkow i ich relacje",
+  "appAdmin.backupScopeUserAccounts": "Wszystkie konta uzytkownikow (w tym konfiguracja MCP / API)",
+  "appAdmin.restoreModeTitle": "Typ przywracania",
+  "appAdmin.restoreModeFull": "Pelne przywracanie (wyczysc i zastap)",
+  "appAdmin.restoreModePartial": "Czesciowe przywracanie (scal wybrane)",
+  "appAdmin.restoreScopeTitle": "Ktore czesci przywrocic"
 }

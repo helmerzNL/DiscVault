@@ -1734,5 +1734,17 @@
   "groups.removingMember": "Odoberanie člena...",
   "groups.memberRemoved": "Člen odobratý.",
   "auth.signInWithUsernamePassword": "Prihláste sa pomocou používateľského mena/hesla",
-  "auth.password": "heslo"
+  "auth.password": "heslo",
+  "appAdmin.includePersonalLists": "Zahrnut zoznam sledovania a historiu prehravania",
+  "appAdmin.backupScopeTitle": "Zahrnut do zalohy",
+  "appAdmin.backupScopeCollection": "Vsetky filmy / kontajnery (vzdy zahrnute)",
+  "appAdmin.backupScopePeople": "Vsetky osoby",
+  "appAdmin.backupScopeFilmArtwork": "Vsetky plagaty a pozadia filmov / kontajnerov",
+  "appAdmin.backupScopePeopleArtwork": "Vsetky plagaty a pozadia osob",
+  "appAdmin.backupScopeMediaGroups": "Vsetky skupiny clenov a ich vztahy",
+  "appAdmin.backupScopeUserAccounts": "Vsetky pouzivatelske ucty (vr. konfiguracie MCP / API)",
+  "appAdmin.restoreModeTitle": "Typ obnovenia",
+  "appAdmin.restoreModeFull": "Uplne obnovenie (vymazat a nahradit)",
+  "appAdmin.restoreModePartial": "Ciastocne obnovenie (zlucit vybrane)",
+  "appAdmin.restoreScopeTitle": "Ktore casti obnovit"
 }

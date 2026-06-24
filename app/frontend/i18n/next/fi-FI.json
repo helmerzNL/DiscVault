@@ -1734,5 +1734,17 @@
   "groups.removingMember": "Removing member...",
   "groups.memberRemoved": "Member removed.",
   "auth.signInWithUsernamePassword": "Kirjaudu sisään käyttäjätunnuksella/salasanalla",
-  "auth.password": "Salasana"
+  "auth.password": "Salasana",
+  "appAdmin.includePersonalLists": "Sisallyta seurantalista ja katseluhistoria",
+  "appAdmin.backupScopeTitle": "Sisallyta varmuuskopioon",
+  "appAdmin.backupScopeCollection": "Kaikki elokuvat / sailiot (aina mukana)",
+  "appAdmin.backupScopePeople": "Kaikki henkilot",
+  "appAdmin.backupScopeFilmArtwork": "Kaikki elokuvien / sailioiden julisteet ja taustat",
+  "appAdmin.backupScopePeopleArtwork": "Kaikki henkiloiden julisteet ja taustat",
+  "appAdmin.backupScopeMediaGroups": "Kaikki jasenryhmat ja niiden suhteet",
+  "appAdmin.backupScopeUserAccounts": "Kaikki kayttajatilit (ml. MCP / API-maaritykset)",
+  "appAdmin.restoreModeTitle": "Palautustyyppi",
+  "appAdmin.restoreModeFull": "Taydellinen palautus (tyhjenna ja korvaa)",
+  "appAdmin.restoreModePartial": "Osittainen palautus (yhdista valitut)",
+  "appAdmin.restoreScopeTitle": "Mitka osat palautetaan"
 }

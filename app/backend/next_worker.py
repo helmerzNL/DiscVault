@@ -452,6 +452,8 @@ def process_functional_restore(payload: dict[str, Any], worker_id: str) -> dict[
                 conn,
                 backup_zip,
                 data_dir=data_dir,
+                mode=str(payload.get("mode") or "full"),
+                scopes=payload.get("scopes") if isinstance(payload.get("scopes"), list) else None,
                 include_personal_lists=bool_value(payload.get("includePersonalLists"), default=False),
                 personal_list_user_id=payload.get("personalListUserId"),
                 group_resolution=payload.get("groupResolution") if isinstance(payload.get("groupResolution"), dict) else {},

@@ -81,6 +81,8 @@ try:
     from .next_backup import backup_restore_plan
     from .next_backup import backup_storage_dir
     from .next_backup import export_functional_backup
+    from .next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
+    from .next_backup import normalize_scopes as normalize_backup_scopes
     from .next_backup import list_backup_archives
     from .next_backup import stored_backup_path
     from .next_backup import validate_backup_zip
@@ -261,6 +263,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import backup_restore_plan
     from next_backup import backup_storage_dir
     from next_backup import export_functional_backup
+    from next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
+    from next_backup import normalize_scopes as normalize_backup_scopes
     from next_backup import list_backup_archives
     from next_backup import stored_backup_path
     from next_backup import validate_backup_zip
@@ -11816,6 +11820,25 @@ def ui_preview_html(
       height: 16px;
       accent-color: var(--accent);
     }
+    .profile-scope-fieldset {
+      display: grid;
+      gap: 8px;
+      border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 6px 0;
+    }
+    .profile-scope-fieldset legend {
+      padding: 0 6px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .profile-scope-fieldset .profile-checkbox-row {
+      display: flex;
+    }
     .profile-passkey {
       display: grid;
       gap: 10px;
@@ -15715,10 +15738,37 @@ def ui_preview_html(
                 <button type="button" class="secondary-button" id="appAdminRefreshBackupButton" data-next-i18n="appAdmin.refreshBackup">Refresh backup</button>
                 <button type="button" class="secondary-button" id="appAdminExportBackupButton" data-next-i18n="appAdmin.exportBackup">Export ZIP</button>
               </div>
-              <label class="profile-checkbox-row" for="appAdminBackupIncludePersonalLists">
-                <input id="appAdminBackupIncludePersonalLists" type="checkbox">
-                <span data-next-i18n="appAdmin.includePersonalLists">Include watchlist and watched history</span>
-              </label>
+              <fieldset class="profile-scope-fieldset" id="appAdminBackupScopes">
+                <legend data-next-i18n="appAdmin.backupScopeTitle">Include in backup</legend>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="collection" checked disabled>
+                  <span data-next-i18n="appAdmin.backupScopeCollection">All films / containers (always included)</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="people" checked>
+                  <span data-next-i18n="appAdmin.backupScopePeople">All people</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="film_artwork" checked>
+                  <span data-next-i18n="appAdmin.backupScopeFilmArtwork">All film / container posters and backdrops</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="people_artwork" checked>
+                  <span data-next-i18n="appAdmin.backupScopePeopleArtwork">All people posters and backdrops</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="media_groups" checked>
+                  <span data-next-i18n="appAdmin.backupScopeMediaGroups">All member groups and their relations</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="user_accounts">
+                  <span data-next-i18n="appAdmin.backupScopeUserAccounts">All user accounts (incl. MCP / API configuration)</span>
+                </label>
+                <label class="profile-checkbox-row" for="appAdminBackupIncludePersonalLists">
+                  <input id="appAdminBackupIncludePersonalLists" type="checkbox" data-backup-scope="personal_lists">
+                  <span data-next-i18n="appAdmin.includePersonalLists">Include watchlist and watched history</span>
+                </label>
+              </fieldset>
               <div class="login-message" id="appAdminBackupMessage"></div>
             </div>
             <div class="detail-card profile-card">
@@ -15729,6 +15779,48 @@ def ui_preview_html(
                   <span data-next-i18n="appAdmin.backupFile">Backup ZIP</span>
                   <input id="appAdminBackupFile" type="file" accept=".zip,application/zip">
                 </label>
+                <fieldset class="profile-scope-fieldset" id="appAdminRestoreMode">
+                  <legend data-next-i18n="appAdmin.restoreModeTitle">Restore type</legend>
+                  <label class="profile-checkbox-row">
+                    <input type="radio" name="appAdminRestoreMode" value="full" checked>
+                    <span data-next-i18n="appAdmin.restoreModeFull">Full restore (wipe and replace)</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="radio" name="appAdminRestoreMode" value="merge">
+                    <span data-next-i18n="appAdmin.restoreModePartial">Partial restore (merge selected)</span>
+                  </label>
+                </fieldset>
+                <fieldset class="profile-scope-fieldset" id="appAdminRestoreScopes" hidden>
+                  <legend data-next-i18n="appAdmin.restoreScopeTitle">Restore which parts</legend>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="collection" checked disabled>
+                    <span data-next-i18n="appAdmin.backupScopeCollection">All films / containers (always included)</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="people" checked>
+                    <span data-next-i18n="appAdmin.backupScopePeople">All people</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="film_artwork" checked>
+                    <span data-next-i18n="appAdmin.backupScopeFilmArtwork">All film / container posters and backdrops</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="people_artwork" checked>
+                    <span data-next-i18n="appAdmin.backupScopePeopleArtwork">All people posters and backdrops</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="media_groups" checked>
+                    <span data-next-i18n="appAdmin.backupScopeMediaGroups">All member groups and their relations</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="user_accounts">
+                    <span data-next-i18n="appAdmin.backupScopeUserAccounts">All user accounts (incl. MCP / API configuration)</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="personal_lists">
+                    <span data-next-i18n="appAdmin.includePersonalLists">Include watchlist and watched history</span>
+                  </label>
+                </fieldset>
                 <div class="profile-form-actions">
                   <button type="button" class="secondary-button" id="appAdminValidateBackupButton" data-next-i18n="appAdmin.validateBackup">Validate ZIP</button>
                   <button type="button" class="secondary-button danger" id="appAdminRestoreBackupButton" data-next-i18n="appAdmin.restoreBackup">Restore ZIP</button>
@@ -19757,6 +19849,33 @@ def ui_preview_html(
     function appAdminBackupIncludesPersonalLists() {
       return !!document.getElementById("appAdminBackupIncludePersonalLists")?.checked;
     }
+    function appAdminBackupExportScopes() {
+      const inputs = document.querySelectorAll("#appAdminBackupScopes input[data-backup-scope]");
+      const scopes = ["collection"];
+      inputs.forEach((input) => {
+        const scope = input.getAttribute("data-backup-scope");
+        if (scope && scope !== "collection" && input.checked) scopes.push(scope);
+      });
+      return Array.from(new Set(scopes));
+    }
+    function appAdminRestoreModeValue() {
+      const checked = document.querySelector("#appAdminRestoreMode input[name='appAdminRestoreMode']:checked");
+      return checked && checked.value === "merge" ? "merge" : "full";
+    }
+    function appAdminRestoreScopes() {
+      const inputs = document.querySelectorAll("#appAdminRestoreScopes input[data-restore-scope]");
+      const scopes = ["collection"];
+      inputs.forEach((input) => {
+        const scope = input.getAttribute("data-restore-scope");
+        if (scope && scope !== "collection" && input.checked) scopes.push(scope);
+      });
+      return Array.from(new Set(scopes));
+    }
+    function syncAppAdminRestoreScopeVisibility() {
+      const fieldset = document.getElementById("appAdminRestoreScopes");
+      if (!fieldset) return;
+      fieldset.hidden = appAdminRestoreModeValue() !== "merge";
+    }
     function appAdminBackupGroupKey(group) {
       return String((group && (group.publicId || group.backupGroupId || group.name)) || "");
     }
@@ -19848,7 +19967,8 @@ def ui_preview_html(
       if (!hasActualAnyPermission(["admin.backup", "collection.export_functional"])) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupExporting", "Creating backup ZIP..."));
       try {
-        const query = appAdminBackupIncludesPersonalLists() ? "?includePersonalLists=1" : "";
+        const scopes = appAdminBackupExportScopes();
+        const query = `?scopes=${encodeURIComponent(scopes.join(","))}`;
         const response = await fetch(`/api/next/backup/export${query}`, {
           method: "GET",
           cache: "no-store",
@@ -19892,9 +20012,13 @@ def ui_preview_html(
       if (!confirm(tNext("appAdmin.backupRestoreConfirm", "Restore this ZIP and replace the functional collection data? Auth, passkeys, plugins and secrets are not restored."))) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueueing", "Validating and queueing restore job..."));
       const restoreUploaded = async (groupResolution = {}) => {
+        const mode = appAdminRestoreModeValue();
+        const scopes = mode === "merge" ? appAdminRestoreScopes() : null;
         const extraFields = {
-          includePersonalLists: appAdminBackupIncludesPersonalLists() ? "1" : "0"
+          mode,
+          includePersonalLists: (scopes ? scopes.includes("personal_lists") : appAdminBackupIncludesPersonalLists()) ? "1" : "0"
         };
+        if (scopes) extraFields.scopes = scopes.join(",");
         if (Object.keys(groupResolution || {}).length) {
           extraFields.groupResolution = JSON.stringify(groupResolution);
         }
@@ -19941,13 +20065,17 @@ def ui_preview_html(
       if (!confirm(confirmText)) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueueing", "Validating and queueing restore job..."));
       const restoreStored = async (groupResolution = {}) => {
+        const mode = appAdminRestoreModeValue();
+        const scopes = mode === "merge" ? appAdminRestoreScopes() : null;
         const payload = await authApiJson("/api/next/backup/restore-stored", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             fileName,
             confirm: "restore-functional-collection",
-            includePersonalLists: appAdminBackupIncludesPersonalLists(),
+            mode,
+            scopes,
+            includePersonalLists: scopes ? scopes.includes("personal_lists") : appAdminBackupIncludesPersonalLists(),
             groupResolution
           })
         }).catch((error) => {
@@ -30621,6 +30749,10 @@ def ui_preview_html(
       document.getElementById("appAdminExportBackupButton")?.addEventListener("click", () => exportAppAdminBackupZip());
       document.getElementById("appAdminValidateBackupButton")?.addEventListener("click", () => validateAppAdminBackupZip());
       document.getElementById("appAdminRestoreBackupButton")?.addEventListener("click", () => restoreAppAdminBackupZip());
+      document.querySelectorAll("#appAdminRestoreMode input[name='appAdminRestoreMode']").forEach((input) => {
+        input.addEventListener("change", () => syncAppAdminRestoreScopeVisibility());
+      });
+      syncAppAdminRestoreScopeVisibility();
       document.getElementById("appAdminBackupList")?.addEventListener("click", (event) => {
         const downloadButton = event.target.closest("[data-app-admin-backup-download]");
         const restoreButton = event.target.closest("[data-app-admin-backup-restore]");
@@ -52596,6 +52728,13 @@ def register_routes(flask_app: Flask) -> None:
             request.args.get("includePersonalLists", request.args.get("include_personal_lists")),
             default=False,
         )
+        scopes_raw = request.args.get("scopes")
+        scopes = None
+        if scopes_raw:
+            requested = [part.strip() for part in scopes_raw.split(",") if part.strip()]
+            if requested:
+                scopes = normalize_backup_scopes(requested)
+                include_personal_lists = "personal_lists" in scopes
         scope_label = "with-personal-lists" if include_personal_lists else "movies-groups"
         file_name = f"discvault-next-{scope_label}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.zip"
         output_path = backup_dir / file_name
@@ -52605,6 +52744,7 @@ def register_routes(flask_app: Flask) -> None:
                 conn,
                 output_path,
                 data_dir=data_dir,
+                scopes=scopes,
                 include_personal_lists=include_personal_lists,
                 generator={
                     "service": "DiscVault Next",
@@ -52630,6 +52770,7 @@ def register_routes(flask_app: Flask) -> None:
                     "fileName": file_name,
                     "sha256": summary.get("sha256"),
                     "scope": "functional_collection",
+                    "scopes": summary.get("manifest", {}).get("scopes"),
                     "includePersonalLists": include_personal_lists,
                 },
             )
@@ -52715,6 +52856,14 @@ def register_routes(flask_app: Flask) -> None:
             request.form.get("includePersonalLists", request.args.get("includePersonalLists")),
             default=False,
         )
+        restore_mode = "merge" if (request.form.get("mode") or request.args.get("mode") or "full").lower() == "merge" else "full"
+        scopes_raw = request.form.get("scopes") or request.args.get("scopes")
+        restore_scopes = None
+        if scopes_raw:
+            requested = [part.strip() for part in scopes_raw.split(",") if part.strip()]
+            if requested:
+                restore_scopes = normalize_backup_scopes(requested)
+                include_personal_lists = "personal_lists" in restore_scopes
         group_resolution_raw = request.form.get("groupResolution") or request.args.get("groupResolution")
         group_resolution = {}
         if group_resolution_raw:
@@ -52743,6 +52892,8 @@ def register_routes(flask_app: Flask) -> None:
                     payload={
                         "backupZip": str(upload_path),
                         "dataDir": str(data_dir),
+                        "mode": restore_mode,
+                        "scopes": restore_scopes,
                         "includePersonalLists": include_personal_lists,
                         "personalListUserId": str(actor.get("id")) if actor.get("id") else None,
                         "groupResolution": group_resolution,
@@ -52789,6 +52940,14 @@ def register_routes(flask_app: Flask) -> None:
         if not backup_path.exists() or not backup_path.is_file():
             raise NextApiError("Backup file not found", 404)
         include_personal_lists = parse_bool_value(body.get("includePersonalLists"), default=False)
+        restore_mode = "merge" if str(body.get("mode") or "full").lower() == "merge" else "full"
+        scopes_value = body.get("scopes")
+        restore_scopes = None
+        if isinstance(scopes_value, str):
+            scopes_value = [part.strip() for part in scopes_value.split(",") if part.strip()]
+        if isinstance(scopes_value, list) and scopes_value:
+            restore_scopes = normalize_backup_scopes(scopes_value)
+            include_personal_lists = "personal_lists" in restore_scopes
         group_resolution = body.get("groupResolution") if isinstance(body.get("groupResolution"), dict) else {}
         report = validate_backup_zip(backup_path)
         if not report.get("valid"):
@@ -52814,6 +52973,8 @@ def register_routes(flask_app: Flask) -> None:
                     payload={
                         "backupZip": str(backup_path),
                         "dataDir": str(data_dir),
+                        "mode": restore_mode,
+                        "scopes": restore_scopes,
                         "includePersonalLists": include_personal_lists,
                         "personalListUserId": str(actor.get("id")) if actor.get("id") else None,
                         "groupResolution": group_resolution,

@@ -1734,5 +1734,17 @@
   "groups.removingMember": "Üye kaldırılıyor...",
   "groups.memberRemoved": "Üye kaldırıldı.",
   "auth.signInWithUsernamePassword": "Kullanıcı adı/şifreyle oturum açın",
-  "auth.password": "Şifre"
+  "auth.password": "Şifre",
+  "appAdmin.includePersonalLists": "Izleme listesi ve izleme gecmisini dahil et",
+  "appAdmin.backupScopeTitle": "Yedege dahil et",
+  "appAdmin.backupScopeCollection": "Tum filmler / kapsayicilar (her zaman dahil)",
+  "appAdmin.backupScopePeople": "Tum kisiler",
+  "appAdmin.backupScopeFilmArtwork": "Tum film / kapsayici posterleri ve arka planlari",
+  "appAdmin.backupScopePeopleArtwork": "Tum kisi posterleri ve arka planlari",
+  "appAdmin.backupScopeMediaGroups": "Tum uye gruplari ve iliskileri",
+  "appAdmin.backupScopeUserAccounts": "Tum kullanici hesaplari (MCP / API yapilandirmasi dahil)",
+  "appAdmin.restoreModeTitle": "Geri yukleme turu",
+  "appAdmin.restoreModeFull": "Tam geri yukleme (temizle ve degistir)",
+  "appAdmin.restoreModePartial": "Kismi geri yukleme (secileni birlestir)",
+  "appAdmin.restoreScopeTitle": "Hangi bolumler geri yuklensin"
 }

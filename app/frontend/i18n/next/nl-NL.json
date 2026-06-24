@@ -1774,5 +1774,17 @@
   "movieDetail.playWithService": "Afspelen met {service}",
   "movieDetail.multipleDigitalItems": "{count} items",
   "auth.signInWithUsernamePassword": "Log in met gebruikersnaam/wachtwoord",
-  "auth.password": "Wachtwoord"
+  "auth.password": "Wachtwoord",
+  "appAdmin.includePersonalLists": "Kijklijst en kijkgeschiedenis meenemen",
+  "appAdmin.backupScopeTitle": "Meenemen in backup",
+  "appAdmin.backupScopeCollection": "Alle films / containers (altijd inbegrepen)",
+  "appAdmin.backupScopePeople": "Alle personen",
+  "appAdmin.backupScopeFilmArtwork": "Alle posters en achtergronden van films / containers",
+  "appAdmin.backupScopePeopleArtwork": "Alle posters en achtergronden van personen",
+  "appAdmin.backupScopeMediaGroups": "Alle ledengroepen en hun relaties",
+  "appAdmin.backupScopeUserAccounts": "Alle gebruikersaccounts (incl. MCP / API-configuratie)",
+  "appAdmin.restoreModeTitle": "Type herstel",
+  "appAdmin.restoreModeFull": "Volledig herstel (wissen en vervangen)",
+  "appAdmin.restoreModePartial": "Gedeeltelijk herstel (selectie samenvoegen)",
+  "appAdmin.restoreScopeTitle": "Welke onderdelen herstellen"
 }
