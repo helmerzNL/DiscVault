@@ -15735,7 +15735,7 @@ def ui_preview_html(
                 </div>
               </div>
               <div class="profile-action-row">
-                <button type="button" class="secondary-button" id="appAdminRefreshBackupButton" data-next-i18n="appAdmin.refreshBackup">Refresh backup</button>
+                <button type="button" class="secondary-button" id="appAdminRefreshBackupButton" data-next-i18n="appAdmin.createBackup">Create backup</button>
                 <button type="button" class="secondary-button" id="appAdminExportBackupButton" data-next-i18n="appAdmin.exportBackup">Export ZIP</button>
               </div>
               <fieldset class="profile-scope-fieldset" id="appAdminBackupScopes">
@@ -15823,7 +15823,7 @@ def ui_preview_html(
                 </fieldset>
                 <div class="profile-form-actions">
                   <button type="button" class="secondary-button" id="appAdminValidateBackupButton" data-next-i18n="appAdmin.validateBackup">Validate ZIP</button>
-                  <button type="button" class="secondary-button danger" id="appAdminRestoreBackupButton" data-next-i18n="appAdmin.restoreBackup">Restore ZIP</button>
+                  <button type="button" class="secondary-button danger" id="appAdminRestoreBackupButton" data-next-i18n="appAdmin.startRestore">Start restore</button>
                 </div>
               </form>
             </div>
@@ -17905,7 +17905,7 @@ def ui_preview_html(
               ${item.errors && item.errors.length ? `<div class="login-message bad">${escapeHtml(item.errors[0])}</div>` : ""}
               <div class="app-admin-plugin-actions">
                 <button type="button" class="secondary-button" data-app-admin-backup-download="${escapeHtml(item.fileName || "")}">${escapeHtml(tNext("appAdmin.downloadBackup", "Download"))}</button>
-                <button type="button" class="secondary-button danger" data-app-admin-backup-restore="${escapeHtml(item.fileName || "")}" ${item.valid ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.restoreBackup", "Restore ZIP"))}</button>
+                <button type="button" class="secondary-button danger" data-app-admin-backup-restore="${escapeHtml(item.fileName || "")}" ${item.valid ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.startRestore", "Start restore"))}</button>
               </div>
             </div>
           `;
@@ -19002,6 +19002,7 @@ def ui_preview_html(
       setElementVisible(closestCard(document.getElementById("appAdminCredentialsList")), canViewPasskeys);
       setElementVisible(document.getElementById("appAdminGroupForm"), canManageGroups);
       setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasActualPermission("admin.restore_functional"));
+      setElementVisible(document.getElementById("appAdminRefreshBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
       setElementVisible(document.getElementById("appAdminExportBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
       setElementVisible(document.getElementById("appAdminValidateBackupButton"), hasActualPermission("admin.restore_functional"));
       setElementVisible(document.getElementById("appAdminRestoreBackupButton"), hasActualPermission("admin.restore_functional"));
@@ -19924,6 +19925,33 @@ def ui_preview_html(
       }
       return resolution;
     }
+    async function pollAppAdminRestoreJob(jobId) {
+      if (!jobId) return;
+      const terminal = new Set(["completed", "failed", "cancelled", "error"]);
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        if (!canUseAdminTab("backup")) return;
+        let job = null;
+        try {
+          const payload = await authApiJson(`/api/next/backup/jobs/${encodeURIComponent(jobId)}`);
+          job = payload && payload.job;
+        } catch (error) {
+          return;
+        }
+        await refreshAppAdminBackupStatus();
+        const status = String((job && job.status) || "");
+        if (terminal.has(status)) {
+          if (status === "completed") {
+            setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreFinished", "Restore finished."), "good");
+          } else if (job && job.error) {
+            setAppAdminMessage("appAdminBackupMessage", job.error, "bad");
+          } else {
+            setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreFailed", "Backup restore failed."), "bad");
+          }
+          return;
+        }
+      }
+    }
     async function handleAppAdminBackupRestorePayload(payload, retry) {
       appAdmin.backupReport = payload.report || null;
       renderAppAdminBackups(appAdmin.backup);
@@ -19936,6 +19964,8 @@ def ui_preview_html(
       }
       await refreshAppAdminBackupStatus();
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueued", "Restore job queued."), "good");
+      const jobId = payload.job && (payload.job.id || payload.job.jobId);
+      if (jobId) pollAppAdminRestoreJob(jobId);
       return payload;
     }
     async function uploadAppAdminBackupZip(url, extraFields = {}) {
@@ -19962,6 +19992,39 @@ def ui_preview_html(
       const match = disposition.match(/filename\\*?=(?:UTF-8''|")?([^";]+)/i);
       if (match && match[1]) return decodeURIComponent(match[1].replace(/"/g, ""));
       return `discvault-functional-${new Date().toISOString().slice(0, 10)}.zip`;
+    }
+    function renderAppAdminBackupProgress(messageKey, fallback) {
+      const node = document.getElementById("appAdminBackupReport");
+      if (!node) return;
+      node.innerHTML = `
+        <div class="profile-passkey">
+          <div class="profile-passkey-head">
+            <strong>${escapeHtml(tNext(messageKey, fallback))}</strong>
+            <span class="tag blue">${escapeHtml(tNext("metadataJobs.running", "Running"))}</span>
+          </div>
+          <div class="login-message">${escapeHtml(tNext("appAdmin.backupCreateHint", "This may take a moment for large collections."))}</div>
+        </div>
+      `;
+    }
+    async function createAppAdminBackup() {
+      if (!hasActualAnyPermission(["admin.backup", "collection.export_functional"])) return;
+      setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupCreating", "Creating backup..."));
+      renderAppAdminBackupProgress("appAdmin.backupCreateInProgress", "Backup in progress...");
+      try {
+        const scopes = appAdminBackupExportScopes();
+        const payload = await authApiJson("/api/next/backup/create", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({scopes: scopes.join(",")})
+        });
+        appAdmin.backupReport = payload.report || null;
+        await refreshAppAdminBackupStatus();
+        setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupCreated", "Backup created."), "good");
+      } catch (error) {
+        appAdmin.backupReport = null;
+        renderAppAdminBackups(appAdmin.backup);
+        setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
     }
     async function exportAppAdminBackupZip() {
       if (!hasActualAnyPermission(["admin.backup", "collection.export_functional"])) return;
@@ -30745,7 +30808,7 @@ def ui_preview_html(
         }
       });
       document.getElementById("appAdminRefreshDigitalSourcesButton")?.addEventListener("click", () => refreshAppAdminDigitalSources());
-      document.getElementById("appAdminRefreshBackupButton")?.addEventListener("click", () => refreshAppAdminBackupStatus());
+      document.getElementById("appAdminRefreshBackupButton")?.addEventListener("click", () => createAppAdminBackup());
       document.getElementById("appAdminExportBackupButton")?.addEventListener("click", () => exportAppAdminBackupZip());
       document.getElementById("appAdminValidateBackupButton")?.addEventListener("click", () => validateAppAdminBackupZip());
       document.getElementById("appAdminRestoreBackupButton")?.addEventListener("click", () => restoreAppAdminBackupZip());
@@ -52784,6 +52847,98 @@ def register_routes(flask_app: Flask) -> None:
         result.headers["X-DiscVault-Backup-Sha256"] = summary["sha256"]
         result.headers["X-DiscVault-Backup-Scope"] = "functional_collection"
         return result
+
+    @flask_app.post("/api/next/backup/create")
+    def backup_create():
+        body = request.get_json(silent=True) if request.is_json else None
+        if not isinstance(body, dict):
+            body = {}
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+
+        def _read_param(name: str):
+            if name in body:
+                return body.get(name)
+            return request.form.get(name, request.args.get(name))
+
+        include_personal_lists = parse_bool_value(
+            _read_param("includePersonalLists"),
+            default=False,
+        )
+        scopes_value = _read_param("scopes")
+        if isinstance(scopes_value, str):
+            scopes_value = [part.strip() for part in scopes_value.split(",") if part.strip()]
+        scopes = None
+        if isinstance(scopes_value, list) and scopes_value:
+            scopes = normalize_backup_scopes(scopes_value)
+            include_personal_lists = "personal_lists" in scopes
+        scope_label = "with-personal-lists" if include_personal_lists else "movies-groups"
+        file_name = f"discvault-next-{scope_label}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.zip"
+        output_path = backup_dir / file_name
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("collection.export_functional", "admin.backup"))
+            summary = export_functional_backup(
+                conn,
+                output_path,
+                data_dir=data_dir,
+                scopes=scopes,
+                include_personal_lists=include_personal_lists,
+                generator={
+                    "service": "DiscVault Next",
+                    "version": build_version(),
+                    "sha": build_sha(),
+                    "description": (
+                        "Movie collection, people, containers, group links, watchlist and watched history"
+                        if include_personal_lists
+                        else "Movie collection, people, containers and group links"
+                    ),
+                },
+                requested_by=actor,
+            )
+            audit_event(
+                conn,
+                event_type="backup.created",
+                category="backup",
+                actor=actor,
+                target_type="backup",
+                target_id=file_name,
+                summary="Created functional collection backup",
+                metadata={
+                    "fileName": file_name,
+                    "sha256": summary.get("sha256"),
+                    "scope": "functional_collection",
+                    "scopes": summary.get("manifest", {}).get("scopes"),
+                    "includePersonalLists": include_personal_lists,
+                },
+            )
+        manifest = summary.get("manifest") or {}
+        media = manifest.get("media") or {}
+        report = {
+            "valid": True,
+            "scope": "functional_collection",
+            "format": manifest.get("format"),
+            "formatVersion": manifest.get("formatVersion"),
+            "createdAt": manifest.get("createdAt"),
+            "scopes": manifest.get("scopes") or [],
+            "tables": manifest.get("tables") or {},
+            "media": {
+                "embedded": media.get("included", 0),
+                "missing": media.get("missing", 0),
+            },
+            "fileName": file_name,
+            "sizeBytes": summary.get("sizeBytes"),
+            "sha256": summary.get("sha256"),
+            "errors": [],
+            "warnings": [],
+        }
+        return response(
+            {
+                "status": "ok",
+                "fileName": file_name,
+                "report": report,
+            },
+            201,
+        )
 
     @flask_app.get("/api/next/backup/download/<path:file_name>")
     def backup_download(file_name: str):

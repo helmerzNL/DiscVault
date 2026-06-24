@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Palautustyyppi",
   "appAdmin.restoreModeFull": "Taydellinen palautus (tyhjenna ja korvaa)",
   "appAdmin.restoreModePartial": "Osittainen palautus (yhdista valitut)",
-  "appAdmin.restoreScopeTitle": "Mitka osat palautetaan"
+  "appAdmin.restoreScopeTitle": "Mitka osat palautetaan",
+  "appAdmin.createBackup": "Luo varmuuskopio",
+  "appAdmin.startRestore": "Aloita palautus",
+  "appAdmin.backupCreating": "Luodaan varmuuskopiota...",
+  "appAdmin.backupCreated": "Varmuuskopio luotu.",
+  "appAdmin.backupCreateInProgress": "Varmuuskopiointi kaynnissa...",
+  "appAdmin.backupCreateHint": "Suurissa kokoelmissa tama voi kestaa hetken.",
+  "appAdmin.backupRestoreFinished": "Palautus valmis."
 }

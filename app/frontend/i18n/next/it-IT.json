@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Tipo di ripristino",
   "appAdmin.restoreModeFull": "Ripristino completo (cancella e sostituisci)",
   "appAdmin.restoreModePartial": "Ripristino parziale (unisci selezione)",
-  "appAdmin.restoreScopeTitle": "Quali parti ripristinare"
+  "appAdmin.restoreScopeTitle": "Quali parti ripristinare",
+  "appAdmin.createBackup": "Crea backup",
+  "appAdmin.startRestore": "Avvia ripristino",
+  "appAdmin.backupCreating": "Creazione backup...",
+  "appAdmin.backupCreated": "Backup creato.",
+  "appAdmin.backupCreateInProgress": "Backup in corso...",
+  "appAdmin.backupCreateHint": "Puo richiedere un momento per raccolte grandi.",
+  "appAdmin.backupRestoreFinished": "Ripristino completato."
 }

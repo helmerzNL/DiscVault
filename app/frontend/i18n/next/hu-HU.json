@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Visszaallitas tipusa",
   "appAdmin.restoreModeFull": "Teljes visszaallitas (torles es csere)",
   "appAdmin.restoreModePartial": "Reszleges visszaallitas (kivalasztottak egyesitese)",
-  "appAdmin.restoreScopeTitle": "Mely reszek visszaallitasa"
+  "appAdmin.restoreScopeTitle": "Mely reszek visszaallitasa",
+  "appAdmin.createBackup": "Biztonsagi mentes letrehozasa",
+  "appAdmin.startRestore": "Visszaallitas inditasa",
+  "appAdmin.backupCreating": "Biztonsagi mentes letrehozasa...",
+  "appAdmin.backupCreated": "Biztonsagi mentes letrehozva.",
+  "appAdmin.backupCreateInProgress": "Biztonsagi mentes folyamatban...",
+  "appAdmin.backupCreateHint": "Nagy gyujtemenyeknel ez eltarthat egy ideig.",
+  "appAdmin.backupRestoreFinished": "Visszaallitas befejezve."
 }

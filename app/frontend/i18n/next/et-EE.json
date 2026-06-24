@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Taastamise tuup",
   "appAdmin.restoreModeFull": "Taielik taastamine (tuhjenda ja asenda)",
   "appAdmin.restoreModePartial": "Osaline taastamine (uhenda valitud)",
-  "appAdmin.restoreScopeTitle": "Milliseid osi taastada"
+  "appAdmin.restoreScopeTitle": "Milliseid osi taastada",
+  "appAdmin.createBackup": "Loo varukoopia",
+  "appAdmin.startRestore": "Alusta taastamist",
+  "appAdmin.backupCreating": "Varukoopia loomine...",
+  "appAdmin.backupCreated": "Varukoopia loodud.",
+  "appAdmin.backupCreateInProgress": "Varukoopia loomine kaib...",
+  "appAdmin.backupCreateHint": "Suurte kogude puhul voib see veidi aega votta.",
+  "appAdmin.backupRestoreFinished": "Taastamine lopetatud."
 }

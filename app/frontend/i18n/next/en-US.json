@@ -1787,5 +1787,12 @@
   "appAdmin.restoreModeTitle": "Restore type",
   "appAdmin.restoreModeFull": "Full restore (wipe and replace)",
   "appAdmin.restoreModePartial": "Partial restore (merge selected)",
-  "appAdmin.restoreScopeTitle": "Restore which parts"
+  "appAdmin.restoreScopeTitle": "Restore which parts",
+  "appAdmin.createBackup": "Create backup",
+  "appAdmin.startRestore": "Start restore",
+  "appAdmin.backupCreating": "Creating backup...",
+  "appAdmin.backupCreated": "Backup created.",
+  "appAdmin.backupCreateInProgress": "Backup in progress...",
+  "appAdmin.backupCreateHint": "This may take a moment for large collections.",
+  "appAdmin.backupRestoreFinished": "Restore finished."
 }

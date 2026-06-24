@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Geri yukleme turu",
   "appAdmin.restoreModeFull": "Tam geri yukleme (temizle ve degistir)",
   "appAdmin.restoreModePartial": "Kismi geri yukleme (secileni birlestir)",
-  "appAdmin.restoreScopeTitle": "Hangi bolumler geri yuklensin"
+  "appAdmin.restoreScopeTitle": "Hangi bolumler geri yuklensin",
+  "appAdmin.createBackup": "Yedek olustur",
+  "appAdmin.startRestore": "Geri yuklemeyi baslat",
+  "appAdmin.backupCreating": "Yedek olusturuluyor...",
+  "appAdmin.backupCreated": "Yedek olusturuldu.",
+  "appAdmin.backupCreateInProgress": "Yedekleme devam ediyor...",
+  "appAdmin.backupCreateHint": "Buyuk koleksiyonlarda bu biraz zaman alabilir.",
+  "appAdmin.backupRestoreFinished": "Geri yukleme tamamlandi."
 }

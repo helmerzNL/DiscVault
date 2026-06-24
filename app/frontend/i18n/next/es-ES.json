@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Tipo de restauracion",
   "appAdmin.restoreModeFull": "Restauracion completa (borrar y reemplazar)",
   "appAdmin.restoreModePartial": "Restauracion parcial (combinar seleccion)",
-  "appAdmin.restoreScopeTitle": "Que partes restaurar"
+  "appAdmin.restoreScopeTitle": "Que partes restaurar",
+  "appAdmin.createBackup": "Crear copia de seguridad",
+  "appAdmin.startRestore": "Iniciar restauracion",
+  "appAdmin.backupCreating": "Creando copia de seguridad...",
+  "appAdmin.backupCreated": "Copia de seguridad creada.",
+  "appAdmin.backupCreateInProgress": "Copia de seguridad en curso...",
+  "appAdmin.backupCreateHint": "Esto puede tardar un momento en colecciones grandes.",
+  "appAdmin.backupRestoreFinished": "Restauracion finalizada."
 }

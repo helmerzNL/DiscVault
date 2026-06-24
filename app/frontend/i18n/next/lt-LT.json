@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Atkurimo tipas",
   "appAdmin.restoreModeFull": "Visiskas atkurimas (isvalyti ir pakeisti)",
   "appAdmin.restoreModePartial": "Dalinis atkurimas (sujungti pasirinktus)",
-  "appAdmin.restoreScopeTitle": "Kurias dalis atkurti"
+  "appAdmin.restoreScopeTitle": "Kurias dalis atkurti",
+  "appAdmin.createBackup": "Kurti atsargine kopija",
+  "appAdmin.startRestore": "Pradeti atkurima",
+  "appAdmin.backupCreating": "Kuriama atsargine kopija...",
+  "appAdmin.backupCreated": "Atsargine kopija sukurta.",
+  "appAdmin.backupCreateInProgress": "Vyksta atsargines kopijos kurimas...",
+  "appAdmin.backupCreateHint": "Dideliems rinkiniams tai gali uztrukti.",
+  "appAdmin.backupRestoreFinished": "Atkurimas baigtas."
 }

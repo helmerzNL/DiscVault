@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Aterstallningstyp",
   "appAdmin.restoreModeFull": "Fullstandig aterstallning (rensa och ersatt)",
   "appAdmin.restoreModePartial": "Delvis aterstallning (sammanfoga valda)",
-  "appAdmin.restoreScopeTitle": "Vilka delar ska aterstallas"
+  "appAdmin.restoreScopeTitle": "Vilka delar ska aterstallas",
+  "appAdmin.createBackup": "Skapa sakerhetskopia",
+  "appAdmin.startRestore": "Starta aterstallning",
+  "appAdmin.backupCreating": "Skapar sakerhetskopia...",
+  "appAdmin.backupCreated": "Sakerhetskopia skapad.",
+  "appAdmin.backupCreateInProgress": "Sakerhetskopiering pagar...",
+  "appAdmin.backupCreateHint": "Det kan ta en stund for stora samlingar.",
+  "appAdmin.backupRestoreFinished": "Aterstallning klar."
 }

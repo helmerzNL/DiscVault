@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Atjaunosanas veids",
   "appAdmin.restoreModeFull": "Pilna atjaunosana (notirit un aizstat)",
   "appAdmin.restoreModePartial": "Dalena atjaunosana (apvienot atlasitos)",
-  "appAdmin.restoreScopeTitle": "Kuras dalas atjaunot"
+  "appAdmin.restoreScopeTitle": "Kuras dalas atjaunot",
+  "appAdmin.createBackup": "Izveidot dublejumu",
+  "appAdmin.startRestore": "Sakt atjaunosanu",
+  "appAdmin.backupCreating": "Notiek dublejuma izveide...",
+  "appAdmin.backupCreated": "Dublejums izveidots.",
+  "appAdmin.backupCreateInProgress": "Notiek dublejuma izveide...",
+  "appAdmin.backupCreateHint": "Lielam kolekcijam tas var aiznemt brizi.",
+  "appAdmin.backupRestoreFinished": "Atjaunosana pabeigta."
 }

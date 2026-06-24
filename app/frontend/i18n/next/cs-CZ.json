@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Typ obnoveni",
   "appAdmin.restoreModeFull": "Uplne obnoveni (vymazat a nahradit)",
   "appAdmin.restoreModePartial": "Castecne obnoveni (sloucit vybrane)",
-  "appAdmin.restoreScopeTitle": "Ktere casti obnovit"
+  "appAdmin.restoreScopeTitle": "Ktere casti obnovit",
+  "appAdmin.createBackup": "Vytvorit zalohu",
+  "appAdmin.startRestore": "Spustit obnoveni",
+  "appAdmin.backupCreating": "Vytvareni zalohy...",
+  "appAdmin.backupCreated": "Zaloha vytvorena.",
+  "appAdmin.backupCreateInProgress": "Probiha vytvareni zalohy...",
+  "appAdmin.backupCreateHint": "U velkych sbirek to muze chvili trvat.",
+  "appAdmin.backupRestoreFinished": "Obnoveni dokonceno."
 }

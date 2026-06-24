@@ -1746,5 +1746,12 @@
   "appAdmin.restoreModeTitle": "Typ przywracania",
   "appAdmin.restoreModeFull": "Pelne przywracanie (wyczysc i zastap)",
   "appAdmin.restoreModePartial": "Czesciowe przywracanie (scal wybrane)",
-  "appAdmin.restoreScopeTitle": "Ktore czesci przywrocic"
+  "appAdmin.restoreScopeTitle": "Ktore czesci przywrocic",
+  "appAdmin.createBackup": "Utworz kopie zapasowa",
+  "appAdmin.startRestore": "Rozpocznij przywracanie",
+  "appAdmin.backupCreating": "Tworzenie kopii zapasowej...",
+  "appAdmin.backupCreated": "Kopia zapasowa utworzona.",
+  "appAdmin.backupCreateInProgress": "Tworzenie kopii zapasowej...",
+  "appAdmin.backupCreateHint": "W przypadku duzych kolekcji moze to chwile potrwac.",
+  "appAdmin.backupRestoreFinished": "Przywracanie zakonczone."
 }
