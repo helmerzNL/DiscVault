@@ -1,7 +1,7 @@
 {
   "id": "bluray_com",
   "name": "Blu-ray.com",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["metadata_source"],
