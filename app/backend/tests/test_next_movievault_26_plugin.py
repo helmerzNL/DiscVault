@@ -50,7 +50,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.5.2")
+        self.assertEqual(manifest["version"], "1.5.3")
         self.assertIn("connection_request", manifest["capabilities"])
         self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
@@ -1580,6 +1580,54 @@ class MovieVaultCircuitBreakerTests(unittest.TestCase):
             movievault_26.requests = original_requests
 
         self.assertEqual(captured["timeout"], movievault_26.REQUEST_TIMEOUT_SECONDS)
+
+
+class MovieVaultFormatReconciliationTests(unittest.TestCase):
+    def test_blu_ray_title_overrides_contradictory_4k_format(self):
+        self.assertEqual(
+            movievault_26._reconcile_release_format(
+                "4K UHD", "Fight Club", "Fight Club Blu-ray (SteelBook) (France)"
+            ),
+            "Blu-ray",
+        )
+
+    def test_genuine_4k_title_keeps_4k_format(self):
+        self.assertEqual(
+            movievault_26._reconcile_release_format("4K UHD", "Fight Club 4K UHD"),
+            "4K UHD",
+        )
+
+    def test_no_format_token_keeps_4k_format(self):
+        self.assertEqual(
+            movievault_26._reconcile_release_format("4K UHD", "Fight Club"),
+            "4K UHD",
+        )
+
+    def test_non_4k_format_is_untouched(self):
+        self.assertEqual(
+            movievault_26._reconcile_release_format("Blu-ray", "Fight Club Blu-ray"),
+            "Blu-ray",
+        )
+
+    def test_movie_payload_corrects_contradictory_release_format(self):
+        movie = movievault_26._movie_payload(
+            {
+                "title": "Fight Club",
+                "format": "4K UHD",
+                "releaseTitle": "Fight Club Blu-ray (SteelBook) (France)",
+            }
+        )
+        self.assertEqual(movie["format"], "Blu-ray")
+
+    def test_movie_payload_keeps_genuine_4k_release(self):
+        movie = movievault_26._movie_payload(
+            {
+                "title": "Fight Club",
+                "format": "4K UHD",
+                "releaseTitle": "Fight Club 4K UHD Blu-ray",
+            }
+        )
+        self.assertEqual(movie["format"], "4K UHD")
 
 
 if __name__ == "__main__":
