@@ -559,8 +559,36 @@ _BOX_SET_GENERIC_MEMBER_KEYS = (
     "discItems",
     "disc_items",
     "contents",
-    "releases",
 )
+
+# Packaging / format / region noise stripped from a member title before computing
+# its dedup identity key. A single film listed under several physical editions
+# (e.g. "Fight Club", "Fight Club Blu-ray (Sweden)", "Fight Club 4K UHD") must
+# collapse to one member. Mirrors next_metadata._SCANNED_TITLE_NOISE_RE; replicated
+# locally because plugins are self-contained and cannot import next_metadata.
+_MEMBER_TITLE_NOISE_RE = re.compile(
+    r"\b("
+    r"4k|uhd|ultra\s*hd|hd|hdr|dolby\s*vision|dv|"
+    r"blu[\s-]*ray|bluray|bd|dvd|"
+    r"remaster(?:ed)?|steelbook|limited|limit[eé]e?|edition|[eé]dition|"
+    r"collector'?s?|special|deluxe|anniversary|"
+    r"region\s*[abc012]?|import|disc\s*\d*"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _has_primary_member_list(item):
+    """True when *item* carries an explicit box-set member list.
+
+    Primary keys (members, boxSetMovies, moviesInSet, …) only appear on a payload
+    a provider has already classified as a box-set. Generic content arrays (movies,
+    items, releases, discs) are NOT a box-set signal — a plain movie legitimately
+    carries those — so they are deliberately excluded here.
+    """
+    if not isinstance(item, dict):
+        return False
+    return any(isinstance(item.get(key), list) and item.get(key) for key in _BOX_SET_PRIMARY_MEMBER_KEYS)
 
 
 def _box_set_payload_marker(item):
@@ -847,11 +875,18 @@ def _member_identity_keys(member):
         keys.add(("imdb", imdb_id))
     title = _text(member.get("title") or member.get("name") or member.get("originalTitle") or member.get("original_title"))
     normalized_title = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
+    # Collapse physical-edition variants of the same film onto one identity key so
+    # e.g. "Fight Club" and "Fight Club Blu-ray (Sweden)" do not survive as two
+    # distinct members of a (genuine) box-set.
+    denoised_title = _MEMBER_TITLE_NOISE_RE.sub(" ", title.casefold())
+    denoised_title = re.sub(r"\(.*?\)", " ", denoised_title)
+    denoised_title = re.sub(r"[^a-z0-9]+", " ", denoised_title).strip()
     year = _parse_year(member.get("year") or member.get("releaseYear") or member.get("release_year"))
-    if normalized_title and year:
-        keys.add(("title_year", f"{normalized_title}:{year}"))
-    elif normalized_title:
-        keys.add(("title", normalized_title))
+    identity_title = denoised_title or normalized_title
+    if identity_title and year:
+        keys.add(("title_year", f"{identity_title}:{year}"))
+    elif identity_title:
+        keys.add(("title", identity_title))
     return keys
 
 
@@ -1045,7 +1080,7 @@ def _box_set_evidence(proposal, context=None):
     }
 
 
-def _normalize_box_set_proposal(payload, context=None):
+def _normalize_box_set_proposal(payload, context=None, *, require_explicit=True):
     item = _box_set_entity(payload) if isinstance(payload, dict) else {}
     if not item:
         item = _first(payload)
@@ -1102,7 +1137,17 @@ def _normalize_box_set_proposal(payload, context=None):
             seen.update(keys)
         members.append(member)
 
-    if len(members) < 2 and not _explicit_box_set_marker(item):
+    # A box-set proposal is only ever emitted on an explicit provider signal: a
+    # deliberate box-set marker (nested boxSet object, entityType/type=box_set,
+    # isBoxSet, detectedWithoutMembers) OR a primary member list (members,
+    # boxSetMovies, moviesInSet, …). A movie's own generic content arrays
+    # (releases/discs/items) must NEVER be inferred as a box-set. The authoritative
+    # /api/v1/box-sets endpoint passes require_explicit=False, since its items are
+    # box-sets by definition even when the inline payload lacks a marker.
+    has_explicit_signal = _explicit_box_set_marker(item) or _has_primary_member_list(item)
+    if require_explicit and not has_explicit_signal:
+        return {}
+    if len(members) < 2 and not has_explicit_signal:
         return {}
 
     if not title and members:
@@ -1587,6 +1632,84 @@ def health_check(context=None):
         return {"status": "unavailable", "message": str(exc)}
 
 
+def _matched_type(data):
+    """Return MovieVault's barcode match discriminator (lowercased).
+
+    The contract response is ``{"type": "release"|"box_set"|"movie", "lookup":
+    {"matchedType": ...}, ...}``. Older / mocked shapes omit it, in which case
+    this returns ``""`` and the caller falls back to generic normalization.
+    """
+    if not isinstance(data, dict):
+        return ""
+    lookup = data.get("lookup")
+    if isinstance(lookup, dict):
+        matched = _text(lookup.get("matchedType") or lookup.get("matched_type"))
+        if matched:
+            return matched.casefold()
+    return _text(data.get("type")).casefold()
+
+
+def _scanned_release_from_movie(movie, barcode):
+    """Find the release in ``movie.releases`` matching the scanned barcode."""
+    if not isinstance(movie, dict):
+        return {}
+    wanted = re.sub(r"\D", "", _text(barcode))
+    releases = movie.get("releases")
+    candidates = [r for r in releases if isinstance(r, dict)] if isinstance(releases, list) else []
+    single = movie.get("release")
+    if isinstance(single, dict):
+        candidates.insert(0, single)
+    if wanted:
+        for release in candidates:
+            for key in ("barcode", "ean", "upc", "normalizedBarcode", "normalized_barcode"):
+                if re.sub(r"\D", "", _text(release.get(key))) == wanted:
+                    return release
+    return candidates[0] if candidates else {}
+
+
+def _release_candidate_payload(movie, release, barcode):
+    """Build a single movie-shaped payload for the scanned disc.
+
+    A barcode identifies exactly one physical release. MovieVault copies the
+    *first* release's spec (often a different edition such as 4K UHD) onto the
+    movie level, so the candidate must take its format/edition/country/region from
+    the actually-scanned ``release`` object, while keeping the movie's canonical
+    title/overview/year. The ``releases``/``release`` arrays are dropped so they
+    are never re-read as box-set members or as extra candidates.
+    """
+    movie = movie if isinstance(movie, dict) else {}
+    release = release if isinstance(release, dict) else {}
+    base = dict(movie) if _text(movie.get("title")) else {}
+    if not base and release:
+        base = {key: value for key, value in release.items() if key not in ("releases", "release")}
+    base.pop("releases", None)
+    base.pop("release", None)
+    if release:
+        for key in (
+            "format",
+            "edition",
+            "country",
+            "language",
+            "regions",
+            "hdr",
+            "audioTracks",
+            "subtitles",
+            "technicalSpecs",
+            "distributor",
+            "barcode",
+        ):
+            value = release.get(key)
+            if value not in (None, "", [], {}):
+                base[key] = value
+        release_title = _text(release.get("title"))
+        if release_title:
+            base.setdefault("releaseTitle", release_title)
+            base.setdefault("release_title", release_title)
+    if not _text(base.get("barcode")):
+        base["barcode"] = barcode
+    return base
+
+
 def search_barcode(payload, context=None):
     barcode = str((payload or {}).get("barcode") or "").strip()
     if not _movievault_enabled(context):
@@ -1594,6 +1717,17 @@ def search_barcode(payload, context=None):
     if not _is_public_barcode(barcode):
         return {"status": "skipped", "provider": PROVIDER_ID, "reason": "not_public_barcode"}
     data = _get(context or {}, f"/api/v1/barcodes/{quote(barcode)}")
+    # A barcode that resolves to a specific release must surface exactly one
+    # candidate — the scanned disc — never a synthesized set and never the
+    # movie-level (first-release) format.
+    if _matched_type(data) == "release" and isinstance(data, dict):
+        release = data.get("release") if isinstance(data.get("release"), dict) else {}
+        movie = data.get("movie") if isinstance(data.get("movie"), dict) else {}
+        if not release:
+            release = _scanned_release_from_movie(movie, barcode)
+        merged = _release_candidate_payload(movie, release, barcode)
+        if _text(merged.get("title")):
+            return _normalize_result(merged, source_ref=f"barcode:{barcode}")
     box_set_entity = _box_set_entity(data)
     if box_set_entity and len(_member_list(box_set_entity)) < 2:
         detailed = _with_box_set_detail(context or {}, box_set_entity)
@@ -1665,7 +1799,7 @@ def box_set_candidates(payload, context=None):
     seen = set()
     for source in sources:
         candidate = _with_box_set_detail(context or {}, source)
-        proposal = _normalize_box_set_proposal(candidate, {**proposal_context, "sourceRef": _text(_first_value(candidate, "id", "movieVaultId", "movievaultId", "movievault_id"))})
+        proposal = _normalize_box_set_proposal(candidate, {**proposal_context, "sourceRef": _text(_first_value(candidate, "id", "movieVaultId", "movievaultId", "movievault_id"))}, require_explicit=False)
         if not proposal:
             continue
         key = _box_set_proposal_key(proposal)
