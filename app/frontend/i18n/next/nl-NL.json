@@ -1793,5 +1793,20 @@
   "appAdmin.backupCreated": "Backup gemaakt.",
   "appAdmin.backupCreateInProgress": "Backup wordt gemaakt...",
   "appAdmin.backupCreateHint": "Dit kan even duren bij grote collecties.",
-  "appAdmin.backupRestoreFinished": "Herstel voltooid."
+  "appAdmin.backupRestoreFinished": "Herstel voltooid.",
+  "appAdmin.updateAvailable": "Update beschikbaar",
+  "appAdmin.rollbackAvailable": "Rollback beschikbaar",
+  "appAdmin.updatePlugin": "Bijwerken",
+  "appAdmin.rollbackPlugin": "Terugdraaien",
+  "appAdmin.autoUpdateLabel": "Plugins automatisch bijwerken",
+  "appAdmin.autoUpdateHelp": "Indien ingeschakeld worden plugins met een nieuwere versie automatisch bijgewerkt. Indien uitgeschakeld kun je een update per plugin handmatig installeren.",
+  "appAdmin.updatePluginConfirm": "De meegeleverde versie {version} van deze plugin installeren?",
+  "appAdmin.updatingPlugin": "Plugin bijwerken...",
+  "appAdmin.pluginUpdated": "Plugin bijgewerkt naar {version}.",
+  "appAdmin.rollbackPluginConfirm": "Deze plugin terugdraaien naar de vorige versie {version}?",
+  "appAdmin.rollingBackPlugin": "Plugin terugdraaien...",
+  "appAdmin.pluginRolledBack": "Plugin teruggedraaid naar {version}.",
+  "appAdmin.savingAutoUpdate": "Auto-update-instelling opslaan...",
+  "appAdmin.autoUpdateEnabled": "Automatische plugin-updates ingeschakeld.",
+  "appAdmin.autoUpdateDisabled": "Automatische plugin-updates uitgeschakeld."
 }
