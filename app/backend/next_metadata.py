@@ -888,7 +888,7 @@ def normalize_box_set_evidence(
     evidence_source = value if isinstance(value, dict) else {}
     proposal = proposal if isinstance(proposal, dict) else {}
     members = []
-    for key in ("members", "movies", "boxSetMovies", "box_set_movies", "items", "releases"):
+    for key in ("members", "movies", "boxSetMovies", "box_set_movies", "items"):
         raw_members = proposal.get(key)
         if isinstance(raw_members, list):
             members = [item for item in raw_members if isinstance(item, dict) and clean_text(item.get("title") or item.get("name"))]
