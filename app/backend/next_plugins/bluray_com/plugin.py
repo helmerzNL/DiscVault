@@ -389,7 +389,16 @@ def _page_text_by_id(soup, *ids):
 def _format_from_url_title_text(url, title, text):
     if "/dvd/" in str(url or "").lower():
         return "DVD"
-    return _normalize_format(" ".join([str(url or ""), str(title or ""), str(text or "")[:2500]]))
+    # The Blu-ray.com release URL slug and og:title authoritatively encode the format of
+    # THIS release (…-Blu-ray/, …-4K-Blu-ray/, …-DVD/). Page text is deliberately NOT used
+    # as a primary signal: a Blu-ray release page routinely mentions a 4K/UHD edition
+    # elsewhere (related products, "also available on 4K UHD"), which previously flipped a
+    # Blu-ray to 4K UHD. Page text is only consulted as a last resort when the URL and title
+    # are inconclusive.
+    fmt = _normalize_format(" ".join([str(url or ""), str(title or "")]))
+    if fmt:
+        return fmt
+    return _normalize_format(str(text or "")[:2500])
 
 
 def _parse_page(url):
