@@ -50,7 +50,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.5.1")
+        self.assertEqual(manifest["version"], "1.5.2")
         self.assertIn("connection_request", manifest["capabilities"])
         self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
@@ -1520,6 +1520,68 @@ class ReadBackLocalizationsTest(unittest.TestCase):
         by_lang = {row["lang"]: row for row in localizations}
         self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
         self.assertEqual(by_lang["ja"]["title"], "千と千尋の神隠し")
+
+class MovieVaultCircuitBreakerTests(unittest.TestCase):
+    def test_network_failure_short_circuits_remaining_requests(self):
+        class FakeTimeout(Exception):
+            pass
+
+        calls = []
+
+        def fake_request(method, url, **kwargs):
+            calls.append(url)
+            raise FakeTimeout("connection timed out")
+
+        fake_requests = types.SimpleNamespace(
+            request=fake_request,
+            exceptions=types.SimpleNamespace(
+                Timeout=FakeTimeout,
+                ConnectTimeout=FakeTimeout,
+                ReadTimeout=FakeTimeout,
+                ConnectionError=FakeTimeout,
+            ),
+        )
+
+        context = {"secrets": {"token": "mv_live_test"}}
+        original_requests = movievault_26.requests
+        try:
+            movievault_26.requests = fake_requests
+            with self.assertRaises(FakeTimeout):
+                movievault_26._request(
+                    "GET", "https://mv.example/api/v1/movies", context=context
+                )
+            self.assertTrue(movievault_26._movievault_unreachable(context))
+            with self.assertRaises(movievault_26.MovieVaultUnavailable):
+                movievault_26._request(
+                    "GET", "https://mv.example/api/v1/box-sets", context=context
+                )
+        finally:
+            movievault_26.requests = original_requests
+
+        self.assertEqual(len(calls), 1)
+
+    def test_request_uses_configurable_timeout(self):
+        captured = {}
+
+        def fake_request(method, url, **kwargs):
+            captured["timeout"] = kwargs.get("timeout")
+            return FakeResponse(200, {"items": []})
+
+        fake_requests = types.SimpleNamespace(
+            request=fake_request, exceptions=types.SimpleNamespace()
+        )
+        context = {"secrets": {"token": "mv_live_test"}}
+        original_requests = movievault_26.requests
+        try:
+            movievault_26.requests = fake_requests
+            movievault_26._request(
+                "GET", "https://mv.example/api/v1/movies", context=context
+            )
+        finally:
+            movievault_26.requests = original_requests
+
+        self.assertEqual(captured["timeout"], movievault_26.REQUEST_TIMEOUT_SECONDS)
+
 
 if __name__ == "__main__":
     unittest.main()
