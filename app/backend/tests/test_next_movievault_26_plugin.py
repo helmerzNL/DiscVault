@@ -50,7 +50,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.5.0")
+        self.assertEqual(manifest["version"], "1.5.1")
         self.assertIn("connection_request", manifest["capabilities"])
         self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
