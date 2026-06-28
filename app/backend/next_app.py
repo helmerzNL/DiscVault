@@ -30096,7 +30096,7 @@ def ui_preview_html(
     function renderProfileUpdateCheck() {
       const block = document.getElementById("profileUpdateBlock");
       if (!block) return;
-      const admin = isAdminUser();
+      const admin = isNativeAdminUser();
       block.classList.toggle("hidden", !admin);
       if (!admin) return;
       if (profileUpdateWired) return;
@@ -30104,13 +30104,13 @@ def ui_preview_html(
       const button = document.getElementById("profileUpdateCheckButton");
       const channel = document.getElementById("profileUpdateChannel");
       const result = document.getElementById("profileUpdateResult");
-      authJson("/api/next/app/update-channel", {headers: authHeaders()})
+      authApiJson("/api/next/app/update-channel")
         .then((payload) => { if (channel && payload && payload.channel) channel.value = payload.channel; })
         .catch(() => {});
       if (channel) {
         channel.addEventListener("change", () => {
           const value = channel.value || "auto";
-          authJson("/api/next/app/update-channel", {method: "POST", body: JSON.stringify({channel: value})})
+          authApiJson("/api/next/app/update-channel", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({channel: value})})
             .catch((error) => setProfileUpdateError(result, error.message));
         });
       }
@@ -30129,7 +30129,7 @@ def ui_preview_html(
       result.textContent = tNext("profile.checking", "Checking for updates...");
       if (button) button.disabled = true;
       try {
-        const payload = await authJson(`/api/next/app/update-check?channel=${encodeURIComponent(requested)}`, {headers: authHeaders()});
+        const payload = await authApiJson(`/api/next/app/update-check?channel=${encodeURIComponent(requested)}`);
         renderProfileUpdateResult(payload);
       } catch (error) {
         setProfileUpdateError(result, error.message);
