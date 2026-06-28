@@ -23,6 +23,16 @@ DEFAULT_PLUGIN_DIR = Path(__file__).resolve().parent / "next_plugins"
 # install directory is the authoritative plugin source and default plugins may
 # be deleted without reappearing on the next boot.
 PLUGIN_INITIALIZED_MARKER = ".initialized"
+# Marker file (inside the install directory) that disables automatic plugin
+# upgrades. Persisting it next to the plugins lets the connection-less runtime
+# honor the preference across restarts, independent of the database.
+PLUGIN_AUTO_UPDATE_DISABLED_MARKER = ".auto_update_disabled"
+# Tracks install directories whose bundled-default upgrade check already ran in
+# this process, so the (rare) file copy work happens at most once per boot.
+_DEFAULT_PLUGIN_UPGRADE_DONE: set[str] = set()
+# Optional in-process override of the auto-update preference, set by the app
+# layer from the database setting. ``None`` falls back to env/marker/default.
+_plugin_auto_update_override: bool | None = None
 VALID_CATEGORIES = {
     "metadata_source",
     "metadata_bootstrap",
@@ -176,8 +186,265 @@ def seed_default_plugins_if_needed() -> dict[str, Any]:
     return result
 
 
+def _parse_plugin_version(value: Any) -> tuple[int, ...]:
+    """Parse a semver-ish version string into a comparable integer tuple.
+
+    Numeric, dot/dash/underscore-separated components are read left-to-right
+    until the first non-numeric component (so ``1.5.1`` -> ``(1, 5, 1)`` and a
+    trailing ``-beta`` is ignored). Returns an empty tuple for blank/garbage
+    input, which compares lower than any real version.
+    """
+
+    text = str(value or "").strip()
+    if not text:
+        return ()
+    parts: list[int] = []
+    for chunk in re.split(r"[._-]+", text):
+        match = re.match(r"\d+", chunk)
+        if not match:
+            break
+        parts.append(int(match.group(0)))
+    return tuple(parts)
+
+
+def _read_manifest_version(plugin_dir: Path) -> str:
+    manifest_path = plugin_dir / "manifest.json"
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(raw, dict):
+        return ""
+    return str(raw.get("version") or "").strip()
+
+
+def plugin_backup_dir() -> Path:
+    """Directory holding the previous version of a plugin for rollback.
+
+    Kept *outside* the install directory so plugin discovery never scans it.
+    """
+
+    configured = os.environ.get("DISCVAULT_PLUGIN_BACKUP_DIR", "").strip()
+    if configured:
+        return Path(configured)
+    return plugin_install_dir().parent / "plugin_backups"
+
+
+def bundled_default_plugin_path(plugin_id: str) -> Path | None:
+    for source in bundled_default_plugin_dirs():
+        if source.name == plugin_id:
+            return source
+    return None
+
+
+def installed_plugin_version(plugin_id: str) -> str:
+    return _read_manifest_version(plugin_install_dir() / plugin_id)
+
+
+def bundled_plugin_version(plugin_id: str) -> str:
+    source = bundled_default_plugin_path(plugin_id)
+    return _read_manifest_version(source) if source else ""
+
+
+def plugin_backup_version(plugin_id: str) -> str:
+    return _read_manifest_version(plugin_backup_dir() / plugin_id)
+
+
+def plugin_has_backup(plugin_id: str) -> bool:
+    return (plugin_backup_dir() / plugin_id / "manifest.json").exists()
+
+
+def plugin_update_state(plugin_id: str, installed_version: str | None = None) -> dict[str, Any]:
+    """Update/rollback availability for a single plugin (filesystem-derived)."""
+
+    installed = (installed_version or installed_plugin_version(plugin_id)).strip()
+    bundled = bundled_plugin_version(plugin_id)
+    update_available = bool(bundled) and _parse_plugin_version(bundled) > _parse_plugin_version(installed)
+    return {
+        "isBundledDefault": bundled_default_plugin_path(plugin_id) is not None,
+        "bundledVersion": bundled,
+        "installedVersion": installed,
+        "updateAvailable": update_available,
+        "canRollback": plugin_has_backup(plugin_id),
+        "rollbackVersion": plugin_backup_version(plugin_id),
+    }
+
+
+def set_plugin_auto_update_enabled(enabled: bool | None) -> None:
+    """Override the auto-update preference for this process (``None`` clears)."""
+
+    global _plugin_auto_update_override
+    _plugin_auto_update_override = None if enabled is None else bool(enabled)
+
+
+def _auto_update_marker_path() -> Path:
+    return plugin_install_dir() / PLUGIN_AUTO_UPDATE_DISABLED_MARKER
+
+
+def write_plugin_auto_update_marker(enabled: bool) -> None:
+    """Persist the auto-update preference next to the installed plugins."""
+
+    marker = _auto_update_marker_path()
+    try:
+        if enabled:
+            marker.unlink(missing_ok=True)
+        else:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(str(int(time.time())), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def plugin_auto_update_enabled() -> bool:
+    """Whether bundled plugin updates apply automatically (default enabled)."""
+
+    if _plugin_auto_update_override is not None:
+        return _plugin_auto_update_override
+    raw = os.environ.get("DISCVAULT_PLUGIN_AUTO_UPDATE", "").strip().lower()
+    if raw in {"0", "false", "off", "no", "disabled"}:
+        return False
+    if raw in {"1", "true", "on", "yes", "enabled"}:
+        return True
+    if _auto_update_marker_path().exists():
+        return False
+    return True
+
+
+def _snapshot_plugin_backup(plugin_id: str) -> None:
+    target = plugin_install_dir() / plugin_id
+    if not target.exists():
+        return
+    backup_target = plugin_backup_dir() / plugin_id
+    backup_target.parent.mkdir(parents=True, exist_ok=True)
+    if backup_target.exists():
+        shutil.rmtree(backup_target)
+    shutil.copytree(target, backup_target)
+
+
+def _replace_installed_plugin(plugin_id: str, source_dir: Path) -> None:
+    """Replace the installed plugin with ``source_dir``, snapshotting a backup
+    of the previous version first so the change can be rolled back."""
+
+    install_dir = plugin_install_dir()
+    target = install_dir / plugin_id
+    _snapshot_plugin_backup(plugin_id)
+    if target.exists():
+        shutil.rmtree(target)
+    install_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source_dir, target)
+
+
+def upgrade_seeded_default_plugins() -> dict[str, Any]:
+    """Refresh installed default plugins when a newer bundled version ships.
+
+    Plugins run only from the writable install directory (``/data/plugins``).
+    Because seeding is one-shot, a bundled bug-fix would otherwise never reach
+    an already-initialized install directory. When auto-update is enabled we
+    therefore upgrade *in place* any default plugin whose bundled manifest
+    version is strictly newer than the installed copy, snapshotting the prior
+    version for rollback. A plugin that the user deleted (absent from the
+    install directory) is left deleted, preserving the seed-once deletion
+    contract. Plugin enable/config state lives in the database, not in these
+    files, so replacing the files keeps that state intact.
+    """
+
+    install_dir = plugin_install_dir()
+    marker = install_dir / PLUGIN_INITIALIZED_MARKER
+    result: dict[str, Any] = {
+        "path": str(install_dir),
+        "upgraded": [],
+        "skipped": [],
+        "errors": [],
+    }
+    # Only manage an initialized, writable install directory. When seeding did
+    # not run (no writable data dir, e.g. unit tests) the bundled directory is
+    # the live source and there is nothing to upgrade.
+    if not marker.exists():
+        return result
+    if not plugin_auto_update_enabled():
+        result["disabled"] = True
+        return result
+    for source in bundled_default_plugin_dirs():
+        target = install_dir / source.name
+        if not target.exists():
+            # Respect a user-deleted default; never resurrect it.
+            continue
+        bundled_version = _read_manifest_version(source)
+        installed_version = _read_manifest_version(target)
+        if _parse_plugin_version(bundled_version) <= _parse_plugin_version(installed_version):
+            result["skipped"].append(source.name)
+            continue
+        try:
+            _replace_installed_plugin(source.name, source)
+            result["upgraded"].append(
+                {
+                    "plugin": source.name,
+                    "from": installed_version,
+                    "to": bundled_version,
+                }
+            )
+        except OSError as exc:
+            result["errors"].append({"path": str(target), "error": str(exc)})
+    return result
+
+
+def install_bundled_plugin_update(plugin_id: str) -> dict[str, Any]:
+    """Manually install the bundled version of a default plugin over the
+    installed copy (writing to ``/data/plugins``), keeping a rollback backup."""
+
+    source = bundled_default_plugin_path(plugin_id)
+    if source is None:
+        raise ValueError(f"No bundled version is available for plugin {plugin_id}")
+    install_dir = plugin_install_dir()
+    if not (install_dir / PLUGIN_INITIALIZED_MARKER).exists():
+        raise ValueError("Plugin install directory is not initialized")
+    installed_version = installed_plugin_version(plugin_id)
+    bundled_version = _read_manifest_version(source)
+    if _parse_plugin_version(bundled_version) <= _parse_plugin_version(installed_version):
+        raise ValueError(
+            f"Bundled version {bundled_version or '?'} is not newer than installed "
+            f"{installed_version or '?'}"
+        )
+    _replace_installed_plugin(plugin_id, source)
+    return {"pluginId": plugin_id, "from": installed_version, "to": bundled_version}
+
+
+def rollback_plugin_update(plugin_id: str) -> dict[str, Any]:
+    """Restore the previous version of a plugin from its rollback backup."""
+
+    backup_target = plugin_backup_dir() / plugin_id
+    if not (backup_target / "manifest.json").exists():
+        raise ValueError(f"No backup is available to roll back plugin {plugin_id}")
+    install_dir = plugin_install_dir()
+    target = install_dir / plugin_id
+    current_version = installed_plugin_version(plugin_id)
+    backup_version = _read_manifest_version(backup_target)
+    if target.exists():
+        shutil.rmtree(target)
+    install_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(backup_target, target)
+    shutil.rmtree(backup_target)
+    return {"pluginId": plugin_id, "from": current_version, "to": backup_version}
+
+
+def _upgrade_default_plugins_once() -> None:
+    install_key = str(plugin_install_dir().resolve()).lower()
+    if install_key in _DEFAULT_PLUGIN_UPGRADE_DONE:
+        return
+    _DEFAULT_PLUGIN_UPGRADE_DONE.add(install_key)
+    try:
+        upgrade_seeded_default_plugins()
+    except Exception:
+        # Never let an upgrade failure break plugin discovery; allow a retry.
+        _DEFAULT_PLUGIN_UPGRADE_DONE.discard(install_key)
+
+
 def plugin_paths() -> list[Path]:
     seed = seed_default_plugins_if_needed()
+    # Once the install directory is authoritative, bring any default plugin
+    # whose bundled version is newer up to date so shipped bug-fixes apply.
+    if seed.get("initialized"):
+        _upgrade_default_plugins_once()
     configured = os.environ.get("DISCVAULT_PLUGIN_PATHS", "").strip()
     # The writable install directory is the authoritative source. The bundled
     # directory is only used as a fallback when seeding did not complete, so a
@@ -797,6 +1064,7 @@ def plugin_registry_row(row: dict[str, Any]) -> dict[str, Any]:
     capabilities = row.get("capabilities") or manifest.get("capabilities") or []
     settings = row.get("settings") or {}
     secrets_ref = row.get("secrets_ref") or {}
+    update_state = plugin_update_state(str(row["id"]), str(row.get("version") or ""))
     return {
         "id": row["id"],
         "name": row["name"],
@@ -816,6 +1084,11 @@ def plugin_registry_row(row: dict[str, Any]) -> dict[str, Any]:
         "runtimeModule": row.get("runtime_module"),
         "runtime": manifest.get("runtime") or {},
         "updatedAt": row.get("updated_at"),
+        "isBundledDefault": update_state["isBundledDefault"],
+        "bundledVersion": update_state["bundledVersion"],
+        "updateAvailable": update_state["updateAvailable"],
+        "canRollback": update_state["canRollback"],
+        "rollbackVersion": update_state["rollbackVersion"],
     }
 
 

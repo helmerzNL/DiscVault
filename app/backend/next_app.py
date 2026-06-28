@@ -53,6 +53,13 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
+    from .next_plugin_runtime import install_bundled_plugin_update
+    from .next_plugin_runtime import rollback_plugin_update
+    from .next_plugin_runtime import plugin_auto_update_enabled
+    from .next_plugin_runtime import set_plugin_auto_update_enabled
+    from .next_plugin_runtime import write_plugin_auto_update_marker
+    from .next_plugin_runtime import upgrade_seeded_default_plugins
+    from .next_plugin_runtime import plugin_update_state
     from .next_plugin_runtime import unconfigured_integration_plugins
     from .next_plugin_runtime import validate_manifest_compatibility
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
@@ -235,6 +242,13 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
+    from next_plugin_runtime import install_bundled_plugin_update
+    from next_plugin_runtime import rollback_plugin_update
+    from next_plugin_runtime import plugin_auto_update_enabled
+    from next_plugin_runtime import set_plugin_auto_update_enabled
+    from next_plugin_runtime import write_plugin_auto_update_marker
+    from next_plugin_runtime import upgrade_seeded_default_plugins
+    from next_plugin_runtime import plugin_update_state
     from next_plugin_runtime import unconfigured_integration_plugins
     from next_plugin_runtime import validate_manifest_compatibility
     from next_metadata import METADATA_REFRESH_JOB_TYPE
@@ -15621,6 +15635,13 @@ def ui_preview_html(
             <div class="app-admin-plugin-tab-panel active full" data-app-admin-plugin-panel="registry">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginRegistry">Plugin registry</h3>
+                <label class="app-admin-plugin-auto-update" for="appAdminPluginAutoUpdateToggle" style="display:flex;align-items:center;gap:8px;margin:4px 0 12px;">
+                  <input type="checkbox" id="appAdminPluginAutoUpdateToggle">
+                  <span>
+                    <strong data-next-i18n="appAdmin.autoUpdateLabel">Automatically update plugins</strong>
+                    <span class="profile-passkey-meta" data-next-i18n="appAdmin.autoUpdateHelp">When enabled, plugins shipped with a newer version are updated automatically. When disabled, an update can be installed manually per plugin.</span>
+                  </span>
+                </label>
                 <div id="appAdminMetadataPriorityPanel"></div>
                 <div class="plugin-operation-panel" id="appAdminPluginExecutionDashboard"></div>
                 <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin types" data-next-i18n-aria="appAdmin.pluginRegistry">
@@ -17388,6 +17409,8 @@ def ui_preview_html(
           </div>
           <div class="app-admin-plugin-meta">
             <span class="tag blue">${escapeHtml(tNext("appAdmin.version", "Version"))} ${escapeHtml(version)}</span>
+            ${plugin.updateAvailable ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.updateAvailable", "Update available"))}: ${escapeHtml(plugin.bundledVersion || "")}</span>` : ""}
+            ${plugin.canRollback ? `<span class="tag">${escapeHtml(tNext("appAdmin.rollbackAvailable", "Rollback available"))}${plugin.rollbackVersion ? `: ${escapeHtml(plugin.rollbackVersion)}` : ""}</span>` : ""}
             <span class="tag ${runtime.loaded || health.state === "ok" ? "good" : ""}">${escapeHtml(tNext("appAdmin.runtime", "Runtime"))} ${escapeHtml(String(runtimeState).replaceAll("_", " "))}</span>
             ${plugin.requiresSecrets ? `<span class="tag ${plugin.secretsConfigured ? "good" : ""}">${escapeHtml(tNext("appAdmin.secrets", "Secrets"))} ${escapeHtml(plugin.secretsConfigured ? tNext("appAdmin.configured", "Configured") : tNext("appAdmin.missing", "Missing"))}</span>` : `<span class="tag good">${escapeHtml(tNext("appAdmin.noSecretsRequired", "No secrets"))}</span>`}
             ${plugin.settingsConfigured ? `<span class="tag good">${escapeHtml(tNext("appAdmin.settingsConfigured", "Settings configured"))}</span>` : `<span class="tag">${escapeHtml(tNext("appAdmin.defaultSettings", "Default settings"))}</span>`}
@@ -17404,6 +17427,8 @@ def ui_preview_html(
           </div>
           <div class="app-admin-plugin-actions">
             ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${escapeHtml(plugin.enabled ? tNext("appAdmin.disablePlugin", "Disable") : tNext("appAdmin.enablePlugin", "Enable"))}</button>` : ""}
+            ${canManage && plugin.updateAvailable ? `<button type="button" class="secondary-button" data-app-admin-plugin-update="${escapeHtml(plugin.id)}" data-target-version="${escapeHtml(plugin.bundledVersion || "")}">${escapeHtml(tNext("appAdmin.updatePlugin", "Update"))}${plugin.bundledVersion ? ` (${escapeHtml(plugin.bundledVersion)})` : ""}</button>` : ""}
+            ${canManage && plugin.canRollback ? `<button type="button" class="secondary-button" data-app-admin-plugin-rollback="${escapeHtml(plugin.id)}" data-target-version="${escapeHtml(plugin.rollbackVersion || "")}">${escapeHtml(tNext("appAdmin.rollbackPlugin", "Rollback"))}${plugin.rollbackVersion ? ` (${escapeHtml(plugin.rollbackVersion)})` : ""}</button>` : ""}
             ${appAdminCanExportPlugin(plugin) ? `<button type="button" class="secondary-button" data-app-admin-plugin-export="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.exportPlugin", "Export"))}</button>` : ""}
             ${appAdminCanDeletePlugin(plugin) ? `<button type="button" class="secondary-button danger" data-app-admin-plugin-delete="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.deletePlugin", "Delete"))}</button>` : ""}
             ${canViewHealth ? `<button type="button" class="secondary-button" data-app-admin-plugin-health="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.checkHealth", "Check health"))}</button>` : ""}
@@ -18423,6 +18448,8 @@ def ui_preview_html(
       if (configNode) configNode.textContent = String(configNeeded);
       if (digitalNode) digitalNode.textContent = String(digitalSources.length);
       renderAppAdminPluginDashboard();
+      const autoUpdateToggle = document.getElementById("appAdminPluginAutoUpdateToggle");
+      if (autoUpdateToggle) autoUpdateToggle.checked = appAdmin.pluginAutoUpdate !== false;
       renderAppAdminPluginExecutionDashboard();
       renderAppAdminPluginPackageValidator();
       renderAppAdminPersonalListSyncDashboard();
@@ -19164,6 +19191,7 @@ def ui_preview_html(
         appAdmin.assignableRoles = rbacPayload.assignableRoles || usersPayload.roles || [];
         appAdmin.groups = groupsPayload.groups || [];
         appAdmin.plugins = pluginsPayload.plugins || [];
+        appAdmin.pluginAutoUpdate = pluginsPayload.autoUpdate !== false;
         appAdmin.digitalSources = digitalSourcesPayload.items || [];
         appAdmin.backup = backupPayload || null;
         appAdmin.pluginJobs = pluginJobsPayload.jobs || [];
@@ -19595,6 +19623,82 @@ def ui_preview_html(
         delete appAdmin.pluginExecutions[pluginId];
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginDeleted", "Plugin deleted."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function updateAppAdminPlugin(pluginId) {
+      if (!pluginId) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanManagePlugin(plugin) || !plugin.updateAvailable) return;
+      const target = plugin.bundledVersion || "";
+      const confirmed = window.confirm(
+        tNext("appAdmin.updatePluginConfirm", "Install the bundled version {version} of this plugin?").replace("{version}", target || "")
+      );
+      if (!confirmed) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.updatingPlugin", "Updating plugin..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/update`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({})
+        });
+        appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        if (payload.registry && typeof payload.registry.autoUpdate === "boolean") {
+          appAdmin.pluginAutoUpdate = payload.registry.autoUpdate;
+        }
+        renderAppAdminPlugins();
+        const to = (payload.update && payload.update.to) || target;
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginUpdated", "Plugin updated to {version}.").replace("{version}", to || ""), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function rollbackAppAdminPlugin(pluginId) {
+      if (!pluginId) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanManagePlugin(plugin) || !plugin.canRollback) return;
+      const target = plugin.rollbackVersion || "";
+      const confirmed = window.confirm(
+        tNext("appAdmin.rollbackPluginConfirm", "Roll back this plugin to the previous version {version}?").replace("{version}", target || "")
+      );
+      if (!confirmed) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.rollingBackPlugin", "Rolling back plugin..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/rollback`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({})
+        });
+        appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        if (payload.registry && typeof payload.registry.autoUpdate === "boolean") {
+          appAdmin.pluginAutoUpdate = payload.registry.autoUpdate;
+        }
+        renderAppAdminPlugins();
+        const to = (payload.rollback && payload.rollback.to) || target;
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginRolledBack", "Plugin rolled back to {version}.").replace("{version}", to || ""), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function setAppAdminPluginAutoUpdate(enabled) {
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.savingAutoUpdate", "Saving auto-update setting..."));
+      try {
+        const payload = await authApiJson("/api/next/plugins/auto-update", {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({enabled: !!enabled})
+        });
+        appAdmin.pluginAutoUpdate = !!payload.autoUpdate;
+        if (payload.registry && payload.registry.plugins) appAdmin.plugins = payload.registry.plugins;
+        renderAppAdminPlugins();
+        setAppAdminMessage(
+          "appAdminPluginsMessage",
+          appAdmin.pluginAutoUpdate
+            ? tNext("appAdmin.autoUpdateEnabled", "Plugin auto-update enabled.")
+            : tNext("appAdmin.autoUpdateDisabled", "Plugin auto-update disabled."),
+          "good"
+        );
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -30790,6 +30894,7 @@ def ui_preview_html(
       document.getElementById("appAdminRefreshOperationsButton")?.addEventListener("click", () => refreshAppAdminOperations());
       document.getElementById("appAdminRefreshPluginJobsButton")?.addEventListener("click", () => refreshAppAdminPluginJobs());
       document.getElementById("appAdminImportPluginButton")?.addEventListener("click", () => importAppAdminPlugin());
+      document.getElementById("appAdminPluginAutoUpdateToggle")?.addEventListener("change", (event) => setAppAdminPluginAutoUpdate(!!event.target.checked));
       document.getElementById("appAdminRefreshMetadataJobsButton")?.addEventListener("click", () => refreshAppAdminMetadataJobs());
       document.getElementById("appAdminArtworkTrashPurgeEnabled")?.addEventListener("change", (event) => {
         const select = document.getElementById("appAdminArtworkTrashRetention");
@@ -30854,6 +30959,8 @@ def ui_preview_html(
         const moveButton = event.target.closest("[data-app-admin-plugin-move]");
         const exportButton = event.target.closest("[data-app-admin-plugin-export]");
         const deleteButton = event.target.closest("[data-app-admin-plugin-delete]");
+        const updateButton = event.target.closest("[data-app-admin-plugin-update]");
+        const rollbackButton = event.target.closest("[data-app-admin-plugin-rollback]");
         const movieVaultRefreshButton = event.target.closest("[data-app-admin-movievault-refresh]");
         const movieVaultResetButton = event.target.closest("[data-app-admin-movievault-reset]");
         if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
@@ -30864,6 +30971,8 @@ def ui_preview_html(
         if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down", moveButton.dataset.sectionCategory || "");
         if (exportButton) exportAppAdminPlugin(exportButton.dataset.appAdminPluginExport);
         if (deleteButton) deleteAppAdminPlugin(deleteButton.dataset.appAdminPluginDelete);
+        if (updateButton) updateAppAdminPlugin(updateButton.dataset.appAdminPluginUpdate);
+        if (rollbackButton) rollbackAppAdminPlugin(rollbackButton.dataset.appAdminPluginRollback);
         if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(movieVaultRefreshButton.dataset.appAdminMovievaultRefresh || "movievault", false);
         if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(movieVaultResetButton.dataset.appAdminMovievaultReset || "movievault", true);
       });
@@ -38193,6 +38302,27 @@ def set_app_user_preferences(conn, user_id: UUID | str, updates: dict[str, Any])
     return app_effective_preferences(conn, user_id)
 
 
+PLUGIN_AUTO_UPDATE_SETTING_KEY = "plugins_auto_update"
+
+
+def plugin_auto_update_setting(conn) -> bool:
+    value = app_setting_value(conn, PLUGIN_AUTO_UPDATE_SETTING_KEY, True)
+    return parse_bool_value(value, default=True)
+
+
+def apply_plugin_auto_update_setting(conn) -> bool:
+    """Mirror the persisted auto-update preference into the plugin runtime.
+
+    Sets the in-process override and a durable marker file so the
+    connection-less runtime honors the preference before discovery runs.
+    """
+
+    enabled = plugin_auto_update_setting(conn)
+    set_plugin_auto_update_enabled(enabled)
+    write_plugin_auto_update_marker(enabled)
+    return enabled
+
+
 def reconcile_legacy_metadata_plugins(conn) -> dict[str, Any] | None:
     if not table_exists(conn, "app_settings") or not table_exists(conn, "metadata_plugins"):
         return None
@@ -38214,6 +38344,7 @@ def reconcile_legacy_metadata_plugins(conn) -> dict[str, Any] | None:
 
 
 def sync_metadata_plugin_registry(conn) -> None:
+    apply_plugin_auto_update_setting(conn)
     sync_plugin_registry(conn, table_exists, Jsonb)
     if reconcile_legacy_metadata_plugins(conn):
         sync_plugin_registry(conn, table_exists, Jsonb)
@@ -48734,7 +48865,118 @@ def register_routes(flask_app: Flask) -> None:
             if table_exists(conn, "metadata_plugins"):
                 sync_metadata_plugin_registry(conn)
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            registry["autoUpdate"] = plugin_auto_update_setting(conn)
         return response(registry)
+
+    @flask_app.put("/api/next/plugins/auto-update")
+    def set_plugins_auto_update():
+        body = request.get_json(silent=True) or {}
+        if "enabled" not in body:
+            raise NextApiError("'enabled' is required", 400)
+        enabled = parse_bool_value(body.get("enabled"), default=True)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            with conn.transaction():
+                set_app_setting_value(
+                    conn,
+                    PLUGIN_AUTO_UPDATE_SETTING_KEY,
+                    enabled,
+                    actor_id=(actor or {}).get("id"),
+                )
+                apply_plugin_auto_update_setting(conn)
+                audit_event(
+                    conn,
+                    event_type="plugin.auto_update_changed",
+                    category="plugins",
+                    actor=actor,
+                    target_type="setting",
+                    target_id=PLUGIN_AUTO_UPDATE_SETTING_KEY,
+                    summary=f"Plugin auto-update {'enabled' if enabled else 'disabled'}",
+                    metadata={"enabled": enabled},
+                )
+                # Applying pending updates immediately when re-enabling keeps the
+                # running plugins in sync with what the UI now promises.
+                if enabled:
+                    upgrade_seeded_default_plugins()
+                if table_exists(conn, "metadata_plugins"):
+                    sync_metadata_plugin_registry(conn)
+                else:
+                    sync_plugin_registry(conn, table_exists, Jsonb)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            registry["autoUpdate"] = plugin_auto_update_setting(conn)
+        return response({"status": "ok", "autoUpdate": enabled, "registry": registry})
+
+    @flask_app.post("/api/next/plugins/<plugin_id>/update")
+    def update_plugin_to_bundled(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            try:
+                outcome = install_bundled_plugin_update(plugin_id)
+            except ValueError as exc:
+                raise NextApiError(str(exc), 400) from exc
+            with conn.transaction():
+                if table_exists(conn, "metadata_plugins"):
+                    sync_metadata_plugin_registry(conn)
+                else:
+                    sync_plugin_registry(conn, table_exists, Jsonb)
+                audit_event(
+                    conn,
+                    event_type="plugin.updated",
+                    category="plugins",
+                    actor=actor,
+                    target_type="plugin",
+                    target_id=plugin_id,
+                    summary=(
+                        f"Updated plugin {plugin_id} "
+                        f"{outcome.get('from') or '?'} -> {outcome.get('to') or '?'}"
+                    ),
+                    metadata=outcome,
+                )
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            registry["autoUpdate"] = plugin_auto_update_setting(conn)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+        return response({"status": "ok", "update": outcome, "plugin": plugin, "registry": registry})
+
+    @flask_app.post("/api/next/plugins/<plugin_id>/rollback")
+    def rollback_plugin_to_backup(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            try:
+                outcome = rollback_plugin_update(plugin_id)
+            except ValueError as exc:
+                raise NextApiError(str(exc), 400) from exc
+            with conn.transaction():
+                if table_exists(conn, "metadata_plugins"):
+                    sync_metadata_plugin_registry(conn)
+                else:
+                    sync_plugin_registry(conn, table_exists, Jsonb)
+                audit_event(
+                    conn,
+                    event_type="plugin.rolled_back",
+                    category="plugins",
+                    actor=actor,
+                    target_type="plugin",
+                    target_id=plugin_id,
+                    summary=(
+                        f"Rolled back plugin {plugin_id} "
+                        f"{outcome.get('from') or '?'} -> {outcome.get('to') or '?'}"
+                    ),
+                    metadata=outcome,
+                )
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            registry["autoUpdate"] = plugin_auto_update_setting(conn)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+        return response({"status": "ok", "rollback": outcome, "plugin": plugin, "registry": registry})
 
     @flask_app.get("/api/next/plugins/<plugin_id>/export")
     def export_plugin(plugin_id: str):

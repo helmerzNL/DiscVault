@@ -1753,5 +1753,20 @@
   "appAdmin.backupCreated": "Copia de seguridad creada.",
   "appAdmin.backupCreateInProgress": "Copia de seguridad en curso...",
   "appAdmin.backupCreateHint": "Esto puede tardar un momento en colecciones grandes.",
-  "appAdmin.backupRestoreFinished": "Restauracion finalizada."
+  "appAdmin.backupRestoreFinished": "Restauracion finalizada.",
+  "appAdmin.updateAvailable": "Actualizacion disponible",
+  "appAdmin.rollbackAvailable": "Reversion disponible",
+  "appAdmin.updatePlugin": "Actualizar",
+  "appAdmin.rollbackPlugin": "Revertir",
+  "appAdmin.autoUpdateLabel": "Actualizar los plugins automaticamente",
+  "appAdmin.autoUpdateHelp": "Cuando esta activado, los plugins con una version mas reciente se actualizan automaticamente. Cuando esta desactivado, se puede instalar una actualizacion manualmente por plugin.",
+  "appAdmin.updatePluginConfirm": "Instalar la version incluida {version} de este plugin?",
+  "appAdmin.updatingPlugin": "Actualizando plugin...",
+  "appAdmin.pluginUpdated": "Plugin actualizado a {version}.",
+  "appAdmin.rollbackPluginConfirm": "Revertir este plugin a la version anterior {version}?",
+  "appAdmin.rollingBackPlugin": "Revirtiendo plugin...",
+  "appAdmin.pluginRolledBack": "Plugin revertido a {version}.",
+  "appAdmin.savingAutoUpdate": "Guardando la configuracion de actualizacion automatica...",
+  "appAdmin.autoUpdateEnabled": "Actualizacion automatica de plugins activada.",
+  "appAdmin.autoUpdateDisabled": "Actualizacion automatica de plugins desactivada."
 }
