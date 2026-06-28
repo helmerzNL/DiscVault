@@ -43,9 +43,54 @@ _TEMPLATE_CACHE = {}
 
 CLIENT_VERSION_UNSUPPORTED_CODE = "client_version_unsupported"
 
-RATE_LIMIT_MAX_RETRIES = 2
+RATE_LIMIT_MAX_RETRIES = 1
 RATE_LIMIT_BACKOFF_CAP = 5.0
 RATE_LIMIT_DEFAULT_DELAY = 1.0
+
+
+def _coerce_positive_float(value, default):
+    try:
+        parsed = float(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+# Per-request HTTP timeout. Kept well under the frontend's 30s lookup budget so a
+# slow or unreachable MovieVault server cannot make a search appear to hang.
+REQUEST_TIMEOUT_SECONDS = _coerce_positive_float(os.environ.get("DISCVAULT_MOVIEVAULT_TIMEOUT"), 8.0)
+
+# A single lookup runs several MovieVault entrypoints (title search, movie
+# details, box-set candidates), each issuing its own request. If the server is
+# unreachable, every request would otherwise pay the full timeout and the total
+# easily exceeds the frontend's 30s budget. Once a request proves the server
+# unreachable (or throttled to exhaustion) we set this flag on the shared lookup
+# context so the remaining entrypoints skip their calls instead of stacking
+# timeouts. The context is rebuilt per lookup, so the flag resets each search.
+_UNREACHABLE_CONTEXT_KEY = "_movievaultUnreachable"
+
+
+class MovieVaultUnavailable(RuntimeError):
+    """Raised to skip a MovieVault call after the server proved unreachable in this lookup."""
+
+
+def _movievault_network_error_types():
+    exceptions = getattr(requests, "exceptions", None)
+    resolved = []
+    for name in ("ConnectTimeout", "ReadTimeout", "Timeout", "ConnectionError"):
+        exc = getattr(exceptions, name, None) if exceptions is not None else None
+        if isinstance(exc, type) and issubclass(exc, BaseException):
+            resolved.append(exc)
+    return tuple(resolved)
+
+
+def _movievault_unreachable(context):
+    return bool(isinstance(context, dict) and context.get(_UNREACHABLE_CONTEXT_KEY))
+
+
+def _mark_movievault_unreachable(context):
+    if isinstance(context, dict):
+        context[_UNREACHABLE_CONTEXT_KEY] = True
 
 
 class MovieVaultClientVersionUnsupported(RuntimeError):
@@ -316,6 +361,10 @@ def _contribution_signature_headers(signer, raw_body):
 
 
 def _request(method, url, *, context=None, params=None, json_payload=None, retry_recovery=True, allow_validation_error=False, sign_body=False, retry_429=RATE_LIMIT_MAX_RETRIES):
+    if _movievault_unreachable(context):
+        raise MovieVaultUnavailable(
+            f"{PROVIDER_LABEL} was unreachable earlier in this lookup; skipping further requests."
+        )
     headers = _headers(context)
     data = None
     if json_payload is not None:
@@ -328,17 +377,21 @@ def _request(method, url, *, context=None, params=None, json_payload=None, retry
                 data = raw_body.encode("utf-8")
                 headers.update(signature_headers)
     request_func = getattr(requests, "request", None)
-    if callable(request_func):
-        if data is not None:
-            response = request_func(method, url, params=params, data=data, headers=headers, timeout=10)
+    try:
+        if callable(request_func):
+            if data is not None:
+                response = request_func(method, url, params=params, data=data, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+            else:
+                response = request_func(method, url, params=params, json=json_payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+        elif method.upper() == "GET":
+            response = requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+        elif data is not None:
+            response = requests.post(url, data=data, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
         else:
-            response = request_func(method, url, params=params, json=json_payload, headers=headers, timeout=10)
-    elif method.upper() == "GET":
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-    elif data is not None:
-        response = requests.post(url, data=data, headers=headers, timeout=10)
-    else:
-        response = requests.post(url, json=json_payload, headers=headers, timeout=10)
+            response = requests.post(url, json=json_payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
+    except _movievault_network_error_types():
+        _mark_movievault_unreachable(context)
+        raise
 
     status_code = _status_code(response)
     if status_code == 401 and retry_recovery:
@@ -374,6 +427,7 @@ def _request(method, url, *, context=None, params=None, json_payload=None, retry
                 sign_body=sign_body,
                 retry_429=retry_429 - 1,
             )
+        _mark_movievault_unreachable(context)
         raise MovieVaultRateLimited(
             f"{PROVIDER_LABEL} is rate limiting requests (HTTP 429). Please retry later.",
             retry_after=retry_after,
