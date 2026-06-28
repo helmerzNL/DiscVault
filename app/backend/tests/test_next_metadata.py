@@ -367,6 +367,67 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(parsed["boxSetMembers"], [])
         self.assertNotIn("boxSetEvidence", parsed)
 
+    def test_format_keys_on_url_and_title_not_page_text(self):
+        # Regression (barcode 0085391176572 "The Dark Knight Blu-ray"): a Blu-ray release
+        # page that mentions a 4K/UHD edition elsewhere must still resolve to Blu-ray. The
+        # URL slug and og:title are authoritative; page text is only a last resort.
+        bluray = bluray_com_plugin._format_from_url_title_text(
+            "https://www.blu-ray.com/movies/The-Dark-Knight-Blu-ray/743/",
+            "The Dark Knight Blu-ray",
+            "Also available on 4K UHD. The Dark Knight Trilogy 4K Ultra HD bundle.",
+        )
+        self.assertEqual(bluray, "Blu-ray")
+
+        uhd = bluray_com_plugin._format_from_url_title_text(
+            "https://www.blu-ray.com/movies/The-Dark-Knight-4K-Blu-ray/12345/",
+            "The Dark Knight 4K (Blu-ray)",
+            "",
+        )
+        self.assertEqual(uhd, "4K UHD")
+
+        dvd = bluray_com_plugin._format_from_url_title_text(
+            "https://www.blu-ray.com/dvd/The-Dark-Knight-DVD/678/",
+            "The Dark Knight DVD",
+            "Also available on 4K UHD.",
+        )
+        self.assertEqual(dvd, "DVD")
+
+        # Inconclusive URL/title falls back to page text rather than guessing nothing.
+        fallback = bluray_com_plugin._format_from_url_title_text(
+            "https://www.blu-ray.com/movies/Some-Release/999/",
+            "Some Release",
+            "Format: Blu-ray",
+        )
+        self.assertEqual(fallback, "Blu-ray")
+
+    def test_bluray_blu_ray_page_mentioning_4k_resolves_as_blu_ray(self):
+        if BeautifulSoup is None:
+            self.skipTest("BeautifulSoup is not available")
+        html = """
+        <html><head>
+          <meta property="og:title" content="The Dark Knight Blu-ray" />
+          <meta property="og:image" content="/covers/the-dark-knight.jpg" />
+        </head><body>
+          <h1>The Dark Knight Blu-ray</h1>
+          <p>Also available on 4K UHD Ultra HD Blu-ray.</p>
+        </body></html>
+        """
+
+        class _Resp:
+            text = html
+
+            def raise_for_status(self):
+                return None
+
+        with mock.patch.object(bluray_com_plugin.requests, "get", return_value=_Resp()):
+            parsed = bluray_com_plugin._parse_page(
+                "https://www.blu-ray.com/movies/The-Dark-Knight-Blu-ray/743/"
+            )
+
+        self.assertEqual(parsed["format"], "Blu-ray")
+        self.assertEqual(parsed["movie"]["format"], "Blu-ray")
+        self.assertEqual(parsed["release"]["format"], "Blu-ray")
+
     def test_canonicalize_plugin_result_normalizes_box_set_evidence_contract(self):
         result = canonicalize_plugin_result(
             "movievault_26",
