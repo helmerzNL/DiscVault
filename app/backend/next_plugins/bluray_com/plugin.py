@@ -179,8 +179,19 @@ def _member_title_from_url(value):
     return _movie_title_from_release_title(re.sub(r"[-_]+", " ", match.group(1)).strip())
 
 
-def _is_box_set_candidate(title, page_text):
-    text = f"{title or ''} {page_text or ''}"[:5000].casefold()
+def _is_box_set_candidate(title, page_text=None):
+    """True only when the scanned product's own *release title* self-identifies as a box-set.
+
+    Earlier this scanned arbitrary page text (``title + page_text``), so any single-disc
+    release page that merely *mentioned* a trilogy/collection/box-set elsewhere — related
+    products, "customers also bought", recommendations — was misclassified as a box-set.
+    A barcode for a single disc (e.g. "The Dark Knight Blu-ray", whose page links to
+    "The Dark Knight Trilogy") must never be turned into a box-set. Only the release/product
+    title is authoritative here; ``page_text`` is accepted for backward compatibility but
+    deliberately ignored. Genuine box-set pages that enumerate their discs are still detected
+    independently via :func:`_extract_explicit_box_set_members`.
+    """
+    text = str(title or "").casefold()
     markers = (
         "box set",
         "boxset",
@@ -412,13 +423,20 @@ def _parse_page(url):
                 video = value
     page_text = soup.get_text(" ", strip=True)
     release_format = _format_from_url_title_text(url, title, page_text)
-    is_box_set_candidate = _is_box_set_candidate(title, page_text[:5000])
+    # Box-set classification keys ONLY on the scanned product's own release title.
+    # Scanning arbitrary page text misclassified single-disc pages that merely mention a
+    # trilogy/collection (e.g. related products) as box-sets. Genuine box-set pages that
+    # enumerate their discs in the explicit "bundle includes the following titles" block are
+    # still detected below, regardless of the title heuristic.
+    is_box_set_candidate = _is_box_set_candidate(title)
     box_set_members = _extract_explicit_box_set_members(
         soup,
         current_url=url,
         parent_title=title,
         release_format=release_format,
-    ) if is_box_set_candidate else []
+    ) if (is_box_set_candidate or _has_explicit_member_text(soup)) else []
+    if box_set_members and not is_box_set_candidate:
+        is_box_set_candidate = True
     year = ""
     match = re.search(r"\((\d{4})\)", title)
     if match:
