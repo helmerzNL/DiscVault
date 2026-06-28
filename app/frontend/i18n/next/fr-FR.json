@@ -1760,5 +1760,20 @@
   "appAdmin.backupCreated": "Sauvegarde creee.",
   "appAdmin.backupCreateInProgress": "Sauvegarde en cours...",
   "appAdmin.backupCreateHint": "Cela peut prendre un moment pour les grandes collections.",
-  "appAdmin.backupRestoreFinished": "Restauration terminee."
+  "appAdmin.backupRestoreFinished": "Restauration terminee.",
+  "appAdmin.updateAvailable": "Mise a jour disponible",
+  "appAdmin.rollbackAvailable": "Restauration disponible",
+  "appAdmin.updatePlugin": "Mettre a jour",
+  "appAdmin.rollbackPlugin": "Restaurer",
+  "appAdmin.autoUpdateLabel": "Mettre a jour les plugins automatiquement",
+  "appAdmin.autoUpdateHelp": "Lorsque cette option est activee, les plugins fournis avec une version plus recente sont mis a jour automatiquement. Lorsqu'elle est desactivee, une mise a jour peut etre installee manuellement par plugin.",
+  "appAdmin.updatePluginConfirm": "Installer la version fournie {version} de ce plugin ?",
+  "appAdmin.updatingPlugin": "Mise a jour du plugin...",
+  "appAdmin.pluginUpdated": "Plugin mis a jour vers {version}.",
+  "appAdmin.rollbackPluginConfirm": "Restaurer ce plugin a la version precedente {version} ?",
+  "appAdmin.rollingBackPlugin": "Restauration du plugin...",
+  "appAdmin.pluginRolledBack": "Plugin restaure a {version}.",
+  "appAdmin.savingAutoUpdate": "Enregistrement du parametre de mise a jour automatique...",
+  "appAdmin.autoUpdateEnabled": "Mise a jour automatique des plugins activee.",
+  "appAdmin.autoUpdateDisabled": "Mise a jour automatique des plugins desactivee."
 }

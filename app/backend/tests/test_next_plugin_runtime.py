@@ -53,6 +53,17 @@ from app.backend.next_plugin_runtime import (
     _plugin_is_active,
     unconfigured_integration_plugins,
 )
+from app.backend.next_plugin_runtime import _parse_plugin_version
+from app.backend.next_plugin_runtime import install_bundled_plugin_update
+from app.backend.next_plugin_runtime import installed_plugin_version
+from app.backend.next_plugin_runtime import plugin_auto_update_enabled
+from app.backend.next_plugin_runtime import plugin_backup_version
+from app.backend.next_plugin_runtime import plugin_has_backup
+from app.backend.next_plugin_runtime import plugin_update_state
+from app.backend.next_plugin_runtime import rollback_plugin_update
+from app.backend.next_plugin_runtime import set_plugin_auto_update_enabled
+from app.backend.next_plugin_runtime import upgrade_seeded_default_plugins
+from app.backend.next_plugin_runtime import write_plugin_auto_update_marker
 
 
 class FakeResponse:
@@ -1132,6 +1143,209 @@ class UnconfiguredIntegrationPluginsTests(unittest.TestCase):
         ):
             result = unconfigured_integration_plugins(Mock(), Mock(), Mock())
         self.assertEqual(result, [])
+
+
+class PluginAutoUpdateTests(unittest.TestCase):
+    """Auto-update / manual update / rollback of bundled default plugins."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.bundled_dir = root / "bundled"
+        self.install_dir = root / "install"
+        self.backup_dir = root / "backups"
+        self.bundled_dir.mkdir(parents=True, exist_ok=True)
+        self.install_dir.mkdir(parents=True, exist_ok=True)
+        self._env = patch.dict(
+            os.environ,
+            {
+                "DISCVAULT_PLUGIN_INSTALL_DIR": str(self.install_dir),
+                "DISCVAULT_BUNDLED_PLUGIN_DIR": str(self.bundled_dir),
+                "DISCVAULT_PLUGIN_BACKUP_DIR": str(self.backup_dir),
+                "DISCVAULT_PLUGIN_AUTO_UPDATE": "",
+                "DISCVAULT_DATA_DIR": str(root / "data"),
+                "DISCVAULT_PLUGIN_PATHS": "",
+            },
+        )
+        self._env.start()
+        # Ensure no leftover process override leaks between tests.
+        set_plugin_auto_update_enabled(None)
+
+    def tearDown(self):
+        set_plugin_auto_update_enabled(None)
+        self._env.stop()
+        self._tmp.cleanup()
+
+    def _write_plugin(self, base: Path, plugin_id: str, version: str, body: str = "pass\n"):
+        plugin_dir = base / plugin_id
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        (plugin_dir / "manifest.json").write_text(
+            f'{{"id": "{plugin_id}", "name": "{plugin_id}", "version": "{version}"}}',
+            encoding="utf-8",
+        )
+        (plugin_dir / "plugin.py").write_text(body, encoding="utf-8")
+        return plugin_dir
+
+    def _mark_initialized(self):
+        (self.install_dir / PLUGIN_INITIALIZED_MARKER).write_text("1", encoding="utf-8")
+
+    def test_parse_plugin_version_orders_versions(self):
+        self.assertEqual(_parse_plugin_version("1.5.1"), (1, 5, 1))
+        self.assertEqual(_parse_plugin_version("1.5.1-beta"), (1, 5, 1))
+        self.assertEqual(_parse_plugin_version(""), ())
+        self.assertEqual(_parse_plugin_version("garbage"), ())
+        self.assertGreater(_parse_plugin_version("1.5.1"), _parse_plugin_version("1.5.0"))
+        self.assertGreater(_parse_plugin_version("2.0"), _parse_plugin_version("1.9.9"))
+        self.assertGreater(_parse_plugin_version("1.0"), _parse_plugin_version(""))
+
+    def test_upgrade_replaces_outdated_installed_plugin_and_snapshots_backup(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1", "VERSION = '1.5.1'\n")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0", "VERSION = '1.5.0'\n")
+        self._mark_initialized()
+
+        result = upgrade_seeded_default_plugins()
+
+        upgraded = {entry["plugin"]: entry for entry in result["upgraded"]}
+        self.assertIn("movievault_26", upgraded)
+        self.assertEqual(upgraded["movievault_26"]["from"], "1.5.0")
+        self.assertEqual(upgraded["movievault_26"]["to"], "1.5.1")
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.1")
+        # New plugin body is live in the install dir.
+        self.assertIn(
+            "1.5.1",
+            (self.install_dir / "movievault_26" / "plugin.py").read_text(encoding="utf-8"),
+        )
+        # The previous version is preserved for rollback.
+        self.assertTrue(plugin_has_backup("movievault_26"))
+        self.assertEqual(plugin_backup_version("movievault_26"), "1.5.0")
+
+    def test_upgrade_skips_when_installed_is_equal_or_newer(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.0")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertIn("movievault_26", result["skipped"])
+        self.assertEqual(result["upgraded"], [])
+        self.assertFalse(plugin_has_backup("movievault_26"))
+
+    def test_upgrade_respects_auto_update_disabled(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+        set_plugin_auto_update_enabled(False)
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertTrue(result.get("disabled"))
+        self.assertEqual(result["upgraded"], [])
+        # Installed copy untouched.
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.0")
+
+    def test_upgrade_does_not_resurrect_deleted_default(self):
+        # Bundled has the plugin, but the user deleted it from the install dir.
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._mark_initialized()
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertEqual(result["upgraded"], [])
+        self.assertFalse((self.install_dir / "movievault_26").exists())
+
+    def test_upgrade_noop_when_install_dir_not_initialized(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        # No .initialized marker written.
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertEqual(result["upgraded"], [])
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.0")
+
+    def test_install_bundled_update_writes_new_version_with_backup(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+
+        info = install_bundled_plugin_update("movievault_26")
+
+        self.assertEqual(info["from"], "1.5.0")
+        self.assertEqual(info["to"], "1.5.1")
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.1")
+        self.assertEqual(plugin_backup_version("movievault_26"), "1.5.0")
+
+    def test_install_bundled_update_rejects_when_not_newer(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.0")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+
+        with self.assertRaises(ValueError):
+            install_bundled_plugin_update("movievault_26")
+
+    def test_install_bundled_update_rejects_unknown_plugin(self):
+        self._mark_initialized()
+        with self.assertRaises(ValueError):
+            install_bundled_plugin_update("does_not_exist")
+
+    def test_rollback_restores_previous_version_and_removes_backup(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0", "VERSION = '1.5.0'\n")
+        self._mark_initialized()
+
+        install_bundled_plugin_update("movievault_26")
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.1")
+
+        info = rollback_plugin_update("movievault_26")
+
+        self.assertEqual(info["from"], "1.5.1")
+        self.assertEqual(info["to"], "1.5.0")
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.0")
+        self.assertIn(
+            "1.5.0",
+            (self.install_dir / "movievault_26" / "plugin.py").read_text(encoding="utf-8"),
+        )
+        # Backup consumed; after rollback bundled is newer again so an update
+        # can be re-offered.
+        self.assertFalse(plugin_has_backup("movievault_26"))
+
+    def test_rollback_without_backup_raises(self):
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+        with self.assertRaises(ValueError):
+            rollback_plugin_update("movievault_26")
+
+    def test_update_state_reports_update_then_rollback_availability(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+
+        state = plugin_update_state("movievault_26")
+        self.assertTrue(state["isBundledDefault"])
+        self.assertTrue(state["updateAvailable"])
+        self.assertEqual(state["bundledVersion"], "1.5.1")
+        self.assertFalse(state["canRollback"])
+
+        install_bundled_plugin_update("movievault_26")
+        state_after = plugin_update_state("movievault_26")
+        self.assertFalse(state_after["updateAvailable"])
+        self.assertTrue(state_after["canRollback"])
+        self.assertEqual(state_after["rollbackVersion"], "1.5.0")
+
+    def test_auto_update_marker_disables_then_enables(self):
+        set_plugin_auto_update_enabled(None)
+        self.assertTrue(plugin_auto_update_enabled())
+        write_plugin_auto_update_marker(False)
+        self.assertFalse(plugin_auto_update_enabled())
+        write_plugin_auto_update_marker(True)
+        self.assertTrue(plugin_auto_update_enabled())
+
+    def test_auto_update_override_takes_precedence(self):
+        write_plugin_auto_update_marker(False)
+        set_plugin_auto_update_enabled(True)
+        self.assertTrue(plugin_auto_update_enabled())
+        set_plugin_auto_update_enabled(None)
+        self.assertFalse(plugin_auto_update_enabled())
 
 
 if __name__ == "__main__":

@@ -1753,5 +1753,20 @@
   "appAdmin.backupCreated": "Kopia zapasowa utworzona.",
   "appAdmin.backupCreateInProgress": "Tworzenie kopii zapasowej...",
   "appAdmin.backupCreateHint": "W przypadku duzych kolekcji moze to chwile potrwac.",
-  "appAdmin.backupRestoreFinished": "Przywracanie zakonczone."
+  "appAdmin.backupRestoreFinished": "Przywracanie zakonczone.",
+  "appAdmin.updateAvailable": "Update available",
+  "appAdmin.rollbackAvailable": "Rollback available",
+  "appAdmin.updatePlugin": "Update",
+  "appAdmin.rollbackPlugin": "Rollback",
+  "appAdmin.autoUpdateLabel": "Automatically update plugins",
+  "appAdmin.autoUpdateHelp": "When enabled, plugins shipped with a newer version are updated automatically. When disabled, an update can be installed manually per plugin.",
+  "appAdmin.updatePluginConfirm": "Install the bundled version {version} of this plugin?",
+  "appAdmin.updatingPlugin": "Updating plugin...",
+  "appAdmin.pluginUpdated": "Plugin updated to {version}.",
+  "appAdmin.rollbackPluginConfirm": "Roll back this plugin to the previous version {version}?",
+  "appAdmin.rollingBackPlugin": "Rolling back plugin...",
+  "appAdmin.pluginRolledBack": "Plugin rolled back to {version}.",
+  "appAdmin.savingAutoUpdate": "Saving auto-update setting...",
+  "appAdmin.autoUpdateEnabled": "Plugin auto-update enabled.",
+  "appAdmin.autoUpdateDisabled": "Plugin auto-update disabled."
 }
