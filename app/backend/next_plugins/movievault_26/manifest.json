@@ -1,7 +1,7 @@
 {
   "id": "movievault_26",
   "name": "MovieVault 26",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["metadata_source", "metadata_receiver"],
