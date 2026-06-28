@@ -319,6 +319,54 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertFalse(evidence["membersAreExplicit"])
         self.assertTrue(evidence["detectedWithoutMembers"])
 
+    def test_is_box_set_candidate_keys_only_on_release_title_not_page_text(self):
+        # Regression (barcode 0085391176572 "The Dark Knight Blu-ray"): a single-disc
+        # release whose page merely *mentions* a trilogy/collection in related products
+        # must NOT be classified as a box-set. Only the product's own release title counts.
+        self.assertFalse(
+            bluray_com_plugin._is_box_set_candidate(
+                "The Dark Knight Blu-ray",
+                "Customers also bought: The Dark Knight Trilogy 4K Collection",
+            )
+        )
+        self.assertTrue(bluray_com_plugin._is_box_set_candidate("The Dark Knight Trilogy Blu-ray"))
+        self.assertTrue(bluray_com_plugin._is_box_set_candidate("Alien Anthology"))
+
+    def test_bluray_single_release_page_mentioning_box_set_is_not_a_candidate(self):
+        if BeautifulSoup is None:
+            self.skipTest("BeautifulSoup is not available")
+        html = """
+        <html><head>
+          <meta property="og:title" content="The Dark Knight Blu-ray" />
+          <meta property="og:image" content="/covers/the-dark-knight.jpg" />
+        </head><body>
+          <h1>The Dark Knight Blu-ray</h1>
+          <div id="similar">
+            <p>Customers who bought this also bought:</p>
+            <a class="hoverlink" data-globalparentid="1" data-productid="2" href="/movies/The-Dark-Knight-Trilogy-4K-Blu-ray/12345/">
+              <img src="/covers/trilogy.jpg" alt="The Dark Knight Trilogy 4K" />
+              The Dark Knight Trilogy 4K
+            </a>
+          </div>
+        </body></html>
+        """
+
+        class _Resp:
+            text = html
+
+            def raise_for_status(self):
+                return None
+
+        with mock.patch.object(bluray_com_plugin.requests, "get", return_value=_Resp()):
+            parsed = bluray_com_plugin._parse_page(
+                "https://www.blu-ray.com/movies/The-Dark-Knight-Blu-ray/743/"
+            )
+
+        self.assertEqual(parsed["status"], "hit")
+        self.assertFalse(parsed["isBoxSetCandidate"])
+        self.assertEqual(parsed["boxSetMembers"], [])
+        self.assertNotIn("boxSetEvidence", parsed)
+
     def test_canonicalize_plugin_result_normalizes_box_set_evidence_contract(self):
         result = canonicalize_plugin_result(
             "movievault_26",
