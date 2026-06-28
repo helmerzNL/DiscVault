@@ -662,6 +662,178 @@ def build_sha() -> str:
     return version_build_sha()
 
 
+# --- App update check (About page) -----------------------------------------
+#
+# DiscVault ships as a Docker stack and cannot safely recreate its own
+# container from inside the app, so this is a *check-only* feature: it compares
+# the running version against the latest published version for the instance's
+# release channel and surfaces the host command an operator runs to update.
+
+UPDATE_GITHUB_REPO = "helmerzNL/DiscVault"
+UPDATE_IMAGE_NAME = "ghcr.io/helmerznl/discvault"
+UPDATE_CHANNELS = ("auto", "beta", "stable", "v26")
+UPDATE_CHANNEL_IMAGE_TAG = {"beta": "v26-beta", "v26": "v26", "stable": "stable"}
+UPDATE_CHANNEL_BRANCH = {"beta": "release/v26-beta", "v26": "release/v26"}
+UPDATE_CHANNEL_SETTING_KEY = "update_channel"
+UPDATE_HTTP_TIMEOUT = 8.0
+UPDATE_USER_AGENT = "DiscVault-UpdateCheck"
+
+
+def _update_version_tuple(value: Any) -> tuple[int, ...]:
+    """Parse a semver-ish string into a comparable integer tuple.
+
+    ``26.2.45`` -> ``(26, 2, 45)``; a trailing ``-beta`` and any non-numeric
+    leading ``v`` are ignored. Blank/garbage input returns ``()`` which sorts
+    below any real version.
+    """
+
+    text = str(value or "").strip().lstrip("vV")
+    if not text:
+        return ()
+    parts: list[int] = []
+    for chunk in re.split(r"[._-]+", text):
+        match = re.match(r"\d+", chunk)
+        if not match:
+            break
+        parts.append(int(match.group(0)))
+    return tuple(parts)
+
+
+def normalize_update_channel(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return text if text in UPDATE_CHANNELS else "auto"
+
+
+def _update_request_headers(accept: str = "application/json") -> dict[str, str]:
+    return {"User-Agent": UPDATE_USER_AGENT, "Accept": accept}
+
+
+def github_latest_stable_release() -> dict[str, Any] | None:
+    """Return the latest published stable GitHub Release, or ``None``."""
+
+    url = f"https://api.github.com/repos/{UPDATE_GITHUB_REPO}/releases/latest"
+    resp = http_requests.get(
+        url,
+        headers=_update_request_headers("application/vnd.github+json"),
+        timeout=UPDATE_HTTP_TIMEOUT,
+    )
+    if resp.status_code != 200:
+        return None
+    data = resp.json() or {}
+    tag = str(data.get("tag_name") or "").strip()
+    version = tag.lstrip("vV")
+    if not version:
+        return None
+    return {
+        "version": version,
+        "releaseUrl": data.get("html_url"),
+        "publishedAt": data.get("published_at"),
+        "source": url,
+    }
+
+
+def github_branch_version(branch: str) -> dict[str, Any] | None:
+    """Read ``app/VERSION`` from a branch via raw.githubusercontent.com."""
+
+    url = f"https://raw.githubusercontent.com/{UPDATE_GITHUB_REPO}/{branch}/app/VERSION"
+    resp = http_requests.get(
+        url,
+        headers=_update_request_headers("text/plain"),
+        timeout=UPDATE_HTTP_TIMEOUT,
+    )
+    if resp.status_code != 200:
+        return None
+    version = (resp.text or "").strip()
+    if not version:
+        return None
+    return {
+        "version": version,
+        "releaseUrl": f"https://github.com/{UPDATE_GITHUB_REPO}/commits/{branch}/app/VERSION",
+        "publishedAt": None,
+        "source": url,
+    }
+
+
+def resolve_update_channel(conn, requested: Any = None) -> tuple[str, str]:
+    """Resolve the effective channel and where the decision came from.
+
+    Priority: explicit request -> stored admin override -> env var -> heuristic
+    (running version newer than latest stable release implies a pre-release
+    build, so check the beta branch).
+    """
+
+    requested_channel = normalize_update_channel(requested)
+    if requested_channel != "auto":
+        return requested_channel, "request"
+
+    stored = normalize_update_channel(app_setting_value(conn, UPDATE_CHANNEL_SETTING_KEY, "auto"))
+    if stored != "auto":
+        return stored, "setting"
+
+    env_channel = normalize_update_channel(os.environ.get("DISCVAULT_UPDATE_CHANNEL"))
+    if env_channel != "auto":
+        return env_channel, "env"
+
+    current = _update_version_tuple(build_version())
+    stable = github_latest_stable_release()
+    if stable is None:
+        return "stable", "auto-fallback"
+    if current and current > _update_version_tuple(stable["version"]):
+        return "beta", "auto"
+    return "stable", "auto"
+
+
+def _update_command_for_channel(channel: str) -> str:
+    return "docker compose pull && docker compose up -d"
+
+
+def perform_update_check(conn, requested_channel: Any = None) -> dict[str, Any]:
+    current_version = build_version()
+    checked_at = datetime.now(timezone.utc).isoformat()
+    try:
+        channel, channel_source = resolve_update_channel(conn, requested_channel)
+        if channel == "stable":
+            latest = github_latest_stable_release()
+        else:
+            latest = github_branch_version(UPDATE_CHANNEL_BRANCH[channel])
+        if not latest:
+            return {
+                "status": "error",
+                "message": "Could not determine the latest published version.",
+                "channel": channel,
+                "channelSource": channel_source,
+                "currentVersion": current_version,
+                "currentSha": build_sha(),
+                "checkedAt": checked_at,
+            }
+        latest_version = latest["version"]
+        update_available = _update_version_tuple(latest_version) > _update_version_tuple(current_version)
+        image_tag = UPDATE_CHANNEL_IMAGE_TAG.get(channel, "stable")
+        return {
+            "status": "ok",
+            "channel": channel,
+            "channelSource": channel_source,
+            "currentVersion": current_version,
+            "currentSha": build_sha(),
+            "latestVersion": latest_version,
+            "updateAvailable": update_available,
+            "releaseUrl": latest.get("releaseUrl"),
+            "publishedAt": latest.get("publishedAt"),
+            "imageRef": f"{UPDATE_IMAGE_NAME}:{image_tag}",
+            "updateCommand": _update_command_for_channel(channel),
+            "source": latest.get("source"),
+            "checkedAt": checked_at,
+        }
+    except Exception as exc:  # noqa: BLE001 - network/parse failures must not 500
+        return {
+            "status": "error",
+            "message": f"Update check failed: {exc}",
+            "currentVersion": current_version,
+            "currentSha": build_sha(),
+            "checkedAt": checked_at,
+        }
+
+
 def physical_media_format_key(value: Any) -> str:
     text = (clean_text(value) or "").casefold().replace("-", " ").replace("_", " ").replace("/", " ")
     text = " ".join(text.split())
@@ -12051,6 +12223,74 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--field) 54%, transparent);
       min-width: 0;
     }
+    .profile-update-block {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .profile-update-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    .profile-update-channel {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: .78rem;
+      font-weight: 650;
+      color: var(--muted);
+    }
+    .profile-update-channel select {
+      padding: 7px 9px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      background: var(--field);
+      color: inherit;
+    }
+    .profile-update-result {
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 11px 12px;
+      background: color-mix(in srgb, var(--field) 54%, transparent);
+      font-size: .85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .profile-update-result.good {
+      border-color: color-mix(in srgb, var(--good, #2e9e5b) 55%, transparent);
+      background: color-mix(in srgb, var(--good, #2e9e5b) 14%, transparent);
+    }
+    .profile-update-result.bad {
+      border-color: color-mix(in srgb, var(--bad, #d2453d) 55%, transparent);
+      background: color-mix(in srgb, var(--bad, #d2453d) 14%, transparent);
+    }
+    .profile-update-headline {
+      font-weight: 700;
+    }
+    .profile-update-meta {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+    .profile-update-command {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .profile-update-command code {
+      flex: 1 1 220px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--field) 80%, transparent);
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .8rem;
+      overflow-wrap: anywhere;
+    }
     .app-admin-contribution-row strong,
     .bulk-result-card strong {
       display: block;
@@ -15341,6 +15581,21 @@ def ui_preview_html(
                     <span data-next-i18n="profile.buildSha">Build SHA</span>
                     <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
                   </div>
+                </div>
+                <div class="profile-update-block hidden" id="profileUpdateBlock">
+                  <div class="profile-update-controls">
+                    <label class="profile-update-channel">
+                      <span data-next-i18n="profile.updateChannel">Update channel</span>
+                      <select id="profileUpdateChannel">
+                        <option value="auto" data-next-i18n="profile.channelAuto">Automatic</option>
+                        <option value="beta" data-next-i18n="profile.channelBeta">Beta</option>
+                        <option value="stable" data-next-i18n="profile.channelStable">Stable</option>
+                        <option value="v26" data-next-i18n="profile.channelV26">v26</option>
+                      </select>
+                    </label>
+                    <button type="button" class="secondary-button" id="profileUpdateCheckButton" data-next-i18n="profile.checkForUpdate">Check for update</button>
+                  </div>
+                  <div class="profile-update-result" id="profileUpdateResult" hidden></div>
                 </div>
                 <div class="offline-status-list" id="profileOfflineStatus"></div>
               </section>
@@ -29758,6 +30013,7 @@ def ui_preview_html(
       renderMemberGroups();
       renderContainerManager();
       renderProfileOfflineStatus();
+      renderProfileUpdateCheck();
       applyAppPermissionVisibility();
     }
     function renderProfileOfflineStatus() {
@@ -29834,6 +30090,118 @@ def ui_preview_html(
         caches.keys()
           .then((keys) => renderRows(keys.length))
           .catch(() => renderRows(null));
+      }
+    }
+    let profileUpdateWired = false;
+    function renderProfileUpdateCheck() {
+      const block = document.getElementById("profileUpdateBlock");
+      if (!block) return;
+      const admin = isAdminUser();
+      block.classList.toggle("hidden", !admin);
+      if (!admin) return;
+      if (profileUpdateWired) return;
+      profileUpdateWired = true;
+      const button = document.getElementById("profileUpdateCheckButton");
+      const channel = document.getElementById("profileUpdateChannel");
+      const result = document.getElementById("profileUpdateResult");
+      authJson("/api/next/app/update-channel", {headers: authHeaders()})
+        .then((payload) => { if (channel && payload && payload.channel) channel.value = payload.channel; })
+        .catch(() => {});
+      if (channel) {
+        channel.addEventListener("change", () => {
+          const value = channel.value || "auto";
+          authJson("/api/next/app/update-channel", {method: "POST", body: JSON.stringify({channel: value})})
+            .catch((error) => setProfileUpdateError(result, error.message));
+        });
+      }
+      if (button) {
+        button.addEventListener("click", () => { runProfileUpdateCheck().catch(() => {}); });
+      }
+    }
+    async function runProfileUpdateCheck() {
+      const button = document.getElementById("profileUpdateCheckButton");
+      const channel = document.getElementById("profileUpdateChannel");
+      const result = document.getElementById("profileUpdateResult");
+      if (!result) return;
+      const requested = (channel && channel.value) || "auto";
+      result.hidden = false;
+      result.className = "profile-update-result info";
+      result.textContent = tNext("profile.checking", "Checking for updates...");
+      if (button) button.disabled = true;
+      try {
+        const payload = await authJson(`/api/next/app/update-check?channel=${encodeURIComponent(requested)}`, {headers: authHeaders()});
+        renderProfileUpdateResult(payload);
+      } catch (error) {
+        setProfileUpdateError(result, error.message);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    function setProfileUpdateError(result, message) {
+      const node = result || document.getElementById("profileUpdateResult");
+      if (!node) return;
+      node.hidden = false;
+      node.className = "profile-update-result bad";
+      node.textContent = tNext("profile.updateCheckError", "Update check failed.") + (message ? ` (${message})` : "");
+    }
+    function copyProfileUpdateCommand(text, button) {
+      const done = () => {
+        if (!button) return;
+        button.textContent = tNext("profile.copied", "Copied");
+        setTimeout(() => { button.textContent = tNext("profile.copyCommand", "Copy"); }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => {});
+        return;
+      }
+      try {
+        const area = document.createElement("textarea");
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        document.body.removeChild(area);
+        done();
+      } catch (_) { /* ignore */ }
+    }
+    function renderProfileUpdateResult(payload) {
+      const result = document.getElementById("profileUpdateResult");
+      if (!result) return;
+      result.hidden = false;
+      if (!payload || payload.status === "error") {
+        setProfileUpdateError(result, (payload && payload.message) || "");
+        return;
+      }
+      const current = escapeHtml(payload.currentVersion || "-");
+      const latest = escapeHtml(payload.latestVersion || "-");
+      const channelLabel = escapeHtml(payload.channel || "-");
+      const channelText = escapeHtml(tNext("profile.channelLabel", "channel"));
+      const versionText = escapeHtml(tNext("profile.appVersion", "App version"));
+      if (payload.updateAvailable) {
+        const notes = payload.releaseUrl
+          ? ` &middot; <a href="${escapeHtml(payload.releaseUrl)}" target="_blank" rel="noreferrer">${escapeHtml(tNext("profile.releaseNotes", "Release notes"))}</a>`
+          : "";
+        const command = escapeHtml(payload.updateCommand || "");
+        result.className = "profile-update-result good";
+        result.innerHTML = `
+          <div class="profile-update-headline">${escapeHtml(tNext("profile.updateAvailable", "Update available"))}</div>
+          <div class="profile-update-meta">${escapeHtml(tNext("profile.latestVersion", "Latest version"))}: <strong>${latest}</strong> &middot; ${versionText}: ${current} (${channelText}: ${channelLabel})${notes}</div>
+          <p class="muted">${escapeHtml(tNext("profile.updateCommandHelp", "Run this command on the Docker host to update:"))}</p>
+          <div class="profile-update-command">
+            <code>${command}</code>
+            <button type="button" class="secondary-button" id="profileUpdateCopyButton" data-next-i18n="profile.copyCommand">Copy</button>
+          </div>
+        `;
+        const copyButton = document.getElementById("profileUpdateCopyButton");
+        if (copyButton) {
+          copyButton.addEventListener("click", () => copyProfileUpdateCommand(payload.updateCommand || "", copyButton));
+        }
+      } else {
+        result.className = "profile-update-result info";
+        result.innerHTML = `
+          <div class="profile-update-headline">${escapeHtml(tNext("profile.updateUpToDate", "You are on the latest version."))}</div>
+          <div class="profile-update-meta">${versionText}: <strong>${current}</strong> (${channelText}: ${channelLabel})</div>
+        `;
       }
     }
     function shortDateTime(value) {
@@ -46611,6 +46979,38 @@ def register_routes(flask_app: Flask) -> None:
             },
             200 if is_ready else 503,
         )
+
+    @flask_app.get("/api/next/app/update-check")
+    def app_update_check():
+        requested = request.args.get("channel")
+        with connect() as conn:
+            require_next_admin_user(conn)
+            result = perform_update_check(conn, requested)
+        return response(result)
+
+    @flask_app.post("/api/next/app/update-channel")
+    def app_update_channel():
+        body = request.get_json(silent=True) or {}
+        channel = normalize_update_channel(body.get("channel"))
+        with connect() as conn:
+            actor = require_next_admin_user(conn)
+            with conn.transaction():
+                set_app_setting_value(
+                    conn,
+                    UPDATE_CHANNEL_SETTING_KEY,
+                    channel,
+                    actor_id=actor.get("id"),
+                )
+        return response({"status": "ok", "channel": channel})
+
+    @flask_app.get("/api/next/app/update-channel")
+    def app_update_channel_get():
+        with connect() as conn:
+            require_next_admin_user(conn)
+            channel = normalize_update_channel(
+                app_setting_value(conn, UPDATE_CHANNEL_SETTING_KEY, "auto")
+            )
+        return response({"status": "ok", "channel": channel})
 
     @flask_app.get("/api/next/flags/<path:flag_name>")
     def next_frontend_flag(flag_name: str):
