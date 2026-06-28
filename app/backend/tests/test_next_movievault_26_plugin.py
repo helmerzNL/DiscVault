@@ -280,6 +280,71 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         finally:
             movievault_26._get = original_get
 
+    def test_barcode_release_match_resolves_single_disc_with_release_format(self):
+        # Regression for barcode 3344428072513 (French StudioCanal Blu-ray of
+        # Fight Club). MovieVault's contract response is a *release* match: the
+        # scanned Blu-ray sits at the top level while the movie carries ALL its
+        # physical editions under ``releases`` plus a movie-level format copied
+        # from the first edition (4K UHD). The lookup must surface exactly ONE
+        # candidate — the scanned Blu-ray — and never a box-set, never the 4K UHD.
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                self.assertEqual(path, "/api/v1/barcodes/3344428072513")
+                return {
+                    "type": "release",
+                    "lookup": {
+                        "barcode": "3344428072513",
+                        "normalizedBarcode": "3344428072513",
+                        "matchedType": "release",
+                    },
+                    "release": {
+                        "id": "mv_rel_fc_bd_fr",
+                        "movieId": "mv_movie_fc",
+                        "barcode": "3344428072513",
+                        "title": "Fight Club",
+                        "format": "Blu-ray",
+                        "country": "France",
+                        "edition": "StudioCanal",
+                    },
+                    "movie": {
+                        "id": "mv_movie_fc",
+                        "movieVaultId": "mv_movie_fc",
+                        "title": "Fight Club",
+                        "year": "1999",
+                        "tmdbId": 550,
+                        "posterUrl": "https://img.example/fightclub.jpg",
+                        "format": "4K UHD",
+                        "release": {"barcode": "5051890315526", "format": "4K UHD"},
+                        "releases": [
+                            {"title": "Fight Club", "barcode": "5051890315526", "format": "4K UHD"},
+                            {"title": "Fight Club - Remastered Blu-ray (Germany)", "format": "Blu-ray", "country": "Germany"},
+                            {"title": "Fight Club Blu-ray (Sweden)", "format": "Blu-ray", "country": "Sweden"},
+                            {"title": "Fight Club (Édition SteelBook Limitée)", "format": "Blu-ray", "country": "France"},
+                            {"title": "Fight Club", "barcode": "3344428072513", "format": "Blu-ray", "country": "France", "edition": "StudioCanal"},
+                            {"title": "Fight Club DVD", "format": "DVD"},
+                            {"title": "Fight Club 4K UHD (UK)", "format": "4K UHD", "country": "United Kingdom"},
+                        ],
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode(
+                {"barcode": "3344428072513"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertNotIn("boxSetProposal", result)
+        self.assertNotIn("boxSetProposals", result)
+        self.assertEqual(len(result["candidates"]), 1)
+        candidate = result["candidates"][0]
+        self.assertEqual(candidate["title"], "Fight Club")
+        self.assertEqual(candidate["format"], "Blu-ray")
+        self.assertEqual(candidate["barcode"], "3344428072513")
+        self.assertEqual(result["movie"]["format"], "Blu-ray")
+
     def test_single_film_payload_with_single_member_is_dropped(self):
         proposal = movievault_26._normalize_box_set_proposal(
             {
@@ -572,6 +637,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 ]
             },
             {"format": "Blu-ray"},
+            require_explicit=False,
         )
 
         self.assertEqual(proposal["movies"][0]["discNumber"], "1")
@@ -592,6 +658,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 ]
             },
             {"format": "Blu-ray"},
+            require_explicit=False,
         )
 
         self.assertEqual(proposal["posterUrl"], "https://img.example/box.jpg")
