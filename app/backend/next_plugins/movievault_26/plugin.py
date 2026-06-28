@@ -562,7 +562,13 @@ def _movie_payload(item):
         "actor": _text(item.get("actor") or item.get("actors") or item.get("cast")),
         "producer": _text(item.get("producer") or item.get("producers")),
         "studios": _text(item.get("studios") or item.get("studio")),
-        "format": _text(item.get("format") or item.get("mediaType") or item.get("media_type")),
+        "format": _reconcile_release_format(
+            item.get("format") or item.get("mediaType") or item.get("media_type"),
+            item.get("releaseTitle"),
+            item.get("release_title"),
+            item.get("title"),
+            item.get("name"),
+        ),
         "edition": _text(item.get("edition")),
         "country": _text(item.get("country")),
         "language": _text(item.get("language")),
@@ -967,6 +973,34 @@ def _format_key(value):
     if "svcd" in text or "vcd" in text:
         return "vcd_svcd"
     return text
+
+
+_FORMAT_TITLE_4K_RE = re.compile(r"\b(?:4k|uhd|ultra\s*hd)\b", re.IGNORECASE)
+_FORMAT_TITLE_BLURAY_RE = re.compile(r"\b(?:blu[\s-]*ray|bluray)\b", re.IGNORECASE)
+
+
+def _reconcile_release_format(format_value, *title_candidates):
+    """Correct a release format that contradicts the disc token in its own title.
+
+    MovieVault's crowd catalog can carry a ``format`` that conflicts with the
+    record's own title -- e.g. barcode 3344428072513, titled "Fight Club Blu-ray
+    (SteelBook) (France)" yet stamped "4K UHD" by an erroneous merged
+    contribution. When the format claims 4K UHD but the title unambiguously says
+    Blu-ray (and never 4K / UHD / Ultra HD), trust the explicit title token.
+    Every other combination is left untouched, so a genuine "Fight Club 4K UHD"
+    or a bare "Fight Club" keeps its reported format.
+    """
+    fmt = _text(format_value)
+    if _format_key(fmt) != "ultra_hd_blu_ray":
+        return fmt
+    title_blob = " ".join(_text(value) for value in title_candidates if _text(value))
+    if not title_blob:
+        return fmt
+    if _FORMAT_TITLE_4K_RE.search(title_blob):
+        return fmt
+    if _FORMAT_TITLE_BLURAY_RE.search(title_blob):
+        return "Blu-ray"
+    return fmt
 
 
 def _selected_format(context=None, item=None):
