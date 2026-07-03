@@ -37995,6 +37995,198 @@ def sync_change(
         )
 
 
+def ensure_user_sync_state(conn, user_id) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO user_sync_state (user_id, revision)
+            VALUES (%s, 0)
+            ON CONFLICT (user_id) DO NOTHING
+            """,
+            (user_id,),
+        )
+        cur.execute("SELECT revision FROM user_sync_state WHERE user_id=%s", (user_id,))
+        row = cur.fetchone()
+    return int(row["revision"] if row else 0)
+
+
+def current_user_revision(conn, user_id) -> int:
+    if not table_exists(conn, "user_sync_state"):
+        return 0
+    return ensure_user_sync_state(conn, user_id)
+
+
+def next_user_revision(conn, user_id) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE user_sync_state
+            SET revision = revision + 1,
+                updated_at = now()
+            WHERE user_id=%s
+            RETURNING revision
+            """,
+            (user_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        ensure_user_sync_state(conn, user_id)
+        return next_user_revision(conn, user_id)
+    return int(row["revision"])
+
+
+def user_sync_change(
+    conn,
+    user_id,
+    *,
+    entity_type: str,
+    entity_id: str,
+    operation: str,
+    payload: dict[str, Any],
+) -> int:
+    """Append one row to the caller's private sync stream and return its revision.
+
+    No-op (returns 0) when the per-user stream tables are absent, so callers on
+    older schemas keep working.
+    """
+    if not table_exists(conn, "user_sync_state") or not table_exists(conn, "user_sync_changes"):
+        return 0
+    revision = next_user_revision(conn, user_id)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO user_sync_changes (
+                user_id,
+                revision,
+                entity_type,
+                entity_id,
+                operation,
+                payload
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (user_id, revision, entity_type, entity_id, operation, Jsonb(json_ready(payload))),
+        )
+    return revision
+
+
+def container_membership_snapshot(conn, container_id) -> list[dict[str, Any]]:
+    """Full member list for one container (box-set), ordered for the client."""
+    if not table_exists(conn, "container_movies"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT container_id, movie_id, sort_order, created_at
+            FROM container_movies
+            WHERE container_id=%s
+            ORDER BY sort_order, created_at
+            """,
+            (container_id,),
+        )
+        return cur.fetchall()
+
+
+def emit_container_membership_change(conn, container_id, *, operation: str = "upsert") -> int:
+    """Emit one ``container_membership`` delta carrying the container's full member set.
+
+    Grouped per container so a client replaces its local membership for that box-set
+    in a single change. No-op when the sync tables are absent.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="container_membership",
+        entity_id=str(container_id),
+        operation=operation,
+        payload={
+            "containerId": str(container_id),
+            "members": container_membership_snapshot(conn, container_id),
+        },
+    )
+    return revision
+
+
+def emit_movie_identifiers_change(conn, movie_id, *, operation: str = "upsert") -> int:
+    """Emit one ``movie_identifier`` delta carrying the movie's full identifier set.
+
+    Grouped per movie so a client replaces its local identifiers (incl. the
+    ``movievault_26`` link) for that movie in a single change.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="movie_identifier",
+        entity_id=str(movie_id),
+        operation=operation,
+        payload={
+            "movieId": str(movie_id),
+            "identifiers": movie_identifier_entities(conn, movie_id),
+        },
+    )
+    return revision
+
+
+def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
+    """One container row in the same shape as the bootstrap ``containers`` array."""
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                c.id,
+                c.public_id,
+                c.container_type,
+                c.title,
+                c.barcode,
+                c.badge_label,
+                c.year,
+                c.description,
+                c.metadata,
+                c.created_at,
+                c.updated_at
+            FROM containers c
+            WHERE c.id=%s
+            """,
+            (container_id,),
+        )
+        return cur.fetchone()
+
+
+def emit_container_change(conn, container_id, *, operation: str, entity: dict[str, Any] | None = None) -> int:
+    """Emit a ``container`` upsert/delete delta (closes the container-CRUD gap).
+
+    Upserts carry the full container ``entity`` (same shape as the bootstrap
+    ``containers`` array); deletes carry only the ``id``. No-op when the sync
+    tables are absent.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    payload: dict[str, Any] = {"id": str(container_id)}
+    if operation != "delete":
+        if entity is None:
+            entity = single_container_sync_entity(conn, container_id)
+        if entity is not None:
+            payload["entity"] = entity
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="container",
+        entity_id=str(container_id),
+        operation=operation,
+        payload=payload,
+    )
+    return revision
+
+
 def idempotency_key(client_id: str, client_mutation_id: str) -> str:
     return f"sync:{client_id}:{client_mutation_id}"
 
@@ -38873,6 +39065,8 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "bootstrap": "/api/next/sync/bootstrap",
             "delta": "/api/next/sync/delta",
             "mutations": "/api/next/sync/mutations",
+            "userBootstrap": "/api/next/sync/user/bootstrap",
+            "userDelta": "/api/next/sync/user/delta",
         },
         "import": {
             "metadataLookup": "/api/next/metadata/lookup",
@@ -40481,6 +40675,27 @@ def movie_identifier_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
+def all_movie_identifier_entities(conn, *, limit: int = 200000) -> list[dict[str, Any]]:
+    """Global variant of ``movie_identifier_entities`` for the sync bootstrap.
+
+    Unlike the per-movie helper this carries ``movie_id`` on every row so an
+    offline client can key each identifier back to its movie.
+    """
+    if not table_exists(conn, "movie_identifiers"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, provider_id, identifier_type, identifier, created_at
+            FROM movie_identifiers
+            ORDER BY movie_id, provider_id, identifier_type, identifier
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return cur.fetchall()
+
+
 def movie_localization_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
     if not table_exists(conn, "movie_localizations"):
         return []
@@ -41148,6 +41363,156 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         state["watchCount"] = len(rows)
         state["lastWatched"] = rows[0].get("watched_at") if rows else None
     return state
+
+
+def watchlist_sync_entity(conn, user_id, movie_id) -> dict[str, Any] | None:
+    """Serialize one watchlist row for the per-user sync stream, or None."""
+    if not table_exists(conn, "watchlist_items"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, added_at, snapshot
+            FROM watchlist_items
+            WHERE user_id=%s AND movie_id=%s
+            """,
+            (user_id, movie_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    movie = row.get("movie_id")
+    return {
+        "movieId": str(movie) if movie else None,
+        "addedAt": row.get("added_at"),
+        "snapshot": row.get("snapshot") or {},
+    }
+
+
+def watch_history_sync_entity(conn, user_id, entry_id) -> dict[str, Any] | None:
+    """Serialize one watch_history row for the per-user sync stream, or None."""
+    if not table_exists(conn, "watch_history"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, movie_id, watched_at, created_at, snapshot
+            FROM watch_history
+            WHERE user_id=%s AND id=%s
+            """,
+            (user_id, entry_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    movie = row.get("movie_id")
+    return {
+        "id": str(row.get("id")),
+        "movieId": str(movie) if movie else None,
+        "watchedAt": row.get("watched_at"),
+        "createdAt": row.get("created_at"),
+        "snapshot": row.get("snapshot") or {},
+    }
+
+
+def all_watchlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "watchlist_items"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, added_at, snapshot
+            FROM watchlist_items
+            WHERE user_id=%s
+            ORDER BY added_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    entities: list[dict[str, Any]] = []
+    for row in rows:
+        movie = row.get("movie_id")
+        entities.append(
+            {
+                "movieId": str(movie) if movie else None,
+                "addedAt": row.get("added_at"),
+                "snapshot": row.get("snapshot") or {},
+            }
+        )
+    return entities
+
+
+def all_watch_history_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "watch_history"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, movie_id, watched_at, created_at, snapshot
+            FROM watch_history
+            WHERE user_id=%s
+            ORDER BY watched_at, created_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    entities: list[dict[str, Any]] = []
+    for row in rows:
+        movie = row.get("movie_id")
+        entities.append(
+            {
+                "id": str(row.get("id")),
+                "movieId": str(movie) if movie else None,
+                "watchedAt": row.get("watched_at"),
+                "createdAt": row.get("created_at"),
+                "snapshot": row.get("snapshot") or {},
+            }
+        )
+    return entities
+
+
+def emit_watchlist_change(conn, user_id, movie_id, *, operation: str) -> int:
+    """Append a watchlist upsert/delete to the caller's private sync stream."""
+    entity_id = str(movie_id)
+    if operation == "delete":
+        payload: dict[str, Any] = {"id": entity_id, "movieId": entity_id}
+    else:
+        entity = watchlist_sync_entity(conn, user_id, movie_id)
+        payload = {"id": entity_id, "movieId": entity_id}
+        if entity is not None:
+            payload["entity"] = entity
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="watchlist",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
+
+
+def emit_watch_history_change(conn, user_id, entry_id, *, operation: str, movie_id=None) -> int:
+    """Append a watch_history upsert/delete to the caller's private sync stream."""
+    entity_id = str(entry_id)
+    payload: dict[str, Any] = {"id": entity_id}
+    if operation == "delete":
+        if movie_id is not None:
+            payload["movieId"] = str(movie_id)
+    else:
+        entity = watch_history_sync_entity(conn, user_id, entry_id)
+        if entity is not None:
+            payload["entity"] = entity
+            payload["movieId"] = entity.get("movieId")
+        elif movie_id is not None:
+            payload["movieId"] = str(movie_id)
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="watch_history",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
 
 
 def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit: int = 200) -> list[dict[str, Any]]:
@@ -45482,6 +45847,281 @@ def apply_movie_delete(
     }
 
 
+def resolve_sync_entity_id(
+    conn,
+    *,
+    client_id: str,
+    entity_type: str,
+    raw_value: Any,
+) -> UUID | None:
+    """Resolve a mutation reference to a server UUID.
+
+    Accepts either a real UUID or a client-supplied temporary id that an
+    earlier queued mutation mapped to a server entity (offline create → link).
+    """
+    entity_uuid = parse_uuid(raw_value, "entityId") if raw_value else None
+    if entity_uuid:
+        return entity_uuid
+    candidate = str(raw_value or "").strip() or None
+    if not candidate:
+        return None
+    return client_entity_mapping(
+        conn,
+        client_id=client_id,
+        entity_type=entity_type,
+        client_entity_id=candidate,
+    )
+
+
+def apply_container_upsert(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("Container upsert payload must be an object", 400)
+    if not table_exists(conn, "containers"):
+        raise NextApiError("Container table is not available", 503)
+
+    client_entity_id = str(mutation.get("clientEntityId") or "").strip() or None
+    entity_id = parse_uuid(mutation.get("entityId"), "entityId")
+    entity_id = entity_id or client_entity_mapping(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        client_entity_id=client_entity_id,
+    )
+    entity_id = entity_id or uuid.uuid4()
+    existing = container_entity(conn, entity_id)
+
+    if "containerType" in payload or "container_type" in payload:
+        container_type = normalize_container_type(payload.get("containerType", payload.get("container_type")))
+    elif existing:
+        container_type = existing.get("container_type")
+    else:
+        container_type = normalize_container_type(None)
+
+    fields = container_payload(payload, existing=existing)
+    public_id = clean_text(payload.get("publicId") or payload.get("public_id"))
+    public_id = public_id or (existing or {}).get("public_id") or f"next-container-{entity_id.hex[:12]}"
+    if len(public_id) > 160:
+        raise NextApiError("publicId must be 160 characters or fewer", 400)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO containers (
+                id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            ON CONFLICT (id) DO UPDATE SET
+                title=COALESCE(EXCLUDED.title, containers.title),
+                barcode=EXCLUDED.barcode,
+                badge_label=EXCLUDED.badge_label,
+                year=EXCLUDED.year,
+                description=EXCLUDED.description,
+                metadata=containers.metadata || EXCLUDED.metadata,
+                updated_at=now()
+            """,
+            (
+                entity_id,
+                public_id,
+                container_type,
+                fields["title"],
+                fields["barcode"],
+                fields["badge_label"],
+                fields["year"],
+                fields["description"],
+                Jsonb(json_ready(fields["metadata"])),
+            ),
+        )
+
+    store_client_entity_mapping(
+        conn,
+        client_id=client_id,
+        client_entity_id=client_entity_id,
+        entity_type="container",
+        entity_id=entity_id,
+        idem_key=idem_key,
+    )
+    entity = single_container_sync_entity(conn, entity_id) or {}
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="container",
+        entity_id=str(entity_id),
+        operation="upsert",
+        payload={
+            "id": str(entity_id),
+            "entity": entity,
+            "clientId": client_id,
+            "clientEntityId": client_entity_id,
+            "clientMutationId": mutation["clientMutationId"],
+        },
+    )
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "container",
+        "operation": "upsert",
+        "entityId": entity_id,
+        "clientEntityId": client_entity_id,
+        "revision": revision,
+        "entity": entity,
+    }
+
+
+def apply_container_delete(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    if not table_exists(conn, "containers"):
+        raise NextApiError("Container table is not available", 503)
+    client_entity_id = str(mutation.get("clientEntityId") or "").strip() or None
+    entity_id = parse_uuid(mutation.get("entityId"), "entityId")
+    entity_id = entity_id or client_entity_mapping(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        client_entity_id=client_entity_id,
+    )
+    if not entity_id:
+        raise NextApiError("Container delete requires entityId or mapped clientEntityId", 400)
+    delete_container_records(conn, entity_id, delete_members=False)
+    revision = emit_container_change(conn, entity_id, operation="delete")
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "container",
+        "operation": "delete",
+        "entityId": entity_id,
+        "clientEntityId": client_entity_id,
+        "revision": revision,
+    }
+
+
+def apply_container_movie_upsert(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("containerMovie upsert payload must be an object", 400)
+    if not table_exists(conn, "container_movies"):
+        raise NextApiError("Container movie links are not available yet", 503)
+
+    container_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        raw_value=payload.get("containerId") or payload.get("container_id"),
+    )
+    movie_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="movie",
+        raw_value=payload.get("movieId") or payload.get("movie_id"),
+    )
+    if not container_id or not movie_id:
+        raise NextApiError("containerMovie upsert requires containerId and movieId", 400)
+    if not container_entity(conn, container_id):
+        raise NextApiError("Container not found", 404)
+    if not movie_entity(conn, movie_id):
+        raise NextApiError("Movie not found", 404)
+
+    sort_order_raw = payload.get("sortOrder", payload.get("sort_order"))
+    with conn.cursor() as cur:
+        if sort_order_raw is None:
+            cur.execute(
+                "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM container_movies WHERE container_id=%s",
+                (container_id,),
+            )
+            sort_order = int(cur.fetchone()["max_sort"]) + 1
+        else:
+            try:
+                sort_order = int(sort_order_raw)
+            except (TypeError, ValueError):
+                raise NextApiError("sortOrder must be an integer", 400)
+        cur.execute(
+            """
+            INSERT INTO container_movies (container_id, movie_id, sort_order, created_at)
+            VALUES (%s, %s, %s, now())
+            ON CONFLICT (container_id, movie_id) DO UPDATE SET sort_order=EXCLUDED.sort_order
+            """,
+            (container_id, movie_id, sort_order),
+        )
+        cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_id,))
+    revision = emit_container_membership_change(conn, container_id)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "containerMovie",
+        "operation": "upsert",
+        "entityId": container_id,
+        "movieId": movie_id,
+        "sortOrder": sort_order,
+        "revision": revision,
+    }
+
+
+def apply_container_movie_delete(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("containerMovie delete payload must be an object", 400)
+    if not table_exists(conn, "container_movies"):
+        raise NextApiError("Container movie links are not available yet", 503)
+
+    container_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        raw_value=payload.get("containerId") or payload.get("container_id"),
+    )
+    movie_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="movie",
+        raw_value=payload.get("movieId") or payload.get("movie_id"),
+    )
+    if not container_id or not movie_id:
+        raise NextApiError("containerMovie delete requires containerId and movieId", 400)
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM container_movies WHERE container_id=%s AND movie_id=%s",
+            (container_id, movie_id),
+        )
+        changed = cur.rowcount
+        if changed:
+            cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_id,))
+    revision = emit_container_membership_change(conn, container_id) if changed else current_revision(conn)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "containerMovie",
+        "operation": "delete",
+        "entityId": container_id,
+        "movieId": movie_id,
+        "changed": int(changed or 0),
+        "revision": revision,
+    }
+
+
 def apply_sync_mutation(conn, *, client_id: str, mutation: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(mutation, dict):
         raise NextApiError("Each mutation must be an object", 400)
@@ -45501,6 +46141,14 @@ def apply_sync_mutation(conn, *, client_id: str, mutation: dict[str, Any]) -> di
         result = apply_movie_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "movie" and operation == "delete":
         result = apply_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "container" and operation == "upsert":
+        result = apply_container_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "container" and operation == "delete":
+        result = apply_container_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "containerMovie" and operation == "upsert":
+        result = apply_container_movie_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "containerMovie" and operation == "delete":
+        result = apply_container_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
     else:
         raise NextApiError(f"Unsupported mutation: {entity_type}.{operation}", 400)
 
@@ -47697,6 +48345,8 @@ def register_routes(flask_app: Flask) -> None:
                     summary="Added movie to container",
                     metadata={"movieId": str(movie_uuid), "containerType": container_type, "changed": changed},
                 )
+                if changed:
+                    emit_container_membership_change(conn, container_uuid)
             return response(
                 {
                     "status": "ok",
@@ -47742,6 +48392,8 @@ def register_routes(flask_app: Flask) -> None:
                     summary="Removed movie from container",
                     metadata={"movieId": str(movie_uuid), "containerType": container_type, "changed": changed},
                 )
+                if changed:
+                    emit_container_membership_change(conn, container_uuid)
             return response(
                 {
                     "status": "ok",
@@ -48009,6 +48661,7 @@ def register_routes(flask_app: Flask) -> None:
                         "badgeLabel": payload["badge_label"],
                     },
                 )
+                emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail}, 201)
 
@@ -48092,6 +48745,7 @@ def register_routes(flask_app: Flask) -> None:
                             "receiverSummary": receiver_summary,
                         },
                     )
+                emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
@@ -48120,6 +48774,7 @@ def register_routes(flask_app: Flask) -> None:
                         "deleted": deleted,
                     },
                 )
+                emit_container_change(conn, container_uuid, operation="delete")
         return response(
             {
                 "status": "ok",
@@ -48184,6 +48839,8 @@ def register_routes(flask_app: Flask) -> None:
                             )
                             changed += cur.rowcount
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+                if changed:
+                    emit_container_membership_change(conn, container_uuid)
         return response(
             {
                 "status": "ok",
@@ -48408,6 +49065,8 @@ def register_routes(flask_app: Flask) -> None:
                     )
                     changed = cur.rowcount
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+                if changed:
+                    emit_container_membership_change(conn, container_uuid)
             detail = container_detail_entity(conn, container_uuid)
         if not detail:
             raise NextApiError("Container not found", 404)
@@ -48456,6 +49115,7 @@ def register_routes(flask_app: Flask) -> None:
                             (index, container_uuid, movie_uuid),
                         )
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+                emit_container_membership_change(conn, container_uuid)
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail})
 
@@ -48973,6 +49633,7 @@ def register_routes(flask_app: Flask) -> None:
                         "badgeLabel": payload["badge_label"],
                     },
                 )
+                emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail}, 201)
 
@@ -49079,6 +49740,7 @@ def register_routes(flask_app: Flask) -> None:
                             "receiverSummary": receiver_summary,
                         },
                     )
+                emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid, actor=actor)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
@@ -49107,6 +49769,7 @@ def register_routes(flask_app: Flask) -> None:
                         "deleted": deleted,
                     },
                 )
+                emit_container_change(conn, container_uuid, operation="delete")
         return response({"status": "ok", "containerId": str(container_uuid), "deleteMembers": delete_members, "deleted": deleted})
 
     @flask_app.get("/api/next/api/v1/stats")
@@ -50429,6 +51092,7 @@ def register_routes(flask_app: Flask) -> None:
                             """,
                             (actor.get("id"), movie_uuid, Jsonb(snapshot)),
                         )
+                emit_watchlist_change(conn, actor.get("id"), movie_uuid, operation="upsert")
                 audit_event(
                     conn,
                     event_type="watchlist.added",
@@ -50454,6 +51118,7 @@ def register_routes(flask_app: Flask) -> None:
                         "DELETE FROM watchlist_items WHERE user_id=%s AND movie_id=%s",
                         (actor.get("id"), movie_uuid),
                     )
+                emit_watchlist_change(conn, actor.get("id"), movie_uuid, operation="delete")
                 audit_event(
                     conn,
                     event_type="watchlist.removed",
@@ -50496,8 +51161,19 @@ def register_routes(flask_app: Flask) -> None:
                         """
                         INSERT INTO watch_history (user_id, movie_id, watched_at, snapshot)
                         VALUES (%s, %s, %s, %s)
+                        RETURNING id
                         """,
                         (actor.get("id"), movie_uuid, watched_at, Jsonb(snapshot)),
+                    )
+                    watch_entry = cur.fetchone()
+                watch_entry_id = watch_entry.get("id") if watch_entry else None
+                if watch_entry_id is not None:
+                    emit_watch_history_change(
+                        conn,
+                        actor.get("id"),
+                        watch_entry_id,
+                        operation="upsert",
+                        movie_id=movie_uuid,
                     )
                 audit_event(
                     conn,
@@ -50529,6 +51205,14 @@ def register_routes(flask_app: Flask) -> None:
                         (entry_uuid, movie_uuid, actor.get("id")),
                     )
                     deleted = int(cur.rowcount or 0)
+                if deleted:
+                    emit_watch_history_change(
+                        conn,
+                        actor.get("id"),
+                        entry_uuid,
+                        operation="delete",
+                        movie_id=movie_uuid,
+                    )
                 audit_event(
                     conn,
                     event_type="watch_history.removed",
@@ -51740,6 +52424,8 @@ def register_routes(flask_app: Flask) -> None:
                 "queuedMetadataRefreshJobs": [str(job.get("id")) for job in queued_jobs],
             },
         )
+        emit_container_change(conn, container_uuid, operation="upsert")
+        emit_container_membership_change(conn, container_uuid)
         return {
             "container": container_detail_entity(conn, container_uuid),
             "movies": imported_movies,
@@ -53839,13 +54525,27 @@ def register_routes(flask_app: Flask) -> None:
                 "supportedEntityTypes": [
                     "movie",
                     "container",
+                    "container_membership",
+                    "movie_identifier",
                     "metadata_plugin",
                     "setting",
                 ],
                 "supportedMutations": [
                     "movie.upsert",
                     "movie.delete",
+                    "container.upsert",
+                    "container.delete",
+                    "containerMovie.upsert",
+                    "containerMovie.delete",
                 ],
+                "userEntityTypes": [
+                    "watchlist",
+                    "watch_history",
+                ],
+                "userSync": {
+                    "bootstrap": "/api/next/sync/user/bootstrap",
+                    "delta": "/api/next/sync/user/delta",
+                },
             }
         )
 
@@ -53862,6 +54562,12 @@ def register_routes(flask_app: Flask) -> None:
             payload = {
                 "movies": all_movie_entities(conn, limit=limit),
                 "containers": all_container_entities(conn, limit=limit),
+                "containerMembership": collection_container_membership_entities(
+                    conn, limit=min(max(limit * 20, 1000), 200000)
+                ),
+                "movieIdentifiers": all_movie_identifier_entities(
+                    conn, limit=min(max(limit * 20, 1000), 200000)
+                ),
                 "moviePeople": movie_people,
                 "movieCast": [credit for credit in movie_people if credit.get("department") == "cast"],
                 "movieCrew": [credit for credit in movie_people if credit.get("department") == "crew"],
@@ -53977,6 +54683,75 @@ def register_routes(flask_app: Flask) -> None:
                 "baseRevision": base_revision,
                 "currentRevision": revision,
                 "results": results,
+            }
+        )
+
+    @flask_app.get("/api/next/sync/user/bootstrap")
+    def sync_user_bootstrap():
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            revision = current_user_revision(conn, user_id)
+            payload = {
+                "watchlist": all_watchlist_sync_entities(conn, user_id),
+                "watchHistory": all_watch_history_sync_entities(conn, user_id),
+            }
+        return response(
+            {
+                "status": "ok",
+                "currentRevision": revision,
+                "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "payload": payload,
+            }
+        )
+
+    @flask_app.get("/api/next/sync/user/delta")
+    def sync_user_delta():
+        since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
+        limit = parse_int_arg("limit", 500, minimum=1, maximum=1000)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            revision = current_user_revision(conn, user_id)
+            if not table_exists(conn, "user_sync_changes"):
+                return response(
+                    {
+                        "status": "ok",
+                        "since": since,
+                        "currentRevision": revision,
+                        "changes": [],
+                        "hasMore": False,
+                        "nextSince": revision,
+                    }
+                )
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        revision,
+                        entity_type,
+                        entity_id,
+                        operation,
+                        payload,
+                        created_at
+                    FROM user_sync_changes
+                    WHERE user_id=%s AND revision > %s
+                    ORDER BY revision ASC
+                    LIMIT %s
+                    """,
+                    (user_id, since, limit),
+                )
+                changes = cur.fetchall()
+        next_since = int(changes[-1]["revision"]) if changes else since
+        return response(
+            {
+                "status": "ok",
+                "since": since,
+                "currentRevision": revision,
+                "changes": changes,
+                "hasMore": bool(changes and next_since < revision),
+                "nextSince": revision if not changes else next_since,
             }
         )
 
