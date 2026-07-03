@@ -3034,6 +3034,45 @@ def record_sync_change(conn, movie_id: UUID, payload: dict[str, Any]) -> int:
     return revision
 
 
+def record_movie_identifier_change(conn, movie_id: UUID) -> int:
+    """Emit a dedicated ``movie_identifier`` upsert delta for one movie.
+
+    Carries the movie's full identifier set (same row shape as the sync
+    ``movieIdentifiers`` bootstrap array) so an offline client replaces its
+    local identifiers — including the ``movievault_26`` link — in one change.
+    No-op when the sync tables are absent.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    if not table_exists(conn, "movie_identifiers"):
+        return 0
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT provider_id, identifier_type, identifier, created_at
+            FROM movie_identifiers
+            WHERE movie_id=%s
+            ORDER BY provider_id, identifier_type, identifier
+            """,
+            (movie_id,),
+        )
+        identifiers = cur.fetchall()
+    revision = next_revision(conn)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO sync_changes (revision, entity_type, entity_id, operation, payload)
+            VALUES (%s, 'movie_identifier', %s, 'upsert', %s)
+            """,
+            (
+                revision,
+                str(movie_id),
+                Jsonb(json_ready({"movieId": str(movie_id), "identifiers": identifiers})),
+            ),
+        )
+    return revision
+
+
 def media_url_fingerprint(kind: str, variant: str, source_url: str) -> str:
     return hashlib.sha256(f"{kind}:{variant}:{source_url}".encode("utf-8")).hexdigest()
 
@@ -3704,6 +3743,8 @@ def apply_metadata_proposal(
             "fieldDecisions": proposal.get("fieldDecisions") or [],
         },
     )
+    if identifiers:
+        record_movie_identifier_change(conn, movie_uuid)
     applied_payload = {
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
