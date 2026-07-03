@@ -1204,6 +1204,7 @@ class MovieVault26SignedContributionTests(unittest.TestCase):
         # Both attempts sign-then-send identical bytes.
         self.assertEqual(posts[0]["data"], posts[1]["data"])
 
+
 class MovieVault26ClientVersionGateTests(unittest.TestCase):
     def test_bootstrap_request_body_advertises_client_version(self):
         result = movievault_26.connection_request(
