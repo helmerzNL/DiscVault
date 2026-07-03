@@ -6593,6 +6593,7 @@ def ui_preview_html(
         "import": "M12 2A10 10 0 1 1 2 12A10 10 0 0 1 12 2M17 11H13V7H11V11H7V13H11V17H13V13H17V11Z",
         "notifications": "M12 22A2.5 2.5 0 0 0 14.5 19.5H9.5A2.5 2.5 0 0 0 12 22M18 16V11A6 6 0 0 0 13 5.1V4A1 1 0 0 0 11 4V5.1A6 6 0 0 0 6 11V16L4 18V19H20V18L18 16Z",
         "profile": "M12 4A4 4 0 1 1 8 8A4 4 0 0 1 12 4M12 14C16.42 14 20 15.79 20 18V20H4V18C4 15.79 7.58 14 12 14Z",
+        "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
     }
 
     def nav_icon(name: str) -> str:
@@ -8166,6 +8167,170 @@ def ui_preview_html(
       grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
       gap: 14px;
     }
+    .wishlist-add-form {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .wishlist-add-fields {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .wishlist-add-fields input {
+      flex: 1 1 140px;
+      min-width: 0;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      color: var(--text);
+      font: inherit;
+    }
+    .wishlist-add-fields button {
+      flex: 0 0 auto;
+    }
+    .lists-simple-list {
+      display: grid;
+      gap: 10px;
+    }
+    .list-simple-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      box-shadow: var(--shadow-soft);
+      padding: 12px 14px;
+    }
+    .list-simple-body {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .list-simple-title {
+      font-weight: 600;
+    }
+    .list-simple-meta {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .list-simple-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .list-simple-actions button {
+      padding: 6px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      color: var(--text);
+      font-size: .8rem;
+      cursor: pointer;
+    }
+    .list-simple-actions button:hover {
+      border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+    }
+    .list-simple-actions button.danger {
+      color: var(--red);
+    }
+    .tags-list .list-simple-card {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+    .tag-swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex: 0 0 auto;
+    }
+    .loan-overdue {
+      color: var(--red);
+      font-weight: 600;
+    }
+    .stats-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      box-shadow: var(--shadow-soft);
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-card strong {
+      display: block;
+      font-size: 1.9rem;
+      line-height: 1.1;
+    }
+    .stat-card span {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .stats-sections {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+      gap: 20px;
+    }
+    .stats-block {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      padding: 16px;
+    }
+    .stats-block h2 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+    }
+    .stats-bars {
+      display: grid;
+      gap: 10px;
+    }
+    .stats-bar-row {
+      display: grid;
+      gap: 4px;
+    }
+    .stats-bar-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: .82rem;
+    }
+    .stats-bar-head span:first-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .stats-bar-head span:last-child {
+      color: var(--muted);
+      flex: 0 0 auto;
+    }
+    .stats-bar-track {
+      height: 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--line) 70%, transparent);
+      overflow: hidden;
+    }
+    .stats-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+    .stats-empty {
+      color: var(--muted);
+      font-size: .82rem;
+      margin: 0;
+    }
     .detail-card-actions {
       display: flex;
       flex-wrap: wrap;
@@ -8603,6 +8768,65 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--muted) 16%, transparent);
       color: var(--muted);
       cursor: pointer;
+    }
+    .movie-tags-section,
+    .movie-loan-section {
+      margin-top: 16px;
+      display: grid;
+      gap: 10px;
+    }
+    .detail-card-head.compact {
+      margin: 0;
+    }
+    .detail-card-head.compact h4 {
+      margin: 0;
+      font-size: .95rem;
+    }
+    .movie-tags-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .movie-tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 30px;
+      border: 1px solid color-mix(in srgb, var(--tag-color, var(--line)) 60%, var(--line));
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--tag-color, var(--bg-solid)) 14%, var(--bg-solid));
+      color: var(--text);
+      padding: 0 8px 0 12px;
+      font-size: .82rem;
+      font-weight: 700;
+    }
+    .movie-tag-chip button {
+      width: 20px;
+      height: 20px;
+      border: 0;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--muted) 16%, transparent);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .movie-tag-add,
+    .movie-loan-add {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .movie-tag-add input,
+    .movie-loan-add input {
+      flex: 1 1 160px;
+      min-width: 0;
+    }
+    .movie-loan-active {
+      display: grid;
+      gap: 8px;
+    }
+    .list-pill-button.danger {
+      color: var(--danger, #d9534f);
     }
     .notifications-view.hidden {
       display: none;
@@ -14182,6 +14406,7 @@ def ui_preview_html(
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span class="nav-item-label">""" + nav_icon("library") + """<span data-next-i18n="uiPreview.navLibrary">Library</span></span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label">""" + nav_icon("lists") + """<span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span><small id="navStatsState">-</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
@@ -14459,6 +14684,14 @@ def ui_preview_html(
               <strong id="listsWatchedCount">0</strong>
               <span data-next-i18n="lists.watched">Watched</span>
             </div>
+            <div class="list-count-pill">
+              <strong id="listsWishlistCount">0</strong>
+              <span data-next-i18n="lists.wishlist">Wishlist</span>
+            </div>
+            <div class="list-count-pill">
+              <strong id="listsLoansCount">0</strong>
+              <span data-next-i18n="lists.loans">On loan</span>
+            </div>
           </div>
         </section>
         <section class="detail-card full lists-panel">
@@ -14468,6 +14701,9 @@ def ui_preview_html(
               <div class="detail-submenu" role="tablist" aria-label="Lists" data-next-i18n-aria="uiPreview.navLists">
                 <button type="button" class="active" data-lists-tab="watchlist" data-next-i18n="lists.watchlist">Watchlist</button>
                 <button type="button" data-lists-tab="watched" data-next-i18n="lists.watched">Watched</button>
+                <button type="button" data-lists-tab="wishlist" data-next-i18n="lists.wishlist">Wishlist</button>
+                <button type="button" data-lists-tab="tags" data-next-i18n="lists.tags">Tags</button>
+                <button type="button" data-lists-tab="loans" data-next-i18n="lists.loans">On loan</button>
               </div>
               <div class="segmented compact view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
                 <button type="button" class="active" data-lists-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
@@ -14478,8 +14714,56 @@ def ui_preview_html(
           </div>
           <div class="lists-grid" id="listsWatchlistGrid"></div>
           <div class="lists-history hidden" id="listsWatchedList"></div>
+          <div class="lists-wishlist hidden" id="listsWishlistPanel">
+            <form class="wishlist-add-form" id="wishlistAddForm" autocomplete="off">
+              <div class="wishlist-add-fields">
+                <input type="text" id="wishlistAddTitle" required data-next-i18n-placeholder="lists.wishlistTitlePlaceholder" placeholder="Title">
+                <input type="text" id="wishlistAddYear" inputmode="numeric" data-next-i18n-placeholder="lists.wishlistYearPlaceholder" placeholder="Year">
+                <input type="text" id="wishlistAddFormat" data-next-i18n-placeholder="lists.wishlistFormatPlaceholder" placeholder="Format">
+                <input type="text" id="wishlistAddBarcode" data-next-i18n-placeholder="lists.wishlistBarcodePlaceholder" placeholder="Barcode">
+                <button type="submit" class="primary-button" data-next-i18n="lists.wishlistAdd">Add to wishlist</button>
+              </div>
+              <p class="form-message" id="wishlistAddMessage" role="status"></p>
+            </form>
+            <div class="lists-simple-list" id="listsWishlistList"></div>
+          </div>
+          <div class="lists-tags-panel hidden" id="listsTagsPanel">
+            <div class="lists-simple-list tags-list" id="listsTagsList"></div>
+          </div>
+          <div class="lists-loans-panel hidden" id="listsLoansPanel">
+            <div class="lists-simple-list loans-list" id="listsLoansList"></div>
+          </div>
           <div class="preview-empty hidden" id="listsEmptyMessage"></div>
         </section>
+      </section>
+      <section class="statistics-view hidden" id="statisticsView" aria-labelledby="statisticsPageTitle">
+        <section class="lists-hero">
+          <div>
+            <p class="eyebrow" data-next-i18n="stats.eyebrow">Your collection</p>
+            <h1 id="statisticsPageTitle" data-next-i18n="stats.title">Statistics</h1>
+            <p class="lists-subtitle" data-next-i18n="stats.subtitle">A breakdown of your personal collection and activity.</p>
+          </div>
+        </section>
+        <div class="stats-cards" id="statsCards"></div>
+        <div class="stats-sections">
+          <div class="stats-block">
+            <h2 data-next-i18n="stats.byFormat">By format</h2>
+            <div class="stats-bars" id="statsByFormat"></div>
+          </div>
+          <div class="stats-block">
+            <h2 data-next-i18n="stats.byGenre">By genre</h2>
+            <div class="stats-bars" id="statsByGenre"></div>
+          </div>
+          <div class="stats-block">
+            <h2 data-next-i18n="stats.byDecade">By decade</h2>
+            <div class="stats-bars" id="statsByDecade"></div>
+          </div>
+          <div class="stats-block">
+            <h2 data-next-i18n="stats.byRating">By rating</h2>
+            <div class="stats-bars" id="statsByRating"></div>
+          </div>
+        </div>
+        <div class="preview-empty hidden" id="statsEmptyMessage"></div>
       </section>
       <section class="notifications-view hidden" id="notificationsView" aria-labelledby="notificationsPageTitle">
         <section class="lists-hero">
@@ -14894,6 +15178,28 @@ def ui_preview_html(
               </div>
             </div>
             <div class="watch-history-pills" id="movieWatchHistoryPills"></div>
+            <div class="movie-tags-section" id="movieTagsSection">
+              <div class="detail-card-head compact">
+                <h4 data-next-i18n="lists.tagsTitle">Tags</h4>
+              </div>
+              <div class="movie-tags-chips" id="movieTagsChips"></div>
+              <form class="movie-tag-add" id="movieTagAddForm" autocomplete="off">
+                <input type="text" id="movieTagAddInput" data-next-i18n-placeholder="lists.tagAddPlaceholder" placeholder="Add a tag">
+                <button type="submit" class="secondary-button" data-next-i18n="lists.tagAdd">Add tag</button>
+              </form>
+            </div>
+            <div class="movie-loan-section" id="movieLoanSection">
+              <div class="detail-card-head compact">
+                <h4 data-next-i18n="lists.loanTitle">Loan</h4>
+              </div>
+              <div class="movie-loan-status" id="movieLoanStatus"></div>
+              <form class="movie-loan-add hidden" id="movieLoanAddForm" autocomplete="off">
+                <input type="text" id="movieLoanBorrower" data-next-i18n-placeholder="lists.loanBorrowerPlaceholder" placeholder="Borrower name">
+                <input type="date" id="movieLoanDue" aria-label="Due date" data-next-i18n-aria="lists.loanDue">
+                <button type="submit" class="secondary-button" data-next-i18n="lists.loanLend">Lend disc</button>
+              </form>
+              <p class="form-message" id="movieLoanMessage"></p>
+            </div>
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.release">Release</h3>
@@ -16181,6 +16487,10 @@ def ui_preview_html(
       """ + nav_icon("lists") + """
       <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
+    <button type="button" class="mobile-tab" data-app-route="statistics">
+      """ + nav_icon("statistics") + """
+      <span data-next-i18n="uiPreview.navStatistics">Statistics</span>
+    </button>
     <button type="button" class="mobile-tab mobile-tab-primary" data-app-route="import">
       """ + nav_icon("import") + """
       <span data-next-i18n="importCenter.title">Import</span>
@@ -16231,7 +16541,7 @@ def ui_preview_html(
     let activePersonPayload = null;
     let personReturnRoute = null;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
-    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], counts: {}};
+    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], counts: {}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
@@ -17090,6 +17400,7 @@ def ui_preview_html(
       const canUseCollectorPreferences = hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
       setVisible('[data-app-route="import"]', hasAnyPermission(APP_PERMISSION_GROUPS.importCenter));
       setVisible('[data-app-route="lists"]', hasPermission("watchlist.manage"));
+      setVisible('[data-app-route="statistics"]', hasPermission("watchlist.manage"));
       renderAppAdminVisibility();
       setElementVisible(document.querySelector('[data-preferences-tab="collectors"]'), canUseCollectorPreferences);
       if (!canUseCollectorPreferences && activePreferenceTab === "collectors") {
@@ -18330,6 +18641,8 @@ def ui_preview_html(
         collection_health_dashboard: ["appAdmin.featureCollectionHealthDashboard", "Collection Health Dashboard"],
         import_intelligence_v2: ["appAdmin.featureImportIntelligenceV2", "Import Intelligence v2"],
         lending_center: ["appAdmin.featureLendingCenter", "Lending Center"],
+        wishlist_center: ["appAdmin.featureWishlistCenter", "Wishlist"],
+        statistics_dashboard: ["appAdmin.featureStatisticsDashboard", "Statistics Dashboard"],
         plugin_marketplace_ui: ["appAdmin.featurePluginMarketplaceUi", "Plugin Marketplace UI"],
         personal_lists_v2: ["appAdmin.featurePersonalListsV2", "Personal Lists v2"],
         offline_mode_v2: ["appAdmin.featureOfflineModeV2", "Offline Mode v2"],
@@ -18395,6 +18708,8 @@ def ui_preview_html(
         collection_health_dashboard: ["appAdmin.featureCollectionHealthDashboardHelp", "Surfaces missing artwork, barcodes, empty containers and duplicate signals in one operations view."],
         import_intelligence_v2: ["appAdmin.featureImportIntelligenceV2Help", "Classifies imported rows, detects box-sets, surfaces provider coverage and flags conflicts before saving."],
         lending_center: ["appAdmin.featureLendingCenterHelp", "Prepares the future lending list without exposing it to roles that cannot view personal lists."],
+        wishlist_center: ["appAdmin.featureWishlistCenterHelp", "Tracks discs the user wants to acquire as metadata-only entries that sync to the native client and can be linked once owned."],
+        statistics_dashboard: ["appAdmin.featureStatisticsDashboardHelp", "Aggregates the caller's visible collection, watch history, wishlist and loans into format, decade, genre and rating breakdowns."],
         plugin_marketplace_ui: ["appAdmin.featurePluginMarketplaceUiHelp", "Groups plugin types, packages, health and lifecycle actions into a marketplace-style admin surface."],
         personal_lists_v2: ["appAdmin.featurePersonalListsV2Help", "Keeps Watchlist, Watched, future lending and source sync in one Apple-native lists model."],
         offline_mode_v2: ["appAdmin.featureOfflineModeV2Help", "Keeps the PWA shell, cached collection reads and queued write actions visible as operational signals."],
@@ -23288,6 +23603,140 @@ def ui_preview_html(
             `).join("")
           : `<span class="import-source-meta">${escapeHtml(tNext("lists.noWatchHistoryForMovie", "No watched dates for this film yet."))}</span>`;
       }
+      renderMovieTags(state);
+      renderMovieLoan(state);
+    }
+    function renderMovieTags(state) {
+      const chips = document.getElementById("movieTagsChips");
+      if (!chips) return;
+      const tags = Array.isArray(state.tags) ? state.tags : [];
+      chips.innerHTML = tags.length
+        ? tags.map((tag) => `
+            <span class="movie-tag-chip"${tag.color ? ` style="--tag-color:${escapeHtml(tag.color)}"` : ""}>
+              ${escapeHtml(tag.name || tag.slug || "")}
+              <button type="button" data-detach-tag="${escapeHtml(tag.id)}" aria-label="${escapeHtml(tNext("lists.tagRemove", "Remove tag"))}">×</button>
+            </span>
+          `).join("")
+        : `<span class="import-source-meta">${escapeHtml(tNext("lists.tagsEmpty", "No tags on this film yet."))}</span>`;
+    }
+    function renderMovieLoan(state) {
+      const statusNode = document.getElementById("movieLoanStatus");
+      const addForm = document.getElementById("movieLoanAddForm");
+      const loan = state.activeLoan;
+      if (statusNode) {
+        if (loan) {
+          const borrower = loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+          const due = loan.dueAt ? `${tNext("lists.loanDue", "Due")} ${escapeHtml(formatAppDate(loan.dueAt))}` : "";
+          statusNode.innerHTML = `
+            <div class="movie-loan-active">
+              <span>${escapeHtml(tNext("lists.loanTo", "Lent to"))} <strong>${escapeHtml(borrower)}</strong>${due ? ` · ${due}` : ""}</span>
+              <div class="button-row compact">
+                <button type="button" class="secondary-button" data-loan-return="${escapeHtml(loan.id)}" data-next-i18n="lists.loanMarkReturned">Mark returned</button>
+                <button type="button" class="list-pill-button danger" data-loan-delete="${escapeHtml(loan.id)}" data-next-i18n="common.delete">Delete</button>
+              </div>
+            </div>
+          `;
+        } else {
+          statusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanNone", "This disc is not on loan."))}</span>`;
+        }
+      }
+      if (addForm) addForm.classList.toggle("hidden", !!loan);
+    }
+    async function attachActiveMovieTag(name) {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      const clean = String(name || "").trim();
+      if (!clean) return;
+      setMovieDetailMessage(tNext("lists.tagAdding", "Adding tag..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/tags`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name: clean})
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        const input = document.getElementById("movieTagAddInput");
+        if (input) input.value = "";
+        setMovieDetailMessage(tNext("lists.tagAdded", "Tag added."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function detachActiveMovieTag(tagId) {
+      if (!activeDetailMovieId || !tagId || !hasPermission("watchlist.manage")) return;
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/tags/${encodeURIComponent(tagId)}`, {method: "DELETE"});
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(tNext("lists.tagRemoved", "Tag removed."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function setMovieLoanMessage(text, tone) {
+      const node = document.getElementById("movieLoanMessage");
+      if (!node) return;
+      node.textContent = text || "";
+      node.className = "form-message" + (tone ? " " + tone : "");
+    }
+    async function lendActiveMovie(borrowerName, dueAt) {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      const borrower = String(borrowerName || "").trim();
+      if (!borrower) {
+        setMovieLoanMessage(tNext("lists.loanBorrowerRequired", "Enter a borrower name."), "bad");
+        return;
+      }
+      const body = {borrowerName: borrower};
+      if (dueAt) body.dueAt = dueAt;
+      setMovieLoanMessage(tNext("lists.loanLending", "Recording loan..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/loans`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        const borrowerInput = document.getElementById("movieLoanBorrower");
+        const dueInput = document.getElementById("movieLoanDue");
+        if (borrowerInput) borrowerInput.value = "";
+        if (dueInput) dueInput.value = "";
+        setMovieLoanMessage(tNext("lists.loanRecorded", "Loan recorded."), "good");
+      } catch (error) {
+        setMovieLoanMessage(error.message || String(error), "bad");
+      }
+    }
+    async function refreshActiveMovieUserState() {
+      if (!activeDetailMovieId) return;
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/watched`);
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+      } catch (error) {
+        /* ignore refresh errors */
+      }
+    }
+    async function returnActiveMovieLoan(loanId) {
+      if (!loanId || !hasPermission("watchlist.manage")) return;
+      setMovieLoanMessage(tNext("lists.loanReturning", "Marking returned..."));
+      try {
+        await authApiJson(`/api/next/loans/${encodeURIComponent(loanId)}/return`, {method: "POST"});
+        await refreshActiveMovieUserState();
+        setMovieLoanMessage(tNext("lists.loanMarkedReturned", "Loan marked returned."), "good");
+      } catch (error) {
+        setMovieLoanMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteActiveMovieLoan(loanId) {
+      if (!loanId || !hasPermission("watchlist.manage")) return;
+      setMovieLoanMessage(tNext("lists.loanDeleting", "Deleting loan..."));
+      try {
+        await authApiJson(`/api/next/loans/${encodeURIComponent(loanId)}`, {method: "DELETE"});
+        await refreshActiveMovieUserState();
+        setMovieLoanMessage(tNext("lists.loanDeleted", "Loan deleted."), "good");
+      } catch (error) {
+        setMovieLoanMessage(error.message || String(error), "bad");
+      }
     }
     function updateMovieListCache(movieId, userState) {
       movies = (movies || []).map((movie) => {
@@ -28026,14 +28475,177 @@ def ui_preview_html(
         </button>
       `;
     }
+    function wishlistItemHtml(item) {
+      const meta = [item.year, physicalFormatLabel(item.format), item.barcode].filter(Boolean).join(" / ");
+      const acquired = !!item.acquiredAt;
+      return `
+        <div class="list-simple-card">
+          <div class="list-simple-body">
+            <span class="list-simple-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
+            <span class="list-simple-meta">${escapeHtml(meta)}</span>
+            ${item.note ? `<span class="list-simple-meta">${escapeHtml(item.note)}</span>` : ""}
+          </div>
+          <div class="list-simple-actions">
+            ${acquired
+              ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
+              : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+            <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+          </div>
+        </div>
+      `;
+    }
+    function tagRowHtml(tag) {
+      const count = tag.movieCount || 0;
+      const color = tag.color || "";
+      return `
+        <div class="list-simple-card">
+          <span class="tag-swatch"${color ? ` style="background:${escapeHtml(color)}"` : ""}></span>
+          <div class="list-simple-body">
+            <span class="list-simple-title">${escapeHtml(tag.name || "")}</span>
+            <span class="list-simple-meta">${escapeHtml(count)} ${escapeHtml(tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies"))}</span>
+          </div>
+          <div class="list-simple-actions">
+            <button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>
+          </div>
+        </div>
+      `;
+    }
+    function loanRowHtml(loan) {
+      const snapshot = loan.snapshot || {};
+      const title = snapshot.title || loan.title || tNext("common.untitled", "Untitled");
+      const borrower = loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+      const overdue = !loan.returned && loan.dueAt && new Date(loan.dueAt) < new Date();
+      const metaParts = [
+        `${tNext("lists.loanTo", "To")}: ${borrower}`,
+        loan.loanedAt ? `${tNext("lists.loanedOn", "Loaned")}: ${formatAppDate(loan.loanedAt)}` : "",
+        loan.dueAt ? `${tNext("lists.loanDue", "Due")}: ${formatAppDate(loan.dueAt)}` : "",
+        loan.returned && loan.returnedAt ? `${tNext("lists.loanReturned", "Returned")}: ${formatAppDate(loan.returnedAt)}` : ""
+      ].filter(Boolean);
+      return `
+        <div class="list-simple-card">
+          <div class="list-simple-body">
+            <span class="list-simple-title">${escapeHtml(title)}</span>
+            <span class="list-simple-meta ${overdue ? "loan-overdue" : ""}">${escapeHtml(metaParts.join(" / "))}</span>
+            ${loan.note ? `<span class="list-simple-meta">${escapeHtml(loan.note)}</span>` : ""}
+          </div>
+          <div class="list-simple-actions">
+            ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
+            <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+          </div>
+        </div>
+      `;
+    }
+    function bindListsSimpleActions() {
+      document.querySelectorAll("[data-wishlist-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => removeWishlistItem(btn.dataset.wishlistRemove));
+      });
+      document.querySelectorAll("[data-wishlist-acquire]").forEach((btn) => {
+        btn.addEventListener("click", () => acquireWishlistItem(btn.dataset.wishlistAcquire));
+      });
+      document.querySelectorAll("[data-tag-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => deleteListTag(btn.dataset.tagRemove));
+      });
+      document.querySelectorAll("[data-loan-return]").forEach((btn) => {
+        btn.addEventListener("click", () => returnLoanItem(btn.dataset.loanReturn));
+      });
+      document.querySelectorAll("[data-loan-remove]").forEach((btn) => {
+        btn.addEventListener("click", () => deleteLoanItem(btn.dataset.loanRemove));
+      });
+    }
+    function setWishlistMessage(text, tone) {
+      const node = document.getElementById("wishlistAddMessage");
+      if (!node) return;
+      node.textContent = text || "";
+      node.className = `form-message ${tone || ""}`.trim();
+    }
+    async function submitWishlistAdd(event) {
+      if (event) event.preventDefault();
+      const titleNode = document.getElementById("wishlistAddTitle");
+      const title = (titleNode?.value || "").trim();
+      if (!title) {
+        setWishlistMessage(tNext("lists.wishlistTitleRequired", "Title is required."), "bad");
+        return;
+      }
+      const yearRaw = (document.getElementById("wishlistAddYear")?.value || "").trim();
+      const body = {
+        title,
+        format: (document.getElementById("wishlistAddFormat")?.value || "").trim() || null,
+        barcode: (document.getElementById("wishlistAddBarcode")?.value || "").trim() || null
+      };
+      const yearNum = parseInt(yearRaw, 10);
+      if (!Number.isNaN(yearNum)) body.year = yearNum;
+      setWishlistMessage(tNext("lists.wishlistAdding", "Adding..."));
+      try {
+        await authApiJson("/api/next/lists/wishlist", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+        ["wishlistAddTitle", "wishlistAddYear", "wishlistAddFormat", "wishlistAddBarcode"].forEach((fid) => {
+          const node = document.getElementById(fid);
+          if (node) node.value = "";
+        });
+        setWishlistMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        await loadListsView(true);
+      } catch (error) {
+        setWishlistMessage(error.message || String(error), "bad");
+      }
+    }
+    async function removeWishlistItem(id) {
+      if (!id) return;
+      try {
+        await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id), {method: "DELETE"});
+        await loadListsView(true);
+      } catch (error) {
+        setWishlistMessage(error.message || String(error), "bad");
+      }
+    }
+    async function acquireWishlistItem(id) {
+      if (!id) return;
+      try {
+        await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id) + "/acquire", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({})});
+        await loadListsView(true);
+      } catch (error) {
+        setWishlistMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteListTag(id) {
+      if (!id) return;
+      try {
+        await authApiJson("/api/next/tags/" + encodeURIComponent(id), {method: "DELETE"});
+        await loadListsView(true);
+      } catch (error) {
+        setWishlistMessage(error.message || String(error), "bad");
+      }
+    }
+    async function returnLoanItem(id) {
+      if (!id) return;
+      try {
+        await authApiJson("/api/next/loans/" + encodeURIComponent(id) + "/return", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({})});
+        await loadListsView(true);
+      } catch (error) {
+        setWishlistMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteLoanItem(id) {
+      if (!id) return;
+      try {
+        await authApiJson("/api/next/loans/" + encodeURIComponent(id), {method: "DELETE"});
+        await loadListsView(true);
+      } catch (error) {
+        setWishlistMessage(error.message || String(error), "bad");
+      }
+    }
     function updateListsCounts(counts = listsState.counts || {}) {
       const watchlistCount = counts.watchlist ?? (listsState.watchlist || []).length;
       const watchedCount = counts.watchedMovies ?? counts.watchHistory ?? (listsState.watched || []).length;
+      const wishlistCount = counts.wishlist ?? (listsState.wishlist || []).length;
+      const loansCount = counts.activeLoans ?? (listsState.loans || []).filter((loan) => !loan.returned).length;
       const watchNode = document.getElementById("listsWatchlistCount");
       const watchedNode = document.getElementById("listsWatchedCount");
+      const wishlistNode = document.getElementById("listsWishlistCount");
+      const loansNode = document.getElementById("listsLoansCount");
       const navNode = document.getElementById("navListCount");
       if (watchNode) watchNode.textContent = String(watchlistCount || 0);
       if (watchedNode) watchedNode.textContent = String(watchedCount || 0);
+      if (wishlistNode) wishlistNode.textContent = String(wishlistCount || 0);
+      if (loansNode) loansNode.textContent = String(loansCount || 0);
       if (navNode) navNode.textContent = String(watchlistCount || 0);
     }
     function renderListsView() {
@@ -28047,9 +28659,19 @@ def ui_preview_html(
       });
       const watchlistGrid = document.getElementById("listsWatchlistGrid");
       const watchedList = document.getElementById("listsWatchedList");
+      const wishlistPanel = document.getElementById("listsWishlistPanel");
+      const tagsPanel = document.getElementById("listsTagsPanel");
+      const loansPanel = document.getElementById("listsLoansPanel");
       const empty = document.getElementById("listsEmptyMessage");
-      if (watchlistGrid) watchlistGrid.classList.toggle("hidden", listsState.active !== "watchlist");
-      if (watchedList) watchedList.classList.toggle("hidden", listsState.active !== "watched");
+      const active = listsState.active;
+      const isMovieTab = active === "watchlist" || active === "watched";
+      const viewModeControl = document.getElementById("listsViewModeControl");
+      if (viewModeControl) viewModeControl.classList.toggle("hidden", !isMovieTab);
+      if (watchlistGrid) watchlistGrid.classList.toggle("hidden", active !== "watchlist");
+      if (watchedList) watchedList.classList.toggle("hidden", active !== "watched");
+      if (wishlistPanel) wishlistPanel.classList.toggle("hidden", active !== "wishlist");
+      if (tagsPanel) tagsPanel.classList.toggle("hidden", active !== "tags");
+      if (loansPanel) loansPanel.classList.toggle("hidden", active !== "loans");
       updateListsCounts(listsState.counts);
       const renderRows = (rows) => {
         if (listsViewMode === "detail") return watchlistDetailTableHtml(rows || []);
@@ -28065,19 +28687,41 @@ def ui_preview_html(
       };
       configureListNode(watchlistGrid);
       configureListNode(watchedList, true);
-      if (listsState.active === "watchlist") {
+      if (active === "watchlist") {
         if (watchlistGrid) watchlistGrid.innerHTML = renderRows(listsState.watchlist || []);
         if (empty) {
           empty.textContent = tNext("lists.emptyWatchlist", "Your watchlist is empty.");
           empty.classList.toggle("hidden", !!(listsState.watchlist || []).length);
         }
-      } else {
+      } else if (active === "watched") {
         if (watchedList) watchedList.innerHTML = watchedGroupsHtml(listsState.watched || []);
         if (empty) {
           empty.textContent = tNext("lists.emptyWatched", "No watched films yet.");
           empty.classList.toggle("hidden", !!(listsState.watched || []).length);
         }
+      } else if (active === "wishlist") {
+        const list = document.getElementById("listsWishlistList");
+        if (list) list.innerHTML = (listsState.wishlist || []).map(wishlistItemHtml).join("");
+        if (empty) {
+          empty.textContent = tNext("lists.emptyWishlist", "Your wishlist is empty.");
+          empty.classList.toggle("hidden", !!(listsState.wishlist || []).length);
+        }
+      } else if (active === "tags") {
+        const list = document.getElementById("listsTagsList");
+        if (list) list.innerHTML = (listsState.tags || []).map(tagRowHtml).join("");
+        if (empty) {
+          empty.textContent = tNext("lists.emptyTags", "You have no tags yet.");
+          empty.classList.toggle("hidden", !!(listsState.tags || []).length);
+        }
+      } else if (active === "loans") {
+        const list = document.getElementById("listsLoansList");
+        if (list) list.innerHTML = (listsState.loans || []).map(loanRowHtml).join("");
+        if (empty) {
+          empty.textContent = tNext("lists.emptyLoans", "No discs are currently on loan.");
+          empty.classList.toggle("hidden", !!(listsState.loans || []).length);
+        }
       }
+      bindListsSimpleActions();
       document.querySelectorAll("[data-list-movie]").forEach((button) => {
         button.addEventListener("click", () => {
           if (button.disabled || button.getAttribute("aria-disabled") === "true") return;
@@ -28106,12 +28750,103 @@ def ui_preview_html(
         empty.classList.remove("hidden");
       }
       try {
-        const payload = await authApiJson("/api/next/lists?limit=500");
+        const [payload, wishlistPayload, tagsPayload, loansPayload] = await Promise.all([
+          authApiJson("/api/next/lists?limit=500"),
+          authApiJson("/api/next/lists/wishlist").catch(() => ({items: []})),
+          authApiJson("/api/next/tags").catch(() => ({tags: []})),
+          authApiJson("/api/next/loans?status=all").catch(() => ({loans: []}))
+        ]);
         listsState.watchlist = payload.watchlist || [];
         listsState.watched = payload.watched || [];
+        listsState.wishlist = wishlistPayload.items || [];
+        listsState.tags = tagsPayload.tags || [];
+        listsState.loans = loansPayload.loans || [];
         listsState.counts = payload.counts || {};
         listsState.loaded = true;
         renderListsView();
+      } catch (error) {
+        if (empty) {
+          empty.textContent = error.message || String(error);
+          empty.classList.remove("hidden");
+        }
+      }
+    }
+    const statsState = {loaded: false, data: null};
+    function statsBarsHtml(rows) {
+      const items = (rows || []).filter((row) => (row.count || 0) > 0);
+      if (!items.length) {
+        return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
+      }
+      const max = items.reduce((acc, row) => Math.max(acc, row.count || 0), 0) || 1;
+      return items
+        .map((row) => {
+          const pct = Math.round(((row.count || 0) / max) * 100);
+          return `
+            <div class="stats-bar-row">
+              <div class="stats-bar-head">
+                <span>${escapeHtml(row.label || tNext("common.untitled", "Unknown"))}</span>
+                <span>${escapeHtml(row.count || 0)}</span>
+              </div>
+              <div class="stats-bar-track"><div class="stats-bar-fill" style="width:${pct}%"></div></div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+    function renderStatisticsView() {
+      const data = statsState.data;
+      const empty = document.getElementById("statsEmptyMessage");
+      const cards = document.getElementById("statsCards");
+      if (!data) {
+        if (cards) cards.innerHTML = "";
+        return;
+      }
+      const watch = data.watch || {};
+      const loans = data.loans || {};
+      const cardDefs = [
+        {label: tNext("stats.cardMovies", "Movies"), value: data.totalMovies || 0},
+        {label: tNext("stats.cardWatched", "Watch events"), value: watch.total || 0},
+        {label: tNext("stats.cardThisYear", "Watched this year"), value: watch.thisYear || 0},
+        {label: tNext("stats.cardWishlist", "Wishlist"), value: data.wishlistCount || 0},
+        {label: tNext("stats.cardOnLoan", "On loan"), value: loans.active || 0},
+        {label: tNext("stats.cardOverdue", "Overdue"), value: loans.overdue || 0}
+      ];
+      if (cards) {
+        cards.innerHTML = cardDefs
+          .map((card) => `
+            <div class="stat-card">
+              <strong>${escapeHtml(card.value)}</strong>
+              <span>${escapeHtml(card.label)}</span>
+            </div>
+          `)
+          .join("");
+      }
+      const byFormat = document.getElementById("statsByFormat");
+      if (byFormat) byFormat.innerHTML = statsBarsHtml(data.byFormat);
+      const byGenre = document.getElementById("statsByGenre");
+      if (byGenre) byGenre.innerHTML = statsBarsHtml(data.byGenre);
+      const byDecade = document.getElementById("statsByDecade");
+      if (byDecade) byDecade.innerHTML = statsBarsHtml(data.byDecade);
+      const byRating = document.getElementById("statsByRating");
+      if (byRating) byRating.innerHTML = statsBarsHtml(data.byRating);
+      if (empty) empty.classList.add("hidden");
+    }
+    async function loadStatisticsView(force = false) {
+      if (!hasPermission("watchlist.manage")) return;
+      if (statsState.loaded && !force) {
+        renderStatisticsView();
+        return;
+      }
+      const empty = document.getElementById("statsEmptyMessage");
+      if (empty) {
+        empty.textContent = tNext("collection.loading", "Loading...");
+        empty.classList.remove("hidden");
+      }
+      try {
+        const payload = await authApiJson("/api/next/stats/personal");
+        statsState.data = payload;
+        statsState.loaded = true;
+        renderStatisticsView();
       } catch (error) {
         if (empty) {
           empty.textContent = error.message || String(error);
@@ -28283,6 +29018,7 @@ def ui_preview_html(
       else if (route.view === "people") showLibraryPage(false);
       else if (route.view === "import") showImportPage(false);
       else if (route.view === "lists") showListsPage(false);
+      else if (route.view === "statistics") showStatisticsPage(false);
       else showLibraryPage(false);
     }
     async function markAllNotificationsRead() {
@@ -28491,6 +29227,9 @@ def ui_preview_html(
       if (route !== "import" && importScanner.running) {
         stopImportBarcodeScanner();
       }
+      if (route !== "statistics") {
+        document.getElementById("statisticsView")?.classList.add("hidden");
+      }
       document.querySelectorAll("[data-app-route='people'], [data-mobile-route='people']").forEach((node) => node.remove());
       document.querySelectorAll("[data-app-route]").forEach((node) => {
         node.classList.toggle("active", node.dataset.appRoute === route);
@@ -28616,6 +29355,35 @@ def ui_preview_html(
       }
       scrollPreviewTop();
     }
+    function showStatisticsPage(pushUrl = true) {
+      if (!hasPermission("watchlist.manage")) {
+        showLibraryPage(pushUrl);
+        return;
+      }
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("statisticsView")?.classList.remove("hidden");
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
+      setActiveAppRoute("statistics");
+      loadStatisticsView();
+      if (pushUrl && appMode && window.location.pathname !== "/statistics") {
+        history.pushState({view: "statistics"}, "", "/statistics");
+      }
+      scrollPreviewTop();
+    }
     function showNotificationsPage(pushUrl = true) {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
@@ -28738,6 +29506,9 @@ def ui_preview_html(
       if (/^\\/app\\/lists\\/?$|^\\/lists\\/?$/.test(window.location.pathname)) {
         return {view: "lists"};
       }
+      if (/^\\/app\\/statistics\\/?$|^\\/statistics\\/?$/.test(window.location.pathname)) {
+        return {view: "statistics"};
+      }
       if (/^\\/app\\/people\\/?$|^\\/people\\/?$/.test(window.location.pathname)) {
         return {view: "library"};
       }
@@ -28773,6 +29544,10 @@ def ui_preview_html(
       }
       if (route === "lists") {
         showListsPage();
+        return;
+      }
+      if (route === "statistics") {
+        showStatisticsPage();
         return;
       }
       if (route === "people") {
@@ -30937,6 +31712,7 @@ def ui_preview_html(
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
       else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
+      else if (route.view === "statistics" && hasPermission("watchlist.manage")) showStatisticsPage(false);
       else if (route.view === "notifications") showNotificationsPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
@@ -31107,6 +31883,7 @@ def ui_preview_html(
           renderListsView();
         });
       });
+      document.getElementById("wishlistAddForm")?.addEventListener("submit", submitWishlistAdd);
       document.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           listsViewMode = normalizeViewMode(button.dataset.listsViewMode);
@@ -31734,6 +32511,27 @@ def ui_preview_html(
         const deleteButton = event.target.closest("[data-delete-watch-history]");
         if (deleteButton) deleteActiveMovieWatchedEntry(deleteButton.dataset.deleteWatchHistory);
       });
+      document.getElementById("movieTagAddForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        attachActiveMovieTag(document.getElementById("movieTagAddInput")?.value || "");
+      });
+      document.getElementById("movieTagsChips")?.addEventListener("click", (event) => {
+        const removeButton = event.target.closest("[data-detach-tag]");
+        if (removeButton) detachActiveMovieTag(removeButton.dataset.detachTag);
+      });
+      document.getElementById("movieLoanAddForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        lendActiveMovie(
+          document.getElementById("movieLoanBorrower")?.value || "",
+          document.getElementById("movieLoanDue")?.value || ""
+        );
+      });
+      document.getElementById("movieLoanStatus")?.addEventListener("click", (event) => {
+        const returnButton = event.target.closest("[data-loan-return]");
+        if (returnButton) { returnActiveMovieLoan(returnButton.dataset.loanReturn); return; }
+        const deleteButton = event.target.closest("[data-loan-delete]");
+        if (deleteButton) deleteActiveMovieLoan(deleteButton.dataset.loanDelete);
+      });
       document.getElementById("containerEditToggleButton")?.addEventListener("click", () => handleContainerEditAction());
       document.getElementById("containerEditCancelTopButton")?.addEventListener("click", () => cancelContainerEdit());
       document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));
@@ -31869,6 +32667,7 @@ def ui_preview_html(
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);
         else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
+        else if (route.view === "statistics" && hasPermission("watchlist.manage")) showStatisticsPage(false);
         else if (route.view === "notifications") showNotificationsPage(false);
         else if (route.view === "profile") showProfilePage(false);
         else {
@@ -41089,8 +41888,22 @@ def attach_personal_list_state(conn, rows: list[dict[str, Any]], user_id: UUID |
 
 def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
     if not user_id:
-        return {"watchlist": 0, "watchHistory": 0, "watchedMovies": 0}
-    counts = {"watchlist": 0, "watchHistory": 0, "watchedMovies": 0}
+        return {
+            "watchlist": 0,
+            "watchHistory": 0,
+            "watchedMovies": 0,
+            "wishlist": 0,
+            "tags": 0,
+            "activeLoans": 0,
+        }
+    counts = {
+        "watchlist": 0,
+        "watchHistory": 0,
+        "watchedMovies": 0,
+        "wishlist": 0,
+        "tags": 0,
+        "activeLoans": 0,
+    }
     if table_exists(conn, "watchlist_items"):
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*)::int AS count FROM watchlist_items WHERE user_id=%s", (user_id,))
@@ -41110,6 +41923,21 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
             row = cur.fetchone() or {}
             counts["watchHistory"] = int(row.get("count") or 0)
             counts["watchedMovies"] = int(row.get("movie_count") or 0)
+    if table_exists(conn, "wishlist_items"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*)::int AS count FROM wishlist_items WHERE user_id=%s", (user_id,))
+            counts["wishlist"] = int((cur.fetchone() or {}).get("count") or 0)
+    if table_exists(conn, "tags"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*)::int AS count FROM tags WHERE user_id=%s", (user_id,))
+            counts["tags"] = int((cur.fetchone() or {}).get("count") or 0)
+    if table_exists(conn, "loans"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*)::int AS count FROM loans WHERE user_id=%s AND returned_at IS NULL",
+                (user_id,),
+            )
+            counts["activeLoans"] = int((cur.fetchone() or {}).get("count") or 0)
     return counts
 
 
@@ -41329,6 +42157,8 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         "lastWatched": None,
         "watchCount": 0,
         "history": [],
+        "tags": [],
+        "activeLoan": None,
     }
     if not user_id:
         return state
@@ -41362,6 +42192,45 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         state["history"] = rows
         state["watchCount"] = len(rows)
         state["lastWatched"] = rows[0].get("watched_at") if rows else None
+    if table_exists(conn, "movie_tags") and table_exists(conn, "tags"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT t.id, t.name, t.slug, t.color, mt.id AS assignment_id
+                FROM movie_tags mt
+                JOIN tags t ON t.id = mt.tag_id
+                WHERE mt.user_id=%s AND mt.movie_id=%s
+                ORDER BY t.name
+                """,
+                (user_id, movie_id),
+            )
+            tag_rows = cur.fetchall()
+        state["tags"] = [
+            {
+                "id": str(r.get("id")),
+                "name": r.get("name"),
+                "slug": r.get("slug"),
+                "color": r.get("color"),
+                "assignmentId": str(r.get("assignment_id")),
+            }
+            for r in tag_rows
+        ]
+    if table_exists(conn, "loans"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, movie_id, snapshot, borrower_name, borrower_user_id,
+                       loaned_at, due_at, returned_at, note, created_at
+                FROM loans
+                WHERE user_id=%s AND movie_id=%s AND returned_at IS NULL
+                ORDER BY loaned_at DESC
+                LIMIT 1
+                """,
+                (user_id, movie_id),
+            )
+            loan_row = cur.fetchone()
+        if loan_row:
+            state["activeLoan"] = _loan_row_entity(loan_row)
     return state
 
 
@@ -41509,6 +42378,285 @@ def emit_watch_history_change(conn, user_id, entry_id, *, operation: str, movie_
         conn,
         user_id,
         entity_type="watch_history",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Lists expansion (wishlist / tags / loans): per-user sync entity builders and
+# emit helpers. Each mirrors the watchlist trio above and rides the generic
+# per-user sync stream (user_sync_change). All are table_exists-guarded so they
+# no-op on pre-026 schemas.
+# ---------------------------------------------------------------------------
+
+
+def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    acquired_movie = row.get("acquired_movie_id")
+    return {
+        "id": str(row.get("id")),
+        "title": row.get("title"),
+        "year": row.get("year"),
+        "barcode": row.get("barcode"),
+        "format": row.get("format"),
+        "movievaultId": row.get("movievault_id"),
+        "posterUrl": row.get("poster_url"),
+        "note": row.get("note"),
+        "snapshot": row.get("snapshot") or {},
+        "addedAt": row.get("added_at"),
+        "acquiredAt": row.get("acquired_at"),
+        "acquiredMovieId": str(acquired_movie) if acquired_movie else None,
+    }
+
+
+def wishlist_sync_entity(conn, user_id, item_id) -> dict[str, Any] | None:
+    if not table_exists(conn, "wishlist_items"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, year, barcode, format, movievault_id, poster_url,
+                   note, snapshot, added_at, acquired_at, acquired_movie_id
+            FROM wishlist_items
+            WHERE user_id=%s AND id=%s
+            """,
+            (user_id, item_id),
+        )
+        row = cur.fetchone()
+    return _wishlist_row_entity(row) if row else None
+
+
+def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "wishlist_items"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, year, barcode, format, movievault_id, poster_url,
+                   note, snapshot, added_at, acquired_at, acquired_movie_id
+            FROM wishlist_items
+            WHERE user_id=%s
+            ORDER BY added_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return [_wishlist_row_entity(row) for row in rows]
+
+
+def emit_wishlist_change(conn, user_id, item_id, *, operation: str) -> int:
+    entity_id = str(item_id)
+    payload: dict[str, Any] = {"id": entity_id}
+    if operation != "delete":
+        entity = wishlist_sync_entity(conn, user_id, item_id)
+        if entity is not None:
+            payload["entity"] = entity
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="wishlist",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
+
+
+def _tag_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(row.get("id")),
+        "name": row.get("name"),
+        "slug": row.get("slug"),
+        "color": row.get("color"),
+        "createdAt": row.get("created_at"),
+    }
+
+
+def tag_sync_entity(conn, user_id, tag_id) -> dict[str, Any] | None:
+    if not table_exists(conn, "tags"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, slug, color, created_at
+            FROM tags
+            WHERE user_id=%s AND id=%s
+            """,
+            (user_id, tag_id),
+        )
+        row = cur.fetchone()
+    return _tag_row_entity(row) if row else None
+
+
+def all_tag_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "tags"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, slug, color, created_at
+            FROM tags
+            WHERE user_id=%s
+            ORDER BY created_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return [_tag_row_entity(row) for row in rows]
+
+
+def emit_tag_change(conn, user_id, tag_id, *, operation: str) -> int:
+    entity_id = str(tag_id)
+    payload: dict[str, Any] = {"id": entity_id}
+    if operation != "delete":
+        entity = tag_sync_entity(conn, user_id, tag_id)
+        if entity is not None:
+            payload["entity"] = entity
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="tag",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
+
+
+def _movie_tag_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(row.get("id")),
+        "tagId": str(row.get("tag_id")),
+        "movieId": str(row.get("movie_id")),
+        "createdAt": row.get("created_at"),
+    }
+
+
+def movie_tag_sync_entity(conn, user_id, assignment_id) -> dict[str, Any] | None:
+    if not table_exists(conn, "movie_tags"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, tag_id, movie_id, created_at
+            FROM movie_tags
+            WHERE user_id=%s AND id=%s
+            """,
+            (user_id, assignment_id),
+        )
+        row = cur.fetchone()
+    return _movie_tag_row_entity(row) if row else None
+
+
+def all_movie_tag_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "movie_tags"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, tag_id, movie_id, created_at
+            FROM movie_tags
+            WHERE user_id=%s
+            ORDER BY created_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return [_movie_tag_row_entity(row) for row in rows]
+
+
+def emit_movie_tag_change(
+    conn, user_id, assignment_id, *, operation: str, tag_id=None, movie_id=None
+) -> int:
+    entity_id = str(assignment_id)
+    payload: dict[str, Any] = {"id": entity_id}
+    if tag_id is not None:
+        payload["tagId"] = str(tag_id)
+    if movie_id is not None:
+        payload["movieId"] = str(movie_id)
+    if operation != "delete":
+        entity = movie_tag_sync_entity(conn, user_id, assignment_id)
+        if entity is not None:
+            payload["entity"] = entity
+            payload["tagId"] = entity.get("tagId")
+            payload["movieId"] = entity.get("movieId")
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="movieTag",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
+
+
+def _loan_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    movie = row.get("movie_id")
+    borrower_user = row.get("borrower_user_id")
+    returned_at = row.get("returned_at")
+    return {
+        "id": str(row.get("id")),
+        "movieId": str(movie) if movie else None,
+        "snapshot": row.get("snapshot") or {},
+        "borrowerName": row.get("borrower_name"),
+        "borrowerUserId": str(borrower_user) if borrower_user else None,
+        "loanedAt": row.get("loaned_at"),
+        "dueAt": row.get("due_at"),
+        "returnedAt": returned_at,
+        "returned": returned_at is not None,
+        "note": row.get("note"),
+        "createdAt": row.get("created_at"),
+    }
+
+
+def loan_sync_entity(conn, user_id, loan_id) -> dict[str, Any] | None:
+    if not table_exists(conn, "loans"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, movie_id, snapshot, borrower_name, borrower_user_id,
+                   loaned_at, due_at, returned_at, note, created_at
+            FROM loans
+            WHERE user_id=%s AND id=%s
+            """,
+            (user_id, loan_id),
+        )
+        row = cur.fetchone()
+    return _loan_row_entity(row) if row else None
+
+
+def all_loan_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "loans"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, movie_id, snapshot, borrower_name, borrower_user_id,
+                   loaned_at, due_at, returned_at, note, created_at
+            FROM loans
+            WHERE user_id=%s
+            ORDER BY loaned_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return [_loan_row_entity(row) for row in rows]
+
+
+def emit_loan_change(conn, user_id, loan_id, *, operation: str, movie_id=None) -> int:
+    entity_id = str(loan_id)
+    payload: dict[str, Any] = {"id": entity_id}
+    if movie_id is not None:
+        payload["movieId"] = str(movie_id)
+    if operation != "delete":
+        entity = loan_sync_entity(conn, user_id, loan_id)
+        if entity is not None:
+            payload["entity"] = entity
+            payload["movieId"] = entity.get("movieId")
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="loan",
         entity_id=entity_id,
         operation=operation,
         payload=payload,
@@ -47273,6 +48421,24 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         "counts": {name: count_table(conn, name) for name in tags_tables},
         "tables": tags_tables,
     }
+    wishlist_tables = [name for name in ("wishlist_items",) if table_exists(conn, name)]
+    wishlist_summary = {
+        "status": "ready" if wishlist_tables else "planned",
+        "counts": {name: count_table(conn, name) for name in wishlist_tables},
+        "tables": wishlist_tables,
+    }
+    statistics_summary = {
+        "status": "ready",
+        "capabilities": {
+            "byFormat": True,
+            "byDecade": True,
+            "byGenre": True,
+            "byRating": True,
+            "watchHistory": table_exists(conn, "watch_history"),
+            "wishlist": bool(wishlist_tables),
+            "loans": bool(lending_tables),
+        },
+    }
     search_summary = {
         "status": "ready",
         "capabilities": {
@@ -47322,6 +48488,8 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         {"key": "personal_lists_v2", "group": "lists", "status": watch_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": watch_summary.get("counts", {})},
         {"key": "watchlist_watched_sync_center", "group": "lists", "status": watch_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": watch_summary.get("counts", {})},
         {"key": "lending_center", "group": "lists", "status": lending_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": lending_summary.get("counts", {}) or {"planned": True}},
+        {"key": "wishlist_center", "group": "lists", "status": wishlist_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": wishlist_summary.get("counts", {}) or {"planned": True}},
+        {"key": "statistics_dashboard", "group": "operations", "status": statistics_summary["status"], "permissionKeys": ["watchlist.manage", "collection.view"], "signals": statistics_summary["capabilities"]},
         {"key": "personal_source_dedupe", "group": "lists", "status": "ready", "permissionKeys": ["watchlist.manage", "digital_sources.view"], "signals": {"traktPlexJellyfinDedupe": True}},
         {"key": "offline_queue_ui", "group": "lists", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"clientSideQueue": True}},
         {"key": "offline_mode_v2", "group": "operations", "status": offline_summary["status"], "permissionKeys": ["collection.view"], "signals": offline_summary["capabilities"]},
@@ -47457,6 +48625,8 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         "watchSync": watch_summary,
         "lending": lending_summary,
         "tags": tags_summary,
+        "wishlist": wishlist_summary,
+        "statistics": statistics_summary,
         "search": search_summary,
         "offline": offline_summary,
         "backupV2": backup_v2_summary,
@@ -51342,6 +52512,721 @@ def register_routes(flask_app: Flask) -> None:
                 )
             return response({"status": "ok", "deleted": deleted, "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
 
+    # ------------------------------------------------------------------
+    # Wishlist: metadata-only "want to acquire" entries.
+    # ------------------------------------------------------------------
+    def _wishlist_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
+        return json_ready(
+            {
+                "title": payload.get("title"),
+                "movie_title": payload.get("title"),
+                "year": payload.get("year"),
+                "movie_year": payload.get("year"),
+                "barcode": payload.get("barcode"),
+                "format": payload.get("format"),
+                "movie_format": payload.get("format"),
+                "movievault_id": payload.get("movievault_id"),
+                "poster_url": payload.get("poster_url"),
+            }
+        )
+
+    @flask_app.get("/api/next/lists/wishlist")
+    def personal_wishlist():
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            return response(
+                {
+                    "status": "ok",
+                    "items": all_wishlist_sync_entities(conn, user_id),
+                    "counts": personal_list_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.post("/api/next/lists/wishlist")
+    def add_wishlist_item():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Wishlist request body must be an object", 400)
+        title = clean_text(body.get("title"))
+        if not title:
+            raise NextApiError("Wishlist entry requires a title", 400)
+        year_raw = body.get("year")
+        year = int(year_raw) if isinstance(year_raw, (int, float)) or (isinstance(year_raw, str) and year_raw.strip().isdigit()) else None
+        fields = {
+            "title": title,
+            "year": year,
+            "barcode": clean_text(body.get("barcode")),
+            "format": clean_text(body.get("format")),
+            "movievault_id": clean_text(body.get("movievaultId") or body.get("movievault_id")),
+            "poster_url": clean_text(body.get("posterUrl") or body.get("poster_url")),
+            "note": clean_text(body.get("note")),
+        }
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            user_id = actor.get("id")
+            snapshot = _wishlist_snapshot(fields)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO wishlist_items
+                            (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            user_id,
+                            fields["title"],
+                            fields["year"],
+                            fields["barcode"],
+                            fields["format"],
+                            fields["movievault_id"],
+                            fields["poster_url"],
+                            fields["note"],
+                            Jsonb(snapshot),
+                        ),
+                    )
+                    item_id = (cur.fetchone() or {}).get("id")
+                if item_id is not None:
+                    emit_wishlist_change(conn, user_id, item_id, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.added",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_id,
+                    summary="Added wishlist entry",
+                    metadata={"title": title},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "entry": wishlist_sync_entity(conn, user_id, item_id) if item_id is not None else None,
+                    "counts": personal_list_counts(conn, user_id),
+                },
+                201,
+            )
+
+    @flask_app.delete("/api/next/lists/wishlist/<item_id>")
+    def remove_wishlist_item(item_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            user_id = actor.get("id")
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM wishlist_items WHERE user_id=%s AND id=%s",
+                        (user_id, item_uuid),
+                    )
+                    deleted = int(cur.rowcount or 0)
+                if deleted:
+                    emit_wishlist_change(conn, user_id, item_uuid, operation="delete")
+                    audit_event(
+                        conn,
+                        event_type="wishlist.removed",
+                        category="personal",
+                        actor=actor,
+                        target_type="wishlist_item",
+                        target_id=item_uuid,
+                        summary="Removed wishlist entry",
+                        metadata={},
+                    )
+            return response({"status": "ok", "deleted": deleted, "counts": personal_list_counts(conn, user_id)})
+
+    @flask_app.post("/api/next/lists/wishlist/<item_id>/acquire")
+    def acquire_wishlist_item(item_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            body = {}
+        movie_ref = clean_text(body.get("movieId") or body.get("movie_id"))
+        movie_uuid = parse_uuid(movie_ref, "movieId") if movie_ref else None
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            user_id = actor.get("id")
+            if movie_uuid is not None and not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE wishlist_items
+                        SET acquired_at=now(), acquired_movie_id=%s
+                        WHERE user_id=%s AND id=%s
+                        """,
+                        (movie_uuid, user_id, item_uuid),
+                    )
+                    updated = int(cur.rowcount or 0)
+                if not updated:
+                    raise NextApiError("Wishlist entry not found", 404)
+                emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.acquired",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_uuid,
+                    summary="Marked wishlist entry as acquired",
+                    metadata={"movieId": str(movie_uuid) if movie_uuid else None},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "entry": wishlist_sync_entity(conn, user_id, item_uuid),
+                    "counts": personal_list_counts(conn, user_id),
+                }
+            )
+
+    # ------------------------------------------------------------------
+    # Tags: per-user private labels on owned movies.
+    # ------------------------------------------------------------------
+    def _tag_slug(name: str) -> str:
+        slug = re.sub(r"[^a-z0-9]+", "-", (name or "").casefold()).strip("-")
+        return slug or "tag"
+
+    def _upsert_tag(conn, user_id, name: str, color: str | None):
+        slug = _tag_slug(name)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO tags (user_id, name, slug, color)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (user_id, slug)
+                DO UPDATE SET name=EXCLUDED.name,
+                             color=COALESCE(EXCLUDED.color, tags.color)
+                RETURNING id, (xmax = 0) AS inserted
+                """,
+                (user_id, name, slug, color),
+            )
+            row = cur.fetchone() or {}
+        return row.get("id"), bool(row.get("inserted"))
+
+    @flask_app.get("/api/next/tags")
+    def list_tags():
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            if not table_exists(conn, "tags"):
+                return response({"status": "ok", "tags": []})
+            has_assignments = table_exists(conn, "movie_tags")
+            with conn.cursor() as cur:
+                if has_assignments:
+                    cur.execute(
+                        """
+                        SELECT t.id, t.name, t.slug, t.color, t.created_at,
+                               COUNT(mt.id)::int AS movie_count
+                        FROM tags t
+                        LEFT JOIN movie_tags mt
+                            ON mt.tag_id = t.id AND mt.user_id = t.user_id
+                        WHERE t.user_id=%s
+                        GROUP BY t.id
+                        ORDER BY t.name
+                        """,
+                        (user_id,),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT id, name, slug, color, created_at, 0 AS movie_count
+                        FROM tags
+                        WHERE user_id=%s
+                        ORDER BY name
+                        """,
+                        (user_id,),
+                    )
+                rows = cur.fetchall()
+            tags = [
+                {
+                    "id": str(r.get("id")),
+                    "name": r.get("name"),
+                    "slug": r.get("slug"),
+                    "color": r.get("color"),
+                    "createdAt": r.get("created_at"),
+                    "movieCount": int(r.get("movie_count") or 0),
+                }
+                for r in rows
+            ]
+            return response({"status": "ok", "tags": tags})
+
+    @flask_app.post("/api/next/tags")
+    def create_tag():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Tag request body must be an object", 400)
+        name = clean_text(body.get("name"))
+        if not name:
+            raise NextApiError("Tag requires a name", 400)
+        color = clean_text(body.get("color"))
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "tags"):
+                raise NextApiError("Tags table is not available", 503)
+            user_id = actor.get("id")
+            with conn.transaction():
+                tag_id, _inserted = _upsert_tag(conn, user_id, name, color)
+                if tag_id is not None:
+                    emit_tag_change(conn, user_id, tag_id, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="tag.created",
+                    category="personal",
+                    actor=actor,
+                    target_type="tag",
+                    target_id=tag_id,
+                    summary="Created tag",
+                    metadata={"name": name},
+                )
+            return response({"status": "ok", "tag": tag_sync_entity(conn, user_id, tag_id)}, 201)
+
+    @flask_app.delete("/api/next/tags/<tag_id>")
+    def delete_tag(tag_id: str):
+        tag_uuid = parse_uuid(tag_id, "tagId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "tags"):
+                raise NextApiError("Tags table is not available", 503)
+            user_id = actor.get("id")
+            assignment_ids: list[Any] = []
+            if table_exists(conn, "movie_tags"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT id FROM movie_tags WHERE user_id=%s AND tag_id=%s",
+                        (user_id, tag_uuid),
+                    )
+                    assignment_ids = [r.get("id") for r in cur.fetchall()]
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM tags WHERE user_id=%s AND id=%s",
+                        (user_id, tag_uuid),
+                    )
+                    deleted = int(cur.rowcount or 0)
+                if deleted:
+                    for assignment_id in assignment_ids:
+                        emit_movie_tag_change(conn, user_id, assignment_id, operation="delete", tag_id=tag_uuid)
+                    emit_tag_change(conn, user_id, tag_uuid, operation="delete")
+                    audit_event(
+                        conn,
+                        event_type="tag.deleted",
+                        category="personal",
+                        actor=actor,
+                        target_type="tag",
+                        target_id=tag_uuid,
+                        summary="Deleted tag",
+                        metadata={"assignmentsRemoved": len(assignment_ids)},
+                    )
+            return response({"status": "ok", "deleted": deleted})
+
+    @flask_app.post("/api/next/movies/<movie_id>/tags")
+    def add_tag_to_movie(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Tag request body must be an object", 400)
+        tag_ref = clean_text(body.get("tagId") or body.get("tag_id"))
+        name = clean_text(body.get("name"))
+        color = clean_text(body.get("color"))
+        if not tag_ref and not name:
+            raise NextApiError("Provide tagId or name", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "tags") or not table_exists(conn, "movie_tags"):
+                raise NextApiError("Tags table is not available", 503)
+            user_id = actor.get("id")
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                if tag_ref:
+                    tag_uuid = parse_uuid(tag_ref, "tagId")
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT id FROM tags WHERE user_id=%s AND id=%s",
+                            (user_id, tag_uuid),
+                        )
+                        if not cur.fetchone():
+                            raise NextApiError("Tag not found", 404)
+                    tag_id = tag_uuid
+                else:
+                    tag_id, inserted = _upsert_tag(conn, user_id, name, color)
+                    if inserted and tag_id is not None:
+                        emit_tag_change(conn, user_id, tag_id, operation="upsert")
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO movie_tags (user_id, tag_id, movie_id)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (user_id, tag_id, movie_id) DO NOTHING
+                        RETURNING id
+                        """,
+                        (user_id, tag_id, movie_uuid),
+                    )
+                    row = cur.fetchone()
+                    assignment_id = row.get("id") if row else None
+                if assignment_id is not None:
+                    emit_movie_tag_change(
+                        conn, user_id, assignment_id, operation="upsert", tag_id=tag_id, movie_id=movie_uuid
+                    )
+                    audit_event(
+                        conn,
+                        event_type="tag.attached",
+                        category="personal",
+                        actor=actor,
+                        target_type="movie",
+                        target_id=movie_uuid,
+                        summary="Attached tag to movie",
+                        metadata={"tagId": str(tag_id)},
+                    )
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
+
+    @flask_app.delete("/api/next/movies/<movie_id>/tags/<tag_id>")
+    def remove_tag_from_movie(movie_id: str, tag_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        tag_uuid = parse_uuid(tag_id, "tagId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "movie_tags"):
+                raise NextApiError("Tags table is not available", 503)
+            user_id = actor.get("id")
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        DELETE FROM movie_tags
+                        WHERE user_id=%s AND tag_id=%s AND movie_id=%s
+                        RETURNING id
+                        """,
+                        (user_id, tag_uuid, movie_uuid),
+                    )
+                    removed = [r.get("id") for r in cur.fetchall()]
+                for assignment_id in removed:
+                    emit_movie_tag_change(
+                        conn, user_id, assignment_id, operation="delete", tag_id=tag_uuid, movie_id=movie_uuid
+                    )
+                if removed:
+                    audit_event(
+                        conn,
+                        event_type="tag.detached",
+                        category="personal",
+                        actor=actor,
+                        target_type="movie",
+                        target_id=movie_uuid,
+                        summary="Detached tag from movie",
+                        metadata={"tagId": str(tag_uuid)},
+                    )
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
+
+    # ------------------------------------------------------------------
+    # Loan tracker: outbound lending of an owned disc.
+    # ------------------------------------------------------------------
+    @flask_app.get("/api/next/loans")
+    def list_loans():
+        status_filter = clean_text(request.args.get("status")) or "all"
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            loans = all_loan_sync_entities(conn, user_id)
+            if status_filter == "active":
+                loans = [ln for ln in loans if not ln.get("returned")]
+            elif status_filter == "returned":
+                loans = [ln for ln in loans if ln.get("returned")]
+            return response(
+                {
+                    "status": "ok",
+                    "loans": loans,
+                    "counts": personal_list_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.post("/api/next/movies/<movie_id>/loans")
+    def create_loan(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Loan request body must be an object", 400)
+        borrower_name = clean_text(body.get("borrowerName") or body.get("borrower_name"))
+        borrower_ref = clean_text(body.get("borrowerUserId") or body.get("borrower_user_id"))
+        borrower_uuid = parse_uuid(borrower_ref, "borrowerUserId") if borrower_ref else None
+        if not borrower_name and borrower_uuid is None:
+            raise NextApiError("Provide borrowerName or borrowerUserId", 400)
+        due_at = clean_text(body.get("dueAt") or body.get("due_at"))
+        note = clean_text(body.get("note"))
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "loans"):
+                raise NextApiError("Loans table is not available", 503)
+            user_id = actor.get("id")
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            snapshot = personal_list_movie_snapshot(conn, movie_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO loans
+                            (user_id, movie_id, snapshot, borrower_name, borrower_user_id, due_at, note)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (user_id, movie_uuid, Jsonb(snapshot), borrower_name, borrower_uuid, due_at, note),
+                    )
+                    loan_id = (cur.fetchone() or {}).get("id")
+                if loan_id is not None:
+                    emit_loan_change(conn, user_id, loan_id, operation="upsert", movie_id=movie_uuid)
+                audit_event(
+                    conn,
+                    event_type="loan.created",
+                    category="personal",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Lent disc",
+                    metadata={"borrower": borrower_name or str(borrower_uuid)},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "loan": loan_sync_entity(conn, user_id, loan_id) if loan_id is not None else None,
+                    "userState": personal_movie_state(conn, movie_uuid, actor.get("id")),
+                },
+                201,
+            )
+
+    @flask_app.post("/api/next/loans/<loan_id>/return")
+    def return_loan(loan_id: str):
+        loan_uuid = parse_uuid(loan_id, "loanId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "loans"):
+                raise NextApiError("Loans table is not available", 503)
+            user_id = actor.get("id")
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE loans
+                        SET returned_at=now()
+                        WHERE user_id=%s AND id=%s AND returned_at IS NULL
+                        RETURNING movie_id
+                        """,
+                        (user_id, loan_uuid),
+                    )
+                    row = cur.fetchone()
+                if not row:
+                    raise NextApiError("Active loan not found", 404)
+                loan_movie = row.get("movie_id")
+                emit_loan_change(conn, user_id, loan_uuid, operation="upsert", movie_id=loan_movie)
+                audit_event(
+                    conn,
+                    event_type="loan.returned",
+                    category="personal",
+                    actor=actor,
+                    target_type="loan",
+                    target_id=loan_uuid,
+                    summary="Marked loan returned",
+                    metadata={},
+                )
+            return response({"status": "ok", "loan": loan_sync_entity(conn, user_id, loan_uuid)})
+
+    @flask_app.delete("/api/next/loans/<loan_id>")
+    def delete_loan(loan_id: str):
+        loan_uuid = parse_uuid(loan_id, "loanId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "loans"):
+                raise NextApiError("Loans table is not available", 503)
+            user_id = actor.get("id")
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM loans WHERE user_id=%s AND id=%s RETURNING movie_id",
+                        (user_id, loan_uuid),
+                    )
+                    row = cur.fetchone()
+                    deleted = 1 if row else 0
+                if deleted:
+                    emit_loan_change(
+                        conn, user_id, loan_uuid, operation="delete", movie_id=row.get("movie_id")
+                    )
+                    audit_event(
+                        conn,
+                        event_type="loan.deleted",
+                        category="personal",
+                        actor=actor,
+                        target_type="loan",
+                        target_id=loan_uuid,
+                        summary="Deleted loan",
+                        metadata={},
+                    )
+            return response({"status": "ok", "deleted": deleted})
+
+    @flask_app.get("/api/next/stats/personal")
+    def personal_statistics():
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            where, params = visible_movie_where_sql(conn, actor, "m")
+
+            def _bucket_rows(sql: str) -> list[dict[str, Any]]:
+                with conn.cursor() as cur:
+                    cur.execute(sql, params)
+                    return cur.fetchall()
+
+            total = 0
+            by_format: list[dict[str, Any]] = []
+            for row in _bucket_rows(
+                f"""
+                SELECT COALESCE(NULLIF(TRIM(m.format), ''), 'Unknown') AS label,
+                       COUNT(*)::int AS count
+                FROM movies m
+                WHERE {where}
+                GROUP BY 1
+                ORDER BY count DESC, label
+                """
+            ):
+                by_format.append({"label": row.get("label"), "count": int(row.get("count") or 0)})
+                total += int(row.get("count") or 0)
+
+            by_decade = [
+                {"label": (f"{row.get('decade')}s" if row.get("decade") is not None else "Unknown"),
+                 "count": int(row.get("count") or 0)}
+                for row in _bucket_rows(
+                    f"""
+                    SELECT (NULLIF(substring(m.year from '[0-9]{{4}}'), '')::int / 10 * 10) AS decade,
+                           COUNT(*)::int AS count
+                    FROM movies m
+                    WHERE {where}
+                    GROUP BY 1
+                    ORDER BY decade NULLS LAST
+                    """
+                )
+            ]
+
+            by_rating = [
+                {"label": row.get("label"), "count": int(row.get("count") or 0)}
+                for row in _bucket_rows(
+                    f"""
+                    SELECT COALESCE(NULLIF(TRIM(m.rating), ''), 'Unrated') AS label,
+                           COUNT(*)::int AS count
+                    FROM movies m
+                    WHERE {where}
+                    GROUP BY 1
+                    ORDER BY count DESC, label
+                    """
+                )
+            ]
+
+            genre_counts: dict[str, int] = {}
+            for row in _bucket_rows(
+                f"""
+                SELECT COALESCE(NULLIF(TRIM(m.metadata->>'genre'), ''), '') AS genre,
+                       COUNT(*)::int AS count
+                FROM movies m
+                WHERE {where}
+                GROUP BY 1
+                """
+            ):
+                raw = (row.get("genre") or "").strip()
+                count = int(row.get("count") or 0)
+                if not raw:
+                    genre_counts["Unknown"] = genre_counts.get("Unknown", 0) + count
+                    continue
+                for part in re.split(r"[,/|]", raw):
+                    label = part.strip()
+                    if label:
+                        genre_counts[label] = genre_counts.get(label, 0) + count
+            by_genre = sorted(
+                [{"label": k, "count": v} for k, v in genre_counts.items()],
+                key=lambda item: (-item["count"], item["label"]),
+            )[:20]
+
+            watch = {"total": 0, "thisYear": 0, "distinctMovies": 0, "topMovies": []}
+            if table_exists(conn, "watch_history"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            COUNT(*)::int AS total,
+                            COUNT(*) FILTER (WHERE date_part('year', watched_at) = date_part('year', now()))::int AS this_year,
+                            COUNT(DISTINCT COALESCE(movie_id::text, snapshot->>'movie_id', snapshot->>'title'))::int AS distinct_movies
+                        FROM watch_history
+                        WHERE user_id=%s
+                        """,
+                        (user_id,),
+                    )
+                    row = cur.fetchone() or {}
+                    watch["total"] = int(row.get("total") or 0)
+                    watch["thisYear"] = int(row.get("this_year") or 0)
+                    watch["distinctMovies"] = int(row.get("distinct_movies") or 0)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            COALESCE(snapshot->>'title', snapshot->>'movie_title', 'Unknown') AS title,
+                            COUNT(*)::int AS count
+                        FROM watch_history
+                        WHERE user_id=%s
+                        GROUP BY 1
+                        ORDER BY count DESC, title
+                        LIMIT 10
+                        """,
+                        (user_id,),
+                    )
+                    watch["topMovies"] = [
+                        {"title": r.get("title"), "count": int(r.get("count") or 0)}
+                        for r in cur.fetchall()
+                    ]
+
+            wishlist_count = 0
+            if table_exists(conn, "wishlist_items"):
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*)::int AS count FROM wishlist_items WHERE user_id=%s", (user_id,))
+                    wishlist_count = int((cur.fetchone() or {}).get("count") or 0)
+
+            loans_stats = {"active": 0, "overdue": 0, "returned": 0}
+            if table_exists(conn, "loans"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            COUNT(*) FILTER (WHERE returned_at IS NULL)::int AS active,
+                            COUNT(*) FILTER (WHERE returned_at IS NULL AND due_at IS NOT NULL AND due_at < now())::int AS overdue,
+                            COUNT(*) FILTER (WHERE returned_at IS NOT NULL)::int AS returned
+                        FROM loans
+                        WHERE user_id=%s
+                        """,
+                        (user_id,),
+                    )
+                    row = cur.fetchone() or {}
+                    loans_stats = {
+                        "active": int(row.get("active") or 0),
+                        "overdue": int(row.get("overdue") or 0),
+                        "returned": int(row.get("returned") or 0),
+                    }
+
+            return response(
+                {
+                    "status": "ok",
+                    "totalMovies": total,
+                    "byFormat": by_format,
+                    "byDecade": by_decade,
+                    "byGenre": by_genre,
+                    "byRating": by_rating,
+                    "watch": watch,
+                    "wishlistCount": wishlist_count,
+                    "loans": loans_stats,
+                }
+            )
+
     @flask_app.post("/api/next/movies/<movie_id>/identifiers")
     def add_movie_identifier(movie_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
@@ -54932,6 +56817,10 @@ def register_routes(flask_app: Flask) -> None:
             payload = {
                 "watchlist": all_watchlist_sync_entities(conn, user_id),
                 "watchHistory": all_watch_history_sync_entities(conn, user_id),
+                "wishlist": all_wishlist_sync_entities(conn, user_id),
+                "tags": all_tag_sync_entities(conn, user_id),
+                "movieTags": all_movie_tag_sync_entities(conn, user_id),
+                "loans": all_loan_sync_entities(conn, user_id),
             }
         return response(
             {
