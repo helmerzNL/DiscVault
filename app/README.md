@@ -8,15 +8,16 @@ For product overview and screenshots, use the repository root README.
 
 ```text
 app/
-├── backend/            Flask API (SQLite, auth, import/export, logs)
-├── frontend/           Static web app (served by Nginx)
+├── backend/            DiscVault Next API (next_app.py, Flask + Gunicorn, PostgreSQL)
+├── frontend/           Shared static assets (i18n/next, flags, icons, PWA, service worker)
 ├── mcp-server/         MCP HTTP server
 ├── deploy/
-│   ├── all-in-one/     Nginx + Supervisor config for single-container image
+│   ├── v26/            Supervisor config for the v26 (Next) single-container image
+│   ├── next/           Compose + docs for running the published image
 │   └── unraid/         Unraid CA template files
 ├── scripts/            Build helper scripts
-├── Dockerfile          All-in-one production image
-└── docker-compose.yml  Local multi-service development setup
+├── Dockerfile.v26      Production image (DiscVault Next stack)
+└── docker-compose.next.yml  Local multi-service development setup (PostgreSQL)
 ```
 
 ## Local development
@@ -54,49 +55,39 @@ MCP_API_KEY=...
 ### Start stack
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.next.yml up -d --build
 ```
 
 Services:
 
-- Web UI: http://localhost:6080
-- Backend health: http://localhost:6080/api/health
-- MCP health: http://localhost:6090/health
+- Web UI / API: http://localhost:6180
+- Backend health: http://localhost:6180/api/next/health
 
 ### Stop stack
 
 ```bash
-docker compose down
+docker compose -f docker-compose.next.yml down
 ```
 
 ## Runtime architecture
 
-- Frontend is served by Nginx
-- API is Flask + Gunicorn
-- Data is SQLite at `/data/discvault.db`
-- MCP server exposes streamable HTTP endpoint and calls the backend API
+- API and embedded web UI are served by `next_app.py` (Flask + Gunicorn)
+- Data is stored in PostgreSQL (`DATABASE_URL`)
+- A `next_worker.py` process handles background jobs
+- MCP server exposes a streamable HTTP endpoint and calls the backend API
 
-## All-in-one production image
+## Production image (DiscVault Next stack)
 
-Build from `app/`:
-
-```bash
-docker build -t ghcr.io/helmerznl/discvault:dev --build-arg BUILD_VERSION=dev .
-```
-
-Run:
+Build from `app/` using the v26 Dockerfile:
 
 ```bash
-docker run -d \
-  --name discvault \
-  -p 6080:80 \
-  -p 6090:6090 \
-  -e TZ=Europe/Amsterdam \
-  -e RP_ID=localhost \
-  -e RP_ORIGIN=http://localhost:6080 \
-  -v /mnt/user/appdata/discvault:/data \
-  ghcr.io/helmerznl/discvault:dev
+docker build -f Dockerfile.v26 -t ghcr.io/helmerznl/discvault:dev --build-arg BUILD_VERSION=dev .
 ```
+
+The image runs the API on `5000` and the MCP server on `6090` via Supervisor
+(`deploy/v26/supervisord.conf`) and expects a reachable PostgreSQL `DATABASE_URL`.
+For running the published image with a bundled PostgreSQL service, see
+`deploy/next/`.
 
 ## Release flow
 
