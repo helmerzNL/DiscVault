@@ -1,5 +1,6 @@
 import os
 import importlib
+import shutil
 import sys
 import tempfile
 import types
@@ -32,9 +33,13 @@ sys.modules.setdefault("psycopg.rows", psycopg_rows_module)
 sys.modules.setdefault("psycopg.types", psycopg_types_module)
 sys.modules.setdefault("psycopg.types.json", psycopg_types_json_module)
 
+from app.backend.next_plugin_runtime import DEFAULT_PLUGIN_DIR
+from app.backend.next_plugin_runtime import PLUGIN_INITIALIZED_MARKER
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import plugin_install_dir
+from app.backend.next_plugin_runtime import plugin_paths
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
+from app.backend.next_plugin_runtime import seed_default_plugins_if_needed
 from app.backend import next_worker
 from app.backend.next_worker import apply_collection_import_review
 from app.backend.next_worker import import_release_date
@@ -42,7 +47,23 @@ from app.backend.next_worker import import_year
 from app.backend.next_plugins._collection_import_base import CollectionImportPlugin
 from app.backend.next_plugins._collection_import_base import parse_release_date
 from app.backend.next_plugins.bluray_com.plugin import _movie_title_from_release_title
+from app.backend.next_plugins.bluray_com import plugin as bluray_com_plugin
 from app.backend.next_plugins.trakt import plugin as trakt_plugin
+from app.backend.next_plugin_runtime import (
+    _plugin_is_active,
+    unconfigured_integration_plugins,
+)
+from app.backend.next_plugin_runtime import _parse_plugin_version
+from app.backend.next_plugin_runtime import install_bundled_plugin_update
+from app.backend.next_plugin_runtime import installed_plugin_version
+from app.backend.next_plugin_runtime import plugin_auto_update_enabled
+from app.backend.next_plugin_runtime import plugin_backup_version
+from app.backend.next_plugin_runtime import plugin_has_backup
+from app.backend.next_plugin_runtime import plugin_update_state
+from app.backend.next_plugin_runtime import rollback_plugin_update
+from app.backend.next_plugin_runtime import set_plugin_auto_update_enabled
+from app.backend.next_plugin_runtime import upgrade_seeded_default_plugins
+from app.backend.next_plugin_runtime import write_plugin_auto_update_marker
 
 
 class FakeResponse:
@@ -378,6 +399,48 @@ class NextPluginRuntimeTests(unittest.TestCase):
         )
         self.assertEqual(_movie_title_from_release_title("Back to the Future DVD"), "Back to the Future")
 
+    def test_bluray_dvd_section_search_ignores_bluray_cross_links(self):
+        captured_sections = []
+
+        def fake_post(url, data=None, headers=None, timeout=None):
+            captured_sections.append((data or {}).get("section"))
+            text = (
+                "var urls = new Array("
+                "'/movies/Lethal-Weapon-2-Blu-ray/12345/',"
+                "'/dvd/Lethal-Weapon-2-DVD/67890/'"
+                ")"
+            )
+            return types.SimpleNamespace(status_code=200, text=text)
+
+        original_requests = bluray_com_plugin.requests
+        try:
+            bluray_com_plugin.requests = types.SimpleNamespace(post=fake_post)
+            urls = bluray_com_plugin._release_urls("Lethal Weapon 2", preferred_format="DVD", limit=8)
+        finally:
+            bluray_com_plugin.requests = original_requests
+
+        self.assertEqual(captured_sections, ["dvdmovies"])
+        self.assertEqual(urls, ["https://www.blu-ray.com/dvd/Lethal-Weapon-2-DVD/67890/"])
+
+    def test_bluray_bluray_section_search_ignores_dvd_cross_links(self):
+        def fake_post(url, data=None, headers=None, timeout=None):
+            text = (
+                "var urls = new Array("
+                "'/dvd/Heat-DVD/111/',"
+                "'/movies/Heat-Blu-ray/222/'"
+                ")"
+            )
+            return types.SimpleNamespace(status_code=200, text=text)
+
+        original_requests = bluray_com_plugin.requests
+        try:
+            bluray_com_plugin.requests = types.SimpleNamespace(post=fake_post)
+            urls = bluray_com_plugin._release_urls("Heat", preferred_format="Blu-ray", limit=8)
+        finally:
+            bluray_com_plugin.requests = original_requests
+
+        self.assertEqual(urls, ["https://www.blu-ray.com/movies/Heat-Blu-ray/222/"])
+
     def test_legacy_import_plugin_is_not_bundled(self):
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
@@ -432,6 +495,97 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(plugins["tmdb"].manifest["version"], "9.9.9")
         self.assertEqual(plugins["tmdb"].path, plugin_dir.resolve())
 
+    def test_seed_default_plugins_copies_bundled_into_install_dir(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": data_dir,
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                    "DISCVAULT_BUNDLED_PLUGIN_DIR": "",
+                },
+            ):
+                result = seed_default_plugins_if_needed()
+                install_dir = Path(data_dir) / "plugins"
+
+                self.assertTrue(result["initialized"])
+                self.assertTrue((install_dir / PLUGIN_INITIALIZED_MARKER).exists())
+                # A known bundled default now lives in the writable install dir.
+                self.assertTrue((install_dir / "tmdb" / "manifest.json").exists())
+                self.assertIn("tmdb", result["seeded"])
+
+    def test_plugin_paths_uses_install_dir_only_after_seeding(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": data_dir,
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                    "DISCVAULT_BUNDLED_PLUGIN_DIR": "",
+                },
+            ):
+                paths = plugin_paths()
+
+                install_dir = (Path(data_dir) / "plugins").resolve()
+                self.assertIn(install_dir, paths)
+                # Bundled dir is no longer a read path once seeding succeeded, so
+                # a deleted default cannot reappear from the read-only image.
+                self.assertNotIn(DEFAULT_PLUGIN_DIR.resolve(), paths)
+
+    def test_deleted_default_plugin_is_not_reseeded(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": data_dir,
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                    "DISCVAULT_BUNDLED_PLUGIN_DIR": "",
+                },
+            ):
+                seed_default_plugins_if_needed()
+                install_dir = Path(data_dir) / "plugins"
+                tmdb_dir = install_dir / "tmdb"
+                self.assertTrue(tmdb_dir.exists())
+
+                # Simulate deleting a bundled default plugin.
+                shutil.rmtree(tmdb_dir)
+
+                # A second discovery must not bring it back (marker gates reseed).
+                second = seed_default_plugins_if_needed()
+                self.assertTrue(second["initialized"])
+                self.assertFalse(tmdb_dir.exists())
+
+                plugins = {plugin.plugin_id for plugin in discover_plugins()["plugins"]}
+                self.assertNotIn("tmdb", plugins)
+                # Other defaults remain available.
+                self.assertIn("movievault_26", plugins)
+
+    def test_plugin_paths_falls_back_to_bundled_when_data_dir_unavailable(self):
+        with tempfile.TemporaryDirectory() as data_dir:
+            # Point the install dir under a non-existent data root so seeding is
+            # skipped (mimics a read-only/absent data directory).
+            missing_root = Path(data_dir) / "does" / "not" / "exist"
+            with patch.dict(
+                os.environ,
+                {
+                    "DISCVAULT_DATA_DIR": str(missing_root),
+                    "DISCVAULT_PLUGIN_INSTALL_DIR": "",
+                    "DISCVAULT_PLUGIN_PATHS": "",
+                    "DISCVAULT_BUNDLED_PLUGIN_DIR": "",
+                },
+            ):
+                seed = seed_default_plugins_if_needed()
+                self.assertFalse(seed["initialized"])
+
+                paths = plugin_paths()
+                self.assertIn(DEFAULT_PLUGIN_DIR.resolve(), paths)
+                # Bundled defaults stay discoverable in fallback mode.
+                plugins = {plugin.plugin_id for plugin in discover_plugins()["plugins"]}
+                self.assertIn("tmdb", plugins)
+
     def test_known_collection_import_plugins_are_discoverable(self):
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
@@ -453,6 +607,24 @@ class NextPluginRuntimeTests(unittest.TestCase):
                 plugin = plugins[plugin_id]
                 self.assertIn("personal_list_source", plugin.manifest["categories"])
                 self.assertIn("sync_personal_lists", plugin.runtime["entrypoints"])
+
+    def test_tmdb_exposes_person_awards_capability_and_entrypoint(self):
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        plugin = plugins["tmdb"]
+        self.assertIn("person_awards", plugin.manifest["capabilities"])
+        self.assertIn("person_awards", plugin.runtime["entrypoints"])
+        self.assertIn("person_details", plugin.runtime["entrypoints"])
+
+    def test_movievault_exposes_person_details_capability_and_entrypoint(self):
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        plugin = plugins["movievault_26"]
+        self.assertIn("metadata_source", plugin.manifest["categories"])
+        self.assertIn("person_details", plugin.manifest["capabilities"])
+        self.assertIn("person_details", plugin.runtime["entrypoints"])
 
     def test_upcitemdb_is_tagged_as_bootstrap_metadata_source(self):
         discovery = discover_plugins()
@@ -871,6 +1043,309 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(item["format"], "Ultra HD Blu-ray")
         self.assertEqual(item["director"], "Denis Villeneuve")
         self.assertIn("Timothee", item["actor"])
+
+
+class UnconfiguredIntegrationPluginsTests(unittest.TestCase):
+    @staticmethod
+    def _plugin(plugin_id, name, *, enabled=True, requires_secrets=False,
+                secrets_configured=False, settings_schema=None, settings_configured=False):
+        return {
+            "id": plugin_id,
+            "name": name,
+            "enabled": enabled,
+            "requiresSecrets": requires_secrets,
+            "secretsConfigured": secrets_configured,
+            "settingsConfigured": settings_configured,
+            "settingsSchema": settings_schema or {},
+        }
+
+    def test_plugin_is_active_requires_enabled_and_secrets(self):
+        self.assertFalse(_plugin_is_active(self._plugin("tmdb", "TMDb", enabled=False)))
+        self.assertFalse(
+            _plugin_is_active(
+                self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=False)
+            )
+        )
+        self.assertTrue(
+            _plugin_is_active(
+                self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=True)
+            )
+        )
+
+    def test_plugin_is_active_requires_required_settings(self):
+        schema = {"settings": [{"name": "baseUrl", "required": True}]}
+        self.assertFalse(
+            _plugin_is_active(
+                self._plugin(
+                    "plex", "Plex", requires_secrets=True, secrets_configured=True,
+                    settings_schema=schema, settings_configured=False,
+                )
+            )
+        )
+        self.assertTrue(
+            _plugin_is_active(
+                self._plugin(
+                    "plex", "Plex", requires_secrets=True, secrets_configured=True,
+                    settings_schema=schema, settings_configured=True,
+                )
+            )
+        )
+
+    def test_unconfigured_lists_disabled_and_missing_plugins_in_order(self):
+        snapshot = {
+            "plugins": [
+                # tmdb fully configured -> excluded
+                self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=True),
+                # bluray disabled -> included
+                self._plugin("bluray_com", "Blu-ray.com", enabled=False),
+                # plex enabled but missing secrets -> included
+                self._plugin("plex", "Plex", requires_secrets=True, secrets_configured=False),
+                # jellyfin fully configured -> excluded
+                self._plugin(
+                    "jellyfin", "Jellyfin", requires_secrets=True, secrets_configured=True,
+                ),
+                # trakt not present in snapshot -> included via fallback name
+            ]
+        }
+        with patch(
+            "app.backend.next_plugin_runtime.plugin_registry_snapshot",
+            return_value=snapshot,
+        ):
+            result = unconfigured_integration_plugins(Mock(), Mock(), Mock())
+        self.assertEqual(
+            result,
+            [
+                {"id": "bluray_com", "name": "Blu-ray.com"},
+                {"id": "plex", "name": "Plex"},
+                {"id": "trakt", "name": "Trakt"},
+            ],
+        )
+
+    def test_unconfigured_empty_when_all_active(self):
+        snapshot = {
+            "plugins": [
+                self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=True),
+                self._plugin("bluray_com", "Blu-ray.com"),
+                self._plugin(
+                    "plex", "Plex", requires_secrets=True, secrets_configured=True,
+                ),
+                self._plugin(
+                    "jellyfin", "Jellyfin", requires_secrets=True, secrets_configured=True,
+                ),
+                self._plugin(
+                    "trakt", "Trakt", requires_secrets=True, secrets_configured=True,
+                ),
+            ]
+        }
+        with patch(
+            "app.backend.next_plugin_runtime.plugin_registry_snapshot",
+            return_value=snapshot,
+        ):
+            result = unconfigured_integration_plugins(Mock(), Mock(), Mock())
+        self.assertEqual(result, [])
+
+
+class PluginAutoUpdateTests(unittest.TestCase):
+    """Auto-update / manual update / rollback of bundled default plugins."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.bundled_dir = root / "bundled"
+        self.install_dir = root / "install"
+        self.backup_dir = root / "backups"
+        self.bundled_dir.mkdir(parents=True, exist_ok=True)
+        self.install_dir.mkdir(parents=True, exist_ok=True)
+        self._env = patch.dict(
+            os.environ,
+            {
+                "DISCVAULT_PLUGIN_INSTALL_DIR": str(self.install_dir),
+                "DISCVAULT_BUNDLED_PLUGIN_DIR": str(self.bundled_dir),
+                "DISCVAULT_PLUGIN_BACKUP_DIR": str(self.backup_dir),
+                "DISCVAULT_PLUGIN_AUTO_UPDATE": "",
+                "DISCVAULT_DATA_DIR": str(root / "data"),
+                "DISCVAULT_PLUGIN_PATHS": "",
+            },
+        )
+        self._env.start()
+        # Ensure no leftover process override leaks between tests.
+        set_plugin_auto_update_enabled(None)
+
+    def tearDown(self):
+        set_plugin_auto_update_enabled(None)
+        self._env.stop()
+        self._tmp.cleanup()
+
+    def _write_plugin(self, base: Path, plugin_id: str, version: str, body: str = "pass\n"):
+        plugin_dir = base / plugin_id
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        (plugin_dir / "manifest.json").write_text(
+            f'{{"id": "{plugin_id}", "name": "{plugin_id}", "version": "{version}"}}',
+            encoding="utf-8",
+        )
+        (plugin_dir / "plugin.py").write_text(body, encoding="utf-8")
+        return plugin_dir
+
+    def _mark_initialized(self):
+        (self.install_dir / PLUGIN_INITIALIZED_MARKER).write_text("1", encoding="utf-8")
+
+    def test_parse_plugin_version_orders_versions(self):
+        self.assertEqual(_parse_plugin_version("1.5.1"), (1, 5, 1))
+        self.assertEqual(_parse_plugin_version("1.5.1-beta"), (1, 5, 1))
+        self.assertEqual(_parse_plugin_version(""), ())
+        self.assertEqual(_parse_plugin_version("garbage"), ())
+        self.assertGreater(_parse_plugin_version("1.5.1"), _parse_plugin_version("1.5.0"))
+        self.assertGreater(_parse_plugin_version("2.0"), _parse_plugin_version("1.9.9"))
+        self.assertGreater(_parse_plugin_version("1.0"), _parse_plugin_version(""))
+
+    def test_upgrade_replaces_outdated_installed_plugin_and_snapshots_backup(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1", "VERSION = '1.5.1'\n")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0", "VERSION = '1.5.0'\n")
+        self._mark_initialized()
+
+        result = upgrade_seeded_default_plugins()
+
+        upgraded = {entry["plugin"]: entry for entry in result["upgraded"]}
+        self.assertIn("movievault_26", upgraded)
+        self.assertEqual(upgraded["movievault_26"]["from"], "1.5.0")
+        self.assertEqual(upgraded["movievault_26"]["to"], "1.5.1")
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.1")
+        # New plugin body is live in the install dir.
+        self.assertIn(
+            "1.5.1",
+            (self.install_dir / "movievault_26" / "plugin.py").read_text(encoding="utf-8"),
+        )
+        # The previous version is preserved for rollback.
+        self.assertTrue(plugin_has_backup("movievault_26"))
+        self.assertEqual(plugin_backup_version("movievault_26"), "1.5.0")
+
+    def test_upgrade_skips_when_installed_is_equal_or_newer(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.0")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertIn("movievault_26", result["skipped"])
+        self.assertEqual(result["upgraded"], [])
+        self.assertFalse(plugin_has_backup("movievault_26"))
+
+    def test_upgrade_respects_auto_update_disabled(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+        set_plugin_auto_update_enabled(False)
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertTrue(result.get("disabled"))
+        self.assertEqual(result["upgraded"], [])
+        # Installed copy untouched.
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.0")
+
+    def test_upgrade_does_not_resurrect_deleted_default(self):
+        # Bundled has the plugin, but the user deleted it from the install dir.
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._mark_initialized()
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertEqual(result["upgraded"], [])
+        self.assertFalse((self.install_dir / "movievault_26").exists())
+
+    def test_upgrade_noop_when_install_dir_not_initialized(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        # No .initialized marker written.
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertEqual(result["upgraded"], [])
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.0")
+
+    def test_install_bundled_update_writes_new_version_with_backup(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+
+        info = install_bundled_plugin_update("movievault_26")
+
+        self.assertEqual(info["from"], "1.5.0")
+        self.assertEqual(info["to"], "1.5.1")
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.1")
+        self.assertEqual(plugin_backup_version("movievault_26"), "1.5.0")
+
+    def test_install_bundled_update_rejects_when_not_newer(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.0")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+
+        with self.assertRaises(ValueError):
+            install_bundled_plugin_update("movievault_26")
+
+    def test_install_bundled_update_rejects_unknown_plugin(self):
+        self._mark_initialized()
+        with self.assertRaises(ValueError):
+            install_bundled_plugin_update("does_not_exist")
+
+    def test_rollback_restores_previous_version_and_removes_backup(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0", "VERSION = '1.5.0'\n")
+        self._mark_initialized()
+
+        install_bundled_plugin_update("movievault_26")
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.1")
+
+        info = rollback_plugin_update("movievault_26")
+
+        self.assertEqual(info["from"], "1.5.1")
+        self.assertEqual(info["to"], "1.5.0")
+        self.assertEqual(installed_plugin_version("movievault_26"), "1.5.0")
+        self.assertIn(
+            "1.5.0",
+            (self.install_dir / "movievault_26" / "plugin.py").read_text(encoding="utf-8"),
+        )
+        # Backup consumed; after rollback bundled is newer again so an update
+        # can be re-offered.
+        self.assertFalse(plugin_has_backup("movievault_26"))
+
+    def test_rollback_without_backup_raises(self):
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+        with self.assertRaises(ValueError):
+            rollback_plugin_update("movievault_26")
+
+    def test_update_state_reports_update_then_rollback_availability(self):
+        self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
+        self._write_plugin(self.install_dir, "movievault_26", "1.5.0")
+        self._mark_initialized()
+
+        state = plugin_update_state("movievault_26")
+        self.assertTrue(state["isBundledDefault"])
+        self.assertTrue(state["updateAvailable"])
+        self.assertEqual(state["bundledVersion"], "1.5.1")
+        self.assertFalse(state["canRollback"])
+
+        install_bundled_plugin_update("movievault_26")
+        state_after = plugin_update_state("movievault_26")
+        self.assertFalse(state_after["updateAvailable"])
+        self.assertTrue(state_after["canRollback"])
+        self.assertEqual(state_after["rollbackVersion"], "1.5.0")
+
+    def test_auto_update_marker_disables_then_enables(self):
+        set_plugin_auto_update_enabled(None)
+        self.assertTrue(plugin_auto_update_enabled())
+        write_plugin_auto_update_marker(False)
+        self.assertFalse(plugin_auto_update_enabled())
+        write_plugin_auto_update_marker(True)
+        self.assertTrue(plugin_auto_update_enabled())
+
+    def test_auto_update_override_takes_precedence(self):
+        write_plugin_auto_update_marker(False)
+        set_plugin_auto_update_enabled(True)
+        self.assertTrue(plugin_auto_update_enabled())
+        set_plugin_auto_update_enabled(None)
+        self.assertFalse(plugin_auto_update_enabled())
 
 
 if __name__ == "__main__":

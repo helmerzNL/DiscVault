@@ -18,6 +18,8 @@ sys.modules.setdefault(
 )
 
 from app.backend.next_metadata import canonicalize_plugin_result
+from app.backend.next_metadata import _clean_scanned_title
+from app.backend.next_metadata import _parse_import_country
 from app.backend.next_metadata import external_metadata_barcode
 from app.backend.next_metadata import metadata_field_decisions_with_write_state
 from app.backend.next_metadata import metadata_fetch_audit_payload
@@ -34,6 +36,149 @@ try:
     from bs4 import BeautifulSoup
 except Exception:  # pragma: no cover
     BeautifulSoup = None
+
+
+class NextScannedTitleTests(unittest.TestCase):
+    def test_bluray_movie_title_from_release_title_strips_format_and_country(self):
+        cleaner = bluray_com_plugin._movie_title_from_release_title
+        self.assertEqual(
+            cleaner("Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)"),
+            "Inception",
+        )
+        self.assertEqual(
+            cleaner("A Star Is Born 4K Blu-ray (4K Ultra HD + Blu-ray + Digital) (France)"),
+            "A Star Is Born",
+        )
+        self.assertEqual(cleaner("Skyfall 4K Blu-ray"), "Skyfall")
+        self.assertEqual(cleaner("The Matrix DVD"), "The Matrix")
+        self.assertEqual(cleaner("The Dark Knight Blu-ray (United States)"), "The Dark Knight")
+        # A plain film title is returned untouched.
+        self.assertEqual(cleaner("Heat"), "Heat")
+
+    def test_clean_scanned_title_strips_packaging_noise(self):
+        self.assertEqual(
+            _clean_scanned_title("John Wick (4K Ultra HD + Blu-ray) (UK Import)"),
+            "John Wick",
+        )
+        self.assertEqual(_clean_scanned_title("Heat [Steelbook]"), "Heat")
+        self.assertEqual(
+            _clean_scanned_title("Blade Runner 2049 - Limited Edition"),
+            "Blade Runner 2049",
+        )
+        # Space-separated multi-token format tails collapse to the film title.
+        self.assertEqual(_clean_scanned_title("Inception 4K Blu-ray"), "Inception")
+        self.assertEqual(_clean_scanned_title("Dune Ultra HD Blu-ray 3D"), "Dune")
+        # A trailing region tag after a format group strands a bare format token
+        # ("4K Blu-ray") that the format-noise stripper alone cannot reach. The
+        # exact shape Blu-ray.com returns for an Inception 4K disc.
+        self.assertEqual(
+            _clean_scanned_title("Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)"),
+            "Inception",
+        )
+        self.assertEqual(
+            _clean_scanned_title(
+                "A Star Is Born 4K Blu-ray (4K Ultra HD + Blu-ray + Digital) (France)"
+            ),
+            "A Star Is Born",
+        )
+        # Multi-word country tags strip too, without eating a leading title word.
+        self.assertEqual(
+            _clean_scanned_title("Skyfall Blu-ray (United Kingdom)"), "Skyfall"
+        )
+        self.assertEqual(
+            _clean_scanned_title("United 93 Blu-ray (United States)"), "United 93"
+        )
+        # A subtitle after a colon must be preserved.
+        self.assertEqual(_clean_scanned_title("Mad Max: Fury Road (Blu-ray)"), "Mad Max: Fury Road")
+        # Titles without noise are returned unchanged.
+        self.assertEqual(_clean_scanned_title("Inception"), "Inception")
+        # Never return an empty string when only noise is present.
+        self.assertTrue(_clean_scanned_title("(Blu-ray)"))
+
+    def test_parse_import_country_maps_known_hints(self):
+        self.assertEqual(_parse_import_country("John Wick (UK Import)"), ("United Kingdom", ""))
+        self.assertEqual(_parse_import_country("Suspiria (Italian Import)"), ("Italy", ""))
+        self.assertEqual(_parse_import_country("The Matrix (US Import)"), ("United States", ""))
+        # Bare country tag in brackets (no "Import" keyword), e.g. Blu-ray.com.
+        self.assertEqual(
+            _parse_import_country("Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)"),
+            ("France", ""),
+        )
+        self.assertEqual(_parse_import_country("Skyfall Blu-ray (United Kingdom)"), ("United Kingdom", ""))
+        # Unknown nationality falls back to a free-text region note.
+        self.assertEqual(_parse_import_country("Some Film (Xyz Import)"), ("", "Xyz Import"))
+        # Region codes land in the region note.
+        self.assertEqual(_parse_import_country("Some Film (Region B)"), ("", "Region B"))
+        # No hint at all.
+        self.assertEqual(_parse_import_country("Plain Title"), ("", ""))
+
+    def test_canonicalize_splits_release_title_from_clean_title(self):
+        normalized = canonicalize_plugin_result(
+            "bluray_com",
+            "movie_details",
+            {
+                "status": "hit",
+                "releaseTitle": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+                "movie": {"title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)"},
+            },
+        )
+        movie_updates = normalized["movieUpdates"]
+        self.assertEqual(movie_updates["title"], "John Wick")
+        self.assertEqual(
+            movie_updates["release_title"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+        self.assertEqual(movie_updates["country"], "United Kingdom")
+        self.assertEqual(normalized["releaseTitle"], "John Wick (4K Ultra HD + Blu-ray) (UK Import)")
+        self.assertEqual(normalized["cleanTitle"], "John Wick")
+
+    def test_canonicalize_keeps_clean_title_untouched_without_noise(self):
+        normalized = canonicalize_plugin_result(
+            "tmdb",
+            "movie_details",
+            {"status": "hit", "movie": {"title": "Inception"}},
+        )
+        self.assertEqual(normalized["movieUpdates"]["title"], "Inception")
+        self.assertNotIn("release_title", normalized["movieUpdates"])
+
+    def test_canonicalize_bluray_release_with_trailing_country(self):
+        # Reproduces the real Blu-ray.com payload for the Inception 4K disc when
+        # MovieVault is disabled: the plugin's movie.title still carries format
+        # noise and the raw release title ends in a "(France)" region tag. The
+        # canonical title must still resolve to the bare film title.
+        normalized = canonicalize_plugin_result(
+            "bluray_com",
+            "search_barcode",
+            {
+                "status": "hit",
+                "releaseTitle": "Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)",
+                "movie": {"title": "Inception 4K Blu-ray (4K Ultra HD + Blu-ray)"},
+                "release": {
+                    "title": "Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)"
+                },
+            },
+        )
+        movie_updates = normalized["movieUpdates"]
+        self.assertEqual(movie_updates["title"], "Inception")
+        self.assertEqual(
+            movie_updates["release_title"],
+            "Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)",
+        )
+        self.assertEqual(movie_updates["country"], "France")
+
+    def test_canonicalize_region_hint_lands_as_regions_array(self):
+        normalized = canonicalize_plugin_result(
+            "bluray_com",
+            "movie_details",
+            {
+                "status": "hit",
+                "releaseTitle": "Some Film (Region B)",
+                "movie": {"title": "Some Film (Region B)"},
+            },
+        )
+        # `regions` must be a JSONB-friendly list, not a bare string.
+        self.assertEqual(normalized["technicalUpdates"]["regions"], ["Region B"])
+        self.assertEqual(normalized["movieUpdates"]["title"], "Some Film")
 
 
 class NextMetadataPolicyTests(unittest.TestCase):
@@ -174,6 +319,115 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertFalse(evidence["membersAreExplicit"])
         self.assertTrue(evidence["detectedWithoutMembers"])
 
+    def test_is_box_set_candidate_keys_only_on_release_title_not_page_text(self):
+        # Regression (barcode 0085391176572 "The Dark Knight Blu-ray"): a single-disc
+        # release whose page merely *mentions* a trilogy/collection in related products
+        # must NOT be classified as a box-set. Only the product's own release title counts.
+        self.assertFalse(
+            bluray_com_plugin._is_box_set_candidate(
+                "The Dark Knight Blu-ray",
+                "Customers also bought: The Dark Knight Trilogy 4K Collection",
+            )
+        )
+        self.assertTrue(bluray_com_plugin._is_box_set_candidate("The Dark Knight Trilogy Blu-ray"))
+        self.assertTrue(bluray_com_plugin._is_box_set_candidate("Alien Anthology"))
+
+    def test_bluray_single_release_page_mentioning_box_set_is_not_a_candidate(self):
+        if BeautifulSoup is None:
+            self.skipTest("BeautifulSoup is not available")
+        html = """
+        <html><head>
+          <meta property="og:title" content="The Dark Knight Blu-ray" />
+          <meta property="og:image" content="/covers/the-dark-knight.jpg" />
+        </head><body>
+          <h1>The Dark Knight Blu-ray</h1>
+          <div id="similar">
+            <p>Customers who bought this also bought:</p>
+            <a class="hoverlink" data-globalparentid="1" data-productid="2" href="/movies/The-Dark-Knight-Trilogy-4K-Blu-ray/12345/">
+              <img src="/covers/trilogy.jpg" alt="The Dark Knight Trilogy 4K" />
+              The Dark Knight Trilogy 4K
+            </a>
+          </div>
+        </body></html>
+        """
+
+        class _Resp:
+            text = html
+
+            def raise_for_status(self):
+                return None
+
+        with mock.patch.object(bluray_com_plugin.requests, "get", return_value=_Resp()):
+            parsed = bluray_com_plugin._parse_page(
+                "https://www.blu-ray.com/movies/The-Dark-Knight-Blu-ray/743/"
+            )
+
+        self.assertEqual(parsed["status"], "hit")
+        self.assertFalse(parsed["isBoxSetCandidate"])
+        self.assertEqual(parsed["boxSetMembers"], [])
+        self.assertNotIn("boxSetEvidence", parsed)
+
+    def test_format_keys_on_url_and_title_not_page_text(self):
+        # Regression (barcode 0085391176572 "The Dark Knight Blu-ray"): a Blu-ray release
+        # page that mentions a 4K/UHD edition elsewhere must still resolve to Blu-ray. The
+        # URL slug and og:title are authoritative; page text is only a last resort.
+        bluray = bluray_com_plugin._format_from_url_title_text(
+            "https://www.blu-ray.com/movies/The-Dark-Knight-Blu-ray/743/",
+            "The Dark Knight Blu-ray",
+            "Also available on 4K UHD. The Dark Knight Trilogy 4K Ultra HD bundle.",
+        )
+        self.assertEqual(bluray, "Blu-ray")
+
+        uhd = bluray_com_plugin._format_from_url_title_text(
+            "https://www.blu-ray.com/movies/The-Dark-Knight-4K-Blu-ray/12345/",
+            "The Dark Knight 4K (Blu-ray)",
+            "",
+        )
+        self.assertEqual(uhd, "4K UHD")
+
+        dvd = bluray_com_plugin._format_from_url_title_text(
+            "https://www.blu-ray.com/dvd/The-Dark-Knight-DVD/678/",
+            "The Dark Knight DVD",
+            "Also available on 4K UHD.",
+        )
+        self.assertEqual(dvd, "DVD")
+
+        # Inconclusive URL/title falls back to page text rather than guessing nothing.
+        fallback = bluray_com_plugin._format_from_url_title_text(
+            "https://www.blu-ray.com/movies/Some-Release/999/",
+            "Some Release",
+            "Format: Blu-ray",
+        )
+        self.assertEqual(fallback, "Blu-ray")
+
+    def test_bluray_blu_ray_page_mentioning_4k_resolves_as_blu_ray(self):
+        if BeautifulSoup is None:
+            self.skipTest("BeautifulSoup is not available")
+        html = """
+        <html><head>
+          <meta property="og:title" content="The Dark Knight Blu-ray" />
+          <meta property="og:image" content="/covers/the-dark-knight.jpg" />
+        </head><body>
+          <h1>The Dark Knight Blu-ray</h1>
+          <p>Also available on 4K UHD Ultra HD Blu-ray.</p>
+        </body></html>
+        """
+
+        class _Resp:
+            text = html
+
+            def raise_for_status(self):
+                return None
+
+        with mock.patch.object(bluray_com_plugin.requests, "get", return_value=_Resp()):
+            parsed = bluray_com_plugin._parse_page(
+                "https://www.blu-ray.com/movies/The-Dark-Knight-Blu-ray/743/"
+            )
+
+        self.assertEqual(parsed["format"], "Blu-ray")
+        self.assertEqual(parsed["movie"]["format"], "Blu-ray")
+        self.assertEqual(parsed["release"]["format"], "Blu-ray")
+
     def test_canonicalize_plugin_result_normalizes_box_set_evidence_contract(self):
         result = canonicalize_plugin_result(
             "movievault_26",
@@ -208,6 +462,77 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(evidence["memberCount"], 3)
         self.assertTrue(evidence["membersAreExplicit"])
         self.assertEqual(evidence["format"], "DVD")
+
+    def test_canonicalize_synthesizes_candidate_for_single_movie_hit(self):
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "Blu-ray.com",
+                "sourceRef": "https://www.blu-ray.com/movies/Lethal-Weapon",
+                "movie": {"title": "Lethal Weapon", "year": "1987", "posterUrl": "https://images.example/lethal.jpg"},
+                "release": {"title": "Lethal Weapon 4K UHD"},
+                "format": "4K UHD",
+            },
+        )
+
+        candidates = result["candidates"]
+        self.assertEqual(len(candidates), 1)
+        synthesized = candidates[0]
+        self.assertTrue(synthesized.get("synthesized"))
+        self.assertEqual(synthesized["title"], "Lethal Weapon")
+        self.assertEqual(synthesized["provider"], "bluray_com")
+        self.assertEqual(synthesized["format"], "4K UHD")
+        self.assertEqual(synthesized["sourceRef"], "https://www.blu-ray.com/movies/Lethal-Weapon")
+        self.assertEqual(synthesized["posterUrl"], "https://images.example/lethal.jpg")
+
+    def test_canonicalize_does_not_synthesize_candidate_on_miss(self):
+        result = canonicalize_plugin_result(
+            "dvd_fr",
+            "search_barcode",
+            {"status": "miss", "sourceLabel": "DVDFr"},
+        )
+
+        self.assertEqual(result["candidates"], [])
+
+    def test_canonicalize_does_not_synthesize_candidate_for_box_set(self):
+        result = canonicalize_plugin_result(
+            "movievault_26",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "MovieVault 26",
+                "sourceRef": "barcode:5050582369601",
+                "movie": {"title": "Back to the Future Trilogy"},
+                "boxSetProposal": {
+                    "title": "Back to the Future Trilogy DVD",
+                    "barcode": "5050582369601",
+                    "format": "DVD",
+                    "members": [
+                        {"title": "Back to the Future", "year": "1985"},
+                        {"title": "Back to the Future Part II", "year": "1989"},
+                    ],
+                },
+            },
+        )
+
+        self.assertEqual(result["candidates"], [])
+
+    def test_canonicalize_preserves_explicit_candidates(self):
+        explicit = [{"title": "Heat", "year": "1995", "provider": "tmdb"}]
+        result = canonicalize_plugin_result(
+            "tmdb",
+            "search_title",
+            {
+                "status": "hit",
+                "sourceLabel": "TMDB",
+                "items": explicit,
+                "movie": {"title": "Heat"},
+            },
+        )
+
+        self.assertEqual(result["candidates"], explicit)
 
     def test_release_specs_do_not_upgrade_across_formats(self):
         current = {
@@ -302,6 +627,77 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(merged["technicalUpdates"]["subtitles"], ["French"])
         self.assertTrue(
             any(item["field"] == "title" and "release source" in item["reason"] for item in merged["skipped"])
+        )
+
+    def test_release_source_seeds_canonical_title_when_movie_has_none(self):
+        # Mirrors a real barcode scan where MovieVault 500s and TMDb misses, so
+        # the only hit is Blu-ray.com (a release source). Its plugin already
+        # derives a clean movie.title with the raw packaging string in
+        # release.title; the clean title must seed the empty canonical title
+        # instead of leaving it blank.
+        current = {"title": "", "format": "4K UHD", "metadata": {}}
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "Blu-ray.com",
+                "movie": {
+                    "title": "Inception",
+                    "format": "4K UHD",
+                },
+                "release": {
+                    "title": "Inception 4K Blu-ray (UK Import)",
+                    "format": "4K UHD",
+                },
+                "technicalSpecs": {"format": "4K UHD", "subtitles": ["English"]},
+            },
+        )
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[result],
+            overwrite_enabled=False,
+            target_format="4K UHD",
+        )
+
+        self.assertEqual(merged["movieUpdates"]["title"], "Inception")
+        self.assertEqual(
+            merged["movieUpdates"]["release_title"],
+            "Inception 4K Blu-ray (UK Import)",
+        )
+        self.assertEqual(merged["movieUpdates"]["country"], "United Kingdom")
+        self.assertFalse(
+            any(item["field"] == "title" and "release source" in item["reason"] for item in merged["skipped"])
+        )
+
+    def test_release_source_still_cannot_overwrite_existing_canonical_title(self):
+        current = {"title": "Inception", "format": "4K UHD", "metadata": {}}
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "search_barcode",
+            {
+                "status": "hit",
+                "sourceLabel": "Blu-ray.com",
+                "movie": {"title": "Inception 4K Blu-ray (UK Import)", "format": "4K UHD"},
+                "release": {"title": "Inception 4K Blu-ray (UK Import)", "format": "4K UHD"},
+                "technicalSpecs": {"format": "4K UHD"},
+            },
+        )
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={},
+            results=[result],
+            overwrite_enabled=True,
+            target_format="4K UHD",
+        )
+
+        self.assertNotIn("title", merged["movieUpdates"])
+        self.assertTrue(
+            any(
+                item["field"] == "title" and "release source cannot overwrite" in item["reason"]
+                for item in merged["skipped"]
+            )
         )
 
     def test_manual_fields_are_protected_without_preferred_overwrite(self):
@@ -592,6 +988,26 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertEqual([item["entrypoint"] for item in plan], ["search_title", "movie_details", "box_set_candidates"])
 
+    def test_preview_barcode_and_title_is_title_driven(self):
+        query = query_from_payload({
+            "barcode": "5051892000000",
+            "title": "Lethal Weapon",
+            "detectBoxSets": True,
+            "previewMode": True,
+        })
+        plan = plugin_execution_plan(
+            {"capabilities": ["search_barcode", "search_title", "movie_details", "box_set_candidates"]},
+            query,
+        )
+
+        entrypoints = [item["entrypoint"] for item in plan]
+        self.assertEqual(entrypoints, ["search_title", "movie_details", "box_set_candidates"])
+        self.assertNotIn("search_barcode", entrypoints)
+        for item in plan:
+            self.assertNotIn("externalBarcode", item["payload"])
+            self.assertNotIn("barcode", item["payload"])
+            self.assertEqual(item["payload"].get("title"), "Lethal Weapon")
+
     def test_bootstrap_metadata_source_runs_for_public_barcode_queries(self):
         plugin = {
             "id": "upcitemdb",
@@ -840,6 +1256,181 @@ class NextMetadataPolicyTests(unittest.TestCase):
         )
         self.assertNotIn("watchHistory", str(payload))
         self.assertNotIn("privateNotes", str(payload))
+
+    def test_receiver_contribution_payload_includes_full_current_metadata(self):
+        movie = {
+            "id": "9f12",
+            "public_id": "legacy-movie-73",
+            "title": "A Star Is Born",
+            "original_title": "A Star Is Born",
+            "sort_title": "Star Is Born, A",
+            "year": "2018",
+            "barcode": "0883929598083",
+            "format": "4K UHD",
+            "edition": "Special Edition",
+            "country": "US",
+            "language": "en",
+            "runtime_minutes": 136,
+            "overview": "A musician helps a young singer find fame.",
+            "rating": "7.5",
+            "release_date": "2018-10-05",
+        }
+        preview = {
+            "proposal": {
+                "technicalUpdates": {"audio_tracks": ["English: Dolby Atmos"]},
+                "identifiers": {"tmdb": "332562", "imdb": "tt1517451"},
+                "provenance": [{"pluginId": "bluray_com", "field": "audio_tracks"}],
+            },
+            "results": [],
+        }
+        credits = [
+            {"name": "Bradley Cooper", "credit_type": "crew", "job": "Director", "character": ""},
+            {"name": "Lady Gaga", "credit_type": "actor", "job": "", "character": "Ally"},
+            {"name": "Bradley Cooper", "credit_type": "actor", "job": "", "character": "Jackson"},
+        ]
+
+        payload = receiver_contribution_payload(
+            movie_id="9f12",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {}},
+            credits=credits,
+        )
+
+        fields = payload["payload"]
+        self.assertEqual(fields["overview"], "A musician helps a young singer find fame.")
+        self.assertEqual(fields["releaseDate"], "2018-10-05")
+        self.assertEqual(fields["runtimeMinutes"], 136)
+        self.assertEqual(fields["country"], "US")
+        self.assertEqual(fields["language"], "en")
+        self.assertEqual(fields["rating"], "7.5")
+        self.assertEqual(fields["edition"], "Special Edition")
+        self.assertEqual(fields["director"], "Bradley Cooper")
+        self.assertIn("Lady Gaga", fields["actor"])
+        self.assertEqual(fields["audio_tracks"], ["English: Dolby Atmos"])
+        self.assertEqual(len(fields["credits"]), 3)
+
+    def test_receiver_contribution_payload_release_date_object_serialized(self):
+        from datetime import date
+
+        movie = {
+            "id": "aa01",
+            "public_id": "legacy-movie-12",
+            "title": "Dune",
+            "year": "2021",
+            "format": "4K UHD",
+            "release_date": date(2021, 10, 22),
+        }
+        payload = receiver_contribution_payload(
+            movie_id="aa01",
+            movie=movie,
+            preview={"proposal": {}, "results": []},
+            applied={"changed": True, "applied": {}},
+        )
+        self.assertEqual(payload["payload"]["releaseDate"], "2021-10-22")
+
+
+    def test_receiver_contribution_payload_excludes_locked_fields(self):
+        movie = {
+            "id": "cc05",
+            "public_id": "legacy-movie-44",
+            "title": "Heat",
+            "original_title": "Heat",
+            "year": "1995",
+            "barcode": "0883929000000",
+            "format": "4K UHD",
+            "overview": "Hand-curated synopsis kept by the collector.",
+            "country": "US",
+            "language": "en",
+            "metadata": {
+                "director": "Michael Mann",
+                "distributor": "Warner",
+                "field_locks": ["overview", "director", "country"],
+            },
+        }
+        preview = {
+            "proposal": {
+                "metadataUpdates": {"director": "Provider Director", "genre": "Crime"},
+                "provenance": [{"pluginId": "tmdb", "field": "genre"}],
+            },
+            "results": [],
+        }
+        payload = receiver_contribution_payload(
+            movie_id="cc05",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {}},
+        )
+        sent = payload["payload"]
+        self.assertNotIn("overview", sent)
+        self.assertNotIn("director", sent)
+        self.assertNotIn("country", sent)
+        self.assertEqual(sent.get("genre"), "Crime")
+        self.assertEqual(sent.get("title"), "Heat")
+        self.assertEqual(sent.get("language"), "en")
+
+    def test_receiver_contribution_payload_includes_localizations(self):
+        movie = {
+            "id": "dd07",
+            "public_id": "legacy-movie-77",
+            "title": "Spirited Away",
+            "year": "2001",
+            "format": "4K UHD",
+        }
+        preview = {
+            "proposal": {
+                "localizations": [
+                    {"lang": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                    {"lang": "de-DE", "title": "Chihiros Reise", "overview": "Ein Maedchen..."},
+                    {"lang": "pt", "overview": ""},
+                ],
+            },
+            "results": [],
+        }
+        payload = receiver_contribution_payload(
+            movie_id="dd07",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {}},
+        )
+        localizations = payload["payload"]["localizations"]
+        self.assertEqual(len(localizations), 2)
+        by_lang = {item["lang"]: item for item in localizations}
+        self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
+        self.assertEqual(by_lang["fr"]["overview"], "Une fille...")
+        self.assertEqual(by_lang["de-DE"]["title"], "Chihiros Reise")
+        self.assertNotIn("pt", by_lang)
+
+    def test_receiver_contribution_payload_localizations_respect_locks(self):
+        movie = {
+            "id": "ee08",
+            "public_id": "legacy-movie-78",
+            "title": "Heat",
+            "year": "1995",
+            "format": "4K UHD",
+            "metadata": {"field_locks": ["overview"]},
+        }
+        preview = {
+            "proposal": {
+                "localizations": [
+                    {"lang": "fr", "title": "Heat FR", "overview": "Synopsis FR"},
+                    {"lang": "es", "overview": "Sinopsis ES"},
+                ],
+            },
+            "results": [],
+        }
+        payload = receiver_contribution_payload(
+            movie_id="ee08",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {}},
+        )
+        localizations = payload["payload"]["localizations"]
+        by_lang = {item["lang"]: item for item in localizations}
+        self.assertIn("fr", by_lang)
+        self.assertEqual(by_lang["fr"].get("title"), "Heat FR")
+        self.assertNotIn("overview", by_lang["fr"])
+        self.assertNotIn("es", by_lang)
 
 
 if __name__ == "__main__":

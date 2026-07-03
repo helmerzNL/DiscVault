@@ -50,7 +50,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.4.0")
+        self.assertEqual(manifest["version"], "1.5.3")
         self.assertIn("connection_request", manifest["capabilities"])
         self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
@@ -58,6 +58,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertIn("prepare_container_update", manifest["capabilities"])
         self.assertIn("prepare_barcode_update", manifest["capabilities"])
         self.assertIn("member_intelligence", manifest["capabilities"])
+        self.assertIn("person_details", manifest["capabilities"])
 
     def test_movievault_26_runtime_exposes_receiver_observability_hooks(self):
         discovery = discover_plugins()
@@ -235,7 +236,131 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
         self.assertEqual(proposal, {})
 
-    def test_barcode_lookup_exposes_box_set_payload_without_movie_wrapper(self):
+    def test_single_film_with_release_list_does_not_become_box_set_proposal(self):
+        # Regression for the iOS HTTP 422 on regular films (barcode 3344428071189).
+        # MovieVault returns a single movie carrying its own physical structure
+        # (releases/discs/contents). Those are NOT box-set members, so the lookup
+        # must surface a normal movie candidate and never a 1-member box-set.
+        original_get = movievault_26._get
+        shapes = {
+            "releases": [{"format": "4K UHD", "barcode": "3344428071189"}],
+            "releases_two_editions": [
+                {"title": "The Greatest Showman", "format": "4K UHD"},
+                {"title": "The Greatest Showman", "format": "Blu-ray"},
+            ],
+            "discs": [{"discNumber": 1, "format": "4K UHD"}],
+            "contents": [{"title": "The Greatest Showman"}],
+        }
+        try:
+            for key, value in shapes.items():
+                def fake_get(_context, path, **_params):
+                    self.assertEqual(path, "/api/v1/barcodes/3344428071189")
+                    return {
+                        "status": "ok",
+                        "data": {
+                            "id": "mv_tgs",
+                            "title": "The Greatest Showman",
+                            "year": "2017",
+                            "format": "4K UHD",
+                            "posterUrl": "https://img.example/tgs.jpg",
+                            "tmdbId": 316029,
+                            ("discItems" if key == "discs" else key): value,
+                        },
+                    }
+
+                movievault_26._get = fake_get
+                result = movievault_26.search_barcode(
+                    {"barcode": "3344428071189"}, {"movievault": {"enabled": True}}
+                )
+                self.assertEqual(result["status"], "hit", key)
+                self.assertNotIn("boxSetProposal", result, key)
+                self.assertNotIn("boxSetProposals", result, key)
+                self.assertEqual(result["movie"]["title"], "The Greatest Showman", key)
+                self.assertEqual(len(result["candidates"]), 1, key)
+        finally:
+            movievault_26._get = original_get
+
+    def test_barcode_release_match_resolves_single_disc_with_release_format(self):
+        # Regression for barcode 3344428072513 (French StudioCanal Blu-ray of
+        # Fight Club). MovieVault's contract response is a *release* match: the
+        # scanned Blu-ray sits at the top level while the movie carries ALL its
+        # physical editions under ``releases`` plus a movie-level format copied
+        # from the first edition (4K UHD). The lookup must surface exactly ONE
+        # candidate — the scanned Blu-ray — and never a box-set, never the 4K UHD.
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                self.assertEqual(path, "/api/v1/barcodes/3344428072513")
+                return {
+                    "type": "release",
+                    "lookup": {
+                        "barcode": "3344428072513",
+                        "normalizedBarcode": "3344428072513",
+                        "matchedType": "release",
+                    },
+                    "release": {
+                        "id": "mv_rel_fc_bd_fr",
+                        "movieId": "mv_movie_fc",
+                        "barcode": "3344428072513",
+                        "title": "Fight Club",
+                        "format": "Blu-ray",
+                        "country": "France",
+                        "edition": "StudioCanal",
+                    },
+                    "movie": {
+                        "id": "mv_movie_fc",
+                        "movieVaultId": "mv_movie_fc",
+                        "title": "Fight Club",
+                        "year": "1999",
+                        "tmdbId": 550,
+                        "posterUrl": "https://img.example/fightclub.jpg",
+                        "format": "4K UHD",
+                        "release": {"barcode": "5051890315526", "format": "4K UHD"},
+                        "releases": [
+                            {"title": "Fight Club", "barcode": "5051890315526", "format": "4K UHD"},
+                            {"title": "Fight Club - Remastered Blu-ray (Germany)", "format": "Blu-ray", "country": "Germany"},
+                            {"title": "Fight Club Blu-ray (Sweden)", "format": "Blu-ray", "country": "Sweden"},
+                            {"title": "Fight Club (Édition SteelBook Limitée)", "format": "Blu-ray", "country": "France"},
+                            {"title": "Fight Club", "barcode": "3344428072513", "format": "Blu-ray", "country": "France", "edition": "StudioCanal"},
+                            {"title": "Fight Club DVD", "format": "DVD"},
+                            {"title": "Fight Club 4K UHD (UK)", "format": "4K UHD", "country": "United Kingdom"},
+                        ],
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode(
+                {"barcode": "3344428072513"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertNotIn("boxSetProposal", result)
+        self.assertNotIn("boxSetProposals", result)
+        self.assertEqual(len(result["candidates"]), 1)
+        candidate = result["candidates"][0]
+        self.assertEqual(candidate["title"], "Fight Club")
+        self.assertEqual(candidate["format"], "Blu-ray")
+        self.assertEqual(candidate["barcode"], "3344428072513")
+        self.assertEqual(result["movie"]["format"], "Blu-ray")
+
+    def test_single_film_payload_with_single_member_is_dropped(self):
+        proposal = movievault_26._normalize_box_set_proposal(
+            {
+                "data": {
+                    "id": "mv_tgs",
+                    "title": "The Greatest Showman",
+                    "year": "2017",
+                    "format": "4K UHD",
+                    "contents": [{"title": "The Greatest Showman"}],
+                }
+            },
+            {},
+        )
+
+        self.assertEqual(proposal, {})
+
         original_get = movievault_26._get
         try:
             def fake_get(_context, path, **_params):
@@ -512,10 +637,32 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 ]
             },
             {"format": "Blu-ray"},
+            require_explicit=False,
         )
 
         self.assertEqual(proposal["movies"][0]["discNumber"], "1")
         self.assertEqual(proposal["movies"][1]["disc_number"], "2")
+
+    def test_box_set_proposal_exposes_camel_case_poster_url(self):
+        proposal = movievault_26._normalize_box_set_proposal(
+            {
+                "items": [
+                    {
+                        "title": "Example Trilogy",
+                        "posterUrl": "https://img.example/box.jpg",
+                        "movies": [
+                            {"title": "Example One", "posterUrl": "https://img.example/one.jpg"},
+                            {"title": "Example Two", "posterUrl": "https://img.example/two.jpg"},
+                        ],
+                    }
+                ]
+            },
+            {"format": "Blu-ray"},
+            require_explicit=False,
+        )
+
+        self.assertEqual(proposal["posterUrl"], "https://img.example/box.jpg")
+        self.assertEqual(proposal["poster_url"], "https://img.example/box.jpg")
 
     def test_unauthorized_request_recovers_token_once_and_retries(self):
         seen_auth = []
@@ -751,6 +898,50 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(payload["members"][0]["title"], "Harry Potter and the Philosopher's Stone")
         self.assertNotIn("mv_live_test", str(posted[0]))
 
+    def test_receive_metadata_skips_gracefully_when_rate_limited(self):
+        attempts = []
+
+        class RateLimitedResponse(FakeResponse):
+            def __init__(self):
+                super().__init__(429, {"error": {"code": "rate_limited"}})
+                self.headers = {"Retry-After": "0"}
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(200, {"version": "tpl-1", "allowedFields": ["title"]})
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                attempts.append(url)
+                return RateLimitedResponse()
+            return FakeResponse(404, {})
+
+        original_requests = movievault_26.requests
+        original_cache = dict(movievault_26._TEMPLATE_CACHE)
+        original_sleep = movievault_26.time.sleep
+        try:
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26.requests = types.SimpleNamespace(request=fake_request)
+            movievault_26.time.sleep = lambda *_args, **_kwargs: None
+            result = movievault_26.receive_metadata(
+                {
+                    "entityType": "movie",
+                    "identity": "tt0078748",
+                    "payload": {"title": "Alien"},
+                },
+                {
+                    "secrets": {"token": "mv_live_test"},
+                    "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+                },
+            )
+        finally:
+            movievault_26.requests = original_requests
+            movievault_26.time.sleep = original_sleep
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26._TEMPLATE_CACHE.update(original_cache)
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "rate_limited")
+        self.assertEqual(len(attempts), movievault_26.RATE_LIMIT_MAX_RETRIES + 1)
+
     def test_describe_payload_summarizes_box_set_contribution(self):
         result = movievault_26.describe_payload(
             {
@@ -882,6 +1073,561 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["fields"], ["overview", "title"])
         self.assertNotIn("mv_live_secret", str(result))
         self.assertNotIn("must-not-leak", str(result))
+
+
+class MovieVault26SignedContributionTests(unittest.TestCase):
+    def _run_contribution(self, context, fake_request):
+        original_requests = movievault_26.requests
+        original_cache = dict(movievault_26._TEMPLATE_CACHE)
+        try:
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26.requests = types.SimpleNamespace(request=fake_request)
+            return movievault_26.receive_metadata(
+                {
+                    "entityType": "movie",
+                    "identity": "tt0078748",
+                    "payload": {"title": "Alien", "overview": "A public synopsis."},
+                },
+                context,
+            )
+        finally:
+            movievault_26.requests = original_requests
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26._TEMPLATE_CACHE.update(original_cache)
+
+    def test_contribution_is_signed_and_transmits_exact_signed_bytes(self):
+        signer_inputs = []
+        posts = []
+
+        def signer(raw_body):
+            signer_inputs.append(raw_body)
+            return {
+                "keyId": "dvpk_registered",
+                "timestamp": "2026-06-21T12:00:00Z",
+                "nonce": f"nonce-{len(signer_inputs)}",
+                "signature": "key-v1=sig-value",
+            }
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(200, {"version": "tpl-1", "allowedFields": ["title", "overview"]})
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posts.append(kwargs)
+                return FakeResponse(200, {"id": "contrib_signed"})
+            return FakeResponse(404, {})
+
+        context = {
+            "secrets": {"token": "mv_live_test"},
+            "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+            "movievaultSignRequest": signer,
+        }
+        result = self._run_contribution(context, fake_request)
+
+        self.assertEqual(result["status"], "submitted")
+        self.assertEqual(len(posts), 1)
+        post = posts[0]
+        # Signed requests must use data= (raw bytes), never json= (which would re-serialize).
+        self.assertIsNone(post.get("json"))
+        sent_bytes = post["data"]
+        self.assertIsInstance(sent_bytes, bytes)
+        # The bytes signed must be exactly the bytes transmitted.
+        self.assertEqual(sent_bytes.decode("utf-8"), signer_inputs[0])
+        headers = post["headers"]
+        self.assertEqual(headers["X-DiscVault-Key-Id"], "dvpk_registered")
+        self.assertEqual(headers["X-DiscVault-Timestamp"], "2026-06-21T12:00:00Z")
+        self.assertEqual(headers["X-DiscVault-Nonce"], "nonce-1")
+        self.assertEqual(headers["X-DiscVault-Signature"], "key-v1=sig-value")
+        self.assertEqual(headers["Content-Type"], "application/json")
+        self.assertEqual(headers["Authorization"], "Bearer mv_live_test")
+
+    def test_unsigned_contribution_uses_json_when_no_signer(self):
+        posts = []
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(200, {"version": "tpl-1", "allowedFields": ["title", "overview"]})
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posts.append(kwargs)
+                return FakeResponse(200, {"id": "contrib_plain"})
+            return FakeResponse(404, {})
+
+        context = {
+            "secrets": {"token": "mv_live_test"},
+            "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+        }
+        result = self._run_contribution(context, fake_request)
+
+        self.assertEqual(result["status"], "submitted")
+        self.assertIsNone(posts[0].get("data"))
+        self.assertIsNotNone(posts[0].get("json"))
+        self.assertNotIn("X-DiscVault-Signature", posts[0]["headers"])
+
+    def test_signed_contribution_resigns_with_fresh_nonce_on_token_recovery_retry(self):
+        nonces = []
+        posts = []
+
+        def signer(raw_body):
+            nonces.append(f"nonce-{len(nonces) + 1}")
+            return {
+                "keyId": "dvpk_registered",
+                "timestamp": "2026-06-21T12:00:00Z",
+                "nonce": nonces[-1],
+                "signature": f"key-v1=sig-{len(nonces)}",
+            }
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(200, {"version": "tpl-1", "allowedFields": ["title", "overview"]})
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posts.append(kwargs)
+                if len(posts) == 1:
+                    return FakeResponse(401, {"error": "unauthorized"})
+                return FakeResponse(200, {"id": "contrib_retry"})
+            return FakeResponse(404, {})
+
+        context = {
+            "secrets": {"token": "mv_old"},
+            "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+            "movievaultRecoverToken": lambda: "mv_new",
+            "movievaultSignRequest": signer,
+        }
+        result = self._run_contribution(context, fake_request)
+
+        self.assertEqual(result["status"], "submitted")
+        self.assertEqual(len(posts), 2)
+        # Each attempt re-signs with a unique nonce so the server never sees a replay.
+        first_nonce = posts[0]["headers"]["X-DiscVault-Nonce"]
+        second_nonce = posts[1]["headers"]["X-DiscVault-Nonce"]
+        self.assertNotEqual(first_nonce, second_nonce)
+        self.assertEqual(posts[0]["headers"]["Authorization"], "Bearer mv_old")
+        self.assertEqual(posts[1]["headers"]["Authorization"], "Bearer mv_new")
+        # Both attempts sign-then-send identical bytes.
+        self.assertEqual(posts[0]["data"], posts[1]["data"])
+
+class MovieVault26ClientVersionGateTests(unittest.TestCase):
+    def test_bootstrap_request_body_advertises_client_version(self):
+        result = movievault_26.connection_request(
+            {
+                "phase": "bootstrap",
+                "body": {
+                    "instanceId": "dv_test",
+                    "instanceVersion": "26.2.9",
+                    "software": {"name": "DiscVault", "version": "26.2.9", "backendVersion": "26.2.9"},
+                },
+                "publicKey": "public_key_test",
+            },
+            {},
+        )
+
+        self.assertEqual(result["body"]["clientVersion"], "26.2.9")
+
+    def test_handshake_request_body_advertises_client_version(self):
+        result = movievault_26.connection_request(
+            {
+                "phase": "recovery",
+                "body": {
+                    "instanceId": "dv_test",
+                    "instanceVersion": "26.2.9",
+                    "software": {"name": "DiscVault", "version": "26.2.9"},
+                },
+                "timestamp": "2026-06-09T12:00:00Z",
+                "nonce": "nonce-test",
+                "publicKeyId": "dvpk_test",
+                "signature": "signature-test",
+            },
+            {},
+        )
+
+        self.assertEqual(result["path"], "/api/v1/internal/discvault/handshake")
+        self.assertEqual(result["body"]["clientVersion"], "26.2.9")
+
+    def test_client_version_falls_back_to_context_source_version(self):
+        result = movievault_26.connection_request(
+            {"phase": "bootstrap", "body": {"instanceId": "dv_test"}, "publicKey": "pk"},
+            {"movievault": {"sourceVersion": "26.3.0"}},
+        )
+
+        self.assertEqual(result["body"]["clientVersion"], "26.3.0")
+
+    def test_connection_recovery_action_treats_426_as_terminal(self):
+        for payload in (
+            {
+                "phase": "bootstrap",
+                "statusCode": 426,
+                "response": {
+                    "error": {
+                        "code": "client_version_unsupported",
+                        "message": "Upgrade required",
+                        "minVersion": "26.1.0",
+                        "detectedVersion": "25.9.9",
+                    }
+                },
+            },
+            {
+                "phase": "recovery",
+                "statusCode": 400,
+                "response": {"error": {"code": "client_version_unsupported", "minVersion": "26.1.0"}},
+            },
+        ):
+            action = movievault_26.connection_recovery_action(payload, {})
+            self.assertEqual(action["action"], "")
+            self.assertEqual(action["reason"], "client_version_unsupported")
+            self.assertTrue(action["terminal"])
+            self.assertIn("26.1.0", action["message"])
+
+    def test_request_raises_terminal_error_on_426_without_retry_loop(self):
+        calls = []
+
+        def fake_request(method, url, **kwargs):
+            calls.append((method, url))
+            return FakeResponse(
+                426,
+                {
+                    "error": {
+                        "code": "client_version_unsupported",
+                        "message": "Upgrade required",
+                        "minVersion": "26.1.0",
+                        "detectedVersion": "25.9.9",
+                    }
+                },
+            )
+
+        original_requests = movievault_26.requests
+        recover_calls = []
+        try:
+            movievault_26.requests = types.SimpleNamespace(request=fake_request)
+            context = {
+                "secrets": {"token": "mv_old"},
+                "movievaultRecoverToken": lambda: recover_calls.append(1) or "mv_new",
+            }
+            with self.assertRaises(movievault_26.MovieVaultClientVersionUnsupported) as ctx:
+                movievault_26._get(context, "/api/v1/movies", q="Alien")
+        finally:
+            movievault_26.requests = original_requests
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(recover_calls, [])
+        message = str(ctx.exception)
+        self.assertIn("26.1.0", message)
+        self.assertIn("25.9.9", message)
+        self.assertEqual(ctx.exception.min_version, "26.1.0")
+        self.assertEqual(ctx.exception.detected_version, "25.9.9")
+
+    def test_describe_payload_surfaces_cached_min_client_version(self):
+        original_cache = dict(movievault_26._TEMPLATE_CACHE)
+        try:
+            movievault_26._TEMPLATE_CACHE.clear()
+            context = {"movievault": {"sourceVersion": "26.2.9"}}
+            key = movievault_26._template_cache_key(context)
+            movievault_26._TEMPLATE_CACHE[key] = {
+                "fetchedAt": 9_999_999_999,
+                "template": {"minClientVersion": "26.1.0"},
+            }
+            result = movievault_26.describe_payload(
+                {"entityType": "movie", "payload": {"title": "Alien"}},
+                context,
+            )
+        finally:
+            movievault_26._TEMPLATE_CACHE.clear()
+            movievault_26._TEMPLATE_CACHE.update(original_cache)
+
+        self.assertEqual(result["destination"]["minClientVersion"], "26.1.0")
+        self.assertEqual(result["destination"]["clientVersion"], "26.2.9")
+
+
+class ContributionFieldDiagnosticsTest(unittest.TestCase):
+    def test_reports_dropped_fields_not_in_template(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "The Matrix",
+                "overview": "A hacker learns the truth.",
+                "audio_tracks": "DTS-HD MA 5.1",
+                "runtime": 136,
+                "empty_field": "",
+            },
+        }
+        template = {"allowedFields": ["title", "overview"]}
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        accepted, dropped = movievault_26._contribution_field_diagnostics(
+            payload, template, contribution_payload
+        )
+        self.assertEqual(accepted, ["overview", "title"])
+        dropped_map = {item["field"]: item["reason"] for item in dropped}
+        self.assertEqual(dropped_map.get("audio_tracks"), "not_in_template")
+        self.assertEqual(dropped_map.get("runtime"), "not_in_template")
+        self.assertNotIn("empty_field", dropped_map)
+
+    def test_no_template_keeps_all_fields(self):
+        payload = {"entityType": "movie", "payload": {"title": "The Matrix", "audio_tracks": "DTS"}}
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        accepted, dropped = movievault_26._contribution_field_diagnostics(
+            payload, {}, contribution_payload
+        )
+        self.assertIn("title", accepted)
+        self.assertEqual(dropped, [])
+
+
+class ContributionReleaseTitleTest(unittest.TestCase):
+    def test_release_entity_carries_physical_title_and_canonical_movie_title(self):
+        payload = {
+            "entityType": "release",
+            "payload": {
+                "title": "John Wick",
+                "release_title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+                "barcode": "5051888255889",
+                "format": "4K UHD",
+                "country": "United Kingdom",
+                "regions": ["Region B"],
+            },
+        }
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        # The release entity carries the full physical/packaging title...
+        self.assertEqual(
+            contribution_payload["title"],
+            "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+        # ...while the canonical film title travels as movieTitle/tmdbTitle.
+        self.assertEqual(contribution_payload["movieTitle"], "John Wick")
+        self.assertEqual(contribution_payload["tmdbTitle"], "John Wick")
+        self.assertEqual(contribution_payload["country"], "United Kingdom")
+        self.assertEqual(contribution_payload["regions"], ["Region B"])
+        # The raw DiscVault-only key is not forwarded as its own field.
+        self.assertNotIn("release_title", contribution_payload)
+
+    def test_release_title_falls_back_to_clean_title(self):
+        payload = {"entityType": "release", "payload": {"title": "Heat", "format": "Blu-ray"}}
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        self.assertEqual(contribution_payload["title"], "Heat")
+        self.assertEqual(contribution_payload["movieTitle"], "Heat")
+        self.assertEqual(contribution_payload["tmdbTitle"], "Heat")
+
+    def test_movie_entity_keeps_only_clean_title(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "John Wick",
+                "release_title": "John Wick (4K Ultra HD + Blu-ray) (UK Import)",
+            },
+        }
+        _, contribution_payload = movievault_26._contribution_payload(payload, {})
+        self.assertEqual(contribution_payload["title"], "John Wick")
+        self.assertNotIn("movieTitle", contribution_payload)
+
+
+class ContributionLocalizedFieldsTest(unittest.TestCase):
+    def test_expands_localizations_into_localized_field_keys(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "Spirited Away",
+                "localizations": [
+                    {"lang": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                    {"lang": "de-DE", "title": "Chihiros Reise"},
+                ],
+            },
+        }
+        template = {
+            "allowedFields": ["title", "overview"],
+            "localizedFieldPattern": "<field>_<iso-639-1-language>",
+        }
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        self.assertEqual(contribution_payload["title"], "Spirited Away")
+        self.assertEqual(contribution_payload["title_fr"], "Le Voyage de Chihiro")
+        self.assertEqual(contribution_payload["overview_fr"], "Une fille...")
+        self.assertEqual(contribution_payload["title_de"], "Chihiros Reise")
+        self.assertNotIn("localizations", contribution_payload)
+
+    def test_localized_fields_respect_allowed_base_fields(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "Heat",
+                "localizations": [
+                    {"lang": "fr", "title": "Heat FR", "edition": "Edition FR"},
+                ],
+            },
+        }
+        template = {"allowedFields": ["title"]}
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        self.assertEqual(contribution_payload["title_fr"], "Heat FR")
+        self.assertNotIn("edition_fr", contribution_payload)
+
+    def test_localizations_not_reported_as_dropped(self):
+        payload = {
+            "entityType": "movie",
+            "payload": {
+                "title": "Heat",
+                "localizations": [{"lang": "fr", "title": "Heat FR"}],
+            },
+        }
+        template = {"allowedFields": ["title"]}
+        _, contribution_payload = movievault_26._contribution_payload(payload, template)
+        _, dropped = movievault_26._contribution_field_diagnostics(
+            payload, template, contribution_payload
+        )
+        dropped_fields = {item["field"] for item in dropped}
+        self.assertNotIn("localizations", dropped_fields)
+
+
+class ReadBackLocalizationsTest(unittest.TestCase):
+    def test_ingest_localizations_normalizes_and_dedupes(self):
+        rows = movievault_26._ingest_localizations(
+            {
+                "localizations": [
+                    {"language": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                    {"language": "de-DE", "title": "Chihiros Reise"},
+                    {"language": "FR", "title": "Duplicate"},
+                    {"language": "xx"},
+                    {"language": "123", "title": "Bad lang"},
+                ]
+            }
+        )
+        by_lang = {row["lang"]: row for row in rows}
+        self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
+        self.assertEqual(by_lang["fr"]["overview"], "Une fille...")
+        self.assertEqual(by_lang["de"]["title"], "Chihiros Reise")
+        self.assertEqual(by_lang["fr"]["source"], "movievault_26")
+        self.assertNotIn("xx", by_lang)
+        self.assertNotIn("123", by_lang)
+
+    def test_barcode_lookup_exposes_localizations(self):
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                return {
+                    "status": "ok",
+                    "data": {
+                        "id": "mv_movie_1",
+                        "title": "Spirited Away",
+                        "year": "2001",
+                        "format": "4K UHD",
+                        "localizations": [
+                            {"language": "fr", "title": "Le Voyage de Chihiro", "overview": "Une fille..."},
+                            {"language": "ja", "title": "千と千尋の神隠し"},
+                        ],
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode({"barcode": "8712626068546"}, {"movievault": {"enabled": True}})
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        localizations = result["localizations"]
+        by_lang = {row["lang"]: row for row in localizations}
+        self.assertEqual(by_lang["fr"]["title"], "Le Voyage de Chihiro")
+        self.assertEqual(by_lang["ja"]["title"], "千と千尋の神隠し")
+
+class MovieVaultCircuitBreakerTests(unittest.TestCase):
+    def test_network_failure_short_circuits_remaining_requests(self):
+        class FakeTimeout(Exception):
+            pass
+
+        calls = []
+
+        def fake_request(method, url, **kwargs):
+            calls.append(url)
+            raise FakeTimeout("connection timed out")
+
+        fake_requests = types.SimpleNamespace(
+            request=fake_request,
+            exceptions=types.SimpleNamespace(
+                Timeout=FakeTimeout,
+                ConnectTimeout=FakeTimeout,
+                ReadTimeout=FakeTimeout,
+                ConnectionError=FakeTimeout,
+            ),
+        )
+
+        context = {"secrets": {"token": "mv_live_test"}}
+        original_requests = movievault_26.requests
+        try:
+            movievault_26.requests = fake_requests
+            with self.assertRaises(FakeTimeout):
+                movievault_26._request(
+                    "GET", "https://mv.example/api/v1/movies", context=context
+                )
+            self.assertTrue(movievault_26._movievault_unreachable(context))
+            with self.assertRaises(movievault_26.MovieVaultUnavailable):
+                movievault_26._request(
+                    "GET", "https://mv.example/api/v1/box-sets", context=context
+                )
+        finally:
+            movievault_26.requests = original_requests
+
+        self.assertEqual(len(calls), 1)
+
+    def test_request_uses_configurable_timeout(self):
+        captured = {}
+
+        def fake_request(method, url, **kwargs):
+            captured["timeout"] = kwargs.get("timeout")
+            return FakeResponse(200, {"items": []})
+
+        fake_requests = types.SimpleNamespace(
+            request=fake_request, exceptions=types.SimpleNamespace()
+        )
+        context = {"secrets": {"token": "mv_live_test"}}
+        original_requests = movievault_26.requests
+        try:
+            movievault_26.requests = fake_requests
+            movievault_26._request(
+                "GET", "https://mv.example/api/v1/movies", context=context
+            )
+        finally:
+            movievault_26.requests = original_requests
+
+        self.assertEqual(captured["timeout"], movievault_26.REQUEST_TIMEOUT_SECONDS)
+
+
+class MovieVaultFormatReconciliationTests(unittest.TestCase):
+    def test_blu_ray_title_overrides_contradictory_4k_format(self):
+        self.assertEqual(
+            movievault_26._reconcile_release_format(
+                "4K UHD", "Fight Club", "Fight Club Blu-ray (SteelBook) (France)"
+            ),
+            "Blu-ray",
+        )
+
+    def test_genuine_4k_title_keeps_4k_format(self):
+        self.assertEqual(
+            movievault_26._reconcile_release_format("4K UHD", "Fight Club 4K UHD"),
+            "4K UHD",
+        )
+
+    def test_no_format_token_keeps_4k_format(self):
+        self.assertEqual(
+            movievault_26._reconcile_release_format("4K UHD", "Fight Club"),
+            "4K UHD",
+        )
+
+    def test_non_4k_format_is_untouched(self):
+        self.assertEqual(
+            movievault_26._reconcile_release_format("Blu-ray", "Fight Club Blu-ray"),
+            "Blu-ray",
+        )
+
+    def test_movie_payload_corrects_contradictory_release_format(self):
+        movie = movievault_26._movie_payload(
+            {
+                "title": "Fight Club",
+                "format": "4K UHD",
+                "releaseTitle": "Fight Club Blu-ray (SteelBook) (France)",
+            }
+        )
+        self.assertEqual(movie["format"], "Blu-ray")
+
+    def test_movie_payload_keeps_genuine_4k_release(self):
+        movie = movievault_26._movie_payload(
+            {
+                "title": "Fight Club",
+                "format": "4K UHD",
+                "releaseTitle": "Fight Club 4K UHD Blu-ray",
+            }
+        )
+        self.assertEqual(movie["format"], "4K UHD")
 
 
 if __name__ == "__main__":

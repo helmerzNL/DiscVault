@@ -53,10 +53,23 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import run_plugin_health
     from .next_plugin_runtime import sync_plugin_registry
+    from .next_plugin_runtime import install_bundled_plugin_update
+    from .next_plugin_runtime import rollback_plugin_update
+    from .next_plugin_runtime import plugin_auto_update_enabled
+    from .next_plugin_runtime import set_plugin_auto_update_enabled
+    from .next_plugin_runtime import write_plugin_auto_update_marker
+    from .next_plugin_runtime import upgrade_seeded_default_plugins
+    from .next_plugin_runtime import plugin_update_state
+    from .next_plugin_runtime import unconfigured_integration_plugins
     from .next_plugin_runtime import validate_manifest_compatibility
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
+    from .next_metadata import _clean_scanned_title
+    from .next_metadata import _parse_import_country
+    from .next_metadata import _SCANNED_TITLE_NOISE_RE
+    from .next_metadata import normalize_list_field
+    from .next_metadata import ensure_remote_media_asset
     from .next_metadata import metadata_result_summary
     from .next_metadata import apply_metadata_proposal
     from .next_metadata import preview_movie_metadata
@@ -66,11 +79,17 @@ try:
     from .next_metadata import metadata_receiver_plugins
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
+    from .next_metadata import normalize_movie_field_locks
+    from .next_metadata import movie_locked_fields
+    from .next_metadata import MOVIE_LOCKABLE_FIELDS
+    from .next_metadata import MOVIE_METADATA_LOCKS_KEY
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import backup_restore_plan
     from .next_backup import backup_storage_dir
     from .next_backup import export_functional_backup
+    from .next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
+    from .next_backup import normalize_scopes as normalize_backup_scopes
     from .next_backup import list_backup_archives
     from .next_backup import stored_backup_path
     from .next_backup import validate_backup_zip
@@ -223,10 +242,23 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import run_plugin_health
     from next_plugin_runtime import sync_plugin_registry
+    from next_plugin_runtime import install_bundled_plugin_update
+    from next_plugin_runtime import rollback_plugin_update
+    from next_plugin_runtime import plugin_auto_update_enabled
+    from next_plugin_runtime import set_plugin_auto_update_enabled
+    from next_plugin_runtime import write_plugin_auto_update_marker
+    from next_plugin_runtime import upgrade_seeded_default_plugins
+    from next_plugin_runtime import plugin_update_state
+    from next_plugin_runtime import unconfigured_integration_plugins
     from next_plugin_runtime import validate_manifest_compatibility
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
+    from next_metadata import _clean_scanned_title
+    from next_metadata import _parse_import_country
+    from next_metadata import _SCANNED_TITLE_NOISE_RE
+    from next_metadata import normalize_list_field
+    from next_metadata import ensure_remote_media_asset
     from next_metadata import metadata_result_summary
     from next_metadata import apply_metadata_proposal
     from next_metadata import preview_movie_metadata
@@ -236,11 +268,17 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import metadata_receiver_plugins
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
+    from next_metadata import normalize_movie_field_locks
+    from next_metadata import movie_locked_fields
+    from next_metadata import MOVIE_LOCKABLE_FIELDS
+    from next_metadata import MOVIE_METADATA_LOCKS_KEY
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import backup_restore_plan
     from next_backup import backup_storage_dir
     from next_backup import export_functional_backup
+    from next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
+    from next_backup import normalize_scopes as normalize_backup_scopes
     from next_backup import list_backup_archives
     from next_backup import stored_backup_path
     from next_backup import validate_backup_zip
@@ -622,6 +660,178 @@ def build_version() -> str:
 
 def build_sha() -> str:
     return version_build_sha()
+
+
+# --- App update check (About page) -----------------------------------------
+#
+# DiscVault ships as a Docker stack and cannot safely recreate its own
+# container from inside the app, so this is a *check-only* feature: it compares
+# the running version against the latest published version for the instance's
+# release channel and surfaces the host command an operator runs to update.
+
+UPDATE_GITHUB_REPO = "helmerzNL/DiscVault"
+UPDATE_IMAGE_NAME = "ghcr.io/helmerznl/discvault"
+UPDATE_CHANNELS = ("auto", "beta", "stable", "v26")
+UPDATE_CHANNEL_IMAGE_TAG = {"beta": "v26-beta", "v26": "v26", "stable": "stable"}
+UPDATE_CHANNEL_BRANCH = {"beta": "release/v26-beta", "v26": "release/v26"}
+UPDATE_CHANNEL_SETTING_KEY = "update_channel"
+UPDATE_HTTP_TIMEOUT = 8.0
+UPDATE_USER_AGENT = "DiscVault-UpdateCheck"
+
+
+def _update_version_tuple(value: Any) -> tuple[int, ...]:
+    """Parse a semver-ish string into a comparable integer tuple.
+
+    ``26.2.45`` -> ``(26, 2, 45)``; a trailing ``-beta`` and any non-numeric
+    leading ``v`` are ignored. Blank/garbage input returns ``()`` which sorts
+    below any real version.
+    """
+
+    text = str(value or "").strip().lstrip("vV")
+    if not text:
+        return ()
+    parts: list[int] = []
+    for chunk in re.split(r"[._-]+", text):
+        match = re.match(r"\d+", chunk)
+        if not match:
+            break
+        parts.append(int(match.group(0)))
+    return tuple(parts)
+
+
+def normalize_update_channel(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return text if text in UPDATE_CHANNELS else "auto"
+
+
+def _update_request_headers(accept: str = "application/json") -> dict[str, str]:
+    return {"User-Agent": UPDATE_USER_AGENT, "Accept": accept}
+
+
+def github_latest_stable_release() -> dict[str, Any] | None:
+    """Return the latest published stable GitHub Release, or ``None``."""
+
+    url = f"https://api.github.com/repos/{UPDATE_GITHUB_REPO}/releases/latest"
+    resp = http_requests.get(
+        url,
+        headers=_update_request_headers("application/vnd.github+json"),
+        timeout=UPDATE_HTTP_TIMEOUT,
+    )
+    if resp.status_code != 200:
+        return None
+    data = resp.json() or {}
+    tag = str(data.get("tag_name") or "").strip()
+    version = tag.lstrip("vV")
+    if not version:
+        return None
+    return {
+        "version": version,
+        "releaseUrl": data.get("html_url"),
+        "publishedAt": data.get("published_at"),
+        "source": url,
+    }
+
+
+def github_branch_version(branch: str) -> dict[str, Any] | None:
+    """Read ``app/VERSION`` from a branch via raw.githubusercontent.com."""
+
+    url = f"https://raw.githubusercontent.com/{UPDATE_GITHUB_REPO}/{branch}/app/VERSION"
+    resp = http_requests.get(
+        url,
+        headers=_update_request_headers("text/plain"),
+        timeout=UPDATE_HTTP_TIMEOUT,
+    )
+    if resp.status_code != 200:
+        return None
+    version = (resp.text or "").strip()
+    if not version:
+        return None
+    return {
+        "version": version,
+        "releaseUrl": f"https://github.com/{UPDATE_GITHUB_REPO}/commits/{branch}/app/VERSION",
+        "publishedAt": None,
+        "source": url,
+    }
+
+
+def resolve_update_channel(conn, requested: Any = None) -> tuple[str, str]:
+    """Resolve the effective channel and where the decision came from.
+
+    Priority: explicit request -> stored admin override -> env var -> heuristic
+    (running version newer than latest stable release implies a pre-release
+    build, so check the beta branch).
+    """
+
+    requested_channel = normalize_update_channel(requested)
+    if requested_channel != "auto":
+        return requested_channel, "request"
+
+    stored = normalize_update_channel(app_setting_value(conn, UPDATE_CHANNEL_SETTING_KEY, "auto"))
+    if stored != "auto":
+        return stored, "setting"
+
+    env_channel = normalize_update_channel(os.environ.get("DISCVAULT_UPDATE_CHANNEL"))
+    if env_channel != "auto":
+        return env_channel, "env"
+
+    current = _update_version_tuple(build_version())
+    stable = github_latest_stable_release()
+    if stable is None:
+        return "stable", "auto-fallback"
+    if current and current > _update_version_tuple(stable["version"]):
+        return "beta", "auto"
+    return "stable", "auto"
+
+
+def _update_command_for_channel(channel: str) -> str:
+    return "docker compose pull && docker compose up -d"
+
+
+def perform_update_check(conn, requested_channel: Any = None) -> dict[str, Any]:
+    current_version = build_version()
+    checked_at = datetime.now(timezone.utc).isoformat()
+    try:
+        channel, channel_source = resolve_update_channel(conn, requested_channel)
+        if channel == "stable":
+            latest = github_latest_stable_release()
+        else:
+            latest = github_branch_version(UPDATE_CHANNEL_BRANCH[channel])
+        if not latest:
+            return {
+                "status": "error",
+                "message": "Could not determine the latest published version.",
+                "channel": channel,
+                "channelSource": channel_source,
+                "currentVersion": current_version,
+                "currentSha": build_sha(),
+                "checkedAt": checked_at,
+            }
+        latest_version = latest["version"]
+        update_available = _update_version_tuple(latest_version) > _update_version_tuple(current_version)
+        image_tag = UPDATE_CHANNEL_IMAGE_TAG.get(channel, "stable")
+        return {
+            "status": "ok",
+            "channel": channel,
+            "channelSource": channel_source,
+            "currentVersion": current_version,
+            "currentSha": build_sha(),
+            "latestVersion": latest_version,
+            "updateAvailable": update_available,
+            "releaseUrl": latest.get("releaseUrl"),
+            "publishedAt": latest.get("publishedAt"),
+            "imageRef": f"{UPDATE_IMAGE_NAME}:{image_tag}",
+            "updateCommand": _update_command_for_channel(channel),
+            "source": latest.get("source"),
+            "checkedAt": checked_at,
+        }
+    except Exception as exc:  # noqa: BLE001 - network/parse failures must not 500
+        return {
+            "status": "error",
+            "message": f"Update check failed: {exc}",
+            "currentVersion": current_version,
+            "currentSha": build_sha(),
+            "checkedAt": checked_at,
+        }
 
 
 def physical_media_format_key(value: Any) -> str:
@@ -1770,6 +1980,11 @@ def selected_import_movie_candidate_from_body(body: dict[str, Any]) -> dict[str,
             candidate.get("detail_url"),
         ),
         "title": title,
+        "releaseTitle": first_value(
+            candidate.get("releaseTitle"),
+            candidate.get("release_title"),
+            movie_updates.get("release_title"),
+        ),
         "year": first_value(
             candidate.get("year"),
             candidate.get("releaseYear"),
@@ -1829,7 +2044,27 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
     provider = clean_text(candidate.get("provider")) or "selected_import_candidate"
     source_label = clean_text(candidate.get("sourceLabel")) or provider
     source_ref = clean_text(candidate.get("sourceRef"))
-    movie_updates: dict[str, Any] = {"title": clean_text(candidate.get("title"))}
+
+    # Split the clean film title from the raw scanned/packaging title so the saved
+    # Title field holds only the movie title while the full packaging string
+    # (e.g. "John Wick (4K Ultra HD + Blu-ray) (UK Import)") is preserved as the
+    # release title. This mirrors canonicalize_plugin_result, so a candidate
+    # selected during a barcode scan honours the same contract no matter which
+    # metadata source (or plugin order) produced it.
+    raw_candidate_title = clean_text(candidate.get("title"))
+    raw_release_title = clean_text(candidate.get("releaseTitle") or candidate.get("release_title"))
+    if not raw_release_title and raw_candidate_title and _SCANNED_TITLE_NOISE_RE.search(raw_candidate_title):
+        raw_release_title = raw_candidate_title
+    clean_title = _clean_scanned_title(raw_release_title) if raw_release_title else raw_candidate_title
+    movie_updates: dict[str, Any] = {"title": clean_title or raw_candidate_title}
+    technical_updates: dict[str, Any] = {}
+    if raw_release_title:
+        movie_updates["release_title"] = raw_release_title
+        import_country, import_region = _parse_import_country(raw_release_title)
+        if import_country:
+            movie_updates.setdefault("country", import_country)
+        if import_region:
+            technical_updates["regions"] = normalize_list_field("regions", import_region)
     if clean_text(candidate.get("year")):
         movie_updates["year"] = clean_text(candidate.get("year"))
     if clean_text(candidate.get("format")):
@@ -1889,6 +2124,18 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
                 "sourceRef": source_ref,
             }
         )
+    for field in technical_updates:
+        provenance.append(
+            {
+                "field": field,
+                "target": "technical",
+                "pluginId": provider,
+                "entrypoint": "selected_import_candidate",
+                "reason": "selected import match",
+                "sourceLabel": source_label,
+                "sourceRef": source_ref,
+            }
+        )
     for field in media_updates:
         provenance.append(
             {
@@ -1905,7 +2152,7 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
     return {
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
-        "technicalUpdates": {},
+        "technicalUpdates": technical_updates,
         "mediaUpdates": media_updates,
         "identifiers": candidate.get("identifiers") if isinstance(candidate.get("identifiers"), dict) else {},
         "provenance": provenance,
@@ -4708,7 +4955,7 @@ def migration_dashboard_html() -> str:
     function setMigrationAuthMessage(message, tone) {
       const node = document.getElementById("migrationAuthMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `auth-message ${tone || ""}`.trim();
     }
     function showMigrationAuthGate(show) {
@@ -4722,9 +4969,64 @@ def migration_dashboard_html() -> str:
       if (intro && show) intro.classList.add("hidden");
       if (workspace && show) workspace.classList.add("hidden");
     }
+    function isLikelyIpHost(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      if (!host || host === "localhost") return false;
+      if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
+      return host.includes(":");
+    }
+    function applyFaqMessage(node, message) {
+      node.textContent = "";
+      const text = String(message || "");
+      const faqUrl = "https://discvault.eu/faq";
+      let cursor = 0;
+      let found = text.indexOf(faqUrl);
+      if (found === -1) {
+        node.textContent = text;
+        return;
+      }
+      while (found !== -1) {
+        if (found > cursor) node.appendChild(document.createTextNode(text.slice(cursor, found)));
+        const anchor = document.createElement("a");
+        anchor.href = faqUrl;
+        anchor.textContent = faqUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer";
+        node.appendChild(anchor);
+        cursor = found + faqUrl.length;
+        found = text.indexOf(faqUrl, cursor);
+      }
+      if (cursor < text.length) node.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    function passkeyUpnSetupMessage() {
+      return tNext(
+        "auth.passkeyUpnRequired",
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyRpMismatchMessage() {
+      return tNext(
+        "auth.passkeyRpMismatch",
+        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
+      if (error && error.name === "NotAllowedError") return cancelledFallback;
+      const rawMessage = String((error && error.message) || "");
+      if (/registrable domain suffix|not equal to the current domain|relying party id/i.test(rawMessage)) {
+        return passkeyRpMismatchMessage();
+      }
+      if ((error && error.name === "NotSupportedError") || /not supported/i.test(rawMessage)) {
+        return webauthnUnavailableReason() || passkeyUpnSetupMessage();
+      }
+      return rawMessage || defaultFallback;
+    }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return tNext("auth.passkeyUnavailable", "This browser does not support passkeys.");
+      }
+      if (isLikelyIpHost(window.location.hostname)) {
+        return passkeyUpnSetupMessage();
       }
       if (!window.isSecureContext) {
         return tNext("auth.passkeyHttpsRequired", "Open this app over HTTPS to use passkeys.");
@@ -4840,7 +5142,7 @@ def migration_dashboard_html() -> str:
         showMigrationAuthGate(false);
         await loadReport();
       } catch (error) {
-        setMigrationAuthMessage(error.name === "NotAllowedError" ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : error.message, "bad");
+        setMigrationAuthMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -6510,6 +6812,10 @@ def ui_preview_html(
     .startup-message.good {
       color: var(--green);
     }
+    .login-message.warn,
+    .startup-message.warn {
+      color: var(--amber, #ff9f0a);
+    }
     .recovery-login-panel {
       display: grid;
       gap: 10px;
@@ -7238,6 +7544,51 @@ def ui_preview_html(
       color: #fff;
       background: rgba(255,255,255,0.15);
       border: 1px solid rgba(255,255,255,0.18);
+    }
+    .movie-detail-action-strip .action,
+    .movie-detail-action-strip .secondary-button {
+      min-height: 38px;
+      border-radius: 10px;
+      padding: 0 16px;
+      font-weight: 650;
+      color: var(--text);
+      border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+      background: color-mix(in srgb, var(--bg-solid) 55%, transparent);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06), inset 0 1px 0 color-mix(in srgb, var(--text) 9%, transparent);
+      transition: background .15s ease, border-color .15s ease, transform .06s ease, box-shadow .15s ease;
+    }
+    .movie-detail-action-strip .action:hover,
+    .movie-detail-action-strip .secondary-button:hover {
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      border-color: color-mix(in srgb, var(--text) 26%, transparent);
+    }
+    .movie-detail-action-strip .action:active,
+    .movie-detail-action-strip .secondary-button:active {
+      transform: scale(0.97);
+    }
+    .movie-detail-action-strip #movieMetadataApplyButton,
+    .movie-detail-action-strip #containerMetadataApplyButton {
+      font-weight: 750;
+      color: color-mix(in srgb, var(--accent) 72%, var(--text));
+      border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+      background: color-mix(in srgb, var(--accent) 20%, var(--bg-solid));
+      box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 26%, transparent), inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .movie-detail-action-strip #movieMetadataApplyButton:hover,
+    .movie-detail-action-strip #containerMetadataApplyButton:hover {
+      background: color-mix(in srgb, var(--accent) 30%, var(--bg-solid));
+      border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+    }
+    .movie-detail-action-strip .action.danger {
+      color: var(--red);
+      border-color: color-mix(in srgb, var(--red) 42%, transparent);
+      background: color-mix(in srgb, var(--red) 14%, var(--bg-solid));
+    }
+    .movie-detail-action-strip .action.danger:hover {
+      background: color-mix(in srgb, var(--red) 22%, var(--bg-solid));
+      border-color: color-mix(in srgb, var(--red) 58%, transparent);
     }
     .hero-poster {
       justify-self: end;
@@ -8532,6 +8883,11 @@ def ui_preview_html(
       color: var(--danger);
       background: color-mix(in srgb, var(--danger) 10%, var(--bg-solid));
     }
+    .import-result-action-status.warn {
+      border-color: color-mix(in srgb, var(--amber, #ff9f0a) 46%, var(--line));
+      color: var(--amber, #ff9f0a);
+      background: color-mix(in srgb, var(--amber, #ff9f0a) 12%, var(--bg-solid));
+    }
     .import-card-head,
     .import-source-head,
     .import-job-head {
@@ -9507,6 +9863,17 @@ def ui_preview_html(
       font: inherit;
       font-weight: 620;
     }
+    .import-barcode-form select {
+      min-height: 40px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+      font-weight: 620;
+    }
     .import-barcode-form button {
       min-height: 40px;
     }
@@ -9518,6 +9885,10 @@ def ui_preview_html(
         width: 100%;
       }
     }
+    .movie-edit-sections {
+      display: grid;
+      gap: 0;
+    }
     .movie-edit-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -9525,6 +9896,33 @@ def ui_preview_html(
     }
     .movie-edit-grid label.wide {
       grid-column: 1 / -1;
+    }
+    .movie-edit-grid label > span:first-child {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .movie-edit-lock {
+      margin-left: auto;
+      border: 1px solid var(--line);
+      background: var(--surface, #fff);
+      border-radius: 6px;
+      width: 24px;
+      height: 22px;
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+      font-size: 12px;
+      opacity: 0.55;
+      transition: opacity .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .movie-edit-lock:hover {
+      opacity: 0.9;
+    }
+    .movie-edit-lock.locked {
+      opacity: 1;
+      border-color: var(--accent, #c8901f);
+      background: color-mix(in srgb, var(--accent, #c8901f) 16%, transparent);
     }
     .movie-detail-page .movie-detail-hero {
       min-height: min(520px, 56vh);
@@ -9620,6 +10018,45 @@ def ui_preview_html(
       color: rgba(255,255,255,.78);
       line-height: 1.55;
     }
+    .person-bio {
+      margin-top: 12px;
+      max-width: 78ch;
+    }
+    .person-bio-text {
+      margin: 0;
+      color: rgba(255,255,255,.78);
+      line-height: 1.55;
+      max-height: 7.8em;
+      overflow: hidden;
+      transition: max-height .2s ease;
+    }
+    .person-bio-text.is-expanded {
+      max-height: min(40vh, 20rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 8px;
+      scrollbar-gutter: stable;
+    }
+    .person-bio-text.has-overflow:not(.is-expanded) {
+      -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+      mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+    }
+    .person-bio-toggle {
+      margin-top: 6px;
+      background: none;
+      border: 0;
+      padding: 2px 0;
+      font: inherit;
+      font-weight: 600;
+      color: #7cc0ff;
+      cursor: pointer;
+    }
+    .person-bio-toggle:hover {
+      text-decoration: underline;
+    }
+    .person-bio-toggle.hidden {
+      display: none;
+    }
     .movie-detail-actions {
       display: flex;
       flex-wrap: wrap;
@@ -9668,6 +10105,101 @@ def ui_preview_html(
     }
     .detail-card.full {
       grid-column: 1 / -1;
+    }
+    .person-media-gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 12px;
+    }
+    .person-media-tile {
+      position: relative;
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bg);
+    }
+    .person-media-tile.is-primary {
+      border-color: var(--accent, #6ea8fe);
+      box-shadow: 0 0 0 2px var(--accent, #6ea8fe);
+    }
+    .person-media-tile img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      object-fit: cover;
+    }
+    .person-media-badge {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: .72rem;
+      background: var(--accent, #6ea8fe);
+      color: #08111f;
+    }
+    .person-media-set-primary {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      right: 6px;
+      font-size: .74rem;
+    }
+    .person-awards {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .person-award-group {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: var(--bg);
+    }
+    .person-award-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .person-award-summary {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .person-award-items {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .person-award-items li {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      font-size: .86rem;
+    }
+    .person-award-result {
+      flex: 0 0 auto;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .person-award-result.won {
+      background: rgba(120, 200, 120, 0.18);
+      color: #57c777;
+    }
+    .person-award-result.nominated {
+      background: rgba(160, 170, 190, 0.18);
+      color: var(--muted);
+    }
+    .person-award-detail {
+      color: var(--text);
     }
     .detail-card h3 {
       margin: 0 0 12px;
@@ -9721,6 +10253,19 @@ def ui_preview_html(
     .detail-subpanel {
       min-width: 0;
     }
+    .detail-subsection + .detail-subsection {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .detail-subsection-title {
+      margin: 0 0 10px;
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
     .detail-fields {
       display: grid;
       gap: 9px;
@@ -9757,6 +10302,36 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
       background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
     }
+    .debug-card-details > summary.debug-card-summary {
+      cursor: pointer;
+      list-style: none;
+      justify-content: flex-start;
+      margin-bottom: 0;
+      user-select: none;
+    }
+    .debug-card-details > summary.debug-card-summary::-webkit-details-marker {
+      display: none;
+    }
+    .debug-card-details > summary.debug-card-summary::after {
+      content: "\u25B8";
+      margin-left: auto;
+      color: var(--muted);
+      font-size: .82rem;
+      transition: transform .15s ease;
+    }
+    .debug-card-details[open] > summary.debug-card-summary::after {
+      transform: rotate(90deg);
+    }
+    .debug-card-details[open] > summary.debug-card-summary {
+      margin-bottom: 12px;
+    }
+    .debug-field-details > summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text);
+      list-style: revert;
+      user-select: none;
+    }
     .debug-localization-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -9792,6 +10367,237 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .84rem;
       line-height: 1.45;
+    }
+    .debug-sources {
+      display: grid;
+      gap: 16px;
+      margin-top: 14px;
+    }
+    .debug-source-section {
+      display: grid;
+      gap: 10px;
+    }
+    .debug-source-section h4 {
+      margin: 0;
+      font-size: .92rem;
+    }
+    .debug-source-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    .debug-source-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--bg-solid);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .debug-source-card header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .debug-source-card strong {
+      margin: 0;
+    }
+    .debug-source-state {
+      font-size: .74rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .debug-source-card-head {
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      padding-bottom: 6px;
+    }
+    .debug-source-badge {
+      font-size: .7rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      border-radius: var(--radius-sm);
+      padding: 2px 8px;
+      white-space: nowrap;
+      background: color-mix(in srgb, var(--muted) 16%, transparent);
+      color: var(--muted);
+    }
+    .debug-source-badge.state-hit,
+    .debug-source-badge.contrib-ok {
+      background: color-mix(in srgb, var(--ok, #2e7d32) 20%, transparent);
+      color: var(--ok, #2e7d32);
+    }
+    .debug-source-badge.contrib-skipped {
+      background: color-mix(in srgb, var(--warn, #b26a00) 20%, transparent);
+      color: var(--warn, #b26a00);
+    }
+    .debug-source-badge.contrib-error,
+    .debug-source-badge.state-no_match,
+    .debug-source-badge.state-blocked_by_format_policy {
+      background: color-mix(in srgb, var(--danger, #c62828) 18%, transparent);
+      color: var(--danger, #c62828);
+    }
+    .debug-source-fields-details > summary {
+      cursor: pointer;
+      font-size: .76rem;
+      color: var(--muted);
+      list-style: revert;
+      user-select: none;
+    }
+    .debug-source-fields-details[open] > summary {
+      margin-bottom: 6px;
+    }
+    .debug-source-nofields {
+      font-size: .78rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+    .debug-source-ref {
+      font-size: .76rem;
+      color: var(--muted);
+      word-break: break-all;
+    }
+    .debug-source-fields {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+    }
+    .debug-source-field {
+      display: grid;
+      grid-template-columns: minmax(90px, auto) 1fr auto;
+      align-items: baseline;
+      gap: 8px;
+      font-size: .8rem;
+    }
+    .debug-source-field-name {
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .debug-source-field-value {
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .debug-source-marker {
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      border-radius: var(--radius-sm);
+      padding: 1px 6px;
+      white-space: nowrap;
+    }
+    .debug-source-marker.used {
+      background: color-mix(in srgb, var(--accent) 22%, transparent);
+      color: var(--accent);
+    }
+    .debug-source-marker.skipped {
+      background: color-mix(in srgb, var(--muted) 18%, transparent);
+      color: var(--muted);
+    }
+    .debug-source-contrib-fields,
+    .debug-source-contrib-sources,
+    .debug-source-contrib-reason {
+      font-size: .8rem;
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .debug-source-label {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .debug-source-excluded-details {
+      margin-top: 6px;
+    }
+    .debug-source-excluded-details > summary {
+      cursor: pointer;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .debug-source-excluded {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .debug-source-excluded-field {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px;
+      font-size: .8rem;
+    }
+    .debug-source-excluded-reason {
+      color: var(--muted);
+      font-style: italic;
+    }
+    .debug-field-group {
+      font-size: .8rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .debug-field-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .debug-field-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 5px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: .74rem;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    .debug-field-chip.accepted {
+      background: color-mix(in srgb, #1f9d55 16%, transparent);
+      color: #1f9d55;
+    }
+    .debug-field-chip.rejected {
+      background: color-mix(in srgb, #d64545 16%, transparent);
+      color: #d64545;
+    }
+    .debug-field-chip-reason {
+      font-weight: 400;
+      font-style: italic;
+      opacity: .85;
+    }
+    .debug-source-export-hint {
+      font-size: .82rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .debug-source-export-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .debug-source-export-btn {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      font: inherit;
+      font-size: .82rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .debug-source-export-btn:hover {
+      border-color: var(--accent);
+    }
+    .debug-source-export-feedback {
+      font-size: .8rem;
+      color: var(--accent);
     }
     .country-picker {
       display: flex;
@@ -11200,6 +12006,25 @@ def ui_preview_html(
       height: 16px;
       accent-color: var(--accent);
     }
+    .profile-scope-fieldset {
+      display: grid;
+      gap: 8px;
+      border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 6px 0;
+    }
+    .profile-scope-fieldset legend {
+      padding: 0 6px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .profile-scope-fieldset .profile-checkbox-row {
+      display: flex;
+    }
     .profile-passkey {
       display: grid;
       gap: 10px;
@@ -11398,6 +12223,74 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--field) 54%, transparent);
       min-width: 0;
     }
+    .profile-update-block {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .profile-update-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    .profile-update-channel {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: .78rem;
+      font-weight: 650;
+      color: var(--muted);
+    }
+    .profile-update-channel select {
+      padding: 7px 9px;
+      border-radius: 12px;
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      background: var(--field);
+      color: inherit;
+    }
+    .profile-update-result {
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 11px 12px;
+      background: color-mix(in srgb, var(--field) 54%, transparent);
+      font-size: .85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .profile-update-result.good {
+      border-color: color-mix(in srgb, var(--good, #2e9e5b) 55%, transparent);
+      background: color-mix(in srgb, var(--good, #2e9e5b) 14%, transparent);
+    }
+    .profile-update-result.bad {
+      border-color: color-mix(in srgb, var(--bad, #d2453d) 55%, transparent);
+      background: color-mix(in srgb, var(--bad, #d2453d) 14%, transparent);
+    }
+    .profile-update-headline {
+      font-weight: 700;
+    }
+    .profile-update-meta {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+    .profile-update-command {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .profile-update-command code {
+      flex: 1 1 220px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--field) 80%, transparent);
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .8rem;
+      overflow-wrap: anywhere;
+    }
     .app-admin-contribution-row strong,
     .bulk-result-card strong {
       display: block;
@@ -11425,6 +12318,195 @@ def ui_preview_html(
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
       gap: 8px;
+    }
+    .metadata-compare-hint {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: .8rem;
+      line-height: 1.4;
+    }
+    .metadata-compare-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .metadata-compare-details {
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--field) 40%, transparent);
+      overflow: hidden;
+    }
+    .metadata-compare-summary-toggle {
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .metadata-compare-summary-toggle::-webkit-details-marker {
+      display: none;
+    }
+    .metadata-compare-summary-toggle::before {
+      content: "\u25B8";
+      color: var(--muted);
+      font-size: .8rem;
+      transition: transform .15s ease;
+    }
+    .metadata-compare-details[open] > .metadata-compare-summary-toggle::before {
+      transform: rotate(90deg);
+    }
+    .metadata-compare-details[open] > .metadata-compare-summary-toggle {
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+    }
+    .metadata-compare-body {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+    .metadata-compare-summary {
+      margin: 0;
+      font-weight: 700;
+      font-size: .82rem;
+    }
+    .metadata-compare-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .metadata-compare-badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .02em;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--field) 60%, transparent);
+      color: var(--muted);
+    }
+    .metadata-compare-badge.winner {
+      border-color: color-mix(in srgb, #1f9d55 60%, transparent);
+      background: color-mix(in srgb, #1f9d55 18%, transparent);
+      color: #1f9d55;
+    }
+    .metadata-compare-badge.change,
+    .metadata-compare-badge.conflict {
+      border-color: color-mix(in srgb, #d98a00 60%, transparent);
+      background: color-mix(in srgb, #d98a00 16%, transparent);
+      color: #c47d00;
+    }
+    .metadata-compare-badge.same {
+      border-color: color-mix(in srgb, var(--line) 70%, transparent);
+    }
+    .metadata-compare-badge.locked {
+      border-color: color-mix(in srgb, #7a5cff 60%, transparent);
+      background: color-mix(in srgb, #7a5cff 16%, transparent);
+      color: #6a4cf0;
+    }
+    .metadata-compare-table {
+      display: grid;
+      gap: 10px;
+    }
+    .metadata-compare-field {
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: color-mix(in srgb, var(--field) 50%, transparent);
+    }
+    .metadata-compare-field.changed {
+      border-color: color-mix(in srgb, #d98a00 55%, transparent);
+    }
+    .metadata-compare-field.locked {
+      border-color: color-mix(in srgb, #7a5cff 50%, transparent);
+    }
+    .metadata-compare-field-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .metadata-compare-field-head strong {
+      font-size: .92rem;
+      overflow-wrap: anywhere;
+    }
+    .metadata-compare-flags {
+      display: inline-flex;
+      gap: 6px;
+    }
+    .metadata-compare-current {
+      display: grid;
+      grid-template-columns: minmax(80px, 130px) 1fr;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+      margin-bottom: 6px;
+    }
+    .metadata-compare-current-label {
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .metadata-compare-current-value {
+      overflow-wrap: anywhere;
+      font-weight: 600;
+    }
+    .metadata-compare-candidates {
+      display: grid;
+      gap: 6px;
+    }
+    .metadata-compare-candidate {
+      display: grid;
+      grid-template-columns: minmax(80px, 130px) 1fr auto;
+      gap: 8px;
+      align-items: start;
+      padding: 4px 6px;
+      border-radius: 10px;
+    }
+    .metadata-compare-candidate.winner {
+      background: color-mix(in srgb, #1f9d55 12%, transparent);
+    }
+    .metadata-compare-candidate.differs {
+      background: color-mix(in srgb, #d98a00 10%, transparent);
+    }
+    .metadata-compare-candidate.rejected {
+      opacity: .7;
+    }
+    .metadata-compare-provider {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .metadata-compare-candidate-value {
+      overflow-wrap: anywhere;
+    }
+    .metadata-compare-marks {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+    .metadata-compare-reason {
+      color: var(--muted);
+      font-size: .68rem;
+      font-style: italic;
+    }
+    @media (max-width: 640px) {
+      .metadata-compare-current,
+      .metadata-compare-candidate {
+        grid-template-columns: 1fr;
+      }
+      .metadata-compare-marks {
+        justify-content: flex-start;
+      }
     }
     .app-admin-plugin-tab-panel {
       display: none;
@@ -13011,9 +14093,23 @@ def ui_preview_html(
       </div>
       <div class="login-actions">
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.signIn">Sign in</button>
+        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
+      <form class="recovery-login-panel hidden" id="appReviewForm">
+        <label for="appReviewUsername">
+          <span>Username</span>
+          <input id="appReviewUsername" autocomplete="username">
+        </label>
+        <label for="appReviewPassword">
+          <span data-next-i18n="auth.password">Password</span>
+          <input id="appReviewPassword" type="password" autocomplete="current-password">
+        </label>
+        <div class="profile-form-actions">
+          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
+        </div>
+      </form>
       <form class="recovery-login-panel hidden" id="appInviteForm">
         <label for="appInviteUsername">
           <span data-next-i18n="auth.username">Username</span>
@@ -13487,7 +14583,7 @@ def ui_preview_html(
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualFormat">Format</span>
-                    <input id="importFormatInput" autocomplete="off" maxlength="80" data-next-i18n-placeholder="importCenter.formatPlaceholder" placeholder="4K UHD">
+                    <select id="importFormatInput" autocomplete="off"></select>
                   </label>
                   <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Search</button>
                 </form>
@@ -13652,59 +14748,127 @@ def ui_preview_html(
               <h3 data-next-i18n="movieDetail.editDetails">Edit details</h3>
             </div>
             <form class="profile-form" id="movieEditForm">
-              <div class="movie-edit-grid">
-                <label for="movieEditTitle">
-                  <span data-next-i18n="movieDetail.fieldTitle">Title</span>
-                  <input id="movieEditTitle" name="title" maxlength="300" autocomplete="off" required>
-                </label>
-                <label for="movieEditOriginalTitle">
-                  <span data-next-i18n="movieDetail.originalTitle">Original title</span>
-                  <input id="movieEditOriginalTitle" name="original_title" maxlength="300" autocomplete="off">
-                </label>
-                <label for="movieEditSortTitle">
-                  <span data-next-i18n="movieDetail.fieldSortTitle">Sort title</span>
-                  <input id="movieEditSortTitle" name="sort_title" maxlength="300" autocomplete="off">
-                </label>
-                <label for="movieEditYear">
-                  <span data-next-i18n="movieDetail.fieldYear">Year</span>
-                  <input id="movieEditYear" name="year" maxlength="40" autocomplete="off">
-                </label>
-                <label for="movieEditBarcode">
-                  <span data-next-i18n="movieDetail.barcode">Barcode</span>
-                  <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditFormat">
-                  <span data-next-i18n="movieDetail.format">Format</span>
-                  <select id="movieEditFormat" name="format"></select>
-                </label>
-                <label for="movieEditEdition">
-                  <span data-next-i18n="movieDetail.edition">Edition</span>
-                  <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditReleaseDate">
-                  <span data-next-i18n="movieDetail.releaseDate">Release date</span>
-                  <input id="movieEditReleaseDate" name="release_date" autocomplete="off" placeholder="YYYY-MM-DD">
-                </label>
-                <label for="movieEditCountry">
-                  <span data-next-i18n="movieDetail.country">Country</span>
-                  <input id="movieEditCountry" name="country" maxlength="80" autocomplete="off">
-                </label>
-                <label for="movieEditLanguage">
-                  <span data-next-i18n="movieDetail.language">Language</span>
-                  <input id="movieEditLanguage" name="language" maxlength="80" autocomplete="off">
-                </label>
-                <label for="movieEditLocation">
-                  <span data-next-i18n="movieDetail.location">Location</span>
-                  <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
-                </label>
-                <label for="movieEditOverview" class="wide">
-                  <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
-                  <textarea id="movieEditOverview" name="overview" maxlength="5000"></textarea>
-                </label>
-                <label for="movieEditNotes" class="wide">
-                  <span data-next-i18n="movieDetail.fieldNotes">Notes</span>
-                  <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
-                </label>
+              <div class="movie-edit-sections">
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.release">Release</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditTitle">
+                      <span data-next-i18n="movieDetail.fieldTitle">Title</span>
+                      <input id="movieEditTitle" name="title" maxlength="300" autocomplete="off" required>
+                    </label>
+                    <label for="movieEditOriginalTitle">
+                      <span data-next-i18n="movieDetail.originalTitle">Original title</span>
+                      <input id="movieEditOriginalTitle" name="original_title" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditReleaseTitle">
+                      <span data-next-i18n="movieDetail.releaseTitle">Release title</span>
+                      <input id="movieEditReleaseTitle" name="release_title" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditSortTitle">
+                      <span data-next-i18n="movieDetail.fieldSortTitle">Sort title</span>
+                      <input id="movieEditSortTitle" name="sort_title" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditYear">
+                      <span data-next-i18n="movieDetail.fieldYear">Year</span>
+                      <input id="movieEditYear" name="year" maxlength="40" autocomplete="off">
+                    </label>
+                    <label for="movieEditBarcode">
+                      <span data-next-i18n="movieDetail.barcode">Barcode</span>
+                      <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditFormat">
+                      <span data-next-i18n="movieDetail.format">Format</span>
+                      <select id="movieEditFormat" name="format"></select>
+                    </label>
+                    <label for="movieEditReleaseDate">
+                      <span data-next-i18n="movieDetail.releaseDate">Release date</span>
+                      <input id="movieEditReleaseDate" name="release_date" autocomplete="off" placeholder="YYYY-MM-DD">
+                    </label>
+                    <label for="movieEditCountry">
+                      <span data-next-i18n="movieDetail.releaseCountry">Release country</span>
+                      <input id="movieEditCountry" name="country" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditLanguage">
+                      <span data-next-i18n="movieDetail.language">Language</span>
+                      <input id="movieEditLanguage" name="language" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditLocation">
+                      <span data-next-i18n="movieDetail.location">Location</span>
+                      <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditDirector">
+                      <span data-next-i18n="movieDetail.director">Director</span>
+                      <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditGenre">
+                      <span data-next-i18n="movieDetail.genre">Genre</span>
+                      <input id="movieEditGenre" name="genre" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditStudios">
+                      <span data-next-i18n="movieDetail.studios">Studios</span>
+                      <input id="movieEditStudios" name="studios" maxlength="300" autocomplete="off">
+                    </label>
+                    <label for="movieEditContentRating">
+                      <span data-next-i18n="movieDetail.contentRating">Content rating</span>
+                      <input id="movieEditContentRating" name="content_rating" maxlength="40" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditHdr">
+                      <span>HDR</span>
+                      <input id="movieEditHdr" name="hdr" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditScreenRatio">
+                      <span data-next-i18n="movieDetail.screenRatio">Screen ratio</span>
+                      <input id="movieEditScreenRatio" name="screen_ratios" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="movieEditRuntime">
+                      <span data-next-i18n="movieDetail.runtime">Runtime</span>
+                      <input id="movieEditRuntime" name="runtime_minutes" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="min">
+                    </label>
+                    <label for="movieEditAudioTracks">
+                      <span data-next-i18n="movieDetail.audio">Audio</span>
+                      <input id="movieEditAudioTracks" name="audio_tracks" maxlength="400" autocomplete="off">
+                    </label>
+                    <label for="movieEditSubtitles">
+                      <span data-next-i18n="movieDetail.subtitles">Subtitles</span>
+                      <input id="movieEditSubtitles" name="subtitles" maxlength="400" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.collectors">Collectors</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditEdition">
+                      <span data-next-i18n="movieDetail.edition">Edition</span>
+                      <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditPackaging">
+                      <span data-next-i18n="movieDetail.packaging">Packaging</span>
+                      <input id="movieEditPackaging" name="packaging" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditDistributor">
+                      <span data-next-i18n="movieDetail.distributor">Distributor</span>
+                      <input id="movieEditDistributor" name="distributor" maxlength="200" autocomplete="off">
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.fieldOverview">Overview</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditOverview" class="wide">
+                      <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
+                      <textarea id="movieEditOverview" name="overview" maxlength="5000"></textarea>
+                    </label>
+                    <label for="movieEditNotes" class="wide">
+                      <span data-next-i18n="movieDetail.fieldNotes">Notes</span>
+                      <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
+                    </label>
+                  </div>
+                </div>
               </div>
             </form>
           </div>
@@ -13737,21 +14901,35 @@ def ui_preview_html(
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.technical">Technical</h3>
-            <div class="detail-fields" id="movieDetailTechnical"></div>
+            <div class="detail-subsections" id="movieDetailTechnical"></div>
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.metadataCompare">Metadata compare</h3>
-              <span class="tag blue" data-next-i18n="metadataJobs.providers">Providers</span>
+              <div class="button-row compact">
+                <button type="button" class="secondary-button hidden" id="movieMetadataCompareButton" data-next-i18n="movieDetail.compareProviders">Compare with providers</button>
+                <span class="tag blue" data-next-i18n="metadataJobs.providers">Providers</span>
+              </div>
             </div>
             <div class="metadata-compare-panel" id="movieMetadataComparePanel"></div>
           </div>
           <div class="detail-card full debug-card hidden" id="movieDetailDebugLocalizationsCard">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
-              <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
-            </div>
-            <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
+            <details class="debug-card-details">
+              <summary class="detail-card-head debug-card-summary">
+                <h3 data-next-i18n="movieDetail.debugLocalizations">Debug info: local titles and plots</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </summary>
+              <div class="debug-localization-grid" id="movieDetailDebugLocalizations"></div>
+            </details>
+          </div>
+          <div class="detail-card full debug-card hidden" id="movieDetailDebugMetadataCard">
+            <details class="debug-card-details">
+              <summary class="detail-card-head debug-card-summary">
+                <h3 data-next-i18n="movieDetail.debugMetadataPanelTitle">Metadata debug</h3>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </summary>
+              <div class="debug-sources" id="movieDetailDebugSources"></div>
+            </details>
           </div>
           <div class="detail-card">
             <h3 data-next-i18n="movieDetail.links">Links</h3>
@@ -13835,14 +15013,14 @@ def ui_preview_html(
         </div>
         <section class="movie-detail-body">
           <nav class="detail-submenu container-detail-submenu" aria-label="Container sections" data-next-i18n-aria="containerDetail.sections">
-            <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
-            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
+            <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailVideosPanel" data-next-i18n="movieDetail.videos">Videos</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailMetadataPanel" data-next-i18n="containerDetail.metadata">Metadata</button>
           </nav>
-          <div class="detail-subpanel container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
             <div class="container-overview-grid">
               <div class="detail-card">
                 <h3 data-next-i18n="containerDetail.overview">Overview</h3>
@@ -13922,7 +15100,7 @@ def ui_preview_html(
               </div>
             </div>
           </div>
-          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailFilmsPanel">
+          <div class="detail-subpanel container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailFilmsPanel">
             <div class="detail-card full container-content-card">
               <div class="detail-card-head">
                 <div>
@@ -13987,6 +15165,15 @@ def ui_preview_html(
               <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
               <div class="detail-fields" id="containerDetailMetadataDetails"></div>
             </div>
+            <div class="detail-card full debug-card hidden" id="containerDetailDebugCard">
+              <details class="debug-card-details">
+                <summary class="detail-card-head debug-card-summary">
+                  <h3 data-next-i18n="containerDetail.debugSources">Debug info: metadata sources</h3>
+                  <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+                </summary>
+                <div class="debug-sources" id="containerDetailDebugSources"></div>
+              </details>
+            </div>
           </div>
         </section>
       </section>
@@ -13999,7 +15186,10 @@ def ui_preview_html(
               <span class="eyebrow" data-next-i18n="personDetail.title">Person details</span>
               <h2 class="movie-detail-title" id="personDetailTitle">-</h2>
               <div class="hero-meta" id="personDetailTags"></div>
-              <p class="movie-detail-overview" id="personDetailBiography"></p>
+              <div class="person-bio" id="personDetailBiographyWrap">
+                <p class="person-bio-text" id="personDetailBiography"></p>
+                <button type="button" class="person-bio-toggle hidden" id="personDetailBiographyToggle" aria-expanded="false" aria-controls="personDetailBiography"></button>
+              </div>
               <div class="detail-message" id="personDetailMessage"></div>
             </div>
           </div>
@@ -14012,6 +15202,14 @@ def ui_preview_html(
           <div class="detail-card">
             <h3 data-next-i18n="personDetail.identifiers">Identifiers</h3>
             <div class="detail-grid" id="personDetailIdentifiers"></div>
+          </div>
+          <div class="detail-card full hidden" id="personDetailMediaCard">
+            <h3 data-next-i18n="personDetail.media">Profile images</h3>
+            <div class="person-media-gallery" id="personDetailMedia"></div>
+          </div>
+          <div class="detail-card full hidden" id="personDetailAwardsCard">
+            <h3 data-next-i18n="personDetail.awards">Awards</h3>
+            <div class="person-awards" id="personDetailAwards"></div>
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
@@ -14384,6 +15582,21 @@ def ui_preview_html(
                     <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
                   </div>
                 </div>
+                <div class="profile-update-block hidden" id="profileUpdateBlock">
+                  <div class="profile-update-controls">
+                    <label class="profile-update-channel">
+                      <span data-next-i18n="profile.updateChannel">Update channel</span>
+                      <select id="profileUpdateChannel">
+                        <option value="auto" data-next-i18n="profile.channelAuto">Automatic</option>
+                        <option value="beta" data-next-i18n="profile.channelBeta">Beta</option>
+                        <option value="stable" data-next-i18n="profile.channelStable">Stable</option>
+                        <option value="v26" data-next-i18n="profile.channelV26">v26</option>
+                      </select>
+                    </label>
+                    <button type="button" class="secondary-button" id="profileUpdateCheckButton" data-next-i18n="profile.checkForUpdate">Check for update</button>
+                  </div>
+                  <div class="profile-update-result" id="profileUpdateResult" hidden></div>
+                </div>
                 <div class="offline-status-list" id="profileOfflineStatus"></div>
               </section>
             </div>
@@ -14677,6 +15890,13 @@ def ui_preview_html(
             <div class="app-admin-plugin-tab-panel active full" data-app-admin-plugin-panel="registry">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginRegistry">Plugin registry</h3>
+                <label class="app-admin-plugin-auto-update" for="appAdminPluginAutoUpdateToggle" style="display:flex;align-items:center;gap:8px;margin:4px 0 12px;">
+                  <input type="checkbox" id="appAdminPluginAutoUpdateToggle">
+                  <span>
+                    <strong data-next-i18n="appAdmin.autoUpdateLabel">Automatically update plugins</strong>
+                    <span class="profile-passkey-meta" data-next-i18n="appAdmin.autoUpdateHelp">When enabled, plugins shipped with a newer version are updated automatically. When disabled, an update can be installed manually per plugin.</span>
+                  </span>
+                </label>
                 <div id="appAdminMetadataPriorityPanel"></div>
                 <div class="plugin-operation-panel" id="appAdminPluginExecutionDashboard"></div>
                 <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin types" data-next-i18n-aria="appAdmin.pluginRegistry">
@@ -14791,13 +16011,40 @@ def ui_preview_html(
                 </div>
               </div>
               <div class="profile-action-row">
-                <button type="button" class="secondary-button" id="appAdminRefreshBackupButton" data-next-i18n="appAdmin.refreshBackup">Refresh backup</button>
+                <button type="button" class="secondary-button" id="appAdminRefreshBackupButton" data-next-i18n="appAdmin.createBackup">Create backup</button>
                 <button type="button" class="secondary-button" id="appAdminExportBackupButton" data-next-i18n="appAdmin.exportBackup">Export ZIP</button>
               </div>
-              <label class="profile-checkbox-row" for="appAdminBackupIncludePersonalLists">
-                <input id="appAdminBackupIncludePersonalLists" type="checkbox">
-                <span data-next-i18n="appAdmin.includePersonalLists">Include watchlist and watched history</span>
-              </label>
+              <fieldset class="profile-scope-fieldset" id="appAdminBackupScopes">
+                <legend data-next-i18n="appAdmin.backupScopeTitle">Include in backup</legend>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="collection" checked disabled>
+                  <span data-next-i18n="appAdmin.backupScopeCollection">All films / containers (always included)</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="people" checked>
+                  <span data-next-i18n="appAdmin.backupScopePeople">All people</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="film_artwork" checked>
+                  <span data-next-i18n="appAdmin.backupScopeFilmArtwork">All film / container posters and backdrops</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="people_artwork" checked>
+                  <span data-next-i18n="appAdmin.backupScopePeopleArtwork">All people posters and backdrops</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="media_groups" checked>
+                  <span data-next-i18n="appAdmin.backupScopeMediaGroups">All member groups and their relations</span>
+                </label>
+                <label class="profile-checkbox-row">
+                  <input type="checkbox" data-backup-scope="user_accounts">
+                  <span data-next-i18n="appAdmin.backupScopeUserAccounts">All user accounts (incl. MCP / API configuration)</span>
+                </label>
+                <label class="profile-checkbox-row" for="appAdminBackupIncludePersonalLists">
+                  <input id="appAdminBackupIncludePersonalLists" type="checkbox" data-backup-scope="personal_lists">
+                  <span data-next-i18n="appAdmin.includePersonalLists">Include watchlist and watched history</span>
+                </label>
+              </fieldset>
               <div class="login-message" id="appAdminBackupMessage"></div>
             </div>
             <div class="detail-card profile-card">
@@ -14808,9 +16055,51 @@ def ui_preview_html(
                   <span data-next-i18n="appAdmin.backupFile">Backup ZIP</span>
                   <input id="appAdminBackupFile" type="file" accept=".zip,application/zip">
                 </label>
+                <fieldset class="profile-scope-fieldset" id="appAdminRestoreMode">
+                  <legend data-next-i18n="appAdmin.restoreModeTitle">Restore type</legend>
+                  <label class="profile-checkbox-row">
+                    <input type="radio" name="appAdminRestoreMode" value="full" checked>
+                    <span data-next-i18n="appAdmin.restoreModeFull">Full restore (wipe and replace)</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="radio" name="appAdminRestoreMode" value="merge">
+                    <span data-next-i18n="appAdmin.restoreModePartial">Partial restore (merge selected)</span>
+                  </label>
+                </fieldset>
+                <fieldset class="profile-scope-fieldset" id="appAdminRestoreScopes" hidden>
+                  <legend data-next-i18n="appAdmin.restoreScopeTitle">Restore which parts</legend>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="collection" checked disabled>
+                    <span data-next-i18n="appAdmin.backupScopeCollection">All films / containers (always included)</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="people" checked>
+                    <span data-next-i18n="appAdmin.backupScopePeople">All people</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="film_artwork" checked>
+                    <span data-next-i18n="appAdmin.backupScopeFilmArtwork">All film / container posters and backdrops</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="people_artwork" checked>
+                    <span data-next-i18n="appAdmin.backupScopePeopleArtwork">All people posters and backdrops</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="media_groups" checked>
+                    <span data-next-i18n="appAdmin.backupScopeMediaGroups">All member groups and their relations</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="user_accounts">
+                    <span data-next-i18n="appAdmin.backupScopeUserAccounts">All user accounts (incl. MCP / API configuration)</span>
+                  </label>
+                  <label class="profile-checkbox-row">
+                    <input type="checkbox" data-restore-scope="personal_lists">
+                    <span data-next-i18n="appAdmin.includePersonalLists">Include watchlist and watched history</span>
+                  </label>
+                </fieldset>
                 <div class="profile-form-actions">
                   <button type="button" class="secondary-button" id="appAdminValidateBackupButton" data-next-i18n="appAdmin.validateBackup">Validate ZIP</button>
-                  <button type="button" class="secondary-button danger" id="appAdminRestoreBackupButton" data-next-i18n="appAdmin.restoreBackup">Restore ZIP</button>
+                  <button type="button" class="secondary-button danger" id="appAdminRestoreBackupButton" data-next-i18n="appAdmin.startRestore">Start restore</button>
                 </div>
               </form>
             </div>
@@ -14934,6 +16223,7 @@ def ui_preview_html(
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
+    let dvMissingContributionReportData = null;
     let movieMetadataRefreshPeople = localStorage.getItem("dv_next_movie_metadata_refresh_people") === "true";
     let activeContainerId = "";
     let activeContainerPayload = null;
@@ -15208,6 +16498,267 @@ def ui_preview_html(
       }
       return localizationHtml + remainingRatingsHtml;
     }
+    function debugSourceValueText(value) {
+      if (value === null || value === undefined) return "";
+      let text;
+      if (typeof value === "string") {
+        text = value;
+      } else if (typeof value === "number" || typeof value === "boolean") {
+        text = String(value);
+      } else {
+        try { text = JSON.stringify(value); } catch (error) { text = String(value); }
+      }
+      text = text.trim();
+      if (text.length > 280) text = text.slice(0, 277) + "\u2026";
+      return text;
+    }
+    function debugSourceStateLabel(state) {
+      const key = String(state || "").trim();
+      if (!key) return "";
+      const map = {
+        hit: tNext("movieDetail.debugSourcesStateHit", "used"),
+        retained_existing: tNext("movieDetail.debugSourcesStateRetained", "retained existing"),
+        no_match: tNext("movieDetail.debugSourcesStateNoMatch", "no match"),
+        blocked_by_format_policy: tNext("movieDetail.debugSourcesStateBlocked", "blocked by format"),
+        needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "needs configuration")
+      };
+      return map[key] || key.replace(/_/g, " ");
+    }
+    function debugContributionReasonLabel(receiver) {
+      const reason = String(receiver && receiver.reason || "").trim().toLowerCase();
+      const status = String(receiver && receiver.status || "").trim().toLowerCase();
+      const state = String(receiver && receiver.state || "").trim().toLowerCase();
+      const reasonMap = {
+        disabled: tNext("movieDetail.debugSourcesReasonDisabled", "Contribution disabled"),
+        contribution_disabled: tNext("movieDetail.debugSourcesReasonDisabled", "Contribution disabled"),
+        needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
+        not_configured: tNext("movieDetail.debugSourcesReasonNeedsConfig", "Plugin needs configuration"),
+        no_match: tNext("movieDetail.debugSourcesReasonNoMatch", "No match"),
+        not_found: tNext("movieDetail.debugSourcesReasonNoMatch", "No match"),
+        rate_limited: tNext("movieDetail.debugSourcesReasonRateLimited", "Rate limited \u2013 retry later")
+      };
+      if (reason && reasonMap[reason]) return reasonMap[reason];
+      if (state && reasonMap[state]) return reasonMap[state];
+      if (status === "error") {
+        const errorText = receiver && (receiver.error || receiver.reason);
+        const errorLabel = tNext("movieDetail.debugSourcesReasonError", "Error");
+        return errorText ? `${errorLabel}: ${String(errorText)}` : errorLabel;
+      }
+      if (receiver && receiver.reason) return String(receiver.reason);
+      return "";
+    }
+    function debugContributionStatusClass(receiver) {
+      const status = String(receiver && receiver.status || "").trim().toLowerCase();
+      const result = String(receiver && receiver.resultStatus || "").trim().toLowerCase();
+      if (status === "error") return "error";
+      if (status === "skipped" || result === "skipped") return "skipped";
+      if (status === "ok" || result === "accepted" || result === "ok") return "ok";
+      return "";
+    }
+    function debugExcludedReasonLabel(reason) {
+      const key = String(reason || "").trim().toLowerCase();
+      const map = {
+        not_in_template: tNext("movieDetail.debugSourcesReasonNotInTemplate", "not in contribution template"),
+        excluded: tNext("movieDetail.debugSourcesReasonExcluded", "excluded by receiver"),
+        sharing_disabled: tNext("movieDetail.debugSourcesReasonSharingDisabled", "sharing disabled"),
+        missing_token: tNext("movieDetail.debugSourcesReasonMissingToken", "not connected"),
+        empty_or_disallowed_payload: tNext("movieDetail.debugSourcesReasonEmptyPayload", "no shareable fields")
+      };
+      if (!key) return "";
+      return map[key] || key.replace(/_/g, " ");
+    }
+    function movieMetadataSourcesDebugHtml(metadataDebug) {
+      const fetched = metadataDebug && Array.isArray(metadataDebug.fetched) ? metadataDebug.fetched : [];
+      const contributed = metadataDebug && Array.isArray(metadataDebug.contributed) ? metadataDebug.contributed : [];
+      const usedLabel = tNext("movieDetail.debugSourcesUsed", "used");
+      const skippedLabel = tNext("movieDetail.debugSourcesSkipped", "not used");
+      const fieldsLabel = tNext("movieDetail.debugSourcesFields", "Fields");
+      const contributedToLabel = tNext("movieDetail.debugSourcesContributedTo", "Sources");
+      const reasonLabel = tNext("movieDetail.debugSourcesReasonLabel", "Reason");
+      const fetchedCards = fetched.map((plugin) => {
+        const fields = Array.isArray(plugin.fields) ? plugin.fields : [];
+        const usedCount = fields.filter((field) => field.accepted).length;
+        const fieldRows = fields.map((field) => {
+          const fieldName = field.target ? `${field.target}.${field.field}` : (field.field || "");
+          const marker = field.accepted
+            ? `<span class="debug-source-marker used">${escapeHtml(usedLabel)}</span>`
+            : `<span class="debug-source-marker skipped">${escapeHtml(skippedLabel)}</span>`;
+          return `
+            <li class="debug-source-field${field.accepted ? " is-used" : ""}">
+              <span class="debug-source-field-name">${escapeHtml(fieldName)}</span>
+              <span class="debug-source-field-value">${escapeHtml(debugSourceValueText(field.value))}</span>
+              ${marker}
+            </li>
+          `;
+        }).join("");
+        const stateText = debugSourceStateLabel(plugin.state);
+        const stateHtml = stateText
+          ? `<span class="debug-source-badge state-${escapeHtml(String(plugin.state || "").replace(/[^a-z0-9_-]/gi, ""))}">${escapeHtml(stateText)}</span>`
+          : "";
+        const refHtml = plugin.sourceRef
+          ? `<div class="debug-source-ref">${escapeHtml(String(plugin.sourceRef))}</div>`
+          : "";
+        const countText = `${usedCount}/${fields.length} ${escapeHtml(fieldsLabel)}`;
+        const body = fields.length
+          ? `
+            <details class="debug-source-fields-details"${fields.length <= 6 ? " open" : ""}>
+              <summary>${countText}</summary>
+              <ul class="debug-source-fields">${fieldRows}</ul>
+            </details>
+          `
+          : `<div class="debug-source-nofields">${escapeHtml(tNext("movieDetail.debugSourcesNoFields", "No fields loaded"))}</div>`;
+        return `
+          <article class="debug-source-card">
+            <header class="debug-source-card-head">
+              <strong>${escapeHtml(pluginDisplayName(plugin.pluginId, plugin.sourceLabel || plugin.pluginId))}</strong>
+              ${stateHtml}
+            </header>
+            ${refHtml}
+            ${body}
+          </article>
+        `;
+      }).join("");
+      const acceptedLabel = tNext("movieDetail.debugSourcesAcceptedFields", "Accepted fields");
+      const notAcceptedLabel = tNext("movieDetail.debugSourcesNotAcceptedFields", "Not accepted");
+      const contributedCards = contributed.map((receiver) => {
+        const acceptedRaw = (Array.isArray(receiver.acceptedFields) && receiver.acceptedFields.length)
+          ? receiver.acceptedFields
+          : (Array.isArray(receiver.fields) ? receiver.fields : []);
+        const accepted = acceptedRaw.map((field) => String(field)).filter(Boolean);
+        const sources = Array.isArray(receiver.sourceProviders) ? receiver.sourceProviders : [];
+        const statusText = receiver.resultStatus || receiver.status || receiver.state || "";
+        const statusClass = debugContributionStatusClass(receiver);
+        const statusHtml = statusText
+          ? `<span class="debug-source-badge contrib-${statusClass || "neutral"}">${escapeHtml(String(statusText))}</span>`
+          : "";
+        const reasonText = debugContributionReasonLabel(receiver);
+        const reasonHtml = reasonText
+          ? `<div class="debug-source-contrib-reason"><span class="debug-source-label">${escapeHtml(reasonLabel)}:</span> ${escapeHtml(reasonText)}</div>`
+          : "";
+        const acceptedChips = accepted
+          .map((field) => `<span class="debug-field-chip accepted">${escapeHtml(field)}</span>`)
+          .join("");
+        const acceptedHtml = accepted.length
+          ? `<div class="debug-field-group"><details class="debug-field-details"${accepted.length <= 8 ? " open" : ""}><summary class="debug-source-label">${escapeHtml(acceptedLabel)} (${accepted.length}):</summary><div class="debug-field-chips">${acceptedChips}</div></details></div>`
+          : "";
+        const excluded = Array.isArray(receiver.excludedFields) ? receiver.excludedFields : [];
+        const rejectedChips = excluded.map((item) => {
+          const fieldName = item && item.field ? String(item.field) : "";
+          const reasonName = debugExcludedReasonLabel(item && item.reason);
+          const reasonChip = reasonName
+            ? ` <span class="debug-field-chip-reason">${escapeHtml(reasonName)}</span>`
+            : "";
+          const titleAttr = reasonName ? ` title="${escapeHtml(reasonName)}"` : "";
+          return `<span class="debug-field-chip rejected"${titleAttr}>${escapeHtml(fieldName)}${reasonChip}</span>`;
+        }).join("");
+        const rejectedHtml = excluded.length
+          ? `<div class="debug-field-group"><span class="debug-source-label">${escapeHtml(notAcceptedLabel)} (${excluded.length}):</span><div class="debug-field-chips">${rejectedChips}</div></div>`
+          : "";
+        const sourcesHtml = sources.length
+          ? `<div class="debug-source-contrib-sources"><span class="debug-source-label">${escapeHtml(contributedToLabel)}:</span> ${escapeHtml(sources.join(", "))}</div>`
+          : "";
+        return `
+          <article class="debug-source-card">
+            <header class="debug-source-card-head">
+              <strong>${escapeHtml(pluginDisplayName(receiver.pluginId, receiver.name || receiver.pluginId))}</strong>
+              ${statusHtml}
+            </header>
+            ${reasonHtml}
+            ${acceptedHtml}
+            ${rejectedHtml}
+            ${sourcesHtml}
+          </article>
+        `;
+      }).join("");
+      const fetchedSection = `
+        <section class="debug-source-section">
+          <h4>${escapeHtml(tNext("movieDetail.debugSourcesTitle", "Loaded metadata per source"))}</h4>
+          ${fetched.length ? `<div class="debug-source-grid">${fetchedCards}</div>` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugSourcesEmpty", "No metadata refresh recorded yet."))}</div>`}
+        </section>
+      `;
+      const contributedSection = `
+        <section class="debug-source-section">
+          <h4>${escapeHtml(tNext("movieDetail.debugSourcesContributedTitle", "Contributed metadata per plugin"))}</h4>
+          ${contributed.length ? `<div class="debug-source-grid">${contributedCards}</div>` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.debugSourcesContributedEmpty", "Nothing contributed in the last refresh."))}</div>`}
+        </section>
+      `;
+      const missingReport = metadataDebug && metadataDebug.missingContributionReport ? metadataDebug.missingContributionReport : null;
+      dvMissingContributionReportData = missingReport;
+      let exportSection = "";
+      if (missingReport && Array.isArray(missingReport.receivers) && missingReport.receivers.length) {
+        const missingCount = missingReport.receivers.reduce((sum, r) => sum + ((r && Array.isArray(r.missingFields)) ? r.missingFields.length : 0), 0);
+        exportSection = `
+          <section class="debug-source-section">
+            <h4>${escapeHtml(tNext("movieDetail.debugSourcesMissingTitle", "Missing in MovieVault"))}</h4>
+            <div class="debug-source-export-hint">${escapeHtml(tNext("movieDetail.debugSourcesMissingHint", "Fields fetched by DiscVault but not accepted by the receiver's contribution template."))} (${missingCount})</div>
+            <div class="debug-source-export-actions">
+              <button type="button" class="debug-source-export-btn" onclick="dvDownloadMissingContributionReport()">${escapeHtml(tNext("movieDetail.debugSourcesDownloadJson", "Download JSON"))}</button>
+              <button type="button" class="debug-source-export-btn" onclick="dvCopyMissingContributionReport()">${escapeHtml(tNext("movieDetail.debugSourcesCopyJson", "Copy"))}</button>
+              <span class="debug-source-export-feedback" id="debugSourcesExportFeedback" role="status" aria-live="polite"></span>
+            </div>
+          </section>
+        `;
+      }
+      return fetchedSection + contributedSection + exportSection;
+    }
+    function dvMissingContributionReportJson() {
+      return JSON.stringify(dvMissingContributionReportData || {}, null, 2);
+    }
+    function dvSetExportFeedback(message) {
+      const node = document.getElementById("debugSourcesExportFeedback");
+      if (!node) return;
+      node.textContent = message || "";
+      if (message) {
+        window.setTimeout(() => { if (node.textContent === message) node.textContent = ""; }, 2500);
+      }
+    }
+    function dvMissingContributionReportFilename() {
+      const report = dvMissingContributionReportData || {};
+      const id = String(report.movieId || report.containerId || "entity").replace(/[^a-z0-9_-]/gi, "").slice(0, 40) || "entity";
+      return `movievault-missing-fields-${id}.json`;
+    }
+    function dvDownloadMissingContributionReport() {
+      if (!dvMissingContributionReportData) return;
+      try {
+        const blob = new Blob([dvMissingContributionReportJson()], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = dvMissingContributionReportFilename();
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        dvSetExportFeedback(tNext("movieDetail.debugSourcesDownloadDone", "Downloaded"));
+      } catch (err) {
+        dvSetExportFeedback(tNext("movieDetail.debugSourcesCopyFailed", "Action failed"));
+      }
+    }
+    function dvCopyMissingContributionReport() {
+      if (!dvMissingContributionReportData) return;
+      const text = dvMissingContributionReportJson();
+      const done = () => dvSetExportFeedback(tNext("movieDetail.debugSourcesCopyDone", "Copied"));
+      const fail = () => {
+        try {
+          const area = document.createElement("textarea");
+          area.value = text;
+          area.setAttribute("readonly", "");
+          area.style.position = "absolute";
+          area.style.left = "-9999px";
+          document.body.appendChild(area);
+          area.select();
+          const ok = document.execCommand("copy");
+          document.body.removeChild(area);
+          if (ok) { done(); return; }
+        } catch (err) { /* ignore */ }
+        dvSetExportFeedback(tNext("movieDetail.debugSourcesCopyFailed", "Action failed"));
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(fail);
+      } else {
+        fail();
+      }
+    }
     function renderAppDebugButton() {
       document.body.classList.toggle("debug-mode", appDebugMode);
       const button = document.getElementById("appAdminDebugButton");
@@ -15295,18 +16846,73 @@ def ui_preview_html(
     function setLoginMessage(message, tone) {
       const node = document.getElementById("appLoginMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
     function setStartupGateMessage(message, tone) {
       const node = document.getElementById("startupMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `startup-message ${tone || ""}`.trim();
+    }
+    function isLikelyIpHost(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      if (!host || host === "localhost") return false;
+      if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
+      return host.includes(":");
+    }
+    function applyFaqMessage(node, message) {
+      node.textContent = "";
+      const text = String(message || "");
+      const faqUrl = "https://discvault.eu/faq";
+      let cursor = 0;
+      let found = text.indexOf(faqUrl);
+      if (found === -1) {
+        node.textContent = text;
+        return;
+      }
+      while (found !== -1) {
+        if (found > cursor) node.appendChild(document.createTextNode(text.slice(cursor, found)));
+        const anchor = document.createElement("a");
+        anchor.href = faqUrl;
+        anchor.textContent = faqUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer";
+        node.appendChild(anchor);
+        cursor = found + faqUrl.length;
+        found = text.indexOf(faqUrl, cursor);
+      }
+      if (cursor < text.length) node.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    function passkeyUpnSetupMessage() {
+      return tNext(
+        "auth.passkeyUpnRequired",
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyRpMismatchMessage() {
+      return tNext(
+        "auth.passkeyRpMismatch",
+        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
+      if (error && error.name === "NotAllowedError") return cancelledFallback;
+      const rawMessage = String((error && error.message) || "");
+      if (/registrable domain suffix|not equal to the current domain|relying party id/i.test(rawMessage)) {
+        return passkeyRpMismatchMessage();
+      }
+      if ((error && error.name === "NotSupportedError") || /not supported/i.test(rawMessage)) {
+        return webauthnUnavailableReason() || passkeyUpnSetupMessage();
+      }
+      return rawMessage || defaultFallback;
     }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return tNext("auth.passkeyUnavailable", "This browser does not support passkeys.");
+      }
+      if (isLikelyIpHost(window.location.hostname)) {
+        return passkeyUpnSetupMessage();
       }
       if (!window.isSecureContext) {
         return tNext("auth.passkeyHttpsRequired", "Open this app over HTTPS to use passkeys.");
@@ -15564,15 +17170,20 @@ def ui_preview_html(
     function renderAppRegistrationMode(auth) {
       if (auth) currentAuthStatus = auth || {};
       const publicRegistration = !!currentAuthStatus.registration_enabled;
+      const reviewLoginAvailable = !!currentAuthStatus.review_login_available;
       const toggleButton = document.getElementById("appInviteToggleButton");
+      const reviewToggleButton = document.getElementById("appReviewToggleButton");
       const codeLabel = document.getElementById("appInviteCodeLabel");
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
+      const reviewForm = document.getElementById("appReviewForm");
       if (toggleButton) {
         const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
         toggleButton.dataset.nextI18n = key;
         toggleButton.textContent = tNext(key, publicRegistration ? "Create account" : "Invite-only access");
       }
+      if (reviewToggleButton) reviewToggleButton.classList.toggle("hidden", !reviewLoginAvailable);
+      if (!reviewLoginAvailable) reviewForm?.classList.add("hidden");
       if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
       if (codeInput) {
         codeInput.required = !publicRegistration;
@@ -16053,6 +17664,8 @@ def ui_preview_html(
           </div>
           <div class="app-admin-plugin-meta">
             <span class="tag blue">${escapeHtml(tNext("appAdmin.version", "Version"))} ${escapeHtml(version)}</span>
+            ${plugin.updateAvailable ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.updateAvailable", "Update available"))}: ${escapeHtml(plugin.bundledVersion || "")}</span>` : ""}
+            ${plugin.canRollback ? `<span class="tag">${escapeHtml(tNext("appAdmin.rollbackAvailable", "Rollback available"))}${plugin.rollbackVersion ? `: ${escapeHtml(plugin.rollbackVersion)}` : ""}</span>` : ""}
             <span class="tag ${runtime.loaded || health.state === "ok" ? "good" : ""}">${escapeHtml(tNext("appAdmin.runtime", "Runtime"))} ${escapeHtml(String(runtimeState).replaceAll("_", " "))}</span>
             ${plugin.requiresSecrets ? `<span class="tag ${plugin.secretsConfigured ? "good" : ""}">${escapeHtml(tNext("appAdmin.secrets", "Secrets"))} ${escapeHtml(plugin.secretsConfigured ? tNext("appAdmin.configured", "Configured") : tNext("appAdmin.missing", "Missing"))}</span>` : `<span class="tag good">${escapeHtml(tNext("appAdmin.noSecretsRequired", "No secrets"))}</span>`}
             ${plugin.settingsConfigured ? `<span class="tag good">${escapeHtml(tNext("appAdmin.settingsConfigured", "Settings configured"))}</span>` : `<span class="tag">${escapeHtml(tNext("appAdmin.defaultSettings", "Default settings"))}</span>`}
@@ -16069,6 +17682,8 @@ def ui_preview_html(
           </div>
           <div class="app-admin-plugin-actions">
             ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${escapeHtml(plugin.enabled ? tNext("appAdmin.disablePlugin", "Disable") : tNext("appAdmin.enablePlugin", "Enable"))}</button>` : ""}
+            ${canManage && plugin.updateAvailable ? `<button type="button" class="secondary-button" data-app-admin-plugin-update="${escapeHtml(plugin.id)}" data-target-version="${escapeHtml(plugin.bundledVersion || "")}">${escapeHtml(tNext("appAdmin.updatePlugin", "Update"))}${plugin.bundledVersion ? ` (${escapeHtml(plugin.bundledVersion)})` : ""}</button>` : ""}
+            ${canManage && plugin.canRollback ? `<button type="button" class="secondary-button" data-app-admin-plugin-rollback="${escapeHtml(plugin.id)}" data-target-version="${escapeHtml(plugin.rollbackVersion || "")}">${escapeHtml(tNext("appAdmin.rollbackPlugin", "Rollback"))}${plugin.rollbackVersion ? ` (${escapeHtml(plugin.rollbackVersion)})` : ""}</button>` : ""}
             ${appAdminCanExportPlugin(plugin) ? `<button type="button" class="secondary-button" data-app-admin-plugin-export="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.exportPlugin", "Export"))}</button>` : ""}
             ${appAdminCanDeletePlugin(plugin) ? `<button type="button" class="secondary-button danger" data-app-admin-plugin-delete="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.deletePlugin", "Delete"))}</button>` : ""}
             ${canViewHealth ? `<button type="button" class="secondary-button" data-app-admin-plugin-health="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.checkHealth", "Check health"))}</button>` : ""}
@@ -16570,7 +18185,7 @@ def ui_preview_html(
               ${item.errors && item.errors.length ? `<div class="login-message bad">${escapeHtml(item.errors[0])}</div>` : ""}
               <div class="app-admin-plugin-actions">
                 <button type="button" class="secondary-button" data-app-admin-backup-download="${escapeHtml(item.fileName || "")}">${escapeHtml(tNext("appAdmin.downloadBackup", "Download"))}</button>
-                <button type="button" class="secondary-button danger" data-app-admin-backup-restore="${escapeHtml(item.fileName || "")}" ${item.valid ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.restoreBackup", "Restore ZIP"))}</button>
+                <button type="button" class="secondary-button danger" data-app-admin-backup-restore="${escapeHtml(item.fileName || "")}" ${item.valid ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.startRestore", "Start restore"))}</button>
               </div>
             </div>
           `;
@@ -17088,6 +18703,8 @@ def ui_preview_html(
       if (configNode) configNode.textContent = String(configNeeded);
       if (digitalNode) digitalNode.textContent = String(digitalSources.length);
       renderAppAdminPluginDashboard();
+      const autoUpdateToggle = document.getElementById("appAdminPluginAutoUpdateToggle");
+      if (autoUpdateToggle) autoUpdateToggle.checked = appAdmin.pluginAutoUpdate !== false;
       renderAppAdminPluginExecutionDashboard();
       renderAppAdminPluginPackageValidator();
       renderAppAdminPersonalListSyncDashboard();
@@ -17667,6 +19284,7 @@ def ui_preview_html(
       setElementVisible(closestCard(document.getElementById("appAdminCredentialsList")), canViewPasskeys);
       setElementVisible(document.getElementById("appAdminGroupForm"), canManageGroups);
       setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasActualPermission("admin.restore_functional"));
+      setElementVisible(document.getElementById("appAdminRefreshBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
       setElementVisible(document.getElementById("appAdminExportBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
       setElementVisible(document.getElementById("appAdminValidateBackupButton"), hasActualPermission("admin.restore_functional"));
       setElementVisible(document.getElementById("appAdminRestoreBackupButton"), hasActualPermission("admin.restore_functional"));
@@ -17828,6 +19446,7 @@ def ui_preview_html(
         appAdmin.assignableRoles = rbacPayload.assignableRoles || usersPayload.roles || [];
         appAdmin.groups = groupsPayload.groups || [];
         appAdmin.plugins = pluginsPayload.plugins || [];
+        appAdmin.pluginAutoUpdate = pluginsPayload.autoUpdate !== false;
         appAdmin.digitalSources = digitalSourcesPayload.items || [];
         appAdmin.backup = backupPayload || null;
         appAdmin.pluginJobs = pluginJobsPayload.jobs || [];
@@ -18222,7 +19841,15 @@ def ui_preview_html(
         appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
         if (input) input.value = "";
         renderAppAdminPlugins();
-        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginImported", "Plugin imported."), "good");
+        const importedPlugin = (payload && payload.plugin) || null;
+        const importedEnabled = !importedPlugin || importedPlugin.enabled !== false;
+        setAppAdminMessage(
+          "appAdminPluginsMessage",
+          importedEnabled
+            ? tNext("appAdmin.pluginImportedEnabled", "Plugin imported and enabled.")
+            : tNext("appAdmin.pluginImported", "Plugin imported."),
+          "good"
+        );
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -18251,6 +19878,82 @@ def ui_preview_html(
         delete appAdmin.pluginExecutions[pluginId];
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginDeleted", "Plugin deleted."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function updateAppAdminPlugin(pluginId) {
+      if (!pluginId) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanManagePlugin(plugin) || !plugin.updateAvailable) return;
+      const target = plugin.bundledVersion || "";
+      const confirmed = window.confirm(
+        tNext("appAdmin.updatePluginConfirm", "Install the bundled version {version} of this plugin?").replace("{version}", target || "")
+      );
+      if (!confirmed) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.updatingPlugin", "Updating plugin..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/update`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({})
+        });
+        appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        if (payload.registry && typeof payload.registry.autoUpdate === "boolean") {
+          appAdmin.pluginAutoUpdate = payload.registry.autoUpdate;
+        }
+        renderAppAdminPlugins();
+        const to = (payload.update && payload.update.to) || target;
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginUpdated", "Plugin updated to {version}.").replace("{version}", to || ""), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function rollbackAppAdminPlugin(pluginId) {
+      if (!pluginId) return;
+      const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
+      if (!appAdminCanManagePlugin(plugin) || !plugin.canRollback) return;
+      const target = plugin.rollbackVersion || "";
+      const confirmed = window.confirm(
+        tNext("appAdmin.rollbackPluginConfirm", "Roll back this plugin to the previous version {version}?").replace("{version}", target || "")
+      );
+      if (!confirmed) return;
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.rollingBackPlugin", "Rolling back plugin..."));
+      try {
+        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/rollback`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({})
+        });
+        appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        if (payload.registry && typeof payload.registry.autoUpdate === "boolean") {
+          appAdmin.pluginAutoUpdate = payload.registry.autoUpdate;
+        }
+        renderAppAdminPlugins();
+        const to = (payload.rollback && payload.rollback.to) || target;
+        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginRolledBack", "Plugin rolled back to {version}.").replace("{version}", to || ""), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
+      }
+    }
+    async function setAppAdminPluginAutoUpdate(enabled) {
+      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.savingAutoUpdate", "Saving auto-update setting..."));
+      try {
+        const payload = await authApiJson("/api/next/plugins/auto-update", {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({enabled: !!enabled})
+        });
+        appAdmin.pluginAutoUpdate = !!payload.autoUpdate;
+        if (payload.registry && payload.registry.plugins) appAdmin.plugins = payload.registry.plugins;
+        renderAppAdminPlugins();
+        setAppAdminMessage(
+          "appAdminPluginsMessage",
+          appAdmin.pluginAutoUpdate
+            ? tNext("appAdmin.autoUpdateEnabled", "Plugin auto-update enabled.")
+            : tNext("appAdmin.autoUpdateDisabled", "Plugin auto-update disabled."),
+          "good"
+        );
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -18506,6 +20209,33 @@ def ui_preview_html(
     function appAdminBackupIncludesPersonalLists() {
       return !!document.getElementById("appAdminBackupIncludePersonalLists")?.checked;
     }
+    function appAdminBackupExportScopes() {
+      const inputs = document.querySelectorAll("#appAdminBackupScopes input[data-backup-scope]");
+      const scopes = ["collection"];
+      inputs.forEach((input) => {
+        const scope = input.getAttribute("data-backup-scope");
+        if (scope && scope !== "collection" && input.checked) scopes.push(scope);
+      });
+      return Array.from(new Set(scopes));
+    }
+    function appAdminRestoreModeValue() {
+      const checked = document.querySelector("#appAdminRestoreMode input[name='appAdminRestoreMode']:checked");
+      return checked && checked.value === "merge" ? "merge" : "full";
+    }
+    function appAdminRestoreScopes() {
+      const inputs = document.querySelectorAll("#appAdminRestoreScopes input[data-restore-scope]");
+      const scopes = ["collection"];
+      inputs.forEach((input) => {
+        const scope = input.getAttribute("data-restore-scope");
+        if (scope && scope !== "collection" && input.checked) scopes.push(scope);
+      });
+      return Array.from(new Set(scopes));
+    }
+    function syncAppAdminRestoreScopeVisibility() {
+      const fieldset = document.getElementById("appAdminRestoreScopes");
+      if (!fieldset) return;
+      fieldset.hidden = appAdminRestoreModeValue() !== "merge";
+    }
     function appAdminBackupGroupKey(group) {
       return String((group && (group.publicId || group.backupGroupId || group.name)) || "");
     }
@@ -18554,6 +20284,33 @@ def ui_preview_html(
       }
       return resolution;
     }
+    async function pollAppAdminRestoreJob(jobId) {
+      if (!jobId) return;
+      const terminal = new Set(["completed", "failed", "cancelled", "error"]);
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        if (!canUseAdminTab("backup")) return;
+        let job = null;
+        try {
+          const payload = await authApiJson(`/api/next/backup/jobs/${encodeURIComponent(jobId)}`);
+          job = payload && payload.job;
+        } catch (error) {
+          return;
+        }
+        await refreshAppAdminBackupStatus();
+        const status = String((job && job.status) || "");
+        if (terminal.has(status)) {
+          if (status === "completed") {
+            setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreFinished", "Restore finished."), "good");
+          } else if (job && job.error) {
+            setAppAdminMessage("appAdminBackupMessage", job.error, "bad");
+          } else {
+            setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreFailed", "Backup restore failed."), "bad");
+          }
+          return;
+        }
+      }
+    }
     async function handleAppAdminBackupRestorePayload(payload, retry) {
       appAdmin.backupReport = payload.report || null;
       renderAppAdminBackups(appAdmin.backup);
@@ -18566,6 +20323,8 @@ def ui_preview_html(
       }
       await refreshAppAdminBackupStatus();
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueued", "Restore job queued."), "good");
+      const jobId = payload.job && (payload.job.id || payload.job.jobId);
+      if (jobId) pollAppAdminRestoreJob(jobId);
       return payload;
     }
     async function uploadAppAdminBackupZip(url, extraFields = {}) {
@@ -18593,11 +20352,45 @@ def ui_preview_html(
       if (match && match[1]) return decodeURIComponent(match[1].replace(/"/g, ""));
       return `discvault-functional-${new Date().toISOString().slice(0, 10)}.zip`;
     }
+    function renderAppAdminBackupProgress(messageKey, fallback) {
+      const node = document.getElementById("appAdminBackupReport");
+      if (!node) return;
+      node.innerHTML = `
+        <div class="profile-passkey">
+          <div class="profile-passkey-head">
+            <strong>${escapeHtml(tNext(messageKey, fallback))}</strong>
+            <span class="tag blue">${escapeHtml(tNext("metadataJobs.running", "Running"))}</span>
+          </div>
+          <div class="login-message">${escapeHtml(tNext("appAdmin.backupCreateHint", "This may take a moment for large collections."))}</div>
+        </div>
+      `;
+    }
+    async function createAppAdminBackup() {
+      if (!hasActualAnyPermission(["admin.backup", "collection.export_functional"])) return;
+      setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupCreating", "Creating backup..."));
+      renderAppAdminBackupProgress("appAdmin.backupCreateInProgress", "Backup in progress...");
+      try {
+        const scopes = appAdminBackupExportScopes();
+        const payload = await authApiJson("/api/next/backup/create", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({scopes: scopes.join(",")})
+        });
+        appAdmin.backupReport = payload.report || null;
+        await refreshAppAdminBackupStatus();
+        setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupCreated", "Backup created."), "good");
+      } catch (error) {
+        appAdmin.backupReport = null;
+        renderAppAdminBackups(appAdmin.backup);
+        setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
+    }
     async function exportAppAdminBackupZip() {
       if (!hasActualAnyPermission(["admin.backup", "collection.export_functional"])) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupExporting", "Creating backup ZIP..."));
       try {
-        const query = appAdminBackupIncludesPersonalLists() ? "?includePersonalLists=1" : "";
+        const scopes = appAdminBackupExportScopes();
+        const query = `?scopes=${encodeURIComponent(scopes.join(","))}`;
         const response = await fetch(`/api/next/backup/export${query}`, {
           method: "GET",
           cache: "no-store",
@@ -18641,9 +20434,13 @@ def ui_preview_html(
       if (!confirm(tNext("appAdmin.backupRestoreConfirm", "Restore this ZIP and replace the functional collection data? Auth, passkeys, plugins and secrets are not restored."))) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueueing", "Validating and queueing restore job..."));
       const restoreUploaded = async (groupResolution = {}) => {
+        const mode = appAdminRestoreModeValue();
+        const scopes = mode === "merge" ? appAdminRestoreScopes() : null;
         const extraFields = {
-          includePersonalLists: appAdminBackupIncludesPersonalLists() ? "1" : "0"
+          mode,
+          includePersonalLists: (scopes ? scopes.includes("personal_lists") : appAdminBackupIncludesPersonalLists()) ? "1" : "0"
         };
+        if (scopes) extraFields.scopes = scopes.join(",");
         if (Object.keys(groupResolution || {}).length) {
           extraFields.groupResolution = JSON.stringify(groupResolution);
         }
@@ -18690,13 +20487,17 @@ def ui_preview_html(
       if (!confirm(confirmText)) return;
       setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.backupRestoreQueueing", "Validating and queueing restore job..."));
       const restoreStored = async (groupResolution = {}) => {
+        const mode = appAdminRestoreModeValue();
+        const scopes = mode === "merge" ? appAdminRestoreScopes() : null;
         const payload = await authApiJson("/api/next/backup/restore-stored", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             fileName,
             confirm: "restore-functional-collection",
-            includePersonalLists: appAdminBackupIncludesPersonalLists(),
+            mode,
+            scopes,
+            includePersonalLists: scopes ? scopes.includes("personal_lists") : appAdminBackupIncludesPersonalLists(),
             groupResolution
           })
         }).catch((error) => {
@@ -18798,8 +20599,7 @@ def ui_preview_html(
         setLoginMessage(tNext("auth.signedIn", "Signed in."), "good");
         await refreshAppFlow();
       } catch (error) {
-        const cancelled = error && error.name === "NotAllowedError";
-        setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : String(error.message || error), "bad");
+        setLoginMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -18856,8 +20656,7 @@ def ui_preview_html(
         setStartupGateMessage(tNext("auth.passkeyCreated", "Passkey created. You are signed in."), "good");
         await refreshAppFlow();
       } catch (error) {
-        const cancelled = error && error.name === "NotAllowedError";
-        setStartupGateMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : (error.message || tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
+        setStartupGateMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -18865,6 +20664,18 @@ def ui_preview_html(
     function toggleInviteLogin() {
       const panel = document.getElementById("appInviteForm");
       const recoveryPanel = document.getElementById("appRecoveryForm");
+      const reviewPanel = document.getElementById("appReviewForm");
+      recoveryPanel?.classList.add("hidden");
+      reviewPanel?.classList.add("hidden");
+      panel?.classList.toggle("hidden");
+      setLoginMessage("");
+    }
+    function toggleReviewLogin() {
+      const panel = document.getElementById("appReviewForm");
+      if (!currentAuthStatus.review_login_available) return;
+      const invitePanel = document.getElementById("appInviteForm");
+      const recoveryPanel = document.getElementById("appRecoveryForm");
+      invitePanel?.classList.add("hidden");
       recoveryPanel?.classList.add("hidden");
       panel?.classList.toggle("hidden");
       setLoginMessage("");
@@ -18934,8 +20745,7 @@ def ui_preview_html(
         setLoginMessage(tNext("auth.inviteCreated", "Account created. You are signed in."), "good");
         await refreshAppFlow();
       } catch (error) {
-        const cancelled = error && error.name === "NotAllowedError";
-        setLoginMessage(cancelled ? tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled.") : (error.message || tNext("auth.inviteFailed", "Invite sign-up failed.")), "bad");
+        setLoginMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey sign-in was cancelled."), tNext("auth.inviteFailed", "Invite sign-up failed.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -18943,9 +20753,62 @@ def ui_preview_html(
     function toggleRecoveryLogin() {
       const panel = document.getElementById("appRecoveryForm");
       const invitePanel = document.getElementById("appInviteForm");
+      const reviewPanel = document.getElementById("appReviewForm");
       invitePanel?.classList.add("hidden");
+      reviewPanel?.classList.add("hidden");
       panel?.classList.toggle("hidden");
       setLoginMessage("");
+    }
+    async function loginReviewPassword(event) {
+      if (event) event.preventDefault();
+      if (!currentAuthStatus.review_login_available) {
+        setLoginMessage("Username/password review login is not available.", "bad");
+        return;
+      }
+      const username = String(document.getElementById("appReviewUsername")?.value || "").trim();
+      const password = String(document.getElementById("appReviewPassword")?.value || "");
+      const button = document.getElementById("appReviewLoginButton");
+      if (!username || !password) {
+        setLoginMessage("Enter username and password.", "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      setLoginMessage("Signing in with username/password...");
+      try {
+        const reviewBody = {username, password};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) reviewBody.mobile_flow = mobileFlow;
+        const payload = await apiJson("/api/next/auth/review/login", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(reviewBody)
+        });
+        if (payload.callback_url || payload.callbackUrl) {
+          window.location.href = payload.callback_url || payload.callbackUrl;
+          return;
+        }
+        if (payload.token) {
+          localStorage.setItem("dv_next_token", payload.token);
+          currentAuthStatus = Object.assign(currentAuthStatus || {}, {
+            authenticated: true,
+            username: payload.username,
+            role: payload.role,
+            display_name: payload.display_name
+          });
+        }
+        const passwordInput = document.getElementById("appReviewPassword");
+        if (passwordInput) passwordInput.value = "";
+        setLoginMessage("Signed in.", "good");
+        if (appMode) {
+          showLibraryPage();
+        } else {
+          await refreshAppFlow();
+        }
+      } catch (error) {
+        setLoginMessage(error.message || "Username/password sign-in failed.", "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
     }
     async function loginRecovery(event) {
       if (event) event.preventDefault();
@@ -20123,8 +21986,8 @@ def ui_preview_html(
       if (typeof value === "object") return JSON.stringify(value);
       return String(value);
     }
-    function detailFieldRows(entries) {
-      const rows = entries
+    function detailFieldRowsHtml(entries) {
+      return entries
         .map(([label, value]) => {
           if (value && typeof value === "object" && !Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, "html")) {
             return [label, valueText(value.text), value.html || ""];
@@ -20132,15 +21995,65 @@ def ui_preview_html(
           const text = valueText(value);
           return [label, text, escapeHtml(text)];
         })
-        .filter(([, value]) => value);
-      return rows.length
-        ? rows.map(([label, value, html]) => `
+        .filter(([, value]) => value)
+        .map(([label, value, html]) => `
             <div class="detail-field">
               <span>${escapeHtml(label)}</span>
               <strong>${html}</strong>
             </div>
-          `).join("")
-        : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+          `).join("");
+    }
+    function detailFieldRows(entries) {
+      return detailFieldRowsHtml(entries)
+        || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+    }
+    function detailFieldSubsection(title, entries) {
+      const rows = detailFieldRowsHtml(entries);
+      if (!rows) return "";
+      return `
+        <div class="detail-subsection">
+          <h4 class="detail-subsection-title">${escapeHtml(title)}</h4>
+          <div class="detail-fields">${rows}</div>
+        </div>
+      `;
+    }
+    function formatRuntimeDetail(minutes) {
+      const total = Math.round(Number(minutes));
+      if (!total || !isFinite(total) || total <= 0) return "";
+      const hours = Math.floor(total / 60);
+      const mins = total % 60;
+      const hhmm = `${hours}:${String(mins).padStart(2, "0")}`;
+      return `${hhmm} (${total} ${tNext("movieDetail.minutesShort", "min")})`;
+    }
+    function movieVaultExternalIds(movie, metadata) {
+      const meta = metadata || {};
+      const movieId = String(
+        meta.movievault_movie_id || meta.movievaultMovieId
+        || meta.movievault_id || meta.movieVaultId || meta.movievaultId
+        || meta.remoteRef || meta.remote_ref || ""
+      ).trim();
+      const releaseId = String(
+        meta.movievault_release_id || meta.movievaultReleaseId
+        || meta.movievault_release || meta.releaseRef || meta.release_ref || ""
+      ).trim();
+      return { movieId, releaseId };
+    }
+    function containerLinksHtml(containers) {
+      return (containers || [])
+        .filter((container) => container && container.title)
+        .map((container) => `<a href="/api/next/app/containers/${encodeURIComponent(container.id || "")}" data-app-container-link="${escapeHtml(String(container.id || ""))}">${escapeHtml(container.title)}</a>`)
+        .join(", ");
+    }
+    function bindContainerDetailLinks(elementId) {
+      const root = document.getElementById(elementId);
+      if (!root) return;
+      root.querySelectorAll("a[data-app-container-link]").forEach((anchor) => {
+        anchor.addEventListener("click", (event) => {
+          event.preventDefault();
+          const id = event.currentTarget.getAttribute("data-app-container-link") || "";
+          if (id) openAppContainerDetail(id);
+        });
+      });
     }
     function mediaAssetUrl(asset) {
       return usableImage(asset?.url || asset?.source_url || "");
@@ -20462,8 +22375,8 @@ def ui_preview_html(
       const container = detail.container || {};
       const metadata = container.metadata || {};
       return mediaAssetImage(detail.mediaAssets, kind)
-        || mediaAssetImage(detail.aggregateMediaAssets, kind)
-        || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind]);
+        || usableImage(metadata[`${kind}_url`] || metadata[`${kind}Url`] || metadata[kind])
+        || mediaAssetImage(detail.aggregateMediaAssets, kind);
     }
     function containerAggregateMovieMap(detail) {
       return new Map((detail.aggregateMovies || []).map((movie) => [String(movie.id || ""), movie]));
@@ -20738,9 +22651,70 @@ def ui_preview_html(
         </section>
       `;
     }
+    let movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: "", collapsed: false};
+    const MOVIE_COMPARE_FIELD_LABELS = {
+      "movie:title": ["movieDetail.title", "Title"],
+      "movie:original_title": ["movieDetail.originalTitle", "Original title"],
+      "movie:sort_title": ["movieDetail.fieldSortTitle", "Sort title"],
+      "movie:year": ["movieDetail.fieldYear", "Year"],
+      "movie:barcode": ["movieDetail.barcode", "Barcode"],
+      "movie:release_date": ["movieDetail.releaseDate", "Release date"],
+      "movie:format": ["movieDetail.format", "Format"],
+      "movie:edition": ["movieDetail.edition", "Edition"],
+      "movie:country": ["movieDetail.releaseCountry", "Release country"],
+      "movie:language": ["movieDetail.language", "Language"],
+      "movie:overview": ["movieDetail.fieldOverview", "Overview"],
+      "movie:rating": ["movieDetail.rating", "Rating"],
+      "movie:runtime_minutes": ["movieDetail.runtime", "Runtime"],
+      "metadata:director": ["movieDetail.director", "Director"],
+      "metadata:genre": ["movieDetail.genre", "Genre"],
+      "metadata:studios": ["movieDetail.studios", "Studios"],
+      "metadata:distributor": ["movieDetail.distributor", "Distributor"],
+      "metadata:packaging": ["movieDetail.packaging", "Packaging"],
+      "technical:hdr": ["", "HDR"],
+      "technical:screen_ratios": ["movieDetail.screenRatio", "Screen ratio"],
+      "technical:audio_tracks": ["movieDetail.audio", "Audio"],
+      "technical:subtitles": ["movieDetail.subtitles", "Subtitles"],
+      "technical:packaging": ["movieDetail.packaging", "Packaging"],
+      "media:poster": ["movieDetail.posters", "Posters"],
+      "media:backdrop": ["movieDetail.backdrops", "Backdrops"]
+    };
+    function metadataCompareFieldLabel(decision) {
+      const key = `${decision.target}:${decision.field}`;
+      const entry = MOVIE_COMPARE_FIELD_LABELS[key];
+      if (entry) return entry[0] ? tNext(entry[0], entry[1]) : entry[1];
+      return String(decision.field || "").replace(/_/g, " ");
+    }
+    function metadataCompareValueText(value) {
+      const text = valueText(value);
+      return text || tNext("movieDetail.compareEmpty", "(empty)");
+    }
     function renderMovieMetadataCompare(detail) {
       const node = document.getElementById("movieMetadataComparePanel");
       if (!node) return;
+      const button = document.getElementById("movieMetadataCompareButton");
+      if (button) {
+        const canCompare = hasPermission("metadata.refresh_one");
+        button.classList.toggle("hidden", !canCompare);
+        button.disabled = !!movieMetadataComparison.loading;
+        button.textContent = movieMetadataComparison.loading
+          ? tNext("movieDetail.comparing", "Comparing...")
+          : tNext("movieDetail.compareProviders", "Compare with providers");
+      }
+      if (movieMetadataComparison.movieId === activeDetailMovieId
+          && (movieMetadataComparison.decisions || movieMetadataComparison.error || movieMetadataComparison.loading)) {
+        node.innerHTML = movieMetadataCompareLiveHtml();
+        const details = document.getElementById("movieMetadataCompareDetails");
+        if (details) {
+          details.addEventListener("toggle", () => {
+            movieMetadataComparison.collapsed = !details.open;
+          });
+        }
+        return;
+      }
+      node.innerHTML = movieMetadataCompareSnapshotHtml(detail);
+    }
+    function movieMetadataCompareSnapshotHtml(detail) {
       const movie = detail.movie || {};
       const metadata = movie.metadata || {};
       const identifiers = detail.identifiers || [];
@@ -20748,13 +22722,18 @@ def ui_preview_html(
       const rows = [
         [tNext("movieDetail.title", "Title"), movie.title || metadata.title, metadata.title_source || metadata.source || "collection"],
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title || metadata.original_title || metadata.originalTitle, metadata.original_title_source || metadata.source || "collection"],
+        [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title || metadata.release_title || metadata.releaseTitle, metadata.release_title_source || metadata.source || "collection"],
         [tNext("movieDetail.fieldOverview", "Overview"), movie.overview || metadata.overview, metadata.overview_source || metadata.source || "collection"],
         [tNext("movieDetail.rating", "Rating"), movie.rating || metadata.rating, metadata.rating_source || metadata.source || "collection"],
         [tNext("movieDetail.technical", "Technical"), [technical.hdr, (technical.audio_tracks || []).slice(0, 2).join(", "), (technical.subtitles || []).slice(0, 2).join(", ")].filter(Boolean).join(" / "), technical.provider || metadata.technical_source || "metadata"]
       ].filter(([, value]) => value);
       const idText = identifiers.map((item) => `${item.provider_id || item.providerId}:${item.identifier}`).join(" / ");
       if (idText) rows.push([tNext("movieDetail.identifiers", "Identifiers"), idText, "providers"]);
-      node.innerHTML = rows.length ? `
+      const hint = `<p class="metadata-compare-hint">${escapeHtml(tNext("movieDetail.compareHint", "Showing the current stored values and their source. Use \u201cCompare with providers\u201d to see what each provider would propose."))}</p>`;
+      if (!rows.length) {
+        return hint + `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+      }
+      return hint + `
         <section class="metadata-compare-grid">
           ${rows.map(([label, value, source]) => `
             <div class="metadata-compare-row">
@@ -20764,7 +22743,118 @@ def ui_preview_html(
             </div>
           `).join("")}
         </section>
-      ` : `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+      `;
+    }
+    function movieMetadataCompareLiveHtml() {
+      if (movieMetadataComparison.loading) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.comparing", "Comparing..."))}</div>`;
+      }
+      if (movieMetadataComparison.error) {
+        return `<div class="preview-empty bad">${escapeHtml(movieMetadataComparison.error)}</div>`;
+      }
+      const decisions = (movieMetadataComparison.decisions || []).filter((decision) => {
+        return decision && Array.isArray(decision.candidates) && decision.candidates.length;
+      });
+      if (!decisions.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("movieDetail.compareNoProposals", "No providers returned any values to compare."))}</div>`;
+      }
+      const changed = decisions.filter((decision) => decision.changed).length;
+      const conflicts = decisions.filter((decision) => decision.conflict).length;
+      const locked = decisions.filter((decision) => metadataCompareDecisionLocked(decision)).length;
+      const summaryParts = [
+        `${decisions.length} ${tNext("movieDetail.compareFieldsCompared", "fields compared")}`,
+        `${changed} ${tNext("movieDetail.compareWouldChange", "would change")}`,
+        `${conflicts} ${tNext("movieDetail.compareConflicts", "conflicts")}`
+      ];
+      if (locked) summaryParts.push(`${locked} ${tNext("movieDetail.compareLocked", "locked")}`);
+      const legend = `
+        <div class="metadata-compare-legend">
+          <span class="metadata-compare-badge winner">${escapeHtml(tNext("movieDetail.compareWinner", "Selected"))}</span>
+          <span class="metadata-compare-badge change">${escapeHtml(tNext("movieDetail.compareChange", "Differs"))}</span>
+          <span class="metadata-compare-badge same">${escapeHtml(tNext("movieDetail.compareSame", "Same"))}</span>
+          <span class="metadata-compare-badge locked">${escapeHtml(tNext("movieDetail.compareLocked", "locked"))}</span>
+        </div>`;
+      const rows = decisions.map(movieMetadataCompareRowHtml).join("");
+      const openAttr = movieMetadataComparison.collapsed ? "" : " open";
+      return `
+        <details class="metadata-compare-details"${openAttr} id="movieMetadataCompareDetails">
+          <summary class="metadata-compare-summary-toggle">
+            <span class="metadata-compare-summary">${escapeHtml(summaryParts.join(" \u00b7 "))}</span>
+          </summary>
+          <div class="metadata-compare-body">
+            ${legend}
+            <div class="metadata-compare-table">${rows}</div>
+          </div>
+        </details>`;
+    }
+    function metadataCompareDecisionLocked(decision) {
+      return (decision.candidates || []).some((candidate) => String(candidate.reason || "").includes("locked by user"));
+    }
+    function movieMetadataCompareRowHtml(decision) {
+      const label = metadataCompareFieldLabel(decision);
+      const currentText = valueText(decision.initialValue);
+      const isLocked = metadataCompareDecisionLocked(decision);
+      const rowClasses = ["metadata-compare-field"];
+      if (decision.changed) rowClasses.push("changed");
+      if (decision.conflict) rowClasses.push("conflict");
+      if (isLocked) rowClasses.push("locked");
+      const flags = [];
+      if (isLocked) flags.push(`<span class="metadata-compare-badge locked">${escapeHtml(tNext("movieDetail.compareLocked", "locked"))}</span>`);
+      if (decision.conflict) flags.push(`<span class="metadata-compare-badge conflict">${escapeHtml(tNext("movieDetail.compareConflict", "conflict"))}</span>`);
+      const candidates = (decision.candidates || []).map((candidate) => {
+        const candidateText = valueText(candidate.value);
+        const same = candidateText === currentText;
+        const cls = ["metadata-compare-candidate"];
+        if (candidate.winner) cls.push("winner");
+        else if (same) cls.push("same");
+        else if (candidate.accepted === false && !same) cls.push("rejected");
+        if (!same && !candidate.winner) cls.push("differs");
+        const marks = [];
+        if (candidate.winner) marks.push(`<span class="metadata-compare-badge winner">${escapeHtml(tNext("movieDetail.compareWinner", "Selected"))}</span>`);
+        else if (same) marks.push(`<span class="metadata-compare-badge same">${escapeHtml(tNext("movieDetail.compareSame", "Same"))}</span>`);
+        else marks.push(`<span class="metadata-compare-badge change">${escapeHtml(tNext("movieDetail.compareChange", "Differs"))}</span>`);
+        const reason = candidate.accepted === false && candidate.reason
+          ? `<span class="metadata-compare-reason">${escapeHtml(candidate.reason)}</span>`
+          : "";
+        return `
+          <div class="${cls.join(" ")}">
+            <span class="metadata-compare-provider">${escapeHtml(candidate.sourceLabel || candidate.pluginId || "")}</span>
+            <span class="metadata-compare-candidate-value">${escapeHtml(metadataCompareValueText(candidate.value)).slice(0, 320)}</span>
+            <span class="metadata-compare-marks">${marks.join("")}${reason}</span>
+          </div>`;
+      }).join("");
+      return `
+        <div class="${rowClasses.join(" ")}">
+          <div class="metadata-compare-field-head">
+            <strong>${escapeHtml(label)}</strong>
+            <span class="metadata-compare-flags">${flags.join("")}</span>
+          </div>
+          <div class="metadata-compare-current">
+            <span class="metadata-compare-current-label">${escapeHtml(tNext("movieDetail.compareCurrent", "Current"))}</span>
+            <span class="metadata-compare-current-value">${escapeHtml(metadataCompareValueText(decision.initialValue)).slice(0, 320)}</span>
+          </div>
+          <div class="metadata-compare-candidates">${candidates}</div>
+        </div>`;
+    }
+    async function loadMovieMetadataComparison() {
+      if (!activeDetailMovieId || !hasPermission("metadata.refresh_one")) return;
+      const movieId = activeDetailMovieId;
+      movieMetadataComparison = {movieId, decisions: null, loading: true, error: ""};
+      if (activeDetailPayload) renderMovieMetadataCompare(activeDetailPayload);
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/preview`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({})
+        });
+        if (activeDetailMovieId !== movieId) return;
+        const decisions = (((payload.metadata || {}).proposal || {}).fieldDecisions) || [];
+        movieMetadataComparison = {movieId, decisions, loading: false, error: ""};
+      } catch (error) {
+        if (activeDetailMovieId !== movieId) return;
+        movieMetadataComparison = {movieId, decisions: null, loading: false, error: error.message || String(error)};
+      }
+      if (activeDetailPayload) renderMovieMetadataCompare(activeDetailPayload);
     }
     function movieVideoItems(movie, metadata) {
       const videos = [];
@@ -21034,12 +23124,97 @@ def ui_preview_html(
       }).join("");
       select.value = normalized;
     }
+    function renderImportFormatOptions() {
+      const select = document.getElementById("importFormatInput");
+      if (!select || select.tagName !== "SELECT") return;
+      const current = normalizedMovieFormatValue(select.value || "");
+      const collectorMode = collectorsModeEnabled();
+      const allowed = MOVIE_FORMAT_OPTIONS.filter((item) => collectorMode || !item.collectorOnly);
+      const allowedValues = new Set(allowed.map((item) => item.value));
+      const knownValues = new Set(MOVIE_FORMAT_OPTIONS.map((item) => item.value));
+      const customOption = current && !allowedValues.has(current) && !knownValues.has(current)
+        ? [{value: current}]
+        : [];
+      select.innerHTML = [
+        `<option value="">${escapeHtml(tNext("common.any", "Any"))}</option>`,
+        ...allowed.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.value)}</option>`),
+        ...customOption.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.value)}</option>`)
+      ].join("");
+      select.value = current;
+    }
+    const MOVIE_EDIT_LOCK_FIELDS = {
+      movieEditTitle: "title",
+      movieEditOriginalTitle: "original_title",
+      movieEditSortTitle: "sort_title",
+      movieEditYear: "year",
+      movieEditBarcode: "barcode",
+      movieEditFormat: "format",
+      movieEditEdition: "edition",
+      movieEditReleaseDate: "release_date",
+      movieEditCountry: "country",
+      movieEditLanguage: "language",
+      movieEditLocation: "location",
+      movieEditOverview: "overview",
+      movieEditNotes: "notes",
+      movieEditRuntime: "runtime_minutes",
+      movieEditDirector: "director",
+      movieEditGenre: "genre",
+      movieEditStudios: "studios",
+      movieEditContentRating: "content_ratings",
+      movieEditHdr: "hdr",
+      movieEditScreenRatio: "screen_ratios",
+      movieEditAudioTracks: "audio_tracks",
+      movieEditSubtitles: "subtitles",
+      movieEditPackaging: "packaging",
+      movieEditDistributor: "distributor"
+    };
+    let movieEditLockedFields = new Set();
+    function reflectMovieEditLock(btn, field) {
+      const locked = movieEditLockedFields.has(field);
+      btn.classList.toggle("locked", locked);
+      btn.setAttribute("aria-pressed", locked ? "true" : "false");
+      btn.textContent = locked ? "🔒" : "🔓";
+      btn.title = locked
+        ? tNext("movieDetail.unlockField", "Field locked. Click to allow metadata updates.")
+        : tNext("movieDetail.lockField", "Field unlocked. Click to protect it from metadata updates.");
+      btn.setAttribute("aria-label", btn.title);
+    }
+    function toggleMovieEditLock(field, btn) {
+      if (movieEditLockedFields.has(field)) movieEditLockedFields.delete(field);
+      else movieEditLockedFields.add(field);
+      reflectMovieEditLock(btn, field);
+    }
+    function setupMovieEditLocks(lockedList) {
+      movieEditLockedFields = new Set(Array.isArray(lockedList) ? lockedList : []);
+      Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const label = input.closest("label");
+        if (!label) return;
+        let btn = label.querySelector(".movie-edit-lock");
+        if (!btn) {
+          btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "movie-edit-lock";
+          btn.dataset.lockField = field;
+          btn.addEventListener("click", () => toggleMovieEditLock(field, btn));
+          const head = label.querySelector("span");
+          if (head) head.appendChild(btn);
+          else label.insertBefore(btn, input);
+        }
+        reflectMovieEditLock(btn, field);
+      });
+    }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
+      const metadata = movie.metadata || {};
+      const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
+      const contentRatingInfo = preferredContentRatingInfo(movie, specs);
       const fields = {
         movieEditTitle: movie.title || "",
         movieEditOriginalTitle: movie.original_title || "",
+        movieEditReleaseTitle: movie.release_title || "",
         movieEditSortTitle: movie.sort_title || "",
         movieEditYear: movie.year || "",
         movieEditBarcode: movie.barcode || "",
@@ -21048,6 +23223,17 @@ def ui_preview_html(
         movieEditCountry: movie.country || "",
         movieEditLanguage: movie.language || "",
         movieEditLocation: movie.location || "",
+        movieEditRuntime: movie.runtime_minutes || "",
+        movieEditDirector: valueText(metadata.director),
+        movieEditGenre: valueText(metadata.genre),
+        movieEditStudios: valueText(metadata.studios),
+        movieEditContentRating: contentRatingInfo.rating || "",
+        movieEditHdr: valueText(specs.hdr || metadata.hdr),
+        movieEditScreenRatio: valueText(specs.screen_ratios || metadata.screen_ratios),
+        movieEditAudioTracks: valueText(specs.audio_tracks || metadata.audio_tracks),
+        movieEditSubtitles: valueText(specs.subtitles || metadata.subtitles),
+        movieEditPackaging: valueText(specs.packaging || metadata.packaging || movie.edition_type),
+        movieEditDistributor: valueText(metadata.distributor),
         movieEditOverview: movie.overview || "",
         movieEditNotes: movie.notes || ""
       };
@@ -21055,6 +23241,11 @@ def ui_preview_html(
         const input = document.getElementById(id);
         if (input && document.activeElement !== input) input.value = value;
       });
+      setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
+    }
+    function movie_locked_fields_from_metadata(metadata) {
+      const raw = (metadata && (metadata.field_locks || metadata.fieldLocks)) || [];
+      return Array.isArray(raw) ? raw.map((item) => String(item || "").trim()).filter(Boolean) : [];
     }
     function renderMovieListState(detail) {
       const state = detail.userState || {};
@@ -21223,33 +23414,53 @@ def ui_preview_html(
       ]);
       fillMovieEditForm(detail);
       renderMovieListState(detail);
+      const mvIds = movieVaultExternalIds(movie, metadata);
+      const releaseContainers = (detail.containers || []).filter((container) => container && container.title);
+      const releaseContainerText = releaseContainers.map((container) => container.title).join(", ");
+      const releaseContainerHtml = containerLinksHtml(releaseContainers);
+      const releasePackaging = specs.packaging || metadata.packaging || movie.edition_type || movie.edition;
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
+        [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title],
         [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
         [tNext("movieDetail.format", "Format"), movie.format],
-        [tNext("movieDetail.edition", "Edition"), movie.edition],
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
-        [tNext("movieDetail.country", "Country"), movie.country],
+        [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
         [tNext("movieDetail.location", "Location"), movie.location],
         [tNext("movieDetail.director", "Director"), metadata.director],
         [tNext("movieDetail.genre", "Genre"), metadata.genre],
-        [tNext("movieDetail.studios", "Studios"), metadata.studios]
+        [tNext("movieDetail.studios", "Studios"), metadata.studios],
+        [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
+        ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
       ]);
-      document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows([
+      const audioVideoSubsection = detailFieldSubsection(tNext("movieDetail.audioVideo", "Audio & Video"), [
         ["HDR", specs.hdr || metadata.hdr],
-        [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
-        [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles],
-        [tNext("movieDetail.regions", "Regions"), specs.regions || metadata.regions],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
-        [tNext("movieDetail.packaging", "Packaging"), specs.packaging || metadata.packaging],
-        [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}]
+        [tNext("movieDetail.format", "Format"), movie.format || specs.format || metadata.format],
+        [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
+        [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
+        [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles]
       ]);
+      const collectorsSubsection = detailFieldSubsection(tNext("movieDetail.collectors", "Collectors"), [
+        [tNext("movieDetail.edition", "Edition"), movie.edition],
+        [tNext("movieDetail.packaging", "Packaging"), releasePackaging],
+        [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
+        [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
+        ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
+      ]);
+      document.getElementById("movieDetailTechnical").innerHTML = (audioVideoSubsection + collectorsSubsection)
+        || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
+      bindContainerDetailLinks("movieDetailTechnical");
       renderMovieMetadataCompare(detail);
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
       if (debugLocalizationList) debugLocalizationList.innerHTML = appDebugMode ? movieLocalizationDebugHtml(detail.localizations || [], movie, specs) : "";
+      const debugMetadataCard = document.getElementById("movieDetailDebugMetadataCard");
+      if (debugMetadataCard) debugMetadataCard.classList.toggle("hidden", !appDebugMode);
+      const debugSources = document.getElementById("movieDetailDebugSources");
+      if (debugSources) debugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       const identifiers = (detail.identifiers || []).filter(Boolean).map((item) => {
         const service = movieIdentifierServiceLabel(item);
         return service === "IMDb" || service === "TMDb"
@@ -21307,6 +23518,7 @@ def ui_preview_html(
     function showMovieDetailLoading(movieId) {
       activeDetailMovieId = movieId || "";
       activeDetailPayload = null;
+      movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
       setMovieEditPanelVisible(false);
       document.getElementById("movieDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("movieDetailOverview").textContent = "";
@@ -21317,7 +23529,13 @@ def ui_preview_html(
       document.getElementById("movieListStateSummary").textContent = "";
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
       document.getElementById("movieDetailDebugLocalizationsCard")?.classList.add("hidden");
+      document.getElementById("movieDetailDebugLocalizationsCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
       document.getElementById("movieDetailDebugLocalizations").innerHTML = "";
+      document.getElementById("movieDetailDebugMetadataCard")?.classList.add("hidden");
+      document.getElementById("movieDetailDebugMetadataCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
+      const debugSourcesEl = document.getElementById("movieDetailDebugSources");
+      if (debugSourcesEl) debugSourcesEl.innerHTML = "";
+      dvMissingContributionReportData = null;
       document.getElementById("movieDetailLinks").innerHTML = "";
       document.getElementById("movieDetailRelationships").innerHTML = "";
       document.getElementById("movieDetailPosterArtwork").innerHTML = "";
@@ -21563,7 +23781,7 @@ def ui_preview_html(
       ).join("");
     }
     function renderContainerDetail(detail) {
-      const activePanelId = activeDetailPanel("containerDetail", "containerDetailOverviewPanel");
+      const activePanelId = activeDetailPanel("containerDetail", "containerDetailFilmsPanel");
       activeContainerPayload = detail;
       const container = detail.container || {};
       activeContainerId = container.id || activeContainerId || "";
@@ -21639,10 +23857,14 @@ def ui_preview_html(
         [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
       ]);
       document.getElementById("containerDetailMetadataDetails").innerHTML = document.getElementById("containerDetailMetadata").innerHTML;
+      const containerDebugCard = document.getElementById("containerDetailDebugCard");
+      const containerDebugSources = document.getElementById("containerDetailDebugSources");
+      if (containerDebugCard) containerDebugCard.classList.toggle("hidden", !appDebugMode);
+      if (containerDebugSources) containerDebugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
-      activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailOverviewPanel");
+      activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailFilmsPanel");
       syncContainerViewModeControls();
       setContainerDetailMessage("");
       applyAppPermissionVisibility();
@@ -21664,12 +23886,13 @@ def ui_preview_html(
       document.getElementById("containerDetailIdentifiers").innerHTML = "";
       document.getElementById("containerDetailMetadata").innerHTML = "";
       document.getElementById("containerDetailMetadataDetails").innerHTML = "";
+      document.getElementById("containerDetailDebugCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
       document.getElementById("containerDetailPosterArtwork").innerHTML = "";
       document.getElementById("containerDetailBackdropArtwork").innerHTML = "";
       document.getElementById("containerDetailVideos").innerHTML = "";
       document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
       document.getElementById("containerDetailBackdrop").src = "";
-      activateDetailTab("containerDetail", "containerDetailOverviewPanel");
+      activateDetailTab("containerDetail", "containerDetailFilmsPanel");
       setContainerDetailMessage("");
     }
     function renderContainerEditSummary(detail) {
@@ -21738,6 +23961,176 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `detail-message ${tone || ""}`.trim();
     }
+    function isIsoDateValue(value) {
+      return /^\\d{4}-\\d{2}-\\d{2}$/.test(String(value || "").slice(0, 10));
+    }
+    function formatPersonLongDate(value) {
+      if (!value) return "";
+      const text = String(value).slice(0, 10);
+      if (!isIsoDateValue(text)) return text;
+      try {
+        return new Intl.DateTimeFormat(localeState.locale || "en-US", {day: "numeric", month: "long", year: "numeric"}).format(new Date(`${text}T12:00:00`));
+      } catch (error) {
+        return text;
+      }
+    }
+    function personAgeYears(birthday, deathday) {
+      const birthText = String(birthday || "").slice(0, 10);
+      if (!isIsoDateValue(birthText)) return null;
+      const birth = new Date(`${birthText}T12:00:00`);
+      if (Number.isNaN(birth.getTime())) return null;
+      const deathText = String(deathday || "").slice(0, 10);
+      const end = isIsoDateValue(deathText) ? new Date(`${deathText}T12:00:00`) : new Date();
+      if (Number.isNaN(end.getTime())) return null;
+      let age = end.getFullYear() - birth.getFullYear();
+      const monthDiff = end.getMonth() - birth.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && end.getDate() < birth.getDate())) age -= 1;
+      return age >= 0 && age < 200 ? age : null;
+    }
+    function personKnownForLabel(value) {
+      const key = String(value || "").trim();
+      if (!key) return "";
+      return tNext(`personDetail.department.${key.toLowerCase()}`, key);
+    }
+    function personBirthdayDisplay(detail, person) {
+      const birthday = detail.birthday || person.birth_date || "";
+      if (!birthday) return "";
+      const formatted = formatPersonLongDate(birthday);
+      const age = personAgeYears(birthday, detail.deathday || person.death_date);
+      if (age === null) return formatted;
+      const deceased = !!(detail.deathday || person.death_date);
+      const label = deceased
+        ? tNext("personDetail.ageAtDeath", "age at death {age}").replace("{age}", String(age))
+        : tNext("personDetail.ageYears", "{age} years").replace("{age}", String(age));
+      return `${formatted} (${label})`;
+    }
+    function personAlsoKnownAs(detail, metadata) {
+      const direct = Array.isArray(detail.alsoKnownAs) ? detail.alsoKnownAs : null;
+      const source = (direct && direct.length) ? direct : (metadata.alsoKnownAs || metadata.also_known_as || []);
+      return (Array.isArray(source) ? source : []).map((value) => String(value || "").trim()).filter(Boolean);
+    }
+    function personMentions(detail, counts) {
+      const numeric = (value) => {
+        const num = Number(value);
+        return Number.isFinite(num) && num >= 0 ? num : null;
+      };
+      let inVault = numeric(detail.mentionsInVault);
+      let total = numeric(detail.mentionsTotal);
+      if (inVault === null) inVault = (Number(counts.collection) || 0) + (Number(counts.digital) || 0);
+      if (total === null) total = Number(counts.filmography) || 0;
+      return {inVault, total};
+    }
+    function personMediaItems(detail) {
+      if (Array.isArray(detail.media) && detail.media.length) {
+        return detail.media.filter((item) => item && item.url);
+      }
+      const raw = Array.isArray(detail.personMedia) ? detail.personMedia : [];
+      return raw
+        .map((asset) => ({
+          id: asset.id || "",
+          url: asset.url || asset.source_url || "",
+          isPrimary: !!asset.is_primary,
+          sortOrder: asset.sort_order,
+          kind: asset.kind || "profile",
+          preview: !!asset.preview,
+        }))
+        .filter((item) => item.url);
+    }
+    function personMediaGalleryHtml(media, options = {}) {
+      if (!media.length) return "";
+      const canEdit = !!options.canEdit;
+      return media
+        .map((item) => {
+          const cls = item.isPrimary ? "person-media-tile is-primary" : "person-media-tile";
+          const badge = item.isPrimary
+            ? `<span class="person-media-badge">${escapeHtml(tNext("personDetail.primaryImage", "Primary"))}</span>`
+            : "";
+          const button = (canEdit && !item.isPrimary && item.id && !item.preview)
+            ? `<button type="button" class="secondary-button person-media-set-primary" data-person-media-primary="${escapeHtml(item.id)}">${escapeHtml(tNext("personDetail.setPrimaryImage", "Set as primary"))}</button>`
+            : "";
+          return `<figure class="${cls}"><img src="${escapeHtml(usableImage(item.url) || item.url)}" alt="" loading="lazy">${badge}${button}</figure>`;
+        })
+        .join("");
+    }
+    function personAwardGroupsList(detail) {
+      const groups = Array.isArray(detail.awardGroups) ? detail.awardGroups : [];
+      if (groups.length) return groups;
+      const metadata = (detail.person || {}).metadata || {};
+      return Array.isArray(metadata.awardGroups) ? metadata.awardGroups : [];
+    }
+    function personAwardsHtml(groups) {
+      if (!groups.length) return "";
+      return groups
+        .map((group) => {
+          const items = (Array.isArray(group.items) ? group.items.slice() : [])
+            .sort((a, b) => (Number(b.year) || 0) - (Number(a.year) || 0));
+          const wins = Number(group.wins) || 0;
+          const nominations = Number(group.nominations) || 0;
+          const summary = [];
+          if (wins) summary.push(`${wins} ${tNext("personDetail.awardWins", "wins")}`);
+          if (nominations) summary.push(`${nominations} ${tNext("personDetail.awardNominations", "nominations")}`);
+          const rows = items
+            .map((item) => {
+              const won = String(item.result || "") === "won";
+              const resultClass = won ? "person-award-result won" : "person-award-result nominated";
+              const resultLabel = won ? tNext("personDetail.awardWon", "Won") : tNext("personDetail.awardNominated", "Nominated");
+              const detailParts = [item.year ? String(item.year) : "", item.category || "", item.work || ""].filter(Boolean).map((part) => escapeHtml(part));
+              return `<li><span class="${resultClass}">${escapeHtml(resultLabel)}</span><span class="person-award-detail">${detailParts.join(" — ")}</span></li>`;
+            })
+            .join("");
+          return `<div class="person-award-group"><div class="person-award-head"><strong>${escapeHtml(group.award || "")}</strong><span class="person-award-summary">${escapeHtml(summary.join(" · "))}</span></div><ul class="person-award-items">${rows}</ul></div>`;
+        })
+        .join("");
+    }
+    async function setPrimaryPersonMedia(mediaId) {
+      if (!activePersonId || !mediaId) return;
+      setPersonDetailMessage(tNext("personDetail.updatingPrimaryImage", "Updating primary image..."), "info");
+      try {
+        await authApiJson(`/api/next/people/${encodeURIComponent(activePersonId)}/media/primary`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({mediaId})
+        });
+        const payload = await authApiJson(`/api/next/people/${encodeURIComponent(activePersonId)}`);
+        renderPersonDetail(payload.detail || {});
+        setPersonDetailMessage(tNext("personDetail.primaryImageUpdated", "Primary image updated."), "good");
+        peopleState.loaded = false;
+      } catch (error) {
+        setPersonDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function setPersonBiographyToggleLabel(expanded) {
+      const toggle = document.getElementById("personDetailBiographyToggle");
+      if (!toggle) return;
+      toggle.textContent = expanded
+        ? tNext("personDetail.readLess", "Read less")
+        : tNext("personDetail.readMore", "Read more");
+      toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+    }
+    function togglePersonBiography() {
+      const node = document.getElementById("personDetailBiography");
+      if (!node) return;
+      const expanded = node.classList.toggle("is-expanded");
+      setPersonBiographyToggleLabel(expanded);
+    }
+    function applyPersonBiography(text) {
+      const node = document.getElementById("personDetailBiography");
+      const toggle = document.getElementById("personDetailBiographyToggle");
+      if (!node) return;
+      node.textContent = text;
+      node.classList.remove("is-expanded", "has-overflow");
+      if (toggle) toggle.classList.add("hidden");
+      requestAnimationFrame(() => {
+        const current = document.getElementById("personDetailBiography");
+        if (current !== node) return;
+        const overflowing = node.scrollHeight - node.clientHeight > 4;
+        node.classList.toggle("has-overflow", overflowing);
+        if (toggle) {
+          toggle.classList.toggle("hidden", !overflowing);
+          if (overflowing) setPersonBiographyToggleLabel(false);
+        }
+      });
+    }
     function renderPersonDetail(detail) {
       activePersonPayload = detail;
       const person = detail.person || {};
@@ -21760,24 +24153,44 @@ def ui_preview_html(
         avatarNode.innerHTML = image ? `<img src="${escapeHtml(image)}" alt="">` : escapeHtml(initialsFromName(name));
       }
       document.getElementById("personDetailTitle").textContent = name;
-      document.getElementById("personDetailBiography").textContent = person.biography || tNext("personDetail.noBiography", "No biography imported yet.");
+      applyPersonBiography(person.biography || tNext("personDetail.noBiography", "No biography imported yet."));
+      const knownForValue = person.known_for || metadata.knownFor || metadata.known_for || "";
+      const knownForLabel = personKnownForLabel(knownForValue);
+      const birthdayDisplay = personBirthdayDisplay(detail, person);
+      const deathdayDisplay = formatPersonLongDate(detail.deathday || person.death_date);
+      const alsoKnownAs = personAlsoKnownAs(detail, metadata);
+      const mentions = personMentions(detail, counts);
+      const mentionsText = `${mentions.inVault} / ${mentions.total}`;
+      const mentionsCaption = `${tNext("personDetail.mentionsInVault", "in collection")} / ${tNext("personDetail.mentionsTotal", "total")}`;
+      const hasMentions = (mentions.inVault > 0 || mentions.total > 0);
       document.getElementById("personDetailTags").innerHTML = detailTagHtml([
-        person.known_for,
-        person.birth_date,
-        person.death_date ? `${tNext("personDetail.died", "Died")} ${person.death_date}` : "",
-        (counts.collection || collectionCredits.length) ? `${counts.collection || collectionCredits.length} ${tNext("personDetail.credits", "credits")}` : "",
+        knownForLabel,
+        birthdayDisplay,
+        deathdayDisplay ? `${tNext("personDetail.died", "Died")} ${deathdayDisplay}` : "",
+        hasMentions ? `${mentionsText} ${tNext("personDetail.mentions", "mentions")}` : "",
         extendedPeople && digitalCredits.length ? `${digitalCredits.length} ${tNext("personDetail.digitalCollection", "Digital").toLowerCase()}` : "",
         extendedPeople && filmography.length ? `${filmography.length} ${tNext("personDetail.filmography", "Filmography").toLowerCase()}` : "",
         appDebugMode && person.id ? `Person ID ${person.id}` : ""
       ]);
       document.getElementById("personDetailFields").innerHTML = detailFieldRows([
-        [tNext("personDetail.knownFor", "Known for"), person.known_for],
-        [tNext("personDetail.birthDate", "Birth date"), person.birth_date],
-        [tNext("personDetail.deathDate", "Death date"), person.death_date],
+        [tNext("personDetail.knownFor", "Known for"), knownForLabel],
+        [tNext("personDetail.birthDate", "Birth date"), birthdayDisplay],
+        [tNext("personDetail.deathDate", "Death date"), deathdayDisplay],
         [tNext("personDetail.placeOfBirth", "Place of birth"), person.place_of_birth],
+        [tNext("personDetail.alsoKnownAs", "Also known as"), alsoKnownAs.join(", ")],
+        [tNext("personDetail.mentions", "Mentions"), hasMentions ? `${mentionsText} (${mentionsCaption})` : ""],
         [tNext("personDetail.publicId", "Public ID"), person.public_id],
         [appDebugMode ? tNext("personDetail.metadataProvenance", "Metadata provenance") : "", appDebugMode ? [metadata.person_metadata_source, metadata.person_metadata_source_ref, metadata.filmography_source_ref].filter(Boolean).join(" / ") : ""]
       ]);
+      const personMedia = personMediaItems(detail);
+      const canEditPersonMedia = hasPermission("metadata.refresh_one");
+      const mediaNode = document.getElementById("personDetailMedia");
+      if (mediaNode) mediaNode.innerHTML = personMediaGalleryHtml(personMedia, {canEdit: canEditPersonMedia});
+      document.getElementById("personDetailMediaCard")?.classList.toggle("hidden", personMedia.length === 0);
+      const awardGroups = personAwardGroupsList(detail);
+      const awardsNode = document.getElementById("personDetailAwards");
+      if (awardsNode) awardsNode.innerHTML = personAwardsHtml(awardGroups);
+      document.getElementById("personDetailAwardsCard")?.classList.toggle("hidden", awardGroups.length === 0);
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
         `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
         item.identifier
@@ -21801,7 +24214,7 @@ def ui_preview_html(
       activePersonPayload = null;
       document.getElementById("personDetailAvatar").innerHTML = "";
       document.getElementById("personDetailTitle").textContent = tNext("collection.loading", "Loading...");
-      document.getElementById("personDetailBiography").textContent = "";
+      applyPersonBiography("");
       document.getElementById("personDetailTags").innerHTML = "";
       document.getElementById("personDetailFields").innerHTML = "";
       document.getElementById("personDetailIdentifiers").innerHTML = "";
@@ -24212,6 +26625,60 @@ def ui_preview_html(
           ];
       return values.map((value) => usableImage(value)).find(Boolean) || "";
     }
+    const SCAN_TITLE_NOISE_RE = /blu[- ]?ray|ultra\\s*hd|\\buhd\\b|\\b4k\\b|\\bdvd\\b|\\b3d\\b|\\bvhs\\b|\\bhddvd\\b|hd[- ]?dvd|steel\\s*book|steelbook|limited\\s+edition|collector|special\\s+edition|digibook|mediabook|slipcover|slipcase|box\\s*set|boxset|gift\\s*set|\\bimport\\b|region[\\s-]*(?:free|locked|[abc]|[0-9])|\\bpal\\b|\\bntsc\\b|remaster|anniversary\\s+edition|uncut|extended\\s+edition|\\bocard\\b|o[- ]card|amaray|digipack|digipak/i;
+    const SCAN_REGION_META_WORDS = new Set(["uk","u.k.","british","england","us","u.s.","usa","american","italian","italy","german","germany","french","france","japanese","japan","spanish","spain","dutch","netherlands","belgian","belgium","korean","korea","swedish","sweden","danish","denmark","norwegian","norway","finnish","finland","australian","australia","canadian","canada","nordic","scandinavian","european","austrian","austria","polish","poland","portuguese","portugal","russian","russia","chinese","china","united","states","kingdom","great","britain","import","region","free","locked","a","b","c"]);
+    function scanGroupIsRegionMeta(inner) {
+      const tokens = String(inner || "").toLowerCase().match(/[a-z.]+/g);
+      if (!tokens || !tokens.length) return false;
+      return tokens.every((t) => SCAN_REGION_META_WORDS.has(t));
+    }
+    function cleanScannedTitle(rawTitle) {
+      let title = String(rawTitle || "").trim();
+      if (!title) return "";
+      const stripGroups = (text, groupRe) => {
+        let prev = null;
+        while (prev !== text) {
+          prev = text;
+          text = text.replace(groupRe, (m) => (SCAN_TITLE_NOISE_RE.test(m) ? " " : m));
+        }
+        return text;
+      };
+      const stripTrailingMetaGroups = (text) => {
+        const groupRe = /\\s*[([{]([^()[\\]{}]*)[)\\]}]\\s*$/;
+        let prev = null;
+        while (prev !== text) {
+          prev = text;
+          const m = text.match(groupRe);
+          if (!m) break;
+          if (SCAN_TITLE_NOISE_RE.test(m[1]) || scanGroupIsRegionMeta(m[1])) {
+            text = text.slice(0, m.index).replace(/\\s+$/, "");
+          } else {
+            break;
+          }
+        }
+        return text;
+      };
+      const tail = new RegExp(" [-|/] *[^-|/]*(?:" + SCAN_TITLE_NOISE_RE.source + ")[^-|/]*$", "i");
+      const bare = new RegExp("[ ,;:/+&-]+(?:" + SCAN_TITLE_NOISE_RE.source + ") *$", "i");
+      let cleaned = title;
+      let prevOuter = null;
+      while (prevOuter !== cleaned) {
+        prevOuter = cleaned;
+        cleaned = stripGroups(cleaned, /\\(([^()]*)\\)/g);
+        cleaned = stripGroups(cleaned, /\\[([^\\[\\]]*)\\]/g);
+        cleaned = stripGroups(cleaned, /\\{([^{}]*)\\}/g);
+        cleaned = stripTrailingMetaGroups(cleaned);
+        cleaned = cleaned.replace(tail, " ");
+        let barePrev = null;
+        while (barePrev !== cleaned) {
+          barePrev = cleaned;
+          cleaned = cleaned.replace(bare, "").replace(/\\s+$/, "");
+        }
+        cleaned = cleaned.trim();
+      }
+      cleaned = cleaned.replace(/\\s{2,}/g, " ").replace(/^[\\s\\-_/|,;:+&]+|[\\s\\-_/|,;:+&]+$/g, "");
+      return cleaned || title;
+    }
     function normalizeLookupMovieCandidate(result, resultIndex, candidate, candidateIndex) {
       if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result))) return null;
       const movieUpdates = result?.movieUpdates && typeof result.movieUpdates === "object" ? result.movieUpdates : {};
@@ -24221,7 +26688,7 @@ def ui_preview_html(
       const rawIdentifiers = candidate.identifiers && typeof candidate.identifiers === "object"
         ? candidate.identifiers
         : (result?.identifiers && typeof result.identifiers === "object" ? result.identifiers : {});
-      const title = String(
+      const rawTitle = String(
         candidate.title
         || candidate.originalTitle
         || candidate.original_title
@@ -24232,7 +26699,16 @@ def ui_preview_html(
         || movieUpdates.original_title
         || ""
       ).trim();
-      if (!title) return null;
+      if (!rawTitle) return null;
+      const explicitReleaseTitle = String(
+        candidate.releaseTitle
+        || candidate.release_title
+        || movieUpdates.release_title
+        || ""
+      ).trim();
+      const rawReleaseTitle = explicitReleaseTitle || (SCAN_TITLE_NOISE_RE.test(rawTitle) ? rawTitle : "");
+      const title = (rawReleaseTitle ? cleanScannedTitle(rawReleaseTitle) : rawTitle) || rawTitle;
+      const releaseTitle = rawReleaseTitle;
       const provider = String(candidate.provider || candidate.pluginId || candidate.providerId || result?.pluginId || result?.provider || result?.providerId || "").trim();
       const sourceLabel = pluginDisplayName(provider, String(candidate.sourceLabel || candidate.providerLabel || result?.sourceLabel || result?.providerLabel || provider || "").trim());
       const sourceRef = String(candidate.sourceRef || candidate.sourceUrl || candidate.source_url || candidate.detailUrl || candidate.detail_url || result?.sourceRef || result?.sourceUrl || result?.source_url || "").trim();
@@ -24264,6 +26740,7 @@ def ui_preview_html(
         sourceLabel,
         sourceRef,
         title,
+        releaseTitle,
         year,
         format,
         barcode,
@@ -24968,7 +27445,7 @@ def ui_preview_html(
           <div class="import-result-body">
             <div class="import-result-kicker">
               <span class="tag good">${escapeHtml(tNext("importCenter.previewReady", "Preview ready."))}</span>
-              <span class="tag">${escapeHtml(tNext("importCenter.sourcesUsed", "Sources"))}: ${escapeHtml(String((metadata.summary || []).filter((item) => item.state === "applied").length || (metadata.executions || []).length || 0))}</span>
+              <span class="tag" title="${escapeHtml(tNext("importCenter.sourcesUsedHelp", "Number of metadata sources that returned a matching title."))}">${escapeHtml(tNext("importCenter.sourcesUsed", "Sources"))}: ${escapeHtml(String(movieResultCards.length || (proposedTitle ? 1 : 0)))}</span>
             </div>
             <h3 class="import-result-title">${escapeHtml(proposedTitle || tNext("importCenter.previewReady", "Preview ready"))}</h3>
             <div class="import-result-subtitle">${escapeHtml(tNext("importCenter.previewReadyHelp", "Review the detected movie details before adding it to your library."))}</div>
@@ -25029,6 +27506,7 @@ def ui_preview_html(
       renderImportMapping();
       renderImportReview();
       renderImportJobs();
+      renderImportFormatOptions();
       renderBarcodeLookup();
       renderImportBatchList();
       applyAppPermissionVisibility();
@@ -25156,6 +27634,16 @@ def ui_preview_html(
         setImportCenterMessage(error.message || String(error), "bad");
       }
     }
+    function barcodeLookupHasMatch() {
+      if (!importCenter.barcodeLookup) return false;
+      const metadata = importCenter.barcodeLookup.metadata || importCenter.barcodeLookup;
+      const proposal = metadata.proposal || {};
+      const movieUpdates = proposal.movieUpdates || {};
+      if (movieUpdates.title || movieUpdates.original_title) return true;
+      if (lookupMovieCandidates().length) return true;
+      if (barcodeBoxSetProposals().length) return true;
+      return false;
+    }
     async function previewBarcodeImport(event) {
       event?.preventDefault();
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return;
@@ -25195,7 +27683,13 @@ def ui_preview_html(
         importCenter.lookupPreviewTone = "";
         setImportLookupActionMessage("", "");
         renderBarcodeLookup();
-        setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
+        if (barcode && !title && !barcodeLookupHasMatch()) {
+          const notRecognized = tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this movie manually.");
+          setImportLookupActionMessage(notRecognized, "warn");
+          setImportCenterMessage(notRecognized, "warn");
+        } else {
+          setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
+        }
         console.log("movie import preview", payload);
         return payload;
       } catch (error) {
@@ -25354,7 +27848,7 @@ def ui_preview_html(
       return physical || digital ? `<span class="personal-list-version-badges">${digital}${physical}</span>` : "";
     }
     function unavailableMovieLabelHtml(entry) {
-      return personalListMovieExists(entry) ? "" : `<span class="tag warning">${escapeHtml(tNext("lists.movieUnavailable", "Movie no longer exists"))}</span>`;
+      return "";
     }
     function listMovieCardHtml(movie) {
       const poster = usableImage(movie.poster_url);
@@ -25519,8 +28013,7 @@ def ui_preview_html(
       const meta = [
         formatAppDate(entry.watched_at || entry.last_watched),
         entry.year,
-        physicalFormatLabel(personalListFormatValue(entry)),
-        exists ? "" : tNext("lists.movieUnavailable", "Movie no longer exists")
+        physicalFormatLabel(personalListFormatValue(entry))
       ].filter(Boolean).join(" / ");
       return `
         <button type="button" class="history-row" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
@@ -25587,6 +28080,7 @@ def ui_preview_html(
       }
       document.querySelectorAll("[data-list-movie]").forEach((button) => {
         button.addEventListener("click", () => {
+          if (button.disabled || button.getAttribute("aria-disabled") === "true") return;
           const movieId = button.dataset.listMovie || "";
           if (movieId) openAppMovieDetail(movieId);
         });
@@ -25644,6 +28138,21 @@ def ui_preview_html(
       const payload = notification?.payload || {};
       return String(payload.prefKey || payload.pref_key || payload.kind || "app_updates");
     }
+    function notificationDisplayTitle(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind === "metadata_plugins_unconfigured") {
+        return tNext("notifications.pluginsUnconfiguredTitle", "Plugins need configuration");
+      }
+      return notification.title || tNext("notifications.itemTitle", "Notification");
+    }
+    function notificationDisplayBody(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind === "metadata_plugins_unconfigured") {
+        const names = Array.isArray(payload.plugins) ? payload.plugins.join(", ") : "";
+        return tNext("notifications.pluginsUnconfiguredBody", "The following plugins are not configured yet: {plugins}").replace("{plugins}", names);
+      }
+      return notification.body || "";
+    }
     function notificationMatchesFilter(notification) {
       const filter = String(notificationFilter || "all");
       if (filter === "all") return true;
@@ -25654,11 +28163,13 @@ def ui_preview_html(
       const unread = !notification.read_at;
       const created = notification.created_at ? formatAppDate(notification.created_at) : "";
       const prefKey = notificationPrefKey(notification);
+      const cardTitle = notificationDisplayTitle(notification);
+      const cardBody = notificationDisplayBody(notification);
       return `
         <article class="notification-card ${unread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}" role="button" tabindex="0">
           <span>
-            <strong>${escapeHtml(notification.title || tNext("notifications.itemTitle", "Notification"))}</strong>
-            ${notification.body ? `<p>${escapeHtml(notification.body)}</p>` : ""}
+            <strong>${escapeHtml(cardTitle)}</strong>
+            ${cardBody ? `<p>${escapeHtml(cardBody)}</p>` : ""}
             <span class="notification-meta">${escapeHtml(created)}${prefKey ? ` / ${escapeHtml(tNext(`notifications.pref.${prefKey}`, prefKey.replaceAll("_", " ")))}` : ""}</span>
             ${notificationInviteActionsHtml(notification)}
           </span>
@@ -26283,9 +28794,15 @@ def ui_preview_html(
         return;
       }
       setMovieDetailMessage(tNext("movieDetail.saving", "Saving movie..."));
+      const prevDetail = activeDetailPayload || {};
+      const prevMovie = prevDetail.movie || {};
+      const prevMetadata = prevMovie.metadata || {};
+      const prevSpecs = prevDetail.technicalSpecs || {};
+      const ratingCountry = normalizedRatingCountryCode((preferences && preferences.rating_country) || "NL") || "NL";
       const body = {
         title,
         originalTitle: formTextValue("movieEditOriginalTitle"),
+        releaseTitle: formTextValue("movieEditReleaseTitle"),
         sortTitle: formTextValue("movieEditSortTitle"),
         year: formTextValue("movieEditYear"),
         barcode: formTextValue("movieEditBarcode"),
@@ -26295,9 +28812,32 @@ def ui_preview_html(
         country: formTextValue("movieEditCountry"),
         language: formTextValue("movieEditLanguage"),
         location: formTextValue("movieEditLocation"),
+        runtimeMinutes: formTextValue("movieEditRuntime"),
+        director: formTextValue("movieEditDirector"),
+        genre: formTextValue("movieEditGenre"),
+        studios: formTextValue("movieEditStudios"),
+        contentRating: formTextValue("movieEditContentRating"),
+        ratingCountry,
+        hdr: formTextValue("movieEditHdr"),
+        screenRatio: formTextValue("movieEditScreenRatio"),
+        audioTracks: formTextValue("movieEditAudioTracks"),
+        subtitles: formTextValue("movieEditSubtitles"),
+        packaging: formTextValue("movieEditPackaging"),
+        distributor: formTextValue("movieEditDistributor"),
         overview: formTextValue("movieEditOverview"),
-        notes: formTextValue("movieEditNotes")
+        notes: formTextValue("movieEditNotes"),
+        fieldLocks: Array.from(movieEditLockedFields)
       };
+      let clearedUnlockedField = false;
+      Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
+        if (movieEditLockedFields.has(field)) return;
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const newValue = (input.value || "").trim();
+        if (newValue) return;
+        const previous = previousMovieEditFieldValue(field, prevMovie, prevMetadata, prevSpecs);
+        if (previous) clearedUnlockedField = true;
+      });
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`, {
           method: "PATCH",
@@ -26308,8 +28848,27 @@ def ui_preview_html(
         await loadAppSnapshot();
         setMovieEditPanelVisible(false);
         setMovieDetailMessage(tNext("movieDetail.saved", "Movie saved."), "good");
+        if (clearedUnlockedField && hasPermission("metadata.refresh_one")) {
+          await refreshActiveMovieMetadata(false);
+        }
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function previousMovieEditFieldValue(field, movie, metadata, specs) {
+      switch (field) {
+        case "runtime_minutes": return valueText(movie.runtime_minutes);
+        case "director": return valueText(metadata.director);
+        case "genre": return valueText(metadata.genre);
+        case "studios": return valueText(metadata.studios);
+        case "distributor": return valueText(metadata.distributor);
+        case "hdr": return valueText(specs.hdr || metadata.hdr);
+        case "screen_ratios": return valueText(specs.screen_ratios || metadata.screen_ratios);
+        case "audio_tracks": return valueText(specs.audio_tracks || metadata.audio_tracks);
+        case "subtitles": return valueText(specs.subtitles || metadata.subtitles);
+        case "packaging": return valueText(specs.packaging || metadata.packaging || movie.edition_type);
+        case "content_ratings": return valueText(preferredContentRatingInfo(movie, specs).rating);
+        default: return valueText(movie[field]);
       }
     }
     async function refreshActiveMovieMetadata(dryRun, personRefreshScope = "all", forceRefreshPeople = false) {
@@ -26330,18 +28889,16 @@ def ui_preview_html(
           body: JSON.stringify({dryRun, refreshPeople, personRefreshScope: scope})
         });
         const personRefresh = (payload.metadata || {}).personRefresh || null;
-        setMovieDetailMessage(
-          (refreshingCrewOnly
-            ? tNext("movieDetail.crewPeopleRefreshed", "Crew people refreshed.")
-            : (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.")))
-            + movieMetadataPeopleRefreshMessage(personRefresh),
-          "good"
-        );
+        const successMessage = (refreshingCrewOnly
+          ? tNext("movieDetail.crewPeopleRefreshed", "Crew people refreshed.")
+          : (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.")))
+          + movieMetadataPeopleRefreshMessage(personRefresh);
         if (!dryRun) {
           const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
           renderMovieDetail(refreshed.detail || {});
           await loadAppSnapshot();
         }
+        setMovieDetailMessage(successMessage, "good");
         console.log("metadata refresh", payload);
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
@@ -27456,6 +30013,7 @@ def ui_preview_html(
       renderMemberGroups();
       renderContainerManager();
       renderProfileOfflineStatus();
+      renderProfileUpdateCheck();
       applyAppPermissionVisibility();
     }
     function renderProfileOfflineStatus() {
@@ -27534,6 +30092,118 @@ def ui_preview_html(
           .catch(() => renderRows(null));
       }
     }
+    let profileUpdateWired = false;
+    function renderProfileUpdateCheck() {
+      const block = document.getElementById("profileUpdateBlock");
+      if (!block) return;
+      const admin = isNativeAdminUser();
+      block.classList.toggle("hidden", !admin);
+      if (!admin) return;
+      if (profileUpdateWired) return;
+      profileUpdateWired = true;
+      const button = document.getElementById("profileUpdateCheckButton");
+      const channel = document.getElementById("profileUpdateChannel");
+      const result = document.getElementById("profileUpdateResult");
+      authApiJson("/api/next/app/update-channel")
+        .then((payload) => { if (channel && payload && payload.channel) channel.value = payload.channel; })
+        .catch(() => {});
+      if (channel) {
+        channel.addEventListener("change", () => {
+          const value = channel.value || "auto";
+          authApiJson("/api/next/app/update-channel", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({channel: value})})
+            .catch((error) => setProfileUpdateError(result, error.message));
+        });
+      }
+      if (button) {
+        button.addEventListener("click", () => { runProfileUpdateCheck().catch(() => {}); });
+      }
+    }
+    async function runProfileUpdateCheck() {
+      const button = document.getElementById("profileUpdateCheckButton");
+      const channel = document.getElementById("profileUpdateChannel");
+      const result = document.getElementById("profileUpdateResult");
+      if (!result) return;
+      const requested = (channel && channel.value) || "auto";
+      result.hidden = false;
+      result.className = "profile-update-result info";
+      result.textContent = tNext("profile.checking", "Checking for updates...");
+      if (button) button.disabled = true;
+      try {
+        const payload = await authApiJson(`/api/next/app/update-check?channel=${encodeURIComponent(requested)}`);
+        renderProfileUpdateResult(payload);
+      } catch (error) {
+        setProfileUpdateError(result, error.message);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    function setProfileUpdateError(result, message) {
+      const node = result || document.getElementById("profileUpdateResult");
+      if (!node) return;
+      node.hidden = false;
+      node.className = "profile-update-result bad";
+      node.textContent = tNext("profile.updateCheckError", "Update check failed.") + (message ? ` (${message})` : "");
+    }
+    function copyProfileUpdateCommand(text, button) {
+      const done = () => {
+        if (!button) return;
+        button.textContent = tNext("profile.copied", "Copied");
+        setTimeout(() => { button.textContent = tNext("profile.copyCommand", "Copy"); }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => {});
+        return;
+      }
+      try {
+        const area = document.createElement("textarea");
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        document.body.removeChild(area);
+        done();
+      } catch (_) { /* ignore */ }
+    }
+    function renderProfileUpdateResult(payload) {
+      const result = document.getElementById("profileUpdateResult");
+      if (!result) return;
+      result.hidden = false;
+      if (!payload || payload.status === "error") {
+        setProfileUpdateError(result, (payload && payload.message) || "");
+        return;
+      }
+      const current = escapeHtml(payload.currentVersion || "-");
+      const latest = escapeHtml(payload.latestVersion || "-");
+      const channelLabel = escapeHtml(payload.channel || "-");
+      const channelText = escapeHtml(tNext("profile.channelLabel", "channel"));
+      const versionText = escapeHtml(tNext("profile.appVersion", "App version"));
+      if (payload.updateAvailable) {
+        const notes = payload.releaseUrl
+          ? ` &middot; <a href="${escapeHtml(payload.releaseUrl)}" target="_blank" rel="noreferrer">${escapeHtml(tNext("profile.releaseNotes", "Release notes"))}</a>`
+          : "";
+        const command = escapeHtml(payload.updateCommand || "");
+        result.className = "profile-update-result good";
+        result.innerHTML = `
+          <div class="profile-update-headline">${escapeHtml(tNext("profile.updateAvailable", "Update available"))}</div>
+          <div class="profile-update-meta">${escapeHtml(tNext("profile.latestVersion", "Latest version"))}: <strong>${latest}</strong> &middot; ${versionText}: ${current} (${channelText}: ${channelLabel})${notes}</div>
+          <p class="muted">${escapeHtml(tNext("profile.updateCommandHelp", "Run this command on the Docker host to update:"))}</p>
+          <div class="profile-update-command">
+            <code>${command}</code>
+            <button type="button" class="secondary-button" id="profileUpdateCopyButton" data-next-i18n="profile.copyCommand">Copy</button>
+          </div>
+        `;
+        const copyButton = document.getElementById("profileUpdateCopyButton");
+        if (copyButton) {
+          copyButton.addEventListener("click", () => copyProfileUpdateCommand(payload.updateCommand || "", copyButton));
+        }
+      } else {
+        result.className = "profile-update-result info";
+        result.innerHTML = `
+          <div class="profile-update-headline">${escapeHtml(tNext("profile.updateUpToDate", "You are on the latest version."))}</div>
+          <div class="profile-update-meta">${versionText}: <strong>${current}</strong> (${channelText}: ${channelLabel})</div>
+        `;
+      }
+    }
     function shortDateTime(value) {
       const text = String(value || "");
       if (!text) return "-";
@@ -27542,7 +30212,7 @@ def ui_preview_html(
     function setProfileSecurityMessage(message, tone) {
       const node = document.getElementById("profileSecurityMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
     function renderProfilePasskeys() {
@@ -27988,7 +30658,7 @@ def ui_preview_html(
         await loadProfileDetails();
         setProfileSecurityMessage(tNext("profile.passkeyAdded", "Passkey added."), "good");
       } catch (error) {
-        setProfileSecurityMessage(error.message || tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), "bad");
+        setProfileSecurityMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -28592,6 +31262,7 @@ def ui_preview_html(
       document.getElementById("appAdminRefreshOperationsButton")?.addEventListener("click", () => refreshAppAdminOperations());
       document.getElementById("appAdminRefreshPluginJobsButton")?.addEventListener("click", () => refreshAppAdminPluginJobs());
       document.getElementById("appAdminImportPluginButton")?.addEventListener("click", () => importAppAdminPlugin());
+      document.getElementById("appAdminPluginAutoUpdateToggle")?.addEventListener("change", (event) => setAppAdminPluginAutoUpdate(!!event.target.checked));
       document.getElementById("appAdminRefreshMetadataJobsButton")?.addEventListener("click", () => refreshAppAdminMetadataJobs());
       document.getElementById("appAdminArtworkTrashPurgeEnabled")?.addEventListener("change", (event) => {
         const select = document.getElementById("appAdminArtworkTrashRetention");
@@ -28610,10 +31281,14 @@ def ui_preview_html(
         }
       });
       document.getElementById("appAdminRefreshDigitalSourcesButton")?.addEventListener("click", () => refreshAppAdminDigitalSources());
-      document.getElementById("appAdminRefreshBackupButton")?.addEventListener("click", () => refreshAppAdminBackupStatus());
+      document.getElementById("appAdminRefreshBackupButton")?.addEventListener("click", () => createAppAdminBackup());
       document.getElementById("appAdminExportBackupButton")?.addEventListener("click", () => exportAppAdminBackupZip());
       document.getElementById("appAdminValidateBackupButton")?.addEventListener("click", () => validateAppAdminBackupZip());
       document.getElementById("appAdminRestoreBackupButton")?.addEventListener("click", () => restoreAppAdminBackupZip());
+      document.querySelectorAll("#appAdminRestoreMode input[name='appAdminRestoreMode']").forEach((input) => {
+        input.addEventListener("change", () => syncAppAdminRestoreScopeVisibility());
+      });
+      syncAppAdminRestoreScopeVisibility();
       document.getElementById("appAdminBackupList")?.addEventListener("click", (event) => {
         const downloadButton = event.target.closest("[data-app-admin-backup-download]");
         const restoreButton = event.target.closest("[data-app-admin-backup-restore]");
@@ -28652,6 +31327,8 @@ def ui_preview_html(
         const moveButton = event.target.closest("[data-app-admin-plugin-move]");
         const exportButton = event.target.closest("[data-app-admin-plugin-export]");
         const deleteButton = event.target.closest("[data-app-admin-plugin-delete]");
+        const updateButton = event.target.closest("[data-app-admin-plugin-update]");
+        const rollbackButton = event.target.closest("[data-app-admin-plugin-rollback]");
         const movieVaultRefreshButton = event.target.closest("[data-app-admin-movievault-refresh]");
         const movieVaultResetButton = event.target.closest("[data-app-admin-movievault-reset]");
         if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
@@ -28662,6 +31339,8 @@ def ui_preview_html(
         if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down", moveButton.dataset.sectionCategory || "");
         if (exportButton) exportAppAdminPlugin(exportButton.dataset.appAdminPluginExport);
         if (deleteButton) deleteAppAdminPlugin(deleteButton.dataset.appAdminPluginDelete);
+        if (updateButton) updateAppAdminPlugin(updateButton.dataset.appAdminPluginUpdate);
+        if (rollbackButton) rollbackAppAdminPlugin(rollbackButton.dataset.appAdminPluginRollback);
         if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(movieVaultRefreshButton.dataset.appAdminMovievaultRefresh || "movievault", false);
         if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(movieVaultResetButton.dataset.appAdminMovievaultReset || "movievault", true);
       });
@@ -28975,6 +31654,8 @@ def ui_preview_html(
         if (event.target.id === "preferencesBackdrop") event.currentTarget.classList.add("hidden");
       });
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
+      document.getElementById("appReviewToggleButton")?.addEventListener("click", () => toggleReviewLogin());
+      document.getElementById("appReviewForm")?.addEventListener("submit", (event) => loginReviewPassword(event));
       document.getElementById("appInviteToggleButton")?.addEventListener("click", () => toggleInviteLogin());
       document.getElementById("appInviteForm")?.addEventListener("submit", (event) => registerInviteAccount(event));
       document.getElementById("appRecoveryToggleButton")?.addEventListener("click", () => toggleRecoveryLogin());
@@ -29103,7 +31784,14 @@ def ui_preview_html(
         openAppPersonDetail(person.dataset.openPerson, true, {view: "movie", movieId: activeDetailMovieId});
       });
       document.getElementById("personDetailBackButton")?.addEventListener("click", () => closeAppPersonDetail());
+      document.getElementById("personDetailBiographyToggle")?.addEventListener("click", () => togglePersonBiography());
       document.getElementById("personDetailPage")?.addEventListener("click", (event) => {
+        const primaryButton = event.target.closest("[data-person-media-primary]");
+        if (primaryButton) {
+          event.preventDefault();
+          setPrimaryPersonMedia(primaryButton.dataset.personMediaPrimary);
+          return;
+        }
         const movieLink = event.target.closest("[data-open-movie]");
         if (!movieLink) return;
         event.preventDefault();
@@ -29155,6 +31843,7 @@ def ui_preview_html(
       document.getElementById("movieMetadataPeopleToggle")?.addEventListener("click", () => setMovieMetadataRefreshPeople(!movieMetadataRefreshPeople));
       setMovieMetadataRefreshPeople(movieMetadataRefreshPeople);
       document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
+      document.getElementById("movieMetadataCompareButton")?.addEventListener("click", () => loadMovieMetadataComparison());
       document.getElementById("shuffleButton")?.addEventListener("click", () => {
         const items = libraryDisplayItems();
         if (!items.length) return;
@@ -30475,9 +33164,18 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <input id="authInviteCode" type="text" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX">
           </label>
         </div>
+        <div id="authReviewFields" class="hidden">
+          <label><span>Username</span>
+            <input id="authReviewUsername" type="text" autocomplete="username">
+          </label>
+          <label><span data-next-i18n="auth.password">Password</span>
+            <input id="authReviewPassword" type="password" autocomplete="current-password">
+          </label>
+        </div>
         <div class="actions">
           <button type="button" id="authSetupButton" data-auth-action="setup" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
           <button type="button" id="authJoinButton" data-auth-action="join" data-next-i18n="auth.createAccount">Create account</button>
+          <button type="button" id="authReviewButton" class="hidden" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
           <button type="button" id="authLoginButton" data-auth-action="login" data-next-i18n="auth.signIn">Sign in</button>
           <button type="button" id="authLogoutButton" data-auth-action="logout" data-next-i18n="auth.signOut">Sign out</button>
         </div>
@@ -30999,16 +33697,71 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function setAuthStatus(message, tone) {
       const node = document.getElementById("authStatusLine");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `auth-status ${tone || ""}`.trim();
     }
     function reportClientError(error) {
       const message = error && error.message ? error.message : String(error || "Unknown browser error");
       setAuthStatus(message, "bad");
     }
+    function isLikelyIpHost(hostname) {
+      const host = String(hostname || "").trim().toLowerCase();
+      if (!host || host === "localhost") return false;
+      if (/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(host)) return true;
+      return host.includes(":");
+    }
+    function applyFaqMessage(node, message) {
+      node.textContent = "";
+      const text = String(message || "");
+      const faqUrl = "https://discvault.eu/faq";
+      let cursor = 0;
+      let found = text.indexOf(faqUrl);
+      if (found === -1) {
+        node.textContent = text;
+        return;
+      }
+      while (found !== -1) {
+        if (found > cursor) node.appendChild(document.createTextNode(text.slice(cursor, found)));
+        const anchor = document.createElement("a");
+        anchor.href = faqUrl;
+        anchor.textContent = faqUrl;
+        anchor.target = "_blank";
+        anchor.rel = "noreferrer";
+        node.appendChild(anchor);
+        cursor = found + faqUrl.length;
+        found = text.indexOf(faqUrl, cursor);
+      }
+      if (cursor < text.length) node.appendChild(document.createTextNode(text.slice(cursor)));
+    }
+    function passkeyUpnSetupMessage() {
+      return tNext(
+        "auth.passkeyUpnRequired",
+        "Passkeys cannot be created on an IP-only URL. Configure a UPN/hostname for DiscVault and open the app with that hostname over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyRpMismatchMessage() {
+      return tNext(
+        "auth.passkeyRpMismatch",
+        "Passkeys are blocked because the configured Relying Party ID does not match the address you are using. Open DiscVault on the exact UPN/hostname that matches its passkey configuration (not an IP address), over HTTPS. Help: https://discvault.eu/faq"
+      );
+    }
+    function passkeyClientErrorMessage(error, cancelledFallback, defaultFallback) {
+      if (error && error.name === "NotAllowedError") return cancelledFallback;
+      const rawMessage = String((error && error.message) || "");
+      if (/registrable domain suffix|not equal to the current domain|relying party id/i.test(rawMessage)) {
+        return passkeyRpMismatchMessage();
+      }
+      if ((error && error.name === "NotSupportedError") || /not supported/i.test(rawMessage)) {
+        return webauthnUnavailableReason() || passkeyUpnSetupMessage();
+      }
+      return rawMessage || defaultFallback;
+    }
     function webauthnUnavailableReason() {
       if (!window.PublicKeyCredential || !navigator.credentials) {
         return "This browser does not support passkeys.";
+      }
+      if (isLikelyIpHost(window.location.hostname)) {
+        return passkeyUpnSetupMessage();
       }
       if (!window.isSecureContext) {
         return "Open this app over HTTPS to use passkeys.";
@@ -31043,12 +33796,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const setupFields = document.getElementById("authSetupFields");
       const setupButton = document.getElementById("authSetupButton");
       const joinButton = document.getElementById("authJoinButton");
+      const reviewButton = document.getElementById("authReviewButton");
+      const reviewFields = document.getElementById("authReviewFields");
       const loginButton = document.getElementById("authLoginButton");
       const logoutButton = document.getElementById("authLogoutButton");
       const inviteLabel = document.getElementById("authInviteLabel");
       const unavailable = webauthnUnavailableReason();
       const setupRequired = !!authState.setup_required;
       const authenticated = !!authState.authenticated;
+      const reviewLoginAvailable = !!authState.review_login_available;
       const joinAllowed = !setupRequired && !authenticated && !!authState.auth_enabled;
       title.textContent = authenticated ? "Signed in" : setupRequired ? "First passkey" : "Passkeys";
       description.textContent = authenticated
@@ -31063,6 +33819,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       inviteLabel.classList.toggle("hidden", !joinAllowed || !!authState.registration_enabled);
       setupButton.classList.toggle("hidden", !setupRequired);
       joinButton.classList.toggle("hidden", !joinAllowed);
+      reviewButton.classList.toggle("hidden", setupRequired || authenticated || !reviewLoginAvailable);
+      reviewFields.classList.toggle("hidden", !reviewLoginAvailable || setupRequired || authenticated);
       loginButton.classList.toggle("hidden", setupRequired || authenticated);
       logoutButton.classList.toggle("hidden", !authenticated);
       setupButton.disabled = !!unavailable;
@@ -31252,7 +34010,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function setStartupMessage(message, tone) {
       const node = document.getElementById("startupMessage");
       if (!node) return;
-      node.textContent = message || "";
+      applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
     async function registerOwnerPasskey(triggerButton = null) {
@@ -31309,8 +34067,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
-        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
-        setStartupMessage(error.name === "NotAllowedError" ? tNext("auth.passkeyCancelled", "Passkey prompt was cancelled.") : error.message, "bad");
+        setAuthStatus(passkeyClientErrorMessage(error, "Passkey prompt was cancelled.", "Owner passkey could not be created."), "bad");
+        setStartupMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -31376,7 +34134,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
-        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+        setAuthStatus(passkeyClientErrorMessage(error, "Passkey prompt was cancelled.", "Invite sign-up failed."), "bad");
       } finally {
         button.disabled = false;
       }
@@ -31432,7 +34190,46 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         await refreshAuthStatus();
         await resumeStartupOrCollection();
       } catch (error) {
-        setAuthStatus(error.name === "NotAllowedError" ? "Passkey prompt was cancelled." : error.message, "bad");
+        setAuthStatus(passkeyClientErrorMessage(error, "Passkey prompt was cancelled.", "Sign-in with passkey failed."), "bad");
+      } finally {
+        button.disabled = false;
+      }
+    }
+    async function loginReviewPassword() {
+      if (!authState.review_login_available) {
+        setAuthStatus("Username/password review login is not available.", "bad");
+        return;
+      }
+      const username = String(document.getElementById("authReviewUsername")?.value || "").trim();
+      const password = String(document.getElementById("authReviewPassword")?.value || "");
+      if (!username || !password) {
+        setAuthStatus("Enter username and password.", "bad");
+        return;
+      }
+      const button = document.getElementById("authReviewButton");
+      button.disabled = true;
+      setAuthStatus("Signing in with username/password...", "info");
+      try {
+        const reviewBody = {username, password};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) reviewBody.mobile_flow = mobileFlow;
+        const payload = await authJson("/api/next/auth/review/login", {
+          method: "POST",
+          body: JSON.stringify(reviewBody)
+        });
+        if (payload.callback_url || payload.callbackUrl) {
+          window.location.href = payload.callback_url || payload.callbackUrl;
+          return;
+        }
+        authToken = payload.token || "";
+        if (authToken) localStorage.setItem("dv_next_token", authToken);
+        const passwordInput = document.getElementById("authReviewPassword");
+        if (passwordInput) passwordInput.value = "";
+        setAuthStatus("Signed in.", "good");
+        await refreshAuthStatus();
+        await resumeStartupOrCollection();
+      } catch (error) {
+        setAuthStatus(error.message || "Username/password sign-in failed.", "bad");
       } finally {
         button.disabled = false;
       }
@@ -31466,6 +34263,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           if (action === "login") loginPasskey().catch(reportClientError);
           if (action === "logout") logoutPasskey().catch(reportClientError);
         });
+      });
+      document.getElementById("authReviewButton")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        loginReviewPassword().catch(reportClientError);
       });
     }
     function bindStartupActions() {
@@ -35194,6 +37995,198 @@ def sync_change(
         )
 
 
+def ensure_user_sync_state(conn, user_id) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO user_sync_state (user_id, revision)
+            VALUES (%s, 0)
+            ON CONFLICT (user_id) DO NOTHING
+            """,
+            (user_id,),
+        )
+        cur.execute("SELECT revision FROM user_sync_state WHERE user_id=%s", (user_id,))
+        row = cur.fetchone()
+    return int(row["revision"] if row else 0)
+
+
+def current_user_revision(conn, user_id) -> int:
+    if not table_exists(conn, "user_sync_state"):
+        return 0
+    return ensure_user_sync_state(conn, user_id)
+
+
+def next_user_revision(conn, user_id) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE user_sync_state
+            SET revision = revision + 1,
+                updated_at = now()
+            WHERE user_id=%s
+            RETURNING revision
+            """,
+            (user_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        ensure_user_sync_state(conn, user_id)
+        return next_user_revision(conn, user_id)
+    return int(row["revision"])
+
+
+def user_sync_change(
+    conn,
+    user_id,
+    *,
+    entity_type: str,
+    entity_id: str,
+    operation: str,
+    payload: dict[str, Any],
+) -> int:
+    """Append one row to the caller's private sync stream and return its revision.
+
+    No-op (returns 0) when the per-user stream tables are absent, so callers on
+    older schemas keep working.
+    """
+    if not table_exists(conn, "user_sync_state") or not table_exists(conn, "user_sync_changes"):
+        return 0
+    revision = next_user_revision(conn, user_id)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO user_sync_changes (
+                user_id,
+                revision,
+                entity_type,
+                entity_id,
+                operation,
+                payload
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (user_id, revision, entity_type, entity_id, operation, Jsonb(json_ready(payload))),
+        )
+    return revision
+
+
+def container_membership_snapshot(conn, container_id) -> list[dict[str, Any]]:
+    """Full member list for one container (box-set), ordered for the client."""
+    if not table_exists(conn, "container_movies"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT container_id, movie_id, sort_order, created_at
+            FROM container_movies
+            WHERE container_id=%s
+            ORDER BY sort_order, created_at
+            """,
+            (container_id,),
+        )
+        return cur.fetchall()
+
+
+def emit_container_membership_change(conn, container_id, *, operation: str = "upsert") -> int:
+    """Emit one ``container_membership`` delta carrying the container's full member set.
+
+    Grouped per container so a client replaces its local membership for that box-set
+    in a single change. No-op when the sync tables are absent.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="container_membership",
+        entity_id=str(container_id),
+        operation=operation,
+        payload={
+            "containerId": str(container_id),
+            "members": container_membership_snapshot(conn, container_id),
+        },
+    )
+    return revision
+
+
+def emit_movie_identifiers_change(conn, movie_id, *, operation: str = "upsert") -> int:
+    """Emit one ``movie_identifier`` delta carrying the movie's full identifier set.
+
+    Grouped per movie so a client replaces its local identifiers (incl. the
+    ``movievault_26`` link) for that movie in a single change.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="movie_identifier",
+        entity_id=str(movie_id),
+        operation=operation,
+        payload={
+            "movieId": str(movie_id),
+            "identifiers": movie_identifier_entities(conn, movie_id),
+        },
+    )
+    return revision
+
+
+def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
+    """One container row in the same shape as the bootstrap ``containers`` array."""
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                c.id,
+                c.public_id,
+                c.container_type,
+                c.title,
+                c.barcode,
+                c.badge_label,
+                c.year,
+                c.description,
+                c.metadata,
+                c.created_at,
+                c.updated_at
+            FROM containers c
+            WHERE c.id=%s
+            """,
+            (container_id,),
+        )
+        return cur.fetchone()
+
+
+def emit_container_change(conn, container_id, *, operation: str, entity: dict[str, Any] | None = None) -> int:
+    """Emit a ``container`` upsert/delete delta (closes the container-CRUD gap).
+
+    Upserts carry the full container ``entity`` (same shape as the bootstrap
+    ``containers`` array); deletes carry only the ``id``. No-op when the sync
+    tables are absent.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    payload: dict[str, Any] = {"id": str(container_id)}
+    if operation != "delete":
+        if entity is None:
+            entity = single_container_sync_entity(conn, container_id)
+        if entity is not None:
+            payload["entity"] = entity
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="container",
+        entity_id=str(container_id),
+        operation=operation,
+        payload=payload,
+    )
+    return revision
+
+
 def idempotency_key(client_id: str, client_mutation_id: str) -> str:
     return f"sync:{client_id}:{client_mutation_id}"
 
@@ -35869,6 +38862,27 @@ def set_app_user_preferences(conn, user_id: UUID | str, updates: dict[str, Any])
     return app_effective_preferences(conn, user_id)
 
 
+PLUGIN_AUTO_UPDATE_SETTING_KEY = "plugins_auto_update"
+
+
+def plugin_auto_update_setting(conn) -> bool:
+    value = app_setting_value(conn, PLUGIN_AUTO_UPDATE_SETTING_KEY, True)
+    return parse_bool_value(value, default=True)
+
+
+def apply_plugin_auto_update_setting(conn) -> bool:
+    """Mirror the persisted auto-update preference into the plugin runtime.
+
+    Sets the in-process override and a durable marker file so the
+    connection-less runtime honors the preference before discovery runs.
+    """
+
+    enabled = plugin_auto_update_setting(conn)
+    set_plugin_auto_update_enabled(enabled)
+    write_plugin_auto_update_marker(enabled)
+    return enabled
+
+
 def reconcile_legacy_metadata_plugins(conn) -> dict[str, Any] | None:
     if not table_exists(conn, "app_settings") or not table_exists(conn, "metadata_plugins"):
         return None
@@ -35890,6 +38904,7 @@ def reconcile_legacy_metadata_plugins(conn) -> dict[str, Any] | None:
 
 
 def sync_metadata_plugin_registry(conn) -> None:
+    apply_plugin_auto_update_setting(conn)
     sync_plugin_registry(conn, table_exists, Jsonb)
     if reconcile_legacy_metadata_plugins(conn):
         sync_plugin_registry(conn, table_exists, Jsonb)
@@ -36050,6 +39065,8 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "bootstrap": "/api/next/sync/bootstrap",
             "delta": "/api/next/sync/delta",
             "mutations": "/api/next/sync/mutations",
+            "userBootstrap": "/api/next/sync/user/bootstrap",
+            "userDelta": "/api/next/sync/user/delta",
         },
         "import": {
             "metadataLookup": "/api/next/metadata/lookup",
@@ -37206,6 +40223,7 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "title": payload.get("title"),
         "sort_title": payload.get("sortTitle") or payload.get("sort_title"),
         "original_title": payload.get("originalTitle") or payload.get("original_title"),
+        "release_title": payload.get("releaseTitle") or payload.get("release_title"),
         "year": payload.get("year"),
         "release_date": release_date,
         "format": payload.get("format"),
@@ -37228,6 +40246,7 @@ MOVIE_EDIT_FIELD_LIMITS = {
     "title": 300,
     "sort_title": 300,
     "original_title": 300,
+    "release_title": 300,
     "year": 40,
     "barcode": 160,
     "format": 80,
@@ -37260,6 +40279,185 @@ def storage_optional_date(value: Any) -> date | None:
         return None
 
 
+def _movie_edit_csv_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        items = list(value)
+    else:
+        items = str(value).split(",")
+    result: list[str] = []
+    for item in items:
+        text = clean_text(item)
+        if text:
+            result.append(text)
+    return result
+
+
+def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int | None:
+    keys = ("runtimeMinutes", "runtime_minutes", "runtime")
+    if not any(key in body for key in keys):
+        return existing.get("runtime_minutes")
+    raw = next(body[key] for key in keys if key in body)
+    text = clean_text(raw)
+    if not text:
+        return None
+    digits = re.sub(r"[^0-9]", "", str(text))
+    if not digits:
+        return None
+    try:
+        return int(digits)
+    except ValueError:
+        return None
+
+
+def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
+    aliases = {
+        "director": ("director",),
+        "genre": ("genre",),
+        "studios": ("studios", "studio"),
+        "distributor": ("distributor",),
+    }
+    edits: dict[str, Any] = {}
+    for field, keys in aliases.items():
+        if any(key in body for key in keys):
+            raw = next(body[key] for key in keys if key in body)
+            edits[field] = clean_text(raw)
+    return edits
+
+
+def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
+    edits: dict[str, Any] = {}
+    if "hdr" in body:
+        edits["hdr"] = clean_text(body.get("hdr"))
+    if "packaging" in body:
+        edits["packaging"] = clean_text(body.get("packaging"))
+    ratio_keys = ("screenRatio", "screen_ratios", "screenRatios")
+    if any(key in body for key in ratio_keys):
+        raw = next(body[key] for key in ratio_keys if key in body)
+        edits["screen_ratios"] = clean_text(raw)
+    audio_keys = ("audioTracks", "audio_tracks")
+    if any(key in body for key in audio_keys):
+        raw = next(body[key] for key in audio_keys if key in body)
+        edits["audio_tracks"] = _movie_edit_csv_list(raw)
+    if "subtitles" in body:
+        edits["subtitles"] = _movie_edit_csv_list(body.get("subtitles"))
+    if "contentRating" in body or "content_rating" in body:
+        rating = clean_text(body.get("contentRating", body.get("content_rating")))
+        country = (clean_text(body.get("ratingCountry") or body.get("rating_country")) or "NL").upper()
+        if rating:
+            edits["content_ratings"] = {country: rating}
+    return edits
+
+
+def movie_effective_field_locks(body: dict[str, Any], existing: dict[str, Any]) -> list[str] | None:
+    if "fieldLocks" not in body and "field_locks" not in body:
+        return None
+    return normalize_movie_field_locks(body.get("fieldLocks", body.get("field_locks")))
+
+
+def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -> None:
+    if not edits:
+        return
+    cur.execute(
+        "INSERT INTO movie_technical_specs (movie_id, updated_at) VALUES (%s, now()) ON CONFLICT (movie_id) DO NOTHING",
+        (movie_uuid,),
+    )
+    assignments: list[str] = []
+    values: list[Any] = []
+    for col in ("hdr", "packaging", "screen_ratios"):
+        if col in edits:
+            assignments.append(f"{col}=%s")
+            values.append(edits[col])
+    for col in ("audio_tracks", "subtitles"):
+        if col in edits:
+            assignments.append(f"{col}=%s")
+            values.append(Jsonb(json_ready(edits[col] or [])))
+    if "content_ratings" in edits:
+        assignments.append("content_ratings = COALESCE(content_ratings, '{}'::jsonb) || %s")
+        values.append(Jsonb(json_ready(edits["content_ratings"] or {})))
+    if not assignments:
+        return
+    assignments.append("updated_at=now()")
+    values.append(movie_uuid)
+    cur.execute(
+        f"UPDATE movie_technical_specs SET {', '.join(assignments)} WHERE movie_id=%s",
+        values,
+    )
+
+
+def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> None:
+    """Persist movie columns, runtime, editable metadata fields and field locks."""
+    metadata_patch: dict[str, Any] = dict(payload.get("metadata_edits") or {})
+    field_locks = payload.get("field_locks")
+    if field_locks is not None:
+        metadata_patch[MOVIE_METADATA_LOCKS_KEY] = field_locks
+    cur.execute(
+        """
+        UPDATE movies
+        SET title=%s,
+            sort_title=%s,
+            original_title=%s,
+            release_title=%s,
+            year=%s,
+            barcode=%s,
+            release_date=%s,
+            format=%s,
+            edition=%s,
+            country=%s,
+            language=%s,
+            overview=%s,
+            notes=%s,
+            location=%s,
+            runtime_minutes=%s,
+            metadata = COALESCE(metadata, '{}'::jsonb) || %s,
+            updated_at=now()
+        WHERE id=%s
+        """,
+        (
+            payload["title"],
+            payload["sort_title"],
+            payload["original_title"],
+            payload["release_title"],
+            payload["year"],
+            payload["barcode"],
+            payload["release_date"],
+            payload["format"],
+            payload["edition"],
+            payload["country"],
+            payload["language"],
+            payload["overview"],
+            payload["notes"],
+            payload["location"],
+            payload.get("runtime_minutes"),
+            Jsonb(json_ready(metadata_patch)),
+            movie_uuid,
+        ),
+    )
+    upsert_movie_technical_edits(cur, movie_uuid, payload.get("technical_edits") or {})
+
+
+def set_movie_field_locks(movie_uuid: UUID, body: dict[str, Any], *, permission: str) -> list[str]:
+    """Persist the set of locked field names for a movie and return the stored list."""
+    locks = normalize_movie_field_locks(body.get("fieldLocks", body.get("field_locks")))
+    with connect() as conn:
+        actor = require_next_permission(conn, permission)
+        if not table_exists(conn, "movies"):
+            raise NextApiError("Movie table is not available", 503)
+        existing = movie_entity(conn, movie_uuid)
+        if not existing:
+            raise NextApiError("Movie not found", 404)
+        if not actor_can_edit_visible_movie(conn, actor, existing):
+            raise NextApiError("Permission required: collection.edit_all", 403)
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE movies SET metadata = COALESCE(metadata, '{}'::jsonb) || %s, updated_at=now() WHERE id=%s",
+                    (Jsonb(json_ready({MOVIE_METADATA_LOCKS_KEY: locks})), movie_uuid),
+                )
+    return locks
+
+
 def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> dict[str, Any]:
     def pick_text(column: str, *aliases: str) -> str | None:
         keys = (column, *aliases)
@@ -37285,6 +40483,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "title": title,
         "sort_title": pick_text("sort_title", "sortTitle"),
         "original_title": pick_text("original_title", "originalTitle"),
+        "release_title": pick_text("release_title", "releaseTitle"),
         "year": pick_text("year"),
         "barcode": pick_text("barcode"),
         "release_date": release_date,
@@ -37295,10 +40494,33 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "overview": pick_text("overview"),
         "notes": pick_text("notes"),
         "location": pick_text("location"),
+        "runtime_minutes": movie_runtime_value(body, existing),
+        "metadata_edits": movie_metadata_edits(body),
+        "technical_edits": movie_technical_edits(body),
+        "field_locks": movie_effective_field_locks(body, existing),
     }
 
 
-def movie_edit_receiver_proposal(existing: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+# Maps a canonical technical-spec column to the receiver payload key the
+# MovieVault contribution template expects (camelCase contract).
+MOVIE_TECHNICAL_RECEIVER_KEYS: dict[str, str] = {
+    "hdr": "hdr",
+    "packaging": "packaging",
+    "screen_ratios": "screenRatios",
+    "audio_tracks": "audioTracks",
+    "subtitles": "subtitles",
+    "content_ratings": "contentRatings",
+}
+
+
+def movie_edit_receiver_proposal(
+    existing: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    locked_fields: set[str] | None = None,
+    existing_technical: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    locked = locked_fields or set()
     public_fields = (
         "title",
         "original_title",
@@ -37317,9 +40539,17 @@ def movie_edit_receiver_proposal(existing: dict[str, Any], payload: dict[str, An
             return value.isoformat()
         return clean_text(value)
 
+    def technical_comparable(value: Any) -> Any:
+        if isinstance(value, (list, dict)):
+            return value
+        return clean_text(value)
+
     movie_updates: dict[str, Any] = {}
     metadata_updates: dict[str, Any] = {}
+    technical_updates: dict[str, Any] = {}
     for field in public_fields:
+        if field in locked:
+            continue
         old_value = comparable(existing.get(field))
         new_value = comparable(payload.get(field))
         if old_value == new_value:
@@ -37333,19 +40563,58 @@ def movie_edit_receiver_proposal(existing: dict[str, Any], payload: dict[str, An
             metadata_updates["releaseDate"] = new_value
         else:
             metadata_updates[field] = new_value
-    if not movie_updates and not metadata_updates:
+
+    # Editable metadata fields stored on movies.metadata (director, genre,
+    # studios, distributor). A non-empty supplement/change becomes a
+    # contribution; locked fields are never forwarded.
+    existing_meta = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
+    metadata_edits = payload.get("metadata_edits") or {}
+    for field in ("director", "genre", "studios", "distributor"):
+        if field not in metadata_edits or field in locked:
+            continue
+        new_value = comparable(metadata_edits.get(field))
+        if not new_value:
+            continue
+        if comparable(existing_meta.get(field)) == new_value:
+            continue
+        metadata_updates[field] = new_value
+
+    # Runtime change.
+    if "runtime_minutes" not in locked:
+        new_runtime = payload.get("runtime_minutes")
+        if new_runtime not in (None, "") and new_runtime != existing.get("runtime_minutes"):
+            movie_updates["runtime_minutes"] = new_runtime
+            metadata_updates["runtimeMinutes"] = new_runtime
+
+    # Technical specs stored on movie_technical_specs (hdr, packaging,
+    # screen_ratios, audio_tracks, subtitles, content_ratings).
+    existing_tech = existing_technical if isinstance(existing_technical, dict) else {}
+    technical_edits = payload.get("technical_edits") or {}
+    for col, receiver_key in MOVIE_TECHNICAL_RECEIVER_KEYS.items():
+        if col not in technical_edits or col in locked:
+            continue
+        new_value = technical_edits.get(col)
+        if new_value in (None, "", [], {}):
+            continue
+        if technical_comparable(existing_tech.get(col)) == technical_comparable(new_value):
+            continue
+        technical_updates[receiver_key] = new_value
+
+    if not movie_updates and not metadata_updates and not technical_updates:
         return {}
     return {
         "movieUpdates": movie_updates,
         "metadataUpdates": metadata_updates,
-        "technicalUpdates": {},
+        "technicalUpdates": technical_updates,
         "mediaUpdates": {},
         "identifiers": {},
         "provenance": [
             {
                 "pluginId": "discvault_local_edit",
                 "sourceLabel": "DiscVault local edit",
-                "fields": sorted(set(movie_updates) | set(metadata_updates)),
+                "fields": sorted(
+                    set(movie_updates) | set(metadata_updates) | set(technical_updates)
+                ),
             }
         ],
     }
@@ -37362,6 +40631,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 title,
                 sort_title,
                 original_title,
+                release_title,
                 year,
                 release_date,
                 format,
@@ -37401,6 +40671,27 @@ def movie_identifier_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
             ORDER BY provider_id, identifier_type, identifier
             """,
             (movie_id,),
+        )
+        return cur.fetchall()
+
+
+def all_movie_identifier_entities(conn, *, limit: int = 200000) -> list[dict[str, Any]]:
+    """Global variant of ``movie_identifier_entities`` for the sync bootstrap.
+
+    Unlike the per-movie helper this carries ``movie_id`` on every row so an
+    offline client can key each identifier back to its movie.
+    """
+    if not table_exists(conn, "movie_identifiers"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, provider_id, identifier_type, identifier, created_at
+            FROM movie_identifiers
+            ORDER BY movie_id, provider_id, identifier_type, identifier
+            LIMIT %s
+            """,
+            (limit,),
         )
         return cur.fetchall()
 
@@ -37849,6 +41140,8 @@ def personal_list_movie_snapshot(conn, movie_id: UUID) -> dict[str, Any]:
             "movie_title": movie.get("title"),
             "sort_title": movie.get("sort_title"),
             "original_title": movie.get("original_title"),
+            "release_title": movie.get("release_title"),
+            "releaseTitle": movie.get("release_title"),
             "year": movie.get("year"),
             "movie_year": movie.get("year"),
             "format": movie.get("format"),
@@ -38070,6 +41363,156 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         state["watchCount"] = len(rows)
         state["lastWatched"] = rows[0].get("watched_at") if rows else None
     return state
+
+
+def watchlist_sync_entity(conn, user_id, movie_id) -> dict[str, Any] | None:
+    """Serialize one watchlist row for the per-user sync stream, or None."""
+    if not table_exists(conn, "watchlist_items"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, added_at, snapshot
+            FROM watchlist_items
+            WHERE user_id=%s AND movie_id=%s
+            """,
+            (user_id, movie_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    movie = row.get("movie_id")
+    return {
+        "movieId": str(movie) if movie else None,
+        "addedAt": row.get("added_at"),
+        "snapshot": row.get("snapshot") or {},
+    }
+
+
+def watch_history_sync_entity(conn, user_id, entry_id) -> dict[str, Any] | None:
+    """Serialize one watch_history row for the per-user sync stream, or None."""
+    if not table_exists(conn, "watch_history"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, movie_id, watched_at, created_at, snapshot
+            FROM watch_history
+            WHERE user_id=%s AND id=%s
+            """,
+            (user_id, entry_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    movie = row.get("movie_id")
+    return {
+        "id": str(row.get("id")),
+        "movieId": str(movie) if movie else None,
+        "watchedAt": row.get("watched_at"),
+        "createdAt": row.get("created_at"),
+        "snapshot": row.get("snapshot") or {},
+    }
+
+
+def all_watchlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "watchlist_items"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, added_at, snapshot
+            FROM watchlist_items
+            WHERE user_id=%s
+            ORDER BY added_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    entities: list[dict[str, Any]] = []
+    for row in rows:
+        movie = row.get("movie_id")
+        entities.append(
+            {
+                "movieId": str(movie) if movie else None,
+                "addedAt": row.get("added_at"),
+                "snapshot": row.get("snapshot") or {},
+            }
+        )
+    return entities
+
+
+def all_watch_history_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "watch_history"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, movie_id, watched_at, created_at, snapshot
+            FROM watch_history
+            WHERE user_id=%s
+            ORDER BY watched_at, created_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    entities: list[dict[str, Any]] = []
+    for row in rows:
+        movie = row.get("movie_id")
+        entities.append(
+            {
+                "id": str(row.get("id")),
+                "movieId": str(movie) if movie else None,
+                "watchedAt": row.get("watched_at"),
+                "createdAt": row.get("created_at"),
+                "snapshot": row.get("snapshot") or {},
+            }
+        )
+    return entities
+
+
+def emit_watchlist_change(conn, user_id, movie_id, *, operation: str) -> int:
+    """Append a watchlist upsert/delete to the caller's private sync stream."""
+    entity_id = str(movie_id)
+    if operation == "delete":
+        payload: dict[str, Any] = {"id": entity_id, "movieId": entity_id}
+    else:
+        entity = watchlist_sync_entity(conn, user_id, movie_id)
+        payload = {"id": entity_id, "movieId": entity_id}
+        if entity is not None:
+            payload["entity"] = entity
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="watchlist",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
+
+
+def emit_watch_history_change(conn, user_id, entry_id, *, operation: str, movie_id=None) -> int:
+    """Append a watch_history upsert/delete to the caller's private sync stream."""
+    entity_id = str(entry_id)
+    payload: dict[str, Any] = {"id": entity_id}
+    if operation == "delete":
+        if movie_id is not None:
+            payload["movieId"] = str(movie_id)
+    else:
+        entity = watch_history_sync_entity(conn, user_id, entry_id)
+        if entity is not None:
+            payload["entity"] = entity
+            payload["movieId"] = entity.get("movieId")
+        elif movie_id is not None:
+            payload["movieId"] = str(movie_id)
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="watch_history",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
 
 
 def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit: int = 200) -> list[dict[str, Any]]:
@@ -38675,10 +42118,266 @@ def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list
     return rows
 
 
+def movie_metadata_debug_latest_audit_event(
+    conn, movie_id: UUID | str, event_type: str
+) -> dict[str, Any] | None:
+    if not table_exists(conn, "audit_events"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                event_type,
+                category,
+                actor_user_id,
+                actor_username,
+                actor_role,
+                target_type,
+                target_id,
+                summary,
+                metadata,
+                request_ip,
+                user_agent,
+                created_at
+            FROM audit_events
+            WHERE target_type='movie' AND target_id=%s AND event_type=%s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (str(movie_id), event_type),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    return audit_event_row(row)
+
+
+def movie_metadata_missing_contribution_report(
+    *,
+    movie_id: UUID | str,
+    title: Any,
+    fetched: list[dict[str, Any]],
+    contributed: list[dict[str, Any]],
+    generated_at: Any,
+    entity_kind: str = "movie",
+) -> dict[str, Any] | None:
+    """Build a self-describing report of fields fetched by DiscVault but not
+    accepted by a receiver's contribution template (e.g. MovieVault).
+
+    The list is derived from the real contribution filtering: each receiver's
+    ``excludedFields`` (incoming payload keys dropped by the template allow-list)
+    cross-referenced against the fetched field decisions for source + sample value.
+    """
+
+    def _norm(key: Any) -> str:
+        return "".join(ch for ch in str(key or "").lower() if ch.isalnum())
+
+    lookup: dict[str, dict[str, Any]] = {}
+    for plugin in fetched or []:
+        if not isinstance(plugin, dict):
+            continue
+        for field in plugin.get("fields") or []:
+            if not isinstance(field, dict):
+                continue
+            norm_key = _norm(field.get("field"))
+            if not norm_key or norm_key in lookup:
+                continue
+            lookup[norm_key] = {
+                "sourcePluginId": plugin.get("pluginId"),
+                "sourceLabel": plugin.get("sourceLabel"),
+                "sampleValue": field.get("value"),
+                "target": field.get("target"),
+            }
+
+    receivers_out: list[dict[str, Any]] = []
+    for receiver in contributed or []:
+        if not isinstance(receiver, dict):
+            continue
+        excluded = receiver.get("excludedFields") or []
+        missing: list[dict[str, Any]] = []
+        for item in excluded:
+            if not isinstance(item, dict) or not item.get("field"):
+                continue
+            info = lookup.get(_norm(item.get("field")), {})
+            missing.append(
+                {
+                    "field": item.get("field"),
+                    "target": info.get("target"),
+                    "sourcePluginId": info.get("sourcePluginId"),
+                    "sourceLabel": info.get("sourceLabel"),
+                    "sampleValue": info.get("sampleValue"),
+                    "reason": item.get("reason"),
+                }
+            )
+        if not missing:
+            continue
+        receivers_out.append(
+            {
+                "pluginId": receiver.get("pluginId"),
+                "name": receiver.get("name") or receiver.get("pluginId"),
+                "templateVersion": receiver.get("templateVersion"),
+                "missingFields": missing,
+            }
+        )
+
+    if not receivers_out:
+        return None
+
+    return {
+        "report": "discvault.metadata.missing_in_receiver",
+        "version": 1,
+        "note": "Fields fetched by DiscVault but not accepted by the receiver's contribution template.",
+        "generatedAt": generated_at,
+        f"{entity_kind}Id": str(movie_id),
+        "title": title,
+        "receivers": receivers_out,
+    }
+
+
+def metadata_debug_fetched_sources(fetched_meta: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Build the per-source "loaded metadata" cards from a refresh_fetched event's metadata."""
+    fetched_meta = fetched_meta if isinstance(fetched_meta, dict) else {}
+
+    source_states: dict[str, dict[str, Any]] = {}
+    for entry in fetched_meta.get("sourceSummary") or []:
+        if isinstance(entry, dict) and entry.get("pluginId"):
+            source_states[str(entry["pluginId"])] = entry
+
+    grouped: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+
+    def ensure_plugin(plugin_id: str, *, source_label: Any, source_ref: Any) -> dict[str, Any]:
+        if plugin_id not in grouped:
+            summary_entry = source_states.get(plugin_id) or {}
+            grouped[plugin_id] = {
+                "pluginId": plugin_id,
+                "sourceLabel": source_label or summary_entry.get("name") or plugin_id,
+                "state": summary_entry.get("state"),
+                "reason": summary_entry.get("reason"),
+                "sourceRef": source_ref or "",
+                "fields": [],
+            }
+            order.append(plugin_id)
+        return grouped[plugin_id]
+
+    for decision in fetched_meta.get("fieldDecisions") or []:
+        if not isinstance(decision, dict):
+            continue
+        target = decision.get("target")
+        field = decision.get("field")
+        for candidate in decision.get("candidates") or []:
+            if not isinstance(candidate, dict):
+                continue
+            plugin_id = str(candidate.get("pluginId") or "")
+            if not plugin_id:
+                continue
+            entry = ensure_plugin(
+                plugin_id,
+                source_label=candidate.get("sourceLabel"),
+                source_ref=candidate.get("sourceRef"),
+            )
+            if not entry.get("sourceRef") and candidate.get("sourceRef"):
+                entry["sourceRef"] = candidate.get("sourceRef")
+            entry["fields"].append(
+                {
+                    "target": target,
+                    "field": field,
+                    "value": candidate.get("value"),
+                    "accepted": bool(candidate.get("accepted") or candidate.get("winner")),
+                }
+            )
+
+    for result in fetched_meta.get("providerResults") or []:
+        if not isinstance(result, dict):
+            continue
+        plugin_id = str(result.get("pluginId") or "")
+        if not plugin_id or plugin_id in grouped:
+            continue
+        ensure_plugin(
+            plugin_id,
+            source_label=result.get("sourceLabel"),
+            source_ref=result.get("sourceRef"),
+        )
+
+    return [grouped[plugin_id] for plugin_id in order]
+
+
+def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | None:
+    if not table_exists(conn, "audit_events"):
+        return None
+    fetched_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.refresh_fetched")
+    pushed_event = movie_metadata_debug_latest_audit_event(conn, movie_id, "metadata.receiver_pushed")
+    if not fetched_event and not pushed_event:
+        return None
+
+    fetched_meta = (fetched_event or {}).get("metadata") or {}
+    pushed_meta = (pushed_event or {}).get("metadata") or {}
+
+    fetched = metadata_debug_fetched_sources(fetched_meta)
+
+    payload_summary = pushed_meta.get("payloadSummary") or {}
+    payload_fields = payload_summary.get("fields") or []
+    payload_sources = payload_summary.get("sourceProviders") or []
+    contributed: list[dict[str, Any]] = []
+    for receiver in pushed_meta.get("receivers") or []:
+        if not isinstance(receiver, dict):
+            continue
+        contributed.append(
+            {
+                "pluginId": receiver.get("pluginId"),
+                "name": receiver.get("name") or receiver.get("pluginId"),
+                "status": receiver.get("status"),
+                "state": receiver.get("state"),
+                "resultStatus": receiver.get("resultStatus"),
+                "reason": receiver.get("reason"),
+                "provider": receiver.get("provider"),
+                "error": receiver.get("error"),
+                "templateVersion": receiver.get("templateVersion"),
+                "fields": payload_fields,
+                "acceptedFields": receiver.get("acceptedFields") if isinstance(receiver.get("acceptedFields"), list) else [],
+                "excludedFields": [
+                    {"field": item.get("field"), "reason": item.get("reason")}
+                    for item in (receiver.get("droppedFields") or [])
+                    if isinstance(item, dict) and item.get("field")
+                ],
+                "sourceProviders": payload_sources,
+            }
+        )
+
+    if not fetched and not contributed:
+        return None
+
+    fetched_at = (fetched_event or {}).get("createdAt")
+    if hasattr(fetched_at, "isoformat"):
+        fetched_at = fetched_at.isoformat()
+
+    movie_title = pushed_meta.get("title") or fetched_meta.get("title")
+    missing_report = movie_metadata_missing_contribution_report(
+        movie_id=movie_id,
+        title=movie_title,
+        fetched=fetched,
+        contributed=contributed,
+        generated_at=fetched_at,
+    )
+
+    return {
+        "fetchedAt": fetched_at,
+        "fetched": fetched,
+        "contributed": contributed,
+        "missingContributionReport": missing_report,
+    }
+
+
 def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     movie = movie_entity(conn, movie_id)
     if not movie:
         return None
+    metadata_debug = None
+    try:
+        metadata_debug = movie_metadata_debug_entity(conn, movie_id)
+    except Exception:  # pragma: no cover - debug info must never break detail load
+        metadata_debug = None
     return {
         "movie": movie,
         "identifiers": movie_identifier_entities(conn, movie_id),
@@ -38689,6 +42388,7 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "mediaGroups": movie_media_group_entities(conn, movie_id),
         "mediaAssets": entity_media_asset_entities(conn, "movie", movie_id),
         "digitalItems": movie_digital_item_entities(conn, movie_id),
+        "metadataDebug": metadata_debug,
     }
 
 
@@ -38820,6 +42520,185 @@ def refresh_movie_person_metadata_cascade(
     return summary
 
 
+def sanitize_profile_urls(values: Any, *, cap: int = 12) -> list[str]:
+    """Return public https profile URLs: trimmed, deduped (order-preserving), capped.
+
+    Only ``https://`` URLs are accepted (no http, local, relative or signed paths)
+    so MovieVault/clients receive distributable public assets. The cap mirrors the
+    TMDb plugin ``_profile_urls`` limit.
+    """
+    urls: list[str] = []
+    for raw in values or []:
+        value = clean_text(raw) or ""
+        if not value.startswith("https://"):
+            continue
+        if value not in urls:
+            urls.append(value)
+        if len(urls) >= cap:
+            break
+    return urls
+
+
+def sync_person_profile_media(
+    conn,
+    person_id: UUID,
+    profile_urls: list[Any] | None,
+    *,
+    provider_id: str = "tmdb",
+) -> dict[str, Any] | None:
+    """Persist a person's profile image URLs as remote media assets.
+
+    Each unique https URL is upserted into ``media_assets`` (kind ``profile``)
+    and linked via ``entity_media`` (entity_type ``person``, role ``profile``).
+    The first asset is marked primary and stored on ``people.profile_asset_id``
+    unless the person already has a primary profile selected (which is left
+    untouched so a manual selection is not overwritten).
+    """
+    if not table_exists(conn, "people") or not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
+        return None
+    urls = sanitize_profile_urls(profile_urls)
+    if not urls:
+        return None
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT profile_asset_id FROM people WHERE id=%s", (person_id,))
+        row = cur.fetchone()
+        existing_primary = (row.get("profile_asset_id") if isinstance(row, dict) else (row[0] if row else None)) if row else None
+
+    assign_primary = existing_primary is None
+    primary_media_id = existing_primary
+    linked: list[str] = []
+    for index, url in enumerate(urls):
+        media_id = ensure_remote_media_asset(conn, kind="profile", source_url=url, provider_id=provider_id)
+        if not media_id:
+            continue
+        make_primary = assign_primary and primary_media_id is None
+        if make_primary:
+            primary_media_id = media_id
+        with conn.cursor() as cur:
+            if make_primary:
+                cur.execute(
+                    """
+                    UPDATE entity_media em
+                    SET is_primary=false,
+                        sort_order=GREATEST(em.sort_order, 1)
+                    FROM media_assets ma
+                    WHERE ma.id = em.media_id
+                      AND em.entity_type='person'
+                      AND em.entity_id=%s
+                      AND ma.kind='profile'
+                      AND em.is_primary=true
+                      AND em.media_id<>%s
+                    """,
+                    (person_id, media_id),
+                )
+            cur.execute(
+                """
+                INSERT INTO entity_media (
+                    entity_type,
+                    entity_id,
+                    media_id,
+                    role,
+                    is_primary,
+                    sort_order
+                )
+                VALUES ('person', %s, %s, 'profile', %s, %s)
+                ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                    is_primary=GREATEST(entity_media.is_primary::int, EXCLUDED.is_primary::int)::boolean,
+                    sort_order=LEAST(entity_media.sort_order, EXCLUDED.sort_order),
+                    deleted_at=NULL,
+                    deleted_by=NULL,
+                    purge_after=NULL,
+                    restore_metadata='{}'::jsonb
+                """,
+                (person_id, media_id, make_primary, 0 if make_primary else index + 1),
+            )
+        linked.append(str(media_id))
+
+    if assign_primary and primary_media_id is not None:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE people SET profile_asset_id=%s, updated_at=now() WHERE id=%s",
+                (primary_media_id, person_id),
+            )
+
+    return {
+        "primaryMediaId": str(primary_media_id) if primary_media_id else None,
+        "linked": linked,
+        "count": len(linked),
+    }
+
+
+def merge_person_awards(*award_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Merge award lists from multiple providers with the shared dedupe rules.
+
+    De-duplicates on ``(awardWikidataId or award, year, workWikidataId or work)``
+    and collapses a nomination into a win when both share that key. Earlier lists
+    take precedence on otherwise-identical (same-result) duplicates.
+    """
+    deduped: dict[tuple, dict[str, Any]] = {}
+    order: list[tuple] = []
+    for awards in award_lists:
+        for entry in awards or []:
+            if not isinstance(entry, dict):
+                continue
+            award = clean_text(entry.get("award"))
+            award_qid = clean_text(entry.get("awardWikidataId"))
+            if not award and not award_qid:
+                continue
+            work = clean_text(entry.get("work"))
+            work_qid = clean_text(entry.get("workWikidataId"))
+            year = entry.get("year")
+            result = clean_text(entry.get("result")).lower()
+            result = "won" if result == "won" else "nominated"
+            normalized = {
+                "award": award or award_qid,
+                "awardWikidataId": award_qid,
+                "category": clean_text(entry.get("category")),
+                "year": year,
+                "work": work,
+                "workWikidataId": work_qid,
+                "workTmdbId": entry.get("workTmdbId"),
+                "result": result,
+                "source": clean_text(entry.get("source")),
+                "sourceRef": clean_text(entry.get("sourceRef")),
+            }
+            key = (award_qid or award, year, work_qid or work)
+            existing = deduped.get(key)
+            if existing is None:
+                deduped[key] = normalized
+                order.append(key)
+            elif existing.get("result") == "nominated" and result == "won":
+                deduped[key] = normalized
+    return [deduped[key] for key in order]
+
+
+def group_person_awards(awards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group a flat award list by award name for display (mirrors wikidata_awards)."""
+    groups: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for award in awards or []:
+        key = clean_text(award.get("awardWikidataId")) or clean_text(award.get("award"))
+        if not key:
+            continue
+        if key not in groups:
+            groups[key] = {
+                "award": award.get("award") or "",
+                "awardWikidataId": award.get("awardWikidataId") or "",
+                "items": [],
+            }
+            order.append(key)
+        groups[key]["items"].append(award)
+    result = []
+    for key in order:
+        group = groups[key]
+        group["items"].sort(key=lambda item: -(item.get("year") or 0))
+        group["wins"] = sum(1 for item in group["items"] if item.get("result") == "won")
+        group["nominations"] = sum(1 for item in group["items"] if item.get("result") == "nominated")
+        result.append(group)
+    return result
+
+
 def person_receiver_contribution_payload(
     *,
     person_id: UUID | str,
@@ -38899,9 +42778,14 @@ def refresh_person_metadata(
     merged: dict[str, Any] = {}
     localizations_by_lang: dict[str, dict[str, str]] = {}
     source_providers: list[str] = []
+    merged_aliases: list[str] = []
+    merged_imdb = ""
+    merged_profiles: list[Any] = []
+    provider_source_awards: list[dict[str, Any]] = []
     primary_plugin: dict[str, Any] | None = None
     primary_execution: dict[str, Any] = {}
     primary_result: dict[str, Any] = {}
+    primary_context: dict[str, Any] | None = None
     primary_language = ""
     last_error = ""
 
@@ -38935,19 +42819,42 @@ def refresh_person_metadata(
                 result.get("photo_url"),
             ),
         }
-        if not any(normalized.values()):
+        provider_aliases = [
+            clean_text(a) for a in (result.get("alsoKnownAs") or result.get("also_known_as") or []) if clean_text(a)
+        ]
+        provider_imdb = clean_text(result.get("imdbId") or result.get("imdb_id"))
+        provider_profiles = list(result.get("profiles") or [])
+        provider_localizations = result.get("localizations") or []
+        provider_awards = [item for item in (result.get("awards") or []) if isinstance(item, dict)]
+        if not (
+            any(normalized.values())
+            or provider_aliases
+            or provider_imdb
+            or provider_profiles
+            or provider_localizations
+            or provider_awards
+        ):
             continue
         if primary_plugin is None:
             primary_plugin = plugin
             primary_execution = execution
             primary_result = result
+            primary_context = context
             primary_language = clean_text(result.get("language")) or "en-US"
         if str(plugin["id"]) not in source_providers:
             source_providers.append(str(plugin["id"]))
         for key, value in normalized.items():
             _accept(key, value)
+        if not merged_aliases and provider_aliases:
+            merged_aliases = provider_aliases
+        if not merged_imdb and provider_imdb:
+            merged_imdb = provider_imdb
+        if not merged_profiles and provider_profiles:
+            merged_profiles = provider_profiles
+        if provider_awards:
+            provider_source_awards.extend(provider_awards)
         provider_language = clean_text(result.get("language")) or primary_language or "en-US"
-        for localization in result.get("localizations") or []:
+        for localization in provider_localizations:
             lang = clean_text(localization.get("lang"))
             biography = clean_text(localization.get("biography"))
             if not lang or not biography:
@@ -38979,6 +42886,52 @@ def refresh_person_metadata(
         localizations_by_lang.setdefault(language.lower(), {"lang": language, "biography": updates["biography"]})
     localizations = list(localizations_by_lang.values())
 
+    aliases = merged_aliases[:50]
+    imdb_id = merged_imdb
+    profile_candidates = list(merged_profiles)
+    if updates["profile_url"]:
+        profile_candidates.insert(0, updates["profile_url"])
+    profile_urls = sanitize_profile_urls(profile_candidates)
+
+    # Awards run as an independent best-effort sub-step on the primary provider: a
+    # slow/flaky Wikidata provider must never fail the metadata mapping, and a
+    # transient empty/miss must not wipe awards that were previously stored.
+    awards_status = "skipped"
+    awards_state = None
+    awards_hit = False
+    awards: list[Any] = []
+    award_groups: list[Any] = []
+    awards_result: dict[str, Any] = {}
+    try:
+        awards_execution = run_plugin_entrypoint(
+            str(primary_plugin["id"]),
+            "person_awards",
+            {"tmdbId": tmdb_id, "imdbId": imdb_id},
+            primary_context,
+        )
+        awards_status = awards_execution.get("status")
+        awards_state = awards_execution.get("state")
+        if awards_execution.get("status") == "ok":
+            awards_result = awards_execution.get("result") or {}
+            awards = awards_result.get("awards") or []
+            award_groups = awards_result.get("awardGroups") or []
+            awards_hit = bool(awards)
+    except Exception:
+        current_app.logger.warning(
+            "Person awards lookup failed for %s; keeping existing awards", person_id, exc_info=True
+        )
+        awards_status = "error"
+
+    # Fold awards that arrived inline from metadata-source providers (e.g. MovieVault
+    # person_details) into the Wikidata substep output, de-duplicated with the shared
+    # won>nominated rules. Only engage the merge when a provider actually supplied
+    # awards so the single-source Wikidata behaviour stays byte-identical otherwise.
+    if provider_source_awards:
+        merged_awards = merge_person_awards(awards, provider_source_awards)
+        awards = merged_awards
+        award_groups = group_person_awards(merged_awards)
+        awards_hit = bool(merged_awards)
+
     preview_detail = json_ready(detail)
     preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
     preview_metadata = preview_person.get("metadata") if isinstance(preview_person.get("metadata"), dict) else {}
@@ -38992,6 +42945,22 @@ def refresh_person_metadata(
     if updates["biography"]:
         preview_person["biography"] = updates["biography"]
         preview_metadata["biography"] = updates["biography"]
+    if aliases:
+        preview_metadata["alsoKnownAs"] = aliases
+    if imdb_id:
+        preview_metadata["imdbId"] = imdb_id
+    if profile_urls:
+        preview_metadata["profiles"] = profile_urls
+    if awards_hit:
+        preview_metadata["awards"] = awards
+        preview_metadata["awardGroups"] = award_groups
+        preview_metadata["awards_source"] = (
+            clean_text(awards_result.get("provider"))
+            or clean_text((awards[0] if awards else {}).get("source"))
+            or "wikidata"
+        )
+        preview_metadata["awards_source_ref"] = clean_text(awards_result.get("sourceRef"))
+        preview_metadata["awards_fetched_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     preview_metadata["person_metadata_source"] = updates["source"]
     preview_metadata["person_metadata_source_ref"] = updates["source_ref"]
     preview_metadata["person_metadata_sources"] = sorted({str(item) for item in source_providers if item})
@@ -39042,6 +43011,12 @@ def refresh_person_metadata(
                         """,
                         (person_id, lang, biography),
                     )
+        try:
+            sync_person_profile_media(conn, person_id, profile_urls, provider_id=updates["source"])
+        except Exception:
+            current_app.logger.warning(
+                "Person profile media sync failed for %s", person_id, exc_info=True
+            )
         detail = person_detail_entity(conn, person_id) or preview_detail
         if source_providers:
             receiver_payload = person_receiver_contribution_payload(
@@ -39056,6 +43031,9 @@ def refresh_person_metadata(
                 try:
                     receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
                 except Exception as exc:  # noqa: BLE001 - contribution must never break the refresh
+                    current_app.logger.warning(
+                        "Person receiver contribution failed for %s", person_id, exc_info=True
+                    )
                     receiver_summary = {"status": "error", "error": str(exc)}
                 audit_event(
                     conn,
@@ -39074,6 +43052,21 @@ def refresh_person_metadata(
                     },
                 )
     else:
+        if profile_urls:
+            existing_media = preview_detail.get("personMedia") if isinstance(preview_detail.get("personMedia"), list) else []
+            has_primary = any(isinstance(asset, dict) and asset.get("is_primary") for asset in existing_media)
+            preview_detail["personMedia"] = [
+                {
+                    "id": f"preview-{index}",
+                    "url": url,
+                    "source_url": url,
+                    "kind": "profile",
+                    "is_primary": (index == 0 and not has_primary),
+                    "sort_order": index,
+                    "preview": True,
+                }
+                for index, url in enumerate(profile_urls)
+            ]
         detail = preview_detail
 
     return {
@@ -39089,12 +43082,17 @@ def refresh_person_metadata(
             "elapsedMs": primary_execution.get("elapsedMs"),
             "entrypoint": primary_execution.get("entrypoint"),
         },
+        "awards": {
+            "status": awards_status,
+            "state": awards_state,
+            "applied": awards_hit,
+            "count": len(awards),
+            "groups": len(award_groups),
+        },
         "result": primary_result,
         "receivers": receiver_summary,
         "detail": detail,
     }
-
-
 
 
 def refresh_person_filmography(
@@ -39287,6 +43285,101 @@ def set_primary_movie_media_asset(
     media["sort_order"] = 0
     media["url"] = media_asset_public_url(media)
     return {"movieId": str(movie_id), "kind": kind, "media": media, "revision": revision}
+
+
+def set_primary_person_media_asset(
+    conn,
+    *,
+    person_id: UUID,
+    media_id: UUID,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if not table_exists(conn, "people") or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM people WHERE id=%s", (person_id,))
+        if not cur.fetchone():
+            raise NextApiError("Person not found", 404)
+        cur.execute(
+            """
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                em.role,
+                em.is_primary,
+                em.sort_order
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type='person'
+              AND em.entity_id=%s
+              AND em.media_id=%s
+              AND em.deleted_at IS NULL
+              AND ma.kind='profile'
+            """,
+            (person_id, media_id),
+        )
+        media = cur.fetchone()
+        if not media:
+            raise NextApiError("Media asset is not linked to this person", 404)
+        cur.execute(
+            """
+            UPDATE entity_media em
+            SET is_primary=false,
+                sort_order=GREATEST(em.sort_order, 1)
+            FROM media_assets ma
+            WHERE ma.id = em.media_id
+              AND em.entity_type='person'
+              AND em.entity_id=%s
+              AND em.deleted_at IS NULL
+              AND ma.kind='profile'
+              AND em.is_primary=true
+            """,
+            (person_id,),
+        )
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET is_primary=true,
+                sort_order=0
+            WHERE entity_type='person'
+              AND entity_id=%s
+              AND media_id=%s
+              AND deleted_at IS NULL
+            """,
+            (person_id, media_id),
+        )
+        media_metadata = media.get("metadata") if isinstance(media, dict) else {}
+        media_metadata = media_metadata if isinstance(media_metadata, dict) else {}
+        media_metadata.update(
+            {
+                "lockedPrimary": True,
+                "userSelectedPrimary": True,
+                "source": media_metadata.get("source") or "manual_selection",
+                "selectedBy": actor_job_payload(actor or {}) if actor else None,
+            }
+        )
+        cur.execute("UPDATE media_assets SET metadata=%s WHERE id=%s", (Jsonb(json_ready(media_metadata)), media_id))
+        cur.execute(
+            "UPDATE people SET profile_asset_id=%s, updated_at=now() WHERE id=%s",
+            (media_id, person_id),
+        )
+
+    media["is_primary"] = True
+    media["sort_order"] = 0
+    media["url"] = media_asset_public_url(media)
+    return {"personId": str(person_id), "kind": "profile", "media": media}
 
 
 def uploaded_artwork_file() -> tuple[Any, str | None]:
@@ -40799,6 +44892,231 @@ def container_aggregate_summary(movies: list[dict[str, Any]], assets: list[dict[
     }
 
 
+def box_set_metadata_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Installed ``metadata_source`` plugins exposing ``box_set_candidates``.
+
+    Ordered by ``order_index`` (highest priority first) like the other source
+    selectors, so the top provider (e.g. MovieVault) wins when several sources
+    return box-set artwork for the same container.
+    """
+    if not table_exists(conn, "plugins"):
+        return []
+    sync_metadata_plugin_registry(conn)
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugins: list[dict[str, Any]] = []
+    for plugin in registry.get("plugins") or []:
+        if not plugin.get("installed"):
+            continue
+        if not include_disabled and not plugin.get("enabled"):
+            continue
+        if "metadata_source" not in plugin_categories(plugin):
+            continue
+        if "box_set_candidates" not in plugin_runtime_entrypoints(plugin):
+            continue
+        plugins.append(plugin)
+    return plugins
+
+
+def link_container_media_option(
+    conn,
+    *,
+    container_id: UUID,
+    kind: str,
+    source_url: str,
+    provider_id: str,
+    sort_order: int,
+    primary: bool = False,
+) -> dict[str, Any] | None:
+    """Attach a remote box-set artwork URL to a container as a selectable option.
+
+    Mirrors ``link_media_option`` (movies) for ``entity_type='container'``.
+    Never demotes or overwrites an existing user-selected primary; when
+    ``primary`` is requested it is only honoured if the container has no other
+    primary artwork of this kind yet.
+    """
+    if kind not in {"poster", "backdrop"}:
+        return None
+    media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
+    if not media_id or not table_exists(conn, "entity_media"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT is_primary, deleted_at
+            FROM entity_media
+            WHERE entity_type='container'
+              AND entity_id=%s
+              AND media_id=%s
+              AND role=%s
+            """,
+            (container_id, media_id, kind),
+        )
+        row = cur.fetchone()
+        if row and (row["deleted_at"] if isinstance(row, dict) else row[1]):
+            return None
+        if row and bool(row["is_primary"] if isinstance(row, dict) else row[0]):
+            return None
+        make_primary = False
+        if primary:
+            cur.execute(
+                """
+                SELECT 1
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='container'
+                  AND em.entity_id=%s
+                  AND em.deleted_at IS NULL
+                  AND em.is_primary=true
+                  AND ma.kind=%s
+                """,
+                (container_id, kind),
+            )
+            make_primary = cur.fetchone() is None
+        cur.execute(
+            """
+            INSERT INTO entity_media (
+                entity_type,
+                entity_id,
+                media_id,
+                role,
+                is_primary,
+                sort_order
+            )
+            VALUES ('container', %s, %s, %s, %s, %s)
+            ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                sort_order=LEAST(entity_media.sort_order, EXCLUDED.sort_order)
+            """,
+            (container_id, media_id, kind, make_primary, sort_order),
+        )
+    return {
+        "kind": kind,
+        "mediaId": str(media_id),
+        "sourceUrl": source_url,
+        "providerId": provider_id,
+        "primary": make_primary,
+    }
+
+
+def fetch_box_set_artwork_from_sources(
+    conn,
+    container: dict[str, Any],
+    identifiers: list[dict[str, Any]] | None,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Pull the box-set's own poster/backdrop (and title/year) from sources.
+
+    Calls each enabled ``box_set_candidates`` source (e.g. MovieVault) with the
+    container's title/year/barcode/format and returns the artwork of the
+    best-matching proposal. Matching prefers an exact barcode or MovieVault id
+    match over a title match, so a refresh of *this* box-set never grabs another
+    set's artwork. Returns an empty dict when nothing matches.
+    """
+
+    plugins = box_set_metadata_source_plugins(conn)
+    if not plugins:
+        return {}
+
+    metadata = container.get("metadata") if isinstance(container.get("metadata"), dict) else {}
+    title = clean_text(container.get("title")) or clean_text(metadata.get("title"))
+    if not title:
+        return {}
+    barcode = clean_text(container.get("barcode")) or clean_text(metadata.get("barcode"))
+    year = clean_text(container.get("year")) or clean_text(metadata.get("year"))
+    fmt = clean_text(container.get("format")) or clean_text(metadata.get("format"))
+    movievault_id = clean_text(
+        metadata.get("movievault_id")
+        or metadata.get("movieVaultId")
+        or metadata.get("movievaultId")
+    )
+    for identifier in identifiers or []:
+        provider = str(identifier.get("provider_id") or "").lower()
+        if "movievault" in provider and clean_text(identifier.get("identifier")):
+            movievault_id = movievault_id or clean_text(identifier.get("identifier"))
+
+    payload = {
+        "title": title,
+        "year": year,
+        "barcode": barcode,
+        "format": fmt,
+        "mediaType": fmt,
+    }
+    if movievault_id:
+        payload["movieVaultId"] = movievault_id
+        payload["identity"] = movievault_id
+
+    norm_title = re.sub(r"[^a-z0-9]+", "", title.lower()) if title else ""
+
+    def _proposal_artwork(proposal: dict[str, Any], provider_id: str, score: int) -> dict[str, Any]:
+        poster = clean_text(
+            proposal.get("poster_url") or proposal.get("posterUrl") or proposal.get("poster")
+        )
+        backdrop = clean_text(
+            proposal.get("backdrop_url") or proposal.get("backdropUrl") or proposal.get("backdrop")
+        )
+        backdrops = [
+            clean_text(url)
+            for url in (proposal.get("backdrop_urls") or proposal.get("backdropUrls") or [])
+            if clean_text(url)
+        ]
+        return {
+            "poster_url": poster,
+            "backdrop_url": backdrop,
+            "backdrop_urls": backdrops,
+            "title": clean_text(proposal.get("title") or proposal.get("name")),
+            "year": clean_text(proposal.get("year")),
+            "provider_id": provider_id,
+            "sourceRef": clean_text(
+                proposal.get("movievault_id") or proposal.get("movieVaultId") or proposal.get("barcode")
+            ),
+            "_score": score,
+        }
+
+    best: dict[str, Any] = {}
+    for plugin in plugins:
+        plugin_id = str(plugin.get("id") or "")
+        config = plugin_config_from_db(conn, plugin_id)
+        if plugin_requires_config_for_entrypoint(plugin, config, "box_set_candidates"):
+            continue
+        context = plugin_execution_context(conn, plugin, config, actor, ensure_movievault_token=True)
+        execution = run_plugin_entrypoint(plugin_id, "box_set_candidates", payload, context)
+        if execution.get("status") != "ok":
+            continue
+        result = execution.get("result") or {}
+        proposals = result.get("boxSetProposals")
+        if not isinstance(proposals, list) or not proposals:
+            single = result.get("boxSetProposal")
+            proposals = [single] if isinstance(single, dict) and single else []
+        for proposal in proposals:
+            if not isinstance(proposal, dict):
+                continue
+            proposal_barcode = clean_text(proposal.get("barcode"))
+            proposal_mv = clean_text(proposal.get("movievault_id") or proposal.get("movieVaultId"))
+            proposal_title = re.sub(
+                r"[^a-z0-9]+", "", clean_text(proposal.get("title") or proposal.get("name")).lower()
+            )
+            score = 0
+            if barcode and proposal_barcode and proposal_barcode == barcode:
+                score = 3
+            elif movievault_id and proposal_mv and proposal_mv == movievault_id:
+                score = 3
+            elif norm_title and proposal_title and proposal_title == norm_title:
+                score = 2
+            elif norm_title and proposal_title and (norm_title in proposal_title or proposal_title in norm_title):
+                score = 1
+            # Require at least a fuzzy title (or stronger barcode/id) match so a
+            # refresh never adopts an unrelated box-set's artwork.
+            if score < 1:
+                continue
+            artwork = _proposal_artwork(proposal, plugin_id, score)
+            if not artwork.get("poster_url") and not artwork.get("backdrop_url"):
+                continue
+            if score > best.get("_score", -1):
+                best = artwork
+    if best:
+        best.pop("_score", None)
+    return best
+
+
 def refresh_container_metadata(
     conn,
     container_id: UUID,
@@ -40814,6 +45132,8 @@ def refresh_container_metadata(
     videos = container_aggregate_video_entities(movies)
     summary = container_aggregate_summary(movies, assets, videos)
     metadata = container.get("metadata") if isinstance(container.get("metadata"), dict) else {}
+    identifiers = container_identifier_entities(conn, container_id)
+    box_set_artwork = fetch_box_set_artwork_from_sources(conn, container, identifiers, actor)
     description = clean_text(container.get("description"))
     generated_description = ""
     if summary.get("memberTitles"):
@@ -40825,13 +45145,34 @@ def refresh_container_metadata(
         "aggregate": summary,
         "videos": videos[:80],
     }
+    # The box-set's own poster/backdrop fetched from a source (e.g. MovieVault)
+    # always wins over artwork aggregated from member movies, but never over a
+    # cover the container already owns or that the user locked.
+    has_own_poster = bool(clean_text(metadata.get("poster_url"))) and not metadata.get("poster_from_members")
+    has_own_backdrop = bool(clean_text(metadata.get("backdrop_url"))) and not metadata.get("backdrop_from_members")
+    box_set_poster = clean_text(box_set_artwork.get("poster_url")) if box_set_artwork else ""
+    box_set_backdrop = clean_text(box_set_artwork.get("backdrop_url")) if box_set_artwork else ""
+    if box_set_poster and not metadata.get("poster_locked") and not has_own_poster:
+        metadata_updates["poster_url"] = box_set_poster
+        metadata_updates["poster_from_members"] = False
+        has_own_poster = True
+    if box_set_backdrop and not metadata.get("backdrop_locked") and not has_own_backdrop:
+        metadata_updates["backdrop_url"] = box_set_backdrop
+        metadata_updates["backdrop_from_members"] = False
+        has_own_backdrop = True
     if assets:
         primary_poster = next((asset for asset in assets if asset.get("kind") == "poster"), None)
         primary_backdrop = next((asset for asset in assets if asset.get("kind") == "backdrop"), None)
-        if primary_poster and not metadata.get("poster_locked"):
+        # Only derive artwork from member movies when the container has no cover of
+        # its own. A box-set keeps its own poster/backdrop (e.g. from MovieVault) in
+        # metadata; member artwork must never overwrite it. Artwork previously
+        # aggregated from members is tagged so it can keep tracking member changes.
+        if primary_poster and not metadata.get("poster_locked") and not has_own_poster:
             metadata_updates["poster_url"] = primary_poster.get("url")
-        if primary_backdrop and not metadata.get("backdrop_locked"):
+            metadata_updates["poster_from_members"] = True
+        if primary_backdrop and not metadata.get("backdrop_locked") and not has_own_backdrop:
             metadata_updates["backdrop_url"] = primary_backdrop.get("url")
+            metadata_updates["backdrop_from_members"] = True
 
     proposal = {
         "containerId": str(container_id),
@@ -40839,6 +45180,7 @@ def refresh_container_metadata(
         "movieCount": summary.get("movieCount", 0),
         "metadataUpdates": metadata_updates,
         "description": description or generated_description,
+        "boxSetArtwork": box_set_artwork or {},
     }
     if dry_run:
         return {"dryRun": True, "changed": False, "proposal": proposal, "summary": summary}
@@ -40856,6 +45198,35 @@ def refresh_container_metadata(
             """,
             (Jsonb(json_ready(next_metadata)), generated_description or None, container_id),
         )
+    if box_set_artwork:
+        provider_id = clean_text(box_set_artwork.get("provider_id")) or "box_set"
+        if box_set_poster:
+            link_container_media_option(
+                conn,
+                container_id=container_id,
+                kind="poster",
+                source_url=box_set_poster,
+                provider_id=provider_id,
+                sort_order=0,
+                primary=not metadata.get("poster_locked"),
+            )
+        backdrop_options = []
+        if box_set_backdrop:
+            backdrop_options.append(box_set_backdrop)
+        for url in box_set_artwork.get("backdrop_urls") or []:
+            url = clean_text(url)
+            if url and url not in backdrop_options:
+                backdrop_options.append(url)
+        for index, url in enumerate(backdrop_options):
+            link_container_media_option(
+                conn,
+                container_id=container_id,
+                kind="backdrop",
+                source_url=url,
+                provider_id=provider_id,
+                sort_order=index,
+                primary=(index == 0) and not metadata.get("backdrop_locked"),
+            )
     revision = 0
     if table_exists(conn, "sync_changes"):
         revision = next_revision(conn)
@@ -40874,6 +45245,155 @@ def refresh_container_metadata(
     return {"dryRun": False, "changed": True, "revision": revision, "applied": proposal, "summary": summary}
 
 
+def container_metadata_debug_entity(conn, container_id: UUID | str) -> dict[str, Any] | None:
+    """Build the metadata debug payload for a container/box-set.
+
+    Containers don't fetch metadata per source the way movies do; instead a
+    container refresh contributes the box-set to receiver plugins (e.g.
+    MovieVault) via asynchronous ``plugin.execute``/``receive_metadata`` jobs.
+    We reconstruct the "contributed metadata per plugin" view (with
+    accepted/rejected fields) from the latest completed receiver jobs for this
+    container, matched via the receiver payload's embedded ``containerId``.
+
+    The "loaded metadata per source" view is aggregated from the box-set's
+    member movies (each film's latest source-load), attributed per film, since
+    a container has no source fetch of its own.
+    """
+
+    name_map: dict[str, str] = {}
+    try:
+        for plugin in metadata_receiver_plugins(conn):
+            if isinstance(plugin, dict) and plugin.get("id"):
+                name_map[str(plugin["id"])] = str(plugin.get("name") or plugin["id"])
+    except Exception:  # pragma: no cover - plugin registry must never break debug
+        name_map = {}
+
+    rows: list[dict[str, Any]] = []
+    if table_exists(conn, "background_jobs"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    job_type,
+                    status,
+                    payload,
+                    result,
+                    error,
+                    created_at,
+                    finished_at
+                FROM background_jobs
+                WHERE job_type = %s
+                  AND payload->>'entrypoint' = 'receive_metadata'
+                  AND payload->'payload'->'metadata'->>'containerId' = %s
+                ORDER BY created_at DESC
+                LIMIT 40
+                """,
+                (PLUGIN_EXECUTION_JOB_TYPE, str(container_id)),
+            )
+            rows = cur.fetchall()
+
+    contributed: list[dict[str, Any]] = []
+    seen_plugins: set[str] = set()
+    fetched_at: Any = None
+    container_title: Any = None
+
+    for row in rows:
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+        receiver_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+        plugin_id = str(payload.get("pluginId") or "")
+        if not plugin_id or plugin_id in seen_plugins:
+            continue
+        seen_plugins.add(plugin_id)
+
+        if fetched_at is None:
+            created = row.get("created_at")
+            fetched_at = created.isoformat() if hasattr(created, "isoformat") else created
+        if container_title is None:
+            container_title = (receiver_payload.get("payload") or {}).get("title") if isinstance(receiver_payload.get("payload"), dict) else None
+
+        contribution_fields = receiver_payload.get("payload") if isinstance(receiver_payload.get("payload"), dict) else {}
+        payload_metadata = receiver_payload.get("metadata") if isinstance(receiver_payload.get("metadata"), dict) else {}
+        source_providers = payload_metadata.get("sourceProviders") if isinstance(payload_metadata.get("sourceProviders"), list) else []
+
+        result = row.get("result") if isinstance(row.get("result"), dict) else {}
+        execution = result.get("execution") if isinstance(result.get("execution"), dict) else {}
+        exec_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+
+        status = row.get("status")
+        accepted_fields = exec_result.get("acceptedFields") if isinstance(exec_result.get("acceptedFields"), list) else []
+        excluded_fields = [
+            {"field": item.get("field"), "reason": item.get("reason")}
+            for item in (exec_result.get("droppedFields") or [])
+            if isinstance(item, dict) and item.get("field")
+        ]
+
+        contributed.append(
+            {
+                "pluginId": plugin_id,
+                "name": name_map.get(plugin_id) or exec_result.get("provider") or plugin_id,
+                "status": execution.get("status") or status,
+                "state": execution.get("state") or status,
+                "resultStatus": exec_result.get("status") or (status if status in {"pending", "running", "failed"} else None),
+                "reason": exec_result.get("reason") or clean_text(row.get("error")) or None,
+                "provider": exec_result.get("provider"),
+                "error": execution.get("error") or clean_text(row.get("error")) or None,
+                "templateVersion": exec_result.get("templateVersion"),
+                "fields": sorted(str(key) for key in contribution_fields.keys()) if isinstance(contribution_fields, dict) else [],
+                "acceptedFields": [str(field) for field in accepted_fields],
+                "excludedFields": excluded_fields,
+                "sourceProviders": source_providers,
+            }
+        )
+
+    # "Loaded metadata per source" is aggregated from the box-set's member
+    # movies (a container doesn't fetch from sources itself). Each member's
+    # latest source-load is attributed to the film via sourceRef.
+    fetched: list[dict[str, Any]] = []
+    if table_exists(conn, "audit_events"):
+        try:
+            members = container_member_movie_entities(conn, container_id)
+        except Exception:  # pragma: no cover - membership lookup must never break debug
+            members = []
+        for member in members[:60]:
+            member_id = member.get("id")
+            if not member_id:
+                continue
+            member_event = movie_metadata_debug_latest_audit_event(conn, member_id, "metadata.refresh_fetched")
+            if not member_event:
+                continue
+            groups = metadata_debug_fetched_sources(member_event.get("metadata") or {})
+            if not groups:
+                continue
+            member_title = clean_text(member.get("title")) or str(member_id)
+            for group in groups:
+                base_ref = clean_text(group.get("sourceRef"))
+                group["sourceRef"] = f"{member_title} · {base_ref}" if base_ref else member_title
+                fetched.append(group)
+            if fetched_at is None:
+                created = member_event.get("createdAt")
+                fetched_at = created.isoformat() if hasattr(created, "isoformat") else created
+
+    if not contributed and not fetched:
+        return None
+
+    missing_report = movie_metadata_missing_contribution_report(
+        movie_id=container_id,
+        title=container_title,
+        fetched=fetched,
+        contributed=contributed,
+        generated_at=fetched_at,
+        entity_kind="container",
+    )
+
+    return {
+        "fetchedAt": fetched_at,
+        "fetched": fetched,
+        "contributed": contributed,
+        "missingContributionReport": missing_report,
+    }
+
+
 def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     container = container_entity(conn, container_id)
     if not container:
@@ -40881,6 +45401,11 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
     aggregate_movies = container_aggregate_movie_entities(conn, container_id, actor=actor)
     aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
     aggregate_videos = container_aggregate_video_entities(aggregate_movies)
+    metadata_debug = None
+    try:
+        metadata_debug = container_metadata_debug_entity(conn, container_id)
+    except Exception:  # pragma: no cover - debug info must never break detail load
+        metadata_debug = None
     return {
         "container": container,
         "identifiers": container_identifier_entities(conn, container_id),
@@ -40891,6 +45416,7 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
         "aggregateMediaAssets": aggregate_assets,
         "aggregateVideos": aggregate_videos,
         "aggregateSummary": container_aggregate_summary(aggregate_movies, aggregate_assets, aggregate_videos),
+        "metadataDebug": metadata_debug,
     }
 
 
@@ -41164,6 +45690,7 @@ def apply_movie_upsert(
                 title,
                 sort_title,
                 original_title,
+                release_title,
                 year,
                 release_date,
                 format,
@@ -41184,7 +45711,7 @@ def apply_movie_upsert(
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -41192,6 +45719,7 @@ def apply_movie_upsert(
                 title=COALESCE(EXCLUDED.title, movies.title),
                 sort_title=COALESCE(EXCLUDED.sort_title, movies.sort_title),
                 original_title=COALESCE(EXCLUDED.original_title, movies.original_title),
+                release_title=COALESCE(EXCLUDED.release_title, movies.release_title),
                 year=COALESCE(EXCLUDED.year, movies.year),
                 release_date=COALESCE(EXCLUDED.release_date, movies.release_date),
                 format=COALESCE(EXCLUDED.format, movies.format),
@@ -41216,6 +45744,7 @@ def apply_movie_upsert(
                 title,
                 fields["sort_title"],
                 fields["original_title"],
+                fields["release_title"],
                 fields["year"],
                 fields["release_date"],
                 fields["format"],
@@ -41318,6 +45847,281 @@ def apply_movie_delete(
     }
 
 
+def resolve_sync_entity_id(
+    conn,
+    *,
+    client_id: str,
+    entity_type: str,
+    raw_value: Any,
+) -> UUID | None:
+    """Resolve a mutation reference to a server UUID.
+
+    Accepts either a real UUID or a client-supplied temporary id that an
+    earlier queued mutation mapped to a server entity (offline create → link).
+    """
+    entity_uuid = parse_uuid(raw_value, "entityId") if raw_value else None
+    if entity_uuid:
+        return entity_uuid
+    candidate = str(raw_value or "").strip() or None
+    if not candidate:
+        return None
+    return client_entity_mapping(
+        conn,
+        client_id=client_id,
+        entity_type=entity_type,
+        client_entity_id=candidate,
+    )
+
+
+def apply_container_upsert(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("Container upsert payload must be an object", 400)
+    if not table_exists(conn, "containers"):
+        raise NextApiError("Container table is not available", 503)
+
+    client_entity_id = str(mutation.get("clientEntityId") or "").strip() or None
+    entity_id = parse_uuid(mutation.get("entityId"), "entityId")
+    entity_id = entity_id or client_entity_mapping(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        client_entity_id=client_entity_id,
+    )
+    entity_id = entity_id or uuid.uuid4()
+    existing = container_entity(conn, entity_id)
+
+    if "containerType" in payload or "container_type" in payload:
+        container_type = normalize_container_type(payload.get("containerType", payload.get("container_type")))
+    elif existing:
+        container_type = existing.get("container_type")
+    else:
+        container_type = normalize_container_type(None)
+
+    fields = container_payload(payload, existing=existing)
+    public_id = clean_text(payload.get("publicId") or payload.get("public_id"))
+    public_id = public_id or (existing or {}).get("public_id") or f"next-container-{entity_id.hex[:12]}"
+    if len(public_id) > 160:
+        raise NextApiError("publicId must be 160 characters or fewer", 400)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO containers (
+                id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            ON CONFLICT (id) DO UPDATE SET
+                title=COALESCE(EXCLUDED.title, containers.title),
+                barcode=EXCLUDED.barcode,
+                badge_label=EXCLUDED.badge_label,
+                year=EXCLUDED.year,
+                description=EXCLUDED.description,
+                metadata=containers.metadata || EXCLUDED.metadata,
+                updated_at=now()
+            """,
+            (
+                entity_id,
+                public_id,
+                container_type,
+                fields["title"],
+                fields["barcode"],
+                fields["badge_label"],
+                fields["year"],
+                fields["description"],
+                Jsonb(json_ready(fields["metadata"])),
+            ),
+        )
+
+    store_client_entity_mapping(
+        conn,
+        client_id=client_id,
+        client_entity_id=client_entity_id,
+        entity_type="container",
+        entity_id=entity_id,
+        idem_key=idem_key,
+    )
+    entity = single_container_sync_entity(conn, entity_id) or {}
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="container",
+        entity_id=str(entity_id),
+        operation="upsert",
+        payload={
+            "id": str(entity_id),
+            "entity": entity,
+            "clientId": client_id,
+            "clientEntityId": client_entity_id,
+            "clientMutationId": mutation["clientMutationId"],
+        },
+    )
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "container",
+        "operation": "upsert",
+        "entityId": entity_id,
+        "clientEntityId": client_entity_id,
+        "revision": revision,
+        "entity": entity,
+    }
+
+
+def apply_container_delete(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    if not table_exists(conn, "containers"):
+        raise NextApiError("Container table is not available", 503)
+    client_entity_id = str(mutation.get("clientEntityId") or "").strip() or None
+    entity_id = parse_uuid(mutation.get("entityId"), "entityId")
+    entity_id = entity_id or client_entity_mapping(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        client_entity_id=client_entity_id,
+    )
+    if not entity_id:
+        raise NextApiError("Container delete requires entityId or mapped clientEntityId", 400)
+    delete_container_records(conn, entity_id, delete_members=False)
+    revision = emit_container_change(conn, entity_id, operation="delete")
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "container",
+        "operation": "delete",
+        "entityId": entity_id,
+        "clientEntityId": client_entity_id,
+        "revision": revision,
+    }
+
+
+def apply_container_movie_upsert(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("containerMovie upsert payload must be an object", 400)
+    if not table_exists(conn, "container_movies"):
+        raise NextApiError("Container movie links are not available yet", 503)
+
+    container_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        raw_value=payload.get("containerId") or payload.get("container_id"),
+    )
+    movie_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="movie",
+        raw_value=payload.get("movieId") or payload.get("movie_id"),
+    )
+    if not container_id or not movie_id:
+        raise NextApiError("containerMovie upsert requires containerId and movieId", 400)
+    if not container_entity(conn, container_id):
+        raise NextApiError("Container not found", 404)
+    if not movie_entity(conn, movie_id):
+        raise NextApiError("Movie not found", 404)
+
+    sort_order_raw = payload.get("sortOrder", payload.get("sort_order"))
+    with conn.cursor() as cur:
+        if sort_order_raw is None:
+            cur.execute(
+                "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM container_movies WHERE container_id=%s",
+                (container_id,),
+            )
+            sort_order = int(cur.fetchone()["max_sort"]) + 1
+        else:
+            try:
+                sort_order = int(sort_order_raw)
+            except (TypeError, ValueError):
+                raise NextApiError("sortOrder must be an integer", 400)
+        cur.execute(
+            """
+            INSERT INTO container_movies (container_id, movie_id, sort_order, created_at)
+            VALUES (%s, %s, %s, now())
+            ON CONFLICT (container_id, movie_id) DO UPDATE SET sort_order=EXCLUDED.sort_order
+            """,
+            (container_id, movie_id, sort_order),
+        )
+        cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_id,))
+    revision = emit_container_membership_change(conn, container_id)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "containerMovie",
+        "operation": "upsert",
+        "entityId": container_id,
+        "movieId": movie_id,
+        "sortOrder": sort_order,
+        "revision": revision,
+    }
+
+
+def apply_container_movie_delete(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("containerMovie delete payload must be an object", 400)
+    if not table_exists(conn, "container_movies"):
+        raise NextApiError("Container movie links are not available yet", 503)
+
+    container_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        raw_value=payload.get("containerId") or payload.get("container_id"),
+    )
+    movie_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="movie",
+        raw_value=payload.get("movieId") or payload.get("movie_id"),
+    )
+    if not container_id or not movie_id:
+        raise NextApiError("containerMovie delete requires containerId and movieId", 400)
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM container_movies WHERE container_id=%s AND movie_id=%s",
+            (container_id, movie_id),
+        )
+        changed = cur.rowcount
+        if changed:
+            cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_id,))
+    revision = emit_container_membership_change(conn, container_id) if changed else current_revision(conn)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "containerMovie",
+        "operation": "delete",
+        "entityId": container_id,
+        "movieId": movie_id,
+        "changed": int(changed or 0),
+        "revision": revision,
+    }
+
+
 def apply_sync_mutation(conn, *, client_id: str, mutation: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(mutation, dict):
         raise NextApiError("Each mutation must be an object", 400)
@@ -41337,6 +46141,14 @@ def apply_sync_mutation(conn, *, client_id: str, mutation: dict[str, Any]) -> di
         result = apply_movie_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "movie" and operation == "delete":
         result = apply_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "container" and operation == "upsert":
+        result = apply_container_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "container" and operation == "delete":
+        result = apply_container_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "containerMovie" and operation == "upsert":
+        result = apply_container_movie_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "containerMovie" and operation == "delete":
+        result = apply_container_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
     else:
         raise NextApiError(f"Unsupported mutation: {entity_type}.{operation}", 400)
 
@@ -42586,6 +47398,69 @@ user_notification_rows = _next_notifications.user_notification_rows
 create_user_notification = _next_notifications.create_user_notification
 register_next_notifications_routes = _next_notifications.register_next_notifications_routes
 
+METADATA_PLUGINS_UNCONFIGURED_KIND = "metadata_plugins_unconfigured"
+
+
+def notify_unconfigured_metadata_plugins(conn, actor):
+    """After a metadata refresh, surface a notification listing metadata/
+    integration plugins (TMDb, Blu-ray.com, Plex, Jellyfin, Trakt) that are
+    still disabled or not configured (e.g. right after a version install).
+
+    The stored title/body are an English fallback used for push delivery; the
+    notification screen renders a localized version from the payload. Must be
+    called inside an open transaction. Never raises - a failure here must not
+    break the refresh flow.
+    """
+    try:
+        user_id = actor.get("id") if isinstance(actor, dict) else None
+        if not user_id or not table_exists(conn, "user_notifications"):
+            return None
+        plugins = unconfigured_integration_plugins(conn, table_exists, Jsonb)
+        if not plugins:
+            return None
+        names = [plugin["name"] for plugin in plugins]
+        payload = {
+            "kind": METADATA_PLUGINS_UNCONFIGURED_KIND,
+            "plugins": names,
+            "pluginIds": [plugin["id"] for plugin in plugins],
+            "url": "/notifications",
+            "prefKey": "metadata_jobs",
+        }
+        title = "Plugins need configuration"
+        body = "These plugins are still disabled or not configured: " + ", ".join(names)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id FROM user_notifications
+                WHERE user_id=%s AND read_at IS NULL AND payload->>'kind'=%s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (user_id, METADATA_PLUGINS_UNCONFIGURED_KIND),
+            )
+            existing = cur.fetchone()
+            if existing:
+                cur.execute(
+                    """
+                    UPDATE user_notifications
+                    SET title=%s, body=%s, payload=%s, created_at=now()
+                    WHERE id=%s
+                    """,
+                    (title, body, Jsonb(json_ready(payload)), existing["id"]),
+                )
+                return None
+        return create_user_notification(
+            conn,
+            user_id,
+            title=title,
+            body=body,
+            url="/notifications",
+            pref_key="metadata_jobs",
+            payload=payload,
+        )
+    except Exception:
+        return None
+
 PWA_ICON_ASSETS = _next_push.PWA_ICON_ASSETS
 pwa_manifest_payload = _next_push.pwa_manifest_payload
 pwa_head_tags = _next_push.pwa_head_tags
@@ -42752,6 +47627,38 @@ def register_routes(flask_app: Flask) -> None:
             },
             200 if is_ready else 503,
         )
+
+    @flask_app.get("/api/next/app/update-check")
+    def app_update_check():
+        requested = request.args.get("channel")
+        with connect() as conn:
+            require_next_admin_user(conn)
+            result = perform_update_check(conn, requested)
+        return response(result)
+
+    @flask_app.post("/api/next/app/update-channel")
+    def app_update_channel():
+        body = request.get_json(silent=True) or {}
+        channel = normalize_update_channel(body.get("channel"))
+        with connect() as conn:
+            actor = require_next_admin_user(conn)
+            with conn.transaction():
+                set_app_setting_value(
+                    conn,
+                    UPDATE_CHANNEL_SETTING_KEY,
+                    channel,
+                    actor_id=actor.get("id"),
+                )
+        return response({"status": "ok", "channel": channel})
+
+    @flask_app.get("/api/next/app/update-channel")
+    def app_update_channel_get():
+        with connect() as conn:
+            require_next_admin_user(conn)
+            channel = normalize_update_channel(
+                app_setting_value(conn, UPDATE_CHANNEL_SETTING_KEY, "auto")
+            )
+        return response({"status": "ok", "channel": channel})
 
     @flask_app.get("/api/next/flags/<path:flag_name>")
     def next_frontend_flag(flag_name: str):
@@ -43438,6 +48345,8 @@ def register_routes(flask_app: Flask) -> None:
                     summary="Added movie to container",
                     metadata={"movieId": str(movie_uuid), "containerType": container_type, "changed": changed},
                 )
+                if changed:
+                    emit_container_membership_change(conn, container_uuid)
             return response(
                 {
                     "status": "ok",
@@ -43483,6 +48392,8 @@ def register_routes(flask_app: Flask) -> None:
                     summary="Removed movie from container",
                     metadata={"movieId": str(movie_uuid), "containerType": container_type, "changed": changed},
                 )
+                if changed:
+                    emit_container_membership_change(conn, container_uuid)
             return response(
                 {
                     "status": "ok",
@@ -43750,6 +48661,7 @@ def register_routes(flask_app: Flask) -> None:
                         "badgeLabel": payload["badge_label"],
                     },
                 )
+                emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail}, 201)
 
@@ -43833,6 +48745,7 @@ def register_routes(flask_app: Flask) -> None:
                             "receiverSummary": receiver_summary,
                         },
                     )
+                emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
@@ -43861,6 +48774,7 @@ def register_routes(flask_app: Flask) -> None:
                         "deleted": deleted,
                     },
                 )
+                emit_container_change(conn, container_uuid, operation="delete")
         return response(
             {
                 "status": "ok",
@@ -43925,6 +48839,8 @@ def register_routes(flask_app: Flask) -> None:
                             )
                             changed += cur.rowcount
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+                if changed:
+                    emit_container_membership_change(conn, container_uuid)
         return response(
             {
                 "status": "ok",
@@ -44149,6 +49065,8 @@ def register_routes(flask_app: Flask) -> None:
                     )
                     changed = cur.rowcount
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+                if changed:
+                    emit_container_membership_change(conn, container_uuid)
             detail = container_detail_entity(conn, container_uuid)
         if not detail:
             raise NextApiError("Container not found", 404)
@@ -44197,6 +49115,7 @@ def register_routes(flask_app: Flask) -> None:
                             (index, container_uuid, movie_uuid),
                         )
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
+                emit_container_membership_change(conn, container_uuid)
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail})
 
@@ -44435,6 +49354,7 @@ def register_routes(flask_app: Flask) -> None:
                             title,
                             sort_title,
                             original_title,
+                            release_title,
                             year,
                             barcode,
                             release_date,
@@ -44450,7 +49370,7 @@ def register_routes(flask_app: Flask) -> None:
                             created_at,
                             updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             movie_id,
@@ -44458,6 +49378,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["title"],
                             payload["sort_title"],
                             payload["original_title"],
+                            payload["release_title"],
                             payload["year"],
                             payload["barcode"],
                             payload["release_date"],
@@ -44522,46 +49443,23 @@ def register_routes(flask_app: Flask) -> None:
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
             payload = movie_update_payload(body, existing=existing)
-            receiver_proposal = movie_edit_receiver_proposal(existing, payload)
+            effective_locks = (
+                set(payload["field_locks"])
+                if payload.get("field_locks") is not None
+                else movie_locked_fields(existing.get("metadata"))
+            )
+            receiver_proposal = movie_edit_receiver_proposal(
+                existing,
+                payload,
+                locked_fields=effective_locks,
+                existing_technical=movie_technical_spec_entity(conn, movie_uuid),
+            )
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
+            entity = existing
             with conn.transaction():
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE movies
-                        SET title=%s,
-                            sort_title=%s,
-                            original_title=%s,
-                            year=%s,
-                            barcode=%s,
-                            release_date=%s,
-                            format=%s,
-                            edition=%s,
-                            country=%s,
-                            language=%s,
-                            overview=%s,
-                            notes=%s,
-                            location=%s,
-                            updated_at=now()
-                        WHERE id=%s
-                        """,
-                        (
-                            payload["title"],
-                            payload["sort_title"],
-                            payload["original_title"],
-                            payload["year"],
-                            payload["barcode"],
-                            payload["release_date"],
-                            payload["format"],
-                            payload["edition"],
-                            payload["country"],
-                            payload["language"],
-                            payload["overview"],
-                            payload["notes"],
-                            payload["location"],
-                            movie_uuid,
-                        ),
-                    )
+                    write_movie_edit_record(cur, movie_uuid, payload)
+                    entity = movie_entity(conn, movie_uuid) or {}
                 audit_api_interaction(
                     conn,
                     actor,
@@ -44573,8 +49471,64 @@ def register_routes(flask_app: Flask) -> None:
                     request_payload={"title": payload["title"], "barcode": payload["barcode"], "format": payload["format"]},
                     metadata={"barcode": payload["barcode"]},
                 )
+            if receiver_proposal:
+                try:
+                    receiver_summary = push_metadata_to_receivers(
+                        conn,
+                        movie_id=movie_uuid,
+                        movie=entity or movie_entity(conn, movie_uuid) or {},
+                        preview={
+                            "movie": entity or {},
+                            "proposal": receiver_proposal,
+                            "results": [],
+                        },
+                        applied={
+                            "changed": True,
+                            "revision": 0,
+                            "applied": {
+                                "movieUpdates": receiver_proposal.get("movieUpdates") or {},
+                                "metadataUpdates": receiver_proposal.get("metadataUpdates") or {},
+                                "technicalUpdates": receiver_proposal.get("technicalUpdates") or {},
+                                "mediaUpdates": {},
+                                "identifiers": {},
+                                "provenance": len(receiver_proposal.get("provenance") or []),
+                            },
+                        },
+                        actor=actor,
+                    )
+                except Exception as exc:
+                    receiver_summary = {"status": "error", "error": str(exc)}
             detail = movie_detail_entity(conn, movie_uuid)
-        return response({"status": "ok", "detail": detail})
+        return response({"status": "ok", "detail": detail, "receivers": receiver_summary})
+
+    @flask_app.get("/api/next/api/v1/movies/<movie_id>/field-locks")
+    def public_api_movie_field_locks(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_movie_details"))
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            locks = sorted(movie_locked_fields(existing.get("metadata")))
+        return response(
+            {
+                "status": "ok",
+                "movieId": str(movie_uuid),
+                "fieldLocks": locks,
+                "lockableFields": sorted(MOVIE_LOCKABLE_FIELDS),
+            }
+        )
+
+    @flask_app.put("/api/next/api/v1/movies/<movie_id>/field-locks")
+    def public_api_set_movie_field_locks(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Field-lock request body must be an object", 400)
+        locks = set_movie_field_locks(movie_uuid, body, permission="api.write")
+        return response({"status": "ok", "movieId": str(movie_uuid), "fieldLocks": locks})
 
     @flask_app.delete("/api/next/api/v1/movies/<movie_id>")
     def public_api_delete_movie(movie_id: str):
@@ -44679,6 +49633,7 @@ def register_routes(flask_app: Flask) -> None:
                         "badgeLabel": payload["badge_label"],
                     },
                 )
+                emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail}, 201)
 
@@ -44785,6 +49740,7 @@ def register_routes(flask_app: Flask) -> None:
                             "receiverSummary": receiver_summary,
                         },
                     )
+                emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid, actor=actor)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
@@ -44813,6 +49769,7 @@ def register_routes(flask_app: Flask) -> None:
                         "deleted": deleted,
                     },
                 )
+                emit_container_change(conn, container_uuid, operation="delete")
         return response({"status": "ok", "containerId": str(container_uuid), "deleteMembers": delete_members, "deleted": deleted})
 
     @flask_app.get("/api/next/api/v1/stats")
@@ -44971,7 +49928,118 @@ def register_routes(flask_app: Flask) -> None:
             if table_exists(conn, "metadata_plugins"):
                 sync_metadata_plugin_registry(conn)
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            registry["autoUpdate"] = plugin_auto_update_setting(conn)
         return response(registry)
+
+    @flask_app.put("/api/next/plugins/auto-update")
+    def set_plugins_auto_update():
+        body = request.get_json(silent=True) or {}
+        if "enabled" not in body:
+            raise NextApiError("'enabled' is required", 400)
+        enabled = parse_bool_value(body.get("enabled"), default=True)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            with conn.transaction():
+                set_app_setting_value(
+                    conn,
+                    PLUGIN_AUTO_UPDATE_SETTING_KEY,
+                    enabled,
+                    actor_id=(actor or {}).get("id"),
+                )
+                apply_plugin_auto_update_setting(conn)
+                audit_event(
+                    conn,
+                    event_type="plugin.auto_update_changed",
+                    category="plugins",
+                    actor=actor,
+                    target_type="setting",
+                    target_id=PLUGIN_AUTO_UPDATE_SETTING_KEY,
+                    summary=f"Plugin auto-update {'enabled' if enabled else 'disabled'}",
+                    metadata={"enabled": enabled},
+                )
+                # Applying pending updates immediately when re-enabling keeps the
+                # running plugins in sync with what the UI now promises.
+                if enabled:
+                    upgrade_seeded_default_plugins()
+                if table_exists(conn, "metadata_plugins"):
+                    sync_metadata_plugin_registry(conn)
+                else:
+                    sync_plugin_registry(conn, table_exists, Jsonb)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            registry["autoUpdate"] = plugin_auto_update_setting(conn)
+        return response({"status": "ok", "autoUpdate": enabled, "registry": registry})
+
+    @flask_app.post("/api/next/plugins/<plugin_id>/update")
+    def update_plugin_to_bundled(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            try:
+                outcome = install_bundled_plugin_update(plugin_id)
+            except ValueError as exc:
+                raise NextApiError(str(exc), 400) from exc
+            with conn.transaction():
+                if table_exists(conn, "metadata_plugins"):
+                    sync_metadata_plugin_registry(conn)
+                else:
+                    sync_plugin_registry(conn, table_exists, Jsonb)
+                audit_event(
+                    conn,
+                    event_type="plugin.updated",
+                    category="plugins",
+                    actor=actor,
+                    target_type="plugin",
+                    target_id=plugin_id,
+                    summary=(
+                        f"Updated plugin {plugin_id} "
+                        f"{outcome.get('from') or '?'} -> {outcome.get('to') or '?'}"
+                    ),
+                    metadata=outcome,
+                )
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            registry["autoUpdate"] = plugin_auto_update_setting(conn)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+        return response({"status": "ok", "update": outcome, "plugin": plugin, "registry": registry})
+
+    @flask_app.post("/api/next/plugins/<plugin_id>/rollback")
+    def rollback_plugin_to_backup(plugin_id: str):
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id:
+            raise NextApiError("Plugin id is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            try:
+                outcome = rollback_plugin_update(plugin_id)
+            except ValueError as exc:
+                raise NextApiError(str(exc), 400) from exc
+            with conn.transaction():
+                if table_exists(conn, "metadata_plugins"):
+                    sync_metadata_plugin_registry(conn)
+                else:
+                    sync_plugin_registry(conn, table_exists, Jsonb)
+                audit_event(
+                    conn,
+                    event_type="plugin.rolled_back",
+                    category="plugins",
+                    actor=actor,
+                    target_type="plugin",
+                    target_id=plugin_id,
+                    summary=(
+                        f"Rolled back plugin {plugin_id} "
+                        f"{outcome.get('from') or '?'} -> {outcome.get('to') or '?'}"
+                    ),
+                    metadata=outcome,
+                )
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            registry["autoUpdate"] = plugin_auto_update_setting(conn)
+            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+        return response({"status": "ok", "rollback": outcome, "plugin": plugin, "registry": registry})
 
     @flask_app.get("/api/next/plugins/<plugin_id>/export")
     def export_plugin(plugin_id: str):
@@ -45036,6 +50104,32 @@ def register_routes(flask_app: Flask) -> None:
                     sync_metadata_plugin_registry(conn)
                 else:
                     sync_plugin_registry(conn, table_exists, Jsonb)
+
+                imported_plugin_id = str(manifest["id"])
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT categories FROM plugins WHERE id=%s",
+                        (imported_plugin_id,),
+                    )
+                    imported_row = cur.fetchone()
+                imported_categories = (
+                    (imported_row.get("categories") if imported_row else None) or []
+                )
+                imported_is_metadata_plugin = bool(
+                    {"metadata_source", "metadata_receiver"}.intersection(
+                        set(imported_categories)
+                    )
+                )
+                with conn.cursor() as cur:
+                    if imported_is_metadata_plugin and table_exists(conn, "metadata_plugins"):
+                        cur.execute(
+                            "UPDATE metadata_plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                            (imported_plugin_id,),
+                        )
+                    cur.execute(
+                        "UPDATE plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                        (imported_plugin_id,),
+                    )
                 audit_event(
                     conn,
                     event_type="plugin.imported",
@@ -45050,6 +50144,7 @@ def register_routes(flask_app: Flask) -> None:
                         "version": manifest.get("version"),
                         "categories": manifest.get("categories"),
                         "installedPath": str(installed_path),
+                        "enabled": True,
                     },
                 )
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
@@ -45747,48 +50842,23 @@ def register_routes(flask_app: Flask) -> None:
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
             payload = movie_update_payload(body, existing=existing)
-            receiver_proposal = movie_edit_receiver_proposal(existing, payload)
+            effective_locks = (
+                set(payload["field_locks"])
+                if payload.get("field_locks") is not None
+                else movie_locked_fields(existing.get("metadata"))
+            )
+            receiver_proposal = movie_edit_receiver_proposal(
+                existing,
+                payload,
+                locked_fields=effective_locks,
+                existing_technical=movie_technical_spec_entity(conn, movie_uuid),
+            )
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_public_receiver_fields_changed"}
             revision = 0
             entity = existing
             with conn.transaction():
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE movies
-                        SET title=%s,
-                            sort_title=%s,
-                            original_title=%s,
-                            year=%s,
-                            barcode=%s,
-                            release_date=%s,
-                            format=%s,
-                            edition=%s,
-                            country=%s,
-                            language=%s,
-                            overview=%s,
-                            notes=%s,
-                            location=%s,
-                            updated_at=now()
-                        WHERE id=%s
-                        """,
-                        (
-                            payload["title"],
-                            payload["sort_title"],
-                            payload["original_title"],
-                            payload["year"],
-                            payload["barcode"],
-                            payload["release_date"],
-                            payload["format"],
-                            payload["edition"],
-                            payload["country"],
-                            payload["language"],
-                            payload["overview"],
-                            payload["notes"],
-                            payload["location"],
-                            movie_uuid,
-                        ),
-                    )
+                    write_movie_edit_record(cur, movie_uuid, payload)
                     revision = next_revision(conn) if table_exists(conn, "sync_state") else 0
                     entity = movie_entity(conn, movie_uuid) or {}
                     if revision and table_exists(conn, "sync_changes"):
@@ -45823,7 +50893,7 @@ def register_routes(flask_app: Flask) -> None:
                             "applied": {
                                 "movieUpdates": receiver_proposal.get("movieUpdates") or {},
                                 "metadataUpdates": receiver_proposal.get("metadataUpdates") or {},
-                                "technicalUpdates": {},
+                                "technicalUpdates": receiver_proposal.get("technicalUpdates") or {},
                                 "mediaUpdates": {},
                                 "identifiers": {},
                                 "provenance": len(receiver_proposal.get("provenance") or []),
@@ -45861,6 +50931,42 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 )
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
+
+    @flask_app.get("/api/next/movies/<movie_id>/field-locks")
+    def movie_field_locks(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            locks = sorted(movie_locked_fields(existing.get("metadata")))
+        return response(
+            {
+                "status": "ok",
+                "movieId": str(movie_uuid),
+                "fieldLocks": locks,
+                "lockableFields": sorted(MOVIE_LOCKABLE_FIELDS),
+            }
+        )
+
+    @flask_app.put("/api/next/movies/<movie_id>/field-locks")
+    def set_movie_field_locks_route(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Field-lock request body must be an object", 400)
+        locks = set_movie_field_locks(movie_uuid, body, permission="collection.edit_all")
+        return response({"status": "ok", "movieId": str(movie_uuid), "fieldLocks": locks})
 
     @flask_app.delete("/api/next/movies/<movie_id>")
     def delete_movie(movie_id: str):
@@ -45986,6 +51092,7 @@ def register_routes(flask_app: Flask) -> None:
                             """,
                             (actor.get("id"), movie_uuid, Jsonb(snapshot)),
                         )
+                emit_watchlist_change(conn, actor.get("id"), movie_uuid, operation="upsert")
                 audit_event(
                     conn,
                     event_type="watchlist.added",
@@ -46011,6 +51118,7 @@ def register_routes(flask_app: Flask) -> None:
                         "DELETE FROM watchlist_items WHERE user_id=%s AND movie_id=%s",
                         (actor.get("id"), movie_uuid),
                     )
+                emit_watchlist_change(conn, actor.get("id"), movie_uuid, operation="delete")
                 audit_event(
                     conn,
                     event_type="watchlist.removed",
@@ -46053,8 +51161,19 @@ def register_routes(flask_app: Flask) -> None:
                         """
                         INSERT INTO watch_history (user_id, movie_id, watched_at, snapshot)
                         VALUES (%s, %s, %s, %s)
+                        RETURNING id
                         """,
                         (actor.get("id"), movie_uuid, watched_at, Jsonb(snapshot)),
+                    )
+                    watch_entry = cur.fetchone()
+                watch_entry_id = watch_entry.get("id") if watch_entry else None
+                if watch_entry_id is not None:
+                    emit_watch_history_change(
+                        conn,
+                        actor.get("id"),
+                        watch_entry_id,
+                        operation="upsert",
+                        movie_id=movie_uuid,
                     )
                 audit_event(
                     conn,
@@ -46086,6 +51205,14 @@ def register_routes(flask_app: Flask) -> None:
                         (entry_uuid, movie_uuid, actor.get("id")),
                     )
                     deleted = int(cur.rowcount or 0)
+                if deleted:
+                    emit_watch_history_change(
+                        conn,
+                        actor.get("id"),
+                        entry_uuid,
+                        operation="delete",
+                        movie_id=movie_uuid,
+                    )
                 audit_event(
                     conn,
                     event_type="watch_history.removed",
@@ -46151,6 +51278,40 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={"dryRun": dry_run, "result": result},
                 )
         return response({"status": "ok", "filmography": result})
+
+    @flask_app.post("/api/next/people/<person_id>/media/primary")
+    def person_media_primary(person_id: str):
+        person_uuid = parse_uuid(person_id, "personId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media selection body must be an object", 400)
+        media_uuid = parse_uuid(body.get("mediaId") or body.get("media_id") or body.get("mediaAssetId"), "mediaId")
+        if not media_uuid:
+            raise NextApiError("mediaId is required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "people"):
+                raise NextApiError("People table is not available", 503)
+            if not actor_can_view_person(conn, actor, person_uuid):
+                raise NextApiError("Person not found", 404)
+            with conn.transaction():
+                result = set_primary_person_media_asset(
+                    conn,
+                    person_id=person_uuid,
+                    media_id=media_uuid,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="person.media_primary_changed",
+                    category="admin",
+                    actor=actor,
+                    target_type="person",
+                    target_id=person_uuid,
+                    summary="Changed primary person profile image",
+                    metadata={"mediaId": str(media_uuid), "result": result},
+                )
+        return response({"status": "ok", **result})
 
     @flask_app.post("/api/next/movies/<movie_id>/media/primary")
     def movie_media_primary(movie_id: str):
@@ -47263,6 +52424,8 @@ def register_routes(flask_app: Flask) -> None:
                 "queuedMetadataRefreshJobs": [str(job.get("id")) for job in queued_jobs],
             },
         )
+        emit_container_change(conn, container_uuid, operation="upsert")
+        emit_container_membership_change(conn, container_uuid)
         return {
             "container": container_detail_entity(conn, container_uuid),
             "movies": imported_movies,
@@ -47473,6 +52636,7 @@ def register_routes(flask_app: Flask) -> None:
         elif wants_movie_import:
             provided_box_set_body = None
         has_provided_box_set = isinstance(provided_box_set_body, dict)
+        explicit_box_set_import = import_mode in {"box-set", "boxset"} or selected_candidate_is_box_set
         if not wants_movie_import and not wants_box_set_import:
             wants_box_set_import = has_provided_box_set or bool(body.get("detectBoxSets") or body.get("detect_box_sets"))
 
@@ -47567,7 +52731,11 @@ def register_routes(flask_app: Flask) -> None:
                 if wants_box_set_import and not box_set_proposal:
                     box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
                 if wants_box_set_import and not box_set_proposal:
-                    raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                    if explicit_box_set_import:
+                        raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                    # Box-set import was only inferred (e.g. a collection was detected while
+                    # adding a single film); fall back to importing the movie instead of failing.
+                    wants_box_set_import = False
                 if wants_box_set_import and box_set_proposal:
                     body_members = normalized_box_set_members_from_body(body)
                     explicit_review_payload = has_provided_box_set or bool(body_members) or bool(selected_box_set_key)
@@ -48073,6 +53241,8 @@ def register_routes(flask_app: Flask) -> None:
                         "jobIds": [str(job.get("id")) for job in jobs],
                     },
                 )
+                if not dry_run:
+                    notify_unconfigured_metadata_plugins(conn, actor)
         return response({"status": "ok", "dryRun": dry_run, "refreshPeople": refresh_people, "personRefreshScope": person_refresh_scope, "queued": len(jobs), "jobs": jobs}, 201)
 
     @flask_app.post("/api/next/movies/<movie_id>/metadata/preview")
@@ -48121,6 +53291,8 @@ def register_routes(flask_app: Flask) -> None:
                     summary="Refreshed movie metadata" if not dry_run else "Previewed movie metadata refresh",
                     metadata={"dryRun": dry_run, "result": result},
                 )
+                if not dry_run:
+                    notify_unconfigured_metadata_plugins(conn, actor)
         return response({"status": "ok", "metadata": result})
 
     @flask_app.get("/api/next/movies/<movie_id>/metadata/jobs")
@@ -48947,6 +54119,13 @@ def register_routes(flask_app: Flask) -> None:
             request.args.get("includePersonalLists", request.args.get("include_personal_lists")),
             default=False,
         )
+        scopes_raw = request.args.get("scopes")
+        scopes = None
+        if scopes_raw:
+            requested = [part.strip() for part in scopes_raw.split(",") if part.strip()]
+            if requested:
+                scopes = normalize_backup_scopes(requested)
+                include_personal_lists = "personal_lists" in scopes
         scope_label = "with-personal-lists" if include_personal_lists else "movies-groups"
         file_name = f"discvault-next-{scope_label}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.zip"
         output_path = backup_dir / file_name
@@ -48956,6 +54135,7 @@ def register_routes(flask_app: Flask) -> None:
                 conn,
                 output_path,
                 data_dir=data_dir,
+                scopes=scopes,
                 include_personal_lists=include_personal_lists,
                 generator={
                     "service": "DiscVault Next",
@@ -48981,6 +54161,7 @@ def register_routes(flask_app: Flask) -> None:
                     "fileName": file_name,
                     "sha256": summary.get("sha256"),
                     "scope": "functional_collection",
+                    "scopes": summary.get("manifest", {}).get("scopes"),
                     "includePersonalLists": include_personal_lists,
                 },
             )
@@ -48994,6 +54175,98 @@ def register_routes(flask_app: Flask) -> None:
         result.headers["X-DiscVault-Backup-Sha256"] = summary["sha256"]
         result.headers["X-DiscVault-Backup-Scope"] = "functional_collection"
         return result
+
+    @flask_app.post("/api/next/backup/create")
+    def backup_create():
+        body = request.get_json(silent=True) if request.is_json else None
+        if not isinstance(body, dict):
+            body = {}
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+
+        def _read_param(name: str):
+            if name in body:
+                return body.get(name)
+            return request.form.get(name, request.args.get(name))
+
+        include_personal_lists = parse_bool_value(
+            _read_param("includePersonalLists"),
+            default=False,
+        )
+        scopes_value = _read_param("scopes")
+        if isinstance(scopes_value, str):
+            scopes_value = [part.strip() for part in scopes_value.split(",") if part.strip()]
+        scopes = None
+        if isinstance(scopes_value, list) and scopes_value:
+            scopes = normalize_backup_scopes(scopes_value)
+            include_personal_lists = "personal_lists" in scopes
+        scope_label = "with-personal-lists" if include_personal_lists else "movies-groups"
+        file_name = f"discvault-next-{scope_label}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.zip"
+        output_path = backup_dir / file_name
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("collection.export_functional", "admin.backup"))
+            summary = export_functional_backup(
+                conn,
+                output_path,
+                data_dir=data_dir,
+                scopes=scopes,
+                include_personal_lists=include_personal_lists,
+                generator={
+                    "service": "DiscVault Next",
+                    "version": build_version(),
+                    "sha": build_sha(),
+                    "description": (
+                        "Movie collection, people, containers, group links, watchlist and watched history"
+                        if include_personal_lists
+                        else "Movie collection, people, containers and group links"
+                    ),
+                },
+                requested_by=actor,
+            )
+            audit_event(
+                conn,
+                event_type="backup.created",
+                category="backup",
+                actor=actor,
+                target_type="backup",
+                target_id=file_name,
+                summary="Created functional collection backup",
+                metadata={
+                    "fileName": file_name,
+                    "sha256": summary.get("sha256"),
+                    "scope": "functional_collection",
+                    "scopes": summary.get("manifest", {}).get("scopes"),
+                    "includePersonalLists": include_personal_lists,
+                },
+            )
+        manifest = summary.get("manifest") or {}
+        media = manifest.get("media") or {}
+        report = {
+            "valid": True,
+            "scope": "functional_collection",
+            "format": manifest.get("format"),
+            "formatVersion": manifest.get("formatVersion"),
+            "createdAt": manifest.get("createdAt"),
+            "scopes": manifest.get("scopes") or [],
+            "tables": manifest.get("tables") or {},
+            "media": {
+                "embedded": media.get("included", 0),
+                "missing": media.get("missing", 0),
+            },
+            "fileName": file_name,
+            "sizeBytes": summary.get("sizeBytes"),
+            "sha256": summary.get("sha256"),
+            "errors": [],
+            "warnings": [],
+        }
+        return response(
+            {
+                "status": "ok",
+                "fileName": file_name,
+                "report": report,
+            },
+            201,
+        )
 
     @flask_app.get("/api/next/backup/download/<path:file_name>")
     def backup_download(file_name: str):
@@ -49066,6 +54339,14 @@ def register_routes(flask_app: Flask) -> None:
             request.form.get("includePersonalLists", request.args.get("includePersonalLists")),
             default=False,
         )
+        restore_mode = "merge" if (request.form.get("mode") or request.args.get("mode") or "full").lower() == "merge" else "full"
+        scopes_raw = request.form.get("scopes") or request.args.get("scopes")
+        restore_scopes = None
+        if scopes_raw:
+            requested = [part.strip() for part in scopes_raw.split(",") if part.strip()]
+            if requested:
+                restore_scopes = normalize_backup_scopes(requested)
+                include_personal_lists = "personal_lists" in restore_scopes
         group_resolution_raw = request.form.get("groupResolution") or request.args.get("groupResolution")
         group_resolution = {}
         if group_resolution_raw:
@@ -49094,6 +54375,8 @@ def register_routes(flask_app: Flask) -> None:
                     payload={
                         "backupZip": str(upload_path),
                         "dataDir": str(data_dir),
+                        "mode": restore_mode,
+                        "scopes": restore_scopes,
                         "includePersonalLists": include_personal_lists,
                         "personalListUserId": str(actor.get("id")) if actor.get("id") else None,
                         "groupResolution": group_resolution,
@@ -49140,6 +54423,14 @@ def register_routes(flask_app: Flask) -> None:
         if not backup_path.exists() or not backup_path.is_file():
             raise NextApiError("Backup file not found", 404)
         include_personal_lists = parse_bool_value(body.get("includePersonalLists"), default=False)
+        restore_mode = "merge" if str(body.get("mode") or "full").lower() == "merge" else "full"
+        scopes_value = body.get("scopes")
+        restore_scopes = None
+        if isinstance(scopes_value, str):
+            scopes_value = [part.strip() for part in scopes_value.split(",") if part.strip()]
+        if isinstance(scopes_value, list) and scopes_value:
+            restore_scopes = normalize_backup_scopes(scopes_value)
+            include_personal_lists = "personal_lists" in restore_scopes
         group_resolution = body.get("groupResolution") if isinstance(body.get("groupResolution"), dict) else {}
         report = validate_backup_zip(backup_path)
         if not report.get("valid"):
@@ -49165,6 +54456,8 @@ def register_routes(flask_app: Flask) -> None:
                     payload={
                         "backupZip": str(backup_path),
                         "dataDir": str(data_dir),
+                        "mode": restore_mode,
+                        "scopes": restore_scopes,
                         "includePersonalLists": include_personal_lists,
                         "personalListUserId": str(actor.get("id")) if actor.get("id") else None,
                         "groupResolution": group_resolution,
@@ -49232,13 +54525,27 @@ def register_routes(flask_app: Flask) -> None:
                 "supportedEntityTypes": [
                     "movie",
                     "container",
+                    "container_membership",
+                    "movie_identifier",
                     "metadata_plugin",
                     "setting",
                 ],
                 "supportedMutations": [
                     "movie.upsert",
                     "movie.delete",
+                    "container.upsert",
+                    "container.delete",
+                    "containerMovie.upsert",
+                    "containerMovie.delete",
                 ],
+                "userEntityTypes": [
+                    "watchlist",
+                    "watch_history",
+                ],
+                "userSync": {
+                    "bootstrap": "/api/next/sync/user/bootstrap",
+                    "delta": "/api/next/sync/user/delta",
+                },
             }
         )
 
@@ -49255,6 +54562,12 @@ def register_routes(flask_app: Flask) -> None:
             payload = {
                 "movies": all_movie_entities(conn, limit=limit),
                 "containers": all_container_entities(conn, limit=limit),
+                "containerMembership": collection_container_membership_entities(
+                    conn, limit=min(max(limit * 20, 1000), 200000)
+                ),
+                "movieIdentifiers": all_movie_identifier_entities(
+                    conn, limit=min(max(limit * 20, 1000), 200000)
+                ),
                 "moviePeople": movie_people,
                 "movieCast": [credit for credit in movie_people if credit.get("department") == "cast"],
                 "movieCrew": [credit for credit in movie_people if credit.get("department") == "crew"],
@@ -49370,6 +54683,75 @@ def register_routes(flask_app: Flask) -> None:
                 "baseRevision": base_revision,
                 "currentRevision": revision,
                 "results": results,
+            }
+        )
+
+    @flask_app.get("/api/next/sync/user/bootstrap")
+    def sync_user_bootstrap():
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            revision = current_user_revision(conn, user_id)
+            payload = {
+                "watchlist": all_watchlist_sync_entities(conn, user_id),
+                "watchHistory": all_watch_history_sync_entities(conn, user_id),
+            }
+        return response(
+            {
+                "status": "ok",
+                "currentRevision": revision,
+                "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "payload": payload,
+            }
+        )
+
+    @flask_app.get("/api/next/sync/user/delta")
+    def sync_user_delta():
+        since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
+        limit = parse_int_arg("limit", 500, minimum=1, maximum=1000)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            revision = current_user_revision(conn, user_id)
+            if not table_exists(conn, "user_sync_changes"):
+                return response(
+                    {
+                        "status": "ok",
+                        "since": since,
+                        "currentRevision": revision,
+                        "changes": [],
+                        "hasMore": False,
+                        "nextSince": revision,
+                    }
+                )
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        revision,
+                        entity_type,
+                        entity_id,
+                        operation,
+                        payload,
+                        created_at
+                    FROM user_sync_changes
+                    WHERE user_id=%s AND revision > %s
+                    ORDER BY revision ASC
+                    LIMIT %s
+                    """,
+                    (user_id, since, limit),
+                )
+                changes = cur.fetchall()
+        next_since = int(changes[-1]["revision"]) if changes else since
+        return response(
+            {
+                "status": "ok",
+                "since": since,
+                "currentRevision": revision,
+                "changes": changes,
+                "hasMore": bool(changes and next_since < revision),
+                "nextSince": revision if not changes else next_since,
             }
         )
 
