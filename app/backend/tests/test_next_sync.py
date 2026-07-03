@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+import uuid
 from unittest.mock import patch
 
 
@@ -298,6 +299,87 @@ class NextUserSyncStreamTests(unittest.TestCase):
             history = next_app.all_watch_history_sync_entities(conn, "user-a")
         self.assertEqual([w["movieId"] for w in watchlist], ["movie-1"])
         self.assertEqual([h["id"] for h in history], ["entry-1"])
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextBatchCreateHealTests(unittest.TestCase):
+    """resolve_new_movie_identity must keep batched brand-new creates distinct.
+
+    Regression guard for the data-loss bug where a single mutations batch of N
+    fresh movie.upsert creates (e.g. an 8-film box set) collapsed into one row.
+    """
+
+    def _resolve(self, *, client_entity_id, barcode, batch_ctx, mapping=None, owner=None):
+        return next_app.resolve_new_movie_identity(
+            entity_id=None,
+            client_entity_id=client_entity_id,
+            barcode=barcode,
+            batch_ctx=batch_ctx,
+            lookup_mapping=lambda: mapping,
+            barcode_owner_lookup=lambda code: owner,
+        )
+
+    def test_duplicate_client_entity_id_yields_distinct_movies(self):
+        # Client (buggily) reuses one clientEntityId for every member of a box set.
+        ctx = next_app.SyncBatchContext()
+        ids = []
+        for _ in range(8):
+            entity_id, _barcode = self._resolve(
+                client_entity_id="tmp-box", barcode=None, batch_ctx=ctx, mapping=None
+            )
+            ids.append(entity_id)
+        self.assertEqual(len(set(ids)), 8, "each create must become a distinct movie")
+
+    def test_missing_client_entity_id_yields_distinct_movies(self):
+        ctx = next_app.SyncBatchContext()
+        ids = [self._resolve(client_entity_id=None, barcode=None, batch_ctx=ctx)[0] for _ in range(8)]
+        self.assertEqual(len(set(ids)), 8)
+
+    def test_shared_barcode_is_healed_after_the_first_member(self):
+        # All 8 members carry the box's shared barcode; only the first keeps it,
+        # the rest are inserted with a null barcode instead of colliding.
+        ctx = next_app.SyncBatchContext()
+        barcodes = []
+        for _ in range(8):
+            _entity_id, healed = self._resolve(
+                client_entity_id=None, barcode="5051890000000", batch_ctx=ctx, owner=None
+            )
+            barcodes.append(healed)
+        self.assertEqual(barcodes[0], "5051890000000")
+        self.assertTrue(all(b is None for b in barcodes[1:]))
+
+    def test_barcode_owned_by_existing_movie_is_dropped(self):
+        ctx = next_app.SyncBatchContext()
+        _entity_id, healed = self._resolve(
+            client_entity_id=None,
+            barcode="5051890000000",
+            batch_ctx=ctx,
+            owner=uuid.uuid4(),  # a different, pre-existing movie already owns it
+        )
+        self.assertIsNone(healed)
+
+    def test_update_path_is_passthrough(self):
+        existing = uuid.uuid4()
+        entity_id, healed = next_app.resolve_new_movie_identity(
+            entity_id=existing,
+            client_entity_id="tmp-box",
+            barcode="5051890000000",
+            batch_ctx=next_app.SyncBatchContext(),
+            lookup_mapping=lambda: uuid.uuid4(),
+            barcode_owner_lookup=lambda code: uuid.uuid4(),
+        )
+        self.assertEqual(entity_id, existing)
+        self.assertEqual(healed, "5051890000000")
+
+    def test_first_occurrence_still_resolves_cross_batch_mapping(self):
+        # A genuine temp-id created in an earlier committed batch must still map
+        # to its server UUID (offline create -> later reference).
+        mapped = uuid.uuid4()
+        ctx = next_app.SyncBatchContext()
+        entity_id, _barcode = self._resolve(
+            client_entity_id="tmp-earlier", barcode=None, batch_ctx=ctx, mapping=mapped
+        )
+        self.assertEqual(entity_id, mapped)
 
 
 if __name__ == "__main__":
