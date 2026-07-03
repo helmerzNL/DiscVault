@@ -58,6 +58,16 @@ class NextSyncRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/api/next/sync/bootstrap", rules)
         self.assertIn("/api/next/sync/mutations", rules)
 
+    def test_movie_identifier_write_routes_are_registered(self):
+        rules = {rule.rule for rule in next_app.app.url_map.iter_rules()}
+        self.assertIn("/api/next/movies/<movie_id>/identifiers", rules)
+        methods = set()
+        for rule in next_app.app.url_map.iter_rules():
+            if rule.rule == "/api/next/movies/<movie_id>/identifiers":
+                methods |= set(rule.methods)
+        self.assertIn("POST", methods)
+        self.assertIn("DELETE", methods)
+
 
 class _FakeCursor:
     def __init__(self, store):
@@ -114,6 +124,22 @@ class _FakeCursor:
         elif "FROM watch_history" in q:
             uid = p[0]
             self._rows = [dict(v) for (u, _i), v in store["watch_history"].items() if u == uid]
+        elif "UPDATE sync_state" in q and "user_sync_state" not in q and "revision + 1" in q:
+            store["global_state"] = store.get("global_state", 0) + 1
+            self._row = {"revision": store["global_state"]}
+        elif "INSERT INTO sync_changes" in q and "user_sync_changes" not in q:
+            revision, entity_type, entity_id, operation, payload = p
+            store.setdefault("global_changes", []).append(
+                {
+                    "revision": revision,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "operation": operation,
+                    "payload": payload,
+                }
+            )
+        elif "FROM movie_identifiers" in q:
+            self._rows = [dict(r) for r in store.get("movie_identifiers", {}).get(p[0], [])]
 
     def fetchone(self):
         return self._row
@@ -140,6 +166,9 @@ class NextUserSyncStreamTests(unittest.TestCase):
             "user_changes": [],
             "watchlist": {},
             "watch_history": {},
+            "global_state": 0,
+            "global_changes": [],
+            "movie_identifiers": {},
         }
 
     def _patches(self):
@@ -210,6 +239,39 @@ class NextUserSyncStreamTests(unittest.TestCase):
         self.assertEqual(change["operation"], "delete")
         self.assertEqual(change["entity_id"], "entry-9")
         self.assertEqual(change["payload"]["movieId"], "movie-1")
+
+    def test_emit_movie_identifiers_change_carries_full_set(self):
+        # The movie_identifier delta must carry the movie's full identifier set
+        # (including the movievault_26 link) so an offline client replaces its
+        # local copy for that movie in one change.
+        store = self._store()
+        store["movie_identifiers"]["movie-1"] = [
+            {
+                "provider_id": "movievault_26",
+                "identifier_type": "movie_id",
+                "identifier": "mv_movie_1",
+                "created_at": "2026-01-01T00:00:00Z",
+            },
+            {
+                "provider_id": "tmdb",
+                "identifier_type": "movie_id",
+                "identifier": "603",
+                "created_at": "2026-01-01T00:00:00Z",
+            },
+        ]
+        conn = _FakeConn(store)
+        p1, p2 = self._patches()
+        with p1, p2:
+            revision = next_app.emit_movie_identifiers_change(conn, "movie-1", operation="upsert")
+        self.assertEqual(revision, 1)
+        change = store["global_changes"][-1]
+        self.assertEqual(change["entity_type"], "movie_identifier")
+        self.assertEqual(change["operation"], "upsert")
+        self.assertEqual(change["entity_id"], "movie-1")
+        self.assertEqual(change["payload"]["movieId"], "movie-1")
+        providers = {i["provider_id"] for i in change["payload"]["identifiers"]}
+        self.assertIn("movievault_26", providers)
+        self.assertIn("tmdb", providers)
 
     def test_bootstrap_collectors_scope_to_the_caller(self):
         store = self._store()

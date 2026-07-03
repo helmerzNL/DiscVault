@@ -1676,6 +1676,29 @@ def _normalize_result(payload, *, source_ref=""):
     }
     if localizations:
         result["localizations"] = localizations
+    # Surface the MovieVault catalog id as a persistable identifier so the
+    # enrichment write path stores the movievault_26 link in movie_identifiers
+    # (and emits the matching sync delta). Without this the link only ever
+    # lives client-side and the movie_identifiers table stays empty for this
+    # provider. Only emit when a real movie candidate was matched so a box-set
+    # id is never attached as a movie's movie_id.
+    movievault_identifier = ""
+    if first_movie:
+        movievault_identifier = _text(
+            source_item.get("id")
+            or source_item.get("movieVaultId")
+            or source_item.get("movievaultId")
+            or source_item.get("movievault_id")
+            or first_movie.get("id")
+        )
+    if movievault_identifier:
+        result["identifiers"] = [
+            {
+                "provider_id": "movievault_26",
+                "identifier_type": "movie_id",
+                "identifier": movievault_identifier,
+            }
+        ]
     if proposals:
         result["boxSetProposal"] = proposals[0]
         result["boxSetProposals"] = proposals
