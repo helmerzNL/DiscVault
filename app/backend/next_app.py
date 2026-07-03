@@ -45651,28 +45651,125 @@ def metadata_plugin_entities(conn) -> list[dict[str, Any]]:
         return [plugin_row(row) for row in cur.fetchall()]
 
 
+class SyncBatchContext:
+    """Per-request state that keeps batched brand-new creates from collapsing.
+
+    A single ``POST /api/next/sync/mutations`` batch can contain several
+    ``movie.upsert`` mutations that are all fresh creates (``entityId`` is null),
+    e.g. the members of a box set added in one go. Two things used to silently
+    collapse such a batch into a single surviving row:
+
+    - a duplicate (non-empty) ``clientEntityId`` shared across the creates made
+      every mutation resolve to the same UUID, so ``ON CONFLICT (id) DO UPDATE``
+      overwrote the one row (last title wins);
+    - members carrying the same barcode collided on the ``movies.barcode`` UNIQUE
+      constraint, rolling back every create after the first.
+
+    This context tracks what has already been claimed within the current batch so
+    each create becomes a distinct movie and a shared barcode is healed instead of
+    blocking the insert.
+    """
+
+    def __init__(self) -> None:
+        self.consumed_client_entity_ids: set[str] = set()
+        self.claimed_barcodes: set[str] = set()
+
+
+def movie_id_for_barcode(conn, barcode: str | None) -> UUID | None:
+    """Return the id of the movie that currently owns ``barcode`` (or None)."""
+    if not barcode:
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def resolve_new_movie_identity(
+    *,
+    entity_id: UUID | None,
+    client_entity_id: str | None,
+    barcode: str | None,
+    batch_ctx: "SyncBatchContext | None",
+    lookup_mapping,
+    barcode_owner_lookup,
+) -> tuple[UUID, str | None]:
+    """Decide a movie upsert's id and its (possibly healed) barcode.
+
+    For updates (``entity_id`` provided) this is a passthrough. For brand-new
+    creates it auto-heals batched creates:
+
+    - a duplicate/missing ``clientEntityId`` still yields a distinct movie
+      (the mapping is only consulted the first time a ``clientEntityId`` is seen
+      in the batch, so cross-batch temp-id resolution keeps working while
+      within-batch duplicates each get a fresh UUID);
+    - a barcode already owned by another movie (in the DB or earlier in this
+      batch) is dropped to null — the barcode belongs to the container, not each
+      member — instead of raising a UNIQUE violation.
+    """
+    if entity_id is not None:
+        return entity_id, barcode
+
+    resolved: UUID | None = None
+    already_consumed = bool(
+        client_entity_id
+        and batch_ctx is not None
+        and client_entity_id in batch_ctx.consumed_client_entity_ids
+    )
+    if client_entity_id and not already_consumed:
+        resolved = lookup_mapping()
+    if resolved is None:
+        resolved = uuid.uuid4()
+    if client_entity_id and batch_ctx is not None:
+        batch_ctx.consumed_client_entity_ids.add(client_entity_id)
+
+    healed_barcode = barcode
+    if barcode:
+        collides = False
+        if batch_ctx is not None and barcode in batch_ctx.claimed_barcodes:
+            collides = True
+        else:
+            owner = barcode_owner_lookup(barcode)
+            if owner is not None and owner != resolved:
+                collides = True
+        if collides:
+            healed_barcode = None
+        elif batch_ctx is not None:
+            batch_ctx.claimed_barcodes.add(barcode)
+
+    return resolved, healed_barcode
+
+
 def apply_movie_upsert(
     conn,
     *,
     client_id: str,
     idem_key: str,
     mutation: dict[str, Any],
+    batch_ctx: "SyncBatchContext | None" = None,
 ) -> dict[str, Any]:
     payload = mutation.get("payload")
     if not isinstance(payload, dict):
         raise NextApiError("Movie upsert payload must be an object", 400)
 
     client_entity_id = str(mutation.get("clientEntityId") or "").strip() or None
-    entity_id = parse_uuid(mutation.get("entityId"), "entityId")
-    entity_id = entity_id or client_entity_mapping(
-        conn,
-        client_id=client_id,
-        entity_type="movie",
-        client_entity_id=client_entity_id,
-    )
-    entity_id = entity_id or uuid.uuid4()
-    existing = movie_entity(conn, entity_id)
+    provided_entity_id = parse_uuid(mutation.get("entityId"), "entityId")
     fields = movie_payload_fields(payload)
+
+    entity_id, healed_barcode = resolve_new_movie_identity(
+        entity_id=provided_entity_id,
+        client_entity_id=client_entity_id,
+        barcode=fields["barcode"],
+        batch_ctx=batch_ctx,
+        lookup_mapping=lambda: client_entity_mapping(
+            conn,
+            client_id=client_id,
+            entity_type="movie",
+            client_entity_id=client_entity_id,
+        ),
+        barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
+    )
+    existing = movie_entity(conn, entity_id)
     title = fields["title"] or (existing or {}).get("title")
     if not title:
         raise NextApiError("Movie title is required for upsert", 400)
@@ -45740,7 +45837,7 @@ def apply_movie_upsert(
             (
                 entity_id,
                 public_id,
-                fields["barcode"],
+                healed_barcode,
                 title,
                 fields["sort_title"],
                 fields["original_title"],
@@ -46122,7 +46219,13 @@ def apply_container_movie_delete(
     }
 
 
-def apply_sync_mutation(conn, *, client_id: str, mutation: dict[str, Any]) -> dict[str, Any]:
+def apply_sync_mutation(
+    conn,
+    *,
+    client_id: str,
+    mutation: dict[str, Any],
+    batch_ctx: "SyncBatchContext | None" = None,
+) -> dict[str, Any]:
     if not isinstance(mutation, dict):
         raise NextApiError("Each mutation must be an object", 400)
     client_mutation_id = str(mutation.get("clientMutationId") or "").strip()
@@ -46138,7 +46241,9 @@ def apply_sync_mutation(conn, *, client_id: str, mutation: dict[str, Any]) -> di
         return existing
 
     if entity_type == "movie" and operation == "upsert":
-        result = apply_movie_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
+        result = apply_movie_upsert(
+            conn, client_id=client_id, idem_key=key, mutation=mutation, batch_ctx=batch_ctx
+        )
     elif entity_type == "movie" and operation == "delete":
         result = apply_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "container" and operation == "upsert":
@@ -54775,6 +54880,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("At most 100 mutations can be submitted at once", 400)
 
         results = []
+        batch_ctx = SyncBatchContext()
         with connect() as conn:
             ensure_sync_state(conn)
             for mutation in mutations:
@@ -54783,7 +54889,14 @@ def register_routes(flask_app: Flask) -> None:
                     client_mutation_id = mutation.get("clientMutationId")
                 try:
                     with conn.transaction():
-                        results.append(apply_sync_mutation(conn, client_id=client_id, mutation=mutation))
+                        results.append(
+                            apply_sync_mutation(
+                                conn,
+                                client_id=client_id,
+                                mutation=mutation,
+                                batch_ctx=batch_ctx,
+                            )
+                        )
                 except NextApiError as exc:
                     results.append(
                         {
