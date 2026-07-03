@@ -51237,6 +51237,118 @@ def register_routes(flask_app: Flask) -> None:
                 )
             return response({"status": "ok", "deleted": deleted, "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
 
+    @flask_app.post("/api/next/movies/<movie_id>/identifiers")
+    def add_movie_identifier(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Identifier request body must be an object", 400)
+        provider_id = clean_text(body.get("providerId") or body.get("provider_id"))
+        identifier = clean_text(body.get("identifier") or body.get("value"))
+        identifier_type = clean_text(body.get("identifierType") or body.get("identifier_type")) or "movie_id"
+        if not provider_id or not identifier:
+            raise NextApiError("providerId and identifier are required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not table_exists(conn, "movie_identifiers"):
+                raise NextApiError("Movie identifiers table is not available", 503)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            if not actor_can_edit_visible_movie(conn, actor, existing):
+                raise NextApiError("Permission required: collection.edit_all", 403)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # A movie carries a single current value per (provider, type),
+                    # so replace any stale value before inserting the new link.
+                    cur.execute(
+                        """
+                        DELETE FROM movie_identifiers
+                        WHERE movie_id=%s AND provider_id=%s AND identifier_type=%s
+                          AND identifier<>%s
+                        """,
+                        (movie_uuid, provider_id, identifier_type, identifier),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO movie_identifiers (movie_id, provider_id, identifier_type, identifier)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                        """,
+                        (movie_uuid, provider_id, identifier_type, identifier),
+                    )
+                emit_movie_identifiers_change(conn, movie_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="movie.identifier_added",
+                    category="metadata",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Added movie identifier",
+                    metadata={"providerId": provider_id, "identifierType": identifier_type},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "movieId": str(movie_uuid),
+                    "identifiers": movie_identifier_entities(conn, movie_uuid),
+                },
+                201,
+            )
+
+    @flask_app.delete("/api/next/movies/<movie_id>/identifiers")
+    def remove_movie_identifier(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        provider_id = clean_text(request.args.get("providerId") or request.args.get("provider_id"))
+        identifier_type = clean_text(request.args.get("identifierType") or request.args.get("identifier_type"))
+        identifier = clean_text(request.args.get("identifier") or request.args.get("value"))
+        if not provider_id:
+            raise NextApiError("providerId is required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not table_exists(conn, "movie_identifiers"):
+                raise NextApiError("Movie identifiers table is not available", 503)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            if not actor_can_edit_visible_movie(conn, actor, existing):
+                raise NextApiError("Permission required: collection.edit_all", 403)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    sql = "DELETE FROM movie_identifiers WHERE movie_id=%s AND provider_id=%s"
+                    params: list[Any] = [movie_uuid, provider_id]
+                    if identifier_type:
+                        sql += " AND identifier_type=%s"
+                        params.append(identifier_type)
+                    if identifier:
+                        sql += " AND identifier=%s"
+                        params.append(identifier)
+                    cur.execute(sql, tuple(params))
+                    deleted = int(cur.rowcount or 0)
+                if deleted:
+                    # Emit the movie's remaining identifier set so offline clients
+                    # replace their local copy for this movie.
+                    emit_movie_identifiers_change(conn, movie_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="movie.identifier_removed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Removed movie identifier",
+                    metadata={"providerId": provider_id, "identifierType": identifier_type, "deleted": deleted},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "movieId": str(movie_uuid),
+                    "deleted": deleted,
+                    "identifiers": movie_identifier_entities(conn, movie_uuid),
+                }
+            )
+
     @flask_app.post("/api/next/people/<person_id>/metadata/refresh")
     def refresh_person_metadata_route(person_id: str):
         person_uuid = parse_uuid(person_id, "personId")
