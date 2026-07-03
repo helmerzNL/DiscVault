@@ -218,6 +218,43 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["candidates"][0]["tmdbId"], "424694")
         self.assertNotIn("boxSetProposal", result)
 
+    def test_barcode_hit_surfaces_persistable_movievault_identifier(self):
+        # The movievault_26 catalog id must be surfaced as an identifiers[] entry
+        # so the enrichment write path persists the movievault_26 link in
+        # movie_identifiers (and emits the matching sync delta). Regression for
+        # the movie_identifiers table staying empty for this provider.
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                return {
+                    "status": "ok",
+                    "data": {
+                        "id": "mv_movie_1",
+                        "title": "Bohemian Rhapsody",
+                        "year": "2018",
+                        "format": "4K UHD",
+                        "tmdbId": 424694,
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_barcode(
+                {"barcode": "8712626068546"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertIn("identifiers", result)
+        self.assertIn(
+            {
+                "provider_id": "movievault_26",
+                "identifier_type": "movie_id",
+                "identifier": "mv_movie_1",
+            },
+            result["identifiers"],
+        )
+
     def test_regular_movie_payload_does_not_become_box_set_proposal(self):
         proposal = movievault_26._normalize_box_set_proposal(
             {
