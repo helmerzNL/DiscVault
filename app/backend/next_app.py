@@ -51185,7 +51185,19 @@ def register_routes(flask_app: Flask) -> None:
                     summary="Marked movie as watched",
                     metadata={"watchedAt": watched_at},
                 )
-            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))}, 201)
+            entry = (
+                {"id": str(watch_entry_id), "watchedAt": watched_at}
+                if watch_entry_id is not None
+                else None
+            )
+            return response(
+                {
+                    "status": "ok",
+                    "entry": entry,
+                    "userState": personal_movie_state(conn, movie_uuid, actor.get("id")),
+                },
+                201,
+            )
 
     @flask_app.delete("/api/next/movies/<movie_id>/watched/<entry_id>")
     def delete_movie_watch_history_entry(movie_id: str, entry_id: str):
