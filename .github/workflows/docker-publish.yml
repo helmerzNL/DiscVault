@@ -74,8 +74,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The legacy app/Dockerfile was removed in "Remove legacy DiscVault app
+          # from the v26 line"; the v26 stack (app/Dockerfile.v26) is now the only
+          # build. main keeps the "legacy" family/tag for image compatibility but
+          # builds from the v26 Dockerfile like every other branch.
           if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-            dockerfile="./app/Dockerfile"
+            dockerfile="./app/Dockerfile.v26"
             family="legacy"
           else
             dockerfile="./app/Dockerfile.v26"
