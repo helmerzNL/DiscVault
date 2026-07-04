@@ -8325,6 +8325,10 @@ def ui_preview_html(
     .wishlist-search-meta.muted {
       opacity: .8;
     }
+    .wishlist-search-meta.edition {
+      color: var(--accent, #6ea8fe);
+      font-weight: 600;
+    }
     .wishlist-manual {
       margin-bottom: 14px;
     }
@@ -28915,13 +28919,16 @@ def ui_preview_html(
         || (provider.toLowerCase().includes("movievault") ? sourceRef : "")
         || ""
       ).trim();
-      const keyParts = [provider, title.toLowerCase(), year, format.toLowerCase(), identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "", identifiers.imdb ? `imdb:${identifiers.imdb}` : "", sourceRef, posterUrl, resultIndex, candidateIndex];
+      const keyParts = [provider, title.toLowerCase(), explicitReleaseTitle.toLowerCase(), year, format.toLowerCase(), identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "", identifiers.imdb ? `imdb:${identifiers.imdb}` : "", sourceRef, posterUrl, resultIndex, candidateIndex];
+      const editionLabel = (explicitReleaseTitle && explicitReleaseTitle.toLowerCase() !== title.toLowerCase()) ? explicitReleaseTitle : "";
       return {
         candidateKey: keyParts.join("|"),
         provider,
         sourceLabel,
         sourceRef,
         title,
+        releaseTitle: explicitReleaseTitle,
+        editionLabel,
         year,
         format,
         barcode,
@@ -28939,7 +28946,7 @@ def ui_preview_html(
         lookupResultCandidates(result).forEach((candidate, candidateIndex) => {
           const normalized = wishlistNormalizeCandidate(result, resultIndex, candidate, candidateIndex);
           if (!normalized) return;
-          const identity = [normalized.provider, normalized.title.toLowerCase(), normalized.year, normalized.format.toLowerCase(), normalized.identifiers.tmdb, normalized.identifiers.imdb, normalized.sourceRef, normalized.posterUrl].join("|");
+          const identity = [normalized.provider, normalized.title.toLowerCase(), (normalized.releaseTitle || "").toLowerCase(), normalized.year, normalized.format.toLowerCase(), normalized.identifiers.tmdb, normalized.identifiers.imdb, normalized.sourceRef, normalized.posterUrl].join("|");
           if (seen.has(identity)) return;
           seen.add(identity);
           candidates.push(normalized);
@@ -28966,6 +28973,7 @@ def ui_preview_html(
           <span class="wishlist-search-poster">${posterHtml}</span>
           <span class="wishlist-search-body">
             <strong>${escapeHtml(candidate.title || "")}</strong>
+            ${candidate.editionLabel ? `<span class="wishlist-search-meta edition">${escapeHtml(candidate.editionLabel)}</span>` : ""}
             <span class="wishlist-search-meta">${escapeHtml(metaParts.join(" / "))}</span>
             ${sub.length ? `<span class="wishlist-search-meta muted">${escapeHtml(sub.join(" · "))}</span>` : ""}
           </span>
@@ -29014,7 +29022,7 @@ def ui_preview_html(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           timeoutMs: 30000,
-          body: JSON.stringify({ title: query, detectBoxSets: false, previewMode: true })
+          body: JSON.stringify({ title: query, detectBoxSets: false, previewMode: true, releaseVariants: true, listReleases: true })
         });
         const metadata = (payload && (payload.metadata || payload.result || payload)) || {};
         state.candidates = wishlistLookupCandidates(metadata);
@@ -29045,7 +29053,8 @@ def ui_preview_html(
             format: candidate.format || null,
             barcode: candidate.barcode || null,
             posterUrl: candidate.posterUrl || null,
-            movievaultId: candidate.movievaultId || null
+            movievaultId: candidate.movievaultId || null,
+            note: candidate.editionLabel || null
           })
         });
         setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");

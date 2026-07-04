@@ -988,7 +988,25 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertEqual([item["entrypoint"] for item in plan], ["search_title", "movie_details", "box_set_candidates"])
 
-    def test_preview_barcode_and_title_is_title_driven(self):
+    def test_preview_title_lookup_propagates_release_variants_flag(self):
+        query = query_from_payload({
+            "title": "E.T. the Extra-Terrestrial",
+            "previewMode": True,
+            "releaseVariants": True,
+        })
+        self.assertTrue(query.get("releaseVariants"))
+        plan = plugin_execution_plan(
+            {"capabilities": ["search_title", "movie_details"]},
+            query,
+        )
+        title_step = next(item for item in plan if item["entrypoint"] == "search_title")
+        self.assertTrue(title_step["payload"].get("releaseVariants"))
+
+    def test_preview_title_lookup_release_variants_flag_defaults_off(self):
+        query = query_from_payload({"title": "E.T. the Extra-Terrestrial", "previewMode": True})
+        self.assertFalse(query.get("releaseVariants"))
+
+
         query = query_from_payload({
             "barcode": "5051892000000",
             "title": "Lethal Weapon",

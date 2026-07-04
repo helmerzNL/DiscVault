@@ -441,6 +441,77 @@ class NextPluginRuntimeTests(unittest.TestCase):
 
         self.assertEqual(urls, ["https://www.blu-ray.com/movies/Heat-Blu-ray/222/"])
 
+    def test_bluray_search_title_is_skipped_without_release_variant_switch(self):
+        def fail_release_urls(*args, **kwargs):
+            raise AssertionError("_release_urls should not run without the switch")
+
+        original = bluray_com_plugin._release_urls
+        try:
+            bluray_com_plugin._release_urls = fail_release_urls
+            result = bluray_com_plugin.search_title({"title": "E.T. the Extra-Terrestrial"})
+        finally:
+            bluray_com_plugin._release_urls = original
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["items"], [])
+
+    def test_bluray_search_title_lists_release_variants_when_switch_enabled(self):
+        urls = [
+            "https://www.blu-ray.com/movies/ET-40th-Anniversary-Edition-4K-Blu-ray/300/",
+            "https://www.blu-ray.com/movies/ET-Steelbook-Blu-ray/301/",
+            "https://www.blu-ray.com/movies/ET-Box-Set-Blu-ray/302/",
+        ]
+
+        def fake_release_urls(query, preferred_format="", limit=8):
+            return urls
+
+        pages = {
+            urls[0]: {
+                "status": "hit",
+                "releaseTitle": "E.T. the Extra-Terrestrial (1982) 40th Anniversary Edition 4K Blu-ray",
+                "movie": {"title": "E.T. the Extra-Terrestrial", "year": "1982", "posterUrl": "p0"},
+                "format": "4K UHD",
+                "isBoxSetCandidate": False,
+            },
+            urls[1]: {
+                "status": "hit",
+                "releaseTitle": "E.T. the Extra-Terrestrial (1982) SteelBook Blu-ray",
+                "movie": {"title": "E.T. the Extra-Terrestrial", "year": "1982", "posterUrl": "p1"},
+                "format": "Blu-ray",
+                "isBoxSetCandidate": False,
+            },
+            urls[2]: {
+                "status": "hit",
+                "releaseTitle": "E.T. Collection Box Set",
+                "movie": {"title": "E.T. Collection", "year": "1982"},
+                "isBoxSetCandidate": True,
+            },
+        }
+
+        original_urls = bluray_com_plugin._release_urls
+        original_parse = bluray_com_plugin._parse_page
+        try:
+            bluray_com_plugin._release_urls = fake_release_urls
+            bluray_com_plugin._parse_page = lambda url: pages[url]
+            result = bluray_com_plugin.search_title(
+                {"title": "E.T. the Extra-Terrestrial", "releaseVariants": True}
+            )
+        finally:
+            bluray_com_plugin._release_urls = original_urls
+            bluray_com_plugin._parse_page = original_parse
+
+        self.assertEqual(result["status"], "hit")
+        # Box-set page is skipped; only the two single releases survive.
+        self.assertEqual(len(result["items"]), 2)
+        release_titles = [item.get("releaseTitle") for item in result["items"]]
+        self.assertIn(
+            "E.T. the Extra-Terrestrial (1982) 40th Anniversary Edition 4K Blu-ray",
+            release_titles,
+        )
+        self.assertIn("E.T. the Extra-Terrestrial (1982) SteelBook Blu-ray", release_titles)
+        for item in result["items"]:
+            self.assertEqual(item["title"], "E.T. the Extra-Terrestrial")
+
     def test_legacy_import_plugin_is_not_bundled(self):
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
