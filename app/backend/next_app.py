@@ -29054,6 +29054,7 @@ def ui_preview_html(
       if (input) input.value = "";
       setWishlistSearchMessage("", "");
       renderWishlistSearchResults();
+    }
     async function submitWishlistSearch(event) {
       if (event) event.preventDefault();
       const input = document.getElementById("wishlistSearchInput");
