@@ -186,7 +186,7 @@ class _FakeCursor:
             self._row = self._one(store["movie_tags"], p)
         elif "FROM movie_tags" in q:
             self._rows = self._all(store["movie_tags"], p)
-        elif "FROM loans" in q and "AND id=%s" in q:
+        elif "FROM loans" in q and ("AND id=%s" in q or "AND l.id=%s" in q):
             self._row = self._one(store["loans"], p)
         elif "FROM loans" in q:
             self._rows = self._all(store["loans"], p)

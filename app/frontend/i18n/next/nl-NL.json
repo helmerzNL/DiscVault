@@ -1879,6 +1879,7 @@
   "lists.loanReturned": "Geretourneerd",
   "lists.loanMarkReturned": "Markeer als geretourneerd",
   "lists.loanLinkedAccount": "Gekoppeld account",
+  "lists.loanDiscvaultUser": "DiscVault-gebruiker",
   "lists.loanNone": "Deze schijf is niet uitgeleend.",
   "lists.loanBorrowerPlaceholder": "Naam lener",
   "lists.loanLend": "Schijf uitlenen",

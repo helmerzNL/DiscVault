@@ -1880,6 +1880,7 @@
   "lists.loanReturned": "Returned",
   "lists.loanMarkReturned": "Mark returned",
   "lists.loanLinkedAccount": "Linked account",
+  "lists.loanDiscvaultUser": "DiscVault user",
   "lists.loanNone": "This disc is not on loan.",
   "lists.loanBorrowerPlaceholder": "Borrower name",
   "lists.loanLend": "Lend disc",
