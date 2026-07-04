@@ -8397,6 +8397,306 @@ def ui_preview_html(
     .lists-poster-badge.danger {
       background: var(--red);
     }
+    .lists-static-poster .preview-poster-art {
+      cursor: pointer;
+    }
+    .lists-static-poster .lists-poster-actions {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      margin-top: 0;
+      transition: max-height .2s ease, opacity .2s ease, margin-top .2s ease;
+    }
+    .lists-static-poster.actions-visible .lists-poster-actions {
+      max-height: 200px;
+      opacity: 1;
+      margin-top: 6px;
+    }
+    .wishlist-section {
+      margin-bottom: 18px;
+    }
+    .wishlist-section-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0 10px;
+    }
+    .wishlist-section-head h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .wishlist-section-head span {
+      font-size: .78rem;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      border-radius: 999px;
+      padding: 1px 8px;
+    }
+    .wishlist-section-empty {
+      color: var(--muted);
+      font-size: .85rem;
+      padding: 4px 0 10px;
+    }
+    .lists-loans-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 10px;
+    }
+    .lists-loans-toolbar button {
+      padding: 7px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .lists-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+      padding: 16px;
+    }
+    .lists-modal {
+      background: var(--bg-solid);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      width: min(520px, 100%);
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 18px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+    }
+    .lists-modal-head h3 {
+      margin: 0 0 12px;
+    }
+    .lists-modal-body {
+      display: flex;
+      gap: 14px;
+    }
+    .lists-meerinfo .lists-modal-poster {
+      flex: 0 0 130px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .lists-meerinfo .lists-modal-poster img {
+      width: 130px;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+    .lists-modal-poster-empty {
+      width: 130px;
+      height: 190px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: .78rem;
+      text-align: center;
+    }
+    .lists-modal-poster-btn {
+      padding: 5px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      font-size: .74rem;
+      cursor: pointer;
+    }
+    .lists-modal-fields {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .lists-modal-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .lists-modal-field > span:first-child {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+    }
+    .lists-modal-field input,
+    .lists-modal-field select,
+    .lists-modal-field textarea {
+      width: 100%;
+      padding: 7px 9px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      box-sizing: border-box;
+    }
+    .lists-modal:not(.editing) [data-edit] {
+      display: none;
+    }
+    .lists-modal.editing [data-read] {
+      display: none;
+    }
+    .lists-modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+    .lists-modal-actions button {
+      padding: 8px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .lists-modal-actions button.ghost {
+      background: transparent;
+      color: var(--text);
+    }
+    .lists-modal-message {
+      min-height: 1.1em;
+      font-size: .82rem;
+      color: var(--muted);
+      margin: 8px 0 0;
+    }
+    .lists-modal-message.bad {
+      color: var(--red);
+    }
+    .lists-picker-results {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 50vh;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    .lists-picker-item {
+      text-align: left;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .lists-picker-item:hover {
+      border-color: var(--accent);
+    }
+    .lists-picker-searchbar input {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      box-sizing: border-box;
+    }
+    .lists-loan-form {
+      flex-direction: column;
+    }
+    .lists-loan-movie {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .lists-borrower-results {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .lists-borrower-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .lists-borrower-item:hover {
+      border-color: var(--accent);
+    }
+    .lists-borrower-item em {
+      color: var(--muted);
+      font-style: normal;
+    }
+    .lists-borrower-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: #fff;
+      font-size: .78rem;
+      font-weight: 600;
+      flex: 0 0 auto;
+    }
+    .lists-switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .lists-switch {
+      position: relative;
+      display: inline-flex;
+      width: 42px;
+      height: 24px;
+      flex: 0 0 auto;
+    }
+    .lists-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .lists-switch span {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: var(--line);
+      transition: background .2s ease;
+    }
+    .lists-switch span::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .2s ease;
+    }
+    .lists-switch input:checked + span {
+      background: var(--accent);
+    }
+    .lists-switch input:checked + span::before {
+      transform: translateX(18px);
+    }
+    .wishlist-tools {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
     .tag-poster-art {
       display: flex;
       align-items: center;
@@ -14872,33 +15172,41 @@ def ui_preview_html(
           <div class="lists-grid" id="listsWatchlistGrid"></div>
           <div class="lists-history hidden" id="listsWatchedList"></div>
           <div class="lists-wishlist hidden" id="listsWishlistPanel">
-            <form class="wishlist-search-form" id="wishlistSearchForm" autocomplete="off">
-              <div class="wishlist-search-row">
-                <input type="text" id="wishlistSearchInput" required data-next-i18n-placeholder="lists.wishlistSearchPlaceholder" placeholder="Search a title to find editions">
-                <button type="submit" class="primary-button" data-next-i18n="lists.wishlistSearchButton">Find editions</button>
-              </div>
-              <p class="form-message" id="wishlistSearchMessage" role="status"></p>
-            </form>
-            <div class="wishlist-search-results" id="wishlistSearchResults"></div>
-            <details class="wishlist-manual">
-              <summary data-next-i18n="lists.wishlistManualToggle">Add manually</summary>
-              <form class="wishlist-add-form" id="wishlistAddForm" autocomplete="off">
-                <div class="wishlist-add-fields">
-                  <input type="text" id="wishlistAddTitle" required data-next-i18n-placeholder="lists.wishlistTitlePlaceholder" placeholder="Title">
-                  <input type="text" id="wishlistAddYear" inputmode="numeric" data-next-i18n-placeholder="lists.wishlistYearPlaceholder" placeholder="Year">
-                  <input type="text" id="wishlistAddFormat" data-next-i18n-placeholder="lists.wishlistFormatPlaceholder" placeholder="Format">
-                  <input type="text" id="wishlistAddBarcode" data-next-i18n-placeholder="lists.wishlistBarcodePlaceholder" placeholder="Barcode">
-                  <button type="submit" class="primary-button" data-next-i18n="lists.wishlistAdd">Add to wishlist</button>
+            <div class="wishlist-tools">
+              <form class="wishlist-search-form" id="wishlistSearchForm" autocomplete="off">
+                <div class="wishlist-search-row">
+                  <input type="text" id="wishlistSearchInput" required data-next-i18n-placeholder="lists.wishlistSearchPlaceholder" placeholder="Search a title to find editions">
+                  <button type="submit" class="primary-button" data-next-i18n="lists.wishlistSearchButton">Find editions</button>
                 </div>
-                <p class="form-message" id="wishlistAddMessage" role="status"></p>
+                <p class="form-message" id="wishlistSearchMessage" role="status"></p>
               </form>
-            </details>
+              <div class="wishlist-search-results" id="wishlistSearchResults"></div>
+              <details class="wishlist-manual">
+                <summary data-next-i18n="lists.wishlistManualToggle">Add manually</summary>
+                <form class="wishlist-add-form" id="wishlistAddForm" autocomplete="off">
+                  <div class="wishlist-add-fields">
+                    <input type="text" id="wishlistAddTitle" required data-next-i18n-placeholder="lists.wishlistTitlePlaceholder" placeholder="Title">
+                    <input type="text" id="wishlistAddYear" inputmode="numeric" data-next-i18n-placeholder="lists.wishlistYearPlaceholder" placeholder="Year">
+                    <select id="wishlistAddFormat" data-next-i18n-aria="movieDetail.format" aria-label="Format"></select>
+                    <input type="text" id="wishlistAddBarcode" data-next-i18n-placeholder="lists.wishlistBarcodePlaceholder" placeholder="Barcode">
+                  </div>
+                  <textarea id="wishlistAddNote" rows="2" class="wishlist-add-note" data-next-i18n-placeholder="lists.wishlistNotePlaceholder" placeholder="Note"></textarea>
+                  <div class="wishlist-add-actions">
+                    <button type="submit" class="primary-button" data-next-i18n="lists.wishlistAdd">Add to wishlist</button>
+                  </div>
+                  <p class="form-message" id="wishlistAddMessage" role="status"></p>
+                </form>
+              </details>
+            </div>
             <div class="lists-simple-list" id="listsWishlistList"></div>
           </div>
           <div class="lists-tags-panel hidden" id="listsTagsPanel">
             <div class="lists-simple-list tags-list" id="listsTagsList"></div>
           </div>
           <div class="lists-loans-panel hidden" id="listsLoansPanel">
+            <div class="lists-loans-toolbar">
+              <button type="button" class="primary-button" id="loanCreateButton" data-next-i18n="lists.loanAddButton">Lend a disc</button>
+            </div>
             <div class="lists-simple-list loans-list" id="listsLoansList"></div>
           </div>
           <div class="preview-empty hidden" id="listsEmptyMessage"></div>
@@ -23609,6 +23917,21 @@ def ui_preview_html(
       }).join("");
       select.value = normalized;
     }
+    function movieFormatOptionsHtml(selectedValue = "") {
+      const normalized = normalizedMovieFormatValue(selectedValue);
+      const collectorMode = collectorsModeEnabled();
+      const allowed = MOVIE_FORMAT_OPTIONS.filter((item) => collectorMode || !item.collectorOnly);
+      const allowedValues = new Set(allowed.map((item) => item.value));
+      const knownValues = new Set(MOVIE_FORMAT_OPTIONS.map((item) => item.value));
+      const customOption = normalized && !allowedValues.has(normalized) && !knownValues.has(normalized)
+        ? [{value: normalized}]
+        : [];
+      return [
+        `<option value="">${escapeHtml(tNext("lists.wishlistFormatPlaceholder", "Format"))}</option>`,
+        ...allowed.map((item) => `<option value="${escapeHtml(item.value)}"${item.value === normalized ? " selected" : ""}>${escapeHtml(item.value)}</option>`),
+        ...customOption.map((item) => `<option value="${escapeHtml(item.value)}" selected>${escapeHtml(item.value)}</option>`)
+      ].join("");
+    }
     function renderImportFormatOptions() {
       const select = document.getElementById("importFormatInput");
       if (!select || select.tagName !== "SELECT") return;
@@ -28658,7 +28981,7 @@ def ui_preview_html(
           <div class="list-simple-actions">
             ${acquired
               ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
-              : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+              : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
             <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
           </div>
         </div>
@@ -28716,12 +29039,13 @@ def ui_preview_html(
       const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
       const acquired = !!item.acquiredAt;
       return `
-        <div class="preview-poster lists-static-poster">
-          <span class="preview-poster-art">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
+        <div class="preview-poster lists-static-poster" data-wishlist-card="${escapeHtml(item.id)}">
+          <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
           <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
           <span class="lists-poster-actions">
-            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
+            <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
             <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
           </span>
         </div>
@@ -28741,7 +29065,8 @@ def ui_preview_html(
             <span class="list-simple-actions">
               ${acquired
                 ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
-                : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+                : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
+              <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
               <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
             </span>
           </span>
@@ -28769,7 +29094,8 @@ def ui_preview_html(
                 <span role="cell" class="list-simple-actions">
                   ${acquired
                     ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
-                    : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+                    : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
+                  <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
                   <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
                 </span>
               </div>
@@ -28779,8 +29105,28 @@ def ui_preview_html(
       `;
     }
     function wishlistRenderRows(rows, mode) {
-      if (mode === "detail") return wishlistDetailTableHtml(rows || []);
-      return (rows || []).map(mode === "list" ? wishlistListCardHtml : wishlistPosterCardHtml).join("");
+      const all = rows || [];
+      const pending = all.filter((item) => !item.acquiredAt);
+      const acquired = all.filter((item) => !!item.acquiredAt);
+      const renderGroup = (groupRows) => {
+        if (mode === "detail") return wishlistDetailTableHtml(groupRows);
+        return groupRows.map(mode === "list" ? wishlistListCardHtml : wishlistPosterCardHtml).join("");
+      };
+      const sectionInner = (groupRows) => mode === "poster"
+        ? `<div class="lists-grid">${renderGroup(groupRows)}</div>`
+        : (mode === "list"
+          ? `<div class="mode-list-grid">${renderGroup(groupRows)}</div>`
+          : renderGroup(groupRows));
+      const section = (title, groupRows) => `
+        <section class="wishlist-section">
+          <header class="wishlist-section-head"><h3>${escapeHtml(title)}</h3><span>${groupRows.length}</span></header>
+          ${groupRows.length
+            ? sectionInner(groupRows)
+            : `<p class="wishlist-section-empty">${escapeHtml(tNext("lists.wishlistSectionEmpty", "Nothing here yet."))}</p>`}
+        </section>
+      `;
+      return section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
+        + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
     function tagPosterCardHtml(tag) {
       const count = tag.movieCount || 0;
@@ -28843,12 +29189,13 @@ def ui_preview_html(
         ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.loanReturned", "Returned"))}</span>`
         : (overdue ? `<span class="lists-poster-badge danger">${escapeHtml(tNext("lists.loanOverdueBadge", "Overdue"))}</span>` : "");
       return `
-        <div class="preview-poster lists-static-poster">
-          <span class="preview-poster-art">${posterHtml}${badge}</span>
+        <div class="preview-poster lists-static-poster" data-loan-card="${escapeHtml(loan.id)}">
+          <span class="preview-poster-art" data-loan-poster="${escapeHtml(loan.id)}" data-loan-movie="${escapeHtml(loan.movieId || "")}" role="button" tabindex="0">${posterHtml}${badge}</span>
           <span class="preview-poster-title">${escapeHtml(loanTitle(loan))}</span>
           <span class="preview-poster-meta">${escapeHtml(tNext("lists.loanTo", "Lent to") + ": " + loanBorrowerLabel(loan))}</span>
           <span class="lists-poster-actions">
             ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
+            <button type="button" data-loan-meerinfo="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
             <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
           </span>
         </div>
@@ -28872,6 +29219,7 @@ def ui_preview_html(
             ${loan.note ? `<span class="mode-list-meta">${escapeHtml(loan.note)}</span>` : ""}
             <span class="list-simple-actions">
               ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
+              <button type="button" data-loan-meerinfo="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
               <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
             </span>
           </span>
@@ -28901,6 +29249,7 @@ def ui_preview_html(
                 <span role="cell" class="${overdue ? "loan-overdue" : ""}">${escapeHtml(status)}</span>
                 <span role="cell" class="list-simple-actions">
                   ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
+                  <button type="button" data-loan-meerinfo="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
                   <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
                 </span>
               </div>
@@ -29133,6 +29482,12 @@ def ui_preview_html(
       document.querySelectorAll("[data-loan-remove]").forEach((btn) => {
         btn.addEventListener("click", () => deleteLoanItem(btn.dataset.loanRemove));
       });
+      document.querySelectorAll("[data-wishlist-meerinfo]").forEach((btn) => {
+        btn.addEventListener("click", (event) => { event.stopPropagation(); openWishlistMeerInfo(btn.dataset.wishlistMeerinfo); });
+      });
+      document.querySelectorAll("[data-loan-meerinfo]").forEach((btn) => {
+        btn.addEventListener("click", (event) => { event.stopPropagation(); openLoanMeerInfo(btn.dataset.loanMeerinfo); });
+      });
     }
     function setWishlistMessage(text, tone) {
       const node = document.getElementById("wishlistAddMessage");
@@ -29152,14 +29507,15 @@ def ui_preview_html(
       const body = {
         title,
         format: (document.getElementById("wishlistAddFormat")?.value || "").trim() || null,
-        barcode: (document.getElementById("wishlistAddBarcode")?.value || "").trim() || null
+        barcode: (document.getElementById("wishlistAddBarcode")?.value || "").trim() || null,
+        note: (document.getElementById("wishlistAddNote")?.value || "").trim() || null
       };
       const yearNum = parseInt(yearRaw, 10);
       if (!Number.isNaN(yearNum)) body.year = yearNum;
       setWishlistMessage(tNext("lists.wishlistAdding", "Adding..."));
       try {
         await authApiJson("/api/next/lists/wishlist", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
-        ["wishlistAddTitle", "wishlistAddYear", "wishlistAddFormat", "wishlistAddBarcode"].forEach((fid) => {
+        ["wishlistAddTitle", "wishlistAddYear", "wishlistAddFormat", "wishlistAddBarcode", "wishlistAddNote"].forEach((fid) => {
           const node = document.getElementById(fid);
           if (node) node.value = "";
         });
@@ -29293,9 +29649,13 @@ def ui_preview_html(
       } else if (active === "wishlist") {
         const list = document.getElementById("listsWishlistList");
         if (list) {
-          configureSimpleListNode(list);
+          list.className = "wishlist-sections";
+          list.dataset.viewMode = listsViewMode;
           list.innerHTML = wishlistRenderRows(listsState.wishlist || [], listsViewMode);
         }
+        const fmt = document.getElementById("wishlistAddFormat");
+        if (fmt && fmt.tagName === "SELECT") fmt.innerHTML = movieFormatOptionsHtml(fmt.value || "");
+        bindWishlistCardInteractions();
         renderWishlistSearchResults();
         if (empty) {
           empty.textContent = tNext("lists.emptyWishlist", "Your wishlist is empty.");
@@ -29317,6 +29677,7 @@ def ui_preview_html(
           configureSimpleListNode(list);
           list.innerHTML = loanRenderRows(listsState.loans || [], listsViewMode);
         }
+        bindLoanCardInteractions();
         if (empty) {
           empty.textContent = tNext("lists.emptyLoans", "No discs are currently on loan.");
           empty.classList.toggle("hidden", !!(listsState.loans || []).length);
@@ -29371,6 +29732,413 @@ def ui_preview_html(
           empty.classList.remove("hidden");
         }
       }
+    }
+    function bindLongPress(el, opts) {
+      if (!el) return;
+      const onClick = (opts && opts.onClick) || (function () {});
+      const onLongPress = (opts && opts.onLongPress) || (function () {});
+      let timer = null;
+      let longFired = false;
+      let startX = 0;
+      let startY = 0;
+      const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      const start = (x, y) => {
+        longFired = false;
+        startX = x;
+        startY = y;
+        clear();
+        timer = setTimeout(() => { longFired = true; onLongPress(); }, 480);
+      };
+      el.addEventListener("pointerdown", (event) => {
+        if (typeof event.button === "number" && event.button !== 0) return;
+        start(event.clientX, event.clientY);
+      });
+      el.addEventListener("pointermove", (event) => {
+        if (!timer) return;
+        if (Math.abs(event.clientX - startX) > 12 || Math.abs(event.clientY - startY) > 12) clear();
+      });
+      el.addEventListener("pointerup", (event) => {
+        const wasLong = longFired;
+        clear();
+        if (wasLong) { event.preventDefault(); return; }
+        onClick();
+      });
+      el.addEventListener("pointerleave", clear);
+      el.addEventListener("pointercancel", clear);
+      el.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onClick(); }
+      });
+    }
+    function bindWishlistCardInteractions() {
+      document.querySelectorAll("#listsWishlistList [data-wishlist-poster]").forEach((poster) => {
+        const id = poster.dataset.wishlistPoster;
+        const card = poster.closest("[data-wishlist-card]");
+        bindLongPress(poster, {
+          onClick: () => openWishlistMeerInfo(id),
+          onLongPress: () => { if (card) card.classList.toggle("actions-visible"); }
+        });
+      });
+    }
+    function bindLoanCardInteractions() {
+      document.querySelectorAll("#listsLoansList [data-loan-poster]").forEach((poster) => {
+        const loanId = poster.dataset.loanPoster;
+        const movieId = poster.dataset.loanMovie || "";
+        const card = poster.closest("[data-loan-card]");
+        bindLongPress(poster, {
+          onClick: () => { if (movieId) openAppMovieDetail(movieId); else openLoanMeerInfo(loanId); },
+          onLongPress: () => { if (card) card.classList.toggle("actions-visible"); }
+        });
+      });
+    }
+    function listsCloseOverlay(overlay) {
+      if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+    function listsCreateOverlay(className) {
+      const overlay = document.createElement("div");
+      overlay.className = "lists-modal-overlay";
+      const panel = document.createElement("div");
+      panel.className = "lists-modal " + (className || "");
+      overlay.appendChild(panel);
+      overlay.addEventListener("mousedown", (event) => { if (event.target === overlay) listsCloseOverlay(overlay); });
+      document.body.appendChild(overlay);
+      return { overlay, panel };
+    }
+    function listsFindWishlist(id) {
+      return (listsState.wishlist || []).find((item) => String(item.id) === String(id)) || null;
+    }
+    function listsFindLoan(id) {
+      return (listsState.loans || []).find((loan) => String(loan.id) === String(id)) || null;
+    }
+    function openWishlistMeerInfo(id) {
+      const item = listsFindWishlist(id);
+      if (!item) return;
+      const { overlay, panel } = listsCreateOverlay("lists-meerinfo");
+      let editing = false;
+      let posterUrl = usableImage(item.posterUrl || item.poster_url) || "";
+      let pendingPosterFile = null;
+      const render = () => {
+        const posterPreview = posterUrl
+          ? `<img src="${escapeHtml(posterUrl)}" alt="">`
+          : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        panel.className = "lists-modal lists-meerinfo" + (editing ? " editing" : "");
+        panel.innerHTML = `
+          <header class="lists-modal-head">
+            <h3>${escapeHtml(editing ? tNext("lists.meerInfoEditTitle", "Edit item") : (item.title || tNext("common.untitled", "Untitled")))}</h3>
+          </header>
+          <div class="lists-modal-body">
+            <div class="lists-modal-poster">
+              ${posterPreview}
+              ${editing ? `<button type="button" class="lists-modal-poster-btn" data-poster-replace>${escapeHtml(tNext("lists.replacePoster", "Replace poster"))}</button><input type="file" accept="image/*" hidden data-poster-input>` : ""}
+            </div>
+            <div class="lists-modal-fields">
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+                <span data-read>${escapeHtml(item.title || "")}</span>
+                <input data-edit data-field="title" type="text" value="${escapeHtml(item.title || "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span>
+                <span data-read>${escapeHtml(physicalFormatLabel(item.format) || item.format || "")}</span>
+                <select data-edit data-field="format">${movieFormatOptionsHtml(item.format || "")}</select></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistYearColumn", "Year"))}</span>
+                <span data-read>${escapeHtml(item.year ? String(item.year) : "")}</span>
+                <input data-edit data-field="year" type="number" value="${escapeHtml(item.year ? String(item.year) : "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistBarcodeColumn", "Barcode"))}</span>
+                <span data-read>${escapeHtml(item.barcode || "")}</span>
+                <input data-edit data-field="barcode" type="text" value="${escapeHtml(item.barcode || "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+                <span data-read>${escapeHtml(item.note || "")}</span>
+                <textarea data-edit data-field="note" rows="2">${escapeHtml(item.note || "")}</textarea></label>
+            </div>
+          </div>
+          <p class="lists-modal-message" data-message></p>
+          <footer class="lists-modal-actions">
+            <button type="button" data-primary>${escapeHtml(editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit"))}</button>
+            <button type="button" class="ghost" data-secondary>${escapeHtml(editing ? tNext("common.cancel", "Cancel") : tNext("common.close", "Close"))}</button>
+          </footer>
+        `;
+        const messageNode = panel.querySelector("[data-message]");
+        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        panel.querySelector("[data-secondary]").addEventListener("click", () => {
+          if (editing) { editing = false; pendingPosterFile = null; posterUrl = usableImage(item.posterUrl || item.poster_url) || ""; render(); }
+          else listsCloseOverlay(overlay);
+        });
+        panel.querySelector("[data-primary]").addEventListener("click", async () => {
+          if (!editing) { editing = true; render(); return; }
+          const body = {
+            title: (panel.querySelector('[data-field="title"]').value || "").trim(),
+            format: (panel.querySelector('[data-field="format"]').value || "").trim() || null,
+            barcode: (panel.querySelector('[data-field="barcode"]').value || "").trim() || null,
+            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null
+          };
+          const yearRaw = (panel.querySelector('[data-field="year"]').value || "").trim();
+          const yearNum = parseInt(yearRaw, 10);
+          body.year = Number.isNaN(yearNum) ? null : yearNum;
+          if (!body.title) { setMessage(tNext("lists.wishlistTitleRequired", "Title is required."), "bad"); return; }
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            if (pendingPosterFile) {
+              const form = new FormData();
+              form.append("file", pendingPosterFile);
+              await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id) + "/poster", { method: "POST", body: form });
+              pendingPosterFile = null;
+            }
+            await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            listsCloseOverlay(overlay);
+            await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+        if (editing) {
+          const replaceBtn = panel.querySelector("[data-poster-replace]");
+          const fileInput = panel.querySelector("[data-poster-input]");
+          if (replaceBtn && fileInput) {
+            replaceBtn.addEventListener("click", () => fileInput.click());
+            fileInput.addEventListener("change", () => {
+              const file = fileInput.files && fileInput.files[0];
+              if (!file) return;
+              pendingPosterFile = file;
+              const reader = new FileReader();
+              reader.onload = () => { posterUrl = reader.result; render(); };
+              reader.readAsDataURL(file);
+            });
+          }
+        }
+      };
+      render();
+    }
+    function openLoanMeerInfo(id) {
+      const loan = listsFindLoan(id);
+      if (!loan) return;
+      const snapshot = loan.snapshot || {};
+      const { overlay, panel } = listsCreateOverlay("lists-meerinfo");
+      let editing = false;
+      const toDateInput = (value) => {
+        if (!value) return "";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toISOString().slice(0, 10);
+      };
+      const render = () => {
+        const poster = loanPosterUrl(loan);
+        const posterPreview = poster
+          ? `<img src="${escapeHtml(poster)}" alt="">`
+          : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        const barcode = snapshot.barcode || loan.barcode || "";
+        const format = snapshot.format || loan.format || "";
+        panel.className = "lists-modal lists-meerinfo" + (editing ? " editing" : "");
+        panel.innerHTML = `
+          <header class="lists-modal-head"><h3>${escapeHtml(loanTitle(loan))}</h3></header>
+          <div class="lists-modal-body">
+            <div class="lists-modal-poster">${posterPreview}</div>
+            <div class="lists-modal-fields">
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistBarcodeColumn", "Barcode"))}</span><span data-read>${escapeHtml(barcode)}</span></div>
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span data-read>${escapeHtml(physicalFormatLabel(format) || format || "")}</span></div>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanedOn", "Loaned"))}</span>
+                <span data-read>${escapeHtml(loan.loanedAt ? formatAppDate(loan.loanedAt) : "")}</span>
+                <input data-edit data-field="loanedAt" type="date" value="${escapeHtml(toDateInput(loan.loanedAt))}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanDue", "Due"))}</span>
+                <span data-read>${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
+                <input data-edit data-field="dueAt" type="date" value="${escapeHtml(toDateInput(loan.dueAt))}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
+                <span data-read>${escapeHtml(loanBorrowerLabel(loan))}</span>
+                <input data-edit data-field="borrowerName" type="text" value="${escapeHtml(loan.borrowerName || "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+                <span data-read>${escapeHtml(loan.note || "")}</span>
+                <textarea data-edit data-field="note" rows="2">${escapeHtml(loan.note || "")}</textarea></label>
+            </div>
+          </div>
+          <p class="lists-modal-message" data-message></p>
+          <footer class="lists-modal-actions">
+            <button type="button" data-primary>${escapeHtml(editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit"))}</button>
+            <button type="button" class="ghost" data-secondary>${escapeHtml(editing ? tNext("common.cancel", "Cancel") : tNext("common.close", "Close"))}</button>
+          </footer>
+        `;
+        const messageNode = panel.querySelector("[data-message]");
+        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        panel.querySelector("[data-secondary]").addEventListener("click", () => {
+          if (editing) { editing = false; render(); }
+          else listsCloseOverlay(overlay);
+        });
+        panel.querySelector("[data-primary]").addEventListener("click", async () => {
+          if (!editing) { editing = true; render(); return; }
+          const dueRaw = (panel.querySelector('[data-field="dueAt"]').value || "").trim();
+          const loanedRaw = (panel.querySelector('[data-field="loanedAt"]').value || "").trim();
+          const body = {
+            borrowerName: (panel.querySelector('[data-field="borrowerName"]').value || "").trim() || null,
+            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null,
+            dueAt: dueRaw ? new Date(dueRaw + "T00:00:00").toISOString() : null,
+            loanedAt: loanedRaw ? new Date(loanedRaw + "T00:00:00").toISOString() : null
+          };
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            await authApiJson("/api/next/loans/" + encodeURIComponent(id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            listsCloseOverlay(overlay);
+            await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+      };
+      render();
+    }
+    function loanLibraryEntryLabel(movie) {
+      const title = movie.title || movie.name || tNext("common.untitled", "Untitled");
+      const year = movie.year || movie.releaseYear || "";
+      const format = physicalFormatLabel(movie.format) || movie.format || "";
+      const suffix = [year, format ? `(${format})` : ""].filter(Boolean).join(" ");
+      return suffix ? `${title} ${suffix}` : title;
+    }
+    async function openLoanLibraryPicker() {
+      const { overlay, panel } = listsCreateOverlay("lists-picker");
+      let debounce = null;
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.loanPickTitle", "Select a film"))}</h3></header>
+        <div class="lists-picker-results" data-results><p class="lists-modal-message">${escapeHtml(tNext("common.loading", "Loading..."))}</p></div>
+        <div class="lists-picker-searchbar">
+          <input type="search" data-picker-search placeholder="${escapeHtml(tNext("lists.loanPickSearch", "Search library..."))}">
+        </div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      const resultsNode = panel.querySelector("[data-results]");
+      const searchNode = panel.querySelector("[data-picker-search]");
+      const renderResults = (movies) => {
+        if (!movies.length) {
+          resultsNode.innerHTML = `<p class="lists-modal-message">${escapeHtml(tNext("lists.loanPickEmpty", "No films found."))}</p>`;
+          return;
+        }
+        resultsNode.innerHTML = movies.map((movie) => `
+          <button type="button" class="lists-picker-item" data-pick-movie="${escapeHtml(String(movie.id || movie.movieId || ""))}">
+            <span>${escapeHtml(loanLibraryEntryLabel(movie))}</span>
+          </button>
+        `).join("");
+        resultsNode.querySelectorAll("[data-pick-movie]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const movieId = btn.dataset.pickMovie;
+            const movie = movies.find((m) => String(m.id || m.movieId) === String(movieId));
+            listsCloseOverlay(overlay);
+            openLoanCreateScreen(movie);
+          });
+        });
+      };
+      const search = async (query) => {
+        try {
+          const params = new URLSearchParams();
+          if (query) params.set("q", query);
+          params.set("limit", "50");
+          const data = await authApiJson("/api/next/movies?" + params.toString());
+          const movies = (data && (data.movies || data.items || data.results)) || [];
+          renderResults(movies);
+        } catch (error) {
+          resultsNode.innerHTML = `<p class="lists-modal-message bad">${escapeHtml((error && error.message) || String(error))}</p>`;
+        }
+      };
+      searchNode.addEventListener("input", () => {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(() => search(searchNode.value.trim()), 220);
+      });
+      search("");
+    }
+    function openLoanCreateScreen(movie) {
+      let selectedMovie = movie || null;
+      const { overlay, panel } = listsCreateOverlay("lists-loan-create");
+      let borrowerUserId = null;
+      let borrowerDebounce = null;
+      const render = () => {
+        panel.innerHTML = `
+          <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.loanCreateTitle", "Lend film"))}</h3></header>
+          <div class="lists-modal-body lists-loan-form">
+            <div class="lists-modal-field">
+              <span>${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+              <div class="lists-loan-movie">
+                <strong>${selectedMovie ? escapeHtml(loanLibraryEntryLabel(selectedMovie)) : escapeHtml(tNext("lists.loanNoFilm", "No film selected"))}</strong>
+                <button type="button" class="ghost" data-change-movie>${escapeHtml(tNext("lists.loanChangeFilm", "Change"))}</button>
+              </div>
+            </div>
+            <label class="lists-modal-field">
+              <span>${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
+              <input type="text" data-borrower-name placeholder="${escapeHtml(tNext("lists.loanBorrowerPlaceholder", "Search members or type a name"))}">
+              <div class="lists-borrower-results" data-borrower-results></div>
+            </label>
+            <div class="lists-modal-field">
+              <span class="lists-switch-row">
+                <span>${escapeHtml(tNext("lists.loanDueSwitch", "Set expected return date"))}</span>
+                <label class="lists-switch"><input type="checkbox" data-due-switch><span></span></label>
+              </span>
+              <input type="date" data-due-date class="hidden">
+            </div>
+            <label class="lists-modal-field">
+              <span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+              <textarea data-loan-note rows="2"></textarea>
+            </label>
+          </div>
+          <p class="lists-modal-message" data-message></p>
+          <footer class="lists-modal-actions">
+            <button type="button" data-primary>${escapeHtml(tNext("lists.loanSubmit", "Lend"))}</button>
+            <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+          </footer>
+        `;
+        const messageNode = panel.querySelector("[data-message]");
+        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+        panel.querySelector("[data-change-movie]").addEventListener("click", () => {
+          listsCloseOverlay(overlay);
+          openLoanLibraryPicker();
+        });
+        const dueSwitch = panel.querySelector("[data-due-switch]");
+        const dueDate = panel.querySelector("[data-due-date]");
+        dueSwitch.addEventListener("change", () => { dueDate.classList.toggle("hidden", !dueSwitch.checked); });
+        const borrowerInput = panel.querySelector("[data-borrower-name]");
+        const borrowerResults = panel.querySelector("[data-borrower-results]");
+        borrowerInput.addEventListener("input", () => {
+          borrowerUserId = null;
+          const query = borrowerInput.value.trim();
+          if (borrowerDebounce) clearTimeout(borrowerDebounce);
+          if (query.length < 2) { borrowerResults.innerHTML = ""; return; }
+          borrowerDebounce = setTimeout(async () => {
+            try {
+              const data = await authApiJson("/api/next/loans/borrowers/search?q=" + encodeURIComponent(query) + "&limit=8");
+              const members = (data && (data.members || data.results || data.borrowers)) || [];
+              if (!members.length) { borrowerResults.innerHTML = ""; return; }
+              borrowerResults.innerHTML = members.map((m) => `
+                <button type="button" class="lists-borrower-item" data-borrower-id="${escapeHtml(String(m.id))}" data-borrower-label="${escapeHtml(m.displayName || m.username || "")}">
+                  <span class="lists-borrower-avatar">${escapeHtml(((m.displayName || m.username || "?").trim()[0] || "?").toUpperCase())}</span>
+                  <span>${escapeHtml(m.displayName || m.username || "")}${m.username ? ` <em>@${escapeHtml(m.username)}</em>` : ""}</span>
+                </button>
+              `).join("");
+              borrowerResults.querySelectorAll("[data-borrower-id]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                  borrowerUserId = btn.dataset.borrowerId;
+                  borrowerInput.value = btn.dataset.borrowerLabel;
+                  borrowerResults.innerHTML = "";
+                });
+              });
+            } catch (error) {
+              borrowerResults.innerHTML = "";
+            }
+          }, 220);
+        });
+        panel.querySelector("[data-primary]").addEventListener("click", async () => {
+          if (!selectedMovie) { setMessage(tNext("lists.loanNoFilm", "No film selected"), "bad"); return; }
+          const borrowerName = borrowerInput.value.trim();
+          if (!borrowerUserId && !borrowerName) { setMessage(tNext("lists.loanBorrowerRequired", "Enter a borrower."), "bad"); return; }
+          const body = { note: (panel.querySelector("[data-loan-note]").value || "").trim() || null };
+          if (borrowerUserId) body.borrower_user_id = borrowerUserId;
+          else body.borrower_name = borrowerName;
+          if (dueSwitch.checked && dueDate.value) body.due_at = new Date(dueDate.value + "T00:00:00").toISOString();
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            const movieId = selectedMovie.id || selectedMovie.movieId;
+            await authApiJson("/api/next/movies/" + encodeURIComponent(movieId) + "/loans", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            listsCloseOverlay(overlay);
+            await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+      };
+      render();
     }
     const statsState = {loaded: false, data: null};
     function statsBarsHtml(rows) {
@@ -32486,6 +33254,7 @@ def ui_preview_html(
       });
       document.getElementById("wishlistAddForm")?.addEventListener("submit", submitWishlistAdd);
       document.getElementById("wishlistSearchForm")?.addEventListener("submit", submitWishlistSearch);
+      document.getElementById("loanCreateButton")?.addEventListener("click", () => openLoanLibraryPicker());
       document.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           listsViewMode = normalizeViewMode(button.dataset.listsViewMode);
@@ -43022,6 +43791,7 @@ def emit_watch_history_change(conn, user_id, entry_id, *, operation: str, movie_
 
 def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
     acquired_movie = row.get("acquired_movie_id")
+    created_by = row.get("created_by_user_id")
     return {
         "id": str(row.get("id")),
         "title": row.get("title"),
@@ -43035,6 +43805,7 @@ def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
         "addedAt": row.get("added_at"),
         "acquiredAt": row.get("acquired_at"),
         "acquiredMovieId": str(acquired_movie) if acquired_movie else None,
+        "createdByUserId": str(created_by) if created_by else None,
     }
 
 
@@ -43045,7 +43816,8 @@ def wishlist_sync_entity(conn, user_id, item_id) -> dict[str, Any] | None:
         cur.execute(
             """
             SELECT id, title, year, barcode, format, movievault_id, poster_url,
-                   note, snapshot, added_at, acquired_at, acquired_movie_id
+                   note, snapshot, added_at, acquired_at, acquired_movie_id,
+                   created_by_user_id
             FROM wishlist_items
             WHERE user_id=%s AND id=%s
             """,
@@ -43062,7 +43834,8 @@ def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
         cur.execute(
             """
             SELECT id, title, year, barcode, format, movievault_id, poster_url,
-                   note, snapshot, added_at, acquired_at, acquired_movie_id
+                   note, snapshot, added_at, acquired_at, acquired_movie_id,
+                   created_by_user_id
             FROM wishlist_items
             WHERE user_id=%s
             ORDER BY added_at
@@ -43220,6 +43993,7 @@ def emit_movie_tag_change(
 def _loan_row_entity(row: dict[str, Any]) -> dict[str, Any]:
     movie = row.get("movie_id")
     borrower_user = row.get("borrower_user_id")
+    created_by = row.get("created_by_user_id")
     returned_at = row.get("returned_at")
     return {
         "id": str(row.get("id")),
@@ -43233,6 +44007,7 @@ def _loan_row_entity(row: dict[str, Any]) -> dict[str, Any]:
         "returned": returned_at is not None,
         "note": row.get("note"),
         "createdAt": row.get("created_at"),
+        "createdByUserId": str(created_by) if created_by else None,
     }
 
 
@@ -43243,7 +44018,8 @@ def loan_sync_entity(conn, user_id, loan_id) -> dict[str, Any] | None:
         cur.execute(
             """
             SELECT id, movie_id, snapshot, borrower_name, borrower_user_id,
-                   loaned_at, due_at, returned_at, note, created_at
+                   loaned_at, due_at, returned_at, note, created_at,
+                   created_by_user_id
             FROM loans
             WHERE user_id=%s AND id=%s
             """,
@@ -43260,7 +44036,8 @@ def all_loan_sync_entities(conn, user_id) -> list[dict[str, Any]]:
         cur.execute(
             """
             SELECT id, movie_id, snapshot, borrower_name, borrower_user_id,
-                   loaned_at, due_at, returned_at, note, created_at
+                   loaned_at, due_at, returned_at, note, created_at,
+                   created_by_user_id
             FROM loans
             WHERE user_id=%s
             ORDER BY loaned_at
@@ -43289,6 +44066,48 @@ def emit_loan_change(conn, user_id, loan_id, *, operation: str, movie_id=None) -
         operation=operation,
         payload=payload,
     )
+
+
+def _borrowed_loan_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    entity = _loan_row_entity(row)
+    lender_user = row.get("user_id")
+    entity["lenderUserId"] = str(lender_user) if lender_user else None
+    entity["lenderName"] = (
+        row.get("lender_display_name")
+        or row.get("lender_username")
+        or None
+    )
+    entity["lenderUsername"] = row.get("lender_username")
+    return entity
+
+
+def all_borrowed_loan_entities(conn, borrower_user_id) -> list[dict[str, Any]]:
+    """Loans where the given user is the borrower (incoming loan list)."""
+    if not borrower_user_id or not table_exists(conn, "loans"):
+        return []
+    join_users = table_exists(conn, "users")
+    lender_select = (
+        "lender.username AS lender_username, lender.display_name AS lender_display_name"
+        if join_users
+        else "NULL AS lender_username, NULL AS lender_display_name"
+    )
+    lender_join = "LEFT JOIN users lender ON lender.id = l.user_id" if join_users else ""
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT l.id, l.user_id, l.movie_id, l.snapshot, l.borrower_name,
+                   l.borrower_user_id, l.loaned_at, l.due_at, l.returned_at,
+                   l.note, l.created_at, l.created_by_user_id,
+                   {lender_select}
+            FROM loans l
+            {lender_join}
+            WHERE l.borrower_user_id=%s
+            ORDER BY l.loaned_at DESC
+            """,
+            (borrower_user_id,),
+        )
+        rows = cur.fetchall()
+    return [_borrowed_loan_row_entity(row) for row in rows]
 
 
 def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit: int = 200) -> list[dict[str, Any]]:
@@ -45333,6 +46152,87 @@ def create_uploaded_profile_avatar_asset(
                 Jsonb(
                     {
                         "source": "profile_upload",
+                        "originalFilename": upload_info.get("originalFilename"),
+                        "uploadedBy": actor_job_payload(actor or {}) if actor else None,
+                    }
+                ),
+            ),
+        )
+        return cur.fetchone()
+
+
+def store_uploaded_poster_asset(
+    conn,
+    *,
+    upload_info: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Persist an uploaded poster image as a shared media asset and return the row.
+
+    Used by lightweight entities (e.g. wishlist items) that keep a poster URL
+    string rather than an entity_media relation. Serve via media_asset_public_url.
+    """
+    if not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset table is not available", 503)
+    storage_key = clean_text(upload_info.get("storageKey")) or ""
+    if not storage_key:
+        raise NextApiError("Uploaded poster did not produce a storage key", 500)
+    media_id = media_asset_uuid(storage_key)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO media_assets (
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata
+            )
+            VALUES (%s, 'poster', 'original', 'local', %s, NULL, 'upload', %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (kind, variant, sha256) DO UPDATE SET
+                storage_backend=EXCLUDED.storage_backend,
+                storage_key=EXCLUDED.storage_key,
+                provider_id=EXCLUDED.provider_id,
+                content_type=EXCLUDED.content_type,
+                width=EXCLUDED.width,
+                height=EXCLUDED.height,
+                size_bytes=EXCLUDED.size_bytes,
+                metadata=EXCLUDED.metadata
+            RETURNING
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata,
+                created_at
+            """,
+            (
+                media_id,
+                storage_key,
+                upload_info.get("contentType"),
+                upload_info.get("width"),
+                upload_info.get("height"),
+                upload_info.get("sizeBytes"),
+                upload_info.get("sha256"),
+                Jsonb(
+                    {
+                        "source": "wishlist_upload",
                         "originalFilename": upload_info.get("originalFilename"),
                         "uploadedBy": actor_job_payload(actor or {}) if actor else None,
                     }
@@ -53201,8 +54101,8 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO wishlist_items
-                            (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot, created_by_user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
                         """,
                         (
@@ -53215,6 +54115,7 @@ def register_routes(flask_app: Flask) -> None:
                             fields["poster_url"],
                             fields["note"],
                             Jsonb(snapshot),
+                            actor.get("id"),
                         ),
                     )
                     item_id = (cur.fetchone() or {}).get("id")
@@ -53313,6 +54214,162 @@ def register_routes(flask_app: Flask) -> None:
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "counts": personal_list_counts(conn, user_id),
                 }
+            )
+
+    @flask_app.patch("/api/next/lists/wishlist/<item_id>")
+    def update_wishlist_item(item_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Wishlist request body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT title, year, barcode, format, movievault_id, poster_url, note
+                    FROM wishlist_items
+                    WHERE user_id=%s AND id=%s
+                    """,
+                    (user_id, item_uuid),
+                )
+                current = cur.fetchone()
+            if not current:
+                raise NextApiError("Wishlist entry not found", 404)
+
+            fields = {
+                "title": current.get("title"),
+                "year": current.get("year"),
+                "barcode": current.get("barcode"),
+                "format": current.get("format"),
+                "movievault_id": current.get("movievault_id"),
+                "poster_url": current.get("poster_url"),
+                "note": current.get("note"),
+            }
+            if "title" in body:
+                new_title = clean_text(body.get("title"))
+                if not new_title:
+                    raise NextApiError("Wishlist entry requires a title", 400)
+                fields["title"] = new_title
+            if "year" in body:
+                year_raw = body.get("year")
+                fields["year"] = (
+                    int(year_raw)
+                    if isinstance(year_raw, (int, float))
+                    or (isinstance(year_raw, str) and year_raw.strip().isdigit())
+                    else None
+                )
+            if "barcode" in body:
+                fields["barcode"] = clean_text(body.get("barcode"))
+            if "format" in body:
+                fields["format"] = clean_text(body.get("format"))
+            if "movievaultId" in body or "movievault_id" in body:
+                fields["movievault_id"] = clean_text(body.get("movievaultId") or body.get("movievault_id"))
+            if "posterUrl" in body or "poster_url" in body:
+                fields["poster_url"] = clean_text(body.get("posterUrl") or body.get("poster_url"))
+            if "note" in body:
+                fields["note"] = clean_text(body.get("note"))
+
+            snapshot = _wishlist_snapshot(fields)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE wishlist_items
+                        SET title=%s, year=%s, barcode=%s, format=%s,
+                            movievault_id=%s, poster_url=%s, note=%s, snapshot=%s
+                        WHERE user_id=%s AND id=%s
+                        """,
+                        (
+                            fields["title"],
+                            fields["year"],
+                            fields["barcode"],
+                            fields["format"],
+                            fields["movievault_id"],
+                            fields["poster_url"],
+                            fields["note"],
+                            Jsonb(snapshot),
+                            user_id,
+                            item_uuid,
+                        ),
+                    )
+                emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.updated",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_uuid,
+                    summary="Updated wishlist entry",
+                    metadata={"title": fields["title"]},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "entry": wishlist_sync_entity(conn, user_id, item_uuid),
+                    "counts": personal_list_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.post("/api/next/lists/wishlist/<item_id>/poster")
+    def upload_wishlist_poster(item_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
+            raise NextApiError("Poster upload may not exceed 20 MB", 413)
+        upload, _inferred = uploaded_artwork_file()
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT title, year, barcode, format, movievault_id, poster_url, note FROM wishlist_items WHERE user_id=%s AND id=%s",
+                    (user_id, item_uuid),
+                )
+                current = cur.fetchone()
+            if not current:
+                raise NextApiError("Wishlist entry not found", 404)
+            upload_info = save_uploaded_artwork_file(upload, kind="poster")
+            with conn.transaction():
+                asset = store_uploaded_poster_asset(conn, upload_info=upload_info, actor=actor)
+                poster_url = media_asset_public_url(asset)
+                fields = {
+                    "title": current.get("title"),
+                    "year": current.get("year"),
+                    "barcode": current.get("barcode"),
+                    "format": current.get("format"),
+                    "movievault_id": current.get("movievault_id"),
+                    "poster_url": poster_url,
+                }
+                snapshot = _wishlist_snapshot(fields)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE wishlist_items SET poster_url=%s, snapshot=%s WHERE user_id=%s AND id=%s",
+                        (poster_url, Jsonb(snapshot), user_id, item_uuid),
+                    )
+                emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.poster_uploaded",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_uuid,
+                    summary="Uploaded wishlist poster",
+                    metadata={"posterUrl": poster_url},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "posterUrl": poster_url,
+                    "entry": wishlist_sync_entity(conn, user_id, item_uuid),
+                },
+                201,
             )
 
     # ------------------------------------------------------------------
@@ -53601,15 +54658,36 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO loans
-                            (user_id, movie_id, snapshot, borrower_name, borrower_user_id, due_at, note)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            (user_id, movie_id, snapshot, borrower_name, borrower_user_id, due_at, note, created_by_user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
                         """,
-                        (user_id, movie_uuid, Jsonb(snapshot), borrower_name, borrower_uuid, due_at, note),
+                        (user_id, movie_uuid, Jsonb(snapshot), borrower_name, borrower_uuid, due_at, note, actor.get("id")),
                     )
                     loan_id = (cur.fetchone() or {}).get("id")
                 if loan_id is not None:
                     emit_loan_change(conn, user_id, loan_id, operation="upsert", movie_id=movie_uuid)
+                    if borrower_uuid is not None and table_exists(conn, "user_notifications"):
+                        movie_title = clean_text((snapshot or {}).get("title")) or "a disc"
+                        lender_label = actor.get("display_name") or actor.get("username") or "A DiscVault member"
+                        try:
+                            create_user_notification(
+                                conn,
+                                borrower_uuid,
+                                title="Disc lent to you",
+                                body=f"{lender_label} lent you {movie_title}.",
+                                url="/lists",
+                                pref_key="app_updates",
+                                payload={
+                                    "kind": "loan_created",
+                                    "loanId": str(loan_id),
+                                    "movieId": str(movie_uuid),
+                                    "movieTitle": movie_title,
+                                    "lenderId": str(user_id or ""),
+                                },
+                            )
+                        except Exception:
+                            pass
                 audit_event(
                     conn,
                     event_type="loan.created",
@@ -53696,6 +54774,136 @@ def register_routes(flask_app: Flask) -> None:
                         metadata={},
                     )
             return response({"status": "ok", "deleted": deleted})
+
+    @flask_app.patch("/api/next/loans/<loan_id>")
+    def update_loan(loan_id: str):
+        loan_uuid = parse_uuid(loan_id, "loanId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Loan request body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "loans"):
+                raise NextApiError("Loans table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT movie_id, borrower_name, borrower_user_id, loaned_at, due_at, note
+                    FROM loans
+                    WHERE user_id=%s AND id=%s
+                    """,
+                    (user_id, loan_uuid),
+                )
+                current = cur.fetchone()
+            if not current:
+                raise NextApiError("Loan not found", 404)
+
+            borrower_name = current.get("borrower_name")
+            borrower_uuid = current.get("borrower_user_id")
+            due_at = current.get("due_at")
+            loaned_at = current.get("loaned_at")
+            note = current.get("note")
+
+            if "borrowerName" in body or "borrower_name" in body:
+                borrower_name = clean_text(body.get("borrowerName") or body.get("borrower_name"))
+            if "borrowerUserId" in body or "borrower_user_id" in body:
+                borrower_ref = clean_text(body.get("borrowerUserId") or body.get("borrower_user_id"))
+                borrower_uuid = parse_uuid(borrower_ref, "borrowerUserId") if borrower_ref else None
+            if "dueAt" in body or "due_at" in body:
+                due_at = clean_text(body.get("dueAt") or body.get("due_at")) or None
+            if "loanedAt" in body or "loaned_at" in body:
+                loaned_raw = clean_text(body.get("loanedAt") or body.get("loaned_at"))
+                if loaned_raw:
+                    loaned_at = loaned_raw
+            if "note" in body:
+                note = clean_text(body.get("note"))
+
+            if not borrower_name and borrower_uuid is None:
+                raise NextApiError("Provide borrowerName or borrowerUserId", 400)
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE loans
+                        SET borrower_name=%s, borrower_user_id=%s, due_at=%s,
+                            loaned_at=%s, note=%s
+                        WHERE user_id=%s AND id=%s
+                        """,
+                        (
+                            borrower_name,
+                            borrower_uuid,
+                            due_at,
+                            loaned_at,
+                            note,
+                            user_id,
+                            loan_uuid,
+                        ),
+                    )
+                emit_loan_change(
+                    conn, user_id, loan_uuid, operation="upsert", movie_id=current.get("movie_id")
+                )
+                audit_event(
+                    conn,
+                    event_type="loan.updated",
+                    category="personal",
+                    actor=actor,
+                    target_type="loan",
+                    target_id=loan_uuid,
+                    summary="Updated loan",
+                    metadata={"borrower": borrower_name or str(borrower_uuid)},
+                )
+            return response({"status": "ok", "loan": loan_sync_entity(conn, user_id, loan_uuid)})
+
+    @flask_app.get("/api/next/loans/borrowers/search")
+    def search_loan_borrowers():
+        query = clean_text(request.args.get("q") or request.args.get("query")) or ""
+        limit = min(max(int(request.args.get("limit", 10) or 10), 1), 25)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "users"):
+                return response({"status": "ok", "borrowers": []})
+            results: list[dict[str, Any]] = []
+            if len(query) >= 1:
+                like = f"%{query.lower()}%"
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, username, display_name
+                        FROM users
+                        WHERE (lower(username) LIKE %s OR lower(coalesce(display_name, '')) LIKE %s)
+                          AND id <> %s
+                        ORDER BY
+                            CASE WHEN lower(username) = %s THEN 0 ELSE 1 END,
+                            lower(coalesce(display_name, username))
+                        LIMIT %s
+                        """,
+                        (like, like, actor.get("id"), query.lower(), limit),
+                    )
+                    rows = cur.fetchall()
+                results = [
+                    {
+                        "id": str(row.get("id")),
+                        "username": row.get("username"),
+                        "displayName": row.get("display_name") or row.get("username"),
+                    }
+                    for row in rows
+                ]
+            return response({"status": "ok", "borrowers": results})
+
+    @flask_app.get("/api/next/loans/borrowed")
+    def list_borrowed_loans():
+        status_filter = clean_text(request.args.get("status")) or "all"
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            loans = all_borrowed_loan_entities(conn, user_id)
+            if status_filter == "active":
+                loans = [ln for ln in loans if not ln.get("returned")]
+            elif status_filter == "returned":
+                loans = [ln for ln in loans if ln.get("returned")]
+            return response({"status": "ok", "loans": loans})
 
     @flask_app.get("/api/next/stats/personal")
     def personal_statistics():
