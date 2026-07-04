@@ -8546,6 +8546,31 @@ def ui_preview_html(
     .lists-modal.editing [data-read] {
       display: none;
     }
+    .lists-actionsheet-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 4px 0 2px;
+    }
+    .lists-actionsheet-btn {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      font-size: .95rem;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .lists-actionsheet-btn:hover {
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .lists-actionsheet-btn.danger {
+      color: var(--danger, #e5484d);
+      border-color: color-mix(in srgb, var(--danger, #e5484d) 45%, var(--line));
+    }
     .lists-modal-actions {
       display: flex;
       gap: 8px;
@@ -10928,6 +10953,18 @@ def ui_preview_html(
       background: var(--bg-solid);
       color: var(--text);
       box-shadow: 0 7px 18px rgba(0,0,0,.12);
+    }
+    .detail-submenu button.lists-seg {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .lists-seg-icon {
+      width: 17px;
+      height: 17px;
+      fill: currentColor;
+      flex: 0 0 auto;
+      display: block;
     }
     .detail-subpanel {
       min-width: 0;
@@ -14375,6 +14412,18 @@ def ui_preview_html(
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      .detail-submenu button.lists-seg {
+        max-width: none;
+        padding: 0 12px;
+        justify-content: center;
+      }
+      .detail-submenu button.lists-seg .lists-seg-label {
+        display: none;
+      }
+      .detail-submenu button.lists-seg .lists-seg-icon {
+        width: 20px;
+        height: 20px;
+      }
       .profile-hero {
         align-items: stretch;
         flex-direction: column;
@@ -15156,11 +15205,11 @@ def ui_preview_html(
             <h3 data-next-i18n="lists.collectionTitle">My viewing lists</h3>
             <div class="detail-card-actions">
               <div class="detail-submenu" role="tablist" aria-label="Lists" data-next-i18n-aria="uiPreview.navLists">
-                <button type="button" class="active" data-lists-tab="watchlist" data-next-i18n="lists.watchlist">Watchlist</button>
-                <button type="button" data-lists-tab="watched" data-next-i18n="lists.watched">Watched</button>
-                <button type="button" data-lists-tab="wishlist" data-next-i18n="lists.wishlist">Wishlist</button>
-                <button type="button" data-lists-tab="tags" data-next-i18n="lists.tags">Tags</button>
-                <button type="button" data-lists-tab="loans" data-next-i18n="lists.loans">On loan</button>
+                <button type="button" class="active lists-seg" data-lists-tab="watchlist" data-next-i18n-aria="lists.watchlist" aria-label="Watchlist"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17,18V5H7V18L12,15.82L17,18M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.watchlist">Watchlist</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="watched" data-next-i18n-aria="lists.watched" aria-label="Watched"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.watched">Watched</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="wishlist" data-next-i18n-aria="lists.wishlist" aria-label="Wishlist"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.1,18.55L12,18.65L11.89,18.55C7.14,14.24 4,11.39 4,8.5C4,6.5 5.5,5 7.5,5C9.04,5 10.54,6 11.07,7.36H12.93C13.46,6 14.96,5 16.5,5C18.5,5 20,6.5 20,8.5C20,11.39 16.86,14.24 12.1,18.55M16.5,3C14.76,3 13.09,3.81 12,5.08C10.91,3.81 9.24,3 7.5,3C4.42,3 2,5.41 2,8.5C2,12.27 5.4,15.36 10.55,20.03L12,21.35L13.45,20.03C18.6,15.36 22,12.27 22,8.5C22,5.41 19.58,3 16.5,3Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.wishlist">Wishlist</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="tags" data-next-i18n-aria="lists.tags" aria-label="Tags"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41,11.58L12.41,2.58C12.04,2.21 11.53,2 11,2H4A2,2 0 0,0 2,4V11C2,11.53 2.21,12.04 2.59,12.42L11.59,21.42C11.96,21.79 12.47,22 13,22C13.53,22 14.04,21.79 14.41,21.41L21.41,14.41C21.79,14.04 22,13.53 22,13C22,12.47 21.79,11.96 21.41,11.58M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.tags">Tags</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="loans" data-next-i18n-aria="lists.loans" aria-label="On loan"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16,17V19H2V17S2,13 9,13 16,17 16,17M12.5,7.5A3.5,3.5 0 1,0 9,11A3.5,3.5 0 0,0 12.5,7.5M15.94,13A5.32,5.32 0 0,1 18,17V19H22V17S22,13.37 15.94,13M15,4A3.39,3.39 0 0,0 13.07,4.59A5,5 0 0,1 13.07,10.41A3.39,3.39 0 0,0 15,11A3.5,3.5 0 0,0 15,4Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.loans">On loan</span></button>
               </div>
               <div class="segmented compact view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
                 <button type="button" class="active" data-lists-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
@@ -29178,8 +29227,18 @@ def ui_preview_html(
       const snapshot = loan.snapshot || {};
       return snapshot.title || loan.title || tNext("common.untitled", "Untitled");
     }
-    function loanBorrowerLabel(loan) {
+    function loanBorrowerDisplayName(loan) {
+      if (loan.borrowerUserId) {
+        return loan.borrowerDisplayName || loan.borrowerUsername || loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+      }
       return loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+    }
+    function loanBorrowerLabel(loan) {
+      const name = loanBorrowerDisplayName(loan);
+      if (loan.borrowerUserId) {
+        return name + " (" + tNext("lists.loanDiscvaultUser", "DiscVault user") + ")";
+      }
+      return name;
     }
     function loanPosterCardHtml(loan) {
       const poster = loanPosterUrl(loan);
@@ -29786,7 +29845,36 @@ def ui_preview_html(
         const card = poster.closest("[data-loan-card]");
         bindLongPress(poster, {
           onClick: () => { if (movieId) openAppMovieDetail(movieId); else openLoanMeerInfo(loanId); },
-          onLongPress: () => { if (card) card.classList.toggle("actions-visible"); }
+          onLongPress: () => openLoanActionsMenu(loanId)
+        });
+      });
+    }
+    function openLoanActionsMenu(loanId) {
+      const loan = listsFindLoan(loanId);
+      if (!loan) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      const actions = [];
+      if (!loan.returned) {
+        actions.push({ key: "return", label: tNext("lists.loanMarkReturned", "Mark returned"), run: () => returnLoanItem(loanId) });
+      }
+      actions.push({ key: "meerinfo", label: tNext("lists.moreInfo", "More info"), run: () => openLoanMeerInfo(loanId) });
+      actions.push({ key: "remove", label: tNext("common.remove", "Remove"), tone: "danger", run: () => deleteLoanItem(loanId) });
+      const buttonsHtml = actions.map((action, index) =>
+        `<button type="button" class="lists-actionsheet-btn${action.tone === "danger" ? " danger" : ""}" data-action-index="${index}">${escapeHtml(action.label)}</button>`
+      ).join("");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(loanTitle(loan))}</h3></header>
+        <div class="lists-actionsheet-list">${buttonsHtml}</div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-action-index]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const action = actions[Number(btn.dataset.actionIndex)];
+          listsCloseOverlay(overlay);
+          if (action && typeof action.run === "function") action.run();
         });
       });
     }
@@ -29930,17 +30018,16 @@ def ui_preview_html(
           <div class="lists-modal-body">
             <div class="lists-modal-poster">${posterPreview}</div>
             <div class="lists-modal-fields">
-              <div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistBarcodeColumn", "Barcode"))}</span><span data-read>${escapeHtml(barcode)}</span></div>
-              <div class="lists-modal-field"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span data-read>${escapeHtml(physicalFormatLabel(format) || format || "")}</span></div>
-              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanedOn", "Loaned"))}</span>
-                <span data-read>${escapeHtml(loan.loanedAt ? formatAppDate(loan.loanedAt) : "")}</span>
-                <input data-edit data-field="loanedAt" type="date" value="${escapeHtml(toDateInput(loan.loanedAt))}"></label>
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistBarcodeColumn", "Barcode"))}</span><span data-static>${escapeHtml(barcode || "—")}</span></div>
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span data-static>${escapeHtml(physicalFormatLabel(format) || format || "—")}</span></div>
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanedOn", "Loaned"))}</span>
+                <span data-static>${escapeHtml(loan.loanedAt ? formatAppDate(loan.loanedAt) : "—")}</span></div>
               <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanDue", "Due"))}</span>
                 <span data-read>${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
                 <input data-edit data-field="dueAt" type="date" value="${escapeHtml(toDateInput(loan.dueAt))}"></label>
               <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
                 <span data-read>${escapeHtml(loanBorrowerLabel(loan))}</span>
-                <input data-edit data-field="borrowerName" type="text" value="${escapeHtml(loan.borrowerName || "")}"></label>
+                <input data-edit data-field="borrowerName" type="text" value="${escapeHtml(loanBorrowerDisplayName(loan) || "")}"></label>
               <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
                 <span data-read>${escapeHtml(loan.note || "")}</span>
                 <textarea data-edit data-field="note" rows="2">${escapeHtml(loan.note || "")}</textarea></label>
@@ -29961,12 +30048,10 @@ def ui_preview_html(
         panel.querySelector("[data-primary]").addEventListener("click", async () => {
           if (!editing) { editing = true; render(); return; }
           const dueRaw = (panel.querySelector('[data-field="dueAt"]').value || "").trim();
-          const loanedRaw = (panel.querySelector('[data-field="loanedAt"]').value || "").trim();
           const body = {
             borrowerName: (panel.querySelector('[data-field="borrowerName"]').value || "").trim() || null,
             note: (panel.querySelector('[data-field="note"]').value || "").trim() || null,
-            dueAt: dueRaw ? new Date(dueRaw + "T00:00:00").toISOString() : null,
-            loanedAt: loanedRaw ? new Date(loanedRaw + "T00:00:00").toISOString() : null
+            dueAt: dueRaw ? new Date(dueRaw + "T00:00:00").toISOString() : null
           };
           setMessage(tNext("common.saving", "Saving..."));
           try {
@@ -43995,12 +44080,16 @@ def _loan_row_entity(row: dict[str, Any]) -> dict[str, Any]:
     borrower_user = row.get("borrower_user_id")
     created_by = row.get("created_by_user_id")
     returned_at = row.get("returned_at")
+    borrower_display = row.get("borrower_display_name") or None
+    borrower_username = row.get("borrower_username") or None
     return {
         "id": str(row.get("id")),
         "movieId": str(movie) if movie else None,
         "snapshot": row.get("snapshot") or {},
         "borrowerName": row.get("borrower_name"),
         "borrowerUserId": str(borrower_user) if borrower_user else None,
+        "borrowerDisplayName": borrower_display or borrower_username,
+        "borrowerUsername": borrower_username,
         "loanedAt": row.get("loaned_at"),
         "dueAt": row.get("due_at"),
         "returnedAt": returned_at,
@@ -44014,14 +44103,25 @@ def _loan_row_entity(row: dict[str, Any]) -> dict[str, Any]:
 def loan_sync_entity(conn, user_id, loan_id) -> dict[str, Any] | None:
     if not table_exists(conn, "loans"):
         return None
+    join_users = table_exists(conn, "users")
+    borrower_select = (
+        "borrower.username AS borrower_username, borrower.display_name AS borrower_display_name"
+        if join_users
+        else "NULL AS borrower_username, NULL AS borrower_display_name"
+    )
+    borrower_join = (
+        "LEFT JOIN users borrower ON borrower.id = l.borrower_user_id" if join_users else ""
+    )
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT id, movie_id, snapshot, borrower_name, borrower_user_id,
-                   loaned_at, due_at, returned_at, note, created_at,
-                   created_by_user_id
-            FROM loans
-            WHERE user_id=%s AND id=%s
+            f"""
+            SELECT l.id, l.movie_id, l.snapshot, l.borrower_name, l.borrower_user_id,
+                   l.loaned_at, l.due_at, l.returned_at, l.note, l.created_at,
+                   l.created_by_user_id,
+                   {borrower_select}
+            FROM loans l
+            {borrower_join}
+            WHERE l.user_id=%s AND l.id=%s
             """,
             (user_id, loan_id),
         )
@@ -44032,15 +44132,26 @@ def loan_sync_entity(conn, user_id, loan_id) -> dict[str, Any] | None:
 def all_loan_sync_entities(conn, user_id) -> list[dict[str, Any]]:
     if not user_id or not table_exists(conn, "loans"):
         return []
+    join_users = table_exists(conn, "users")
+    borrower_select = (
+        "borrower.username AS borrower_username, borrower.display_name AS borrower_display_name"
+        if join_users
+        else "NULL AS borrower_username, NULL AS borrower_display_name"
+    )
+    borrower_join = (
+        "LEFT JOIN users borrower ON borrower.id = l.borrower_user_id" if join_users else ""
+    )
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT id, movie_id, snapshot, borrower_name, borrower_user_id,
-                   loaned_at, due_at, returned_at, note, created_at,
-                   created_by_user_id
-            FROM loans
-            WHERE user_id=%s
-            ORDER BY loaned_at
+            f"""
+            SELECT l.id, l.movie_id, l.snapshot, l.borrower_name, l.borrower_user_id,
+                   l.loaned_at, l.due_at, l.returned_at, l.note, l.created_at,
+                   l.created_by_user_id,
+                   {borrower_select}
+            FROM loans l
+            {borrower_join}
+            WHERE l.user_id=%s
+            ORDER BY l.loaned_at
             """,
             (user_id,),
         )
