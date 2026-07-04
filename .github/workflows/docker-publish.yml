@@ -74,24 +74,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-            dockerfile="./app/Dockerfile"
-            family="legacy"
-          else
-            dockerfile="./app/Dockerfile.v26"
-            family="v26-stack"
-          fi
+          # The legacy app/Dockerfile was removed in "Remove legacy DiscVault app
+          # from the v26 line"; the v26 stack (app/Dockerfile.v26) is now the only
+          # build, on every branch including main. The frozen :legacy image is the
+          # old DiscVault app and is no longer rebuilt here (kept until cleanup).
+          dockerfile="./app/Dockerfile.v26"
+          family="v26-stack"
           echo "dockerfile=$dockerfile" >> "$GITHUB_OUTPUT"
           echo "family=$family" >> "$GITHUB_OUTPUT"
           echo "Using Dockerfile: $dockerfile ($family)"
 
       # Resolve tags:
-      #   main                -> :latest, :legacy
+      #   main                -> :latest, :v26
+      #   release/v26         -> :latest, :v26
       #   release/v26-dev     -> :dev, :v26-dev
       #   release/v26-beta    -> :v26-beta
-      #   release/v26         -> :v26
       #   tag v26.0.0         -> :v26.0.0, :v26, :stable
       #   manual run          -> :dev-<sha>
+      # (:legacy is intentionally not produced here — it stays the frozen old
+      #  DiscVault image until we retire it.)
       - name: Docker meta (tags & labels)
         id: meta
         uses: docker/metadata-action@v6
@@ -102,13 +103,12 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=legacy,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release/v26' }}
             type=raw,value=dev-${{ github.sha }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/release/v26-dev' || github.event_name == 'workflow_dispatch' }}
             type=raw,value=v26-dev,enable=${{ github.ref == 'refs/heads/release/v26-dev' }}
             type=raw,value=v26-beta,enable=${{ github.ref == 'refs/heads/release/v26-beta' }}
-            type=raw,value=v26,enable=${{ github.ref == 'refs/heads/release/v26' }}
+            type=raw,value=v26,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release/v26' }}
             type=raw,value=v26,enable=${{ github.ref_type == 'tag' }}
             type=ref,event=tag,enable=${{ startsWith(github.ref, 'refs/tags/v26.') }}
           labels: |
