@@ -8253,6 +8253,134 @@ def ui_preview_html(
       color: var(--red);
       font-weight: 600;
     }
+    .wishlist-search-form {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .wishlist-search-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .wishlist-search-row input {
+      flex: 1 1 220px;
+      min-width: 0;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      color: var(--text);
+    }
+    .wishlist-search-results {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .wishlist-search-results:empty {
+      margin-bottom: 0;
+    }
+    .wishlist-search-status {
+      color: var(--muted);
+      font-size: .85rem;
+      margin: 4px 0;
+    }
+    .wishlist-search-card {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      padding: 8px 12px;
+    }
+    .wishlist-search-poster {
+      width: 46px;
+      height: 64px;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      font-size: .6rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    .wishlist-search-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .wishlist-search-body {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .wishlist-search-meta {
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .wishlist-search-meta.muted {
+      opacity: .8;
+    }
+    .wishlist-manual {
+      margin-bottom: 14px;
+    }
+    .wishlist-manual > summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: .85rem;
+      padding: 4px 0;
+    }
+    .lists-static-poster {
+      cursor: default;
+    }
+    .lists-poster-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 6px;
+    }
+    .lists-poster-actions button {
+      padding: 5px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      color: var(--text);
+      font-size: .78rem;
+      cursor: pointer;
+    }
+    .lists-poster-actions button.danger {
+      color: var(--red);
+    }
+    .lists-poster-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 85%, black);
+      color: #fff;
+      font-size: .68rem;
+      font-weight: 600;
+    }
+    .lists-poster-badge.danger {
+      background: var(--red);
+    }
+    .tag-poster-art {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tag-poster-initial {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+    }
     .stats-cards {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -14715,16 +14843,27 @@ def ui_preview_html(
           <div class="lists-grid" id="listsWatchlistGrid"></div>
           <div class="lists-history hidden" id="listsWatchedList"></div>
           <div class="lists-wishlist hidden" id="listsWishlistPanel">
-            <form class="wishlist-add-form" id="wishlistAddForm" autocomplete="off">
-              <div class="wishlist-add-fields">
-                <input type="text" id="wishlistAddTitle" required data-next-i18n-placeholder="lists.wishlistTitlePlaceholder" placeholder="Title">
-                <input type="text" id="wishlistAddYear" inputmode="numeric" data-next-i18n-placeholder="lists.wishlistYearPlaceholder" placeholder="Year">
-                <input type="text" id="wishlistAddFormat" data-next-i18n-placeholder="lists.wishlistFormatPlaceholder" placeholder="Format">
-                <input type="text" id="wishlistAddBarcode" data-next-i18n-placeholder="lists.wishlistBarcodePlaceholder" placeholder="Barcode">
-                <button type="submit" class="primary-button" data-next-i18n="lists.wishlistAdd">Add to wishlist</button>
+            <form class="wishlist-search-form" id="wishlistSearchForm" autocomplete="off">
+              <div class="wishlist-search-row">
+                <input type="text" id="wishlistSearchInput" required data-next-i18n-placeholder="lists.wishlistSearchPlaceholder" placeholder="Search a title to find editions">
+                <button type="submit" class="primary-button" data-next-i18n="lists.wishlistSearchButton">Find editions</button>
               </div>
-              <p class="form-message" id="wishlistAddMessage" role="status"></p>
+              <p class="form-message" id="wishlistSearchMessage" role="status"></p>
             </form>
+            <div class="wishlist-search-results" id="wishlistSearchResults"></div>
+            <details class="wishlist-manual">
+              <summary data-next-i18n="lists.wishlistManualToggle">Add manually</summary>
+              <form class="wishlist-add-form" id="wishlistAddForm" autocomplete="off">
+                <div class="wishlist-add-fields">
+                  <input type="text" id="wishlistAddTitle" required data-next-i18n-placeholder="lists.wishlistTitlePlaceholder" placeholder="Title">
+                  <input type="text" id="wishlistAddYear" inputmode="numeric" data-next-i18n-placeholder="lists.wishlistYearPlaceholder" placeholder="Year">
+                  <input type="text" id="wishlistAddFormat" data-next-i18n-placeholder="lists.wishlistFormatPlaceholder" placeholder="Format">
+                  <input type="text" id="wishlistAddBarcode" data-next-i18n-placeholder="lists.wishlistBarcodePlaceholder" placeholder="Barcode">
+                  <button type="submit" class="primary-button" data-next-i18n="lists.wishlistAdd">Add to wishlist</button>
+                </div>
+                <p class="form-message" id="wishlistAddMessage" role="status"></p>
+              </form>
+            </details>
             <div class="lists-simple-list" id="listsWishlistList"></div>
           </div>
           <div class="lists-tags-panel hidden" id="listsTagsPanel">
@@ -16541,7 +16680,7 @@ def ui_preview_html(
     let activePersonPayload = null;
     let personReturnRoute = null;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
-    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], counts: {}};
+    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
@@ -28535,6 +28674,386 @@ def ui_preview_html(
         </div>
       `;
     }
+    function listsSimpleModeClass(mode) {
+      if (mode === "list") return "mode-list-grid";
+      if (mode === "detail") return "mode-detail-grid";
+      return "lists-grid";
+    }
+    function wishlistPosterCardHtml(item) {
+      const poster = usableImage(item.posterUrl || item.poster_url);
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
+      const acquired = !!item.acquiredAt;
+      return `
+        <div class="preview-poster lists-static-poster">
+          <span class="preview-poster-art">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
+          <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
+          <span class="preview-poster-meta">${escapeHtml(meta)}</span>
+          <span class="lists-poster-actions">
+            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+            <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+          </span>
+        </div>
+      `;
+    }
+    function wishlistListCardHtml(item) {
+      const poster = usableImage(item.posterUrl || item.poster_url);
+      const meta = [item.year, physicalFormatLabel(item.format) || item.format, item.barcode].filter(Boolean).join(" / ");
+      const acquired = !!item.acquiredAt;
+      return `
+        <article class="mode-list-card">
+          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
+          <span class="mode-list-body">
+            <strong>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</strong>
+            <span class="mode-list-meta">${escapeHtml(meta)}</span>
+            ${item.note ? `<span class="mode-list-meta">${escapeHtml(item.note)}</span>` : ""}
+            <span class="list-simple-actions">
+              ${acquired
+                ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
+                : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+              <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+            </span>
+          </span>
+        </article>
+      `;
+    }
+    function wishlistDetailTableHtml(items) {
+      return `
+        <div class="watched-detail-table" role="table">
+          <div class="watched-detail-row head" role="row">
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.wishlistYearColumn", "Year"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("movieDetail.format", "Format"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.wishlistBarcodeColumn", "Barcode"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("common.actions", "Actions"))}</span>
+          </div>
+          ${(items || []).map((item) => {
+            const acquired = !!item.acquiredAt;
+            return `
+              <div class="watched-detail-row" role="row">
+                <span role="cell"><strong>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</strong>${item.note ? `<span class="list-simple-meta">${escapeHtml(item.note)}</span>` : ""}</span>
+                <span role="cell">${escapeHtml(item.year || "")}</span>
+                <span role="cell">${escapeHtml(physicalFormatLabel(item.format) || item.format || "")}</span>
+                <span role="cell">${escapeHtml(item.barcode || "")}</span>
+                <span role="cell" class="list-simple-actions">
+                  ${acquired
+                    ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
+                    : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+                  <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+                </span>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+    function wishlistRenderRows(rows, mode) {
+      if (mode === "detail") return wishlistDetailTableHtml(rows || []);
+      return (rows || []).map(mode === "list" ? wishlistListCardHtml : wishlistPosterCardHtml).join("");
+    }
+    function tagPosterCardHtml(tag) {
+      const count = tag.movieCount || 0;
+      const color = tag.color || "";
+      const initial = (String(tag.name || "#").trim().slice(0, 1) || "#").toUpperCase();
+      return `
+        <div class="preview-poster lists-static-poster tag-poster-card">
+          <span class="preview-poster-art tag-poster-art"${color ? ` style="background:${escapeHtml(color)}"` : ""}><span class="tag-poster-initial">${escapeHtml(initial)}</span></span>
+          <span class="preview-poster-title">${escapeHtml(tag.name || "")}</span>
+          <span class="preview-poster-meta">${escapeHtml(count)} ${escapeHtml(tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies"))}</span>
+          <span class="lists-poster-actions">
+            <button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>
+          </span>
+        </div>
+      `;
+    }
+    function tagDetailTableHtml(tags) {
+      return `
+        <div class="watched-detail-table" role="table">
+          <div class="watched-detail-row head" role="row">
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.tagName", "Tag"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.tagMoviesColumn", "Movies"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("common.actions", "Actions"))}</span>
+          </div>
+          ${(tags || []).map((tag) => {
+            const count = tag.movieCount || 0;
+            const color = tag.color || "";
+            return `
+              <div class="watched-detail-row" role="row">
+                <span role="cell"><span class="tag-swatch"${color ? ` style="background:${escapeHtml(color)}"` : ""}></span> <strong>${escapeHtml(tag.name || "")}</strong></span>
+                <span role="cell">${escapeHtml(count)}</span>
+                <span role="cell" class="list-simple-actions"><button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button></span>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+    function tagRenderRows(rows, mode) {
+      if (mode === "detail") return tagDetailTableHtml(rows || []);
+      if (mode === "list") return (rows || []).map(tagRowHtml).join("");
+      return (rows || []).map(tagPosterCardHtml).join("");
+    }
+    function loanPosterUrl(loan) {
+      const snapshot = loan.snapshot || {};
+      return usableImage(snapshot.poster_url || snapshot.poster || loan.poster_url);
+    }
+    function loanTitle(loan) {
+      const snapshot = loan.snapshot || {};
+      return snapshot.title || loan.title || tNext("common.untitled", "Untitled");
+    }
+    function loanBorrowerLabel(loan) {
+      return loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+    }
+    function loanPosterCardHtml(loan) {
+      const poster = loanPosterUrl(loan);
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const overdue = !loan.returned && loan.dueAt && new Date(loan.dueAt) < new Date();
+      const badge = loan.returned
+        ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.loanReturned", "Returned"))}</span>`
+        : (overdue ? `<span class="lists-poster-badge danger">${escapeHtml(tNext("lists.loanOverdueBadge", "Overdue"))}</span>` : "");
+      return `
+        <div class="preview-poster lists-static-poster">
+          <span class="preview-poster-art">${posterHtml}${badge}</span>
+          <span class="preview-poster-title">${escapeHtml(loanTitle(loan))}</span>
+          <span class="preview-poster-meta">${escapeHtml(tNext("lists.loanTo", "Lent to") + ": " + loanBorrowerLabel(loan))}</span>
+          <span class="lists-poster-actions">
+            ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
+            <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+          </span>
+        </div>
+      `;
+    }
+    function loanListCardHtml(loan) {
+      const poster = loanPosterUrl(loan);
+      const overdue = !loan.returned && loan.dueAt && new Date(loan.dueAt) < new Date();
+      const metaParts = [
+        `${tNext("lists.loanTo", "Lent to")}: ${loanBorrowerLabel(loan)}`,
+        loan.loanedAt ? `${tNext("lists.loanedOn", "Loaned")}: ${formatAppDate(loan.loanedAt)}` : "",
+        loan.dueAt ? `${tNext("lists.loanDue", "Due")}: ${formatAppDate(loan.dueAt)}` : "",
+        loan.returned && loan.returnedAt ? `${tNext("lists.loanReturned", "Returned")}: ${formatAppDate(loan.returnedAt)}` : ""
+      ].filter(Boolean);
+      return `
+        <article class="mode-list-card">
+          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
+          <span class="mode-list-body">
+            <strong>${escapeHtml(loanTitle(loan))}</strong>
+            <span class="mode-list-meta ${overdue ? "loan-overdue" : ""}">${escapeHtml(metaParts.join(" / "))}</span>
+            ${loan.note ? `<span class="mode-list-meta">${escapeHtml(loan.note)}</span>` : ""}
+            <span class="list-simple-actions">
+              ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
+              <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+            </span>
+          </span>
+        </article>
+      `;
+    }
+    function loanDetailTableHtml(loans) {
+      return `
+        <div class="watched-detail-table" role="table">
+          <div class="watched-detail-row head" role="row">
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.loanDue", "Due"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.loanStatus", "Status"))}</span>
+            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("common.actions", "Actions"))}</span>
+          </div>
+          ${(loans || []).map((loan) => {
+            const overdue = !loan.returned && loan.dueAt && new Date(loan.dueAt) < new Date();
+            const status = loan.returned
+              ? tNext("lists.loanReturned", "Returned")
+              : (overdue ? tNext("lists.loanOverdueBadge", "Overdue") : tNext("lists.loanActive", "On loan"));
+            return `
+              <div class="watched-detail-row" role="row">
+                <span role="cell"><strong>${escapeHtml(loanTitle(loan))}</strong>${loan.note ? `<span class="list-simple-meta">${escapeHtml(loan.note)}</span>` : ""}</span>
+                <span role="cell">${escapeHtml(loanBorrowerLabel(loan))}</span>
+                <span role="cell">${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
+                <span role="cell" class="${overdue ? "loan-overdue" : ""}">${escapeHtml(status)}</span>
+                <span role="cell" class="list-simple-actions">
+                  ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
+                  <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+                </span>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+    function loanRenderRows(rows, mode) {
+      if (mode === "detail") return loanDetailTableHtml(rows || []);
+      return (rows || []).map(mode === "list" ? loanListCardHtml : loanPosterCardHtml).join("");
+    }
+    function wishlistNormalizeCandidate(result, resultIndex, candidate, candidateIndex) {
+      if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result))) return null;
+      const movieUpdates = result?.movieUpdates && typeof result.movieUpdates === "object" ? result.movieUpdates : {};
+      const technicalUpdates = result?.technicalUpdates && typeof result.technicalUpdates === "object" ? result.technicalUpdates : {};
+      const rawIdentifiers = candidate.identifiers && typeof candidate.identifiers === "object"
+        ? candidate.identifiers
+        : (result?.identifiers && typeof result.identifiers === "object" ? result.identifiers : {});
+      const rawTitle = String(candidate.title || candidate.originalTitle || candidate.original_title || candidate.name || candidate.movieTitle || candidate.movie_title || movieUpdates.title || movieUpdates.original_title || "").trim();
+      if (!rawTitle) return null;
+      const explicitReleaseTitle = String(candidate.releaseTitle || candidate.release_title || movieUpdates.release_title || "").trim();
+      const rawReleaseTitle = explicitReleaseTitle || (SCAN_TITLE_NOISE_RE.test(rawTitle) ? rawTitle : "");
+      const title = (rawReleaseTitle ? cleanScannedTitle(rawReleaseTitle) : rawTitle) || rawTitle;
+      const provider = String(candidate.provider || candidate.pluginId || candidate.providerId || result?.pluginId || result?.provider || result?.providerId || "").trim();
+      const sourceLabel = pluginDisplayName(provider, String(candidate.sourceLabel || candidate.providerLabel || result?.sourceLabel || result?.providerLabel || provider || "").trim());
+      const sourceRef = String(candidate.sourceRef || candidate.sourceUrl || candidate.source_url || candidate.detailUrl || candidate.detail_url || result?.sourceRef || result?.sourceUrl || result?.source_url || "").trim();
+      const year = String(candidate.year || candidate.releaseYear || candidate.release_year || candidate.movieYear || candidate.movie_year || movieUpdates.year || "").trim();
+      const format = String(candidate.format || candidate.mediaFormat || candidate.media_format || candidate.releaseFormat || candidate.release_format || movieUpdates.format || technicalUpdates.format || result?.sourceFormat || "").trim();
+      const identifiers = {
+        tmdb: String(rawIdentifiers.tmdb || rawIdentifiers.tmdbId || rawIdentifiers.tmdb_id || candidate.tmdbId || candidate.tmdb_id || "").trim(),
+        imdb: String(rawIdentifiers.imdb || rawIdentifiers.imdbId || rawIdentifiers.imdb_id || candidate.imdbId || candidate.imdb_id || "").trim()
+      };
+      const posterUrl = lookupCandidateImage(result, candidate, "poster");
+      const barcode = String(candidate.barcode || candidate.externalBarcode || candidate.external_barcode || candidate.ean || candidate.upc || "").trim();
+      const movievaultId = String(
+        candidate.movievaultId
+        || candidate.movievault_id
+        || candidate.movieVaultId
+        || rawIdentifiers.movievault
+        || rawIdentifiers.movievault_26
+        || rawIdentifiers.movievaultId
+        || (provider.toLowerCase().includes("movievault") ? sourceRef : "")
+        || ""
+      ).trim();
+      const keyParts = [provider, title.toLowerCase(), year, format.toLowerCase(), identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "", identifiers.imdb ? `imdb:${identifiers.imdb}` : "", sourceRef, posterUrl, resultIndex, candidateIndex];
+      return {
+        candidateKey: keyParts.join("|"),
+        provider,
+        sourceLabel,
+        sourceRef,
+        title,
+        year,
+        format,
+        barcode,
+        posterUrl,
+        movievaultId,
+        identifiers
+      };
+    }
+    function wishlistLookupCandidates(metadata) {
+      const results = (metadata && (metadata.results || metadata.sources || metadata.matches)) || [];
+      if (!Array.isArray(results)) return [];
+      const candidates = [];
+      const seen = new Set();
+      results.forEach((result, resultIndex) => {
+        lookupResultCandidates(result).forEach((candidate, candidateIndex) => {
+          const normalized = wishlistNormalizeCandidate(result, resultIndex, candidate, candidateIndex);
+          if (!normalized) return;
+          const identity = [normalized.provider, normalized.title.toLowerCase(), normalized.year, normalized.format.toLowerCase(), normalized.identifiers.tmdb, normalized.identifiers.imdb, normalized.sourceRef, normalized.posterUrl].join("|");
+          if (seen.has(identity)) return;
+          seen.add(identity);
+          candidates.push(normalized);
+        });
+      });
+      return candidates;
+    }
+    function setWishlistSearchMessage(text, tone) {
+      const node = document.getElementById("wishlistSearchMessage");
+      if (!node) return;
+      node.textContent = text || "";
+      node.hidden = !text;
+      node.dataset.tone = tone || "";
+    }
+    function wishlistSearchCardHtml(candidate) {
+      const poster = usableImage(candidate.posterUrl);
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const metaParts = [candidate.year, physicalFormatLabel(candidate.format) || candidate.format].filter(Boolean);
+      const sub = [];
+      if (candidate.sourceLabel) sub.push(candidate.sourceLabel);
+      if (candidate.barcode) sub.push(`${tNext("lists.wishlistBarcodeColumn", "Barcode")}: ${candidate.barcode}`);
+      return `
+        <div class="wishlist-search-card">
+          <span class="wishlist-search-poster">${posterHtml}</span>
+          <span class="wishlist-search-body">
+            <strong>${escapeHtml(candidate.title || "")}</strong>
+            <span class="wishlist-search-meta">${escapeHtml(metaParts.join(" / "))}</span>
+            ${sub.length ? `<span class="wishlist-search-meta muted">${escapeHtml(sub.join(" · "))}</span>` : ""}
+          </span>
+          <button type="button" class="primary" data-wishlist-pick="${escapeHtml(candidate.candidateKey)}">${escapeHtml(tNext("lists.wishlistAddEdition", "Add"))}</button>
+        </div>
+      `;
+    }
+    function renderWishlistSearchResults() {
+      const wrap = document.getElementById("wishlistSearchResults");
+      if (!wrap) return;
+      const state = listsState.wishlistSearch || {};
+      if (state.loading) {
+        wrap.innerHTML = `<p class="wishlist-search-status">${escapeHtml(tNext("lists.wishlistSearching", "Searching…"))}</p>`;
+        return;
+      }
+      const candidates = Array.isArray(state.candidates) ? state.candidates : [];
+      if (!candidates.length) {
+        if (state.query && !state.error) {
+          wrap.innerHTML = `<p class="wishlist-search-status">${escapeHtml(tNext("lists.wishlistNoResults", "No editions found."))}</p>`;
+        } else {
+          wrap.innerHTML = "";
+        }
+        return;
+      }
+      wrap.innerHTML = candidates.map(wishlistSearchCardHtml).join("");
+      wrap.querySelectorAll("[data-wishlist-pick]").forEach((btn) => {
+        btn.addEventListener("click", () => addWishlistFromCandidate(btn.getAttribute("data-wishlist-pick")));
+      });
+    }
+    async function submitWishlistSearch(event) {
+      if (event) event.preventDefault();
+      const input = document.getElementById("wishlistSearchInput");
+      const query = String(input?.value || "").trim();
+      const state = listsState.wishlistSearch || (listsState.wishlistSearch = { query: "", loading: false, error: "", candidates: [] });
+      if (!query) {
+        setWishlistSearchMessage(tNext("lists.wishlistSearchRequired", "Enter a title to search."), "error");
+        return;
+      }
+      state.query = query;
+      state.loading = true;
+      state.error = "";
+      setWishlistSearchMessage("", "");
+      renderWishlistSearchResults();
+      try {
+        const payload = await authApiJson("/api/next/metadata/lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          timeoutMs: 30000,
+          body: JSON.stringify({ title: query, detectBoxSets: false, previewMode: true })
+        });
+        const metadata = (payload && (payload.metadata || payload.result || payload)) || {};
+        state.candidates = wishlistLookupCandidates(metadata);
+        state.loading = false;
+        renderWishlistSearchResults();
+        if (!state.candidates.length) {
+          setWishlistSearchMessage(tNext("lists.wishlistNoResults", "No editions found."), "");
+        }
+      } catch (err) {
+        state.loading = false;
+        state.candidates = [];
+        state.error = (err && err.message) || String(err);
+        renderWishlistSearchResults();
+        setWishlistSearchMessage(tNext("lists.wishlistSearchError", "Search failed. Please try again."), "error");
+      }
+    }
+    async function addWishlistFromCandidate(candidateKey) {
+      const state = listsState.wishlistSearch || {};
+      const candidate = (state.candidates || []).find((c) => c.candidateKey === candidateKey);
+      if (!candidate) return;
+      try {
+        await authApiJson("/api/next/lists/wishlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: candidate.title,
+            year: candidate.year || null,
+            format: candidate.format || null,
+            barcode: candidate.barcode || null,
+            posterUrl: candidate.posterUrl || null,
+            movievaultId: candidate.movievaultId || null
+          })
+        });
+        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        await loadListsView(true);
+      } catch (err) {
+        setWishlistSearchMessage((err && err.message) || tNext("lists.wishlistSearchError", "Search failed. Please try again."), "error");
+      }
+    }
     function bindListsSimpleActions() {
       document.querySelectorAll("[data-wishlist-remove]").forEach((btn) => {
         btn.addEventListener("click", () => removeWishlistItem(btn.dataset.wishlistRemove));
@@ -28664,9 +29183,8 @@ def ui_preview_html(
       const loansPanel = document.getElementById("listsLoansPanel");
       const empty = document.getElementById("listsEmptyMessage");
       const active = listsState.active;
-      const isMovieTab = active === "watchlist" || active === "watched";
       const viewModeControl = document.getElementById("listsViewModeControl");
-      if (viewModeControl) viewModeControl.classList.toggle("hidden", !isMovieTab);
+      if (viewModeControl) viewModeControl.classList.remove("hidden");
       if (watchlistGrid) watchlistGrid.classList.toggle("hidden", active !== "watchlist");
       if (watchedList) watchedList.classList.toggle("hidden", active !== "watched");
       if (wishlistPanel) wishlistPanel.classList.toggle("hidden", active !== "wishlist");
@@ -28685,6 +29203,16 @@ def ui_preview_html(
         node.classList.toggle("mode-list-grid", !watched && listsViewMode === "list");
         node.classList.toggle("mode-detail-grid", !watched && listsViewMode === "detail");
       };
+      const configureSimpleListNode = (node, options = {}) => {
+        if (!node) return;
+        const classes = [];
+        if (options.tags && listsViewMode === "list") classes.push("tags-list");
+        if (listsViewMode === "poster") classes.push("lists-grid");
+        else if (listsViewMode === "list") classes.push("mode-list-grid");
+        else if (listsViewMode === "detail") classes.push("mode-detail-grid");
+        else classes.push("lists-simple-list");
+        node.className = classes.join(" ");
+      };
       configureListNode(watchlistGrid);
       configureListNode(watchedList, true);
       if (active === "watchlist") {
@@ -28701,21 +29229,31 @@ def ui_preview_html(
         }
       } else if (active === "wishlist") {
         const list = document.getElementById("listsWishlistList");
-        if (list) list.innerHTML = (listsState.wishlist || []).map(wishlistItemHtml).join("");
+        if (list) {
+          configureSimpleListNode(list);
+          list.innerHTML = wishlistRenderRows(listsState.wishlist || [], listsViewMode);
+        }
+        renderWishlistSearchResults();
         if (empty) {
           empty.textContent = tNext("lists.emptyWishlist", "Your wishlist is empty.");
           empty.classList.toggle("hidden", !!(listsState.wishlist || []).length);
         }
       } else if (active === "tags") {
         const list = document.getElementById("listsTagsList");
-        if (list) list.innerHTML = (listsState.tags || []).map(tagRowHtml).join("");
+        if (list) {
+          configureSimpleListNode(list, {tags: true});
+          list.innerHTML = tagRenderRows(listsState.tags || [], listsViewMode);
+        }
         if (empty) {
           empty.textContent = tNext("lists.emptyTags", "You have no tags yet.");
           empty.classList.toggle("hidden", !!(listsState.tags || []).length);
         }
       } else if (active === "loans") {
         const list = document.getElementById("listsLoansList");
-        if (list) list.innerHTML = (listsState.loans || []).map(loanRowHtml).join("");
+        if (list) {
+          configureSimpleListNode(list);
+          list.innerHTML = loanRenderRows(listsState.loans || [], listsViewMode);
+        }
         if (empty) {
           empty.textContent = tNext("lists.emptyLoans", "No discs are currently on loan.");
           empty.classList.toggle("hidden", !!(listsState.loans || []).length);
@@ -31884,6 +32422,7 @@ def ui_preview_html(
         });
       });
       document.getElementById("wishlistAddForm")?.addEventListener("submit", submitWishlistAdd);
+      document.getElementById("wishlistSearchForm")?.addEventListener("submit", submitWishlistSearch);
       document.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           listsViewMode = normalizeViewMode(button.dataset.listsViewMode);
