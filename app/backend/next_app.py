@@ -8329,6 +8329,29 @@ def ui_preview_html(
       color: var(--accent, #6ea8fe);
       font-weight: 600;
     }
+    .wishlist-search-badge {
+      justify-self: start;
+      display: inline-block;
+      font-size: .68rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+      color: var(--bg-solid, #10131a);
+      background: var(--accent, #6ea8fe);
+      border-radius: 999px;
+      padding: 1px 8px;
+    }
+    .wishlist-search-resultbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 2px 2px 4px;
+    }
+    .wishlist-search-count {
+      color: var(--muted);
+      font-size: .82rem;
+    }
     .wishlist-manual {
       margin-bottom: 14px;
     }
@@ -14638,6 +14661,8 @@ def ui_preview_html(
                 <option value="any" data-next-i18n="common.any">Any</option>
                 <option value="watchlist" data-next-i18n="lists.watchlist">Watchlist</option>
                 <option value="watched" data-next-i18n="lists.watched">Watched</option>
+                <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
+                <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
                 <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
               </select>
             </label>
@@ -21477,7 +21502,7 @@ def ui_preview_html(
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
-        personal: ["any", "watchlist", "watched", "unlisted"].includes(source.personal) ? source.personal : "any",
+        personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged"].includes(source.personal) ? source.personal : "any",
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any"
       };
     }
@@ -21746,6 +21771,8 @@ def ui_preview_html(
       if (filters.personal === "watchlist" && !movie?.on_watchlist) return false;
       if (filters.personal === "watched" && !movieIsWatched(movie)) return false;
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
+      if (filters.personal === "onloan" && !movie?.on_loan) return false;
+      if (filters.personal === "tagged" && !movie?.has_tags) return false;
       return true;
     }
     function containerMatchesGroup(container) {
@@ -21792,7 +21819,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted"].includes(filters.personal)) {
+      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged"].includes(filters.personal)) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -28887,7 +28914,11 @@ def ui_preview_html(
       return (rows || []).map(mode === "list" ? loanListCardHtml : loanPosterCardHtml).join("");
     }
     function wishlistNormalizeCandidate(result, resultIndex, candidate, candidateIndex) {
-      if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result))) return null;
+      if (!candidate || typeof candidate !== "object") return null;
+      // In the wishlist edition picker box sets / anniversary / trilogy editions
+      // are legitimate pickable editions, so we keep them (flagged) instead of
+      // dropping them the way the shared import/lookup flow does.
+      const isBoxSet = lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result));
       const movieUpdates = result?.movieUpdates && typeof result.movieUpdates === "object" ? result.movieUpdates : {};
       const technicalUpdates = result?.technicalUpdates && typeof result.technicalUpdates === "object" ? result.technicalUpdates : {};
       const rawIdentifiers = candidate.identifiers && typeof candidate.identifiers === "object"
@@ -28934,6 +28965,7 @@ def ui_preview_html(
         barcode,
         posterUrl,
         movievaultId,
+        isBoxSet,
         identifiers
       };
     }
@@ -28973,6 +29005,7 @@ def ui_preview_html(
           <span class="wishlist-search-poster">${posterHtml}</span>
           <span class="wishlist-search-body">
             <strong>${escapeHtml(candidate.title || "")}</strong>
+            ${candidate.isBoxSet ? `<span class="wishlist-search-badge">${escapeHtml(tNext("lists.wishlistBoxSetBadge", "Box set"))}</span>` : ""}
             ${candidate.editionLabel ? `<span class="wishlist-search-meta edition">${escapeHtml(candidate.editionLabel)}</span>` : ""}
             <span class="wishlist-search-meta">${escapeHtml(metaParts.join(" / "))}</span>
             ${sub.length ? `<span class="wishlist-search-meta muted">${escapeHtml(sub.join(" · "))}</span>` : ""}
@@ -28998,11 +29031,29 @@ def ui_preview_html(
         }
         return;
       }
-      wrap.innerHTML = candidates.map(wishlistSearchCardHtml).join("");
+      wrap.innerHTML = `
+        <div class="wishlist-search-resultbar">
+          <span class="wishlist-search-count">${escapeHtml(tNext("lists.wishlistResultsCount", "Editions found"))}: ${candidates.length}</span>
+          <button type="button" class="link-button" id="wishlistSearchCloseBtn">${escapeHtml(tNext("lists.wishlistCloseResults", "Close"))}</button>
+        </div>
+        ${candidates.map(wishlistSearchCardHtml).join("")}
+      `;
+      const closeBtn = document.getElementById("wishlistSearchCloseBtn");
+      if (closeBtn) closeBtn.addEventListener("click", () => closeWishlistSearch());
       wrap.querySelectorAll("[data-wishlist-pick]").forEach((btn) => {
         btn.addEventListener("click", () => addWishlistFromCandidate(btn.getAttribute("data-wishlist-pick")));
       });
     }
+    function closeWishlistSearch() {
+      const state = listsState.wishlistSearch || (listsState.wishlistSearch = { query: "", loading: false, error: "", candidates: [] });
+      state.query = "";
+      state.error = "";
+      state.candidates = [];
+      state.loading = false;
+      const input = document.getElementById("wishlistSearchInput");
+      if (input) input.value = "";
+      setWishlistSearchMessage("", "");
+      renderWishlistSearchResults();
     async function submitWishlistSearch(event) {
       if (event) event.preventDefault();
       const input = document.getElementById("wishlistSearchInput");
@@ -29057,6 +29108,8 @@ def ui_preview_html(
             note: candidate.editionLabel || null
           })
         });
+        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        closeWishlistSearch();
         setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
         await loadListsView(true);
       } catch (err) {
@@ -42426,11 +42479,37 @@ def attach_personal_list_state(conn, rows: list[dict[str, Any]], user_id: UUID |
                 (user_id, ids),
             )
             watched_by_movie = {row["movie_id"]: row.get("watched_at") for row in cur.fetchall()}
+    loaned_movies: set[Any] = set()
+    if table_exists(conn, "loans"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT movie_id
+                FROM loans
+                WHERE user_id=%s AND movie_id = ANY(%s) AND returned_at IS NULL
+                """,
+                (user_id, ids),
+            )
+            loaned_movies = {row["movie_id"] for row in cur.fetchall()}
+    tagged_movies: set[Any] = set()
+    if table_exists(conn, "movie_tags"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT movie_id
+                FROM movie_tags
+                WHERE user_id=%s AND movie_id = ANY(%s)
+                """,
+                (user_id, ids),
+            )
+            tagged_movies = {row["movie_id"] for row in cur.fetchall()}
     for row in rows:
         movie_id = row.get("id")
         row["on_watchlist"] = movie_id in watchlist_by_movie
         row["watchlist_added_at"] = watchlist_by_movie.get(movie_id)
         row["last_watched"] = watched_by_movie.get(movie_id)
+        row["on_loan"] = movie_id in loaned_movies
+        row["has_tags"] = movie_id in tagged_movies
     return rows
 
 
