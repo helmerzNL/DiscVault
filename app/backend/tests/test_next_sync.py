@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+import uuid
 from unittest.mock import patch
 
 
@@ -58,6 +59,16 @@ class NextSyncRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/api/next/sync/bootstrap", rules)
         self.assertIn("/api/next/sync/mutations", rules)
 
+    def test_movie_identifier_write_routes_are_registered(self):
+        rules = {rule.rule for rule in next_app.app.url_map.iter_rules()}
+        self.assertIn("/api/next/movies/<movie_id>/identifiers", rules)
+        methods = set()
+        for rule in next_app.app.url_map.iter_rules():
+            if rule.rule == "/api/next/movies/<movie_id>/identifiers":
+                methods |= set(rule.methods)
+        self.assertIn("POST", methods)
+        self.assertIn("DELETE", methods)
+
 
 class _FakeCursor:
     def __init__(self, store):
@@ -114,6 +125,22 @@ class _FakeCursor:
         elif "FROM watch_history" in q:
             uid = p[0]
             self._rows = [dict(v) for (u, _i), v in store["watch_history"].items() if u == uid]
+        elif "UPDATE sync_state" in q and "user_sync_state" not in q and "revision + 1" in q:
+            store["global_state"] = store.get("global_state", 0) + 1
+            self._row = {"revision": store["global_state"]}
+        elif "INSERT INTO sync_changes" in q and "user_sync_changes" not in q:
+            revision, entity_type, entity_id, operation, payload = p
+            store.setdefault("global_changes", []).append(
+                {
+                    "revision": revision,
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "operation": operation,
+                    "payload": payload,
+                }
+            )
+        elif "FROM movie_identifiers" in q:
+            self._rows = [dict(r) for r in store.get("movie_identifiers", {}).get(p[0], [])]
 
     def fetchone(self):
         return self._row
@@ -140,6 +167,9 @@ class NextUserSyncStreamTests(unittest.TestCase):
             "user_changes": [],
             "watchlist": {},
             "watch_history": {},
+            "global_state": 0,
+            "global_changes": [],
+            "movie_identifiers": {},
         }
 
     def _patches(self):
@@ -211,6 +241,39 @@ class NextUserSyncStreamTests(unittest.TestCase):
         self.assertEqual(change["entity_id"], "entry-9")
         self.assertEqual(change["payload"]["movieId"], "movie-1")
 
+    def test_emit_movie_identifiers_change_carries_full_set(self):
+        # The movie_identifier delta must carry the movie's full identifier set
+        # (including the movievault_26 link) so an offline client replaces its
+        # local copy for that movie in one change.
+        store = self._store()
+        store["movie_identifiers"]["movie-1"] = [
+            {
+                "provider_id": "movievault_26",
+                "identifier_type": "movie_id",
+                "identifier": "mv_movie_1",
+                "created_at": "2026-01-01T00:00:00Z",
+            },
+            {
+                "provider_id": "tmdb",
+                "identifier_type": "movie_id",
+                "identifier": "603",
+                "created_at": "2026-01-01T00:00:00Z",
+            },
+        ]
+        conn = _FakeConn(store)
+        p1, p2 = self._patches()
+        with p1, p2:
+            revision = next_app.emit_movie_identifiers_change(conn, "movie-1", operation="upsert")
+        self.assertEqual(revision, 1)
+        change = store["global_changes"][-1]
+        self.assertEqual(change["entity_type"], "movie_identifier")
+        self.assertEqual(change["operation"], "upsert")
+        self.assertEqual(change["entity_id"], "movie-1")
+        self.assertEqual(change["payload"]["movieId"], "movie-1")
+        providers = {i["provider_id"] for i in change["payload"]["identifiers"]}
+        self.assertIn("movievault_26", providers)
+        self.assertIn("tmdb", providers)
+
     def test_bootstrap_collectors_scope_to_the_caller(self):
         store = self._store()
         store["watchlist"][("user-a", "movie-1")] = {
@@ -236,6 +299,87 @@ class NextUserSyncStreamTests(unittest.TestCase):
             history = next_app.all_watch_history_sync_entities(conn, "user-a")
         self.assertEqual([w["movieId"] for w in watchlist], ["movie-1"])
         self.assertEqual([h["id"] for h in history], ["entry-1"])
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextBatchCreateHealTests(unittest.TestCase):
+    """resolve_new_movie_identity must keep batched brand-new creates distinct.
+
+    Regression guard for the data-loss bug where a single mutations batch of N
+    fresh movie.upsert creates (e.g. an 8-film box set) collapsed into one row.
+    """
+
+    def _resolve(self, *, client_entity_id, barcode, batch_ctx, mapping=None, owner=None):
+        return next_app.resolve_new_movie_identity(
+            entity_id=None,
+            client_entity_id=client_entity_id,
+            barcode=barcode,
+            batch_ctx=batch_ctx,
+            lookup_mapping=lambda: mapping,
+            barcode_owner_lookup=lambda code: owner,
+        )
+
+    def test_duplicate_client_entity_id_yields_distinct_movies(self):
+        # Client (buggily) reuses one clientEntityId for every member of a box set.
+        ctx = next_app.SyncBatchContext()
+        ids = []
+        for _ in range(8):
+            entity_id, _barcode = self._resolve(
+                client_entity_id="tmp-box", barcode=None, batch_ctx=ctx, mapping=None
+            )
+            ids.append(entity_id)
+        self.assertEqual(len(set(ids)), 8, "each create must become a distinct movie")
+
+    def test_missing_client_entity_id_yields_distinct_movies(self):
+        ctx = next_app.SyncBatchContext()
+        ids = [self._resolve(client_entity_id=None, barcode=None, batch_ctx=ctx)[0] for _ in range(8)]
+        self.assertEqual(len(set(ids)), 8)
+
+    def test_shared_barcode_is_healed_after_the_first_member(self):
+        # All 8 members carry the box's shared barcode; only the first keeps it,
+        # the rest are inserted with a null barcode instead of colliding.
+        ctx = next_app.SyncBatchContext()
+        barcodes = []
+        for _ in range(8):
+            _entity_id, healed = self._resolve(
+                client_entity_id=None, barcode="5051890000000", batch_ctx=ctx, owner=None
+            )
+            barcodes.append(healed)
+        self.assertEqual(barcodes[0], "5051890000000")
+        self.assertTrue(all(b is None for b in barcodes[1:]))
+
+    def test_barcode_owned_by_existing_movie_is_dropped(self):
+        ctx = next_app.SyncBatchContext()
+        _entity_id, healed = self._resolve(
+            client_entity_id=None,
+            barcode="5051890000000",
+            batch_ctx=ctx,
+            owner=uuid.uuid4(),  # a different, pre-existing movie already owns it
+        )
+        self.assertIsNone(healed)
+
+    def test_update_path_is_passthrough(self):
+        existing = uuid.uuid4()
+        entity_id, healed = next_app.resolve_new_movie_identity(
+            entity_id=existing,
+            client_entity_id="tmp-box",
+            barcode="5051890000000",
+            batch_ctx=next_app.SyncBatchContext(),
+            lookup_mapping=lambda: uuid.uuid4(),
+            barcode_owner_lookup=lambda code: uuid.uuid4(),
+        )
+        self.assertEqual(entity_id, existing)
+        self.assertEqual(healed, "5051890000000")
+
+    def test_first_occurrence_still_resolves_cross_batch_mapping(self):
+        # A genuine temp-id created in an earlier committed batch must still map
+        # to its server UUID (offline create -> later reference).
+        mapped = uuid.uuid4()
+        ctx = next_app.SyncBatchContext()
+        entity_id, _barcode = self._resolve(
+            client_entity_id="tmp-earlier", barcode=None, batch_ctx=ctx, mapping=mapped
+        )
+        self.assertEqual(entity_id, mapped)
 
 
 if __name__ == "__main__":
