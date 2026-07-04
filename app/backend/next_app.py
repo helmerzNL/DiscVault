@@ -8460,19 +8460,12 @@ def ui_preview_html(
       font-size: .85rem;
       padding: 4px 0 10px;
     }
-    .lists-loans-toolbar {
+    .lists-loans-toolbar,
+    .lists-tags-toolbar {
       display: flex;
       justify-content: flex-end;
+      gap: 8px;
       margin-bottom: 10px;
-    }
-    .lists-loans-toolbar button {
-      padding: 7px 14px;
-      border-radius: 10px;
-      border: 1px solid var(--line);
-      background: var(--accent);
-      color: #fff;
-      font-weight: 600;
-      cursor: pointer;
     }
     .lists-modal-overlay {
       position: fixed;
@@ -15346,12 +15339,15 @@ def ui_preview_html(
             <div class="lists-simple-list" id="listsWishlistList"></div>
           </div>
           <div class="lists-tags-panel hidden" id="listsTagsPanel">
+            <div class="lists-tags-toolbar">
+              <button type="button" class="primary-button" id="tagCreateButton" data-next-i18n="lists.tagCreateButton">New tag</button>
+            </div>
             <div class="lists-simple-list tags-list" id="listsTagsList"></div>
           </div>
           <div class="lists-loans-panel hidden" id="listsLoansPanel">
             <div class="lists-loans-toolbar">
               <button type="button" class="primary-button" id="loanCreateButton" data-next-i18n="lists.loanAddButton">Lend a disc</button>
-              <button type="button" class="ghost-button" id="loanHistoryButton" data-next-i18n="lists.loanHistoryButton">History</button>
+              <button type="button" class="secondary-button" id="loanHistoryButton" data-next-i18n="lists.loanHistoryButton">History</button>
             </div>
             <div class="lists-simple-list loans-list" id="listsLoansList"></div>
           </div>
@@ -30287,6 +30283,49 @@ def ui_preview_html(
       };
       render();
     }
+    function openTagCreate() {
+      const { overlay, panel } = listsCreateOverlay("lists-tag-create");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.tagCreateTitle", "New tag"))}</h3></header>
+        <div class="lists-modal-fields">
+          <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.tagNameLabel", "Name"))}</span>
+            <input data-field="name" type="text" maxlength="60" placeholder="${escapeHtml(tNext("lists.tagNamePlaceholder", "Tag name"))}"></label>
+          <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.tagColorLabel", "Colour"))}</span>
+            <input data-field="color" type="color" value="#4f7cff"></label>
+        </div>
+        <p class="lists-modal-message" data-message></p>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+          <button type="button" data-primary>${escapeHtml(tNext("lists.tagCreateSubmit", "Create"))}</button>
+        </footer>
+      `;
+      const nameInput = panel.querySelector('[data-field="name"]');
+      const colorInput = panel.querySelector('[data-field="color"]');
+      const message = panel.querySelector("[data-message]");
+      const submit = async () => {
+        const name = (nameInput.value || "").trim();
+        if (!name) {
+          message.textContent = tNext("lists.tagNameRequired", "Enter a tag name.");
+          message.classList.add("bad");
+          nameInput.focus();
+          return;
+        }
+        message.classList.remove("bad");
+        message.textContent = tNext("common.saving", "Saving...");
+        try {
+          await authApiJson("/api/next/tags", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name, color: colorInput.value || null})});
+          listsCloseOverlay(overlay);
+          await loadListsView(true);
+        } catch (error) {
+          message.textContent = error.message || String(error);
+          message.classList.add("bad");
+        }
+      };
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelector("[data-primary]").addEventListener("click", submit);
+      nameInput.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); submit(); } });
+      nameInput.focus();
+    }
     async function openLoanLibraryPicker() {
       const { overlay, panel } = listsCreateOverlay("lists-picker");
       let debounce = null;
@@ -33556,6 +33595,7 @@ def ui_preview_html(
       document.getElementById("wishlistSearchForm")?.addEventListener("submit", submitWishlistSearch);
       document.getElementById("loanCreateButton")?.addEventListener("click", () => openLoanLibraryPicker());
       document.getElementById("loanHistoryButton")?.addEventListener("click", () => openLoanHistory());
+      document.getElementById("tagCreateButton")?.addEventListener("click", () => openTagCreate());
       document.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           listsViewMode = normalizeViewMode(button.dataset.listsViewMode);
