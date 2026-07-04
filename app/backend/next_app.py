@@ -1078,6 +1078,29 @@ def next_i18n_messages(locale: str) -> dict[str, Any]:
     return messages
 
 
+def next_translate(locale: str | None, key: str, default: str | None = None, **params: Any) -> str:
+    """Translate an i18n key server-side using the flat locale catalog.
+
+    Substitutes ``{param}`` placeholders. Falls back to ``default`` (or the key
+    itself) when the catalog does not provide the key.
+    """
+
+    template: str | None = None
+    try:
+        messages = next_i18n_messages(locale or NEXT_I18N_DEFAULT_LOCALE)
+        candidate = messages.get(key)
+        if isinstance(candidate, str) and candidate:
+            template = candidate
+    except Exception:
+        template = None
+    if template is None:
+        template = default if default is not None else key
+    if params:
+        for name, value in params.items():
+            template = template.replace("{" + str(name) + "}", str(value))
+    return template
+
+
 def legacy_data_dir() -> Path:
     raw = (
         os.environ.get("DISCVAULT_LEGACY_DATA_DIR")
@@ -8599,6 +8622,79 @@ def ui_preview_html(
     .lists-modal-message.bad {
       color: var(--red);
     }
+    .lists-modal.lists-history {
+      max-width: 720px;
+      width: min(92vw, 720px);
+    }
+    .lists-history-filter {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .lists-history-filter button {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      font-weight: 600;
+      font-size: .82rem;
+      cursor: pointer;
+    }
+    .lists-history-filter button.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .lists-history-table {
+      display: flex;
+      flex-direction: column;
+      max-height: 56vh;
+      overflow-y: auto;
+    }
+    .lists-history-row {
+      display: grid;
+      grid-template-columns: 52px 1.6fr 1fr 0.9fr 1.4fr;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--line);
+      font-size: .84rem;
+    }
+    .lists-history-row.head {
+      font-weight: 700;
+      color: var(--muted);
+      font-size: .74rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      position: sticky;
+      top: 0;
+      background: var(--bg-solid);
+    }
+    .lists-history-poster img,
+    .lists-history-poster span {
+      width: 44px;
+      height: 62px;
+      border-radius: 6px;
+      object-fit: cover;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      font-size: .6rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    @media (max-width: 640px) {
+      .lists-history-row {
+        grid-template-columns: 44px 1.4fr 1.2fr;
+      }
+      .lists-history-row > span:nth-child(3),
+      .lists-history-row > span:nth-child(4) {
+        display: none;
+      }
+    }
     .lists-picker-results {
       display: flex;
       flex-direction: column;
@@ -15255,6 +15351,7 @@ def ui_preview_html(
           <div class="lists-loans-panel hidden" id="listsLoansPanel">
             <div class="lists-loans-toolbar">
               <button type="button" class="primary-button" id="loanCreateButton" data-next-i18n="lists.loanAddButton">Lend a disc</button>
+              <button type="button" class="ghost-button" id="loanHistoryButton" data-next-i18n="lists.loanHistoryButton">History</button>
             </div>
             <div class="lists-simple-list loans-list" id="listsLoansList"></div>
           </div>
@@ -21700,6 +21797,19 @@ def ui_preview_html(
       });
       renderAppRegistrationMode();
     }
+    let lastPersistedLocale = null;
+    function persistNextLocale(locale) {
+      const value = String(locale || "").trim();
+      if (!value || value === lastPersistedLocale) return;
+      const token = localStorage.getItem("dv_next_token");
+      if (!token) return;
+      lastPersistedLocale = value;
+      authApiJson("/api/next/preferences/locale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locale: value })
+      }).catch(() => { lastPersistedLocale = null; });
+    }
     async function loadLocale(locale) {
       const normalized = locale || "nl-NL";
       try {
@@ -21710,6 +21820,7 @@ def ui_preview_html(
         localeState.messages = payload.messages || {};
         localStorage.setItem("dv_next_locale", localeState.locale);
         localStorage.setItem("dv_lang", legacyLocaleForApp(localeState.locale));
+        persistNextLocale(localeState.locale);
       } catch (error) {
         console.warn("Next i18n catalog unavailable", error);
       }
@@ -29240,6 +29351,28 @@ def ui_preview_html(
       }
       return name;
     }
+    function loanIsBorrowed(loan) {
+      return loan && loan.direction === "in";
+    }
+    function loanLenderDisplayName(loan) {
+      return (loan && (loan.lenderName || loan.lenderUsername)) || tNext("lists.loanLinkedAccount", "Linked account");
+    }
+    function loanLenderLabel(loan) {
+      return loanLenderDisplayName(loan) + " (" + tNext("lists.loanDiscvaultUser", "DiscVault user") + ")";
+    }
+    function loanCounterpartyLabel(loan) {
+      if (loanIsBorrowed(loan)) {
+        return tNext("lists.loanFrom", "Borrowed from") + ": " + loanLenderLabel(loan);
+      }
+      return tNext("lists.loanTo", "Lent to") + ": " + loanBorrowerLabel(loan);
+    }
+    function loanActionButtonsHtml(loan) {
+      const meerInfo = `<button type="button" data-loan-meerinfo="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>`;
+      if (loanIsBorrowed(loan)) return meerInfo;
+      const ret = loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`;
+      const remove = `<button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>`;
+      return `${ret}${meerInfo}${remove}`;
+    }
     function loanPosterCardHtml(loan) {
       const poster = loanPosterUrl(loan);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -29251,11 +29384,9 @@ def ui_preview_html(
         <div class="preview-poster lists-static-poster" data-loan-card="${escapeHtml(loan.id)}">
           <span class="preview-poster-art" data-loan-poster="${escapeHtml(loan.id)}" data-loan-movie="${escapeHtml(loan.movieId || "")}" role="button" tabindex="0">${posterHtml}${badge}</span>
           <span class="preview-poster-title">${escapeHtml(loanTitle(loan))}</span>
-          <span class="preview-poster-meta">${escapeHtml(tNext("lists.loanTo", "Lent to") + ": " + loanBorrowerLabel(loan))}</span>
+          <span class="preview-poster-meta">${escapeHtml(loanCounterpartyLabel(loan))}</span>
           <span class="lists-poster-actions">
-            ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
-            <button type="button" data-loan-meerinfo="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
-            <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+            ${loanActionButtonsHtml(loan)}
           </span>
         </div>
       `;
@@ -29264,7 +29395,7 @@ def ui_preview_html(
       const poster = loanPosterUrl(loan);
       const overdue = !loan.returned && loan.dueAt && new Date(loan.dueAt) < new Date();
       const metaParts = [
-        `${tNext("lists.loanTo", "Lent to")}: ${loanBorrowerLabel(loan)}`,
+        loanCounterpartyLabel(loan),
         loan.loanedAt ? `${tNext("lists.loanedOn", "Loaned")}: ${formatAppDate(loan.loanedAt)}` : "",
         loan.dueAt ? `${tNext("lists.loanDue", "Due")}: ${formatAppDate(loan.dueAt)}` : "",
         loan.returned && loan.returnedAt ? `${tNext("lists.loanReturned", "Returned")}: ${formatAppDate(loan.returnedAt)}` : ""
@@ -29277,9 +29408,7 @@ def ui_preview_html(
             <span class="mode-list-meta ${overdue ? "loan-overdue" : ""}">${escapeHtml(metaParts.join(" / "))}</span>
             ${loan.note ? `<span class="mode-list-meta">${escapeHtml(loan.note)}</span>` : ""}
             <span class="list-simple-actions">
-              ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
-              <button type="button" data-loan-meerinfo="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
-              <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+              ${loanActionButtonsHtml(loan)}
             </span>
           </span>
         </article>
@@ -29300,16 +29429,15 @@ def ui_preview_html(
             const status = loan.returned
               ? tNext("lists.loanReturned", "Returned")
               : (overdue ? tNext("lists.loanOverdueBadge", "Overdue") : tNext("lists.loanActive", "On loan"));
+            const counterparty = loanIsBorrowed(loan) ? loanLenderLabel(loan) : loanBorrowerLabel(loan);
             return `
               <div class="watched-detail-row" role="row">
                 <span role="cell"><strong>${escapeHtml(loanTitle(loan))}</strong>${loan.note ? `<span class="list-simple-meta">${escapeHtml(loan.note)}</span>` : ""}</span>
-                <span role="cell">${escapeHtml(loanBorrowerLabel(loan))}</span>
+                <span role="cell">${escapeHtml(counterparty)}</span>
                 <span role="cell">${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
                 <span role="cell" class="${overdue ? "loan-overdue" : ""}">${escapeHtml(status)}</span>
                 <span role="cell" class="list-simple-actions">
-                  ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
-                  <button type="button" data-loan-meerinfo="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
-                  <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+                  ${loanActionButtonsHtml(loan)}
                 </span>
               </div>
             `;
@@ -29732,14 +29860,15 @@ def ui_preview_html(
         }
       } else if (active === "loans") {
         const list = document.getElementById("listsLoansList");
+        const activeLoans = (listsState.loans || []).filter((loan) => !loan.returned);
         if (list) {
           configureSimpleListNode(list);
-          list.innerHTML = loanRenderRows(listsState.loans || [], listsViewMode);
+          list.innerHTML = loanRenderRows(activeLoans, listsViewMode);
         }
         bindLoanCardInteractions();
         if (empty) {
           empty.textContent = tNext("lists.emptyLoans", "No discs are currently on loan.");
-          empty.classList.toggle("hidden", !!(listsState.loans || []).length);
+          empty.classList.toggle("hidden", !!activeLoans.length);
         }
       }
       bindListsSimpleActions();
@@ -29771,19 +29900,23 @@ def ui_preview_html(
         empty.classList.remove("hidden");
       }
       try {
-        const [payload, wishlistPayload, tagsPayload, loansPayload] = await Promise.all([
+        const [payload, wishlistPayload, tagsPayload, loansPayload, borrowedPayload] = await Promise.all([
           authApiJson("/api/next/lists?limit=500"),
           authApiJson("/api/next/lists/wishlist").catch(() => ({items: []})),
           authApiJson("/api/next/tags").catch(() => ({tags: []})),
-          authApiJson("/api/next/loans?status=all").catch(() => ({loans: []}))
+          authApiJson("/api/next/loans?status=all").catch(() => ({loans: []})),
+          authApiJson("/api/next/loans/borrowed?status=all").catch(() => ({loans: []}))
         ]);
         listsState.watchlist = payload.watchlist || [];
         listsState.watched = payload.watched || [];
         listsState.wishlist = wishlistPayload.items || [];
         listsState.tags = tagsPayload.tags || [];
-        listsState.loans = loansPayload.loans || [];
+        const lentLoans = (loansPayload.loans || []).map((loan) => { loan.direction = "out"; return loan; });
+        const borrowedLoans = (borrowedPayload.loans || []).map((loan) => { loan.direction = "in"; return loan; });
+        listsState.loans = lentLoans.concat(borrowedLoans);
         listsState.counts = payload.counts || {};
         listsState.loaded = true;
+        persistNextLocale(localeState.locale);
         renderListsView();
       } catch (error) {
         if (empty) {
@@ -29854,11 +29987,14 @@ def ui_preview_html(
       if (!loan) return;
       const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
       const actions = [];
-      if (!loan.returned) {
+      const borrowed = loanIsBorrowed(loan);
+      if (!borrowed && !loan.returned) {
         actions.push({ key: "return", label: tNext("lists.loanMarkReturned", "Mark returned"), run: () => returnLoanItem(loanId) });
       }
       actions.push({ key: "meerinfo", label: tNext("lists.moreInfo", "More info"), run: () => openLoanMeerInfo(loanId) });
-      actions.push({ key: "remove", label: tNext("common.remove", "Remove"), tone: "danger", run: () => deleteLoanItem(loanId) });
+      if (!borrowed) {
+        actions.push({ key: "remove", label: tNext("common.remove", "Remove"), tone: "danger", run: () => deleteLoanItem(loanId) });
+      }
       const buttonsHtml = actions.map((action, index) =>
         `<button type="button" class="lists-actionsheet-btn${action.tone === "danger" ? " danger" : ""}" data-action-index="${index}">${escapeHtml(action.label)}</button>`
       ).join("");
@@ -30005,6 +30141,7 @@ def ui_preview_html(
         if (Number.isNaN(d.getTime())) return "";
         return d.toISOString().slice(0, 10);
       };
+      const canEdit = !loanIsBorrowed(loan);
       const render = () => {
         const poster = loanPosterUrl(loan);
         const posterPreview = poster
@@ -30012,6 +30149,21 @@ def ui_preview_html(
           : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
         const barcode = snapshot.barcode || loan.barcode || "";
         const format = snapshot.format || loan.format || "";
+        const counterpartyRow = canEdit
+          ? `<label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
+                <span data-read>${escapeHtml(loanBorrowerLabel(loan))}</span>
+                <input data-edit data-field="borrowerName" type="text" value="${escapeHtml(loanBorrowerDisplayName(loan) || "")}"></label>`
+          : `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanFrom", "Borrowed from"))}</span><span data-static>${escapeHtml(loanLenderLabel(loan))}</span></div>`;
+        const dueRow = canEdit
+          ? `<label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanDue", "Due"))}</span>
+                <span data-read>${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
+                <input data-edit data-field="dueAt" type="date" value="${escapeHtml(toDateInput(loan.dueAt))}"></label>`
+          : `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanDue", "Due"))}</span><span data-static>${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "—")}</span></div>`;
+        const noteRow = canEdit
+          ? `<label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+                <span data-read>${escapeHtml(loan.note || "")}</span>
+                <textarea data-edit data-field="note" rows="2">${escapeHtml(loan.note || "")}</textarea></label>`
+          : `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span><span data-static>${escapeHtml(loan.note || "—")}</span></div>`;
         panel.className = "lists-modal lists-meerinfo" + (editing ? " editing" : "");
         panel.innerHTML = `
           <header class="lists-modal-head"><h3>${escapeHtml(loanTitle(loan))}</h3></header>
@@ -30022,20 +30174,14 @@ def ui_preview_html(
               <div class="lists-modal-field"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span data-static>${escapeHtml(physicalFormatLabel(format) || format || "—")}</span></div>
               <div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanedOn", "Loaned"))}</span>
                 <span data-static>${escapeHtml(loan.loanedAt ? formatAppDate(loan.loanedAt) : "—")}</span></div>
-              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanDue", "Due"))}</span>
-                <span data-read>${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
-                <input data-edit data-field="dueAt" type="date" value="${escapeHtml(toDateInput(loan.dueAt))}"></label>
-              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
-                <span data-read>${escapeHtml(loanBorrowerLabel(loan))}</span>
-                <input data-edit data-field="borrowerName" type="text" value="${escapeHtml(loanBorrowerDisplayName(loan) || "")}"></label>
-              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
-                <span data-read>${escapeHtml(loan.note || "")}</span>
-                <textarea data-edit data-field="note" rows="2">${escapeHtml(loan.note || "")}</textarea></label>
+              ${dueRow}
+              ${counterpartyRow}
+              ${noteRow}
             </div>
           </div>
           <p class="lists-modal-message" data-message></p>
           <footer class="lists-modal-actions">
-            <button type="button" data-primary>${escapeHtml(editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit"))}</button>
+            ${canEdit ? `<button type="button" data-primary>${escapeHtml(editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit"))}</button>` : ""}
             <button type="button" class="ghost" data-secondary>${escapeHtml(editing ? tNext("common.cancel", "Cancel") : tNext("common.close", "Close"))}</button>
           </footer>
         `;
@@ -30045,7 +30191,8 @@ def ui_preview_html(
           if (editing) { editing = false; render(); }
           else listsCloseOverlay(overlay);
         });
-        panel.querySelector("[data-primary]").addEventListener("click", async () => {
+        const primary = panel.querySelector("[data-primary]");
+        if (primary) primary.addEventListener("click", async () => {
           if (!editing) { editing = true; render(); return; }
           const dueRaw = (panel.querySelector('[data-field="dueAt"]').value || "").trim();
           const body = {
@@ -30071,6 +30218,74 @@ def ui_preview_html(
       const format = physicalFormatLabel(movie.format) || movie.format || "";
       const suffix = [year, format ? `(${format})` : ""].filter(Boolean).join(" ");
       return suffix ? `${title} ${suffix}` : title;
+    }
+    function loanDurationDays(loan) {
+      if (!loan.loanedAt || !loan.returnedAt) return null;
+      const start = new Date(loan.loanedAt).getTime();
+      const end = new Date(loan.returnedAt).getTime();
+      if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+      return Math.max(1, Math.round((end - start) / 86400000));
+    }
+    function openLoanHistory() {
+      const { overlay, panel } = listsCreateOverlay("lists-history");
+      let filter = "all";
+      const render = () => {
+        const all = (listsState.loans || []).filter((loan) => loan.returned);
+        const rows = all.filter((loan) => {
+          if (filter === "out") return !loanIsBorrowed(loan);
+          if (filter === "in") return loanIsBorrowed(loan);
+          return true;
+        }).sort((a, b) => new Date(b.returnedAt || 0) - new Date(a.returnedAt || 0));
+        const dayUnit = tNext("lists.loanDaysUnit", "days");
+        const body = rows.length
+          ? rows.map((loan) => {
+              const poster = loanPosterUrl(loan);
+              const posterHtml = poster
+                ? `<img src="${escapeHtml(poster)}" alt="">`
+                : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+              const days = loanDurationDays(loan);
+              const duration = days == null ? "—" : `${days} ${dayUnit}`;
+              const counterparty = loanIsBorrowed(loan)
+                ? `${tNext("lists.loanFrom", "Borrowed from")}: ${loanLenderLabel(loan)}`
+                : `${tNext("lists.loanTo", "Lent to")}: ${loanBorrowerLabel(loan)}`;
+              return `
+                <div class="lists-history-row" role="row">
+                  <span class="lists-history-poster" role="cell">${posterHtml}</span>
+                  <span role="cell"><strong>${escapeHtml(loanTitle(loan))}</strong></span>
+                  <span role="cell">${escapeHtml(loan.loanedAt ? formatAppDate(loan.loanedAt) : "—")}</span>
+                  <span role="cell">${escapeHtml(duration)}</span>
+                  <span role="cell">${escapeHtml(counterparty)}</span>
+                </div>`;
+            }).join("")
+          : `<p class="lists-modal-message">${escapeHtml(tNext("lists.loanHistoryEmpty", "No returned loans yet."))}</p>`;
+        panel.className = "lists-modal lists-history";
+        panel.innerHTML = `
+          <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.loanHistoryTitle", "Loan history"))}</h3></header>
+          <div class="lists-history-filter" role="tablist">
+            <button type="button" data-filter="all" class="${filter === "all" ? "active" : ""}">${escapeHtml(tNext("lists.loanFilterAll", "All"))}</button>
+            <button type="button" data-filter="out" class="${filter === "out" ? "active" : ""}">${escapeHtml(tNext("lists.loanFilterLent", "Lent out"))}</button>
+            <button type="button" data-filter="in" class="${filter === "in" ? "active" : ""}">${escapeHtml(tNext("lists.loanFilterBorrowed", "Borrowed"))}</button>
+          </div>
+          <div class="lists-history-table" role="table">
+            <div class="lists-history-row head" role="row">
+              <span role="columnheader">${escapeHtml(tNext("lists.loanPosterColumn", "Poster"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("lists.loanedOn", "Loaned"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("lists.loanDurationColumn", "Duration"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("lists.loanCounterpartyColumn", "Borrower / Lender"))}</span>
+            </div>
+            ${body}
+          </div>
+          <footer class="lists-modal-actions">
+            <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+          </footer>
+        `;
+        panel.querySelectorAll("[data-filter]").forEach((btn) => {
+          btn.addEventListener("click", () => { filter = btn.getAttribute("data-filter"); render(); });
+        });
+        panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      };
+      render();
     }
     async function openLoanLibraryPicker() {
       const { overlay, panel } = listsCreateOverlay("lists-picker");
@@ -33340,6 +33555,7 @@ def ui_preview_html(
       document.getElementById("wishlistAddForm")?.addEventListener("submit", submitWishlistAdd);
       document.getElementById("wishlistSearchForm")?.addEventListener("submit", submitWishlistSearch);
       document.getElementById("loanCreateButton")?.addEventListener("click", () => openLoanLibraryPicker());
+      document.getElementById("loanHistoryButton")?.addEventListener("click", () => openLoanHistory());
       document.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           listsViewMode = normalizeViewMode(button.dataset.listsViewMode);
@@ -41115,6 +41331,48 @@ def set_app_user_preferences(conn, user_id: UUID | str, updates: dict[str, Any])
                 (user_id, key, Jsonb(json_ready(value))),
             )
     return app_effective_preferences(conn, user_id)
+
+
+def get_user_locale(conn, user_id: UUID | str | None) -> str:
+    """Return the persisted UI locale for a user, or the default locale."""
+
+    if not user_id or not table_exists(conn, "user_preferences"):
+        return NEXT_I18N_DEFAULT_LOCALE
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT value FROM user_preferences WHERE user_id=%s AND key=%s",
+                (user_id, "locale"),
+            )
+            row = cur.fetchone()
+    except Exception:
+        return NEXT_I18N_DEFAULT_LOCALE
+    if not row:
+        return NEXT_I18N_DEFAULT_LOCALE
+    value = row["value"] if isinstance(row, dict) else row[0]
+    if isinstance(value, str):
+        return normalize_next_locale(value)
+    return normalize_next_locale(str(value or ""))
+
+
+def set_user_locale(conn, user_id: UUID | str, locale: str | None) -> str:
+    """Persist the UI locale for a user in the user_preferences KV table."""
+
+    if not table_exists(conn, "user_preferences"):
+        raise NextApiError("User preferences table is not available", 503)
+    normalized = normalize_next_locale(locale)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO user_preferences (user_id, key, value, updated_at)
+            VALUES (%s, %s, %s, now())
+            ON CONFLICT (user_id, key) DO UPDATE SET
+                value=EXCLUDED.value,
+                updated_at=now()
+            """,
+            (user_id, "locale", Jsonb(normalized)),
+        )
+    return normalized
 
 
 PLUGIN_AUTO_UPDATE_SETTING_KEY = "plugins_auto_update"
@@ -54779,21 +55037,38 @@ def register_routes(flask_app: Flask) -> None:
                 if loan_id is not None:
                     emit_loan_change(conn, user_id, loan_id, operation="upsert", movie_id=movie_uuid)
                     if borrower_uuid is not None and table_exists(conn, "user_notifications"):
-                        movie_title = clean_text((snapshot or {}).get("title")) or "a disc"
-                        lender_label = actor.get("display_name") or actor.get("username") or "A DiscVault member"
+                        movie_title = clean_text((snapshot or {}).get("title")) or None
+                        lender_label = actor.get("display_name") or actor.get("username") or None
+                        recipient_locale = get_user_locale(conn, borrower_uuid)
+                        lender_text = lender_label or next_translate(
+                            recipient_locale, "notifications.loanLenderFallback", "A DiscVault member"
+                        )
+                        title_text = next_translate(
+                            recipient_locale, "notifications.loanCreatedTitle", "Disc lent to you"
+                        )
+                        movie_text = movie_title or next_translate(
+                            recipient_locale, "notifications.loanTitleFallback", "a disc"
+                        )
+                        body_text = next_translate(
+                            recipient_locale,
+                            "notifications.loanCreatedBody",
+                            "{lender} lent you {title}.",
+                            lender=lender_text,
+                            title=movie_text,
+                        )
                         try:
                             create_user_notification(
                                 conn,
                                 borrower_uuid,
-                                title="Disc lent to you",
-                                body=f"{lender_label} lent you {movie_title}.",
+                                title=title_text,
+                                body=body_text,
                                 url="/lists",
                                 pref_key="app_updates",
                                 payload={
                                     "kind": "loan_created",
                                     "loanId": str(loan_id),
                                     "movieId": str(movie_uuid),
-                                    "movieTitle": movie_title,
+                                    "movieTitle": movie_text,
                                     "lenderId": str(user_id or ""),
                                 },
                             )
@@ -55015,6 +55290,21 @@ def register_routes(flask_app: Flask) -> None:
             elif status_filter == "returned":
                 loans = [ln for ln in loans if ln.get("returned")]
             return response({"status": "ok", "loans": loans})
+
+    @flask_app.post("/api/next/preferences/locale")
+    def set_preferences_locale():
+        body = request.get_json(silent=True) or {}
+        locale = clean_text(body.get("locale") or body.get("value"))
+        if not locale:
+            raise NextApiError("A locale is required", 400)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Unauthorized", 401)
+            with conn.transaction():
+                normalized = set_user_locale(conn, user_id, locale)
+            return response({"status": "ok", "locale": normalized})
 
     @flask_app.get("/api/next/stats/personal")
     def personal_statistics():
