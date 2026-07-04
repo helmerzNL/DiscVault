@@ -721,6 +721,13 @@ def query_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "memberOfBoxSet": bool(payload.get("memberOfBoxSet") or payload.get("member_of_box_set")),
         "detectBoxSets": bool(payload.get("detectBoxSets") or payload.get("detect_box_sets") or payload.get("importBoxSets") or payload.get("import_box_sets")),
         "previewMode": bool(payload.get("previewMode") or payload.get("preview_mode")),
+        "releaseVariants": bool(
+            payload.get("releaseVariants")
+            or payload.get("release_variants")
+            or payload.get("listReleases")
+            or payload.get("list_releases")
+            or payload.get("editions")
+        ),
         "parentBoxSets": payload.get("parentBoxSets") or payload.get("parent_box_sets") or [],
     }
 
