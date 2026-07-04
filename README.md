@@ -158,8 +158,10 @@ Before updating production:
 ## Repository Structure
 
 - `app/` - Main application code (backend, frontend, mcp-server, deployment files)
-- `website/` - GitHub Pages marketing site
 - `.github/workflows/` - CI/CD workflows
+
+The marketing website (https://discvault.eu) lives in its own repository:
+[helmerzNL/DiscVault.EU](https://github.com/helmerzNL/DiscVault.EU).
 
 ## License
 
