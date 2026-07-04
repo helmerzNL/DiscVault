@@ -53,6 +53,31 @@ class ListsExpansionMigrationContractTests(unittest.TestCase):
         self.assertIn("borrower_name IS NOT NULL OR borrower_user_id IS NOT NULL", sql)
 
 
+class ListsProvenanceMigrationContractTests(unittest.TestCase):
+    """Migration 027 records who created each loan / wishlist entry and speeds up
+    the inbound "borrowed by me" lookup."""
+
+    def setUp(self):
+        self.migrations = {m.version: m for m in discover_migrations()}
+
+    def test_provenance_migration_is_present(self):
+        self.assertIn("027", self.migrations)
+        self.assertEqual(self.migrations["027"].name, "lists_created_by")
+
+    def test_created_by_columns_are_added_and_backfilled(self):
+        sql = self.migrations["027"].sql
+        self.assertIn("ALTER TABLE loans", sql)
+        self.assertIn("ALTER TABLE wishlist_items", sql)
+        self.assertIn("ADD COLUMN IF NOT EXISTS created_by_user_id uuid", sql)
+        # Pre-existing rows are attributed to the owner/list-owner.
+        self.assertIn("SET created_by_user_id = user_id", sql)
+
+    def test_borrower_lookup_index_is_declared(self):
+        sql = self.migrations["027"].sql
+        self.assertIn("idx_loans_borrower_user", sql)
+        self.assertIn("ON loans(borrower_user_id", sql)
+
+
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class ListsRouteRegistrationTests(unittest.TestCase):
     """The personal-list write/read surface must be wired into the Flask app."""
@@ -72,9 +97,12 @@ class ListsRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/api/next/lists/wishlist", rules)
         self.assertIn("/api/next/lists/wishlist/<item_id>", rules)
         self.assertIn("/api/next/lists/wishlist/<item_id>/acquire", rules)
+        self.assertIn("/api/next/lists/wishlist/<item_id>/poster", rules)
         self.assertIn("GET", self._methods("/api/next/lists/wishlist"))
         self.assertIn("POST", self._methods("/api/next/lists/wishlist"))
+        self.assertIn("PATCH", self._methods("/api/next/lists/wishlist/<item_id>"))
         self.assertIn("DELETE", self._methods("/api/next/lists/wishlist/<item_id>"))
+        self.assertIn("POST", self._methods("/api/next/lists/wishlist/<item_id>/poster"))
 
     def test_tag_routes_are_registered(self):
         rules = self._rules()
@@ -90,9 +118,14 @@ class ListsRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/api/next/movies/<movie_id>/loans", rules)
         self.assertIn("/api/next/loans/<loan_id>/return", rules)
         self.assertIn("/api/next/loans/<loan_id>", rules)
+        self.assertIn("/api/next/loans/borrowers/search", rules)
+        self.assertIn("/api/next/loans/borrowed", rules)
         self.assertIn("POST", self._methods("/api/next/movies/<movie_id>/loans"))
         self.assertIn("POST", self._methods("/api/next/loans/<loan_id>/return"))
+        self.assertIn("PATCH", self._methods("/api/next/loans/<loan_id>"))
         self.assertIn("DELETE", self._methods("/api/next/loans/<loan_id>"))
+        self.assertIn("GET", self._methods("/api/next/loans/borrowers/search"))
+        self.assertIn("GET", self._methods("/api/next/loans/borrowed"))
 
     def test_statistics_route_is_registered(self):
         self.assertIn("/api/next/stats/personal", self._rules())
@@ -336,6 +369,73 @@ class ListsSyncEntityTests(unittest.TestCase):
         self.assertEqual(change["operation"], "delete")
         self.assertNotIn("entity", change["payload"])
         self.assertEqual(change["payload"]["movieId"], "movie-9")
+
+    # -- loans --------------------------------------------------------------
+
+    def test_emit_loan_upsert_carries_provenance_and_borrower(self):
+        store = self._store()
+        store["loans"][("user-a", "loan-1")] = {
+            "id": "loan-1",
+            "movie_id": "movie-9",
+            "snapshot": {"title": "Heat"},
+            "borrower_name": "Neil",
+            "borrower_user_id": "user-b",
+            "loaned_at": "2026-01-01T00:00:00Z",
+            "due_at": None,
+            "returned_at": None,
+            "note": None,
+            "created_at": "2026-01-01T00:00:00Z",
+            "created_by_user_id": "user-a",
+        }
+        conn = _FakeConn(store)
+        p1, p2 = self._patches()
+        with p1, p2:
+            revision = next_app.emit_loan_change(
+                conn, "user-a", "loan-1", operation="upsert", movie_id="movie-9"
+            )
+        self.assertEqual(revision, 1)
+        change = store["user_changes"][-1]
+        self.assertEqual(change["entity_type"], "loan")
+        self.assertEqual(change["payload"]["movieId"], "movie-9")
+        entity = change["payload"]["entity"]
+        self.assertEqual(entity["borrowerName"], "Neil")
+        self.assertEqual(entity["borrowerUserId"], "user-b")
+        self.assertEqual(entity["createdByUserId"], "user-a")
+
+    def test_loan_row_entity_marks_returned_state(self):
+        active = next_app._loan_row_entity({"id": "l1", "returned_at": None})
+        self.assertFalse(active["returned"])
+        self.assertIsNone(active["returnedAt"])
+        done = next_app._loan_row_entity(
+            {"id": "l2", "returned_at": "2026-02-02T00:00:00Z"}
+        )
+        self.assertTrue(done["returned"])
+
+    def test_borrowed_loan_row_entity_adds_lender_context(self):
+        entity = next_app._borrowed_loan_row_entity(
+            {
+                "id": "loan-1",
+                "movie_id": "movie-9",
+                "user_id": "user-a",
+                "borrower_user_id": "user-b",
+                "lender_username": "alice",
+                "lender_display_name": "Alice A.",
+                "returned_at": None,
+            }
+        )
+        self.assertEqual(entity["lenderUserId"], "user-a")
+        self.assertEqual(entity["lenderName"], "Alice A.")
+        self.assertEqual(entity["lenderUsername"], "alice")
+        self.assertEqual(entity["borrowerUserId"], "user-b")
+
+    def test_all_borrowed_loan_entities_empty_without_user_or_table(self):
+        conn = _FakeConn(self._store())
+        p1, p2 = self._patches(tables_present=False)
+        with p1, p2:
+            self.assertEqual(next_app.all_borrowed_loan_entities(conn, "user-b"), [])
+        p1, p2 = self._patches()
+        with p1, p2:
+            self.assertEqual(next_app.all_borrowed_loan_entities(conn, None), [])
 
     # -- loans --------------------------------------------------------------
 
