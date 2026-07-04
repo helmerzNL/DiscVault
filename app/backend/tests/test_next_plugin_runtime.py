@@ -501,15 +501,20 @@ class NextPluginRuntimeTests(unittest.TestCase):
             bluray_com_plugin._parse_page = original_parse
 
         self.assertEqual(result["status"], "hit")
-        # Box-set page is skipped; only the two single releases survive.
-        self.assertEqual(len(result["items"]), 2)
+        # In release-variants mode box sets are kept as pickable editions, so
+        # all three releases survive and the box set is flagged.
+        self.assertEqual(len(result["items"]), 3)
         release_titles = [item.get("releaseTitle") for item in result["items"]]
         self.assertIn(
             "E.T. the Extra-Terrestrial (1982) 40th Anniversary Edition 4K Blu-ray",
             release_titles,
         )
         self.assertIn("E.T. the Extra-Terrestrial (1982) SteelBook Blu-ray", release_titles)
-        for item in result["items"]:
+        box_set_items = [item for item in result["items"] if item.get("isBoxSetCandidate")]
+        self.assertEqual(len(box_set_items), 1)
+        self.assertEqual(box_set_items[0].get("releaseTitle"), "E.T. Collection Box Set")
+        single_items = [item for item in result["items"] if not item.get("isBoxSetCandidate")]
+        for item in single_items:
             self.assertEqual(item["title"], "E.T. the Extra-Terrestrial")
 
     def test_legacy_import_plugin_is_not_bundled(self):

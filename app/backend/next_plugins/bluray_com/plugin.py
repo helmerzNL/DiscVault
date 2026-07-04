@@ -567,9 +567,11 @@ def search_title(payload, context=None):
         except Exception:
             parsed = None
         if isinstance(parsed, dict) and parsed.get("status") == "hit":
-            # The edition picker only wants single releases, not box sets.
+            # In release-variants (wishlist edition picker) mode box sets and
+            # anniversary/trilogy editions are legitimate pickable editions, so
+            # keep them and flag them for the frontend to label.
             if parsed.get("isBoxSetCandidate"):
-                continue
+                item["isBoxSetCandidate"] = True
             release_title = _clean_text(parsed.get("releaseTitle"))
             movie = parsed.get("movie") if isinstance(parsed.get("movie"), dict) else {}
             clean_movie_title = _clean_text(movie.get("title"))
