@@ -255,6 +255,8 @@ def mobile_feature_capabilities(conn, actor: dict[str, Any]) -> dict[str, Any]:
             "watchlist": has_any("watchlist.manage"),
             "notifications": True,
             "push": True,
+            "loanRequests": has_any("lending.request"),
+            "manageLoansSystem": has_any("security.manage_loans_system"),
         },
         "api": {
             "read": has_any("api.read"),
@@ -300,6 +302,18 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "refreshMovie": "/api/next/movies/{movieId}/metadata/refresh",
             "refreshContainer": "/api/next/containers/{containerId}/metadata/refresh",
             "jobs": "/api/next/metadata/jobs",
+        },
+        "loans": {
+            "list": "/api/next/loans",
+            "borrowed": "/api/next/loans/borrowed",
+            "return": "/api/next/loans/{loanId}/return",
+        },
+        "loanRequests": {
+            "create": "/api/next/movies/{movieId}/loan-requests",
+            "list": "/api/next/loan-requests",
+            "approve": "/api/next/loan-requests/{loanRequestId}/approve",
+            "decline": "/api/next/loan-requests/{loanRequestId}/decline",
+            "cancel": "/api/next/loan-requests/{loanRequestId}/cancel",
         },
     }
 
@@ -370,6 +384,9 @@ def register_next_preferences_routes(flask_app: Flask, *, connect) -> None:  # p
                         "locales": _app.supported_next_locales(),
                     },
                     "apiAccess": profile_api_access_payload(conn, actor),
+                    "instanceSettings": {
+                        "loansSystemEnabled": _app.loans_system_enabled(conn),
+                    },
                     "endpoints": mobile_endpoint_contract_payload(),
                 }
             )

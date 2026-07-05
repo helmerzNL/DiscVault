@@ -6248,6 +6248,9 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
         "preferences": app_effective_preferences(conn, user_id),
+        "instanceSettings": {
+            "loansSystemEnabled": loans_system_enabled(conn),
+        },
         "user": {
             "id": user.get("id"),
             "username": user.get("username"),
@@ -6274,6 +6277,9 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "mediaGroups": [],
         "plugins": [],
         "preferences": dict(APP_PREFERENCE_DEFAULTS),
+        "instanceSettings": {
+            "loansSystemEnabled": False,
+        },
         "user": None,
         "build": {
             "version": build_version(),
@@ -15377,7 +15383,7 @@ def ui_preview_html(
               <strong id="listsWishlistCount">0</strong>
               <span data-next-i18n="lists.wishlist">Wishlist</span>
             </div>
-            <div class="list-count-pill">
+            <div class="list-count-pill" id="listsLoansCountPill">
               <strong id="listsLoansCount">0</strong>
               <span data-next-i18n="lists.loans">On loan</span>
             </div>
@@ -15444,6 +15450,17 @@ def ui_preview_html(
               <button type="button" class="secondary-button" id="loanHistoryButton" data-next-i18n="lists.loanHistoryButton">History</button>
             </div>
             <div class="lists-simple-list loans-list" id="listsLoansList"></div>
+            <div class="lists-loan-requests" id="listsLoanRequests">
+              <div class="detail-card-head compact">
+                <h4 data-next-i18n="lists.loanRequestsTitle">Borrow requests</h4>
+                <div class="detail-submenu" role="tablist" aria-label="Borrow requests">
+                  <button type="button" class="active lists-seg" data-loan-requests-tab="incoming"><span class="lists-seg-label" data-next-i18n="lists.loanRequestsIncomingTitle">To review</span></button>
+                  <button type="button" class="lists-seg" data-loan-requests-tab="outgoing"><span class="lists-seg-label" data-next-i18n="lists.loanRequestsOutgoingTitle">My requests</span></button>
+                </div>
+              </div>
+              <div class="lists-simple-list" id="listsLoanRequestsIncoming"></div>
+              <div class="lists-simple-list hidden" id="listsLoanRequestsOutgoing"></div>
+            </div>
           </div>
           <div class="preview-empty hidden" id="listsEmptyMessage"></div>
         </section>
@@ -15921,6 +15938,19 @@ def ui_preview_html(
                 <input type="text" id="movieLoanBorrower" data-next-i18n-placeholder="lists.loanBorrowerPlaceholder" placeholder="Borrower name">
                 <input type="date" id="movieLoanDue" aria-label="Due date" data-next-i18n-aria="lists.loanDue">
                 <button type="submit" class="secondary-button" data-next-i18n="lists.loanLend">Lend disc</button>
+              </form>
+              <div class="movie-loan-request-status" id="movieLoanRequestStatus"></div>
+              <form class="movie-loan-request hidden" id="movieLoanRequestForm" autocomplete="off">
+                <label class="loan-request-field">
+                  <span data-next-i18n="lists.loanRequestFrom">Borrow from</span>
+                  <input type="date" id="movieLoanRequestFrom" aria-label="Borrow from" data-next-i18n-aria="lists.loanRequestFrom">
+                </label>
+                <label class="loan-request-field">
+                  <span data-next-i18n="lists.loanRequestReturnBy">Return by</span>
+                  <input type="date" id="movieLoanRequestReturnBy" aria-label="Return by" data-next-i18n-aria="lists.loanRequestReturnBy">
+                </label>
+                <input type="text" id="movieLoanRequestNote" data-next-i18n-placeholder="lists.loanRequestNotePlaceholder" placeholder="Optional message to the owner">
+                <button type="submit" class="secondary-button" data-next-i18n="lists.loanRequestSubmit">Send request</button>
               </form>
               <p class="form-message" id="movieLoanMessage"></p>
             </div>
@@ -16400,6 +16430,7 @@ def ui_preview_html(
               </div>
               <div class="detail-subpanel hidden" data-preferences-panel="collectors">
                 <div class="preference-list" id="profileCollectorPreferenceList"></div>
+                <div class="preference-list hidden" id="loansSystemSettingRow"></div>
               </div>
               <div class="login-message" id="preferencesMessage"></div>
             </div>
@@ -17265,7 +17296,7 @@ def ui_preview_html(
     let activePersonPayload = null;
     let personReturnRoute = null;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
-    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
+    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
@@ -18056,6 +18087,13 @@ def ui_preview_html(
     function currentUserId() {
       return currentAuthStatus.user_id || currentAuthStatus.userId || (state.user || {}).id || "";
     }
+    function loansSystemEnabled() {
+      const settings = (state && state.instanceSettings) || {};
+      return settings.loansSystemEnabled !== false;
+    }
+    function canManageLoansSystem() {
+      return hasActualPermission("security.manage_loans_system");
+    }
     function canViewFullCollectionByDefault() {
       return hasActualPermission("collection.view_all");
     }
@@ -18131,6 +18169,7 @@ def ui_preview_html(
         activePreferenceTab = "appearance";
       }
       syncPreferencePanelVisibility();
+      renderLoansSystemSetting();
       setElementVisible(document.querySelector('[data-profile-tab="structure"]'), canManageContainers);
       if (!canManageContainers && activeProfileTab === "structure") {
         activeProfileTab = "account";
@@ -24377,25 +24416,74 @@ def ui_preview_html(
     function renderMovieLoan(state) {
       const statusNode = document.getElementById("movieLoanStatus");
       const addForm = document.getElementById("movieLoanAddForm");
+      const requestForm = document.getElementById("movieLoanRequestForm");
+      const requestStatusNode = document.getElementById("movieLoanRequestStatus");
+      const section = document.getElementById("movieLoanSection");
+      if (section) section.classList.toggle("hidden", !loansSystemEnabled());
+      if (!loansSystemEnabled()) {
+        if (addForm) addForm.classList.add("hidden");
+        if (requestForm) requestForm.classList.add("hidden");
+        if (statusNode) statusNode.innerHTML = "";
+        if (requestStatusNode) requestStatusNode.innerHTML = "";
+        return;
+      }
+      const movie = (activeDetailPayload && activeDetailPayload.movie) || {};
+      const ownerId = String(movie.owner_id || movie.ownerId || "");
+      const viewerId = String(currentUserId() || "");
+      const isOwner = !ownerId || (!!viewerId && ownerId === viewerId);
       const loan = state.activeLoan;
-      if (statusNode) {
-        if (loan) {
-          const borrower = loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
-          const due = loan.dueAt ? `${tNext("lists.loanDue", "Due")} ${escapeHtml(formatAppDate(loan.dueAt))}` : "";
-          statusNode.innerHTML = `
-            <div class="movie-loan-active">
-              <span>${escapeHtml(tNext("lists.loanTo", "Lent to"))} <strong>${escapeHtml(borrower)}</strong>${due ? ` · ${due}` : ""}</span>
-              <div class="button-row compact">
-                <button type="button" class="secondary-button" data-loan-return="${escapeHtml(loan.id)}" data-next-i18n="lists.loanMarkReturned">Mark returned</button>
-                <button type="button" class="list-pill-button danger" data-loan-delete="${escapeHtml(loan.id)}" data-next-i18n="common.delete">Delete</button>
+      if (isOwner) {
+        if (requestForm) requestForm.classList.add("hidden");
+        if (requestStatusNode) requestStatusNode.innerHTML = "";
+        if (statusNode) {
+          if (loan) {
+            const borrower = loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+            const due = loan.dueAt ? `${tNext("lists.loanDue", "Due")} ${escapeHtml(formatAppDate(loan.dueAt))}` : "";
+            statusNode.innerHTML = `
+              <div class="movie-loan-active">
+                <span>${escapeHtml(tNext("lists.loanTo", "Lent to"))} <strong>${escapeHtml(borrower)}</strong>${due ? ` · ${due}` : ""}</span>
+                <div class="button-row compact">
+                  <button type="button" class="secondary-button" data-loan-return="${escapeHtml(loan.id)}" data-next-i18n="lists.loanMarkReturned">Mark returned</button>
+                  <button type="button" class="list-pill-button danger" data-loan-delete="${escapeHtml(loan.id)}" data-next-i18n="common.delete">Delete</button>
+                </div>
               </div>
-            </div>
-          `;
+            `;
+          } else {
+            statusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanNone", "This disc is not on loan."))}</span>`;
+          }
+        }
+        if (addForm) addForm.classList.toggle("hidden", !!loan);
+        return;
+      }
+      // Non-owner (group member): you cannot lend someone else's disc, so offer a borrow request.
+      if (addForm) addForm.classList.add("hidden");
+      if (statusNode) statusNode.innerHTML = "";
+      const req = state.loanRequest;
+      const status = req && req.status;
+      const pending = status === "pending";
+      const approved = status === "approved";
+      const declined = status === "declined";
+      if (requestStatusNode) {
+        if (pending) {
+          const from = req.borrowFrom ? escapeHtml(formatAppDate(req.borrowFrom)) : "";
+          const until = req.returnBy ? escapeHtml(formatAppDate(req.returnBy)) : "";
+          const range = from && until ? ` · ${from} → ${until}` : "";
+          requestStatusNode.innerHTML = `
+            <div class="movie-loan-request-active">
+              <span class="status-pill">${escapeHtml(tNext("lists.loanRequestPending", "Borrow request pending"))}${range}</span>
+              <div class="button-row compact">
+                <button type="button" class="list-pill-button" data-loan-request-cancel="${escapeHtml(req.id)}" data-next-i18n="lists.loanRequestCancel">Cancel request</button>
+              </div>
+            </div>`;
+        } else if (approved) {
+          requestStatusNode.innerHTML = `<span class="status-pill good">${escapeHtml(tNext("lists.loanRequestApproved", "Borrow request approved"))}</span>`;
+        } else if (declined) {
+          requestStatusNode.innerHTML = `<span class="status-pill bad">${escapeHtml(tNext("lists.loanRequestDeclined", "Borrow request declined"))}</span>`;
         } else {
-          statusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanNone", "This disc is not on loan."))}</span>`;
+          requestStatusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanRequestHelp", "Ask the owner if you may borrow this disc."))}</span>`;
         }
       }
-      if (addForm) addForm.classList.toggle("hidden", !!loan);
+      if (requestForm) requestForm.classList.toggle("hidden", pending || approved);
     }
     async function attachActiveMovieTag(name) {
       if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
@@ -24457,6 +24545,49 @@ def ui_preview_html(
         if (borrowerInput) borrowerInput.value = "";
         if (dueInput) dueInput.value = "";
         setMovieLoanMessage(tNext("lists.loanRecorded", "Loan recorded."), "good");
+      } catch (error) {
+        setMovieLoanMessage(error.message || String(error), "bad");
+      }
+    }
+    async function requestBorrowActiveMovie(borrowFrom, returnBy, note) {
+      if (!activeDetailMovieId || !hasPermission("lending.request")) return;
+      const from = String(borrowFrom || "").trim();
+      const until = String(returnBy || "").trim();
+      if (!from || !until) {
+        setMovieLoanMessage(tNext("lists.loanRequestDatesRequired", "Choose both a borrow-from and a return-by date."), "bad");
+        return;
+      }
+      if (until < from) {
+        setMovieLoanMessage(tNext("lists.loanRequestDateError", "The return-by date must be on or after the borrow-from date."), "bad");
+        return;
+      }
+      const body = {borrowFrom: from, returnBy: until};
+      const message = String(note || "").trim();
+      if (message) body.note = message;
+      setMovieLoanMessage(tNext("lists.loanRequestSubmitting", "Sending request..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/loan-requests`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        const noteInput = document.getElementById("movieLoanRequestNote");
+        if (noteInput) noteInput.value = "";
+        setMovieLoanMessage(tNext("lists.loanRequestSent", "Request sent to the owner."), "good");
+      } catch (error) {
+        setMovieLoanMessage(error.message || String(error), "bad");
+      }
+    }
+    async function cancelActiveMovieLoanRequest(requestId) {
+      if (!requestId || !hasPermission("lending.request")) return;
+      setMovieLoanMessage(tNext("lists.loanRequestCancelling", "Cancelling request..."));
+      try {
+        const payload = await authApiJson(`/api/next/loan-requests/${encodeURIComponent(requestId)}/cancel`, {method: "POST"});
+        if (payload && payload.userState) activeDetailPayload.userState = payload.userState;
+        renderMovieListState(activeDetailPayload);
+        setMovieLoanMessage(tNext("lists.loanRequestCancelledMsg", "Request cancelled."), "good");
       } catch (error) {
         setMovieLoanMessage(error.message || String(error), "bad");
       }
@@ -29399,6 +29530,123 @@ def ui_preview_html(
         </div>
       `;
     }
+    function loanRequestStatusLabel(status) {
+      if (status === "pending") return tNext("lists.loanRequestPending", "Pending");
+      if (status === "approved") return tNext("lists.loanRequestApproved", "Approved");
+      if (status === "declined") return tNext("lists.loanRequestDeclined", "Declined");
+      if (status === "cancelled") return tNext("lists.loanRequestCancelled", "Cancelled");
+      return status || "";
+    }
+    function loanRequestRowHtml(req, role) {
+      const snapshot = req.snapshot || {};
+      const title = snapshot.title || tNext("common.untitled", "Untitled");
+      const status = req.status || "pending";
+      const person = role === "incoming"
+        ? (req.requesterDisplayName || req.requesterUsername || tNext("notifications.loanRequestRequesterFallback", "A DiscVault member"))
+        : (req.ownerDisplayName || req.ownerUsername || tNext("notifications.loanRequestOwnerFallback", "The owner"));
+      const personLabel = role === "incoming" ? tNext("lists.loanRequestRequestedBy", "Requested by") : tNext("lists.loanRequestOwnerLabel", "Owner");
+      const dates = (req.borrowFrom && req.returnBy)
+        ? `${escapeHtml(formatAppDate(req.borrowFrom))} → ${escapeHtml(formatAppDate(req.returnBy))}`
+        : "";
+      const metaParts = [
+        `${escapeHtml(personLabel)}: ${escapeHtml(person)}`,
+        dates
+      ].filter(Boolean);
+      let actions = "";
+      if (role === "incoming" && status === "pending") {
+        actions = `
+          <button type="button" data-loan-request-approve="${escapeHtml(req.id)}">${escapeHtml(tNext("lists.loanRequestApprove", "Approve"))}</button>
+          <button type="button" class="danger" data-loan-request-decline="${escapeHtml(req.id)}">${escapeHtml(tNext("lists.loanRequestDecline", "Decline"))}</button>`;
+      } else if (role === "outgoing" && status === "pending") {
+        actions = `<button type="button" class="danger" data-loan-request-cancel-row="${escapeHtml(req.id)}">${escapeHtml(tNext("lists.loanRequestCancel", "Cancel request"))}</button>`;
+      }
+      const statusClass = status === "approved" ? "good" : (status === "declined" || status === "cancelled" ? "bad" : "");
+      return `
+        <div class="list-simple-card">
+          <div class="list-simple-body">
+            <span class="list-simple-title">${escapeHtml(title)}</span>
+            <span class="list-simple-meta">${metaParts.join(" / ")}</span>
+            ${req.note ? `<span class="list-simple-meta">${escapeHtml(req.note)}</span>` : ""}
+            <span class="tag ${statusClass}">${escapeHtml(loanRequestStatusLabel(status))}</span>
+          </div>
+          <div class="list-simple-actions">${actions}</div>
+        </div>
+      `;
+    }
+    function renderLoanRequestsSection() {
+      const wrap = document.getElementById("listsLoanRequests");
+      if (!wrap) return;
+      if (!hasPermission("lending.request")) {
+        wrap.classList.add("hidden");
+        return;
+      }
+      wrap.classList.remove("hidden");
+      const tab = listsState.loanRequestsTab === "outgoing" ? "outgoing" : "incoming";
+      document.querySelectorAll("[data-loan-requests-tab]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.loanRequestsTab === tab);
+      });
+      const incomingNode = document.getElementById("listsLoanRequestsIncoming");
+      const outgoingNode = document.getElementById("listsLoanRequestsOutgoing");
+      const incoming = (listsState.loanRequests && listsState.loanRequests.incoming) || [];
+      const outgoing = (listsState.loanRequests && listsState.loanRequests.outgoing) || [];
+      if (incomingNode) {
+        incomingNode.classList.toggle("hidden", tab !== "incoming");
+        incomingNode.innerHTML = incoming.length
+          ? incoming.map((req) => loanRequestRowHtml(req, "incoming")).join("")
+          : `<p class="import-source-meta">${escapeHtml(tNext("lists.loanRequestsIncomingEmpty", "No borrow requests to review."))}</p>`;
+      }
+      if (outgoingNode) {
+        outgoingNode.classList.toggle("hidden", tab !== "outgoing");
+        outgoingNode.innerHTML = outgoing.length
+          ? outgoing.map((req) => loanRequestRowHtml(req, "outgoing")).join("")
+          : `<p class="import-source-meta">${escapeHtml(tNext("lists.loanRequestsOutgoingEmpty", "You have no borrow requests."))}</p>`;
+      }
+      bindLoanRequestInteractions();
+    }
+    function bindLoanRequestInteractions() {
+      const wrap = document.getElementById("listsLoanRequests");
+      if (!wrap || wrap.dataset.bound === "true") return;
+      wrap.dataset.bound = "true";
+      wrap.addEventListener("click", (event) => {
+        const approveBtn = event.target.closest("[data-loan-request-approve]");
+        const declineBtn = event.target.closest("[data-loan-request-decline]");
+        const cancelBtn = event.target.closest("[data-loan-request-cancel-row]");
+        if (approveBtn) { decideLoanRequest(approveBtn.dataset.loanRequestApprove, "approve"); return; }
+        if (declineBtn) { decideLoanRequest(declineBtn.dataset.loanRequestDecline, "decline"); return; }
+        if (cancelBtn) { decideLoanRequest(cancelBtn.dataset.loanRequestCancelRow, "cancel"); return; }
+      });
+    }
+    async function decideLoanRequest(requestId, action) {
+      if (!requestId || !["approve", "decline", "cancel"].includes(action)) return;
+      try {
+        await authApiJson(`/api/next/loan-requests/${encodeURIComponent(requestId)}/${action}`, {method: "POST"});
+        await loadLoanRequests(true);
+        if (action === "approve") { try { await loadListsView(true); } catch (e) { /* ignore */ } }
+      } catch (error) {
+        setWishlistMessage(error.message || String(error), "bad");
+      }
+    }
+    async function loadLoanRequests(force = false) {
+      if (!hasPermission("lending.request")) return;
+      if (listsState.loanRequestsLoaded && !force) {
+        renderLoanRequestsSection();
+        return;
+      }
+      try {
+        const [incoming, outgoing] = await Promise.all([
+          authApiJson("/api/next/loan-requests?role=incoming"),
+          authApiJson("/api/next/loan-requests?role=outgoing")
+        ]);
+        listsState.loanRequests = {
+          incoming: (incoming && incoming.loanRequests) || [],
+          outgoing: (outgoing && outgoing.loanRequests) || []
+        };
+        listsState.loanRequestsLoaded = true;
+        renderLoanRequestsSection();
+      } catch (error) {
+        /* ignore loan request load errors */
+      }
+    }
     function listsSimpleModeClass(mode) {
       if (mode === "list") return "mode-list-grid";
       if (mode === "detail") return "mode-detail-grid";
@@ -29985,6 +30233,14 @@ def ui_preview_html(
       if (navNode) navNode.textContent = String(watchlistCount || 0);
     }
     function renderListsView() {
+      const loansOn = loansSystemEnabled();
+      const loansTabButton = document.querySelector('[data-lists-tab="loans"]');
+      if (loansTabButton) loansTabButton.classList.toggle("hidden", !loansOn);
+      const loansCountPill = document.getElementById("listsLoansCountPill");
+      if (loansCountPill) loansCountPill.classList.toggle("hidden", !loansOn);
+      if (!loansOn && listsState.active === "loans") {
+        listsState.active = "watchlist";
+      }
       document.querySelectorAll("[data-lists-tab]").forEach((button) => {
         button.classList.toggle("active", button.dataset.listsTab === listsState.active);
       });
@@ -30081,6 +30337,8 @@ def ui_preview_html(
           empty.textContent = tNext("lists.emptyLoans", "No discs are currently on loan.");
           empty.classList.toggle("hidden", !!activeLoans.length);
         }
+        renderLoanRequestsSection();
+        loadLoanRequests();
       }
       bindListsSimpleActions();
       document.querySelectorAll("[data-list-movie]").forEach((button) => {
@@ -30792,6 +31050,17 @@ def ui_preview_html(
         </span>
       `;
     }
+    function notificationLoanRequestActionsHtml(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind !== "loan_request" || !payload.loanRequestId) return "";
+      const requestId = escapeHtml(payload.loanRequestId);
+      return `
+        <span class="notification-actions">
+          <button type="button" class="secondary-button" data-notification-loan-request-approve="${requestId}">${escapeHtml(tNext("lists.loanRequestApprove", "Approve"))}</button>
+          <button type="button" class="secondary-button" data-notification-loan-request-decline="${requestId}">${escapeHtml(tNext("lists.loanRequestDecline", "Decline"))}</button>
+        </span>
+      `;
+    }
     function notificationPrefKey(notification) {
       const payload = notification?.payload || {};
       return String(payload.prefKey || payload.pref_key || payload.kind || "app_updates");
@@ -30830,6 +31099,7 @@ def ui_preview_html(
             ${cardBody ? `<p>${escapeHtml(cardBody)}</p>` : ""}
             <span class="notification-meta">${escapeHtml(created)}${prefKey ? ` / ${escapeHtml(tNext(`notifications.pref.${prefKey}`, prefKey.replaceAll("_", " ")))}` : ""}</span>
             ${notificationInviteActionsHtml(notification)}
+            ${notificationLoanRequestActionsHtml(notification)}
           </span>
           <span class="notification-dot" aria-hidden="true"></span>
         </article>
@@ -30883,6 +31153,21 @@ def ui_preview_html(
         notificationsState.loaded = false;
         await loadNotifications(true);
         await loadAppSnapshot();
+      } catch (error) {
+        const empty = document.getElementById("notificationsEmptyMessage");
+        if (empty) {
+          empty.textContent = error.message || String(error);
+          empty.classList.remove("hidden");
+        }
+      }
+    }
+    async function respondToLoanRequest(requestId, action) {
+      if (!requestId || !["approve", "decline"].includes(action)) return;
+      try {
+        await authApiJson(`/api/next/loan-requests/${encodeURIComponent(requestId)}/${action}`, {method: "POST"});
+        notificationsState.loaded = false;
+        await loadNotifications(true);
+        if (typeof loadLoanRequests === "function") { try { await loadLoanRequests(true); } catch (e) { /* ignore */ } }
       } catch (error) {
         const empty = document.getElementById("notificationsEmptyMessage");
         if (empty) {
@@ -32261,6 +32546,50 @@ def ui_preview_html(
         loadProfileApiAuditEvents();
       }
     }
+    function renderLoansSystemSetting() {
+      const row = document.getElementById("loansSystemSettingRow");
+      if (!row) return;
+      if (!canManageLoansSystem()) {
+        row.classList.add("hidden");
+        row.innerHTML = "";
+        return;
+      }
+      const active = loansSystemEnabled();
+      row.classList.remove("hidden");
+      row.innerHTML = `
+        <div class="preference-row">
+          <span>
+            <strong>${escapeHtml(tNext("preferences.loansSystemLabel", "Loans System"))}</strong>
+            <span>${escapeHtml(tNext("preferences.loansSystemHelp", "Enable lending and borrow requests across the collection."))}</span>
+          </span>
+          <button type="button" class="switch ${active ? "on" : ""}" id="loansSystemToggle" aria-pressed="${active ? "true" : "false"}"></button>
+        </div>
+      `;
+      const toggle = document.getElementById("loansSystemToggle");
+      if (toggle) toggle.addEventListener("click", () => toggleLoansSystem(!active));
+    }
+    async function toggleLoansSystem(enabled) {
+      const toggle = document.getElementById("loansSystemToggle");
+      if (toggle) toggle.disabled = true;
+      try {
+        await authApiJson("/api/next/admin/settings/loans-system", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ enabled: !!enabled })
+        });
+        await loadAppSnapshot();
+        renderLoansSystemSetting();
+      } catch (error) {
+        if (toggle) toggle.disabled = false;
+        setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
+      }
+    }
+    function setPreferencesMessage(message, tone) {
+      const node = document.getElementById("preferencesMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
     function renderPreferences() {
       const libraryList = document.getElementById("profilePreferenceList");
       const collectorList = document.getElementById("profileCollectorPreferenceList");
@@ -32273,6 +32602,7 @@ def ui_preview_html(
         collectorList.innerHTML = preferenceRowsHtml(preferenceCollectorLabels);
         bindPreferenceList(collectorList);
       }
+      renderLoansSystemSetting();
       if (legacyList) {
         legacyList.innerHTML = preferenceRowsHtml(preferenceLabels);
         bindPreferenceList(legacyList);
@@ -33806,6 +34136,12 @@ def ui_preview_html(
           renderListsView();
         });
       });
+      document.querySelectorAll("[data-loan-requests-tab]").forEach((button) => {
+        button.addEventListener("click", () => {
+          listsState.loanRequestsTab = button.dataset.loanRequestsTab || "incoming";
+          renderLoanRequestsSection();
+        });
+      });
       document.getElementById("wishlistAddForm")?.addEventListener("submit", submitWishlistAdd);
       document.getElementById("wishlistSearchForm")?.addEventListener("submit", submitWishlistSearch);
       document.getElementById("loanCreateButton")?.addEventListener("click", () => openLoanLibraryPicker());
@@ -33830,6 +34166,8 @@ def ui_preview_html(
       document.getElementById("notificationsList")?.addEventListener("click", (event) => {
         const acceptButton = event.target.closest("[data-notification-invite-accept]");
         const declineButton = event.target.closest("[data-notification-invite-decline]");
+        const loanApproveButton = event.target.closest("[data-notification-loan-request-approve]");
+        const loanDeclineButton = event.target.closest("[data-notification-loan-request-decline]");
         if (acceptButton) {
           event.preventDefault();
           event.stopPropagation();
@@ -33838,6 +34176,14 @@ def ui_preview_html(
           event.preventDefault();
           event.stopPropagation();
           respondToMediaGroupInvite(declineButton.dataset.notificationInviteDecline, "decline");
+        } else if (loanApproveButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          respondToLoanRequest(loanApproveButton.dataset.notificationLoanRequestApprove, "approve");
+        } else if (loanDeclineButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          respondToLoanRequest(loanDeclineButton.dataset.notificationLoanRequestDecline, "decline");
         }
       });
       document.getElementById("pushEnableButton")?.addEventListener("click", () => enablePushNotifications());
@@ -34475,6 +34821,18 @@ def ui_preview_html(
           document.getElementById("movieLoanBorrower")?.value || "",
           document.getElementById("movieLoanDue")?.value || ""
         );
+      });
+      document.getElementById("movieLoanRequestForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        requestBorrowActiveMovie(
+          document.getElementById("movieLoanRequestFrom")?.value || "",
+          document.getElementById("movieLoanRequestReturnBy")?.value || "",
+          document.getElementById("movieLoanRequestNote")?.value || ""
+        );
+      });
+      document.getElementById("movieLoanRequestStatus")?.addEventListener("click", (event) => {
+        const cancelButton = event.target.closest("[data-loan-request-cancel]");
+        if (cancelButton) cancelActiveMovieLoanRequest(cancelButton.dataset.loanRequestCancel);
       });
       document.getElementById("movieLoanStatus")?.addEventListener("click", (event) => {
         const returnButton = event.target.closest("[data-loan-return]");
@@ -41019,6 +41377,11 @@ def set_app_setting_value(conn, key: str, value: Any, *, is_secret: bool = False
         )
 
 
+def loans_system_enabled(conn) -> bool:
+    """Instance-wide flag: is the Loans System (loans + borrow requests) enabled?"""
+    return bool(app_setting_value(conn, "loans_system_enabled", False))
+
+
 def push_vapid_subject() -> str:
     return os.environ.get("VAPID_SUBJECT") or os.environ.get("DISCVAULT_VAPID_SUBJECT") or "mailto:no-reply@discvault.app"
 
@@ -41820,6 +42183,8 @@ def mobile_feature_capabilities(conn, actor: dict[str, Any]) -> dict[str, Any]:
             "watchlist": has_any("watchlist.manage"),
             "notifications": True,
             "push": True,
+            "loanRequests": has_any("lending.request"),
+            "manageLoansSystem": has_any("security.manage_loans_system"),
         },
         "api": {
             "read": has_any("api.read"),
@@ -41867,6 +42232,18 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "refreshMovie": "/api/next/movies/{movieId}/metadata/refresh",
             "refreshContainer": "/api/next/containers/{containerId}/metadata/refresh",
             "jobs": "/api/next/metadata/jobs",
+        },
+        "loans": {
+            "list": "/api/next/loans",
+            "borrowed": "/api/next/loans/borrowed",
+            "return": "/api/next/loans/{loanId}/return",
+        },
+        "loanRequests": {
+            "create": "/api/next/movies/{movieId}/loan-requests",
+            "list": "/api/next/loan-requests",
+            "approve": "/api/next/loan-requests/{loanRequestId}/approve",
+            "decline": "/api/next/loan-requests/{loanRequestId}/decline",
+            "cancel": "/api/next/loan-requests/{loanRequestId}/cancel",
         },
     }
 
@@ -44177,6 +44554,8 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         "history": [],
         "tags": [],
         "activeLoan": None,
+        "loanRequest": None,
+        "incomingLoanRequests": 0,
     }
     if not user_id:
         return state
@@ -44249,6 +44628,10 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
             loan_row = cur.fetchone()
         if loan_row:
             state["activeLoan"] = _loan_row_entity(loan_row)
+    if table_exists(conn, "loan_requests"):
+        request_state = personal_movie_loan_request_state(conn, movie_id, user_id)
+        state["loanRequest"] = request_state.get("outgoing")
+        state["incomingLoanRequests"] = request_state.get("incomingPending") or 0
     return state
 
 
@@ -44755,6 +45138,200 @@ def all_borrowed_loan_entities(conn, borrower_user_id) -> list[dict[str, Any]]:
         )
         rows = cur.fetchall()
     return [_borrowed_loan_row_entity(row) for row in rows]
+
+
+def movie_owner_id(conn, movie_id: UUID) -> UUID | None:
+    """Return the owner_id for a movie, or None when the movie/column is absent."""
+    if not table_exists(conn, "movies"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT owner_id FROM movies WHERE id=%s", (movie_id,))
+        row = cur.fetchone()
+    return row.get("owner_id") if row else None
+
+
+def movie_borrowable_from_other(conn, actor: dict[str, Any] | None, movie_id: UUID) -> bool:
+    """True when the actor can see this movie via a shared group but is NOT its owner.
+
+    This is the predicate for showing the "Ask to borrow" control instead of the
+    owner-only "Lend" form: you cannot lend someone else's disc, so a group member
+    viewing another member's movie may raise a borrow request instead.
+    """
+    actor_id = (actor or {}).get("id")
+    if not actor_id:
+        return False
+    owner = movie_owner_id(conn, movie_id)
+    if owner is not None and str(owner) == str(actor_id):
+        return False
+    return movie_is_shared_with_actor(conn, actor, movie_id)
+
+
+def _loan_request_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    movie = row.get("movie_id")
+    requester = row.get("requester_user_id")
+    owner = row.get("owner_user_id")
+    resulting_loan = row.get("resulting_loan_id")
+    borrow_from = row.get("borrow_from")
+    return_by = row.get("return_by")
+    decided_at = row.get("decided_at")
+    return {
+        "id": str(row.get("id")),
+        "movieId": str(movie) if movie else None,
+        "snapshot": row.get("snapshot") or {},
+        "requesterUserId": str(requester) if requester else None,
+        "requesterDisplayName": (
+            row.get("requester_display_name") or row.get("requester_username") or None
+        ),
+        "requesterUsername": row.get("requester_username"),
+        "ownerUserId": str(owner) if owner else None,
+        "ownerDisplayName": row.get("owner_display_name") or row.get("owner_username") or None,
+        "ownerUsername": row.get("owner_username"),
+        "borrowFrom": borrow_from.isoformat() if hasattr(borrow_from, "isoformat") else borrow_from,
+        "returnBy": return_by.isoformat() if hasattr(return_by, "isoformat") else return_by,
+        "status": row.get("status"),
+        "note": row.get("note"),
+        "resultingLoanId": str(resulting_loan) if resulting_loan else None,
+        "decidedAt": decided_at,
+        "createdAt": row.get("created_at"),
+        "updatedAt": row.get("updated_at"),
+    }
+
+
+def _loan_request_select(join_users: bool) -> tuple[str, str]:
+    """Return (extra_select, joins) that resolve requester/owner display names."""
+    if not join_users:
+        extra = (
+            "NULL AS requester_username, NULL AS requester_display_name, "
+            "NULL AS owner_username, NULL AS owner_display_name"
+        )
+        return extra, ""
+    extra = (
+        "requester.username AS requester_username, "
+        "requester.display_name AS requester_display_name, "
+        "owner.username AS owner_username, "
+        "owner.display_name AS owner_display_name"
+    )
+    joins = (
+        "LEFT JOIN users requester ON requester.id = lr.requester_user_id "
+        "LEFT JOIN users owner ON owner.id = lr.owner_user_id"
+    )
+    return extra, joins
+
+
+def loan_request_entity(conn, request_id: UUID) -> dict[str, Any] | None:
+    if not table_exists(conn, "loan_requests"):
+        return None
+    extra, joins = _loan_request_select(table_exists(conn, "users"))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT lr.id, lr.movie_id, lr.requester_user_id, lr.owner_user_id, lr.snapshot,
+                   lr.borrow_from, lr.return_by, lr.status, lr.note, lr.resulting_loan_id,
+                   lr.decided_at, lr.created_at, lr.updated_at,
+                   {extra}
+            FROM loan_requests lr
+            {joins}
+            WHERE lr.id=%s
+            """,
+            (request_id,),
+        )
+        row = cur.fetchone()
+    return _loan_request_row_entity(row) if row else None
+
+
+def all_loan_requests(conn, user_id: UUID | str, *, role: str = "incoming") -> list[dict[str, Any]]:
+    """List loan requests where the user is the owner ('incoming') or requester ('outgoing')."""
+    if not user_id or not table_exists(conn, "loan_requests"):
+        return []
+    column = "owner_user_id" if role == "incoming" else "requester_user_id"
+    extra, joins = _loan_request_select(table_exists(conn, "users"))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT lr.id, lr.movie_id, lr.requester_user_id, lr.owner_user_id, lr.snapshot,
+                   lr.borrow_from, lr.return_by, lr.status, lr.note, lr.resulting_loan_id,
+                   lr.decided_at, lr.created_at, lr.updated_at,
+                   {extra}
+            FROM loan_requests lr
+            {joins}
+            WHERE lr.{column}=%s
+            ORDER BY
+                CASE WHEN lr.status='pending' THEN 0 ELSE 1 END,
+                lr.created_at DESC
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return [_loan_request_row_entity(row) for row in rows]
+
+
+def personal_movie_loan_request_state(
+    conn, movie_id: UUID, user_id: UUID | str | None
+) -> dict[str, Any]:
+    """Borrow-request state for the movie-detail panel of a given viewer."""
+    state: dict[str, Any] = {"outgoing": None, "incomingPending": 0}
+    if not user_id or not table_exists(conn, "loan_requests"):
+        return state
+    extra, joins = _loan_request_select(table_exists(conn, "users"))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT lr.id, lr.movie_id, lr.requester_user_id, lr.owner_user_id, lr.snapshot,
+                   lr.borrow_from, lr.return_by, lr.status, lr.note, lr.resulting_loan_id,
+                   lr.decided_at, lr.created_at, lr.updated_at,
+                   {extra}
+            FROM loan_requests lr
+            {joins}
+            WHERE lr.movie_id=%s AND lr.requester_user_id=%s
+            ORDER BY lr.created_at DESC
+            LIMIT 1
+            """,
+            (movie_id, user_id),
+        )
+        outgoing = cur.fetchone()
+    if outgoing:
+        state["outgoing"] = _loan_request_row_entity(outgoing)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*)::int AS count
+            FROM loan_requests
+            WHERE movie_id=%s AND owner_user_id=%s AND status='pending'
+            """,
+            (movie_id, user_id),
+        )
+        state["incomingPending"] = int((cur.fetchone() or {}).get("count") or 0)
+    return state
+
+
+def create_loan_from_request(conn, request_row: dict[str, Any], actor: dict[str, Any] | None) -> UUID | None:
+    """Materialize an outbound loan from an approved borrow request.
+
+    The owner becomes the lender (loans.user_id), the requester the borrower, and
+    the requested return date becomes the loan due date. Returns the new loan id.
+    """
+    if not table_exists(conn, "loans"):
+        return None
+    owner_id = request_row.get("owner_user_id")
+    requester_id = request_row.get("requester_user_id")
+    movie_id = request_row.get("movie_id")
+    snapshot = request_row.get("snapshot") or {}
+    return_by = request_row.get("return_by")
+    created_by = (actor or {}).get("id") or owner_id
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO loans
+                (user_id, movie_id, snapshot, borrower_user_id, due_at, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (owner_id, movie_id, Jsonb(snapshot), requester_id, return_by, created_by),
+        )
+        loan_id = (cur.fetchone() or {}).get("id")
+    if loan_id is not None:
+        emit_loan_change(conn, owner_id, loan_id, operation="upsert", movie_id=movie_id)
+    return loan_id
 
 
 def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit: int = 200) -> list[dict[str, Any]]:
@@ -55294,6 +55871,8 @@ def register_routes(flask_app: Flask) -> None:
         note = clean_text(body.get("note"))
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            if not loans_system_enabled(conn):
+                raise NextApiError("Loans system is disabled", 409)
             if not table_exists(conn, "loans"):
                 raise NextApiError("Loans table is not available", 503)
             user_id = actor.get("id")
@@ -55568,6 +56147,373 @@ def register_routes(flask_app: Flask) -> None:
             elif status_filter == "returned":
                 loans = [ln for ln in loans if ln.get("returned")]
             return response({"status": "ok", "loans": loans})
+
+    def _load_loan_request_raw(conn, request_uuid: UUID, *, for_update: bool = False):
+        lock = " FOR UPDATE" if for_update else ""
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT id, movie_id, requester_user_id, owner_user_id, snapshot,
+                       borrow_from, return_by, status, note, resulting_loan_id
+                FROM loan_requests
+                WHERE id=%s{lock}
+                """,
+                (request_uuid,),
+            )
+            return cur.fetchone()
+
+    def _notify_loan_request(conn, recipient_id, *, title_key, title_default,
+                             body_key, body_default, payload, url="/lists", **body_kwargs):
+        if not recipient_id or not table_exists(conn, "user_notifications"):
+            return
+        recipient_locale = get_user_locale(conn, recipient_id)
+        title_text = next_translate(recipient_locale, title_key, title_default)
+        body_text = next_translate(recipient_locale, body_key, body_default, **body_kwargs)
+        try:
+            create_user_notification(
+                conn,
+                recipient_id,
+                title=title_text,
+                body=body_text,
+                url=url,
+                pref_key="app_updates",
+                payload=payload,
+            )
+        except Exception:
+            pass
+
+    @flask_app.post("/api/next/movies/<movie_id>/loan-requests")
+    def create_loan_request(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Loan request body must be an object", 400)
+        borrow_from = parse_optional_date(body.get("borrowFrom") or body.get("borrow_from"), "borrowFrom")
+        return_by = parse_optional_date(body.get("returnBy") or body.get("return_by"), "returnBy")
+        if borrow_from is None:
+            raise NextApiError("A borrow-from date is required", 400)
+        if return_by is None:
+            raise NextApiError("A return-by date is required", 400)
+        if return_by < borrow_from:
+            raise NextApiError("The return-by date must be on or after the borrow-from date", 400)
+        note = clean_text(body.get("note"))
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            if not loans_system_enabled(conn):
+                raise NextApiError("Loans system is disabled", 409)
+            if not table_exists(conn, "loan_requests"):
+                raise NextApiError("Loan requests are not available", 503)
+            requester_id = actor.get("id")
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            owner_id = movie_owner_id(conn, movie_uuid)
+            if owner_id is None:
+                raise NextApiError("This disc has no owner to borrow from", 409)
+            if str(owner_id) == str(requester_id):
+                raise NextApiError("You already own this disc", 409)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id FROM loan_requests
+                    WHERE movie_id=%s AND requester_user_id=%s AND status='pending'
+                    LIMIT 1
+                    """,
+                    (movie_uuid, requester_id),
+                )
+                if cur.fetchone():
+                    raise NextApiError("You already have a pending request for this disc", 409)
+            snapshot = personal_list_movie_snapshot(conn, movie_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO loan_requests
+                            (movie_id, requester_user_id, owner_user_id, snapshot,
+                             borrow_from, return_by, note)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (movie_uuid, requester_id, owner_id, Jsonb(snapshot),
+                         borrow_from, return_by, note),
+                    )
+                    request_uuid = (cur.fetchone() or {}).get("id")
+                requester_label = actor.get("display_name") or actor.get("username") or None
+                movie_title = clean_text((snapshot or {}).get("title")) or None
+                owner_locale = get_user_locale(conn, owner_id)
+                requester_text = requester_label or next_translate(
+                    owner_locale, "notifications.loanRequestRequesterFallback", "A DiscVault member"
+                )
+                movie_text = movie_title or next_translate(
+                    owner_locale, "notifications.loanTitleFallback", "a disc"
+                )
+                _notify_loan_request(
+                    conn,
+                    owner_id,
+                    title_key="notifications.loanRequestTitle",
+                    title_default="New borrow request",
+                    body_key="notifications.loanRequestBody",
+                    body_default="{requester} would like to borrow {title}.",
+                    requester=requester_text,
+                    title=movie_text,
+                    payload={
+                        "kind": "loan_request",
+                        "loanRequestId": str(request_uuid),
+                        "movieId": str(movie_uuid),
+                        "movieTitle": movie_text,
+                        "requesterId": str(requester_id or ""),
+                        "borrowFrom": borrow_from.isoformat(),
+                        "returnBy": return_by.isoformat(),
+                    },
+                )
+                audit_event(
+                    conn,
+                    event_type="loan_request.created",
+                    category="personal",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Requested to borrow disc",
+                    metadata={"owner": str(owner_id), "returnBy": return_by.isoformat()},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "loanRequest": loan_request_entity(conn, request_uuid) if request_uuid else None,
+                    "userState": personal_movie_state(conn, movie_uuid, requester_id),
+                },
+                201,
+            )
+
+    @flask_app.get("/api/next/loan-requests")
+    def list_loan_requests():
+        role = clean_text(request.args.get("role")) or "incoming"
+        if role not in ("incoming", "outgoing"):
+            raise NextApiError("role must be 'incoming' or 'outgoing'", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            user_id = actor.get("id")
+            requests = all_loan_requests(conn, user_id, role=role)
+            return response({"status": "ok", "role": role, "loanRequests": requests})
+
+    @flask_app.post("/api/next/loan-requests/<request_id>/approve")
+    def approve_loan_request(request_id: str):
+        request_uuid = parse_uuid(request_id, "loanRequestId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            if not loans_system_enabled(conn):
+                raise NextApiError("Loans system is disabled", 409)
+            if not table_exists(conn, "loan_requests"):
+                raise NextApiError("Loan requests are not available", 503)
+            actor_id = actor.get("id")
+            with conn.transaction():
+                row = _load_loan_request_raw(conn, request_uuid, for_update=True)
+                if not row:
+                    raise NextApiError("Loan request not found", 404)
+                if str(row.get("owner_user_id")) != str(actor_id):
+                    raise NextApiError("Only the disc owner can approve this request", 403)
+                if row.get("status") != "pending":
+                    raise NextApiError("This request has already been decided", 409)
+                loan_id = create_loan_from_request(conn, row, actor)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE loan_requests
+                        SET status='approved', decided_at=now(), updated_at=now(),
+                            resulting_loan_id=%s
+                        WHERE id=%s
+                        """,
+                        (loan_id, request_uuid),
+                    )
+                snapshot = row.get("snapshot") or {}
+                movie_uuid = row.get("movie_id")
+                requester_id = row.get("requester_user_id")
+                owner_label = actor.get("display_name") or actor.get("username") or None
+                requester_locale = get_user_locale(conn, requester_id)
+                owner_text = owner_label or next_translate(
+                    requester_locale, "notifications.loanRequestOwnerFallback", "The owner"
+                )
+                movie_text = clean_text((snapshot or {}).get("title")) or next_translate(
+                    requester_locale, "notifications.loanTitleFallback", "a disc"
+                )
+                _notify_loan_request(
+                    conn,
+                    requester_id,
+                    title_key="notifications.loanRequestApprovedTitle",
+                    title_default="Borrow request approved",
+                    body_key="notifications.loanRequestApprovedBody",
+                    body_default="{owner} approved your request to borrow {title}.",
+                    owner=owner_text,
+                    title=movie_text,
+                    payload={
+                        "kind": "loan_request_decided",
+                        "loanRequestId": str(request_uuid),
+                        "status": "approved",
+                        "movieId": str(movie_uuid) if movie_uuid else None,
+                        "movieTitle": movie_text,
+                        "loanId": str(loan_id) if loan_id else None,
+                    },
+                )
+                audit_event(
+                    conn,
+                    event_type="loan_request.approved",
+                    category="personal",
+                    actor=actor,
+                    target_type="loan_request",
+                    target_id=request_uuid,
+                    summary="Approved borrow request",
+                    metadata={"loanId": str(loan_id) if loan_id else None},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "loanRequest": loan_request_entity(conn, request_uuid),
+                }
+            )
+
+    @flask_app.post("/api/next/loan-requests/<request_id>/decline")
+    def decline_loan_request(request_id: str):
+        request_uuid = parse_uuid(request_id, "loanRequestId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            if not table_exists(conn, "loan_requests"):
+                raise NextApiError("Loan requests are not available", 503)
+            actor_id = actor.get("id")
+            with conn.transaction():
+                row = _load_loan_request_raw(conn, request_uuid, for_update=True)
+                if not row:
+                    raise NextApiError("Loan request not found", 404)
+                if str(row.get("owner_user_id")) != str(actor_id):
+                    raise NextApiError("Only the disc owner can decline this request", 403)
+                if row.get("status") != "pending":
+                    raise NextApiError("This request has already been decided", 409)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE loan_requests
+                        SET status='declined', decided_at=now(), updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (request_uuid,),
+                    )
+                snapshot = row.get("snapshot") or {}
+                movie_uuid = row.get("movie_id")
+                requester_id = row.get("requester_user_id")
+                owner_label = actor.get("display_name") or actor.get("username") or None
+                requester_locale = get_user_locale(conn, requester_id)
+                owner_text = owner_label or next_translate(
+                    requester_locale, "notifications.loanRequestOwnerFallback", "The owner"
+                )
+                movie_text = clean_text((snapshot or {}).get("title")) or next_translate(
+                    requester_locale, "notifications.loanTitleFallback", "a disc"
+                )
+                _notify_loan_request(
+                    conn,
+                    requester_id,
+                    title_key="notifications.loanRequestDeclinedTitle",
+                    title_default="Borrow request declined",
+                    body_key="notifications.loanRequestDeclinedBody",
+                    body_default="{owner} declined your request to borrow {title}.",
+                    owner=owner_text,
+                    title=movie_text,
+                    payload={
+                        "kind": "loan_request_decided",
+                        "loanRequestId": str(request_uuid),
+                        "status": "declined",
+                        "movieId": str(movie_uuid) if movie_uuid else None,
+                        "movieTitle": movie_text,
+                    },
+                )
+                audit_event(
+                    conn,
+                    event_type="loan_request.declined",
+                    category="personal",
+                    actor=actor,
+                    target_type="loan_request",
+                    target_id=request_uuid,
+                    summary="Declined borrow request",
+                    metadata={},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "loanRequest": loan_request_entity(conn, request_uuid),
+                }
+            )
+
+    @flask_app.post("/api/next/loan-requests/<request_id>/cancel")
+    def cancel_loan_request(request_id: str):
+        request_uuid = parse_uuid(request_id, "loanRequestId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            if not table_exists(conn, "loan_requests"):
+                raise NextApiError("Loan requests are not available", 503)
+            actor_id = actor.get("id")
+            with conn.transaction():
+                row = _load_loan_request_raw(conn, request_uuid, for_update=True)
+                if not row:
+                    raise NextApiError("Loan request not found", 404)
+                if str(row.get("requester_user_id")) != str(actor_id):
+                    raise NextApiError("Only the requester can cancel this request", 403)
+                if row.get("status") != "pending":
+                    raise NextApiError("Only pending requests can be cancelled", 409)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE loan_requests
+                        SET status='cancelled', decided_at=now(), updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (request_uuid,),
+                    )
+                audit_event(
+                    conn,
+                    event_type="loan_request.cancelled",
+                    category="personal",
+                    actor=actor,
+                    target_type="loan_request",
+                    target_id=request_uuid,
+                    summary="Cancelled borrow request",
+                    metadata={},
+                )
+            movie_uuid = row.get("movie_id")
+            return response(
+                {
+                    "status": "ok",
+                    "loanRequest": loan_request_entity(conn, request_uuid),
+                    "userState": (
+                        personal_movie_state(conn, movie_uuid, actor_id) if movie_uuid else None
+                    ),
+                }
+            )
+
+    @flask_app.patch("/api/next/admin/settings/loans-system")
+    def set_loans_system_setting():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        if "enabled" not in body:
+            raise NextApiError("An 'enabled' boolean is required", 400)
+        enabled = bool(body.get("enabled"))
+        with connect() as conn:
+            actor = require_next_permission(conn, "security.manage_loans_system")
+            with conn.transaction():
+                set_app_setting_value(
+                    conn,
+                    "loans_system_enabled",
+                    enabled,
+                    actor_id=actor.get("id"),
+                )
+                audit_event(
+                    conn,
+                    event_type="settings.loans_system",
+                    category="security",
+                    actor=actor,
+                    target_type="app_setting",
+                    target_id=None,
+                    summary=("Enabled" if enabled else "Disabled") + " the Loans System",
+                    metadata={"enabled": enabled},
+                )
+            return response({"status": "ok", "loansSystemEnabled": enabled})
 
     @flask_app.post("/api/next/preferences/locale")
     def set_preferences_locale():
