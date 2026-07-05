@@ -109,6 +109,70 @@ Use `/api/next/notifications` for the in-app inbox and
 delivery is marked as planned in the bootstrap response; current backend push
 metadata is Web Push compatible.
 
+Loan requests emit notifications with a `payload.kind` the client should handle:
+
+- `loan_request` — the disc owner receives this when a member asks to borrow a
+  disc. Payload carries `loanRequestId`, `movieId`, `movieTitle`, `requesterId`,
+  `borrowFrom`, `returnBy`. Offer Approve/Decline actions that call the
+  loan-request approve/decline endpoints below.
+- `loan_request_decided` — the requester receives this when the owner approves or
+  declines. Payload carries `loanRequestId`, `status` (`approved` | `declined`),
+  `movieId`, and (on approval) `loanId`.
+
+## Loans And Borrow Requests
+
+Gated by the `personal.loanRequests` capability
+(`capabilities.personal.loanRequests`, backed by the `lending.request`
+permission). When `false`, hide the borrow-request UI.
+
+Own discs (owner) use the loan endpoints in `endpoints.loans`:
+
+- `GET /api/next/loans` — active loans the user has lent out.
+- `GET /api/next/loans/borrowed` — discs borrowed by the user.
+- `POST /api/next/loans/{loanId}/return` — mark a loan returned.
+
+Discs owned by another group member cannot be lent directly; instead the member
+sends a borrow request (`endpoints.loanRequests`):
+
+- `POST /api/next/movies/{movieId}/loan-requests` — create a request.
+  Body: `{"borrowFrom":"YYYY-MM-DD","returnBy":"YYYY-MM-DD","note":"optional"}`.
+  Both dates are required and `returnBy` must be on or after `borrowFrom`.
+  A duplicate pending request for the same disc returns `409`.
+- `GET /api/next/loan-requests?role=incoming|outgoing` — list requests.
+  `incoming` = requests to decide as the owner; `outgoing` = the user's own
+  requests with their current status.
+- `POST /api/next/loan-requests/{loanRequestId}/approve` — owner approves; this
+  auto-creates a loan (`resultingLoanId`) with the requester as borrower and
+  `returnBy` as the due date, and notifies the requester.
+- `POST /api/next/loan-requests/{loanRequestId}/decline` — owner declines and
+  notifies the requester.
+- `POST /api/next/loan-requests/{loanRequestId}/cancel` — requester cancels their
+  own pending request.
+
+Request `status` values: `pending`, `approved`, `declined`, `cancelled`. The
+per-movie state (in the movie detail payload) exposes the viewer's outgoing
+request under `userState.loanRequest` and an `incomingLoanRequests` count for
+owners.
+
+### Loans System Toggle (instance-wide)
+
+The entire loans + borrow-request feature can be switched off instance-wide by
+an admin. The mobile bootstrap exposes the current state under
+`instanceSettings.loansSystemEnabled` (boolean). When `false`, hide **all** loan
+and borrow-request UI (loan lists, borrow-request forms, the on-loan section)
+for every user, regardless of their `personal.loanRequests` capability. The
+loan and loan-request endpoints also reject writes with `409` while disabled.
+
+Admins (users with the `security.manage_loans_system` permission, surfaced as
+the `personal.manageLoansSystem` capability) can change it:
+
+- `PATCH /api/next/admin/settings/loans-system` — body `{"enabled": true|false}`.
+  Returns `{"status":"ok","loansSystemEnabled": bool}`. Only expose this control
+  when `capabilities.personal.manageLoansSystem` is `true`.
+
+Fresh installs default to disabled; installs that already had loan data default
+to enabled.
+
 ## Offline
 
 Use the Next sync endpoints exposed in `endpoints.sync`:
