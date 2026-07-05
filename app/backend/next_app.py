@@ -26810,7 +26810,7 @@ def ui_preview_html(
         state.textContent = stateText;
         state.className = `tag ${canStartSelected ? "good" : ""}`.trim();
       }
-      if (navState) navState.textContent = canStartSelected ? tNext("importCenter.ready", "Ready") : stateText;
+      if (navState) navState.textContent = canStartSelected ? tNext("importCenter.ready", "Ready") : "";
       if (startButton) startButton.disabled = !canStartSelected;
       if (pathInput && document.activeElement !== pathInput) {
         pathInput.value = importCenter.sourcePath || source.sourcePath || "";
