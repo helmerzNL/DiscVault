@@ -27587,7 +27587,7 @@ def ui_preview_html(
                 <span>${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
               </span>
             </span>
-            <button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" || isAdded || importCenter.batchRunning ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
+            ${(!isAdded && !isActive) ? `<button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${importCenter.batchRunning ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>` : ""}
           </div>
         `;
       }).join("") : "";
@@ -28976,6 +28976,13 @@ def ui_preview_html(
       );
       const primaryImportMode = selectedBoxSetForAction ? "box-set" : "movie";
       const inBatchContext = Boolean(importCenter.activeBatchBarcode);
+      // Issue #111: once every batch barcode has been added there is nothing
+      // left to confirm, so hide the bottom "Add movie" / "Use selected match"
+      // action button (the "Go to Library" footer takes over).
+      const batchRows = importCenter.batchResults || [];
+      const addableBatchRows = batchRows.filter((row) => row.status !== "error");
+      const allBatchAdded = batchRows.length > 0 && addableBatchRows.length > 0
+        && addableBatchRows.every((row) => row.status === "added");
       const primaryImportLabel = (inBatchContext && (selectedMovieCandidate || selectedBoxSetForAction))
         ? tNext("importCenter.useSelectedMatch", "Use selected match")
         : selectedBoxSetForAction
@@ -28983,7 +28990,7 @@ def ui_preview_html(
           : tNext("importCenter.addMovie", "Add movie");
       const lookupActionFooter = `
         <div class="import-result-action-footer">
-          ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
+          ${hasMovieCandidate && !allBatchAdded ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
           ${secondaryBoxSetActionKey ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" data-box-set-proposal-key="${escapeHtml(secondaryBoxSetActionKey)}" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
           <div id="importLookupActionStatus" class="import-result-action-status ${escapeHtml(importCenter.lookupActionTone || "")} ${importCenter.lookupActionMessage ? "" : "hidden"}">${escapeHtml(importCenter.lookupActionMessage || "")}</div>
         </div>
