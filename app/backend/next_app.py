@@ -27599,31 +27599,37 @@ def ui_preview_html(
           : tNext("importCenter.batchAdded", "Added");
       return row;
     }
-    function focusNextImportBatchRow(barcode) {
+    function importBatchRowHasCandidates(row) {
+      if (!row) return false;
+      const known = row.movieCandidates !== undefined || row.boxSetCandidates !== undefined;
+      if (!known) return true;
+      return Number(row.movieCandidates) > 0 || Number(row.boxSetCandidates) > 0;
+    }
+    function openNextImportBatchRow(afterBarcode) {
       const rows = importCenter.batchResults || [];
-      const target = normalizeImportBarcode(barcode);
-      const startIndex = rows.findIndex((item) => normalizeImportBarcode(item.barcode || "") === target);
-      let nextBarcode = "";
+      const target = normalizeImportBarcode(afterBarcode || "");
+      const startIndex = target
+        ? rows.findIndex((item) => normalizeImportBarcode(item.barcode || "") === target)
+        : -1;
+      const eligible = (row) => row && row.status !== "added" && row.status !== "error" && importBatchRowHasCandidates(row);
+      let next = null;
       for (let index = startIndex + 1; index < rows.length; index += 1) {
-        if (rows[index].status !== "added") { nextBarcode = rows[index].barcode || ""; break; }
+        if (eligible(rows[index])) { next = rows[index]; break; }
       }
-      if (!nextBarcode) {
-        for (let index = 0; index < rows.length; index += 1) {
-          if (rows[index].status !== "added") { nextBarcode = rows[index].barcode || ""; break; }
+      if (!next) {
+        for (let index = 0; index <= startIndex && index < rows.length; index += 1) {
+          if (eligible(rows[index])) { next = rows[index]; break; }
         }
       }
-      if (!nextBarcode) return;
-      requestAnimationFrame(() => {
-        const button = document.querySelector(`#importBatchList [data-import-batch-preview="${cssEscapeValue(nextBarcode)}"]`);
-        if (!button) return;
-        try { button.scrollIntoView({behavior: "smooth", block: "center"}); } catch (error) { button.scrollIntoView(); }
-        button.focus({preventScroll: true});
-      });
-    }
-    function cssEscapeValue(value) {
-      const text = String(value || "");
-      if (window.CSS && typeof window.CSS.escape === "function") return window.CSS.escape(text);
-      return text.replace(/["\\\\]/g, "\\\\$&");
+      if (!next) return false;
+      importCenter.activeBatchBarcode = next.barcode || "";
+      renderImportBatchList();
+      const results = document.getElementById("importBarcodeResults");
+      if (results) {
+        try { results.scrollIntoView({behavior: "smooth", block: "start"}); } catch (error) { results.scrollIntoView(); }
+      }
+      previewImportBatchBarcode(next.barcode || "");
+      return true;
     }
     async function previewImportBatchBarcode(barcode) {
       const input = document.getElementById("importBarcodeInput");
@@ -27688,6 +27694,10 @@ def ui_preview_html(
       } finally {
         importCenter.batchRunning = false;
         renderImportBatchList();
+        // Issue #111: after the bulk check, drop straight into the first
+        // barcode that has candidates so the user can pick a match without
+        // clicking Search again on each row.
+        openNextImportBatchRow("");
       }
     }
     async function applyImportScannerFocus(stream) {
@@ -29256,8 +29266,11 @@ def ui_preview_html(
           // navigating into the movie/box-set detail page (issue #111).
           importCenter.activeBatchBarcode = "";
           renderImportBatchList();
-          setImportBatchMessage(tNext("importCenter.batchWorkflowNext", "Added. Pick the next barcode to continue."), "good");
-          focusNextImportBatchRow(barcode);
+          // Auto-advance: open the next barcode with candidates for selection.
+          // Only fall back to the "pick the next barcode" hint when none remain.
+          if (!openNextImportBatchRow(barcode)) {
+            setImportBatchMessage(tNext("importCenter.batchWorkflowNext", "Added. Pick the next barcode to continue."), "good");
+          }
         } else if (importedContainerId) {
           openAppContainerDetail(importedContainerId);
         } else if (movie.id) {
