@@ -44649,7 +44649,7 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
     # a NULL owner_id, which would make every viewer look like the owner. Compute the
     # decision here where group membership is known.
     actor = {"id": user_id}
-    owner_id = movie_owner_id(conn, movie_id)
+    owner_id = resolve_movie_owner_id(conn, movie_id, viewer_id=user_id)
     state["ownerUserId"] = str(owner_id) if owner_id else None
     state["isOwnMovie"] = bool(owner_id) and str(owner_id) == str(user_id)
     state["canRequestBorrow"] = movie_borrowable_from_other(conn, actor, movie_id)
@@ -45171,17 +45171,66 @@ def movie_owner_id(conn, movie_id: UUID) -> UUID | None:
     return row.get("owner_id") if row else None
 
 
+def resolve_movie_owner_id(conn, movie_id: UUID, *, viewer_id: Any = None) -> UUID | None:
+    """Best-effort owner of a movie for lending / borrow-request attribution.
+
+    Prefers the explicit ``movies.owner_id``. When that is NULL -- e.g. discs created
+    via the device sync/import path, which runs without an authenticated actor and so
+    never stamps an owner -- fall back to the person who shared the disc into a media
+    group: the per-share ``added_by`` recorded in ``media_group_movies.metadata`` when
+    present, otherwise the group's ``created_by``. Groups the viewer belongs to are
+    preferred so a borrow request is routed to a collection the viewer can actually
+    see. Returns None only when no owner can be attributed at all.
+    """
+    owner = movie_owner_id(conn, movie_id)
+    if owner is not None:
+        return owner
+    if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT mgm.metadata->>'added_by' AS added_by,
+                   g.created_by            AS created_by
+            FROM media_group_movies mgm
+            JOIN media_groups g ON g.id = mgm.group_id
+            LEFT JOIN media_group_members mem
+                ON mem.group_id = mgm.group_id AND mem.user_id = %s
+            WHERE mgm.movie_id = %s
+            ORDER BY (mem.user_id IS NOT NULL) DESC, mgm.created_at ASC
+            """,
+            (viewer_id, movie_id),
+        )
+        rows = cur.fetchall() or []
+    for row in rows:
+        added_by = row.get("added_by")
+        if added_by:
+            try:
+                return added_by if isinstance(added_by, UUID) else UUID(str(added_by))
+            except (ValueError, AttributeError, TypeError):
+                pass
+        created_by = row.get("created_by")
+        if created_by:
+            try:
+                return created_by if isinstance(created_by, UUID) else UUID(str(created_by))
+            except (ValueError, AttributeError, TypeError):
+                pass
+    return None
+
+
 def movie_borrowable_from_other(conn, actor: dict[str, Any] | None, movie_id: UUID) -> bool:
     """True when the actor can see this movie via a shared group but is NOT its owner.
 
     This is the predicate for showing the "Ask to borrow" control instead of the
     owner-only "Lend" form: you cannot lend someone else's disc, so a group member
-    viewing another member's movie may raise a borrow request instead.
+    viewing another member's movie may raise a borrow request instead. Ownership is
+    resolved authoritatively (see ``resolve_movie_owner_id``) so a NULL-owner disc
+    whose group the actor created is correctly treated as the actor's own.
     """
     actor_id = (actor or {}).get("id")
     if not actor_id:
         return False
-    owner = movie_owner_id(conn, movie_id)
+    owner = resolve_movie_owner_id(conn, movie_id, viewer_id=actor_id)
     if owner is not None and str(owner) == str(actor_id):
         return False
     return movie_is_shared_with_actor(conn, actor, movie_id)
@@ -52320,16 +52369,25 @@ def register_routes(flask_app: Flask) -> None:
                         )
                         changed = cur.rowcount
                     else:
+                        actor_id = actor.get("id")
                         for movie_id in movie_ids:
                             cur.execute(
                                 """
                                 INSERT INTO media_group_movies (group_id, movie_id, metadata, created_at, updated_at)
-                                VALUES (%s, %s, '{}'::jsonb, now(), now())
+                                VALUES (%s, %s, jsonb_build_object('added_by', %s::text), now(), now())
                                 ON CONFLICT (group_id, movie_id) DO NOTHING
                                 """,
-                                (group_uuid, movie_id),
+                                (group_uuid, movie_id, str(actor_id) if actor_id else None),
                             )
                             changed += cur.rowcount
+                            if actor_id:
+                                # Discs synced from a device have no owner; the member who
+                                # shares one into a group becomes its owner so it can be
+                                # lent/borrowed. Never overwrite an existing owner.
+                                cur.execute(
+                                    "UPDATE movies SET owner_id=%s WHERE id=%s AND owner_id IS NULL",
+                                    (actor_id, movie_id),
+                                )
                     cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
         return response(
             {
@@ -52574,15 +52632,24 @@ def register_routes(flask_app: Flask) -> None:
             changed = 0
             with conn.transaction():
                 with conn.cursor() as cur:
+                    actor_id = actor.get("id")
                     cur.execute(
                         """
                         INSERT INTO media_group_movies (group_id, movie_id, metadata, created_at, updated_at)
-                        VALUES (%s, %s, '{}'::jsonb, now(), now())
+                        VALUES (%s, %s, jsonb_build_object('added_by', %s::text), now(), now())
                         ON CONFLICT (group_id, movie_id) DO NOTHING
                         """,
-                        (group_uuid, movie_uuid),
+                        (group_uuid, movie_uuid, str(actor_id) if actor_id else None),
                     )
                     changed = cur.rowcount
+                    if actor_id:
+                        # Discs synced from a device have no owner; the member who shares
+                        # one into a group becomes its owner so it can be lent/borrowed.
+                        # Never overwrite an existing owner.
+                        cur.execute(
+                            "UPDATE movies SET owner_id=%s WHERE id=%s AND owner_id IS NULL",
+                            (actor_id, movie_uuid),
+                        )
                     cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
                 audit_event(
                     conn,
@@ -56227,7 +56294,7 @@ def register_routes(flask_app: Flask) -> None:
             requester_id = actor.get("id")
             if not actor_can_view_movie(conn, actor, movie_uuid):
                 raise NextApiError("Movie not found", 404)
-            owner_id = movie_owner_id(conn, movie_uuid)
+            owner_id = resolve_movie_owner_id(conn, movie_uuid, viewer_id=requester_id)
             if owner_id is None:
                 raise NextApiError("This disc has no owner to borrow from", 409)
             if str(owner_id) == str(requester_id):
