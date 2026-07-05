@@ -15117,6 +15117,8 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
       <div class="sidebar-footer">
+        <strong data-next-i18n="profile.appVersion">App version</strong><br>
+        """ + h(build.get("version") or "unknown") + """<br>
         <strong data-next-i18n="uiPreview.build">Build</strong><br>
         """ + h((build.get("sha") or "unknown")[:12]) + """
       </div>
