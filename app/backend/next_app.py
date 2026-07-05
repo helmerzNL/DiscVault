@@ -9566,6 +9566,51 @@ def ui_preview_html(
       display: grid;
       gap: 16px;
     }
+    .import-method-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 66%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .import-method-tabs button {
+      flex: 1 1 auto;
+      min-height: 36px;
+      border: 0;
+      border-radius: 12px;
+      padding: 0 12px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-weight: 720;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .import-method-tabs button.active {
+      background: var(--bg-elevated);
+      color: var(--text);
+      box-shadow: 0 8px 20px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.16);
+    }
+    .import-method-panel {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+      min-width: 0;
+    }
+    .import-method-panel.hidden {
+      display: none;
+    }
+    .import-method-panel .import-batch-card.standalone {
+      padding-top: 0;
+      border-top: 0;
+    }
+    .import-method-panel .import-file-upload-card.secondary {
+      margin-top: 0;
+    }
     .import-scanner-card {
       overflow: hidden;
       min-width: 0;
@@ -15448,7 +15493,13 @@ def ui_preview_html(
                 <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding a movie.</p>
               </div>
             </div>
-            <div class="import-scanner-spotlight">
+            <nav class="import-method-tabs" aria-label="Import method" data-next-i18n-aria="importCenter.methods">
+              <button type="button" class="active" data-import-method="camera" data-next-i18n="importCenter.methodCamera">Camera</button>
+              <button type="button" data-import-method="single" data-next-i18n="importCenter.methodSingle">Single search</button>
+              <button type="button" data-import-method="batch" data-next-i18n="importCenter.methodBatch">Batch</button>
+              <button type="button" data-import-method="csv" data-next-i18n="importCenter.methodCsv">CSV import</button>
+            </nav>
+            <div class="import-method-panel" data-import-method-panel="camera">
               <div class="barcode-scanner-shell">
                 <div class="import-card-head">
                   <div>
@@ -15465,6 +15516,8 @@ def ui_preview_html(
                 </div>
                 <div class="login-message" id="importScannerMessage"></div>
               </div>
+            </div>
+            <div class="import-method-panel hidden" data-import-method-panel="single">
               <div class="import-manual-card">
                 <div>
                   <strong data-next-i18n="importCenter.manualTitleCard">Manual search</strong>
@@ -15489,7 +15542,10 @@ def ui_preview_html(
                   </label>
                   <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Search</button>
                 </form>
-                <div class="import-batch-card">
+              </div>
+            </div>
+            <div class="import-method-panel hidden" data-import-method-panel="batch">
+              <div class="import-batch-card standalone">
                   <div>
                     <strong data-next-i18n="importCenter.batchTitle">Batch barcodes</strong>
                     <p class="import-source-meta" data-next-i18n="importCenter.batchHelp">Paste multiple EAN or UPC barcodes. DiscVault checks them one by one through the same metadata plugin flow.</p>
@@ -15503,8 +15559,8 @@ def ui_preview_html(
                   <div class="import-batch-list" id="importBatchList"></div>
                 </div>
               </div>
-            </div>
-            <div class="import-file-upload-card secondary" id="importFileUploadCard">
+            <div class="import-method-panel hidden" data-import-method-panel="csv">
+              <div class="import-file-upload-card secondary" id="importFileUploadCard">
               <div>
                 <strong data-next-i18n="importCenter.fileTitle">Import file</strong>
                 <p class="import-source-meta" data-next-i18n="importCenter.fileHelp">Upload a CSV, TSV, JSON, XML or ZIP file. DiscVault asks the enabled import plugins which one recognizes it.</p>
@@ -15516,6 +15572,7 @@ def ui_preview_html(
               </div>
               <div class="login-message" id="importFileMessage"></div>
               <div class="import-file-summary" id="importFileSummary"></div>
+            </div>
             </div>
             <div class="import-result-list" id="importBarcodeResults"></div>
           </div>
@@ -17214,7 +17271,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeTab: "add", activeMethod: "camera"};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -25762,6 +25819,22 @@ def ui_preview_html(
         panel.classList.toggle("hidden", panel.dataset.importPanel !== active);
       });
     }
+    function setImportMethodTab(method) {
+      importCenter.activeMethod = method || "camera";
+      renderImportMethodTabs();
+      if (importCenter.activeMethod !== "camera") {
+        stopImportBarcodeScanner();
+      }
+    }
+    function renderImportMethodTabs() {
+      const active = importCenter.activeMethod || "camera";
+      document.querySelectorAll("[data-import-method]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.importMethod === active);
+      });
+      document.querySelectorAll("[data-import-method-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.importMethodPanel !== active);
+      });
+    }
     function jsonPreview(value, maxLength = 1200) {
       if (value === null || value === undefined || value === "") return "";
       try {
@@ -34108,6 +34181,10 @@ def ui_preview_html(
       document.querySelectorAll("[data-import-tab]").forEach((button) => {
         button.addEventListener("click", () => setImportCenterTab(button.dataset.importTab || "add"));
       });
+      document.querySelectorAll("[data-import-method]").forEach((button) => {
+        button.addEventListener("click", () => setImportMethodTab(button.dataset.importMethod || "camera"));
+      });
+      renderImportMethodTabs();
       document.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
         if (!addLookupButton) return;
