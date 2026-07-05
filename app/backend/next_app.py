@@ -24430,7 +24430,16 @@ def ui_preview_html(
       const movie = (activeDetailPayload && activeDetailPayload.movie) || {};
       const ownerId = String(movie.owner_id || movie.ownerId || "");
       const viewerId = String(currentUserId() || "");
-      const isOwner = !ownerId || (!!viewerId && ownerId === viewerId);
+      // Prefer the backend-computed borrow-eligibility flag: it knows group membership
+      // and is robust against NULL/legacy owner_id (which would otherwise make every
+      // viewer look like the owner). Fall back to the owner_id comparison for payloads
+      // from older backends that don't send the flag.
+      let isOwner;
+      if (typeof state.canRequestBorrow === "boolean") {
+        isOwner = !state.canRequestBorrow;
+      } else {
+        isOwner = !ownerId || (!!viewerId && ownerId === viewerId);
+      }
       const loan = state.activeLoan;
       if (isOwner) {
         if (requestForm) requestForm.classList.add("hidden");
@@ -44556,6 +44565,9 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         "activeLoan": None,
         "loanRequest": None,
         "incomingLoanRequests": 0,
+        "ownerUserId": None,
+        "isOwnMovie": False,
+        "canRequestBorrow": False,
     }
     if not user_id:
         return state
@@ -44632,6 +44644,15 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         request_state = personal_movie_loan_request_state(conn, movie_id, user_id)
         state["loanRequest"] = request_state.get("outgoing")
         state["incomingLoanRequests"] = request_state.get("incomingPending") or 0
+    # Authoritative ownership / borrow-eligibility flags. The frontend cannot rely on
+    # a bare owner_id comparison because movies created via the sync/import path carry
+    # a NULL owner_id, which would make every viewer look like the owner. Compute the
+    # decision here where group membership is known.
+    actor = {"id": user_id}
+    owner_id = movie_owner_id(conn, movie_id)
+    state["ownerUserId"] = str(owner_id) if owner_id else None
+    state["isOwnMovie"] = bool(owner_id) and str(owner_id) == str(user_id)
+    state["canRequestBorrow"] = movie_borrowable_from_other(conn, actor, movie_id)
     return state
 
 
