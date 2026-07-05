@@ -27548,7 +27548,13 @@ def ui_preview_html(
       const activeBarcode = normalizeImportBarcode(importCenter.activeBatchBarcode || "");
       const rowsHtml = rows.length ? rows.map((row) => {
         const isAdded = row.status === "added";
-        const isActive = !isAdded && activeBarcode && normalizeImportBarcode(row.barcode || "") === activeBarcode;
+        // Issue #111: during the initial bulk check the blue active marker
+        // should follow the row that is currently being searched, so the user
+        // can see which barcode we are looking up right now.
+        const isActive = !isAdded && (
+          (activeBarcode && normalizeImportBarcode(row.barcode || "") === activeBarcode)
+          || (importCenter.batchRunning && row.status === "running")
+        );
         const statusClass = isAdded
           ? "is-added"
           : row.status === "error"
@@ -27579,7 +27585,7 @@ def ui_preview_html(
                 <span>${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
               </span>
             </span>
-            <button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" || isAdded ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
+            <button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" || isAdded || importCenter.batchRunning ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
           </div>
         `;
       }).join("") : "";
