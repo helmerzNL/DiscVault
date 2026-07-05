@@ -10674,6 +10674,18 @@ def ui_preview_html(
     .import-batch-row.is-added strong {
       color: var(--green, #1f9d55);
     }
+    .import-batch-spinner {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--accent, #3b82f6) 28%, transparent);
+      border-top-color: var(--accent, #3b82f6);
+      animation: importBatchSpin .7s linear infinite;
+    }
+    @keyframes importBatchSpin {
+      to { transform: rotate(360deg); }
+    }
     .import-batch-footer {
       display: flex;
       align-items: center;
@@ -27552,6 +27564,8 @@ def ui_preview_html(
           row.boxSetCandidates !== undefined ? `${formatNumber(row.boxSetCandidates)} ${tNext("importCenter.batchBoxSets", "box-sets")}` : ""
         ].filter(Boolean).join(" / ");
         const checkMark = isAdded ? `<span class="import-batch-check" aria-hidden="true">&#10003;</span>` : "";
+        const isSearching = row.status === "running";
+        const spinner = isSearching ? `<span class="import-batch-spinner" aria-hidden="true"></span>` : "";
         const buttonLabel = isAdded
           ? tNext("importCenter.batchAdded", "Added")
           : tNext("importCenter.previewBarcode", "Search");
@@ -27559,6 +27573,7 @@ def ui_preview_html(
           <div class="${rowClass}">
             <span class="import-batch-info">
               ${checkMark}
+              ${spinner}
               <span class="import-batch-text">
                 <strong>${escapeHtml(row.barcode || "-")}</strong>
                 <span>${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
@@ -27623,13 +27638,41 @@ def ui_preview_html(
       }
       if (!next) return false;
       importCenter.activeBatchBarcode = next.barcode || "";
+      // Show the search running on the freshly opened (blue) row and disable
+      // its Search button until the lookup resolves (issue #111).
+      next.status = "running";
+      next.message = tNext("importCenter.previewingLookup", "Searching metadata...");
       renderImportBatchList();
       const results = document.getElementById("importBarcodeResults");
       if (results) {
         try { results.scrollIntoView({behavior: "smooth", block: "start"}); } catch (error) { results.scrollIntoView(); }
       }
-      previewImportBatchBarcode(next.barcode || "");
+      searchActiveBatchRow(next);
       return true;
+    }
+    async function searchActiveBatchRow(row) {
+      if (!row) return;
+      try {
+        const payload = await previewImportBatchBarcode(row.barcode || "");
+        if (!payload) {
+          row.status = "error";
+          row.message = importCenter.lookupPreviewMessage || tNext("importCenter.noBarcodeResults", "No barcode candidates found.");
+        } else {
+          const movieCount = lookupMovieCandidates().length;
+          const boxSetCount = barcodeBoxSetProposals().length;
+          row.status = "ok";
+          row.movieCandidates = movieCount;
+          row.boxSetCandidates = boxSetCount;
+          row.message = movieCount || boxSetCount
+            ? `${formatNumber(movieCount)} ${tNext("importCenter.batchMovies", "movies")} / ${formatNumber(boxSetCount)} ${tNext("importCenter.batchBoxSets", "box-sets")}`
+            : tNext("importCenter.noBarcodeResults", "No barcode candidates found.");
+        }
+      } catch (error) {
+        row.status = "error";
+        row.message = error?.message || String(error);
+      } finally {
+        renderImportBatchList();
+      }
     }
     async function previewImportBatchBarcode(barcode) {
       const input = document.getElementById("importBarcodeInput");
@@ -28925,10 +28968,10 @@ def ui_preview_html(
       );
       const primaryImportMode = selectedBoxSetForAction ? "box-set" : "movie";
       const inBatchContext = Boolean(importCenter.activeBatchBarcode);
-      const primaryImportLabel = selectedBoxSetForAction
-        ? tNext("importCenter.addBoxSet", "Add box-set")
-        : (inBatchContext && selectedMovieCandidate)
-          ? tNext("importCenter.useSelectedMatch", "Use selected match")
+      const primaryImportLabel = (inBatchContext && (selectedMovieCandidate || selectedBoxSetForAction))
+        ? tNext("importCenter.useSelectedMatch", "Use selected match")
+        : selectedBoxSetForAction
+          ? tNext("importCenter.addBoxSet", "Add box-set")
           : tNext("importCenter.addMovie", "Add movie");
       const lookupActionFooter = `
         <div class="import-result-action-footer">
