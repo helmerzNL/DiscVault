@@ -10146,6 +10146,40 @@ def ui_preview_html(
     .import-batch-row span {
       overflow-wrap: anywhere;
     }
+    .import-batch-row.added {
+      border-color: color-mix(in srgb, var(--success) 46%, var(--line));
+      background: color-mix(in srgb, var(--success) 8%, transparent);
+    }
+    .import-batch-row.active {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+    }
+    .import-batch-check {
+      color: var(--success);
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .import-batch-added-label {
+      display: inline-flex;
+      align-items: center;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .import-batch-added-label.good,
+    .import-batch-complete.good {
+      color: var(--success);
+    }
+    .import-batch-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .import-batch-complete {
+      font-weight: 600;
+      margin-right: auto;
+    }
     .barcode-scanner-viewport video,
     .barcode-scanner-viewport canvas {
       width: 100%;
@@ -16735,7 +16769,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add"};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -26761,22 +26795,40 @@ def ui_preview_html(
       const list = document.getElementById("importBatchList");
       if (!list) return;
       const rows = importCenter.batchResults || [];
-      list.innerHTML = rows.length ? rows.map((row) => {
-        const statusClass = row.status === "ok" ? "good" : row.status === "error" ? "bad" : "blue";
+      const addedCount = rows.filter((row) => row.status === "added").length;
+      const addableRows = rows.filter((row) => row.status !== "error");
+      const allAdded = addableRows.length > 0 && addableRows.every((row) => row.status === "added");
+      const rowsHtml = rows.length ? rows.map((row) => {
+        const isAdded = row.status === "added";
+        const statusClass = isAdded ? "added" : row.status === "ok" ? "good" : row.status === "error" ? "bad" : "blue";
+        const isActive = row.barcode && row.barcode === importCenter.activeBatchBarcode;
         const countText = [
           row.movieCandidates !== undefined ? `${formatNumber(row.movieCandidates)} ${tNext("importCenter.batchMovies", "movies")}` : "",
           row.boxSetCandidates !== undefined ? `${formatNumber(row.boxSetCandidates)} ${tNext("importCenter.batchBoxSets", "box-sets")}` : ""
         ].filter(Boolean).join(" / ");
+        const checkMark = isAdded ? `<span class="import-batch-check" aria-hidden="true">✓</span>` : "";
+        const actionCell = isAdded
+          ? `<span class="import-batch-added-label good">${escapeHtml(tNext("importCenter.batchAdded", "Added"))}</span>`
+          : `<button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" ? "disabled" : ""}>${escapeHtml(tNext("importCenter.previewBarcode", "Search"))}</button>`;
         return `
-          <div class="import-batch-row">
+          <div class="import-batch-row ${isAdded ? "added" : ""} ${isActive ? "active" : ""}">
             <span>
-              <strong>${escapeHtml(row.barcode || "-")}</strong>
-              <span>${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
+              <strong>${checkMark}${escapeHtml(row.barcode || "-")}</strong>
+              <span class="${escapeHtml(statusClass)}">${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
             </span>
-            <button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" ? "disabled" : ""}>${escapeHtml(tNext("importCenter.previewBarcode", "Search"))}</button>
+            ${actionCell}
           </div>
         `;
       }).join("") : "";
+      const libraryFooter = addedCount > 0
+        ? `
+          <div class="import-batch-footer">
+            ${allAdded ? `<span class="import-batch-complete good">${escapeHtml(tNext("importCenter.batchAllMatched", "All barcodes matched."))}</span>` : ""}
+            <button type="button" class="primary-button" data-import-batch-library="1">${escapeHtml(tNext("importCenter.goToLibrary", "Go to Library"))}</button>
+          </div>
+        `
+        : "";
+      list.innerHTML = rowsHtml ? rowsHtml + libraryFooter : "";
     }
     async function previewImportBatchBarcode(barcode) {
       const input = document.getElementById("importBarcodeInput");
@@ -26798,6 +26850,7 @@ def ui_preview_html(
         return;
       }
       importCenter.batchBarcodes = parsed.valid;
+      importCenter.activeBatchBarcode = "";
       importCenter.batchResults = [
         ...parsed.valid.map((barcode) => ({barcode, status: "queued", message: tNext("importCenter.batchQueued", "Queued")})),
         ...parsed.invalid.map((barcode) => ({barcode, status: "error", message: tNext("importCenter.scanInvalid", "The scanned barcode was not a valid EAN or UPC.")}))
@@ -26931,6 +26984,7 @@ def ui_preview_html(
       stopImportBarcodeScanner();
       const input = document.getElementById("importBarcodeInput");
       if (input) input.value = barcode;
+      importCenter.activeBatchBarcode = "";
       setImportScannerMessage(tNext("importCenter.scanFound", "Barcode found. Previewing metadata..."), "good");
       previewBarcodeImport();
       return true;
@@ -28066,9 +28120,12 @@ def ui_preview_html(
         || document.getElementById("importBarcodeInput")?.value
       );
       const primaryImportMode = selectedBoxSetForAction ? "box-set" : "movie";
+      const inBatchContext = Boolean(importCenter.activeBatchBarcode);
       const primaryImportLabel = selectedBoxSetForAction
         ? tNext("importCenter.addBoxSet", "Add box-set")
-        : tNext("importCenter.addMovie", "Add movie");
+        : (inBatchContext && selectedMovieCandidate)
+          ? tNext("importCenter.useSelectedMatch", "Use selected match")
+          : tNext("importCenter.addMovie", "Add movie");
       const lookupActionFooter = `
         <div class="import-result-action-footer">
           ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
@@ -28234,6 +28291,7 @@ def ui_preview_html(
     }
     async function previewBarcodeImport(event) {
       event?.preventDefault();
+      if (event) importCenter.activeBatchBarcode = "";
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return;
       const barcodeInput = document.getElementById("importBarcodeInput");
       const titleInput = document.getElementById("importTitleInput");
@@ -28395,9 +28453,39 @@ def ui_preview_html(
             : "Movie added.";
         setImportLookupActionMessage(tNext(messageKey, messageFallback), "good");
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
-        renderBarcodeLookup();
-        if (importedContainerId) openAppContainerDetail(importedContainerId);
-        else if (movie.id) openAppMovieDetail(movie.id);
+        const batchBarcode = importCenter.activeBatchBarcode;
+        if (batchBarcode) {
+          const batchRow = (importCenter.batchResults || []).find((item) => item.barcode === batchBarcode);
+          if (batchRow) {
+            const addedTitle = payload.boxSet?.container?.title || movie.title || movie.original_title || "";
+            batchRow.status = "added";
+            batchRow.addedTitle = addedTitle;
+            batchRow.message = addedTitle
+              ? `${tNext("importCenter.batchAdded", "Added")}: ${addedTitle}`
+              : tNext("importCenter.batchAdded", "Added");
+          }
+          importCenter.activeBatchBarcode = "";
+          importCenter.barcodeLookup = null;
+          importCenter.addResult = null;
+          importCenter.selectedMovieCandidateKey = "";
+          importCenter.selectedBoxSetProposalKey = "";
+          importCenter.selectedBoxSetProposalSnapshot = null;
+          importCenter.boxSetMemberEdits = {};
+          const barcodeInputEl = document.getElementById("importBarcodeInput");
+          const titleInputEl = document.getElementById("importTitleInput");
+          const yearInputEl = document.getElementById("importYearInput");
+          if (barcodeInputEl) barcodeInputEl.value = "";
+          if (titleInputEl) titleInputEl.value = "";
+          if (yearInputEl) yearInputEl.value = "";
+          setImportLookupActionMessage("", "");
+          setImportLookupPreviewMessage(tNext("importCenter.batchNextPrompt", "Added. Click Search on the next barcode to continue."), "good");
+          renderBarcodeLookup();
+          renderImportBatchList();
+        } else {
+          renderBarcodeLookup();
+          if (importedContainerId) openAppContainerDetail(importedContainerId);
+          else if (movie.id) openAppMovieDetail(movie.id);
+        }
         loadAppSnapshot().catch((error) => {
           console.warn("Snapshot refresh after import failed", error);
           setImportCenterMessage(`${tNext(messageKey, messageFallback)} ${error.message || String(error)}`, "bad");
@@ -32822,12 +32910,23 @@ def ui_preview_html(
         if (input) input.value = "";
         importCenter.batchBarcodes = [];
         importCenter.batchResults = [];
+        importCenter.activeBatchBarcode = "";
         setImportBatchMessage("", "");
         renderImportBatchList();
       });
       document.getElementById("importBatchList")?.addEventListener("click", (event) => {
+        const goToLibraryButton = event.target.closest("[data-import-batch-library]");
+        if (goToLibraryButton) {
+          event.preventDefault();
+          showLibraryPage(true);
+          return;
+        }
         const previewButton = event.target.closest("[data-import-batch-preview]");
-        if (previewButton) previewImportBatchBarcode(previewButton.dataset.importBatchPreview || "");
+        if (previewButton) {
+          const barcode = previewButton.dataset.importBatchPreview || "";
+          importCenter.activeBatchBarcode = barcode;
+          previewImportBatchBarcode(barcode);
+        }
       });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
