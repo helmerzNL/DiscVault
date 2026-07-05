@@ -10686,6 +10686,35 @@ def ui_preview_html(
     @keyframes importBatchSpin {
       to { transform: rotate(360deg); }
     }
+    /* Issue #111: give the "Use selected match" / "Add box-set" action button an
+       immediate busy animation on click. Box-set resolution can take a few
+       seconds, so this confirms the click registered and a search is running. */
+    .primary-button.is-loading,
+    .secondary-button.is-loading {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      pointer-events: none;
+      opacity: .85;
+    }
+    .primary-button.is-loading::after,
+    .secondary-button.is-loading::after {
+      content: "";
+      flex: 0 0 auto;
+      width: 15px;
+      height: 15px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
+      border-top-color: currentColor;
+      animation: importBatchSpin .7s linear infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .primary-button.is-loading::after,
+      .secondary-button.is-loading::after {
+        animation-duration: 1.6s;
+      }
+    }
     .import-batch-footer {
       display: flex;
       align-items: center;
@@ -29246,7 +29275,15 @@ def ui_preview_html(
           ? `${tNext("importCenter.addBoxSet", "Add box-set")}: ${tNext("importCenter.resolvingSelection", "resolving selection...")}`
           : tNext("importCenter.addingMovie", "Adding movie...")
       );
-      if (button) button.disabled = true;
+      if (button) {
+        // Immediate click feedback: spinner + busy state. This stays visible
+        // through the whole request (box-set resolution can take a few seconds)
+        // because the status messages above update text nodes in place and do
+        // not re-render the button until the request resolves (issue #111).
+        button.disabled = true;
+        button.classList.add("is-loading");
+        button.setAttribute("aria-busy", "true");
+      }
       try {
         const selectedProposal = wantsBoxSet
           ? (boxSetProposalByKey(importCenter.selectedBoxSetProposalKey) || selectedBoxSetProposal())
@@ -29342,7 +29379,11 @@ def ui_preview_html(
         setImportLookupActionMessage(error.message || String(error), "bad");
         setImportCenterMessage(error.message || String(error), "bad");
       } finally {
-        if (button) button.disabled = false;
+        if (button) {
+          button.disabled = false;
+          button.classList.remove("is-loading");
+          button.removeAttribute("aria-busy");
+        }
         renderBarcodeLookup();
       }
     }
