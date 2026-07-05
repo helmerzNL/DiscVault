@@ -10632,6 +10632,42 @@ def ui_preview_html(
     .import-batch-row span {
       overflow-wrap: anywhere;
     }
+    .import-batch-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .import-batch-text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .import-batch-check {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: var(--green, #1f9d55);
+      color: #fff;
+      font-weight: 800;
+      font-size: .82rem;
+      line-height: 1;
+    }
+    .import-batch-row.is-active {
+      border-color: var(--accent, #3b82f6);
+      background: color-mix(in srgb, var(--accent, #3b82f6) 14%, var(--bg-solid));
+    }
+    .import-batch-row.is-added {
+      border-color: color-mix(in srgb, var(--green, #1f9d55) 55%, var(--line));
+      background: color-mix(in srgb, var(--green, #1f9d55) 12%, var(--bg-solid));
+    }
+    .import-batch-row.is-added strong {
+      color: var(--green, #1f9d55);
+    }
     .barcode-scanner-viewport video,
     .barcode-scanner-viewport canvas {
       width: 100%;
@@ -15548,7 +15584,7 @@ def ui_preview_html(
               <div class="import-batch-card standalone">
                   <div>
                     <strong data-next-i18n="importCenter.batchTitle">Batch barcodes</strong>
-                    <p class="import-source-meta" data-next-i18n="importCenter.batchHelp">Paste multiple EAN or UPC barcodes. DiscVault checks them one by one through the same metadata plugin flow.</p>
+                    <p class="import-source-meta" data-next-i18n="importCenter.batchHelp">Scan or paste all EAN/UPC barcodes first, then run Check batch. Work down the list: Search a line, add the film, and it gets checked off so you can continue with the next one.</p>
                   </div>
                   <textarea id="importBatchBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.batchPlaceholder" placeholder="8712626064312&#10;5051890315526"></textarea>
                   <div class="button-row compact">
@@ -17271,7 +17307,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeTab: "add", activeMethod: "camera"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera"};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -27344,22 +27380,85 @@ def ui_preview_html(
       const list = document.getElementById("importBatchList");
       if (!list) return;
       const rows = importCenter.batchResults || [];
+      const activeBarcode = normalizeImportBarcode(importCenter.activeBatchBarcode || "");
       list.innerHTML = rows.length ? rows.map((row) => {
-        const statusClass = row.status === "ok" ? "good" : row.status === "error" ? "bad" : "blue";
+        const isAdded = row.status === "added";
+        const isActive = !isAdded && activeBarcode && normalizeImportBarcode(row.barcode || "") === activeBarcode;
+        const statusClass = isAdded
+          ? "is-added"
+          : row.status === "error"
+            ? "is-error"
+            : row.status === "ok"
+              ? "is-ready"
+              : row.status === "running"
+                ? "is-running"
+                : "";
+        const rowClass = ["import-batch-row", statusClass, isActive ? "is-active" : ""].filter(Boolean).join(" ");
         const countText = [
           row.movieCandidates !== undefined ? `${formatNumber(row.movieCandidates)} ${tNext("importCenter.batchMovies", "movies")}` : "",
           row.boxSetCandidates !== undefined ? `${formatNumber(row.boxSetCandidates)} ${tNext("importCenter.batchBoxSets", "box-sets")}` : ""
         ].filter(Boolean).join(" / ");
+        const checkMark = isAdded ? `<span class="import-batch-check" aria-hidden="true">&#10003;</span>` : "";
+        const buttonLabel = isAdded
+          ? tNext("importCenter.batchAdded", "Added")
+          : tNext("importCenter.previewBarcode", "Search");
         return `
-          <div class="import-batch-row">
-            <span>
-              <strong>${escapeHtml(row.barcode || "-")}</strong>
-              <span>${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
+          <div class="${rowClass}">
+            <span class="import-batch-info">
+              ${checkMark}
+              <span class="import-batch-text">
+                <strong>${escapeHtml(row.barcode || "-")}</strong>
+                <span>${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
+              </span>
             </span>
-            <button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" ? "disabled" : ""}>${escapeHtml(tNext("importCenter.previewBarcode", "Search"))}</button>
+            <button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" || isAdded ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
           </div>
         `;
       }).join("") : "";
+    }
+    function markImportBatchAdded(barcode, payload) {
+      const rows = importCenter.batchResults || [];
+      const target = normalizeImportBarcode(barcode);
+      if (!target) return null;
+      const row = rows.find((item) => normalizeImportBarcode(item.barcode || "") === target);
+      if (!row) return null;
+      const isBoxSet = !!(payload && (payload.state === "box_set_created" || payload.boxSet));
+      const alreadyExists = !!(payload && payload.state === "already_exists");
+      row.status = "added";
+      row.movieCandidates = undefined;
+      row.boxSetCandidates = undefined;
+      row.message = alreadyExists
+        ? tNext("importCenter.batchAlreadyExists", "Already in your library.")
+        : isBoxSet
+          ? tNext("importCenter.batchAddedBoxSet", "Box-set added.")
+          : tNext("importCenter.batchAdded", "Added");
+      return row;
+    }
+    function focusNextImportBatchRow(barcode) {
+      const rows = importCenter.batchResults || [];
+      const target = normalizeImportBarcode(barcode);
+      const startIndex = rows.findIndex((item) => normalizeImportBarcode(item.barcode || "") === target);
+      let nextBarcode = "";
+      for (let index = startIndex + 1; index < rows.length; index += 1) {
+        if (rows[index].status !== "added") { nextBarcode = rows[index].barcode || ""; break; }
+      }
+      if (!nextBarcode) {
+        for (let index = 0; index < rows.length; index += 1) {
+          if (rows[index].status !== "added") { nextBarcode = rows[index].barcode || ""; break; }
+        }
+      }
+      if (!nextBarcode) return;
+      requestAnimationFrame(() => {
+        const button = document.querySelector(`#importBatchList [data-import-batch-preview="${cssEscapeValue(nextBarcode)}"]`);
+        if (!button) return;
+        try { button.scrollIntoView({behavior: "smooth", block: "center"}); } catch (error) { button.scrollIntoView(); }
+        button.focus({preventScroll: true});
+      });
+    }
+    function cssEscapeValue(value) {
+      const text = String(value || "");
+      if (window.CSS && typeof window.CSS.escape === "function") return window.CSS.escape(text);
+      return text.replace(/["\\\\]/g, "\\\\$&");
     }
     async function previewImportBatchBarcode(barcode) {
       const input = document.getElementById("importBarcodeInput");
@@ -27372,6 +27471,7 @@ def ui_preview_html(
     }
     async function runImportBatchLookup() {
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd) || importCenter.batchRunning) return;
+      importCenter.activeBatchBarcode = "";
       const textarea = document.getElementById("importBatchBarcodeInput");
       const parsed = parseImportBatchBarcodes(textarea?.value || "");
       if (!parsed.valid.length) {
@@ -28979,8 +29079,22 @@ def ui_preview_html(
         setImportLookupActionMessage(tNext(messageKey, messageFallback), "good");
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
         renderBarcodeLookup();
-        if (importedContainerId) openAppContainerDetail(importedContainerId);
-        else if (movie.id) openAppMovieDetail(movie.id);
+        const activeBatchBarcode = importCenter.activeBatchBarcode || "";
+        const batchRow = activeBatchBarcode && normalizeImportBarcode(activeBatchBarcode) === barcode
+          ? markImportBatchAdded(barcode, payload)
+          : null;
+        if (batchRow) {
+          // Batch workflow: check the line off and stay in place instead of
+          // navigating into the movie/box-set detail page (issue #111).
+          importCenter.activeBatchBarcode = "";
+          renderImportBatchList();
+          setImportBatchMessage(tNext("importCenter.batchWorkflowNext", "Added. Pick the next barcode to continue."), "good");
+          focusNextImportBatchRow(barcode);
+        } else if (importedContainerId) {
+          openAppContainerDetail(importedContainerId);
+        } else if (movie.id) {
+          openAppMovieDetail(movie.id);
+        }
         loadAppSnapshot().catch((error) => {
           console.warn("Snapshot refresh after import failed", error);
           setImportCenterMessage(`${tNext(messageKey, messageFallback)} ${error.message || String(error)}`, "bad");
@@ -34061,19 +34175,32 @@ def ui_preview_html(
         if (metadataButton) queueImportMovieMetadataRefresh(metadataButton.dataset.importMetadataRefresh);
         if (metadataJobButton) queueImportJobMetadataRefresh(metadataJobButton.dataset.importMetadataRefreshJob);
       });
-      document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
+      document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => {
+        importCenter.activeBatchBarcode = "";
+        renderImportBatchList();
+        previewBarcodeImport(event);
+      });
       document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
       document.getElementById("importBatchClearButton")?.addEventListener("click", () => {
         const input = document.getElementById("importBatchBarcodeInput");
         if (input) input.value = "";
         importCenter.batchBarcodes = [];
         importCenter.batchResults = [];
+        importCenter.activeBatchBarcode = "";
         setImportBatchMessage("", "");
         renderImportBatchList();
       });
       document.getElementById("importBatchList")?.addEventListener("click", (event) => {
         const previewButton = event.target.closest("[data-import-batch-preview]");
-        if (previewButton) previewImportBatchBarcode(previewButton.dataset.importBatchPreview || "");
+        if (!previewButton) return;
+        const barcode = previewButton.dataset.importBatchPreview || "";
+        importCenter.activeBatchBarcode = barcode;
+        renderImportBatchList();
+        const results = document.getElementById("importBarcodeResults");
+        if (results) {
+          try { results.scrollIntoView({behavior: "smooth", block: "start"}); } catch (error) { results.scrollIntoView(); }
+        }
+        previewImportBatchBarcode(barcode);
       });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
