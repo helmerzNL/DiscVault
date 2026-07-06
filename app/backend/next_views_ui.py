@@ -9564,6 +9564,7 @@ def ui_preview_html(
                     <span data-next-i18n="importCenter.boxSetBuilderMemberBarcode">Member barcode</span>
                     <input id="boxSetBuilderMemberBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
                   </label>
+                  <div class="import-source-meta import-scan-preview" id="boxSetBuilderMemberPreview" hidden></div>
                   <label>
                     <span data-next-i18n="importCenter.boxSetBuilderMemberTitle">Title (fallback)</span>
                     <input id="boxSetBuilderMemberTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
@@ -10112,6 +10113,7 @@ def ui_preview_html(
                     <span data-next-i18n="containerDetail.scanToAdd">Scan / search to add</span>
                     <input id="containerScanAddBarcode" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
                   </label>
+                  <div class="import-source-meta import-scan-preview" id="containerScanAddPreview" hidden></div>
                   <label for="containerScanAddTitle">
                     <span data-next-i18n="containerDetail.scanToAddTitle">Title (fallback)</span>
                     <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
@@ -17880,16 +17882,21 @@ def ui_preview_html(
       const orderAttrs = options.orderKind === "item"
         ? `data-container-move-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
         : `data-container-move-movie="${escapeHtml(movie.id || "")}"`;
+      const coverContainer = (activeContainerPayload && activeContainerPayload.container) || {};
+      const primaryMovieId = String(coverContainer.primaryMovieId || "");
+      const canSetCover = canEdit && coverContainer.container_type === "box_set" && options.removeKind !== "item" && movie.id;
+      const isCover = canSetCover && primaryMovieId && String(movie.id) === primaryMovieId;
+      const coverButton = canSetCover ? `
+          <button type="button" class="detail-order-button container-cover-button ${isCover ? "active" : ""}" data-container-set-cover="${escapeHtml(movie.id || "")}" ${isCover ? "disabled" : ""} title="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}" aria-label="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}">${isCover ? "&#9733;" : "&#9734;"}</button>
+      ` : "";
       const orderControls = canEdit ? `
         <div class="container-member-actions">
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          ${coverButton}
           <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
         </div>
       ` : "";
-      return `
-        <div class="container-member-card ${canEdit ? "editable" : ""}" title="${escapeHtml(title)}">
-          <a class="container-member-poster" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}" title="${escapeHtml(title)}">
             ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}
             <span class="container-member-index">${escapeHtml(index + 1)}</span>
             ${physicalFormatBadgeHtml(movie.format || movie.edition_type || metadata.format)}
@@ -19413,7 +19420,14 @@ def ui_preview_html(
       }
       const posterNode = document.getElementById("containerDetailPoster");
       if (posterNode) {
-        posterNode.innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        let coverPoster = poster;
+        if (!coverPoster && container.container_type === "box_set" && container.primaryMovieId) {
+          const coverMember = (detail.memberMovies || []).find((movie) => String(movie.id) === String(container.primaryMovieId));
+          if (coverMember) {
+            coverPoster = usableImage(coverMember.poster_url || (coverMember.metadata || {}).poster_url || (coverMember.metadata || {}).posterUrl || (coverMember.metadata || {}).poster);
+          }
+        }
+        posterNode.innerHTML = coverPoster ? `<img src="${escapeHtml(coverPoster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       }
       const summary = detail.aggregateSummary || {};
       const directMovieCount = (detail.memberMovies || []).length;
@@ -19875,15 +19889,22 @@ def ui_preview_html(
       const orderAttrs = options.orderKind === "item"
         ? `data-container-move-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
         : `data-container-move-movie="${escapeHtml(movie.id || "")}"`;
+      const coverContainer = (activeContainerPayload && activeContainerPayload.container) || {};
+      const primaryMovieId = String(coverContainer.primaryMovieId || "");
+      const canSetCover = coverContainer.container_type === "box_set" && options.removeKind !== "item" && movie.id;
+      const isCover = canSetCover && primaryMovieId && String(movie.id) === primaryMovieId;
+      const coverButton = canSetCover ? `
+          <button type="button" class="detail-order-button container-cover-button ${isCover ? "active" : ""}" data-container-set-cover="${escapeHtml(movie.id || "")}" ${isCover ? "disabled" : ""} title="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}" aria-label="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}">${isCover ? "&#9733;" : "&#9734;"}</button>
+      ` : "";
       return `
         <span class="container-member-row-actions">
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          ${coverButton}
           <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
         </span>
       `;
     }
-    function containerMemberContainerRowActionsHtml(item, index, total, canEdit) {
       if (!canEdit) return "";
       const itemId = item.entity_id || item.item_id || item.id || "";
       const itemType = item.item_type || item.container_type || item.entity_type || "container";
@@ -20151,7 +20172,7 @@ def ui_preview_html(
       }
       setContainerDetailMessage(tNext("containerDetail.adding", "Adding content..."));
       try {
-        await authApiJson("/api/next/import/movie", {
+        const payload = await authApiJson("/api/next/import/movie", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           timeoutMs: 45000,
@@ -20168,7 +20189,19 @@ def ui_preview_html(
         if (barcodeInput) barcodeInput.value = "";
         if (titleInput) titleInput.value = "";
         if (yearInput) yearInput.value = "";
-        await refreshActiveContainerDetail(tNext("containerDetail.added", "Content added."), "good");
+        const scanPreview = document.getElementById("containerScanAddPreview");
+        if (scanPreview) { scanPreview.hidden = true; scanPreview.textContent = ""; }
+        const already = payload?.state === "already_exists";
+        const changed = Number(payload?.linkChanged || 0) > 0;
+        let msg = tNext("containerDetail.added", "Content added.");
+        let tone = "good";
+        if (already && !changed) {
+          msg = tNext("containerDetail.memberAlready", "Already linked to this box-set.");
+          tone = "warn";
+        } else if (already && changed) {
+          msg = tNext("containerDetail.memberVaultLinked", "Already in your vault \u2014 linked here.");
+        }
+        await refreshActiveContainerDetail(msg, tone);
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
       }
@@ -20264,6 +20297,22 @@ def ui_preview_html(
         renderContainerDetail(payload.detail || {});
         await loadAppSnapshot();
         setContainerDetailMessage(tNext("containerDetail.removed", "Link removed."), "good");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function setContainerCoverMovie(movieId) {
+      if (!activeContainerId || !movieId) return;
+      setContainerDetailMessage(tNext("containerDetail.settingCover", "Updating cover..."));
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({primaryMovieId: movieId})
+        });
+        renderContainerDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setContainerDetailMessage(tNext("containerDetail.coverSet", "Cover updated."), "good");
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
       }
@@ -20506,6 +20555,69 @@ def ui_preview_html(
         })
       });
     }
+    async function resolveImportMemberBarcode(barcode) {
+      const code = normalizeImportBarcode(barcode);
+      if (!code) return null;
+      const url = "/api/next/import/movie/resolve?barcode=" + encodeURIComponent(code);
+      return authApiJson(url, {method: "GET", timeoutMs: 15000});
+    }
+    function renderImportScanPreview(previewEl, payload) {
+      if (!previewEl) return;
+      if (!payload || payload.status !== "ok") {
+        previewEl.hidden = true;
+        previewEl.textContent = "";
+        return;
+      }
+      previewEl.hidden = false;
+      previewEl.classList.remove("is-good", "is-neutral");
+      if (payload.state === "existingMovie" && payload.movie) {
+        const movie = payload.movie;
+        const label = tNext("importCenter.scanPreviewExisting", "Already in your vault:");
+        const year = movie.year ? " (" + escapeHtml(String(movie.year)) + ")" : "";
+        previewEl.classList.add("is-good");
+        previewEl.innerHTML = escapeHtml(label) + " <strong>" + escapeHtml(movie.title || "") + "</strong>" + year;
+      } else if (payload.state === "candidates" && payload.candidateCount) {
+        const label = tNext("importCenter.scanPreviewCandidates", "Match found — will be imported on add.");
+        previewEl.classList.add("is-neutral");
+        previewEl.textContent = label;
+      } else {
+        const label = tNext("importCenter.scanPreviewUnknown", "Unknown barcode — create it manually with a title below.");
+        previewEl.classList.add("is-neutral");
+        previewEl.textContent = label;
+      }
+    }
+    function wireImportScanPreview(inputId, previewId) {
+      const input = document.getElementById(inputId);
+      const previewEl = document.getElementById(previewId);
+      if (!input || !previewEl || input.dataset.scanPreviewWired === "1") return;
+      input.dataset.scanPreviewWired = "1";
+      let timer = null;
+      let lastCode = "";
+      const run = async () => {
+        const code = normalizeImportBarcode(input.value);
+        if (!code) {
+          lastCode = "";
+          previewEl.hidden = true;
+          previewEl.textContent = "";
+          return;
+        }
+        if (code === lastCode) return;
+        lastCode = code;
+        try {
+          const payload = await resolveImportMemberBarcode(code);
+          if (normalizeImportBarcode(input.value) !== code) return;
+          renderImportScanPreview(previewEl, payload);
+        } catch (error) {
+          previewEl.hidden = true;
+          previewEl.textContent = "";
+        }
+      };
+      input.addEventListener("input", () => {
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(run, 450);
+      });
+      input.addEventListener("change", run);
+    }
     function renderBoxSetBuilderBatch() {
       const list = document.getElementById("boxSetBuilderBatchList");
       if (!list) return;
@@ -20589,7 +20701,9 @@ def ui_preview_html(
             row.status = "added";
             row.message = (already && !changed)
               ? tNext("importCenter.boxSetBuilderMemberAlready", "Already linked to this box-set.")
-              : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
+              : (already && changed)
+                ? tNext("importCenter.boxSetBuilderMemberVaultLinked", "Already in your vault \u2014 linked to this box-set.")
+                : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
             added += 1;
           } catch (error) {
             row.status = "error";
@@ -20652,12 +20766,18 @@ def ui_preview_html(
           messageKey = "importCenter.boxSetBuilderMemberAlready";
           messageFallback = "Already linked to this box-set.";
           tone = "warn";
+        } else if (already && changed) {
+          messageKey = "importCenter.boxSetBuilderMemberVaultLinked";
+          messageFallback = "Already in your vault \u2014 linked to this box-set.";
+          tone = "good";
         }
         const prefix = movieTitle ? `${movieTitle}: ` : "";
         setBoxSetBuilderMessage("boxSetBuilderMemberMessage", `${prefix}${tNext(messageKey, messageFallback)}`, tone);
         if (barcodeInput) barcodeInput.value = "";
         if (titleInput) titleInput.value = "";
         if (yearInput) yearInput.value = "";
+        const memberPreview = document.getElementById("boxSetBuilderMemberPreview");
+        if (memberPreview) { memberPreview.hidden = true; memberPreview.textContent = ""; }
         barcodeInput?.focus();
         if (state.captureToCamera) {
           setImportScannerMessage(`${prefix}${tNext(messageKey, messageFallback)}`, tone);
@@ -29762,6 +29882,7 @@ def ui_preview_html(
       document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
       document.getElementById("boxSetBuilderIdentifyForm")?.addEventListener("submit", (event) => identifyBoxSetBuilderTarget(event));
       document.getElementById("boxSetBuilderMemberForm")?.addEventListener("submit", (event) => addBoxSetBuilderMember(event));
+      wireImportScanPreview("boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberPreview");
       document.getElementById("boxSetBuilderBatchButton")?.addEventListener("click", () => runBoxSetBuilderBatch());
       document.getElementById("boxSetBuilderCameraButton")?.addEventListener("click", () => startBoxSetBuilderCameraScan());
       document.getElementById("boxSetBuilderOpenButton")?.addEventListener("click", () => {
@@ -30077,6 +30198,7 @@ def ui_preview_html(
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerScanAddForm")?.addEventListener("submit", (event) => addContainerScanMember(event));
+      wireImportScanPreview("containerScanAddBarcode", "containerScanAddPreview");
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
       document.addEventListener("click", (event) => {
@@ -30148,6 +30270,12 @@ def ui_preview_html(
         const moveItem = event.target.closest("[data-container-move-item]");
         const removeMovie = event.target.closest("[data-container-remove-movie]");
         const removeItem = event.target.closest("[data-container-remove-item]");
+        const setCover = event.target.closest("[data-container-set-cover]");
+        if (setCover) {
+          event.preventDefault();
+          setContainerCoverMovie(setCover.dataset.containerSetCover);
+          return;
+        }
         if (moveMovie) {
           event.preventDefault();
           moveContainerMovie(moveMovie.dataset.containerMoveMovie, moveMovie.dataset.direction);
