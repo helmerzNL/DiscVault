@@ -48,8 +48,12 @@ class UpdateVersionTupleTests(unittest.TestCase):
 
 class NormalizeUpdateChannelTests(unittest.TestCase):
     def test_known_channels(self):
-        for value in ("auto", "beta", "stable", "v26"):
+        for value in ("auto", "beta", "stable"):
             self.assertEqual(next_app.normalize_update_channel(value), value)
+
+    def test_legacy_v26_maps_to_stable(self):
+        self.assertEqual(next_app.normalize_update_channel("v26"), "stable")
+        self.assertEqual(next_app.normalize_update_channel("V26"), "stable")
 
     def test_unknown_falls_back_to_auto(self):
         self.assertEqual(next_app.normalize_update_channel("nightly"), "auto")
@@ -67,7 +71,8 @@ class ResolveUpdateChannelTests(unittest.TestCase):
     def test_stored_setting_used_when_request_auto(self):
         with mock.patch.object(next_app, "app_setting_value", return_value="v26"):
             channel, source = next_app.resolve_update_channel(None, "auto")
-        self.assertEqual((channel, source), ("v26", "setting"))
+        # Legacy "v26" preference is remapped to its successor "stable".
+        self.assertEqual((channel, source), ("stable", "setting"))
 
     def test_env_var_used_when_setting_auto(self):
         with mock.patch.object(next_app, "app_setting_value", return_value="auto"), \
@@ -132,16 +137,16 @@ class PerformUpdateCheckTests(unittest.TestCase):
         self.assertEqual(result["status"], "ok")
         self.assertFalse(result["updateAvailable"])
 
-    def test_stable_uses_release_endpoint(self):
+    def test_stable_reads_main_branch_version(self):
         with mock.patch.object(next_app, "build_version", return_value="26.2.45"), \
                 mock.patch.object(next_app, "resolve_update_channel", return_value=("stable", "request")), \
                 mock.patch.object(
                     next_app,
-                    "github_latest_stable_release",
-                    return_value={"version": "26.3.0", "releaseUrl": "https://example/rel", "publishedAt": "2026-01-01T00:00:00Z", "source": "api"},
-                ) as release_mock:
+                    "github_branch_version",
+                    return_value={"version": "26.3.0", "releaseUrl": "https://example/notes", "publishedAt": None, "source": "https://example/VERSION"},
+                ) as branch_mock:
             result = next_app.perform_update_check(None, "stable")
-        release_mock.assert_called_once()
+        branch_mock.assert_called_once_with("main")
         self.assertEqual(result["channel"], "stable")
         self.assertEqual(result["imageRef"], "ghcr.io/helmerznl/discvault:stable")
         self.assertTrue(result["updateAvailable"])
