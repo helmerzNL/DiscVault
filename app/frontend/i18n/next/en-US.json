@@ -1065,6 +1065,8 @@
   "containerManage.renamed": "Renamed.",
   "containerManage.deleted": "Deleted.",
   "containerManage.deleteConfirm": "Delete {title}? This also removes its links from movies and collections.",
+  "collection.createContainer": "Create container",
+  "collection.createContainerNamePlaceholder": "New container name",
   "importCenter.jobType.collection": "Collection",
   "importCenter.jobType.importSource": "Plugin import",
   "importCenter.jobType.metadata": "Metadata",
