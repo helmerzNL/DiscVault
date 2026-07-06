@@ -1054,6 +1054,8 @@
   "containerManage.renamed": "Hernoemd.",
   "containerManage.deleted": "Verwijderd.",
   "containerManage.deleteConfirm": "{title} verwijderen? Hiermee worden ook koppelingen met films en collecties verwijderd.",
+  "collection.createContainer": "Container aanmaken",
+  "collection.createContainerNamePlaceholder": "Nieuwe containernaam",
   "importCenter.jobType.collection": "Collectie",
   "importCenter.jobType.importSource": "Pluginimport",
   "importCenter.jobType.metadata": "Metadata",
