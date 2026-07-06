@@ -121,6 +121,8 @@ MOVIE_LOCKABLE_FIELDS = {
     "audio_tracks",
     "subtitles",
     "content_ratings",
+    "poster",
+    "backdrop",
 }
 
 
@@ -721,6 +723,13 @@ def query_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "memberOfBoxSet": bool(payload.get("memberOfBoxSet") or payload.get("member_of_box_set")),
         "detectBoxSets": bool(payload.get("detectBoxSets") or payload.get("detect_box_sets") or payload.get("importBoxSets") or payload.get("import_box_sets")),
         "previewMode": bool(payload.get("previewMode") or payload.get("preview_mode")),
+        "releaseVariants": bool(
+            payload.get("releaseVariants")
+            or payload.get("release_variants")
+            or payload.get("listReleases")
+            or payload.get("list_releases")
+            or payload.get("editions")
+        ),
         "parentBoxSets": payload.get("parentBoxSets") or payload.get("parent_box_sets") or [],
     }
 
@@ -3247,6 +3256,54 @@ def apply_primary_media_update(
     }
 
 
+def movie_field_locks_from_db(conn, movie_id: UUID | str) -> set[str]:
+    """Read the explicit field_locks set stored on a movie's metadata."""
+    if not table_exists(conn, "movies"):
+        return set()
+    with conn.cursor() as cur:
+        cur.execute("SELECT metadata FROM movies WHERE id=%s", (movie_id,))
+        row = cur.fetchone()
+    metadata = row.get("metadata") if isinstance(row, dict) and row else None
+    return movie_locked_fields(metadata)
+
+
+_ARTWORK_METADATA_URL_KEYS: dict[str, tuple[str, ...]] = {
+    "poster": ("poster_url", "posterUrl", "poster"),
+    "backdrop": ("backdrop_url", "backdropUrl", "backdrop"),
+}
+
+
+def filter_locked_artwork_updates(
+    metadata_updates: dict[str, Any],
+    media_updates: dict[str, Any],
+    *,
+    metadata_locked_kinds: set[str],
+    media_locked_kinds: set[str],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Strip locked poster/backdrop entries from a metadata proposal.
+
+    ``metadata_locked_kinds`` are kinds whose stored artwork URL must not be
+    changed by a plugin/sync (explicit field lock OR a user-selected/locked
+    primary media asset). ``media_locked_kinds`` are kinds whose primary media
+    asset must not be added/replaced (explicit field lock only).
+
+    Returns fresh copies of ``metadata_updates`` and ``media_updates`` with the
+    locked entries removed; the inputs are left untouched.
+    """
+    metadata_updates = dict(metadata_updates)
+    media_updates = dict(media_updates)
+    for kind in metadata_locked_kinds:
+        for key in _ARTWORK_METADATA_URL_KEYS.get(kind, ()):
+            metadata_updates.pop(key, None)
+    if media_locked_kinds:
+        media_updates = {
+            kind: value
+            for kind, value in media_updates.items()
+            if kind not in media_locked_kinds
+        }
+    return metadata_updates, media_updates
+
+
 def has_locked_primary_media(conn, *, movie_id: UUID, kind: str) -> bool:
     if kind not in {"poster", "backdrop"} or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
         return False
@@ -3547,14 +3604,25 @@ def apply_metadata_proposal(
     credit_updates = proposal.get("credits") or []
     localization_updates = proposal.get("localizations") or []
     provenance = proposal.get("provenance") or []
-    metadata_updates = dict(metadata_updates)
-    if metadata_updates:
-        if has_locked_primary_media(conn, movie_id=movie_uuid, kind="poster"):
-            for key in ("poster_url", "posterUrl", "poster"):
-                metadata_updates.pop(key, None)
-        if has_locked_primary_media(conn, movie_id=movie_uuid, kind="backdrop"):
-            for key in ("backdrop_url", "backdropUrl", "backdrop"):
-                metadata_updates.pop(key, None)
+    explicit_locked_fields = movie_field_locks_from_db(conn, movie_uuid)
+    # Kinds whose primary artwork must not be overwritten by a plugin/sync.
+    # Two lock sources: the explicit field lock, and a user-selected (locked)
+    # primary media asset. Both protect the metadata URL; the explicit field
+    # lock additionally suppresses adding/replacing the primary media asset.
+    metadata_locked_kinds: set[str] = set()
+    media_locked_kinds: set[str] = set()
+    for kind in ("poster", "backdrop"):
+        field_locked = kind in explicit_locked_fields
+        if field_locked or has_locked_primary_media(conn, movie_id=movie_uuid, kind=kind):
+            metadata_locked_kinds.add(kind)
+        if field_locked:
+            media_locked_kinds.add(kind)
+    metadata_updates, media_updates = filter_locked_artwork_updates(
+        metadata_updates,
+        media_updates,
+        metadata_locked_kinds=metadata_locked_kinds,
+        media_locked_kinds=media_locked_kinds,
+    )
     changed = bool(movie_updates or metadata_updates or technical_updates or media_updates or identifiers or credit_updates or localization_updates)
 
     if not changed:

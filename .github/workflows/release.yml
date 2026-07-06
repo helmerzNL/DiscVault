@@ -1,0 +1,79 @@
+name: Release (tag main)
+
+# Cut a production release from main. Reads app/VERSION as the single source of
+# truth, creates the matching `v<VERSION>` git tag on the current main commit and
+# publishes a GitHub Release. The tag push then triggers docker-publish.yml, which
+# builds the release snapshot (:v26.x.x, :v26, :stable) from that exact commit.
+#
+# Run this manually from the GitHub UI (Actions -> Release (tag main) -> Run
+# workflow) with the branch set to `main`, after a beta -> main promotion has
+# landed and version-guard has bumped app/VERSION.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard branch is main
+        run: |
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "::error::This workflow must be run from 'main' (got '${GITHUB_REF_NAME}')."
+            exit 1
+          fi
+
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Read app/VERSION
+        id: version
+        run: |
+          VERSION="$(tr -d '[:space:]' < app/VERSION)"
+          if [[ -z "${VERSION}" ]]; then
+            echo "::error::app/VERSION is empty."
+            exit 1
+          fi
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::app/VERSION '${VERSION}' is not a MAJOR.MINOR.PATCH semver."
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${TAG} from $(git rev-parse HEAD)"
+
+      - name: Guard tag does not already exist
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git fetch --tags --quiet
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::error::Tag ${TAG} already exists. Bump app/VERSION on main before releasing."
+            exit 1
+          fi
+
+      - name: Create tag and GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "DiscVault ${TAG}"
+          git push origin "${TAG}"
+          gh release create "${TAG}" \
+            --target main \
+            --title "DiscVault ${TAG}" \
+            --generate-notes \
+            --latest
