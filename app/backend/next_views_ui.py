@@ -799,6 +799,8 @@ def ui_preview_html(
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     .collection-toolbar {
+      position: relative;
+      z-index: 30;
       display: grid;
       gap: 12px;
       padding: 12px;
@@ -899,6 +901,191 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 8px;
       min-width: 0;
+    }
+    .collection-controls .icon-button {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .collection-controls .icon-button svg,
+    .filter-toggle-row svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+    .collection-controls-spacer {
+      flex: 0 0 auto;
+      width: 14px;
+    }
+    .toolbar-menu {
+      position: relative;
+      display: inline-flex;
+    }
+    .toolbar-menu-trigger {
+      position: relative;
+    }
+    .toolbar-menu.open .toolbar-menu-trigger,
+    .toolbar-menu-trigger[aria-expanded="true"] {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      color: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .toolbar-menu-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 40;
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      backdrop-filter: blur(20px) saturate(160%);
+      box-shadow: var(--shadow-soft);
+    }
+    .toolbar-menu-panel.hidden {
+      display: none;
+    }
+    .toolbar-menu-option {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-height: 34px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+      text-align: left;
+      cursor: pointer;
+    }
+    .toolbar-menu-option:hover {
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+    .toolbar-menu-option.active {
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
+      color: var(--accent);
+      font-weight: 800;
+    }
+    .filter-panel {
+      min-width: 280px;
+      max-width: 320px;
+      gap: 14px;
+      padding: 14px;
+    }
+    .filter-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .filter-section.hidden {
+      display: none;
+    }
+    .filter-section-title {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter-switch-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .filter-switch-list .filter-empty {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .filter-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 30px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .filter-toggle-row input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      position: relative;
+      flex: 0 0 auto;
+      width: 38px;
+      height: 22px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--muted) 24%, transparent);
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+    .filter-toggle-row input[type="checkbox"]::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .15s ease;
+    }
+    .filter-toggle-row input[type="checkbox"]:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .filter-toggle-row input[type="checkbox"]:checked::after {
+      transform: translateX(16px);
+    }
+    .filter-select-field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .filter-select-field select {
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+    }
+    .filter-panel .segmented.compact {
+      flex-wrap: wrap;
+    }
+    .filter-panel-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .segmented button.is-disabled,
+    .segmented button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+    .view-mode-button.active {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      color: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    #collectionFilterBadge:not(.hidden),
+    #advancedSearchBadge:not(.hidden) {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: var(--accent);
+      color: #fff;
     }
     .segmented.compact button {
       min-width: 0;
@@ -1860,6 +2047,33 @@ def ui_preview_html(
     .wishlist-search-meta.muted {
       opacity: .8;
     }
+    .wishlist-search-meta.edition {
+      color: var(--accent, #6ea8fe);
+      font-weight: 600;
+    }
+    .wishlist-search-badge {
+      justify-self: start;
+      display: inline-block;
+      font-size: .68rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+      color: var(--bg-solid, #10131a);
+      background: var(--accent, #6ea8fe);
+      border-radius: 999px;
+      padding: 1px 8px;
+    }
+    .wishlist-search-resultbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 2px 2px 4px;
+    }
+    .wishlist-search-count {
+      color: var(--muted);
+      font-size: .82rem;
+    }
     .wishlist-manual {
       margin-bottom: 14px;
     }
@@ -1904,6 +2118,397 @@ def ui_preview_html(
     }
     .lists-poster-badge.danger {
       background: var(--red);
+    }
+    .lists-static-poster .preview-poster-art {
+      cursor: pointer;
+    }
+    .lists-static-poster .lists-poster-actions {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      margin-top: 0;
+      transition: max-height .2s ease, opacity .2s ease, margin-top .2s ease;
+    }
+    .lists-static-poster.actions-visible .lists-poster-actions {
+      max-height: 200px;
+      opacity: 1;
+      margin-top: 6px;
+    }
+    .wishlist-section {
+      margin-bottom: 18px;
+    }
+    .wishlist-section-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0 10px;
+    }
+    .wishlist-section-head h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .wishlist-section-head span {
+      font-size: .78rem;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      border-radius: 999px;
+      padding: 1px 8px;
+    }
+    .wishlist-section-empty {
+      color: var(--muted);
+      font-size: .85rem;
+      padding: 4px 0 10px;
+    }
+    .lists-loans-toolbar,
+    .lists-tags-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .lists-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+      padding: 16px;
+    }
+    .lists-modal {
+      background: var(--bg-solid);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      width: min(520px, 100%);
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 18px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+    }
+    .lists-modal-head h3 {
+      margin: 0 0 12px;
+    }
+    .lists-modal-body {
+      display: flex;
+      gap: 14px;
+    }
+    .lists-meerinfo .lists-modal-poster {
+      flex: 0 0 130px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .lists-meerinfo .lists-modal-poster img {
+      width: 130px;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+    .lists-modal-poster-empty {
+      width: 130px;
+      height: 190px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: .78rem;
+      text-align: center;
+    }
+    .lists-modal-poster-btn {
+      padding: 5px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      font-size: .74rem;
+      cursor: pointer;
+    }
+    .lists-modal-fields {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .lists-modal-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .lists-modal-field > span:first-child {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+    }
+    .lists-modal-field input,
+    .lists-modal-field select,
+    .lists-modal-field textarea {
+      width: 100%;
+      padding: 7px 9px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      box-sizing: border-box;
+    }
+    .lists-modal:not(.editing) [data-edit] {
+      display: none;
+    }
+    .lists-modal.editing [data-read] {
+      display: none;
+    }
+    .lists-actionsheet-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 4px 0 2px;
+    }
+    .lists-actionsheet-btn {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      font-size: .95rem;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .lists-actionsheet-btn:hover {
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .lists-actionsheet-btn.danger {
+      color: var(--danger, #e5484d);
+      border-color: color-mix(in srgb, var(--danger, #e5484d) 45%, var(--line));
+    }
+    .lists-modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+    .lists-modal-actions button {
+      padding: 8px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .lists-modal-actions button.ghost {
+      background: transparent;
+      color: var(--text);
+    }
+    .lists-modal-message {
+      min-height: 1.1em;
+      font-size: .82rem;
+      color: var(--muted);
+      margin: 8px 0 0;
+    }
+    .lists-modal-message.bad {
+      color: var(--red);
+    }
+    .lists-modal.lists-history {
+      max-width: 720px;
+      width: min(92vw, 720px);
+    }
+    .lists-history-filter {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .lists-history-filter button {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      font-weight: 600;
+      font-size: .82rem;
+      cursor: pointer;
+    }
+    .lists-history-filter button.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .lists-history-table {
+      display: flex;
+      flex-direction: column;
+      max-height: 56vh;
+      overflow-y: auto;
+    }
+    .lists-history-row {
+      display: grid;
+      grid-template-columns: 52px 1.6fr 1fr 0.9fr 1.4fr;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--line);
+      font-size: .84rem;
+    }
+    .lists-history-row.head {
+      font-weight: 700;
+      color: var(--muted);
+      font-size: .74rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      position: sticky;
+      top: 0;
+      background: var(--bg-solid);
+    }
+    .lists-history-poster img,
+    .lists-history-poster span {
+      width: 44px;
+      height: 62px;
+      border-radius: 6px;
+      object-fit: cover;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      font-size: .6rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    @media (max-width: 640px) {
+      .lists-history-row {
+        grid-template-columns: 44px 1.4fr 1.2fr;
+      }
+      .lists-history-row > span:nth-child(3),
+      .lists-history-row > span:nth-child(4) {
+        display: none;
+      }
+    }
+    .lists-picker-results {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 50vh;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    .lists-picker-item {
+      text-align: left;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .lists-picker-item:hover {
+      border-color: var(--accent);
+    }
+    .lists-picker-searchbar input {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      box-sizing: border-box;
+    }
+    .lists-loan-form {
+      flex-direction: column;
+    }
+    .lists-loan-movie {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .lists-borrower-results {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .lists-borrower-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .lists-borrower-item:hover {
+      border-color: var(--accent);
+    }
+    .lists-borrower-item em {
+      color: var(--muted);
+      font-style: normal;
+    }
+    .lists-borrower-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: #fff;
+      font-size: .78rem;
+      font-weight: 600;
+      flex: 0 0 auto;
+    }
+    .lists-switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .lists-switch {
+      position: relative;
+      display: inline-flex;
+      width: 42px;
+      height: 24px;
+      flex: 0 0 auto;
+    }
+    .lists-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .lists-switch span {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: var(--line);
+      transition: background .2s ease;
+    }
+    .lists-switch span::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .2s ease;
+    }
+    .lists-switch input:checked + span {
+      background: var(--accent);
+    }
+    .lists-switch input:checked + span::before {
+      transform: translateX(18px);
+    }
+    .wishlist-tools {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 14px;
     }
     .tag-poster-art {
       display: flex;
@@ -2659,6 +3264,51 @@ def ui_preview_html(
     .import-tab-panel {
       display: grid;
       gap: 16px;
+    }
+    .import-method-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 66%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .import-method-tabs button {
+      flex: 1 1 auto;
+      min-height: 36px;
+      border: 0;
+      border-radius: 12px;
+      padding: 0 12px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-weight: 720;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .import-method-tabs button.active {
+      background: var(--bg-elevated);
+      color: var(--text);
+      box-shadow: 0 8px 20px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.16);
+    }
+    .import-method-panel {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+      min-width: 0;
+    }
+    .import-method-panel.hidden {
+      display: none;
+    }
+    .import-method-panel .import-batch-card.standalone {
+      padding-top: 0;
+      border-top: 0;
+    }
+    .import-method-panel .import-file-upload-card.secondary {
+      margin-top: 0;
     }
     .import-scanner-card {
       overflow: hidden;
@@ -3681,27 +4331,82 @@ def ui_preview_html(
     .import-batch-row span {
       overflow-wrap: anywhere;
     }
-    .import-batch-row.added {
-      border-color: color-mix(in srgb, var(--success) 46%, var(--line));
-      background: color-mix(in srgb, var(--success) 8%, transparent);
+    .import-batch-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
     }
-    .import-batch-row.active {
-      border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+    .import-batch-text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
     }
     .import-batch-check {
-      color: var(--success);
-      font-weight: 700;
-      margin-right: 6px;
-    }
-    .import-batch-added-label {
+      flex: 0 0 auto;
       display: inline-flex;
       align-items: center;
-      font-weight: 600;
-      white-space: nowrap;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: var(--green, #1f9d55);
+      color: #fff;
+      font-weight: 800;
+      font-size: .82rem;
+      line-height: 1;
     }
-    .import-batch-added-label.good,
-    .import-batch-complete.good {
-      color: var(--success);
+    .import-batch-row.is-active {
+      border-color: var(--accent, #3b82f6);
+      background: color-mix(in srgb, var(--accent, #3b82f6) 14%, var(--bg-solid));
+    }
+    .import-batch-row.is-added {
+      border-color: color-mix(in srgb, var(--green, #1f9d55) 55%, var(--line));
+      background: color-mix(in srgb, var(--green, #1f9d55) 12%, var(--bg-solid));
+    }
+    .import-batch-row.is-added strong {
+      color: var(--green, #1f9d55);
+    }
+    .import-batch-spinner {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--accent, #3b82f6) 28%, transparent);
+      border-top-color: var(--accent, #3b82f6);
+      animation: importBatchSpin .7s linear infinite;
+    }
+    @keyframes importBatchSpin {
+      to { transform: rotate(360deg); }
+    }
+    /* Issue #111: give the "Use selected match" / "Add box-set" action button an
+       immediate busy animation on click. Box-set resolution can take a few
+       seconds, so this confirms the click registered and a search is running. */
+    .primary-button.is-loading,
+    .secondary-button.is-loading {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      pointer-events: none;
+      opacity: .85;
+    }
+    .primary-button.is-loading::after,
+    .secondary-button.is-loading::after {
+      content: "";
+      flex: 0 0 auto;
+      width: 15px;
+      height: 15px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
+      border-top-color: currentColor;
+      animation: importBatchSpin .7s linear infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .primary-button.is-loading::after,
+      .secondary-button.is-loading::after {
+        animation-duration: 1.6s;
+      }
     }
     .import-batch-footer {
       display: flex;
@@ -3714,6 +4419,7 @@ def ui_preview_html(
     .import-batch-complete {
       font-weight: 600;
       margin-right: auto;
+      color: var(--green, #1f9d55);
     }
     .barcode-scanner-viewport video,
     .barcode-scanner-viewport canvas {
@@ -4170,6 +4876,18 @@ def ui_preview_html(
       background: var(--bg-solid);
       color: var(--text);
       box-shadow: 0 7px 18px rgba(0,0,0,.12);
+    }
+    .detail-submenu button.lists-seg {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .lists-seg-icon {
+      width: 17px;
+      height: 17px;
+      fill: currentColor;
+      flex: 0 0 auto;
+      display: block;
     }
     .detail-subpanel {
       min-width: 0;
@@ -7617,6 +8335,18 @@ def ui_preview_html(
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      .detail-submenu button.lists-seg {
+        max-width: none;
+        padding: 0 12px;
+        justify-content: center;
+      }
+      .detail-submenu button.lists-seg .lists-seg-label {
+        display: none;
+      }
+      .detail-submenu button.lists-seg .lists-seg-icon {
+        width: 20px;
+        height: 20px;
+      }
       .profile-hero {
         align-items: stretch;
         flex-direction: column;
@@ -8109,6 +8839,8 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
       <div class="sidebar-footer">
+        <strong data-next-i18n="profile.appVersion">App version</strong><br>
+        """ + h(build.get("version") or "unknown") + """<br>
         <strong data-next-i18n="uiPreview.build">Build</strong><br>
         """ + h((build.get("sha") or "unknown")[:12]) + """
       </div>
@@ -8130,38 +8862,73 @@ def ui_preview_html(
             <input id="previewSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
           </label>
           <div class="collection-controls">
-            <button type="button" class="icon-button advanced-search-toggle" id="advancedSearchToggleButton">
-              <span data-next-i18n="collection.advancedSearch">Advanced</span>
+            <div class="toolbar-menu" id="collectionSortMenu">
+              <button type="button" class="icon-button toolbar-menu-trigger" id="collectionSortTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Sort collection" data-next-i18n-aria="collection.sort" title="Sort" data-next-i18n-title="collection.sort">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9,3L5,6.99H8V14H10V6.99H13M16,17.01V10H14V17.01H11L15,21L19,17.01H16Z"/></svg>
+              </button>
+              <div class="toolbar-menu-panel hidden" id="collectionSortPanel" role="menu" aria-label="Sort options" data-next-i18n-aria="collection.sort">
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="added_desc" data-next-i18n="collection.sortAddedNewest">Date Added (newest)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="added_asc" data-next-i18n="collection.sortAddedOldest">Date Added (oldest)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="title_asc" data-next-i18n="collection.sortNameAsc">Name (A-Z)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="title_desc" data-next-i18n="collection.sortNameDesc">Name (Z-A)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="year_desc" data-next-i18n="collection.sortYearNewest">Release Year (newest)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="year_asc" data-next-i18n="collection.sortYearOldest">Release Year (oldest)</button>
+              </div>
+            </div>
+            <div class="toolbar-menu" id="collectionFilterMenu">
+              <button type="button" class="icon-button toolbar-menu-trigger" id="collectionFilterTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Filter collection" data-next-i18n-aria="collection.filter" title="Filter" data-next-i18n-title="collection.filter">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 13H18V11H6M3 6V8H21V6M10 18H14V16H10V18Z"/></svg>
+                <span class="metadata-job-badge hidden" id="collectionFilterBadge">0</span>
+              </button>
+              <div class="toolbar-menu-panel filter-panel hidden" id="collectionFilterPanel" role="dialog" aria-label="Filters" data-next-i18n-aria="collection.filter">
+                <div class="filter-section">
+                  <span class="filter-section-title" data-next-i18n="collection.filterFormat">Format</span>
+                  <div class="filter-switch-list" id="collectionFormatSwitches"></div>
+                </div>
+                <div class="filter-section">
+                  <span class="filter-section-title" data-next-i18n="collection.filterType">Type</span>
+                  <div class="segmented compact" id="collectionTypeFilter" role="group" aria-label="Type filter" data-next-i18n-aria="collection.filterType">
+                    <button type="button" class="active" data-type-filter="all" data-next-i18n="common.all">All</button>
+                    <button type="button" data-type-filter="movie" data-next-i18n="collection.typeMovie">Movie</button>
+                    <button type="button" data-type-filter="tv" class="is-disabled" disabled aria-disabled="true" data-next-i18n="collection.typeTvShow">TV Show</button>
+                  </div>
+                </div>
+                <div class="filter-section">
+                  <label class="filter-select-field" for="collectionGenreSelect">
+                    <span class="filter-section-title" data-next-i18n="collection.filterGenre">Genre</span>
+                    <select id="collectionGenreSelect" aria-label="Genre filter" data-next-i18n-aria="collection.filterGenre"></select>
+                  </label>
+                </div>
+                <div class="filter-section">
+                  <label class="filter-select-field" for="collectionLocationSelect">
+                    <span class="filter-section-title" data-next-i18n="collection.filterLocation">Location</span>
+                    <select id="collectionLocationSelect" aria-label="Location filter" data-next-i18n-aria="collection.filterLocation"></select>
+                  </label>
+                </div>
+                <div class="filter-section filter-section-containers hidden" id="collectionContainersSection">
+                  <label class="filter-toggle-row">
+                    <span data-next-i18n="collection.onlyContainers">Only show Containers</span>
+                    <input type="checkbox" id="collectionContainersSwitch" role="switch">
+                  </label>
+                </div>
+                <div class="filter-panel-actions">
+                  <button type="button" class="secondary-button compact-button" id="collectionFilterResetButton" data-next-i18n="common.reset">Reset</button>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="icon-button advanced-search-toggle" id="advancedSearchToggleButton" aria-label="Advanced search" data-next-i18n-aria="collection.advancedSearch" title="Advanced" data-next-i18n-title="collection.advancedSearch">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5,5.6L10,7L8.6,4.5L10,2L7.5,3.4L5,2L6.4,4.5L5,7L7.5,5.6M19.5,15.4L17,14L18.4,16.5L17,19L19.5,17.6L22,19L20.6,16.5L22,14L19.5,15.4M22,2L19.5,3.4L17,2L18.4,4.5L17,7L19.5,5.6L22,7L20.6,4.5L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z"/></svg>
               <span class="metadata-job-badge hidden" id="advancedSearchBadge">0</span>
             </button>
-            <div class="segmented compact view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
-              <button type="button" class="active" data-library-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
-              <button type="button" data-library-view-mode="list" data-next-i18n="collection.viewList">List</button>
-              <button type="button" data-library-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+            <span class="collection-controls-spacer" aria-hidden="true"></span>
+            <div class="view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+              <button type="button" class="icon-button view-mode-button" data-library-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg>
+              </button>
+              <button type="button" class="icon-button view-mode-button active" data-library-view-mode="poster" aria-label="Poster view" data-next-i18n-aria="collection.viewPoster" title="Posters" data-next-i18n-title="collection.viewPoster">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3H11V11H3V3M13 3H21V11H13V3M3 13H11V21H3V13M13 13H21V21H13V13Z"/></svg>
+              </button>
             </div>
-            <label class="sort-menu" for="collectionSortSelect">
-              <span data-next-i18n="collection.sort">Sort</span>
-              <select id="collectionSortSelect" aria-label="Sort collection" data-next-i18n-aria="collection.sort">
-                <option value="title_asc" data-next-i18n="collection.sortTitleAsc">Title A-Z</option>
-                <option value="title_desc" data-next-i18n="collection.sortTitleDesc">Title Z-A</option>
-                <option value="added_desc" data-next-i18n="collection.sortAddedDesc">Added newest first</option>
-                <option value="added_asc" data-next-i18n="collection.sortAddedAsc">Added oldest first</option>
-                <option value="year_desc" data-next-i18n="collection.sortYearDesc">Year newest first</option>
-                <option value="year_asc" data-next-i18n="collection.sortYearAsc">Year oldest first</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        <div class="collection-toolbar-row">
-          <div class="segmented compact" id="collectionFormatFilter" role="group" aria-label="Format filter" data-next-i18n-aria="collection.formatFilter">
-            <button type="button" class="active" data-format-filter="all" data-next-i18n="common.all">All</button>
-            <button type="button" data-format-filter="4k" data-next-i18n="collection.format4k">4K UHD</button>
-            <button type="button" data-format-filter="bluray" data-next-i18n="collection.formatBluray">Blu-ray</button>
-            <button type="button" data-format-filter="dvd" data-next-i18n="collection.formatDvd">DVD</button>
-          </div>
-          <div class="segmented compact" id="collectionItemFilter" role="group" aria-label="Item filter" data-next-i18n-aria="collection.itemFilter">
-            <button type="button" class="active" data-item-filter="all" data-next-i18n="common.all">All</button>
-            <button type="button" data-item-filter="containers" data-next-i18n="collection.containers">Containers</button>
           </div>
         </div>
         <div class="advanced-search-panel hidden" id="advancedSearchPanel">
@@ -8203,6 +8970,8 @@ def ui_preview_html(
                 <option value="any" data-next-i18n="common.any">Any</option>
                 <option value="watchlist" data-next-i18n="lists.watchlist">Watchlist</option>
                 <option value="watched" data-next-i18n="lists.watched">Watched</option>
+                <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
+                <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
                 <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
               </select>
             </label>
@@ -8220,6 +8989,10 @@ def ui_preview_html(
             <label class="advanced-search-field">
               <span data-next-i18n="collection.smartFilters">Smart filters</span>
               <select id="smartFilterSelect"></select>
+            </label>
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.locationFilter">Location</span>
+              <select id="advancedLocationFilter"></select>
             </label>
           </div>
           <div class="advanced-search-actions">
@@ -8385,7 +9158,7 @@ def ui_preview_html(
               <strong id="listsWishlistCount">0</strong>
               <span data-next-i18n="lists.wishlist">Wishlist</span>
             </div>
-            <div class="list-count-pill">
+            <div class="list-count-pill" id="listsLoansCountPill">
               <strong id="listsLoansCount">0</strong>
               <span data-next-i18n="lists.loans">On loan</span>
             </div>
@@ -8396,11 +9169,11 @@ def ui_preview_html(
             <h3 data-next-i18n="lists.collectionTitle">My viewing lists</h3>
             <div class="detail-card-actions">
               <div class="detail-submenu" role="tablist" aria-label="Lists" data-next-i18n-aria="uiPreview.navLists">
-                <button type="button" class="active" data-lists-tab="watchlist" data-next-i18n="lists.watchlist">Watchlist</button>
-                <button type="button" data-lists-tab="watched" data-next-i18n="lists.watched">Watched</button>
-                <button type="button" data-lists-tab="wishlist" data-next-i18n="lists.wishlist">Wishlist</button>
-                <button type="button" data-lists-tab="tags" data-next-i18n="lists.tags">Tags</button>
-                <button type="button" data-lists-tab="loans" data-next-i18n="lists.loans">On loan</button>
+                <button type="button" class="active lists-seg" data-lists-tab="watchlist" data-next-i18n-aria="lists.watchlist" aria-label="Watchlist"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17,18V5H7V18L12,15.82L17,18M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.watchlist">Watchlist</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="watched" data-next-i18n-aria="lists.watched" aria-label="Watched"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.watched">Watched</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="wishlist" data-next-i18n-aria="lists.wishlist" aria-label="Wishlist"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.1,18.55L12,18.65L11.89,18.55C7.14,14.24 4,11.39 4,8.5C4,6.5 5.5,5 7.5,5C9.04,5 10.54,6 11.07,7.36H12.93C13.46,6 14.96,5 16.5,5C18.5,5 20,6.5 20,8.5C20,11.39 16.86,14.24 12.1,18.55M16.5,3C14.76,3 13.09,3.81 12,5.08C10.91,3.81 9.24,3 7.5,3C4.42,3 2,5.41 2,8.5C2,12.27 5.4,15.36 10.55,20.03L12,21.35L13.45,20.03C18.6,15.36 22,12.27 22,8.5C22,5.41 19.58,3 16.5,3Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.wishlist">Wishlist</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="tags" data-next-i18n-aria="lists.tags" aria-label="Tags"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41,11.58L12.41,2.58C12.04,2.21 11.53,2 11,2H4A2,2 0 0,0 2,4V11C2,11.53 2.21,12.04 2.59,12.42L11.59,21.42C11.96,21.79 12.47,22 13,22C13.53,22 14.04,21.79 14.41,21.41L21.41,14.41C21.79,14.04 22,13.53 22,13C22,12.47 21.79,11.96 21.41,11.58M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.tags">Tags</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="loans" data-next-i18n-aria="lists.loans" aria-label="On loan"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16,17V19H2V17S2,13 9,13 16,17 16,17M12.5,7.5A3.5,3.5 0 1,0 9,11A3.5,3.5 0 0,0 12.5,7.5M15.94,13A5.32,5.32 0 0,1 18,17V19H22V17S22,13.37 15.94,13M15,4A3.39,3.39 0 0,0 13.07,4.59A5,5 0 0,1 13.07,10.41A3.39,3.39 0 0,0 15,11A3.5,3.5 0 0,0 15,4Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.loans">On loan</span></button>
               </div>
               <div class="segmented compact view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
                 <button type="button" class="active" data-lists-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
@@ -8412,34 +9185,57 @@ def ui_preview_html(
           <div class="lists-grid" id="listsWatchlistGrid"></div>
           <div class="lists-history hidden" id="listsWatchedList"></div>
           <div class="lists-wishlist hidden" id="listsWishlistPanel">
-            <form class="wishlist-search-form" id="wishlistSearchForm" autocomplete="off">
-              <div class="wishlist-search-row">
-                <input type="text" id="wishlistSearchInput" required data-next-i18n-placeholder="lists.wishlistSearchPlaceholder" placeholder="Search a title to find editions">
-                <button type="submit" class="primary-button" data-next-i18n="lists.wishlistSearchButton">Find editions</button>
-              </div>
-              <p class="form-message" id="wishlistSearchMessage" role="status"></p>
-            </form>
-            <div class="wishlist-search-results" id="wishlistSearchResults"></div>
-            <details class="wishlist-manual">
-              <summary data-next-i18n="lists.wishlistManualToggle">Add manually</summary>
-              <form class="wishlist-add-form" id="wishlistAddForm" autocomplete="off">
-                <div class="wishlist-add-fields">
-                  <input type="text" id="wishlistAddTitle" required data-next-i18n-placeholder="lists.wishlistTitlePlaceholder" placeholder="Title">
-                  <input type="text" id="wishlistAddYear" inputmode="numeric" data-next-i18n-placeholder="lists.wishlistYearPlaceholder" placeholder="Year">
-                  <input type="text" id="wishlistAddFormat" data-next-i18n-placeholder="lists.wishlistFormatPlaceholder" placeholder="Format">
-                  <input type="text" id="wishlistAddBarcode" data-next-i18n-placeholder="lists.wishlistBarcodePlaceholder" placeholder="Barcode">
-                  <button type="submit" class="primary-button" data-next-i18n="lists.wishlistAdd">Add to wishlist</button>
+            <div class="wishlist-tools">
+              <form class="wishlist-search-form" id="wishlistSearchForm" autocomplete="off">
+                <div class="wishlist-search-row">
+                  <input type="text" id="wishlistSearchInput" required data-next-i18n-placeholder="lists.wishlistSearchPlaceholder" placeholder="Search a title to find editions">
+                  <button type="submit" class="primary-button" data-next-i18n="lists.wishlistSearchButton">Find editions</button>
                 </div>
-                <p class="form-message" id="wishlistAddMessage" role="status"></p>
+                <p class="form-message" id="wishlistSearchMessage" role="status"></p>
               </form>
-            </details>
+              <div class="wishlist-search-results" id="wishlistSearchResults"></div>
+              <details class="wishlist-manual">
+                <summary data-next-i18n="lists.wishlistManualToggle">Add manually</summary>
+                <form class="wishlist-add-form" id="wishlistAddForm" autocomplete="off">
+                  <div class="wishlist-add-fields">
+                    <input type="text" id="wishlistAddTitle" required data-next-i18n-placeholder="lists.wishlistTitlePlaceholder" placeholder="Title">
+                    <input type="text" id="wishlistAddYear" inputmode="numeric" data-next-i18n-placeholder="lists.wishlistYearPlaceholder" placeholder="Year">
+                    <select id="wishlistAddFormat" data-next-i18n-aria="movieDetail.format" aria-label="Format"></select>
+                    <input type="text" id="wishlistAddBarcode" data-next-i18n-placeholder="lists.wishlistBarcodePlaceholder" placeholder="Barcode">
+                  </div>
+                  <textarea id="wishlistAddNote" rows="2" class="wishlist-add-note" data-next-i18n-placeholder="lists.wishlistNotePlaceholder" placeholder="Note"></textarea>
+                  <div class="wishlist-add-actions">
+                    <button type="submit" class="primary-button" data-next-i18n="lists.wishlistAdd">Add to wishlist</button>
+                  </div>
+                  <p class="form-message" id="wishlistAddMessage" role="status"></p>
+                </form>
+              </details>
+            </div>
             <div class="lists-simple-list" id="listsWishlistList"></div>
           </div>
           <div class="lists-tags-panel hidden" id="listsTagsPanel">
+            <div class="lists-tags-toolbar">
+              <button type="button" class="primary-button" id="tagCreateButton" data-next-i18n="lists.tagCreateButton">New tag</button>
+            </div>
             <div class="lists-simple-list tags-list" id="listsTagsList"></div>
           </div>
           <div class="lists-loans-panel hidden" id="listsLoansPanel">
+            <div class="lists-loans-toolbar">
+              <button type="button" class="primary-button" id="loanCreateButton" data-next-i18n="lists.loanAddButton">Lend a disc</button>
+              <button type="button" class="secondary-button" id="loanHistoryButton" data-next-i18n="lists.loanHistoryButton">History</button>
+            </div>
             <div class="lists-simple-list loans-list" id="listsLoansList"></div>
+            <div class="lists-loan-requests" id="listsLoanRequests">
+              <div class="detail-card-head compact">
+                <h4 data-next-i18n="lists.loanRequestsTitle">Borrow requests</h4>
+                <div class="detail-submenu" role="tablist" aria-label="Borrow requests">
+                  <button type="button" class="active lists-seg" data-loan-requests-tab="incoming"><span class="lists-seg-label" data-next-i18n="lists.loanRequestsIncomingTitle">To review</span></button>
+                  <button type="button" class="lists-seg" data-loan-requests-tab="outgoing"><span class="lists-seg-label" data-next-i18n="lists.loanRequestsOutgoingTitle">My requests</span></button>
+                </div>
+              </div>
+              <div class="lists-simple-list" id="listsLoanRequestsIncoming"></div>
+              <div class="lists-simple-list hidden" id="listsLoanRequestsOutgoing"></div>
+            </div>
           </div>
           <div class="preview-empty hidden" id="listsEmptyMessage"></div>
         </section>
@@ -8538,7 +9334,13 @@ def ui_preview_html(
                 <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding a movie.</p>
               </div>
             </div>
-            <div class="import-scanner-spotlight">
+            <nav class="import-method-tabs" aria-label="Import method" data-next-i18n-aria="importCenter.methods">
+              <button type="button" class="active" data-import-method="camera" data-next-i18n="importCenter.methodCamera">Camera</button>
+              <button type="button" data-import-method="single" data-next-i18n="importCenter.methodSingle">Single search</button>
+              <button type="button" data-import-method="batch" data-next-i18n="importCenter.methodBatch">Batch</button>
+              <button type="button" data-import-method="csv" data-next-i18n="importCenter.methodCsv">CSV import</button>
+            </nav>
+            <div class="import-method-panel" data-import-method-panel="camera">
               <div class="barcode-scanner-shell">
                 <div class="import-card-head">
                   <div>
@@ -8555,6 +9357,8 @@ def ui_preview_html(
                 </div>
                 <div class="login-message" id="importScannerMessage"></div>
               </div>
+            </div>
+            <div class="import-method-panel hidden" data-import-method-panel="single">
               <div class="import-manual-card">
                 <div>
                   <strong data-next-i18n="importCenter.manualTitleCard">Manual search</strong>
@@ -8579,10 +9383,13 @@ def ui_preview_html(
                   </label>
                   <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Search</button>
                 </form>
-                <div class="import-batch-card">
+              </div>
+            </div>
+            <div class="import-method-panel hidden" data-import-method-panel="batch">
+              <div class="import-batch-card standalone">
                   <div>
                     <strong data-next-i18n="importCenter.batchTitle">Batch barcodes</strong>
-                    <p class="import-source-meta" data-next-i18n="importCenter.batchHelp">Paste multiple EAN or UPC barcodes. DiscVault checks them one by one through the same metadata plugin flow.</p>
+                    <p class="import-source-meta" data-next-i18n="importCenter.batchHelp">Scan or paste all EAN/UPC barcodes first, then run Check batch. Work down the list: Search a line, add the film, and it gets checked off so you can continue with the next one.</p>
                   </div>
                   <textarea id="importBatchBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.batchPlaceholder" placeholder="8712626064312&#10;5051890315526"></textarea>
                   <div class="button-row compact">
@@ -8593,8 +9400,8 @@ def ui_preview_html(
                   <div class="import-batch-list" id="importBatchList"></div>
                 </div>
               </div>
-            </div>
-            <div class="import-file-upload-card secondary" id="importFileUploadCard">
+            <div class="import-method-panel hidden" data-import-method-panel="csv">
+              <div class="import-file-upload-card secondary" id="importFileUploadCard">
               <div>
                 <strong data-next-i18n="importCenter.fileTitle">Import file</strong>
                 <p class="import-source-meta" data-next-i18n="importCenter.fileHelp">Upload a CSV, TSV, JSON, XML or ZIP file. DiscVault asks the enabled import plugins which one recognizes it.</p>
@@ -8606,6 +9413,7 @@ def ui_preview_html(
               </div>
               <div class="login-message" id="importFileMessage"></div>
               <div class="import-file-summary" id="importFileSummary"></div>
+            </div>
             </div>
             <div class="import-result-list" id="importBarcodeResults"></div>
           </div>
@@ -8788,6 +9596,10 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.location">Location</span>
                       <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
                     </label>
+                    <label for="movieEditLocationSelect">
+                      <span data-next-i18n="locations.assign">Storage location</span>
+                      <select id="movieEditLocationSelect" name="locationId"></select>
+                    </label>
                     <label for="movieEditDirector">
                       <span data-next-i18n="movieDetail.director">Director</span>
                       <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
@@ -8906,6 +9718,19 @@ def ui_preview_html(
                 <input type="date" id="movieLoanDue" aria-label="Due date" data-next-i18n-aria="lists.loanDue">
                 <button type="submit" class="secondary-button" data-next-i18n="lists.loanLend">Lend disc</button>
               </form>
+              <div class="movie-loan-request-status" id="movieLoanRequestStatus"></div>
+              <form class="movie-loan-request hidden" id="movieLoanRequestForm" autocomplete="off">
+                <label class="loan-request-field">
+                  <span data-next-i18n="lists.loanRequestFrom">Borrow from</span>
+                  <input type="date" id="movieLoanRequestFrom" aria-label="Borrow from" data-next-i18n-aria="lists.loanRequestFrom">
+                </label>
+                <label class="loan-request-field">
+                  <span data-next-i18n="lists.loanRequestReturnBy">Return by</span>
+                  <input type="date" id="movieLoanRequestReturnBy" aria-label="Return by" data-next-i18n-aria="lists.loanRequestReturnBy">
+                </label>
+                <input type="text" id="movieLoanRequestNote" data-next-i18n-placeholder="lists.loanRequestNotePlaceholder" placeholder="Optional message to the owner">
+                <button type="submit" class="secondary-button" data-next-i18n="lists.loanRequestSubmit">Send request</button>
+              </form>
               <p class="form-message" id="movieLoanMessage"></p>
             </div>
           </div>
@@ -8968,6 +9793,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="moviePosterUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="poster" data-input="moviePosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="moviePosterLockToggle" data-artwork-lock="movie" data-kind="poster" aria-pressed="false">Lock poster</button>
               </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaBackdrops">
@@ -8975,6 +9801,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="movieBackdropUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="backdrop" data-input="movieBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="movieBackdropLockToggle" data-artwork-lock="movie" data-kind="backdrop" aria-pressed="false">Lock backdrop</button>
               </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
@@ -9079,6 +9906,10 @@ def ui_preview_html(
                   <span data-next-i18n="containerDetail.fieldDescription">Description</span>
                   <textarea id="containerEditDescription" name="description" maxlength="2000"></textarea>
                 </label>
+                <label for="containerEditLocationSelect">
+                  <span data-next-i18n="locations.assign">Storage location</span>
+                  <select id="containerEditLocationSelect" name="locationId"></select>
+                </label>
               </form>
             </div>
             <div class="detail-card full hidden" id="containerAddContentPanel">
@@ -9151,6 +9982,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="containerPosterUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="container" data-kind="poster" data-input="containerPosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="containerPosterLockToggle" data-artwork-lock="container" data-kind="poster" aria-pressed="false">Lock poster</button>
               </div>
             </div>
           </div>
@@ -9161,6 +9993,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="containerBackdropUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="container" data-kind="backdrop" data-input="containerBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="containerBackdropLockToggle" data-artwork-lock="container" data-kind="backdrop" aria-pressed="false">Lock backdrop</button>
               </div>
             </div>
           </div>
@@ -9384,6 +10217,7 @@ def ui_preview_html(
               </div>
               <div class="detail-subpanel hidden" data-preferences-panel="collectors">
                 <div class="preference-list" id="profileCollectorPreferenceList"></div>
+                <div class="preference-list hidden" id="loansSystemSettingRow"></div>
               </div>
               <div class="login-message" id="preferencesMessage"></div>
             </div>
@@ -9461,9 +10295,10 @@ def ui_preview_html(
                   <button type="button" class="active" data-container-manager-type="box_set" data-next-i18n="containerManage.boxSets">Box-sets</button>
                   <button type="button" data-container-manager-type="vault" data-next-i18n="containerManage.vaults">Vaults</button>
                   <button type="button" data-container-manager-type="collection" data-next-i18n="containerManage.collections">Collections</button>
+                  <button type="button" data-structure-view="locations" data-next-i18n="locations.navLabel">Locations</button>
                 </nav>
               </div>
-              <form class="profile-form container-manager-create" id="containerManagerCreateForm">
+              <form class="profile-form container-manager-create" id="containerManagerCreateForm" data-structure-section="containers">
                 <label for="containerManagerTitle">
                   <span data-next-i18n="containerManage.titleLabel">Name</span>
                   <input id="containerManagerTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="containerManage.titlePlaceholder" placeholder="New collection name">
@@ -9473,7 +10308,28 @@ def ui_preview_html(
                   <span class="login-message" id="containerManagerMessage"></span>
                 </div>
               </form>
-              <div class="container-manager-list" id="containerManagerList"></div>
+              <div class="container-manager-list" id="containerManagerList" data-structure-section="containers"></div>
+              <div class="locations-manager hidden" data-structure-section="locations">
+                <form class="profile-form locations-create-form" id="locationCreateForm">
+                  <label for="locationCreateName">
+                    <span data-next-i18n="locations.name">Name</span>
+                    <input id="locationCreateName" maxlength="240" autocomplete="off" data-next-i18n-placeholder="locations.namePlaceholder" placeholder="Cabinet 01">
+                  </label>
+                  <label for="locationCreateParent">
+                    <span data-next-i18n="locations.parent">Parent</span>
+                    <select id="locationCreateParent"></select>
+                  </label>
+                  <label for="locationCreateDescription">
+                    <span data-next-i18n="locations.descriptionField">Description</span>
+                    <input id="locationCreateDescription" maxlength="2000" autocomplete="off" data-next-i18n-placeholder="locations.descriptionPlaceholder" placeholder="Optional description">
+                  </label>
+                  <div class="profile-form-actions">
+                    <button type="submit" class="secondary-button" id="locationCreateButton" data-next-i18n="locations.create">Create location</button>
+                    <span class="login-message" id="locationManagerMessage"></span>
+                  </div>
+                </form>
+                <div class="locations-tree" id="locationsTree"></div>
+              </div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="security">
               <div class="profile-section-grid">
@@ -9604,7 +10460,6 @@ def ui_preview_html(
                         <option value="auto" data-next-i18n="profile.channelAuto">Automatic</option>
                         <option value="beta" data-next-i18n="profile.channelBeta">Beta</option>
                         <option value="stable" data-next-i18n="profile.channelStable">Stable</option>
-                        <option value="v26" data-next-i18n="profile.channelV26">v26</option>
                       </select>
                     </label>
                     <button type="button" class="secondary-button" id="profileUpdateCheckButton" data-next-i18n="profile.checkForUpdate">Check for update</button>
@@ -10221,14 +11076,26 @@ def ui_preview_html(
     let state = JSON.parse(document.getElementById("initialState").textContent || "{}");
     let movies = state.movies || [];
     let containers = state.containers || [];
+    let locations = state.locations || [];
     let containerMembership = state.containerMembership || [];
     let mediaGroups = state.mediaGroups || [];
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
     let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
     let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
+    function readStoredFormatFilters() {
+      try {
+        const raw = JSON.parse(localStorage.getItem("dv_next_collection_formats") || "[]");
+        if (Array.isArray(raw)) return raw.map((value) => String(value || "")).filter(Boolean);
+      } catch (error) {}
+      return [];
+    }
+    let collectionFormatFilters = new Set(readStoredFormatFilters());
+    let collectionTypeFilter = localStorage.getItem("dv_next_collection_type") || "all";
+    let collectionGenreFilter = localStorage.getItem("dv_next_collection_genre") || "";
+    let collectionLocationFilter = localStorage.getItem("dv_next_collection_location") || "";
     let collectionItemFilter = localStorage.getItem("dv_next_collection_item_filter") || "all";
     let activeCollectionGroupFilter = localStorage.getItem("dv_next_collection_group_filter") || "";
-    let libraryViewMode = localStorage.getItem("dv_next_library_view_mode") || "poster";
+    let libraryViewMode = normalizeLibraryViewMode(localStorage.getItem("dv_next_library_view_mode"));
     let libraryDetailSort = JSON.parse(localStorage.getItem("dv_next_library_detail_sort") || '{"key":"title","direction":"asc"}');
     let advancedSearchOpen = localStorage.getItem("dv_next_advanced_search_open") === "true";
     let advancedSearch = parseLocalJson("dv_next_advanced_search", {});
@@ -10249,7 +11116,7 @@ def ui_preview_html(
     let activePersonPayload = null;
     let personReturnRoute = null;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
-    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
+    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
@@ -10262,6 +11129,8 @@ def ui_preview_html(
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
     let activeProfileApiTab = localStorage.getItem("dv_next_profile_api_tab") || "general";
     let containerManagerType = "box_set";
+    let structureView = "containers";
+    let locationDragId = "";
     let appAdmin = {
       activeTab: "access",
       activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "registry",
@@ -10304,7 +11173,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera"};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -11040,6 +11909,13 @@ def ui_preview_html(
     function currentUserId() {
       return currentAuthStatus.user_id || currentAuthStatus.userId || (state.user || {}).id || "";
     }
+    function loansSystemEnabled() {
+      const settings = (state && state.instanceSettings) || {};
+      return settings.loansSystemEnabled !== false;
+    }
+    function canManageLoansSystem() {
+      return hasActualPermission("security.manage_loans_system");
+    }
     function canViewFullCollectionByDefault() {
       return hasActualPermission("collection.view_all");
     }
@@ -11115,6 +11991,7 @@ def ui_preview_html(
         activePreferenceTab = "appearance";
       }
       syncPreferencePanelVisibility();
+      renderLoansSystemSetting();
       setElementVisible(document.querySelector('[data-profile-tab="structure"]'), canManageContainers);
       if (!canManageContainers && activeProfileTab === "structure") {
         activeProfileTab = "account";
@@ -14883,6 +15760,19 @@ def ui_preview_html(
       });
       renderAppRegistrationMode();
     }
+    let lastPersistedLocale = null;
+    function persistNextLocale(locale) {
+      const value = String(locale || "").trim();
+      if (!value || value === lastPersistedLocale) return;
+      const token = localStorage.getItem("dv_next_token");
+      if (!token) return;
+      lastPersistedLocale = value;
+      authApiJson("/api/next/preferences/locale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locale: value })
+      }).catch(() => { lastPersistedLocale = null; });
+    }
     async function loadLocale(locale) {
       const normalized = locale || "nl-NL";
       try {
@@ -14893,6 +15783,7 @@ def ui_preview_html(
         localeState.messages = payload.messages || {};
         localStorage.setItem("dv_next_locale", localeState.locale);
         localStorage.setItem("dv_lang", legacyLocaleForApp(localeState.locale));
+        persistNextLocale(localeState.locale);
       } catch (error) {
         console.warn("Next i18n catalog unavailable", error);
       }
@@ -15003,24 +15894,169 @@ def ui_preview_html(
       }
       advancedSearch = normalizeAdvancedSearch(advancedSearch);
       smartFilters = Array.isArray(smartFilters) ? smartFilters : [];
-      libraryViewMode = normalizeViewMode(libraryViewMode);
+      libraryViewMode = normalizeLibraryViewMode(libraryViewMode);
       document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
         button.classList.toggle("active", button.dataset.libraryViewMode === libraryViewMode);
         button.setAttribute("aria-pressed", button.dataset.libraryViewMode === libraryViewMode ? "true" : "false");
       });
-      const sortSelect = document.getElementById("collectionSortSelect");
-      if (sortSelect && sortSelect.value !== collectionSortMode) sortSelect.value = collectionSortMode;
-      document.querySelectorAll("[data-format-filter]").forEach((button) => {
-        button.classList.toggle("active", button.dataset.formatFilter === collectionFormatFilter);
-        button.setAttribute("aria-pressed", button.dataset.formatFilter === collectionFormatFilter ? "true" : "false");
+      document.querySelectorAll("[data-sort-option]").forEach((button) => {
+        const active = button.dataset.sortOption === collectionSortMode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-checked", active ? "true" : "false");
       });
-      const itemFilter = document.getElementById("collectionItemFilter");
-      if (itemFilter) itemFilter.classList.toggle("hidden", !collectorsModeEnabled());
-      document.querySelectorAll("[data-item-filter]").forEach((button) => {
-        button.classList.toggle("active", button.dataset.itemFilter === collectionItemFilter);
-        button.setAttribute("aria-pressed", button.dataset.itemFilter === collectionItemFilter ? "true" : "false");
-      });
+      renderCollectionFilterMenu();
       syncAdvancedSearchControls();
+    }
+    function collectionFilterActiveCount() {
+      let count = collectionFormatFilters ? collectionFormatFilters.size : 0;
+      if (collectionTypeFilter && collectionTypeFilter !== "all") count += 1;
+      if (collectionGenreFilter) count += 1;
+      if (collectionLocationFilter) count += 1;
+      if (collectorsModeEnabled() && collectionItemFilter === "containers") count += 1;
+      return count;
+    }
+    function collectionGenreOptionValues() {
+      const seen = new Map();
+      (movies || []).forEach((movie) => {
+        movieGenreValues(movie).forEach((value) => {
+          const key = value.toLowerCase();
+          if (!seen.has(key)) seen.set(key, value);
+        });
+      });
+      return [...seen.values()].sort((a, b) => a.localeCompare(b, localeState.locale || undefined, {sensitivity: "base"}));
+    }
+    function collectionLocationOptionValues() {
+      const seen = new Map();
+      (movies || []).forEach((movie) => {
+        const value = movieLocationValue(movie);
+        if (!value) return;
+        const key = value.toLowerCase();
+        if (!seen.has(key)) seen.set(key, value);
+      });
+      return [...seen.values()].sort((a, b) => a.localeCompare(b, localeState.locale || undefined, {sensitivity: "base"}));
+    }
+    function renderCollectionFilterMenu() {
+      const collectorMode = collectorsModeEnabled();
+      const formatHost = document.getElementById("collectionFormatSwitches");
+      if (formatHost) {
+        const allowed = MOVIE_FORMAT_OPTIONS
+          .filter((item) => collectorMode || !item.collectorOnly)
+          .slice()
+          .sort((a, b) => a.value.localeCompare(b.value, localeState.locale || undefined, {sensitivity: "base"}));
+        formatHost.innerHTML = allowed.map((item) => {
+          const checked = collectionFormatFilters.has(item.value) ? " checked" : "";
+          return `<label class="filter-toggle-row"><span>${escapeHtml(formatFilterLabel(item.value))}</span><input type="checkbox" role="switch" data-format-switch="${escapeHtml(item.value)}"${checked}></label>`;
+        }).join("");
+      }
+      // Drop selected formats that are no longer available (e.g. collector mode off)
+      const allowedValues = new Set(MOVIE_FORMAT_OPTIONS.filter((item) => collectorMode || !item.collectorOnly).map((item) => item.value));
+      let formatsChanged = false;
+      collectionFormatFilters.forEach((value) => {
+        if (!allowedValues.has(value)) { collectionFormatFilters.delete(value); formatsChanged = true; }
+      });
+      if (formatsChanged) persistCollectionFormatFilters();
+      document.querySelectorAll("[data-type-filter]").forEach((button) => {
+        const active = button.dataset.typeFilter === collectionTypeFilter;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      const genreSelect = document.getElementById("collectionGenreSelect");
+      if (genreSelect) {
+        const options = collectionGenreOptionValues();
+        if (collectionGenreFilter && !options.some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase())) {
+          collectionGenreFilter = "";
+          localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
+        }
+        const anyLabel = tNext("common.all", "All");
+        genreSelect.innerHTML = [`<option value="">${escapeHtml(anyLabel)}</option>`]
+          .concat(options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
+          .join("");
+        genreSelect.value = collectionGenreFilter;
+      }
+      const locationSelect = document.getElementById("collectionLocationSelect");
+      if (locationSelect) {
+        const options = collectionLocationOptionValues();
+        if (collectionLocationFilter && !options.some((value) => value.toLowerCase() === collectionLocationFilter.toLowerCase())) {
+          collectionLocationFilter = "";
+          localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
+        }
+        const anyLabel = tNext("common.all", "All");
+        locationSelect.innerHTML = [`<option value="">${escapeHtml(anyLabel)}</option>`]
+          .concat(options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
+          .join("");
+        locationSelect.value = collectionLocationFilter;
+      }
+      const containersSection = document.getElementById("collectionContainersSection");
+      if (containersSection) containersSection.classList.toggle("hidden", !collectorMode);
+      const containersSwitch = document.getElementById("collectionContainersSwitch");
+      if (containersSwitch) containersSwitch.checked = collectorMode && collectionItemFilter === "containers";
+      const badge = document.getElementById("collectionFilterBadge");
+      if (badge) {
+        const count = collectionFilterActiveCount();
+        badge.textContent = String(count);
+        badge.classList.toggle("hidden", count === 0);
+      }
+    }
+    function formatFilterLabel(value) {
+      const map = {
+        "Ultra HD Blu-ray": tNext("collection.format4k", "4K UHD"),
+        "4K UHD + Blu-ray": tNext("collection.format4kBluray", "4K UHD + Blu-ray"),
+        "Blu-ray": tNext("collection.formatBluray", "Blu-ray"),
+        "DVD": tNext("collection.formatDvd", "DVD")
+      };
+      return map[value] || value;
+    }
+    function persistCollectionFormatFilters() {
+      localStorage.setItem("dv_next_collection_formats", JSON.stringify([...collectionFormatFilters]));
+    }
+    const COLLECTION_MENUS = [
+      {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
+      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"}
+    ];
+    let collectionMenusBound = false;
+    function closeCollectionMenu(menuId) {
+      const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
+      if (!def) return;
+      document.getElementById(def.panel)?.classList.add("hidden");
+      document.getElementById(def.trigger)?.setAttribute("aria-expanded", "false");
+      document.getElementById(def.menu)?.classList.remove("open");
+    }
+    function closeAllCollectionMenus(except) {
+      COLLECTION_MENUS.forEach((def) => { if (def.menu !== except) closeCollectionMenu(def.menu); });
+    }
+    function openCollectionMenu(menuId) {
+      closeAllCollectionMenus(menuId);
+      const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
+      if (!def) return;
+      document.getElementById(def.panel)?.classList.remove("hidden");
+      document.getElementById(def.trigger)?.setAttribute("aria-expanded", "true");
+      document.getElementById(def.menu)?.classList.add("open");
+    }
+    function toggleCollectionMenu(menuId) {
+      const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
+      if (!def) return;
+      const panel = document.getElementById(def.panel);
+      if (panel && !panel.classList.contains("hidden")) closeCollectionMenu(menuId);
+      else openCollectionMenu(menuId);
+    }
+    function setupCollectionMenus() {
+      COLLECTION_MENUS.forEach((def) => {
+        const trigger = document.getElementById(def.trigger);
+        if (trigger && !trigger.dataset.menuBound) {
+          trigger.dataset.menuBound = "1";
+          trigger.addEventListener("click", (event) => { event.stopPropagation(); toggleCollectionMenu(def.menu); });
+        }
+        const panel = document.getElementById(def.panel);
+        if (panel && !panel.dataset.menuBound && def.menu === "collectionFilterMenu") {
+          panel.dataset.menuBound = "1";
+          panel.addEventListener("click", (event) => event.stopPropagation());
+        }
+      });
+      if (!collectionMenusBound) {
+        collectionMenusBound = true;
+        document.addEventListener("click", () => closeAllCollectionMenus());
+        document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeAllCollectionMenus(); });
+      }
     }
     function advancedSearchDefaults() {
       return {
@@ -15030,7 +16066,8 @@ def ui_preview_html(
         digital: "any",
         artwork: "any",
         personal: "any",
-        itemType: "any"
+        itemType: "any",
+        location: "any"
       };
     }
     function normalizeAdvancedSearch(value) {
@@ -15042,8 +16079,9 @@ def ui_preview_html(
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
-        personal: ["any", "watchlist", "watched", "unlisted"].includes(source.personal) ? source.personal : "any",
-        itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any"
+        personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged"].includes(source.personal) ? source.personal : "any",
+        itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
+        location: String(source.location || "any").trim() || "any"
       };
     }
     function advancedSearchActiveCount(filters = advancedSearch) {
@@ -15056,6 +16094,7 @@ def ui_preview_html(
       if (normalized.artwork !== "any") count += 1;
       if (normalized.personal !== "any") count += 1;
       if (normalized.itemType !== "any") count += 1;
+      if (normalized.location !== "any") count += 1;
       return count;
     }
     function setAdvancedControlValue(id, value) {
@@ -15070,7 +16109,8 @@ def ui_preview_html(
         digital: document.getElementById("advancedDigitalFilter")?.value || "any",
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
         personal: document.getElementById("advancedPersonalFilter")?.value || "any",
-        itemType: document.getElementById("advancedContainerType")?.value || "any"
+        itemType: document.getElementById("advancedContainerType")?.value || "any",
+        location: document.getElementById("advancedLocationFilter")?.value || "any"
       });
     }
     function persistAdvancedSearch() {
@@ -15104,6 +16144,19 @@ def ui_preview_html(
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
       setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
       setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
+      const locationFilter = document.getElementById("advancedLocationFilter");
+      if (locationFilter) {
+        const anyLabel = tNext("collection.locationFilterAny", "Any location");
+        const options = [`<option value="any">${escapeHtml(anyLabel)}</option>`];
+        locations.forEach((loc) => {
+          const indent = "\u2007\u2007".repeat(Math.max(0, (loc.depth || 1) - 1));
+          options.push(`<option value="${escapeHtml(String(loc.id))}">${escapeHtml(indent + (loc.name || ""))}</option>`);
+        });
+        locationFilter.innerHTML = options.join("");
+        locationFilter.value = advancedSearch.location && locations.some((loc) => String(loc.id) === String(advancedSearch.location))
+          ? String(advancedSearch.location)
+          : "any";
+      }
       const select = document.getElementById("smartFilterSelect");
       if (select) {
         const filters = Array.isArray(smartFilters) ? smartFilters : [];
@@ -15311,6 +16364,12 @@ def ui_preview_html(
       if (filters.personal === "watchlist" && !movie?.on_watchlist) return false;
       if (filters.personal === "watched" && !movieIsWatched(movie)) return false;
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
+      if (filters.personal === "onloan" && !movie?.on_loan) return false;
+      if (filters.personal === "tagged" && !movie?.has_tags) return false;
+      if (filters.location !== "any") {
+        const movieLoc = String((movie && (movie.location_id || (movie.location && movie.location.id))) || "");
+        if (!movieLoc || !locationSubtreeIds(filters.location).has(movieLoc)) return false;
+      }
       return true;
     }
     function containerMatchesGroup(container) {
@@ -15357,36 +16416,71 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted"].includes(filters.personal)) {
+      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged"].includes(filters.personal)) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
       if (filters.artwork === "missingBackdrop" && containerBackdropValue(container)) return false;
       if (filters.artwork === "completeArtwork" && (!containerPosterValue(container) || !containerBackdropValue(container))) return false;
+      if (filters.location !== "any") {
+        const subtree = locationSubtreeIds(filters.location);
+        const ownLoc = String((container && (container.location_id || (container.location && container.location.id))) || "");
+        const ownMatch = Boolean(ownLoc && subtree.has(ownLoc));
+        const memberMatch = members.some((movie) => {
+          const ml = String((movie && (movie.location_id || (movie.location && movie.location.id))) || "");
+          return ml && subtree.has(ml);
+        });
+        if (!ownMatch && !memberMatch) return false;
+      }
       return true;
+    }
+    function movieFormatIsFourKBlurayCombo(value) {
+      const lower = String(value || "").toLowerCase();
+      const has4k = lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd");
+      if (!has4k) return false;
+      const hasBluray = /blu[\\s-]?ray/.test(lower) || /(^|[^a-z])bd([^a-z]|$)/.test(lower);
+      if (!hasBluray) return false;
+      return /[+/&]/.test(lower);
     }
     function normalizedMovieFormat(movie) {
-      return String(movie?.format || movie?.edition_type || movie?.metadata?.format || "").toLowerCase();
+      return String(movie?.format || movie?.edition_type || movie?.metadata?.format || "");
     }
     function movieMatchesFormat(movie) {
-      const selected = collectionFormatFilter || "all";
-      if (selected === "all") return true;
-      const value = normalizedMovieFormat(movie);
-      if (selected === "4k") return value.includes("4k") || value.includes("uhd") || value.includes("ultra hd");
-      if (selected === "bluray") return (value.includes("blu") || value.includes("bd")) && !movieMatchesFormatValue(value, "4k");
-      if (selected === "dvd") return value.includes("dvd") && !value.includes("blu") && !value.includes("uhd");
-      return true;
+      const selected = collectionFormatFilters;
+      if (!selected || selected.size === 0) return true;
+      const normalized = normalizedMovieFormatValue(normalizedMovieFormat(movie));
+      if (!normalized) return false;
+      if (selected.has(normalized)) return true;
+      if (normalized === "4K UHD + Blu-ray" && (selected.has("4K UHD") || selected.has("Blu-ray"))) return true;
+      return false;
     }
-    function movieMatchesFormatValue(value, selected) {
-      const normalized = String(value || "").toLowerCase();
-      if (selected === "4k") return normalized.includes("4k") || normalized.includes("uhd") || normalized.includes("ultra hd");
-      if (selected === "bluray") return normalized.includes("blu") || normalized.includes("bd");
-      if (selected === "dvd") return normalized.includes("dvd");
+    function movieGenreValues(movie) {
+      const raw = movie?.genre || movie?.metadata?.genre || "";
+      return String(raw)
+        .split(/[,/|]/)
+        .map((value) => value.trim())
+        .filter(Boolean);
+    }
+    function movieMatchesGenre(movie) {
+      if (!collectionGenreFilter) return true;
+      return movieGenreValues(movie).some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase());
+    }
+    function movieLocationValue(movie) {
+      return String(movie?.location || movie?.metadata?.location || "").trim();
+    }
+    function movieMatchesLocation(movie) {
+      if (!collectionLocationFilter) return true;
+      return movieLocationValue(movie).toLowerCase() === collectionLocationFilter.toLowerCase();
+    }
+    function movieMatchesType(movie) {
+      const selected = collectionTypeFilter || "all";
+      if (selected === "all") return true;
+      if (selected === "tv") return false;
       return true;
     }
     function containerMatchesFormat(container) {
       if (!collectorsModeEnabled()) return false;
-      if ((collectionFormatFilter || "all") === "all") return true;
+      if (!collectionFormatFilters || collectionFormatFilters.size === 0) return true;
       return containerMemberMovies(container.id).some((movie) => movieMatchesFormat(movie));
     }
     function itemDateValue(item, mode) {
@@ -15440,6 +16534,9 @@ def ui_preview_html(
         movieMatchesGroup(movie)
         && movieMatchesSearch(movie)
         && movieMatchesFormat(movie)
+        && movieMatchesType(movie)
+        && movieMatchesGenre(movie)
+        && movieMatchesLocation(movie)
         && movieMatchesAdvancedSearch(movie)
         && !["container", "box_set", "collection", "vault"].includes(normalizeAdvancedSearch(advancedSearch).itemType)
       ));
@@ -15496,6 +16593,9 @@ def ui_preview_html(
     }
     function normalizeViewMode(value) {
       return ["poster", "list", "detail"].includes(value) ? value : "poster";
+    }
+    function normalizeLibraryViewMode(value) {
+      return value === "list" ? "list" : "poster";
     }
     function splitCreditText(value, limit = 5) {
       return String(value || "")
@@ -15747,6 +16847,7 @@ def ui_preview_html(
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
       if (!text) return "";
+      if (movieFormatIsFourKBlurayCombo(text)) return "4K UHD + Blu-ray";
       if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K UHD";
       if (lower.includes("blu") || lower.includes("bd")) return "Blu-ray";
       if (lower.includes("dvd")) return "DVD";
@@ -17107,18 +18208,21 @@ def ui_preview_html(
       setMovieDetailMessage("");
     }
     const MOVIE_FORMAT_OPTIONS = [
+      {value: "4K UHD + Blu-ray", collectorOnly: false},
       {value: "Blu-ray", collectorOnly: false},
       {value: "DVD", collectorOnly: false},
       {value: "HD DVD", collectorOnly: true},
       {value: "LaserDisc", collectorOnly: true},
-      {value: "Ultra HD Blu-ray", collectorOnly: false},
+      {value: "4K UHD", collectorOnly: false},
+      {value: "4K UHD + Blu-ray", collectorOnly: false},
       {value: "VCD/SVCD", collectorOnly: true}
     ];
     function normalizedMovieFormatValue(value) {
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
       if (!text) return "";
-      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "Ultra HD Blu-ray";
+      if (movieFormatIsFourKBlurayCombo(text)) return "4K UHD + Blu-ray";
+      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K UHD";
       if (lower.includes("blu")) return "Blu-ray";
       if (lower.includes("hd dvd")) return "HD DVD";
       if (lower.includes("laser")) return "LaserDisc";
@@ -17146,6 +18250,21 @@ def ui_preview_html(
         return `<option value="${escapeHtml(item.value)}">${escapeHtml(item.value)}</option>`;
       }).join("");
       select.value = normalized;
+    }
+    function movieFormatOptionsHtml(selectedValue = "") {
+      const normalized = normalizedMovieFormatValue(selectedValue);
+      const collectorMode = collectorsModeEnabled();
+      const allowed = MOVIE_FORMAT_OPTIONS.filter((item) => collectorMode || !item.collectorOnly);
+      const allowedValues = new Set(allowed.map((item) => item.value));
+      const knownValues = new Set(MOVIE_FORMAT_OPTIONS.map((item) => item.value));
+      const customOption = normalized && !allowedValues.has(normalized) && !knownValues.has(normalized)
+        ? [{value: normalized}]
+        : [];
+      return [
+        `<option value="">${escapeHtml(tNext("lists.wishlistFormatPlaceholder", "Format"))}</option>`,
+        ...allowed.map((item) => `<option value="${escapeHtml(item.value)}"${item.value === normalized ? " selected" : ""}>${escapeHtml(item.value)}</option>`),
+        ...customOption.map((item) => `<option value="${escapeHtml(item.value)}" selected>${escapeHtml(item.value)}</option>`)
+      ].join("");
     }
     function renderImportFormatOptions() {
       const select = document.getElementById("importFormatInput");
@@ -17264,6 +18383,11 @@ def ui_preview_html(
         const input = document.getElementById(id);
         if (input && document.activeElement !== input) input.value = value;
       });
+      const locationSelect = document.getElementById("movieEditLocationSelect");
+      if (locationSelect && document.activeElement !== locationSelect) {
+        const currentLocationId = (movie.location && movie.location.id) || movie.location_id || "";
+        populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
+      }
       setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
     }
     function movie_locked_fields_from_metadata(metadata) {
@@ -17330,25 +18454,83 @@ def ui_preview_html(
     function renderMovieLoan(state) {
       const statusNode = document.getElementById("movieLoanStatus");
       const addForm = document.getElementById("movieLoanAddForm");
+      const requestForm = document.getElementById("movieLoanRequestForm");
+      const requestStatusNode = document.getElementById("movieLoanRequestStatus");
+      const section = document.getElementById("movieLoanSection");
+      if (section) section.classList.toggle("hidden", !loansSystemEnabled());
+      if (!loansSystemEnabled()) {
+        if (addForm) addForm.classList.add("hidden");
+        if (requestForm) requestForm.classList.add("hidden");
+        if (statusNode) statusNode.innerHTML = "";
+        if (requestStatusNode) requestStatusNode.innerHTML = "";
+        return;
+      }
+      const movie = (activeDetailPayload && activeDetailPayload.movie) || {};
+      const ownerId = String(movie.owner_id || movie.ownerId || "");
+      const viewerId = String(currentUserId() || "");
+      // Prefer the backend-computed borrow-eligibility flag: it knows group membership
+      // and is robust against NULL/legacy owner_id (which would otherwise make every
+      // viewer look like the owner). Fall back to the owner_id comparison for payloads
+      // from older backends that don't send the flag.
+      let isOwner;
+      if (typeof state.canRequestBorrow === "boolean") {
+        isOwner = !state.canRequestBorrow;
+      } else {
+        isOwner = !ownerId || (!!viewerId && ownerId === viewerId);
+      }
       const loan = state.activeLoan;
-      if (statusNode) {
-        if (loan) {
-          const borrower = loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
-          const due = loan.dueAt ? `${tNext("lists.loanDue", "Due")} ${escapeHtml(formatAppDate(loan.dueAt))}` : "";
-          statusNode.innerHTML = `
-            <div class="movie-loan-active">
-              <span>${escapeHtml(tNext("lists.loanTo", "Lent to"))} <strong>${escapeHtml(borrower)}</strong>${due ? ` · ${due}` : ""}</span>
-              <div class="button-row compact">
-                <button type="button" class="secondary-button" data-loan-return="${escapeHtml(loan.id)}" data-next-i18n="lists.loanMarkReturned">Mark returned</button>
-                <button type="button" class="list-pill-button danger" data-loan-delete="${escapeHtml(loan.id)}" data-next-i18n="common.delete">Delete</button>
+      if (isOwner) {
+        if (requestForm) requestForm.classList.add("hidden");
+        if (requestStatusNode) requestStatusNode.innerHTML = "";
+        if (statusNode) {
+          if (loan) {
+            const borrower = loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+            const due = loan.dueAt ? `${tNext("lists.loanDue", "Due")} ${escapeHtml(formatAppDate(loan.dueAt))}` : "";
+            statusNode.innerHTML = `
+              <div class="movie-loan-active">
+                <span>${escapeHtml(tNext("lists.loanTo", "Lent to"))} <strong>${escapeHtml(borrower)}</strong>${due ? ` · ${due}` : ""}</span>
+                <div class="button-row compact">
+                  <button type="button" class="secondary-button" data-loan-return="${escapeHtml(loan.id)}" data-next-i18n="lists.loanMarkReturned">Mark returned</button>
+                  <button type="button" class="list-pill-button danger" data-loan-delete="${escapeHtml(loan.id)}" data-next-i18n="common.delete">Delete</button>
+                </div>
               </div>
-            </div>
-          `;
+            `;
+          } else {
+            statusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanNone", "This disc is not on loan."))}</span>`;
+          }
+        }
+        if (addForm) addForm.classList.toggle("hidden", !!loan);
+        return;
+      }
+      // Non-owner (group member): you cannot lend someone else's disc, so offer a borrow request.
+      if (addForm) addForm.classList.add("hidden");
+      if (statusNode) statusNode.innerHTML = "";
+      const req = state.loanRequest;
+      const status = req && req.status;
+      const pending = status === "pending";
+      const approved = status === "approved";
+      const declined = status === "declined";
+      if (requestStatusNode) {
+        if (pending) {
+          const from = req.borrowFrom ? escapeHtml(formatAppDate(req.borrowFrom)) : "";
+          const until = req.returnBy ? escapeHtml(formatAppDate(req.returnBy)) : "";
+          const range = from && until ? ` · ${from} → ${until}` : "";
+          requestStatusNode.innerHTML = `
+            <div class="movie-loan-request-active">
+              <span class="status-pill">${escapeHtml(tNext("lists.loanRequestPending", "Borrow request pending"))}${range}</span>
+              <div class="button-row compact">
+                <button type="button" class="list-pill-button" data-loan-request-cancel="${escapeHtml(req.id)}" data-next-i18n="lists.loanRequestCancel">Cancel request</button>
+              </div>
+            </div>`;
+        } else if (approved) {
+          requestStatusNode.innerHTML = `<span class="status-pill good">${escapeHtml(tNext("lists.loanRequestApproved", "Borrow request approved"))}</span>`;
+        } else if (declined) {
+          requestStatusNode.innerHTML = `<span class="status-pill bad">${escapeHtml(tNext("lists.loanRequestDeclined", "Borrow request declined"))}</span>`;
         } else {
-          statusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanNone", "This disc is not on loan."))}</span>`;
+          requestStatusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanRequestHelp", "Ask the owner if you may borrow this disc."))}</span>`;
         }
       }
-      if (addForm) addForm.classList.toggle("hidden", !!loan);
+      if (requestForm) requestForm.classList.toggle("hidden", pending || approved);
     }
     async function attachActiveMovieTag(name) {
       if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
@@ -17410,6 +18592,49 @@ def ui_preview_html(
         if (borrowerInput) borrowerInput.value = "";
         if (dueInput) dueInput.value = "";
         setMovieLoanMessage(tNext("lists.loanRecorded", "Loan recorded."), "good");
+      } catch (error) {
+        setMovieLoanMessage(error.message || String(error), "bad");
+      }
+    }
+    async function requestBorrowActiveMovie(borrowFrom, returnBy, note) {
+      if (!activeDetailMovieId || !hasPermission("lending.request")) return;
+      const from = String(borrowFrom || "").trim();
+      const until = String(returnBy || "").trim();
+      if (!from || !until) {
+        setMovieLoanMessage(tNext("lists.loanRequestDatesRequired", "Choose both a borrow-from and a return-by date."), "bad");
+        return;
+      }
+      if (until < from) {
+        setMovieLoanMessage(tNext("lists.loanRequestDateError", "The return-by date must be on or after the borrow-from date."), "bad");
+        return;
+      }
+      const body = {borrowFrom: from, returnBy: until};
+      const message = String(note || "").trim();
+      if (message) body.note = message;
+      setMovieLoanMessage(tNext("lists.loanRequestSubmitting", "Sending request..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/loan-requests`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        const noteInput = document.getElementById("movieLoanRequestNote");
+        if (noteInput) noteInput.value = "";
+        setMovieLoanMessage(tNext("lists.loanRequestSent", "Request sent to the owner."), "good");
+      } catch (error) {
+        setMovieLoanMessage(error.message || String(error), "bad");
+      }
+    }
+    async function cancelActiveMovieLoanRequest(requestId) {
+      if (!requestId || !hasPermission("lending.request")) return;
+      setMovieLoanMessage(tNext("lists.loanRequestCancelling", "Cancelling request..."));
+      try {
+        const payload = await authApiJson(`/api/next/loan-requests/${encodeURIComponent(requestId)}/cancel`, {method: "POST"});
+        if (payload && payload.userState) activeDetailPayload.userState = payload.userState;
+        renderMovieListState(activeDetailPayload);
+        setMovieLoanMessage(tNext("lists.loanRequestCancelledMsg", "Request cancelled."), "good");
       } catch (error) {
         setMovieLoanMessage(error.message || String(error), "bad");
       }
@@ -17658,6 +18883,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       renderMovieArtworkManagerStatus(detail);
+      reflectArtworkLockButtons(detail, "movie");
       document.getElementById("movieDetailVideos").innerHTML = movieVideoGroupsHtml(movieVideoItems(movie, metadata));
       const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
@@ -17830,6 +19056,11 @@ def ui_preview_html(
       if (typeInput) {
         typeInput.value = container.container_type || "collection";
         typeInput.disabled = true;
+      }
+      const locationSelect = document.getElementById("containerEditLocationSelect");
+      if (locationSelect && document.activeElement !== locationSelect) {
+        const currentLocationId = (container.location && container.location.id) || container.location_id || "";
+        populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
       }
     }
     function renderContainerAddForms(detail = activeContainerPayload || {}) {
@@ -18020,6 +19251,7 @@ def ui_preview_html(
       if (containerDebugSources) containerDebugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      reflectArtworkLockButtons(detail, "container");
       document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
       activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailFilmsPanel");
       syncContainerViewModeControls();
@@ -18629,7 +19861,8 @@ def ui_preview_html(
         year: formTextValue("containerEditYear"),
         barcode: formTextValue("containerEditBarcode"),
         badgeLabel: formTextValue("containerEditBadge"),
-        description: formTextValue("containerEditDescription")
+        description: formTextValue("containerEditDescription"),
+        locationId: document.getElementById("containerEditLocationSelect")?.value || null
       };
       try {
         const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`, {
@@ -18819,6 +20052,22 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-import-panel]").forEach((panel) => {
         panel.classList.toggle("hidden", panel.dataset.importPanel !== active);
+      });
+    }
+    function setImportMethodTab(method) {
+      importCenter.activeMethod = method || "camera";
+      renderImportMethodTabs();
+      if (importCenter.activeMethod !== "camera") {
+        stopImportBarcodeScanner();
+      }
+    }
+    function renderImportMethodTabs() {
+      const active = importCenter.activeMethod || "camera";
+      document.querySelectorAll("[data-import-method]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.importMethod === active);
+      });
+      document.querySelectorAll("[data-import-method-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.importMethodPanel !== active);
       });
     }
     function jsonPreview(value, maxLength = 1200) {
@@ -19833,7 +21082,7 @@ def ui_preview_html(
         state.textContent = stateText;
         state.className = `tag ${canStartSelected ? "good" : ""}`.trim();
       }
-      if (navState) navState.textContent = canStartSelected ? tNext("importCenter.ready", "Ready") : stateText;
+      if (navState) navState.textContent = canStartSelected ? tNext("importCenter.ready", "Ready") : "";
       if (startButton) startButton.disabled = !canStartSelected;
       if (pathInput && document.activeElement !== pathInput) {
         pathInput.value = importCenter.sourcePath || source.sourcePath || "";
@@ -20330,40 +21579,140 @@ def ui_preview_html(
       const list = document.getElementById("importBatchList");
       if (!list) return;
       const rows = importCenter.batchResults || [];
-      const addedCount = rows.filter((row) => row.status === "added").length;
-      const addableRows = rows.filter((row) => row.status !== "error");
-      const allAdded = addableRows.length > 0 && addableRows.every((row) => row.status === "added");
+      const activeBarcode = normalizeImportBarcode(importCenter.activeBatchBarcode || "");
       const rowsHtml = rows.length ? rows.map((row) => {
         const isAdded = row.status === "added";
-        const statusClass = isAdded ? "added" : row.status === "ok" ? "good" : row.status === "error" ? "bad" : "blue";
-        const isActive = row.barcode && row.barcode === importCenter.activeBatchBarcode;
+        // Issue #111: during the initial bulk check the blue active marker
+        // should follow the row that is currently being searched, so the user
+        // can see which barcode we are looking up right now.
+        const isActive = !isAdded && (
+          (activeBarcode && normalizeImportBarcode(row.barcode || "") === activeBarcode)
+          || (importCenter.batchRunning && row.status === "running")
+        );
+        const statusClass = isAdded
+          ? "is-added"
+          : row.status === "error"
+            ? "is-error"
+            : row.status === "ok"
+              ? "is-ready"
+              : row.status === "running"
+                ? "is-running"
+                : "";
+        const rowClass = ["import-batch-row", statusClass, isActive ? "is-active" : ""].filter(Boolean).join(" ");
         const countText = [
           row.movieCandidates !== undefined ? `${formatNumber(row.movieCandidates)} ${tNext("importCenter.batchMovies", "movies")}` : "",
           row.boxSetCandidates !== undefined ? `${formatNumber(row.boxSetCandidates)} ${tNext("importCenter.batchBoxSets", "box-sets")}` : ""
         ].filter(Boolean).join(" / ");
-        const checkMark = isAdded ? `<span class="import-batch-check" aria-hidden="true">✓</span>` : "";
-        const actionCell = isAdded
-          ? `<span class="import-batch-added-label good">${escapeHtml(tNext("importCenter.batchAdded", "Added"))}</span>`
-          : `<button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" ? "disabled" : ""}>${escapeHtml(tNext("importCenter.previewBarcode", "Search"))}</button>`;
+        const checkMark = isAdded ? `<span class="import-batch-check" aria-hidden="true">&#10003;</span>` : "";
+        const isSearching = row.status === "running";
+        const spinner = isSearching ? `<span class="import-batch-spinner" aria-hidden="true"></span>` : "";
+        const buttonLabel = isAdded
+          ? tNext("importCenter.batchAdded", "Added")
+          : tNext("importCenter.previewBarcode", "Search");
         return `
-          <div class="import-batch-row ${isAdded ? "added" : ""} ${isActive ? "active" : ""}">
-            <span>
-              <strong>${checkMark}${escapeHtml(row.barcode || "-")}</strong>
-              <span class="${escapeHtml(statusClass)}">${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
+          <div class="${rowClass}">
+            <span class="import-batch-info">
+              ${checkMark}
+              ${spinner}
+              <span class="import-batch-text">
+                <strong>${escapeHtml(row.barcode || "-")}</strong>
+                <span>${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
+              </span>
             </span>
-            ${actionCell}
+            ${(!isAdded && !isActive) ? `<button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${importCenter.batchRunning ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>` : ""}
           </div>
         `;
       }).join("") : "";
+      const addedCount = rows.filter((row) => row.status === "added").length;
+      const addableRows = rows.filter((row) => row.status !== "error");
+      const allAdded = addableRows.length > 0 && addableRows.every((row) => row.status === "added");
       const libraryFooter = addedCount > 0
         ? `
           <div class="import-batch-footer">
-            ${allAdded ? `<span class="import-batch-complete good">${escapeHtml(tNext("importCenter.batchAllMatched", "All barcodes matched."))}</span>` : ""}
+            ${allAdded ? `<span class="import-batch-complete">${escapeHtml(tNext("importCenter.batchAllMatched", "All barcodes matched."))}</span>` : ""}
             <button type="button" class="primary-button" data-import-batch-library="1">${escapeHtml(tNext("importCenter.goToLibrary", "Go to Library"))}</button>
           </div>
         `
         : "";
       list.innerHTML = rowsHtml ? rowsHtml + libraryFooter : "";
+    }
+    function markImportBatchAdded(barcode, payload) {
+      const rows = importCenter.batchResults || [];
+      const target = normalizeImportBarcode(barcode);
+      if (!target) return null;
+      const row = rows.find((item) => normalizeImportBarcode(item.barcode || "") === target);
+      if (!row) return null;
+      const isBoxSet = !!(payload && (payload.state === "box_set_created" || payload.boxSet));
+      const alreadyExists = !!(payload && payload.state === "already_exists");
+      row.status = "added";
+      row.movieCandidates = undefined;
+      row.boxSetCandidates = undefined;
+      row.message = alreadyExists
+        ? tNext("importCenter.batchAlreadyExists", "Already in your library.")
+        : isBoxSet
+          ? tNext("importCenter.batchAddedBoxSet", "Box-set added.")
+          : tNext("importCenter.batchAdded", "Added");
+      return row;
+    }
+    function importBatchRowHasCandidates(row) {
+      if (!row) return false;
+      const known = row.movieCandidates !== undefined || row.boxSetCandidates !== undefined;
+      if (!known) return true;
+      return Number(row.movieCandidates) > 0 || Number(row.boxSetCandidates) > 0;
+    }
+    function openNextImportBatchRow(afterBarcode) {
+      const rows = importCenter.batchResults || [];
+      const target = normalizeImportBarcode(afterBarcode || "");
+      const startIndex = target
+        ? rows.findIndex((item) => normalizeImportBarcode(item.barcode || "") === target)
+        : -1;
+      const eligible = (row) => row && row.status !== "added" && row.status !== "error" && importBatchRowHasCandidates(row);
+      let next = null;
+      for (let index = startIndex + 1; index < rows.length; index += 1) {
+        if (eligible(rows[index])) { next = rows[index]; break; }
+      }
+      if (!next) {
+        for (let index = 0; index <= startIndex && index < rows.length; index += 1) {
+          if (eligible(rows[index])) { next = rows[index]; break; }
+        }
+      }
+      if (!next) return false;
+      importCenter.activeBatchBarcode = next.barcode || "";
+      // Show the search running on the freshly opened (blue) row and disable
+      // its Search button until the lookup resolves (issue #111).
+      next.status = "running";
+      next.message = tNext("importCenter.previewingLookup", "Searching metadata...");
+      renderImportBatchList();
+      const results = document.getElementById("importBarcodeResults");
+      if (results) {
+        try { results.scrollIntoView({behavior: "smooth", block: "start"}); } catch (error) { results.scrollIntoView(); }
+      }
+      searchActiveBatchRow(next);
+      return true;
+    }
+    async function searchActiveBatchRow(row) {
+      if (!row) return;
+      try {
+        const payload = await previewImportBatchBarcode(row.barcode || "");
+        if (!payload) {
+          row.status = "error";
+          row.message = importCenter.lookupPreviewMessage || tNext("importCenter.noBarcodeResults", "No barcode candidates found.");
+        } else {
+          const movieCount = lookupMovieCandidates().length;
+          const boxSetCount = barcodeBoxSetProposals().length;
+          row.status = "ok";
+          row.movieCandidates = movieCount;
+          row.boxSetCandidates = boxSetCount;
+          row.message = movieCount || boxSetCount
+            ? `${formatNumber(movieCount)} ${tNext("importCenter.batchMovies", "movies")} / ${formatNumber(boxSetCount)} ${tNext("importCenter.batchBoxSets", "box-sets")}`
+            : tNext("importCenter.noBarcodeResults", "No barcode candidates found.");
+        }
+      } catch (error) {
+        row.status = "error";
+        row.message = error?.message || String(error);
+      } finally {
+        renderImportBatchList();
+      }
     }
     async function previewImportBatchBarcode(barcode) {
       const input = document.getElementById("importBarcodeInput");
@@ -20376,6 +21725,7 @@ def ui_preview_html(
     }
     async function runImportBatchLookup() {
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd) || importCenter.batchRunning) return;
+      importCenter.activeBatchBarcode = "";
       const textarea = document.getElementById("importBatchBarcodeInput");
       const parsed = parseImportBatchBarcodes(textarea?.value || "");
       if (!parsed.valid.length) {
@@ -20428,6 +21778,10 @@ def ui_preview_html(
       } finally {
         importCenter.batchRunning = false;
         renderImportBatchList();
+        // Issue #111: after the bulk check, drop straight into the first
+        // barcode that has candidates so the user can pick a match without
+        // clicking Search again on each row.
+        openNextImportBatchRow("");
       }
     }
     async function applyImportScannerFocus(stream) {
@@ -21656,14 +23010,21 @@ def ui_preview_html(
       );
       const primaryImportMode = selectedBoxSetForAction ? "box-set" : "movie";
       const inBatchContext = Boolean(importCenter.activeBatchBarcode);
-      const primaryImportLabel = selectedBoxSetForAction
-        ? tNext("importCenter.addBoxSet", "Add box-set")
-        : (inBatchContext && selectedMovieCandidate)
-          ? tNext("importCenter.useSelectedMatch", "Use selected match")
+      // Issue #111: once every batch barcode has been added there is nothing
+      // left to confirm, so hide the bottom "Add movie" / "Use selected match"
+      // action button (the "Go to Library" footer takes over).
+      const batchRows = importCenter.batchResults || [];
+      const addableBatchRows = batchRows.filter((row) => row.status !== "error");
+      const allBatchAdded = batchRows.length > 0 && addableBatchRows.length > 0
+        && addableBatchRows.every((row) => row.status === "added");
+      const primaryImportLabel = (inBatchContext && (selectedMovieCandidate || selectedBoxSetForAction))
+        ? tNext("importCenter.useSelectedMatch", "Use selected match")
+        : selectedBoxSetForAction
+          ? tNext("importCenter.addBoxSet", "Add box-set")
           : tNext("importCenter.addMovie", "Add movie");
       const lookupActionFooter = `
         <div class="import-result-action-footer">
-          ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
+          ${hasMovieCandidate && !allBatchAdded ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
           ${secondaryBoxSetActionKey ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" data-box-set-proposal-key="${escapeHtml(secondaryBoxSetActionKey)}" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
           <div id="importLookupActionStatus" class="import-result-action-status ${escapeHtml(importCenter.lookupActionTone || "")} ${importCenter.lookupActionMessage ? "" : "hidden"}">${escapeHtml(importCenter.lookupActionMessage || "")}</div>
         </div>
@@ -21920,7 +23281,15 @@ def ui_preview_html(
           ? `${tNext("importCenter.addBoxSet", "Add box-set")}: ${tNext("importCenter.resolvingSelection", "resolving selection...")}`
           : tNext("importCenter.addingMovie", "Adding movie...")
       );
-      if (button) button.disabled = true;
+      if (button) {
+        // Immediate click feedback: spinner + busy state. This stays visible
+        // through the whole request (box-set resolution can take a few seconds)
+        // because the status messages above update text nodes in place and do
+        // not re-render the button until the request resolves (issue #111).
+        button.disabled = true;
+        button.classList.add("is-loading");
+        button.setAttribute("aria-busy", "true");
+      }
       try {
         const selectedProposal = wantsBoxSet
           ? (boxSetProposalByKey(importCenter.selectedBoxSetProposalKey) || selectedBoxSetProposal())
@@ -21988,38 +23357,25 @@ def ui_preview_html(
             : "Movie added.";
         setImportLookupActionMessage(tNext(messageKey, messageFallback), "good");
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
-        const batchBarcode = importCenter.activeBatchBarcode;
-        if (batchBarcode) {
-          const batchRow = (importCenter.batchResults || []).find((item) => item.barcode === batchBarcode);
-          if (batchRow) {
-            const addedTitle = payload.boxSet?.container?.title || movie.title || movie.original_title || "";
-            batchRow.status = "added";
-            batchRow.addedTitle = addedTitle;
-            batchRow.message = addedTitle
-              ? `${tNext("importCenter.batchAdded", "Added")}: ${addedTitle}`
-              : tNext("importCenter.batchAdded", "Added");
-          }
+        renderBarcodeLookup();
+        const activeBatchBarcode = importCenter.activeBatchBarcode || "";
+        const batchRow = activeBatchBarcode && normalizeImportBarcode(activeBatchBarcode) === barcode
+          ? markImportBatchAdded(barcode, payload)
+          : null;
+        if (batchRow) {
+          // Batch workflow: check the line off and stay in place instead of
+          // navigating into the movie/box-set detail page (issue #111).
           importCenter.activeBatchBarcode = "";
-          importCenter.barcodeLookup = null;
-          importCenter.addResult = null;
-          importCenter.selectedMovieCandidateKey = "";
-          importCenter.selectedBoxSetProposalKey = "";
-          importCenter.selectedBoxSetProposalSnapshot = null;
-          importCenter.boxSetMemberEdits = {};
-          const barcodeInputEl = document.getElementById("importBarcodeInput");
-          const titleInputEl = document.getElementById("importTitleInput");
-          const yearInputEl = document.getElementById("importYearInput");
-          if (barcodeInputEl) barcodeInputEl.value = "";
-          if (titleInputEl) titleInputEl.value = "";
-          if (yearInputEl) yearInputEl.value = "";
-          setImportLookupActionMessage("", "");
-          setImportLookupPreviewMessage(tNext("importCenter.batchNextPrompt", "Added. Click Search on the next barcode to continue."), "good");
-          renderBarcodeLookup();
           renderImportBatchList();
-        } else {
-          renderBarcodeLookup();
-          if (importedContainerId) openAppContainerDetail(importedContainerId);
-          else if (movie.id) openAppMovieDetail(movie.id);
+          // Auto-advance: open the next barcode with candidates for selection.
+          // Only fall back to the "pick the next barcode" hint when none remain.
+          if (!openNextImportBatchRow(barcode)) {
+            setImportBatchMessage(tNext("importCenter.batchWorkflowNext", "Added. Pick the next barcode to continue."), "good");
+          }
+        } else if (importedContainerId) {
+          openAppContainerDetail(importedContainerId);
+        } else if (movie.id) {
+          openAppMovieDetail(movie.id);
         }
         loadAppSnapshot().catch((error) => {
           console.warn("Snapshot refresh after import failed", error);
@@ -22029,7 +23385,11 @@ def ui_preview_html(
         setImportLookupActionMessage(error.message || String(error), "bad");
         setImportCenterMessage(error.message || String(error), "bad");
       } finally {
-        if (button) button.disabled = false;
+        if (button) {
+          button.disabled = false;
+          button.classList.remove("is-loading");
+          button.removeAttribute("aria-busy");
+        }
         renderBarcodeLookup();
       }
     }
@@ -22250,7 +23610,7 @@ def ui_preview_html(
           <div class="list-simple-actions">
             ${acquired
               ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
-              : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+              : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
             <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
           </div>
         </div>
@@ -22297,6 +23657,123 @@ def ui_preview_html(
         </div>
       `;
     }
+    function loanRequestStatusLabel(status) {
+      if (status === "pending") return tNext("lists.loanRequestPending", "Pending");
+      if (status === "approved") return tNext("lists.loanRequestApproved", "Approved");
+      if (status === "declined") return tNext("lists.loanRequestDeclined", "Declined");
+      if (status === "cancelled") return tNext("lists.loanRequestCancelled", "Cancelled");
+      return status || "";
+    }
+    function loanRequestRowHtml(req, role) {
+      const snapshot = req.snapshot || {};
+      const title = snapshot.title || tNext("common.untitled", "Untitled");
+      const status = req.status || "pending";
+      const person = role === "incoming"
+        ? (req.requesterDisplayName || req.requesterUsername || tNext("notifications.loanRequestRequesterFallback", "A DiscVault member"))
+        : (req.ownerDisplayName || req.ownerUsername || tNext("notifications.loanRequestOwnerFallback", "The owner"));
+      const personLabel = role === "incoming" ? tNext("lists.loanRequestRequestedBy", "Requested by") : tNext("lists.loanRequestOwnerLabel", "Owner");
+      const dates = (req.borrowFrom && req.returnBy)
+        ? `${escapeHtml(formatAppDate(req.borrowFrom))} → ${escapeHtml(formatAppDate(req.returnBy))}`
+        : "";
+      const metaParts = [
+        `${escapeHtml(personLabel)}: ${escapeHtml(person)}`,
+        dates
+      ].filter(Boolean);
+      let actions = "";
+      if (role === "incoming" && status === "pending") {
+        actions = `
+          <button type="button" data-loan-request-approve="${escapeHtml(req.id)}">${escapeHtml(tNext("lists.loanRequestApprove", "Approve"))}</button>
+          <button type="button" class="danger" data-loan-request-decline="${escapeHtml(req.id)}">${escapeHtml(tNext("lists.loanRequestDecline", "Decline"))}</button>`;
+      } else if (role === "outgoing" && status === "pending") {
+        actions = `<button type="button" class="danger" data-loan-request-cancel-row="${escapeHtml(req.id)}">${escapeHtml(tNext("lists.loanRequestCancel", "Cancel request"))}</button>`;
+      }
+      const statusClass = status === "approved" ? "good" : (status === "declined" || status === "cancelled" ? "bad" : "");
+      return `
+        <div class="list-simple-card">
+          <div class="list-simple-body">
+            <span class="list-simple-title">${escapeHtml(title)}</span>
+            <span class="list-simple-meta">${metaParts.join(" / ")}</span>
+            ${req.note ? `<span class="list-simple-meta">${escapeHtml(req.note)}</span>` : ""}
+            <span class="tag ${statusClass}">${escapeHtml(loanRequestStatusLabel(status))}</span>
+          </div>
+          <div class="list-simple-actions">${actions}</div>
+        </div>
+      `;
+    }
+    function renderLoanRequestsSection() {
+      const wrap = document.getElementById("listsLoanRequests");
+      if (!wrap) return;
+      if (!hasPermission("lending.request")) {
+        wrap.classList.add("hidden");
+        return;
+      }
+      wrap.classList.remove("hidden");
+      const tab = listsState.loanRequestsTab === "outgoing" ? "outgoing" : "incoming";
+      document.querySelectorAll("[data-loan-requests-tab]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.loanRequestsTab === tab);
+      });
+      const incomingNode = document.getElementById("listsLoanRequestsIncoming");
+      const outgoingNode = document.getElementById("listsLoanRequestsOutgoing");
+      const incoming = (listsState.loanRequests && listsState.loanRequests.incoming) || [];
+      const outgoing = (listsState.loanRequests && listsState.loanRequests.outgoing) || [];
+      if (incomingNode) {
+        incomingNode.classList.toggle("hidden", tab !== "incoming");
+        incomingNode.innerHTML = incoming.length
+          ? incoming.map((req) => loanRequestRowHtml(req, "incoming")).join("")
+          : `<p class="import-source-meta">${escapeHtml(tNext("lists.loanRequestsIncomingEmpty", "No borrow requests to review."))}</p>`;
+      }
+      if (outgoingNode) {
+        outgoingNode.classList.toggle("hidden", tab !== "outgoing");
+        outgoingNode.innerHTML = outgoing.length
+          ? outgoing.map((req) => loanRequestRowHtml(req, "outgoing")).join("")
+          : `<p class="import-source-meta">${escapeHtml(tNext("lists.loanRequestsOutgoingEmpty", "You have no borrow requests."))}</p>`;
+      }
+      bindLoanRequestInteractions();
+    }
+    function bindLoanRequestInteractions() {
+      const wrap = document.getElementById("listsLoanRequests");
+      if (!wrap || wrap.dataset.bound === "true") return;
+      wrap.dataset.bound = "true";
+      wrap.addEventListener("click", (event) => {
+        const approveBtn = event.target.closest("[data-loan-request-approve]");
+        const declineBtn = event.target.closest("[data-loan-request-decline]");
+        const cancelBtn = event.target.closest("[data-loan-request-cancel-row]");
+        if (approveBtn) { decideLoanRequest(approveBtn.dataset.loanRequestApprove, "approve"); return; }
+        if (declineBtn) { decideLoanRequest(declineBtn.dataset.loanRequestDecline, "decline"); return; }
+        if (cancelBtn) { decideLoanRequest(cancelBtn.dataset.loanRequestCancelRow, "cancel"); return; }
+      });
+    }
+    async function decideLoanRequest(requestId, action) {
+      if (!requestId || !["approve", "decline", "cancel"].includes(action)) return;
+      try {
+        await authApiJson(`/api/next/loan-requests/${encodeURIComponent(requestId)}/${action}`, {method: "POST"});
+        await loadLoanRequests(true);
+        if (action === "approve") { try { await loadListsView(true); } catch (e) { /* ignore */ } }
+      } catch (error) {
+        setWishlistMessage(error.message || String(error), "bad");
+      }
+    }
+    async function loadLoanRequests(force = false) {
+      if (!hasPermission("lending.request")) return;
+      if (listsState.loanRequestsLoaded && !force) {
+        renderLoanRequestsSection();
+        return;
+      }
+      try {
+        const [incoming, outgoing] = await Promise.all([
+          authApiJson("/api/next/loan-requests?role=incoming"),
+          authApiJson("/api/next/loan-requests?role=outgoing")
+        ]);
+        listsState.loanRequests = {
+          incoming: (incoming && incoming.loanRequests) || [],
+          outgoing: (outgoing && outgoing.loanRequests) || []
+        };
+        listsState.loanRequestsLoaded = true;
+        renderLoanRequestsSection();
+      } catch (error) {
+        /* ignore loan request load errors */
+      }
+    }
     function listsSimpleModeClass(mode) {
       if (mode === "list") return "mode-list-grid";
       if (mode === "detail") return "mode-detail-grid";
@@ -22308,12 +23785,13 @@ def ui_preview_html(
       const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
       const acquired = !!item.acquiredAt;
       return `
-        <div class="preview-poster lists-static-poster">
-          <span class="preview-poster-art">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
+        <div class="preview-poster lists-static-poster" data-wishlist-card="${escapeHtml(item.id)}">
+          <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
           <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
           <span class="lists-poster-actions">
-            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
+            <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
             <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
           </span>
         </div>
@@ -22333,7 +23811,8 @@ def ui_preview_html(
             <span class="list-simple-actions">
               ${acquired
                 ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
-                : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+                : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
+              <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
               <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
             </span>
           </span>
@@ -22361,7 +23840,8 @@ def ui_preview_html(
                 <span role="cell" class="list-simple-actions">
                   ${acquired
                     ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
-                    : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+                    : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
+                  <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
                   <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
                 </span>
               </div>
@@ -22371,8 +23851,28 @@ def ui_preview_html(
       `;
     }
     function wishlistRenderRows(rows, mode) {
-      if (mode === "detail") return wishlistDetailTableHtml(rows || []);
-      return (rows || []).map(mode === "list" ? wishlistListCardHtml : wishlistPosterCardHtml).join("");
+      const all = rows || [];
+      const pending = all.filter((item) => !item.acquiredAt);
+      const acquired = all.filter((item) => !!item.acquiredAt);
+      const renderGroup = (groupRows) => {
+        if (mode === "detail") return wishlistDetailTableHtml(groupRows);
+        return groupRows.map(mode === "list" ? wishlistListCardHtml : wishlistPosterCardHtml).join("");
+      };
+      const sectionInner = (groupRows) => mode === "poster"
+        ? `<div class="lists-grid">${renderGroup(groupRows)}</div>`
+        : (mode === "list"
+          ? `<div class="mode-list-grid">${renderGroup(groupRows)}</div>`
+          : renderGroup(groupRows));
+      const section = (title, groupRows) => `
+        <section class="wishlist-section">
+          <header class="wishlist-section-head"><h3>${escapeHtml(title)}</h3><span>${groupRows.length}</span></header>
+          ${groupRows.length
+            ? sectionInner(groupRows)
+            : `<p class="wishlist-section-empty">${escapeHtml(tNext("lists.wishlistSectionEmpty", "Nothing here yet."))}</p>`}
+        </section>
+      `;
+      return section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
+        + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
     function tagPosterCardHtml(tag) {
       const count = tag.movieCount || 0;
@@ -22424,8 +23924,40 @@ def ui_preview_html(
       const snapshot = loan.snapshot || {};
       return snapshot.title || loan.title || tNext("common.untitled", "Untitled");
     }
-    function loanBorrowerLabel(loan) {
+    function loanBorrowerDisplayName(loan) {
+      if (loan.borrowerUserId) {
+        return loan.borrowerDisplayName || loan.borrowerUsername || loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+      }
       return loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+    }
+    function loanBorrowerLabel(loan) {
+      const name = loanBorrowerDisplayName(loan);
+      if (loan.borrowerUserId) {
+        return name + " (" + tNext("lists.loanDiscvaultUser", "DiscVault user") + ")";
+      }
+      return name;
+    }
+    function loanIsBorrowed(loan) {
+      return loan && loan.direction === "in";
+    }
+    function loanLenderDisplayName(loan) {
+      return (loan && (loan.lenderName || loan.lenderUsername)) || tNext("lists.loanLinkedAccount", "Linked account");
+    }
+    function loanLenderLabel(loan) {
+      return loanLenderDisplayName(loan) + " (" + tNext("lists.loanDiscvaultUser", "DiscVault user") + ")";
+    }
+    function loanCounterpartyLabel(loan) {
+      if (loanIsBorrowed(loan)) {
+        return tNext("lists.loanFrom", "Borrowed from") + ": " + loanLenderLabel(loan);
+      }
+      return tNext("lists.loanTo", "Lent to") + ": " + loanBorrowerLabel(loan);
+    }
+    function loanActionButtonsHtml(loan) {
+      const meerInfo = `<button type="button" data-loan-meerinfo="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>`;
+      if (loanIsBorrowed(loan)) return meerInfo;
+      const ret = loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`;
+      const remove = `<button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>`;
+      return `${ret}${meerInfo}${remove}`;
     }
     function loanPosterCardHtml(loan) {
       const poster = loanPosterUrl(loan);
@@ -22435,13 +23967,12 @@ def ui_preview_html(
         ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.loanReturned", "Returned"))}</span>`
         : (overdue ? `<span class="lists-poster-badge danger">${escapeHtml(tNext("lists.loanOverdueBadge", "Overdue"))}</span>` : "");
       return `
-        <div class="preview-poster lists-static-poster">
-          <span class="preview-poster-art">${posterHtml}${badge}</span>
+        <div class="preview-poster lists-static-poster" data-loan-card="${escapeHtml(loan.id)}">
+          <span class="preview-poster-art" data-loan-poster="${escapeHtml(loan.id)}" data-loan-movie="${escapeHtml(loan.movieId || "")}" role="button" tabindex="0">${posterHtml}${badge}</span>
           <span class="preview-poster-title">${escapeHtml(loanTitle(loan))}</span>
-          <span class="preview-poster-meta">${escapeHtml(tNext("lists.loanTo", "Lent to") + ": " + loanBorrowerLabel(loan))}</span>
+          <span class="preview-poster-meta">${escapeHtml(loanCounterpartyLabel(loan))}</span>
           <span class="lists-poster-actions">
-            ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
-            <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+            ${loanActionButtonsHtml(loan)}
           </span>
         </div>
       `;
@@ -22450,7 +23981,7 @@ def ui_preview_html(
       const poster = loanPosterUrl(loan);
       const overdue = !loan.returned && loan.dueAt && new Date(loan.dueAt) < new Date();
       const metaParts = [
-        `${tNext("lists.loanTo", "Lent to")}: ${loanBorrowerLabel(loan)}`,
+        loanCounterpartyLabel(loan),
         loan.loanedAt ? `${tNext("lists.loanedOn", "Loaned")}: ${formatAppDate(loan.loanedAt)}` : "",
         loan.dueAt ? `${tNext("lists.loanDue", "Due")}: ${formatAppDate(loan.dueAt)}` : "",
         loan.returned && loan.returnedAt ? `${tNext("lists.loanReturned", "Returned")}: ${formatAppDate(loan.returnedAt)}` : ""
@@ -22463,8 +23994,7 @@ def ui_preview_html(
             <span class="mode-list-meta ${overdue ? "loan-overdue" : ""}">${escapeHtml(metaParts.join(" / "))}</span>
             ${loan.note ? `<span class="mode-list-meta">${escapeHtml(loan.note)}</span>` : ""}
             <span class="list-simple-actions">
-              ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
-              <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+              ${loanActionButtonsHtml(loan)}
             </span>
           </span>
         </article>
@@ -22485,15 +24015,15 @@ def ui_preview_html(
             const status = loan.returned
               ? tNext("lists.loanReturned", "Returned")
               : (overdue ? tNext("lists.loanOverdueBadge", "Overdue") : tNext("lists.loanActive", "On loan"));
+            const counterparty = loanIsBorrowed(loan) ? loanLenderLabel(loan) : loanBorrowerLabel(loan);
             return `
               <div class="watched-detail-row" role="row">
                 <span role="cell"><strong>${escapeHtml(loanTitle(loan))}</strong>${loan.note ? `<span class="list-simple-meta">${escapeHtml(loan.note)}</span>` : ""}</span>
-                <span role="cell">${escapeHtml(loanBorrowerLabel(loan))}</span>
+                <span role="cell">${escapeHtml(counterparty)}</span>
                 <span role="cell">${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
                 <span role="cell" class="${overdue ? "loan-overdue" : ""}">${escapeHtml(status)}</span>
                 <span role="cell" class="list-simple-actions">
-                  ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
-                  <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+                  ${loanActionButtonsHtml(loan)}
                 </span>
               </div>
             `;
@@ -22506,7 +24036,11 @@ def ui_preview_html(
       return (rows || []).map(mode === "list" ? loanListCardHtml : loanPosterCardHtml).join("");
     }
     function wishlistNormalizeCandidate(result, resultIndex, candidate, candidateIndex) {
-      if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result))) return null;
+      if (!candidate || typeof candidate !== "object") return null;
+      // In the wishlist edition picker box sets / anniversary / trilogy editions
+      // are legitimate pickable editions, so we keep them (flagged) instead of
+      // dropping them the way the shared import/lookup flow does.
+      const isBoxSet = lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result));
       const movieUpdates = result?.movieUpdates && typeof result.movieUpdates === "object" ? result.movieUpdates : {};
       const technicalUpdates = result?.technicalUpdates && typeof result.technicalUpdates === "object" ? result.technicalUpdates : {};
       const rawIdentifiers = candidate.identifiers && typeof candidate.identifiers === "object"
@@ -22538,18 +24072,22 @@ def ui_preview_html(
         || (provider.toLowerCase().includes("movievault") ? sourceRef : "")
         || ""
       ).trim();
-      const keyParts = [provider, title.toLowerCase(), year, format.toLowerCase(), identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "", identifiers.imdb ? `imdb:${identifiers.imdb}` : "", sourceRef, posterUrl, resultIndex, candidateIndex];
+      const keyParts = [provider, title.toLowerCase(), explicitReleaseTitle.toLowerCase(), year, format.toLowerCase(), identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "", identifiers.imdb ? `imdb:${identifiers.imdb}` : "", sourceRef, posterUrl, resultIndex, candidateIndex];
+      const editionLabel = (explicitReleaseTitle && explicitReleaseTitle.toLowerCase() !== title.toLowerCase()) ? explicitReleaseTitle : "";
       return {
         candidateKey: keyParts.join("|"),
         provider,
         sourceLabel,
         sourceRef,
         title,
+        releaseTitle: explicitReleaseTitle,
+        editionLabel,
         year,
         format,
         barcode,
         posterUrl,
         movievaultId,
+        isBoxSet,
         identifiers
       };
     }
@@ -22562,7 +24100,7 @@ def ui_preview_html(
         lookupResultCandidates(result).forEach((candidate, candidateIndex) => {
           const normalized = wishlistNormalizeCandidate(result, resultIndex, candidate, candidateIndex);
           if (!normalized) return;
-          const identity = [normalized.provider, normalized.title.toLowerCase(), normalized.year, normalized.format.toLowerCase(), normalized.identifiers.tmdb, normalized.identifiers.imdb, normalized.sourceRef, normalized.posterUrl].join("|");
+          const identity = [normalized.provider, normalized.title.toLowerCase(), (normalized.releaseTitle || "").toLowerCase(), normalized.year, normalized.format.toLowerCase(), normalized.identifiers.tmdb, normalized.identifiers.imdb, normalized.sourceRef, normalized.posterUrl].join("|");
           if (seen.has(identity)) return;
           seen.add(identity);
           candidates.push(normalized);
@@ -22589,6 +24127,8 @@ def ui_preview_html(
           <span class="wishlist-search-poster">${posterHtml}</span>
           <span class="wishlist-search-body">
             <strong>${escapeHtml(candidate.title || "")}</strong>
+            ${candidate.isBoxSet ? `<span class="wishlist-search-badge">${escapeHtml(tNext("lists.wishlistBoxSetBadge", "Box set"))}</span>` : ""}
+            ${candidate.editionLabel ? `<span class="wishlist-search-meta edition">${escapeHtml(candidate.editionLabel)}</span>` : ""}
             <span class="wishlist-search-meta">${escapeHtml(metaParts.join(" / "))}</span>
             ${sub.length ? `<span class="wishlist-search-meta muted">${escapeHtml(sub.join(" · "))}</span>` : ""}
           </span>
@@ -22613,10 +24153,29 @@ def ui_preview_html(
         }
         return;
       }
-      wrap.innerHTML = candidates.map(wishlistSearchCardHtml).join("");
+      wrap.innerHTML = `
+        <div class="wishlist-search-resultbar">
+          <span class="wishlist-search-count">${escapeHtml(tNext("lists.wishlistResultsCount", "Editions found"))}: ${candidates.length}</span>
+          <button type="button" class="link-button" id="wishlistSearchCloseBtn">${escapeHtml(tNext("lists.wishlistCloseResults", "Close"))}</button>
+        </div>
+        ${candidates.map(wishlistSearchCardHtml).join("")}
+      `;
+      const closeBtn = document.getElementById("wishlistSearchCloseBtn");
+      if (closeBtn) closeBtn.addEventListener("click", () => closeWishlistSearch());
       wrap.querySelectorAll("[data-wishlist-pick]").forEach((btn) => {
         btn.addEventListener("click", () => addWishlistFromCandidate(btn.getAttribute("data-wishlist-pick")));
       });
+    }
+    function closeWishlistSearch() {
+      const state = listsState.wishlistSearch || (listsState.wishlistSearch = { query: "", loading: false, error: "", candidates: [] });
+      state.query = "";
+      state.error = "";
+      state.candidates = [];
+      state.loading = false;
+      const input = document.getElementById("wishlistSearchInput");
+      if (input) input.value = "";
+      setWishlistSearchMessage("", "");
+      renderWishlistSearchResults();
     }
     async function submitWishlistSearch(event) {
       if (event) event.preventDefault();
@@ -22637,7 +24196,7 @@ def ui_preview_html(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           timeoutMs: 30000,
-          body: JSON.stringify({ title: query, detectBoxSets: false, previewMode: true })
+          body: JSON.stringify({ title: query, detectBoxSets: false, previewMode: true, releaseVariants: true, listReleases: true })
         });
         const metadata = (payload && (payload.metadata || payload.result || payload)) || {};
         state.candidates = wishlistLookupCandidates(metadata);
@@ -22668,9 +24227,12 @@ def ui_preview_html(
             format: candidate.format || null,
             barcode: candidate.barcode || null,
             posterUrl: candidate.posterUrl || null,
-            movievaultId: candidate.movievaultId || null
+            movievaultId: candidate.movievaultId || null,
+            note: candidate.editionLabel || null
           })
         });
+        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        closeWishlistSearch();
         setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
         await loadListsView(true);
       } catch (err) {
@@ -22693,6 +24255,12 @@ def ui_preview_html(
       document.querySelectorAll("[data-loan-remove]").forEach((btn) => {
         btn.addEventListener("click", () => deleteLoanItem(btn.dataset.loanRemove));
       });
+      document.querySelectorAll("[data-wishlist-meerinfo]").forEach((btn) => {
+        btn.addEventListener("click", (event) => { event.stopPropagation(); openWishlistMeerInfo(btn.dataset.wishlistMeerinfo); });
+      });
+      document.querySelectorAll("[data-loan-meerinfo]").forEach((btn) => {
+        btn.addEventListener("click", (event) => { event.stopPropagation(); openLoanMeerInfo(btn.dataset.loanMeerinfo); });
+      });
     }
     function setWishlistMessage(text, tone) {
       const node = document.getElementById("wishlistAddMessage");
@@ -22712,14 +24280,15 @@ def ui_preview_html(
       const body = {
         title,
         format: (document.getElementById("wishlistAddFormat")?.value || "").trim() || null,
-        barcode: (document.getElementById("wishlistAddBarcode")?.value || "").trim() || null
+        barcode: (document.getElementById("wishlistAddBarcode")?.value || "").trim() || null,
+        note: (document.getElementById("wishlistAddNote")?.value || "").trim() || null
       };
       const yearNum = parseInt(yearRaw, 10);
       if (!Number.isNaN(yearNum)) body.year = yearNum;
       setWishlistMessage(tNext("lists.wishlistAdding", "Adding..."));
       try {
         await authApiJson("/api/next/lists/wishlist", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
-        ["wishlistAddTitle", "wishlistAddYear", "wishlistAddFormat", "wishlistAddBarcode"].forEach((fid) => {
+        ["wishlistAddTitle", "wishlistAddYear", "wishlistAddFormat", "wishlistAddBarcode", "wishlistAddNote"].forEach((fid) => {
           const node = document.getElementById(fid);
           if (node) node.value = "";
         });
@@ -22791,6 +24360,14 @@ def ui_preview_html(
       if (navNode) navNode.textContent = String(watchlistCount || 0);
     }
     function renderListsView() {
+      const loansOn = loansSystemEnabled();
+      const loansTabButton = document.querySelector('[data-lists-tab="loans"]');
+      if (loansTabButton) loansTabButton.classList.toggle("hidden", !loansOn);
+      const loansCountPill = document.getElementById("listsLoansCountPill");
+      if (loansCountPill) loansCountPill.classList.toggle("hidden", !loansOn);
+      if (!loansOn && listsState.active === "loans") {
+        listsState.active = "watchlist";
+      }
       document.querySelectorAll("[data-lists-tab]").forEach((button) => {
         button.classList.toggle("active", button.dataset.listsTab === listsState.active);
       });
@@ -22853,9 +24430,13 @@ def ui_preview_html(
       } else if (active === "wishlist") {
         const list = document.getElementById("listsWishlistList");
         if (list) {
-          configureSimpleListNode(list);
+          list.className = "wishlist-sections";
+          list.dataset.viewMode = listsViewMode;
           list.innerHTML = wishlistRenderRows(listsState.wishlist || [], listsViewMode);
         }
+        const fmt = document.getElementById("wishlistAddFormat");
+        if (fmt && fmt.tagName === "SELECT") fmt.innerHTML = movieFormatOptionsHtml(fmt.value || "");
+        bindWishlistCardInteractions();
         renderWishlistSearchResults();
         if (empty) {
           empty.textContent = tNext("lists.emptyWishlist", "Your wishlist is empty.");
@@ -22873,14 +24454,18 @@ def ui_preview_html(
         }
       } else if (active === "loans") {
         const list = document.getElementById("listsLoansList");
+        const activeLoans = (listsState.loans || []).filter((loan) => !loan.returned);
         if (list) {
           configureSimpleListNode(list);
-          list.innerHTML = loanRenderRows(listsState.loans || [], listsViewMode);
+          list.innerHTML = loanRenderRows(activeLoans, listsViewMode);
         }
+        bindLoanCardInteractions();
         if (empty) {
           empty.textContent = tNext("lists.emptyLoans", "No discs are currently on loan.");
-          empty.classList.toggle("hidden", !!(listsState.loans || []).length);
+          empty.classList.toggle("hidden", !!activeLoans.length);
         }
+        renderLoanRequestsSection();
+        loadLoanRequests();
       }
       bindListsSimpleActions();
       document.querySelectorAll("[data-list-movie]").forEach((button) => {
@@ -22911,19 +24496,23 @@ def ui_preview_html(
         empty.classList.remove("hidden");
       }
       try {
-        const [payload, wishlistPayload, tagsPayload, loansPayload] = await Promise.all([
+        const [payload, wishlistPayload, tagsPayload, loansPayload, borrowedPayload] = await Promise.all([
           authApiJson("/api/next/lists?limit=500"),
           authApiJson("/api/next/lists/wishlist").catch(() => ({items: []})),
           authApiJson("/api/next/tags").catch(() => ({tags: []})),
-          authApiJson("/api/next/loans?status=all").catch(() => ({loans: []}))
+          authApiJson("/api/next/loans?status=all").catch(() => ({loans: []})),
+          authApiJson("/api/next/loans/borrowed?status=all").catch(() => ({loans: []}))
         ]);
         listsState.watchlist = payload.watchlist || [];
         listsState.watched = payload.watched || [];
         listsState.wishlist = wishlistPayload.items || [];
         listsState.tags = tagsPayload.tags || [];
-        listsState.loans = loansPayload.loans || [];
+        const lentLoans = (loansPayload.loans || []).map((loan) => { loan.direction = "out"; return loan; });
+        const borrowedLoans = (borrowedPayload.loans || []).map((loan) => { loan.direction = "in"; return loan; });
+        listsState.loans = lentLoans.concat(borrowedLoans);
         listsState.counts = payload.counts || {};
         listsState.loaded = true;
+        persistNextLocale(localeState.locale);
         renderListsView();
       } catch (error) {
         if (empty) {
@@ -22931,6 +24520,564 @@ def ui_preview_html(
           empty.classList.remove("hidden");
         }
       }
+    }
+    function bindLongPress(el, opts) {
+      if (!el) return;
+      const onClick = (opts && opts.onClick) || (function () {});
+      const onLongPress = (opts && opts.onLongPress) || (function () {});
+      let timer = null;
+      let longFired = false;
+      let startX = 0;
+      let startY = 0;
+      const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      const start = (x, y) => {
+        longFired = false;
+        startX = x;
+        startY = y;
+        clear();
+        timer = setTimeout(() => { longFired = true; onLongPress(); }, 480);
+      };
+      el.addEventListener("pointerdown", (event) => {
+        if (typeof event.button === "number" && event.button !== 0) return;
+        start(event.clientX, event.clientY);
+      });
+      el.addEventListener("pointermove", (event) => {
+        if (!timer) return;
+        if (Math.abs(event.clientX - startX) > 12 || Math.abs(event.clientY - startY) > 12) clear();
+      });
+      el.addEventListener("pointerup", (event) => {
+        const wasLong = longFired;
+        clear();
+        if (wasLong) { event.preventDefault(); return; }
+        onClick();
+      });
+      el.addEventListener("pointerleave", clear);
+      el.addEventListener("pointercancel", clear);
+      el.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onClick(); }
+      });
+    }
+    function bindWishlistCardInteractions() {
+      document.querySelectorAll("#listsWishlistList [data-wishlist-poster]").forEach((poster) => {
+        const id = poster.dataset.wishlistPoster;
+        const card = poster.closest("[data-wishlist-card]");
+        bindLongPress(poster, {
+          onClick: () => openWishlistMeerInfo(id),
+          onLongPress: () => { if (card) card.classList.toggle("actions-visible"); }
+        });
+      });
+    }
+    function bindLoanCardInteractions() {
+      document.querySelectorAll("#listsLoansList [data-loan-poster]").forEach((poster) => {
+        const loanId = poster.dataset.loanPoster;
+        const movieId = poster.dataset.loanMovie || "";
+        const card = poster.closest("[data-loan-card]");
+        bindLongPress(poster, {
+          onClick: () => { if (movieId) openAppMovieDetail(movieId); else openLoanMeerInfo(loanId); },
+          onLongPress: () => openLoanActionsMenu(loanId)
+        });
+      });
+    }
+    function openLoanActionsMenu(loanId) {
+      const loan = listsFindLoan(loanId);
+      if (!loan) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      const actions = [];
+      const borrowed = loanIsBorrowed(loan);
+      if (!borrowed && !loan.returned) {
+        actions.push({ key: "return", label: tNext("lists.loanMarkReturned", "Mark returned"), run: () => returnLoanItem(loanId) });
+      }
+      actions.push({ key: "meerinfo", label: tNext("lists.moreInfo", "More info"), run: () => openLoanMeerInfo(loanId) });
+      if (!borrowed) {
+        actions.push({ key: "remove", label: tNext("common.remove", "Remove"), tone: "danger", run: () => deleteLoanItem(loanId) });
+      }
+      const buttonsHtml = actions.map((action, index) =>
+        `<button type="button" class="lists-actionsheet-btn${action.tone === "danger" ? " danger" : ""}" data-action-index="${index}">${escapeHtml(action.label)}</button>`
+      ).join("");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(loanTitle(loan))}</h3></header>
+        <div class="lists-actionsheet-list">${buttonsHtml}</div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-action-index]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const action = actions[Number(btn.dataset.actionIndex)];
+          listsCloseOverlay(overlay);
+          if (action && typeof action.run === "function") action.run();
+        });
+      });
+    }
+    function listsCloseOverlay(overlay) {
+      if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+    function listsCreateOverlay(className) {
+      const overlay = document.createElement("div");
+      overlay.className = "lists-modal-overlay";
+      const panel = document.createElement("div");
+      panel.className = "lists-modal " + (className || "");
+      overlay.appendChild(panel);
+      overlay.addEventListener("mousedown", (event) => { if (event.target === overlay) listsCloseOverlay(overlay); });
+      document.body.appendChild(overlay);
+      return { overlay, panel };
+    }
+    function listsFindWishlist(id) {
+      return (listsState.wishlist || []).find((item) => String(item.id) === String(id)) || null;
+    }
+    function listsFindLoan(id) {
+      return (listsState.loans || []).find((loan) => String(loan.id) === String(id)) || null;
+    }
+    function openWishlistMeerInfo(id) {
+      const item = listsFindWishlist(id);
+      if (!item) return;
+      const { overlay, panel } = listsCreateOverlay("lists-meerinfo");
+      let editing = false;
+      let posterUrl = usableImage(item.posterUrl || item.poster_url) || "";
+      let pendingPosterFile = null;
+      const render = () => {
+        const posterPreview = posterUrl
+          ? `<img src="${escapeHtml(posterUrl)}" alt="">`
+          : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        panel.className = "lists-modal lists-meerinfo" + (editing ? " editing" : "");
+        panel.innerHTML = `
+          <header class="lists-modal-head">
+            <h3>${escapeHtml(editing ? tNext("lists.meerInfoEditTitle", "Edit item") : (item.title || tNext("common.untitled", "Untitled")))}</h3>
+          </header>
+          <div class="lists-modal-body">
+            <div class="lists-modal-poster">
+              ${posterPreview}
+              ${editing ? `<button type="button" class="lists-modal-poster-btn" data-poster-replace>${escapeHtml(tNext("lists.replacePoster", "Replace poster"))}</button><input type="file" accept="image/*" hidden data-poster-input>` : ""}
+            </div>
+            <div class="lists-modal-fields">
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+                <span data-read>${escapeHtml(item.title || "")}</span>
+                <input data-edit data-field="title" type="text" value="${escapeHtml(item.title || "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span>
+                <span data-read>${escapeHtml(physicalFormatLabel(item.format) || item.format || "")}</span>
+                <select data-edit data-field="format">${movieFormatOptionsHtml(item.format || "")}</select></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistYearColumn", "Year"))}</span>
+                <span data-read>${escapeHtml(item.year ? String(item.year) : "")}</span>
+                <input data-edit data-field="year" type="number" value="${escapeHtml(item.year ? String(item.year) : "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistBarcodeColumn", "Barcode"))}</span>
+                <span data-read>${escapeHtml(item.barcode || "")}</span>
+                <input data-edit data-field="barcode" type="text" value="${escapeHtml(item.barcode || "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+                <span data-read>${escapeHtml(item.note || "")}</span>
+                <textarea data-edit data-field="note" rows="2">${escapeHtml(item.note || "")}</textarea></label>
+            </div>
+          </div>
+          <p class="lists-modal-message" data-message></p>
+          <footer class="lists-modal-actions">
+            <button type="button" data-primary>${escapeHtml(editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit"))}</button>
+            <button type="button" class="ghost" data-secondary>${escapeHtml(editing ? tNext("common.cancel", "Cancel") : tNext("common.close", "Close"))}</button>
+          </footer>
+        `;
+        const messageNode = panel.querySelector("[data-message]");
+        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        panel.querySelector("[data-secondary]").addEventListener("click", () => {
+          if (editing) { editing = false; pendingPosterFile = null; posterUrl = usableImage(item.posterUrl || item.poster_url) || ""; render(); }
+          else listsCloseOverlay(overlay);
+        });
+        panel.querySelector("[data-primary]").addEventListener("click", async () => {
+          if (!editing) { editing = true; render(); return; }
+          const body = {
+            title: (panel.querySelector('[data-field="title"]').value || "").trim(),
+            format: (panel.querySelector('[data-field="format"]').value || "").trim() || null,
+            barcode: (panel.querySelector('[data-field="barcode"]').value || "").trim() || null,
+            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null
+          };
+          const yearRaw = (panel.querySelector('[data-field="year"]').value || "").trim();
+          const yearNum = parseInt(yearRaw, 10);
+          body.year = Number.isNaN(yearNum) ? null : yearNum;
+          if (!body.title) { setMessage(tNext("lists.wishlistTitleRequired", "Title is required."), "bad"); return; }
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            if (pendingPosterFile) {
+              const form = new FormData();
+              form.append("file", pendingPosterFile);
+              await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id) + "/poster", { method: "POST", body: form });
+              pendingPosterFile = null;
+            }
+            await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            listsCloseOverlay(overlay);
+            await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+        if (editing) {
+          const replaceBtn = panel.querySelector("[data-poster-replace]");
+          const fileInput = panel.querySelector("[data-poster-input]");
+          if (replaceBtn && fileInput) {
+            replaceBtn.addEventListener("click", () => fileInput.click());
+            fileInput.addEventListener("change", () => {
+              const file = fileInput.files && fileInput.files[0];
+              if (!file) return;
+              pendingPosterFile = file;
+              const reader = new FileReader();
+              reader.onload = () => { posterUrl = reader.result; render(); };
+              reader.readAsDataURL(file);
+            });
+          }
+        }
+      };
+      render();
+    }
+    function openLoanMeerInfo(id) {
+      const loan = listsFindLoan(id);
+      if (!loan) return;
+      const snapshot = loan.snapshot || {};
+      const { overlay, panel } = listsCreateOverlay("lists-meerinfo");
+      let editing = false;
+      const toDateInput = (value) => {
+        if (!value) return "";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toISOString().slice(0, 10);
+      };
+      const canEdit = !loanIsBorrowed(loan);
+      const render = () => {
+        const poster = loanPosterUrl(loan);
+        const posterPreview = poster
+          ? `<img src="${escapeHtml(poster)}" alt="">`
+          : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        const barcode = snapshot.barcode || loan.barcode || "";
+        const format = snapshot.format || loan.format || "";
+        const counterpartyRow = canEdit
+          ? `<label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
+                <span data-read>${escapeHtml(loanBorrowerLabel(loan))}</span>
+                <input data-edit data-field="borrowerName" type="text" value="${escapeHtml(loanBorrowerDisplayName(loan) || "")}"></label>`
+          : `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanFrom", "Borrowed from"))}</span><span data-static>${escapeHtml(loanLenderLabel(loan))}</span></div>`;
+        const dueRow = canEdit
+          ? `<label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanDue", "Due"))}</span>
+                <span data-read>${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
+                <input data-edit data-field="dueAt" type="date" value="${escapeHtml(toDateInput(loan.dueAt))}"></label>`
+          : `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanDue", "Due"))}</span><span data-static>${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "—")}</span></div>`;
+        const noteRow = canEdit
+          ? `<label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+                <span data-read>${escapeHtml(loan.note || "")}</span>
+                <textarea data-edit data-field="note" rows="2">${escapeHtml(loan.note || "")}</textarea></label>`
+          : `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span><span data-static>${escapeHtml(loan.note || "—")}</span></div>`;
+        panel.className = "lists-modal lists-meerinfo" + (editing ? " editing" : "");
+        panel.innerHTML = `
+          <header class="lists-modal-head"><h3>${escapeHtml(loanTitle(loan))}</h3></header>
+          <div class="lists-modal-body">
+            <div class="lists-modal-poster">${posterPreview}</div>
+            <div class="lists-modal-fields">
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistBarcodeColumn", "Barcode"))}</span><span data-static>${escapeHtml(barcode || "—")}</span></div>
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span data-static>${escapeHtml(physicalFormatLabel(format) || format || "—")}</span></div>
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanedOn", "Loaned"))}</span>
+                <span data-static>${escapeHtml(loan.loanedAt ? formatAppDate(loan.loanedAt) : "—")}</span></div>
+              ${dueRow}
+              ${counterpartyRow}
+              ${noteRow}
+            </div>
+          </div>
+          <p class="lists-modal-message" data-message></p>
+          <footer class="lists-modal-actions">
+            ${canEdit ? `<button type="button" data-primary>${escapeHtml(editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit"))}</button>` : ""}
+            <button type="button" class="ghost" data-secondary>${escapeHtml(editing ? tNext("common.cancel", "Cancel") : tNext("common.close", "Close"))}</button>
+          </footer>
+        `;
+        const messageNode = panel.querySelector("[data-message]");
+        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        panel.querySelector("[data-secondary]").addEventListener("click", () => {
+          if (editing) { editing = false; render(); }
+          else listsCloseOverlay(overlay);
+        });
+        const primary = panel.querySelector("[data-primary]");
+        if (primary) primary.addEventListener("click", async () => {
+          if (!editing) { editing = true; render(); return; }
+          const dueRaw = (panel.querySelector('[data-field="dueAt"]').value || "").trim();
+          const body = {
+            borrowerName: (panel.querySelector('[data-field="borrowerName"]').value || "").trim() || null,
+            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null,
+            dueAt: dueRaw ? new Date(dueRaw + "T00:00:00").toISOString() : null
+          };
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            await authApiJson("/api/next/loans/" + encodeURIComponent(id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            listsCloseOverlay(overlay);
+            await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+      };
+      render();
+    }
+    function loanLibraryEntryLabel(movie) {
+      const title = movie.title || movie.name || tNext("common.untitled", "Untitled");
+      const year = movie.year || movie.releaseYear || "";
+      const format = physicalFormatLabel(movie.format) || movie.format || "";
+      const suffix = [year, format ? `(${format})` : ""].filter(Boolean).join(" ");
+      return suffix ? `${title} ${suffix}` : title;
+    }
+    function loanDurationDays(loan) {
+      if (!loan.loanedAt || !loan.returnedAt) return null;
+      const start = new Date(loan.loanedAt).getTime();
+      const end = new Date(loan.returnedAt).getTime();
+      if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+      return Math.max(1, Math.round((end - start) / 86400000));
+    }
+    function openLoanHistory() {
+      const { overlay, panel } = listsCreateOverlay("lists-history");
+      let filter = "all";
+      const render = () => {
+        const all = (listsState.loans || []).filter((loan) => loan.returned);
+        const rows = all.filter((loan) => {
+          if (filter === "out") return !loanIsBorrowed(loan);
+          if (filter === "in") return loanIsBorrowed(loan);
+          return true;
+        }).sort((a, b) => new Date(b.returnedAt || 0) - new Date(a.returnedAt || 0));
+        const dayUnit = tNext("lists.loanDaysUnit", "days");
+        const body = rows.length
+          ? rows.map((loan) => {
+              const poster = loanPosterUrl(loan);
+              const posterHtml = poster
+                ? `<img src="${escapeHtml(poster)}" alt="">`
+                : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+              const days = loanDurationDays(loan);
+              const duration = days == null ? "—" : `${days} ${dayUnit}`;
+              const counterparty = loanIsBorrowed(loan)
+                ? `${tNext("lists.loanFrom", "Borrowed from")}: ${loanLenderLabel(loan)}`
+                : `${tNext("lists.loanTo", "Lent to")}: ${loanBorrowerLabel(loan)}`;
+              return `
+                <div class="lists-history-row" role="row">
+                  <span class="lists-history-poster" role="cell">${posterHtml}</span>
+                  <span role="cell"><strong>${escapeHtml(loanTitle(loan))}</strong></span>
+                  <span role="cell">${escapeHtml(loan.loanedAt ? formatAppDate(loan.loanedAt) : "—")}</span>
+                  <span role="cell">${escapeHtml(duration)}</span>
+                  <span role="cell">${escapeHtml(counterparty)}</span>
+                </div>`;
+            }).join("")
+          : `<p class="lists-modal-message">${escapeHtml(tNext("lists.loanHistoryEmpty", "No returned loans yet."))}</p>`;
+        panel.className = "lists-modal lists-history";
+        panel.innerHTML = `
+          <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.loanHistoryTitle", "Loan history"))}</h3></header>
+          <div class="lists-history-filter" role="tablist">
+            <button type="button" data-filter="all" class="${filter === "all" ? "active" : ""}">${escapeHtml(tNext("lists.loanFilterAll", "All"))}</button>
+            <button type="button" data-filter="out" class="${filter === "out" ? "active" : ""}">${escapeHtml(tNext("lists.loanFilterLent", "Lent out"))}</button>
+            <button type="button" data-filter="in" class="${filter === "in" ? "active" : ""}">${escapeHtml(tNext("lists.loanFilterBorrowed", "Borrowed"))}</button>
+          </div>
+          <div class="lists-history-table" role="table">
+            <div class="lists-history-row head" role="row">
+              <span role="columnheader">${escapeHtml(tNext("lists.loanPosterColumn", "Poster"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("lists.loanedOn", "Loaned"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("lists.loanDurationColumn", "Duration"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("lists.loanCounterpartyColumn", "Borrower / Lender"))}</span>
+            </div>
+            ${body}
+          </div>
+          <footer class="lists-modal-actions">
+            <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+          </footer>
+        `;
+        panel.querySelectorAll("[data-filter]").forEach((btn) => {
+          btn.addEventListener("click", () => { filter = btn.getAttribute("data-filter"); render(); });
+        });
+        panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      };
+      render();
+    }
+    function openTagCreate() {
+      const { overlay, panel } = listsCreateOverlay("lists-tag-create");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.tagCreateTitle", "New tag"))}</h3></header>
+        <div class="lists-modal-fields">
+          <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.tagNameLabel", "Name"))}</span>
+            <input data-field="name" type="text" maxlength="60" placeholder="${escapeHtml(tNext("lists.tagNamePlaceholder", "Tag name"))}"></label>
+          <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.tagColorLabel", "Colour"))}</span>
+            <input data-field="color" type="color" value="#4f7cff"></label>
+        </div>
+        <p class="lists-modal-message" data-message></p>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+          <button type="button" data-primary>${escapeHtml(tNext("lists.tagCreateSubmit", "Create"))}</button>
+        </footer>
+      `;
+      const nameInput = panel.querySelector('[data-field="name"]');
+      const colorInput = panel.querySelector('[data-field="color"]');
+      const message = panel.querySelector("[data-message]");
+      const submit = async () => {
+        const name = (nameInput.value || "").trim();
+        if (!name) {
+          message.textContent = tNext("lists.tagNameRequired", "Enter a tag name.");
+          message.classList.add("bad");
+          nameInput.focus();
+          return;
+        }
+        message.classList.remove("bad");
+        message.textContent = tNext("common.saving", "Saving...");
+        try {
+          await authApiJson("/api/next/tags", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name, color: colorInput.value || null})});
+          listsCloseOverlay(overlay);
+          await loadListsView(true);
+        } catch (error) {
+          message.textContent = error.message || String(error);
+          message.classList.add("bad");
+        }
+      };
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelector("[data-primary]").addEventListener("click", submit);
+      nameInput.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); submit(); } });
+      nameInput.focus();
+    }
+    async function openLoanLibraryPicker() {
+      const { overlay, panel } = listsCreateOverlay("lists-picker");
+      let debounce = null;
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.loanPickTitle", "Select a film"))}</h3></header>
+        <div class="lists-picker-results" data-results><p class="lists-modal-message">${escapeHtml(tNext("common.loading", "Loading..."))}</p></div>
+        <div class="lists-picker-searchbar">
+          <input type="search" data-picker-search placeholder="${escapeHtml(tNext("lists.loanPickSearch", "Search library..."))}">
+        </div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      const resultsNode = panel.querySelector("[data-results]");
+      const searchNode = panel.querySelector("[data-picker-search]");
+      const renderResults = (movies) => {
+        if (!movies.length) {
+          resultsNode.innerHTML = `<p class="lists-modal-message">${escapeHtml(tNext("lists.loanPickEmpty", "No films found."))}</p>`;
+          return;
+        }
+        resultsNode.innerHTML = movies.map((movie) => `
+          <button type="button" class="lists-picker-item" data-pick-movie="${escapeHtml(String(movie.id || movie.movieId || ""))}">
+            <span>${escapeHtml(loanLibraryEntryLabel(movie))}</span>
+          </button>
+        `).join("");
+        resultsNode.querySelectorAll("[data-pick-movie]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const movieId = btn.dataset.pickMovie;
+            const movie = movies.find((m) => String(m.id || m.movieId) === String(movieId));
+            listsCloseOverlay(overlay);
+            openLoanCreateScreen(movie);
+          });
+        });
+      };
+      const search = async (query) => {
+        try {
+          const params = new URLSearchParams();
+          if (query) params.set("q", query);
+          params.set("limit", "50");
+          const data = await authApiJson("/api/next/movies?" + params.toString());
+          const movies = (data && (data.movies || data.items || data.results)) || [];
+          renderResults(movies);
+        } catch (error) {
+          resultsNode.innerHTML = `<p class="lists-modal-message bad">${escapeHtml((error && error.message) || String(error))}</p>`;
+        }
+      };
+      searchNode.addEventListener("input", () => {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(() => search(searchNode.value.trim()), 220);
+      });
+      search("");
+    }
+    function openLoanCreateScreen(movie) {
+      let selectedMovie = movie || null;
+      const { overlay, panel } = listsCreateOverlay("lists-loan-create");
+      let borrowerUserId = null;
+      let borrowerDebounce = null;
+      const render = () => {
+        panel.innerHTML = `
+          <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.loanCreateTitle", "Lend film"))}</h3></header>
+          <div class="lists-modal-body lists-loan-form">
+            <div class="lists-modal-field">
+              <span>${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+              <div class="lists-loan-movie">
+                <strong>${selectedMovie ? escapeHtml(loanLibraryEntryLabel(selectedMovie)) : escapeHtml(tNext("lists.loanNoFilm", "No film selected"))}</strong>
+                <button type="button" class="ghost" data-change-movie>${escapeHtml(tNext("lists.loanChangeFilm", "Change"))}</button>
+              </div>
+            </div>
+            <label class="lists-modal-field">
+              <span>${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
+              <input type="text" data-borrower-name placeholder="${escapeHtml(tNext("lists.loanBorrowerPlaceholder", "Search members or type a name"))}">
+              <div class="lists-borrower-results" data-borrower-results></div>
+            </label>
+            <div class="lists-modal-field">
+              <span class="lists-switch-row">
+                <span>${escapeHtml(tNext("lists.loanDueSwitch", "Set expected return date"))}</span>
+                <label class="lists-switch"><input type="checkbox" data-due-switch><span></span></label>
+              </span>
+              <input type="date" data-due-date class="hidden">
+            </div>
+            <label class="lists-modal-field">
+              <span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+              <textarea data-loan-note rows="2"></textarea>
+            </label>
+          </div>
+          <p class="lists-modal-message" data-message></p>
+          <footer class="lists-modal-actions">
+            <button type="button" data-primary>${escapeHtml(tNext("lists.loanSubmit", "Lend"))}</button>
+            <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+          </footer>
+        `;
+        const messageNode = panel.querySelector("[data-message]");
+        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+        panel.querySelector("[data-change-movie]").addEventListener("click", () => {
+          listsCloseOverlay(overlay);
+          openLoanLibraryPicker();
+        });
+        const dueSwitch = panel.querySelector("[data-due-switch]");
+        const dueDate = panel.querySelector("[data-due-date]");
+        dueSwitch.addEventListener("change", () => { dueDate.classList.toggle("hidden", !dueSwitch.checked); });
+        const borrowerInput = panel.querySelector("[data-borrower-name]");
+        const borrowerResults = panel.querySelector("[data-borrower-results]");
+        borrowerInput.addEventListener("input", () => {
+          borrowerUserId = null;
+          const query = borrowerInput.value.trim();
+          if (borrowerDebounce) clearTimeout(borrowerDebounce);
+          if (query.length < 2) { borrowerResults.innerHTML = ""; return; }
+          borrowerDebounce = setTimeout(async () => {
+            try {
+              const data = await authApiJson("/api/next/loans/borrowers/search?q=" + encodeURIComponent(query) + "&limit=8");
+              const members = (data && (data.members || data.results || data.borrowers)) || [];
+              if (!members.length) { borrowerResults.innerHTML = ""; return; }
+              borrowerResults.innerHTML = members.map((m) => `
+                <button type="button" class="lists-borrower-item" data-borrower-id="${escapeHtml(String(m.id))}" data-borrower-label="${escapeHtml(m.displayName || m.username || "")}">
+                  <span class="lists-borrower-avatar">${escapeHtml(((m.displayName || m.username || "?").trim()[0] || "?").toUpperCase())}</span>
+                  <span>${escapeHtml(m.displayName || m.username || "")}${m.username ? ` <em>@${escapeHtml(m.username)}</em>` : ""}</span>
+                </button>
+              `).join("");
+              borrowerResults.querySelectorAll("[data-borrower-id]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                  borrowerUserId = btn.dataset.borrowerId;
+                  borrowerInput.value = btn.dataset.borrowerLabel;
+                  borrowerResults.innerHTML = "";
+                });
+              });
+            } catch (error) {
+              borrowerResults.innerHTML = "";
+            }
+          }, 220);
+        });
+        panel.querySelector("[data-primary]").addEventListener("click", async () => {
+          if (!selectedMovie) { setMessage(tNext("lists.loanNoFilm", "No film selected"), "bad"); return; }
+          const borrowerName = borrowerInput.value.trim();
+          if (!borrowerUserId && !borrowerName) { setMessage(tNext("lists.loanBorrowerRequired", "Enter a borrower."), "bad"); return; }
+          const body = { note: (panel.querySelector("[data-loan-note]").value || "").trim() || null };
+          if (borrowerUserId) body.borrower_user_id = borrowerUserId;
+          else body.borrower_name = borrowerName;
+          if (dueSwitch.checked && dueDate.value) body.due_at = new Date(dueDate.value + "T00:00:00").toISOString();
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            const movieId = selectedMovie.id || selectedMovie.movieId;
+            await authApiJson("/api/next/movies/" + encodeURIComponent(movieId) + "/loans", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            listsCloseOverlay(overlay);
+            await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+      };
+      render();
     }
     const statsState = {loaded: false, data: null};
     function statsBarsHtml(rows) {
@@ -23030,6 +25177,17 @@ def ui_preview_html(
         </span>
       `;
     }
+    function notificationLoanRequestActionsHtml(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind !== "loan_request" || !payload.loanRequestId) return "";
+      const requestId = escapeHtml(payload.loanRequestId);
+      return `
+        <span class="notification-actions">
+          <button type="button" class="secondary-button" data-notification-loan-request-approve="${requestId}">${escapeHtml(tNext("lists.loanRequestApprove", "Approve"))}</button>
+          <button type="button" class="secondary-button" data-notification-loan-request-decline="${requestId}">${escapeHtml(tNext("lists.loanRequestDecline", "Decline"))}</button>
+        </span>
+      `;
+    }
     function notificationPrefKey(notification) {
       const payload = notification?.payload || {};
       return String(payload.prefKey || payload.pref_key || payload.kind || "app_updates");
@@ -23068,6 +25226,7 @@ def ui_preview_html(
             ${cardBody ? `<p>${escapeHtml(cardBody)}</p>` : ""}
             <span class="notification-meta">${escapeHtml(created)}${prefKey ? ` / ${escapeHtml(tNext(`notifications.pref.${prefKey}`, prefKey.replaceAll("_", " ")))}` : ""}</span>
             ${notificationInviteActionsHtml(notification)}
+            ${notificationLoanRequestActionsHtml(notification)}
           </span>
           <span class="notification-dot" aria-hidden="true"></span>
         </article>
@@ -23121,6 +25280,21 @@ def ui_preview_html(
         notificationsState.loaded = false;
         await loadNotifications(true);
         await loadAppSnapshot();
+      } catch (error) {
+        const empty = document.getElementById("notificationsEmptyMessage");
+        if (empty) {
+          empty.textContent = error.message || String(error);
+          empty.classList.remove("hidden");
+        }
+      }
+    }
+    async function respondToLoanRequest(requestId, action) {
+      if (!requestId || !["approve", "decline"].includes(action)) return;
+      try {
+        await authApiJson(`/api/next/loan-requests/${encodeURIComponent(requestId)}/${action}`, {method: "POST"});
+        notificationsState.loaded = false;
+        await loadNotifications(true);
+        if (typeof loadLoanRequests === "function") { try { await loadLoanRequests(true); } catch (e) { /* ignore */ } }
       } catch (error) {
         const empty = document.getElementById("notificationsEmptyMessage");
         if (empty) {
@@ -23748,6 +25922,7 @@ def ui_preview_html(
         country: formTextValue("movieEditCountry"),
         language: formTextValue("movieEditLanguage"),
         location: formTextValue("movieEditLocation"),
+        locationId: document.getElementById("movieEditLocationSelect")?.value || null,
         runtimeMinutes: formTextValue("movieEditRuntime"),
         director: formTextValue("movieEditDirector"),
         genre: formTextValue("movieEditGenre"),
@@ -23977,6 +26152,86 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    function movieArtworkLockSet(detail) {
+      const metadata = (((detail || {}).movie || {}).metadata) || {};
+      let raw = metadata.field_locks;
+      if (raw == null) raw = metadata.fieldLocks;
+      return new Set((Array.isArray(raw) ? raw : []).map((item) => String(item)));
+    }
+    function artworkLockState(entity, kind) {
+      if (entity === "container") {
+        const metadata = (((activeContainerPayload || {}).container || {}).metadata) || {};
+        return Boolean(metadata[`${kind}_locked`]);
+      }
+      return movieArtworkLockSet(activeDetailPayload).has(kind);
+    }
+    function reflectArtworkLockButtons(detail, entity) {
+      const kinds = ["poster", "backdrop"];
+      const prefix = entity === "container" ? "container" : "movie";
+      kinds.forEach((kind) => {
+        const id = `${prefix}${kind === "poster" ? "Poster" : "Backdrop"}LockToggle`;
+        const button = document.getElementById(id);
+        if (!button) return;
+        const canEdit = entity === "container" ? hasPermission("containers.edit") : hasPermission("collection.edit_all");
+        button.classList.toggle("hidden", !canEdit);
+        let locked;
+        if (entity === "container") {
+          const metadata = (((detail || {}).container || {}).metadata) || {};
+          locked = Boolean(metadata[`${kind}_locked`]);
+        } else {
+          locked = movieArtworkLockSet(detail).has(kind);
+        }
+        button.classList.toggle("locked", locked);
+        button.setAttribute("aria-pressed", locked ? "true" : "false");
+        const lockKey = kind === "poster" ? "movieDetail.lockPoster" : "movieDetail.lockBackdrop";
+        const unlockKey = kind === "poster" ? "movieDetail.unlockPoster" : "movieDetail.unlockBackdrop";
+        const lockLabel = kind === "poster" ? "Lock poster" : "Lock backdrop";
+        const unlockLabel = kind === "poster" ? "Unlock poster" : "Unlock backdrop";
+        button.textContent = locked ? tNext(unlockKey, unlockLabel) : tNext(lockKey, lockLabel);
+      });
+    }
+    async function toggleArtworkLock(entity, kind) {
+      if (kind !== "poster" && kind !== "backdrop") return;
+      if (entity === "container") {
+        if (!hasPermission("containers.edit") || !activeContainerId) return;
+        const nextLocked = !artworkLockState("container", kind);
+        setContainerDetailMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+        try {
+          const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}/artwork-locks`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({[kind]: nextLocked})
+          });
+          renderContainerDetail(payload.detail || {});
+          await loadAppSnapshot();
+          setContainerDetailMessage(nextLocked ? tNext("movieDetail.artworkLockOn", "Artwork locked.") : tNext("movieDetail.artworkLockOff", "Artwork unlocked."), "good");
+        } catch (error) {
+          setContainerDetailMessage(error.message || String(error), "bad");
+        }
+        return;
+      }
+      if (!hasPermission("collection.edit_all") || !activeDetailMovieId) return;
+      const locks = movieArtworkLockSet(activeDetailPayload);
+      const nextLocked = !locks.has(kind);
+      if (nextLocked) locks.add(kind); else locks.delete(kind);
+      if (typeof movieEditLockedFields !== "undefined" && movieEditLockedFields) {
+        if (nextLocked) movieEditLockedFields.add(kind); else movieEditLockedFields.delete(kind);
+      }
+      setMovieDetailMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+      try {
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/field-locks`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({fieldLocks: Array.from(locks)})
+        });
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
+        renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMovieDetailMessage(nextLocked ? tNext("movieDetail.artworkLockOn", "Artwork locked.") : tNext("movieDetail.artworkLockOff", "Artwork unlocked."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
     async function copyArtworkUrl(url) {
       if (!url) return;
       const setMessage = activeContainerId ? setContainerDetailMessage : setMovieDetailMessage;
@@ -24015,21 +26270,19 @@ def ui_preview_html(
       const rail = document.getElementById("posterRail");
       if (rail) {
         rail.classList.toggle("mode-list-grid", libraryViewMode === "list");
-        rail.classList.toggle("mode-detail-grid", libraryViewMode === "detail");
+        rail.classList.remove("mode-detail-grid");
         rail.classList.toggle("poster-rail", libraryViewMode === "poster");
-        rail.innerHTML = displayItems.length && libraryViewMode === "detail"
-          ? detailTableHtml(displayItems.slice(0, 120), "library", libraryDetailSort)
-          : displayItems.length
-            ? displayItems.slice(0, 80).map((item, index) => (
-                libraryViewMode === "list"
-                  ? libraryListItemHtml(item)
-                  : (
+        rail.innerHTML = displayItems.length
+          ? displayItems.slice(0, 80).map((item, index) => (
+              libraryViewMode === "list"
+                ? libraryListItemHtml(item)
+                : (
               item.kind === "container"
                 ? containerPosterCardHtml(item.container, index)
                 : posterCardHtml(item.movie, index)
-                  )
-              )).join("")
-            : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
+                )
+            )).join("")
+          : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
       }
       document.querySelectorAll("[data-preview-movie]").forEach((button) => {
         button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
@@ -24499,6 +26752,50 @@ def ui_preview_html(
         loadProfileApiAuditEvents();
       }
     }
+    function renderLoansSystemSetting() {
+      const row = document.getElementById("loansSystemSettingRow");
+      if (!row) return;
+      if (!canManageLoansSystem()) {
+        row.classList.add("hidden");
+        row.innerHTML = "";
+        return;
+      }
+      const active = loansSystemEnabled();
+      row.classList.remove("hidden");
+      row.innerHTML = `
+        <div class="preference-row">
+          <span>
+            <strong>${escapeHtml(tNext("preferences.loansSystemLabel", "Loans System"))}</strong>
+            <span>${escapeHtml(tNext("preferences.loansSystemHelp", "Enable lending and borrow requests across the collection."))}</span>
+          </span>
+          <button type="button" class="switch ${active ? "on" : ""}" id="loansSystemToggle" aria-pressed="${active ? "true" : "false"}"></button>
+        </div>
+      `;
+      const toggle = document.getElementById("loansSystemToggle");
+      if (toggle) toggle.addEventListener("click", () => toggleLoansSystem(!active));
+    }
+    async function toggleLoansSystem(enabled) {
+      const toggle = document.getElementById("loansSystemToggle");
+      if (toggle) toggle.disabled = true;
+      try {
+        await authApiJson("/api/next/admin/settings/loans-system", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ enabled: !!enabled })
+        });
+        await loadAppSnapshot();
+        renderLoansSystemSetting();
+      } catch (error) {
+        if (toggle) toggle.disabled = false;
+        setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
+      }
+    }
+    function setPreferencesMessage(message, tone) {
+      const node = document.getElementById("preferencesMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
     function renderPreferences() {
       const libraryList = document.getElementById("profilePreferenceList");
       const collectorList = document.getElementById("profileCollectorPreferenceList");
@@ -24511,6 +26808,7 @@ def ui_preview_html(
         collectorList.innerHTML = preferenceRowsHtml(preferenceCollectorLabels);
         bindPreferenceList(collectorList);
       }
+      renderLoansSystemSetting();
       if (legacyList) {
         legacyList.innerHTML = preferenceRowsHtml(preferenceLabels);
         bindPreferenceList(legacyList);
@@ -24847,6 +27145,296 @@ def ui_preview_html(
         setContainerManagerMessage(error.message || String(error), "bad");
       }
     }
+    const LOCATION_MAX_DEPTH = 4;
+    function locationsEnabled() {
+      return collectorsModeEnabled() && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
+    }
+    function setLocationMessage(message, tone) {
+      const node = document.getElementById("locationManagerMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function locationById(id) {
+      const key = String(id || "");
+      return locations.find((loc) => String(loc.id) === key) || null;
+    }
+    function locationChildren(parentId) {
+      const key = parentId ? String(parentId) : "";
+      return locations
+        .filter((loc) => String(loc.parent_id || "") === key)
+        .sort((a, b) => (a.sort_order - b.sort_order) || String(a.name || "").localeCompare(String(b.name || "")));
+    }
+    function locationDepthOf(id) {
+      let depth = 0;
+      let current = locationById(id);
+      const seen = new Set();
+      while (current && !seen.has(String(current.id))) {
+        seen.add(String(current.id));
+        depth += 1;
+        current = current.parent_id ? locationById(current.parent_id) : null;
+      }
+      return depth;
+    }
+    function locationSubtreeHeight(id) {
+      const kids = locationChildren(id);
+      if (!kids.length) return 1;
+      return 1 + Math.max(...kids.map((child) => locationSubtreeHeight(child.id)));
+    }
+    function locationSubtreeIds(id) {
+      const result = new Set();
+      if (!id) return result;
+      const walk = (nodeId) => {
+        const key = String(nodeId);
+        if (result.has(key)) return;
+        result.add(key);
+        locationChildren(nodeId).forEach((child) => walk(child.id));
+      };
+      walk(id);
+      return result;
+    }
+    function locationIsDescendant(candidateId, ancestorId) {
+      let current = locationById(candidateId);
+      const seen = new Set();
+      while (current && !seen.has(String(current.id))) {
+        if (String(current.id) === String(ancestorId)) return true;
+        seen.add(String(current.id));
+        current = current.parent_id ? locationById(current.parent_id) : null;
+      }
+      return false;
+    }
+    function locationMoveAllowed(nodeId, newParentId) {
+      if (!nodeId) return false;
+      if (String(nodeId) === String(newParentId || "")) return false;
+      if (newParentId && locationIsDescendant(newParentId, nodeId)) return false;
+      const parentDepth = newParentId ? locationDepthOf(newParentId) : 0;
+      const height = locationSubtreeHeight(nodeId);
+      return (parentDepth + height) <= LOCATION_MAX_DEPTH;
+    }
+    function populateLocationParentSelect(select, opts) {
+      opts = opts || {};
+      const excludeId = opts.excludeId ? String(opts.excludeId) : "";
+      const selectedId = opts.selectedId ? String(opts.selectedId) : "";
+      if (!select) return;
+      const rootLabel = opts.emptyLabel || tNext("locations.parentNone", "No parent (top level)");
+      const options = [`<option value="">${escapeHtml(rootLabel)}</option>`];
+      locations.forEach((loc) => {
+        if (excludeId && (String(loc.id) === excludeId || locationIsDescendant(loc.id, excludeId))) return;
+        const indent = "\u2007\u2007".repeat(Math.max(0, (loc.depth || 1) - 1));
+        options.push(`<option value="${escapeHtml(String(loc.id))}">${escapeHtml(indent + (loc.name || ""))}</option>`);
+      });
+      select.innerHTML = options.join("");
+      select.value = selectedId;
+    }
+    function renderLocationTreeNode(node) {
+      const id = escapeHtml(String(node.id || ""));
+      const canEdit = hasAnyPermission(["containers.edit", "collection.bulk_edit"]);
+      const canDelete = hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete);
+      const counts = [];
+      if (node.movie_count) counts.push(tNext("locations.movieCount", "{count} films").replace("{count}", node.movie_count));
+      if (node.container_count) counts.push(tNext("locations.containerCount", "{count} containers").replace("{count}", node.container_count));
+      const countLabel = counts.join(" / ");
+      const children = locationChildren(node.id);
+      const childHtml = children.length
+        ? `<div class="locations-children">${children.map(renderLocationTreeNode).join("")}</div>`
+        : "";
+      return `
+        <div class="locations-node" data-location-node="${id}" draggable="${canEdit ? "true" : "false"}">
+          <div class="locations-row" data-location-drop="${id}">
+            <span class="locations-handle" aria-hidden="true">\u2630</span>
+            <div class="locations-info">
+              <strong>${escapeHtml(node.name || tNext("common.untitled", "Untitled"))}</strong>
+              ${node.description ? `<span class="locations-desc">${escapeHtml(node.description)}</span>` : ""}
+              ${countLabel ? `<span class="locations-counts">${escapeHtml(countLabel)}</span>` : ""}
+            </div>
+            <div class="locations-actions">
+              ${canEdit ? `<button type="button" class="secondary-button" data-location-rename="${id}">${escapeHtml(tNext("locations.rename", "Rename"))}</button>` : ""}
+              <button type="button" class="secondary-button" data-location-qr="${id}">${escapeHtml(tNext("locations.qr", "QR"))}</button>
+              ${canDelete ? `<button type="button" class="secondary-button danger" data-location-delete="${id}">${escapeHtml(tNext("locations.delete", "Delete"))}</button>` : ""}
+            </div>
+          </div>
+          ${childHtml}
+        </div>
+      `;
+    }
+    function renderLocationsPanel() {
+      const parentSelect = document.getElementById("locationCreateParent");
+      if (parentSelect) populateLocationParentSelect(parentSelect, {selectedId: parentSelect.value});
+      const tree = document.getElementById("locationsTree");
+      if (!tree) return;
+      if (!locationsEnabled()) {
+        tree.innerHTML = "";
+        return;
+      }
+      const roots = locationChildren("");
+      if (!roots.length) {
+        tree.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("locations.empty", "No locations yet. Create your first cabinet."))}</div>`;
+        return;
+      }
+      tree.innerHTML = roots.map(renderLocationTreeNode).join("");
+      bindLocationTreeEvents();
+    }
+    async function reloadLocations() {
+      try {
+        const payload = await authApiJson("/api/next/locations", {headers: authHeaders()});
+        locations = payload.locations || payload.items || [];
+        if (state) state.locations = locations;
+      } catch (error) {
+        /* keep existing snapshot on failure */
+      }
+      renderLocationsPanel();
+    }
+    async function createLocation(event) {
+      event?.preventDefault();
+      if (!hasAnyPermission(["containers.edit", "collection.bulk_edit"])) return;
+      const nameInput = document.getElementById("locationCreateName");
+      const parentSelect = document.getElementById("locationCreateParent");
+      const descInput = document.getElementById("locationCreateDescription");
+      const name = String(nameInput?.value || "").trim();
+      if (!name) {
+        setLocationMessage(tNext("locations.nameRequired", "Enter a name first."), "bad");
+        return;
+      }
+      const parentId = String(parentSelect?.value || "");
+      if (parentId && (locationDepthOf(parentId) + 1) > LOCATION_MAX_DEPTH) {
+        setLocationMessage(tNext("locations.maxDepth", "Locations can be at most four levels deep."), "bad");
+        return;
+      }
+      setLocationMessage(tNext("locations.saving", "Saving..."));
+      try {
+        await authApiJson("/api/next/locations", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name, parentId: parentId || null, description: String(descInput?.value || "").trim() || null})
+        });
+        if (nameInput) nameInput.value = "";
+        if (descInput) descInput.value = "";
+        await reloadLocations();
+        setLocationMessage(tNext("locations.created", "Location created."), "good");
+      } catch (error) {
+        setLocationMessage(error.message || String(error), "bad");
+      }
+    }
+    async function renameLocation(locationId) {
+      if (!hasAnyPermission(["containers.edit", "collection.bulk_edit"])) return;
+      const node = locationById(locationId);
+      if (!node) return;
+      const next = window.prompt(tNext("locations.renamePrompt", "New location name"), node.name || "");
+      if (next === null) return;
+      const name = String(next).trim();
+      if (!name) return;
+      setLocationMessage(tNext("locations.saving", "Saving..."));
+      try {
+        await authApiJson(`/api/next/locations/${encodeURIComponent(locationId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name})
+        });
+        await reloadLocations();
+        setLocationMessage(tNext("locations.renamed", "Location renamed."), "good");
+      } catch (error) {
+        setLocationMessage(error.message || String(error), "bad");
+      }
+    }
+    async function reparentLocation(locationId, newParentId) {
+      if (!hasAnyPermission(["containers.edit", "collection.bulk_edit"])) return;
+      if (!locationMoveAllowed(locationId, newParentId)) {
+        setLocationMessage(tNext("locations.maxDepth", "Locations can be at most four levels deep."), "bad");
+        return;
+      }
+      setLocationMessage(tNext("locations.saving", "Saving..."));
+      try {
+        await authApiJson(`/api/next/locations/${encodeURIComponent(locationId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({parentId: newParentId || null})
+        });
+        await reloadLocations();
+        setLocationMessage(tNext("locations.moved", "Location moved."), "good");
+      } catch (error) {
+        setLocationMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteLocation(locationId) {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete)) return;
+      const node = locationById(locationId);
+      const name = node?.name || tNext("common.untitled", "Untitled");
+      const confirmed = window.confirm(tNext("locations.deleteConfirm", "Delete '{name}' and all nested locations?").replace("{name}", name));
+      if (!confirmed) return;
+      setLocationMessage(tNext("locations.saving", "Saving..."));
+      try {
+        await authApiJson(`/api/next/locations/${encodeURIComponent(locationId)}`, {method: "DELETE"});
+        await reloadLocations();
+        setLocationMessage(tNext("locations.deleted", "Location deleted."), "good");
+      } catch (error) {
+        setLocationMessage(error.message || String(error), "bad");
+      }
+    }
+    function openLocationQr(locationId) {
+      const node = locationById(locationId);
+      if (!node) return;
+      const url = `/api/next/locations/${encodeURIComponent(locationId)}/qr.svg`;
+      const win = window.open("", "_blank");
+      if (!win) return;
+      const title = escapeHtml(node.path_label || node.name || "");
+      win.document.write(`<!doctype html><title>${title}</title><body style="margin:0;display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px;font-family:sans-serif;background:#f8fafc"><h3>${title}</h3><img src="${url}" alt="QR" style="width:280px;height:280px"><a href="${url}" download="location-${escapeHtml(String(node.public_id || locationId))}.svg">${escapeHtml(tNext("locations.qrDownload", "Download SVG"))}</a></body>`);
+    }
+    function setStructureView(view) {
+      structureView = view === "locations" ? "locations" : "containers";
+      document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
+        button.classList.toggle("active", structureView === "containers" && button.dataset.containerManagerType === containerManagerType);
+      });
+      document.querySelectorAll("[data-structure-view]").forEach((button) => {
+        button.classList.toggle("active", structureView === "locations" && button.dataset.structureView === "locations");
+      });
+      document.querySelectorAll('[data-structure-section="containers"]').forEach((el) => el.classList.toggle("hidden", structureView !== "containers"));
+      document.querySelectorAll('[data-structure-section="locations"]').forEach((el) => el.classList.toggle("hidden", structureView !== "locations"));
+      if (structureView === "locations") renderLocationsPanel();
+      else renderContainerManager();
+    }
+    function bindLocationTreeEvents() {
+      const tree = document.getElementById("locationsTree");
+      if (!tree || tree.dataset.bound === "true") return;
+      tree.dataset.bound = "true";
+      tree.addEventListener("click", (event) => {
+        const renameBtn = event.target.closest("[data-location-rename]");
+        if (renameBtn) { renameLocation(renameBtn.dataset.locationRename); return; }
+        const qrBtn = event.target.closest("[data-location-qr]");
+        if (qrBtn) { openLocationQr(qrBtn.dataset.locationQr); return; }
+        const delBtn = event.target.closest("[data-location-delete]");
+        if (delBtn) { deleteLocation(delBtn.dataset.locationDelete); return; }
+      });
+      tree.addEventListener("dragstart", (event) => {
+        const node = event.target.closest("[data-location-node]");
+        if (!node) return;
+        locationDragId = node.dataset.locationNode || "";
+        event.dataTransfer.effectAllowed = "move";
+      });
+      tree.addEventListener("dragover", (event) => {
+        const row = event.target.closest("[data-location-drop]");
+        if (!row || !locationDragId) return;
+        const targetId = row.dataset.locationDrop;
+        if (locationMoveAllowed(locationDragId, targetId)) {
+          event.preventDefault();
+          row.classList.add("drop-target");
+        }
+      });
+      tree.addEventListener("dragleave", (event) => {
+        const row = event.target.closest("[data-location-drop]");
+        if (row) row.classList.remove("drop-target");
+      });
+      tree.addEventListener("drop", (event) => {
+        const row = event.target.closest("[data-location-drop]");
+        if (!row || !locationDragId) return;
+        event.preventDefault();
+        row.classList.remove("drop-target");
+        const targetId = row.dataset.locationDrop;
+        const dragId = locationDragId;
+        locationDragId = "";
+        if (String(dragId) !== String(targetId)) reparentLocation(dragId, targetId);
+      });
+      tree.addEventListener("dragend", () => { locationDragId = ""; });
+    }
     function renderStartup(startup) {
       const phase = startup.phase || "ready";
       const title = document.getElementById("startupTitle");
@@ -24948,6 +27536,7 @@ def ui_preview_html(
       renderProfileApiAccess();
       renderMemberGroups();
       renderContainerManager();
+      renderLocationsPanel();
       renderProfileOfflineStatus();
       renderProfileUpdateCheck();
       applyAppPermissionVisibility();
@@ -25967,14 +28556,18 @@ def ui_preview_html(
       document.getElementById("advancedSearchSaveButton")?.addEventListener("click", saveSmartFilter);
       document.getElementById("advancedSearchDeleteButton")?.addEventListener("click", deleteSmartFilter);
       document.getElementById("smartFilterSelect")?.addEventListener("change", (event) => applySmartFilter(event.target.value || ""));
-      document.getElementById("collectionSortSelect")?.addEventListener("change", (event) => {
-        collectionSortMode = event.target.value || "title_asc";
-        localStorage.setItem("dv_next_collection_sort", collectionSortMode);
-        renderLibrary();
+      setupCollectionMenus();
+      document.querySelectorAll("[data-sort-option]").forEach((button) => {
+        button.addEventListener("click", () => {
+          collectionSortMode = button.dataset.sortOption || "title_asc";
+          localStorage.setItem("dv_next_collection_sort", collectionSortMode);
+          closeCollectionMenu("collectionSortMenu");
+          renderLibrary();
+        });
       });
       document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
-          libraryViewMode = normalizeViewMode(button.dataset.libraryViewMode);
+          libraryViewMode = normalizeLibraryViewMode(button.dataset.libraryViewMode);
           localStorage.setItem("dv_next_library_view_mode", libraryViewMode);
           renderLibrary();
         });
@@ -25994,19 +28587,50 @@ def ui_preview_html(
           else syncContainerViewModeControls();
         });
       });
-      document.querySelectorAll("[data-format-filter]").forEach((button) => {
+      document.getElementById("collectionFormatSwitches")?.addEventListener("change", (event) => {
+        const input = event.target.closest("[data-format-switch]");
+        if (!input) return;
+        const value = input.dataset.formatSwitch;
+        if (input.checked) collectionFormatFilters.add(value);
+        else collectionFormatFilters.delete(value);
+        persistCollectionFormatFilters();
+        renderLibrary();
+      });
+      document.querySelectorAll("[data-type-filter]").forEach((button) => {
         button.addEventListener("click", () => {
-          collectionFormatFilter = button.dataset.formatFilter || "all";
-          localStorage.setItem("dv_next_collection_format", collectionFormatFilter);
+          if (button.disabled) return;
+          collectionTypeFilter = button.dataset.typeFilter || "all";
+          localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
           renderLibrary();
         });
       });
-      document.querySelectorAll("[data-item-filter]").forEach((button) => {
-        button.addEventListener("click", () => {
-          collectionItemFilter = button.dataset.itemFilter || "all";
-          localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
-          renderLibrary();
-        });
+      document.getElementById("collectionGenreSelect")?.addEventListener("change", (event) => {
+        collectionGenreFilter = event.target.value || "";
+        localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
+        renderLibrary();
+      });
+      document.getElementById("collectionLocationSelect")?.addEventListener("change", (event) => {
+        collectionLocationFilter = event.target.value || "";
+        localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
+        renderLibrary();
+      });
+      document.getElementById("collectionContainersSwitch")?.addEventListener("change", (event) => {
+        collectionItemFilter = event.target.checked ? "containers" : "all";
+        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+        renderLibrary();
+      });
+      document.getElementById("collectionFilterResetButton")?.addEventListener("click", () => {
+        collectionFormatFilters.clear();
+        persistCollectionFormatFilters();
+        collectionTypeFilter = "all";
+        collectionGenreFilter = "";
+        collectionLocationFilter = "";
+        if (collectionItemFilter === "containers") collectionItemFilter = "all";
+        localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
+        localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
+        localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
+        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+        renderLibrary();
       });
       document.getElementById("groupFilter")?.addEventListener("change", (event) => {
         activeCollectionGroupFilter = validCollectionGroupFilter(event.target.value || "");
@@ -26044,8 +28668,17 @@ def ui_preview_html(
           renderListsView();
         });
       });
+      document.querySelectorAll("[data-loan-requests-tab]").forEach((button) => {
+        button.addEventListener("click", () => {
+          listsState.loanRequestsTab = button.dataset.loanRequestsTab || "incoming";
+          renderLoanRequestsSection();
+        });
+      });
       document.getElementById("wishlistAddForm")?.addEventListener("submit", submitWishlistAdd);
       document.getElementById("wishlistSearchForm")?.addEventListener("submit", submitWishlistSearch);
+      document.getElementById("loanCreateButton")?.addEventListener("click", () => openLoanLibraryPicker());
+      document.getElementById("loanHistoryButton")?.addEventListener("click", () => openLoanHistory());
+      document.getElementById("tagCreateButton")?.addEventListener("click", () => openTagCreate());
       document.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           listsViewMode = normalizeViewMode(button.dataset.listsViewMode);
@@ -26065,6 +28698,8 @@ def ui_preview_html(
       document.getElementById("notificationsList")?.addEventListener("click", (event) => {
         const acceptButton = event.target.closest("[data-notification-invite-accept]");
         const declineButton = event.target.closest("[data-notification-invite-decline]");
+        const loanApproveButton = event.target.closest("[data-notification-loan-request-approve]");
+        const loanDeclineButton = event.target.closest("[data-notification-loan-request-decline]");
         if (acceptButton) {
           event.preventDefault();
           event.stopPropagation();
@@ -26073,6 +28708,14 @@ def ui_preview_html(
           event.preventDefault();
           event.stopPropagation();
           respondToMediaGroupInvite(declineButton.dataset.notificationInviteDecline, "decline");
+        } else if (loanApproveButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          respondToLoanRequest(loanApproveButton.dataset.notificationLoanRequestApprove, "approve");
+        } else if (loanDeclineButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          respondToLoanRequest(loanDeclineButton.dataset.notificationLoanRequestDecline, "decline");
         }
       });
       document.getElementById("pushEnableButton")?.addEventListener("click", () => enablePushNotifications());
@@ -26110,10 +28753,14 @@ def ui_preview_html(
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.addEventListener("click", () => {
           containerManagerType = button.dataset.containerManagerType || "box_set";
-          renderContainerManager();
+          setStructureView("containers");
           setContainerManagerMessage("");
         });
       });
+      document.querySelectorAll("[data-structure-view]").forEach((button) => {
+        button.addEventListener("click", () => setStructureView(button.dataset.structureView || "containers"));
+      });
+      document.getElementById("locationCreateForm")?.addEventListener("submit", (event) => createLocation(event));
       document.getElementById("containerManagerCreateForm")?.addEventListener("submit", (event) => createManagedContainer(event));
       document.getElementById("containerManagerList")?.addEventListener("click", (event) => {
         const renameButton = event.target.closest("[data-container-manager-rename]");
@@ -26438,7 +29085,11 @@ def ui_preview_html(
         if (metadataButton) queueImportMovieMetadataRefresh(metadataButton.dataset.importMetadataRefresh);
         if (metadataJobButton) queueImportJobMetadataRefresh(metadataJobButton.dataset.importMetadataRefreshJob);
       });
-      document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
+      document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => {
+        importCenter.activeBatchBarcode = "";
+        renderImportBatchList();
+        previewBarcodeImport(event);
+      });
       document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
       document.getElementById("importBatchClearButton")?.addEventListener("click", () => {
         const input = document.getElementById("importBatchBarcodeInput");
@@ -26457,11 +29108,15 @@ def ui_preview_html(
           return;
         }
         const previewButton = event.target.closest("[data-import-batch-preview]");
-        if (previewButton) {
-          const barcode = previewButton.dataset.importBatchPreview || "";
-          importCenter.activeBatchBarcode = barcode;
-          previewImportBatchBarcode(barcode);
+        if (!previewButton) return;
+        const barcode = previewButton.dataset.importBatchPreview || "";
+        importCenter.activeBatchBarcode = barcode;
+        renderImportBatchList();
+        const results = document.getElementById("importBarcodeResults");
+        if (results) {
+          try { results.scrollIntoView({behavior: "smooth", block: "start"}); } catch (error) { results.scrollIntoView(); }
         }
+        previewImportBatchBarcode(barcode);
       });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
@@ -26569,6 +29224,10 @@ def ui_preview_html(
       document.querySelectorAll("[data-import-tab]").forEach((button) => {
         button.addEventListener("click", () => setImportCenterTab(button.dataset.importTab || "add"));
       });
+      document.querySelectorAll("[data-import-method]").forEach((button) => {
+        button.addEventListener("click", () => setImportMethodTab(button.dataset.importMethod || "camera"));
+      });
+      renderImportMethodTabs();
       document.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
         if (!addLookupButton) return;
@@ -26699,6 +29358,18 @@ def ui_preview_html(
           document.getElementById("movieLoanDue")?.value || ""
         );
       });
+      document.getElementById("movieLoanRequestForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        requestBorrowActiveMovie(
+          document.getElementById("movieLoanRequestFrom")?.value || "",
+          document.getElementById("movieLoanRequestReturnBy")?.value || "",
+          document.getElementById("movieLoanRequestNote")?.value || ""
+        );
+      });
+      document.getElementById("movieLoanRequestStatus")?.addEventListener("click", (event) => {
+        const cancelButton = event.target.closest("[data-loan-request-cancel]");
+        if (cancelButton) cancelActiveMovieLoanRequest(cancelButton.dataset.loanRequestCancel);
+      });
       document.getElementById("movieLoanStatus")?.addEventListener("click", (event) => {
         const returnButton = event.target.closest("[data-loan-return]");
         if (returnButton) { returnActiveMovieLoan(returnButton.dataset.loanReturn); return; }
@@ -26725,6 +29396,12 @@ def ui_preview_html(
         if (uploadArtwork) {
           event.preventDefault();
           uploadDetailArtwork(uploadArtwork.dataset.uploadArtwork || "movie", uploadArtwork.dataset.kind, uploadArtwork.dataset.input);
+          return;
+        }
+        const artworkLock = event.target.closest("[data-artwork-lock]");
+        if (artworkLock) {
+          event.preventDefault();
+          toggleArtworkLock(artworkLock.dataset.artworkLock || "movie", artworkLock.dataset.kind);
           return;
         }
         const deleteArtwork = event.target.closest("[data-app-artwork-delete]");
