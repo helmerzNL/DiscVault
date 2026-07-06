@@ -16057,6 +16057,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="moviePosterUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="poster" data-input="moviePosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="moviePosterLockToggle" data-artwork-lock="movie" data-kind="poster" aria-pressed="false">Lock poster</button>
               </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaBackdrops">
@@ -16064,6 +16065,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="movieBackdropUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="backdrop" data-input="movieBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="movieBackdropLockToggle" data-artwork-lock="movie" data-kind="backdrop" aria-pressed="false">Lock backdrop</button>
               </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
@@ -16240,6 +16242,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="containerPosterUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="container" data-kind="poster" data-input="containerPosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="containerPosterLockToggle" data-artwork-lock="container" data-kind="poster" aria-pressed="false">Lock poster</button>
               </div>
             </div>
           </div>
@@ -16250,6 +16253,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="containerBackdropUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="container" data-kind="backdrop" data-input="containerBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="containerBackdropLockToggle" data-artwork-lock="container" data-kind="backdrop" aria-pressed="false">Lock backdrop</button>
               </div>
             </div>
           </div>
@@ -24888,6 +24892,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       renderMovieArtworkManagerStatus(detail);
+      reflectArtworkLockButtons(detail, "movie");
       document.getElementById("movieDetailVideos").innerHTML = movieVideoGroupsHtml(movieVideoItems(movie, metadata));
       const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
@@ -25250,6 +25255,7 @@ def ui_preview_html(
       if (containerDebugSources) containerDebugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      reflectArtworkLockButtons(detail, "container");
       document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
       activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailFilmsPanel");
       syncContainerViewModeControls();
@@ -32145,6 +32151,86 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    function movieArtworkLockSet(detail) {
+      const metadata = (((detail || {}).movie || {}).metadata) || {};
+      let raw = metadata.field_locks;
+      if (raw == null) raw = metadata.fieldLocks;
+      return new Set((Array.isArray(raw) ? raw : []).map((item) => String(item)));
+    }
+    function artworkLockState(entity, kind) {
+      if (entity === "container") {
+        const metadata = (((activeContainerPayload || {}).container || {}).metadata) || {};
+        return Boolean(metadata[`${kind}_locked`]);
+      }
+      return movieArtworkLockSet(activeDetailPayload).has(kind);
+    }
+    function reflectArtworkLockButtons(detail, entity) {
+      const kinds = ["poster", "backdrop"];
+      const prefix = entity === "container" ? "container" : "movie";
+      kinds.forEach((kind) => {
+        const id = `${prefix}${kind === "poster" ? "Poster" : "Backdrop"}LockToggle`;
+        const button = document.getElementById(id);
+        if (!button) return;
+        const canEdit = entity === "container" ? hasPermission("containers.edit") : hasPermission("collection.edit_all");
+        button.classList.toggle("hidden", !canEdit);
+        let locked;
+        if (entity === "container") {
+          const metadata = (((detail || {}).container || {}).metadata) || {};
+          locked = Boolean(metadata[`${kind}_locked`]);
+        } else {
+          locked = movieArtworkLockSet(detail).has(kind);
+        }
+        button.classList.toggle("locked", locked);
+        button.setAttribute("aria-pressed", locked ? "true" : "false");
+        const lockKey = kind === "poster" ? "movieDetail.lockPoster" : "movieDetail.lockBackdrop";
+        const unlockKey = kind === "poster" ? "movieDetail.unlockPoster" : "movieDetail.unlockBackdrop";
+        const lockLabel = kind === "poster" ? "Lock poster" : "Lock backdrop";
+        const unlockLabel = kind === "poster" ? "Unlock poster" : "Unlock backdrop";
+        button.textContent = locked ? tNext(unlockKey, unlockLabel) : tNext(lockKey, lockLabel);
+      });
+    }
+    async function toggleArtworkLock(entity, kind) {
+      if (kind !== "poster" && kind !== "backdrop") return;
+      if (entity === "container") {
+        if (!hasPermission("containers.edit") || !activeContainerId) return;
+        const nextLocked = !artworkLockState("container", kind);
+        setContainerDetailMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+        try {
+          const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}/artwork-locks`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({[kind]: nextLocked})
+          });
+          renderContainerDetail(payload.detail || {});
+          await loadAppSnapshot();
+          setContainerDetailMessage(nextLocked ? tNext("movieDetail.artworkLockOn", "Artwork locked.") : tNext("movieDetail.artworkLockOff", "Artwork unlocked."), "good");
+        } catch (error) {
+          setContainerDetailMessage(error.message || String(error), "bad");
+        }
+        return;
+      }
+      if (!hasPermission("collection.edit_all") || !activeDetailMovieId) return;
+      const locks = movieArtworkLockSet(activeDetailPayload);
+      const nextLocked = !locks.has(kind);
+      if (nextLocked) locks.add(kind); else locks.delete(kind);
+      if (typeof movieEditLockedFields !== "undefined" && movieEditLockedFields) {
+        if (nextLocked) movieEditLockedFields.add(kind); else movieEditLockedFields.delete(kind);
+      }
+      setMovieDetailMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+      try {
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/field-locks`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({fieldLocks: Array.from(locks)})
+        });
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
+        renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMovieDetailMessage(nextLocked ? tNext("movieDetail.artworkLockOn", "Artwork locked.") : tNext("movieDetail.artworkLockOff", "Artwork unlocked."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
     async function copyArtworkUrl(url) {
       if (!url) return;
       const setMessage = activeContainerId ? setContainerDetailMessage : setMovieDetailMessage;
@@ -34981,6 +35067,12 @@ def ui_preview_html(
         if (uploadArtwork) {
           event.preventDefault();
           uploadDetailArtwork(uploadArtwork.dataset.uploadArtwork || "movie", uploadArtwork.dataset.kind, uploadArtwork.dataset.input);
+          return;
+        }
+        const artworkLock = event.target.closest("[data-artwork-lock]");
+        if (artworkLock) {
+          event.preventDefault();
+          toggleArtworkLock(artworkLock.dataset.artworkLock || "movie", artworkLock.dataset.kind);
           return;
         }
         const deleteArtwork = event.target.closest("[data-app-artwork-delete]");
@@ -52975,6 +53067,59 @@ def register_routes(flask_app: Flask) -> None:
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
+
+    @flask_app.put("/api/next/containers/<container_id>/artwork-locks")
+    def set_container_artwork_locks(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        if not container_uuid:
+            raise NextApiError("containerId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Artwork lock request body must be an object", 400)
+        updates: dict[str, bool] = {}
+        alias = {
+            "poster": "poster_locked",
+            "posterLocked": "poster_locked",
+            "poster_locked": "poster_locked",
+            "backdrop": "backdrop_locked",
+            "backdropLocked": "backdrop_locked",
+            "backdrop_locked": "backdrop_locked",
+        }
+        for key, value in body.items():
+            target = alias.get(key)
+            if not target:
+                continue
+            updates[target] = bool(value)
+        if not updates:
+            raise NextApiError("No poster/backdrop lock values provided", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            existing = container_entity(conn, container_uuid)
+            if not existing:
+                raise NextApiError("Container not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE containers SET metadata=COALESCE(metadata, '{}'::jsonb) || %s, updated_at=now() WHERE id=%s",
+                        (Jsonb(json_ready(updates)), container_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="container.updated",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary=f"Updated artwork locks for container {existing.get('title')}",
+                    metadata={
+                        "containerType": existing.get("container_type"),
+                        "title": existing.get("title"),
+                        "artworkLocks": updates,
+                    },
+                )
+                emit_container_change(conn, container_uuid, operation="upsert")
+            detail = container_detail_entity(conn, container_uuid)
+        return response({"status": "ok", "detail": detail, "artworkLocks": updates})
 
     @flask_app.delete("/api/next/containers/<container_id>")
     def delete_container(container_id: str):
