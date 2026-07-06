@@ -2030,6 +2030,7 @@
   "locations.maxDepth": "Locaties kunnen maximaal vier niveaus diep genest worden.",
   "locations.nameRequired": "Voer eerst een naam in.",
   "locations.qr": "QR",
+  "locations.qrPrint": "QR printen",
   "locations.qrDownload": "SVG downloaden",
   "locations.assign": "Opslaglocatie",
   "locations.none": "Geen locatie",
