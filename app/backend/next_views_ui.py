@@ -18214,7 +18214,6 @@ def ui_preview_html(
       {value: "HD DVD", collectorOnly: true},
       {value: "LaserDisc", collectorOnly: true},
       {value: "4K UHD", collectorOnly: false},
-      {value: "4K UHD + Blu-ray", collectorOnly: false},
       {value: "VCD/SVCD", collectorOnly: true}
     ];
     function normalizedMovieFormatValue(value) {
