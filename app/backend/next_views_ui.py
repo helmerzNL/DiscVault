@@ -7765,6 +7765,113 @@ def ui_preview_html(
       display: grid;
       gap: 16px;
     }
+    .location-qr-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 125;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0,0,0,.42);
+      backdrop-filter: blur(18px);
+    }
+    .location-qr-panel {
+      width: min(540px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+      box-shadow: var(--shadow-strong);
+      padding: clamp(20px, 4vw, 28px);
+      display: grid;
+      gap: 18px;
+    }
+    .location-qr-head h2 {
+      margin: 0 0 4px;
+      font-size: 1.3rem;
+      overflow-wrap: anywhere;
+    }
+    .location-qr-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .9rem;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .location-qr-preview {
+      display: grid;
+      place-items: center;
+      padding: 8px 0;
+    }
+    .location-qr-frame {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      padding: 16px;
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .06);
+    }
+    .location-qr-frame img {
+      display: block;
+    }
+    .location-qr-frame > #locationQrImage {
+      width: min(100%, 320px);
+      height: auto;
+    }
+    .location-qr-logo {
+      position: absolute;
+      width: 64px;
+      height: 64px;
+      padding: 8px;
+      border-radius: 18px;
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, .16);
+    }
+    .location-qr-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+    .location-qr-download {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    @media print {
+      body.location-qr-print-open > * {
+        display: none !important;
+      }
+      body.location-qr-print-open #locationQrBackdrop {
+        display: grid !important;
+        position: static;
+        inset: auto;
+        padding: 0;
+        background: transparent;
+        backdrop-filter: none;
+      }
+      body.location-qr-print-open .location-qr-panel {
+        width: auto;
+        max-width: none;
+        border: 0;
+        border-radius: 0;
+        background: #fff;
+        box-shadow: none;
+        padding: 0;
+      }
+      body.location-qr-print-open .location-qr-head,
+      body.location-qr-print-open .location-qr-actions {
+        display: none !important;
+      }
+      body.location-qr-print-open .location-qr-preview {
+        padding: 0;
+      }
+      body.location-qr-print-open .location-qr-frame {
+        padding: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+    }
     .preferences-head {
       display: flex;
       align-items: start;
@@ -9550,7 +9657,7 @@ def ui_preview_html(
             <form class="profile-form" id="movieEditForm">
               <div class="movie-edit-sections">
                 <div class="detail-subsection">
-                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.release">Release</h4>
+                  <h4 class="detail-subsection-title" data-next-i18n="containerDetail.overview">Overview</h4>
                   <div class="movie-edit-grid">
                     <label for="movieEditTitle">
                       <span data-next-i18n="movieDetail.fieldTitle">Title</span>
@@ -9591,14 +9698,6 @@ def ui_preview_html(
                     <label for="movieEditLanguage">
                       <span data-next-i18n="movieDetail.language">Language</span>
                       <input id="movieEditLanguage" name="language" maxlength="80" autocomplete="off">
-                    </label>
-                    <label for="movieEditLocation">
-                      <span data-next-i18n="movieDetail.location">Location</span>
-                      <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
-                    </label>
-                    <label for="movieEditLocationSelect">
-                      <span data-next-i18n="locations.assign">Storage location</span>
-                      <select id="movieEditLocationSelect" name="locationId"></select>
                     </label>
                     <label for="movieEditDirector">
                       <span data-next-i18n="movieDetail.director">Director</span>
@@ -9657,6 +9756,14 @@ def ui_preview_html(
                     <label for="movieEditDistributor">
                       <span data-next-i18n="movieDetail.distributor">Distributor</span>
                       <input id="movieEditDistributor" name="distributor" maxlength="200" autocomplete="off">
+                    </label>
+                    <label for="movieEditLocation">
+                      <span data-next-i18n="movieDetail.location">Location</span>
+                      <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="movieEditLocationSelect">
+                      <span data-next-i18n="locations.assign">Storage location</span>
+                      <select id="movieEditLocationSelect" name="locationId"></select>
                     </label>
                   </div>
                 </div>
@@ -9878,38 +9985,48 @@ def ui_preview_html(
                 <h3 data-next-i18n="containerDetail.editDetails">Edit details</h3>
               </div>
               <form class="profile-form" id="containerEditForm">
-                <label for="containerEditTitle">
-                  <span data-next-i18n="containerDetail.fieldTitle">Title</span>
-                  <input id="containerEditTitle" name="title" maxlength="240" autocomplete="off">
-                </label>
-                <label for="containerEditType">
-                  <span data-next-i18n="containerDetail.fieldType">Type</span>
-                  <select id="containerEditType" name="container_type">
-                    <option value="box_set" data-next-i18n="containerDetail.type.box_set">Box-set</option>
-                    <option value="collection" data-next-i18n="containerDetail.type.collection">Collection</option>
-                    <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
-                  </select>
-                </label>
-                <label for="containerEditYear">
-                  <span data-next-i18n="containerDetail.fieldYear">Year</span>
-                  <input id="containerEditYear" name="year" maxlength="40" autocomplete="off">
-                </label>
-                <label for="containerEditBarcode">
-                  <span data-next-i18n="containerDetail.fieldBarcode">Barcode</span>
-                  <input id="containerEditBarcode" name="barcode" maxlength="160" autocomplete="off">
-                </label>
-                <label for="containerEditBadge">
-                  <span data-next-i18n="containerDetail.fieldBadge">Badge</span>
-                  <input id="containerEditBadge" name="badge_label" maxlength="80" autocomplete="off">
-                </label>
-                <label for="containerEditDescription">
-                  <span data-next-i18n="containerDetail.fieldDescription">Description</span>
-                  <textarea id="containerEditDescription" name="description" maxlength="2000"></textarea>
-                </label>
-                <label for="containerEditLocationSelect">
-                  <span data-next-i18n="locations.assign">Storage location</span>
-                  <select id="containerEditLocationSelect" name="locationId"></select>
-                </label>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.release">Release</h4>
+                  <div class="movie-edit-grid">
+                    <label for="containerEditTitle">
+                      <span data-next-i18n="containerDetail.fieldTitle">Title</span>
+                      <input id="containerEditTitle" name="title" maxlength="240" autocomplete="off">
+                    </label>
+                    <label for="containerEditType">
+                      <span data-next-i18n="containerDetail.fieldType">Type</span>
+                      <select id="containerEditType" name="container_type">
+                        <option value="box_set" data-next-i18n="containerDetail.type.box_set">Box-set</option>
+                        <option value="collection" data-next-i18n="containerDetail.type.collection">Collection</option>
+                        <option value="vault" data-next-i18n="containerDetail.type.vault">Vault</option>
+                      </select>
+                    </label>
+                    <label for="containerEditYear">
+                      <span data-next-i18n="containerDetail.fieldYear">Year</span>
+                      <input id="containerEditYear" name="year" maxlength="40" autocomplete="off">
+                    </label>
+                    <label for="containerEditBarcode">
+                      <span data-next-i18n="containerDetail.fieldBarcode">Barcode</span>
+                      <input id="containerEditBarcode" name="barcode" maxlength="160" autocomplete="off">
+                    </label>
+                    <label for="containerEditBadge">
+                      <span data-next-i18n="containerDetail.fieldBadge">Badge</span>
+                      <input id="containerEditBadge" name="badge_label" maxlength="80" autocomplete="off">
+                    </label>
+                    <label for="containerEditDescription" class="wide">
+                      <span data-next-i18n="containerDetail.fieldDescription">Description</span>
+                      <textarea id="containerEditDescription" name="description" maxlength="2000"></textarea>
+                    </label>
+                  </div>
+                </div>
+                <div class="detail-subsection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.collectors">Collectors</h4>
+                  <div class="movie-edit-grid">
+                    <label for="containerEditLocationSelect">
+                      <span data-next-i18n="locations.assign">Storage location</span>
+                      <select id="containerEditLocationSelect" name="locationId"></select>
+                    </label>
+                  </div>
+                </div>
               </form>
             </div>
             <div class="detail-card full hidden" id="containerAddContentPanel">
@@ -11039,6 +11156,27 @@ def ui_preview_html(
       <h2 class="visually-hidden" id="commandPaletteTitle" data-next-i18n="commandPalette.title">Command palette</h2>
       <input id="commandPaletteInput" autocomplete="off" placeholder="Search commands..." data-next-i18n-placeholder="commandPalette.placeholder" aria-labelledby="commandPaletteTitle">
       <div class="command-list" id="commandPaletteList"></div>
+    </div>
+  </section>
+  <section class="location-qr-backdrop hidden" id="locationQrBackdrop" aria-modal="true" role="dialog" aria-labelledby="locationQrTitle">
+    <div class="location-qr-panel">
+      <div class="preferences-head location-qr-head">
+        <div>
+          <h2 id="locationQrTitle">Location QR</h2>
+          <p id="locationQrPath"></p>
+        </div>
+        <button type="button" class="icon-button" id="locationQrCloseButton" aria-label="Close" data-next-i18n-aria="common.close">×</button>
+      </div>
+      <div class="location-qr-preview">
+        <div class="location-qr-frame">
+          <img id="locationQrImage" alt="QR">
+          <img class="location-qr-logo" src="/pwa-icon-192.png" alt="">
+        </div>
+      </div>
+      <div class="location-qr-actions">
+        <a class="secondary-button location-qr-download" id="locationQrDownloadLink" href="#" download data-next-i18n="locations.qrDownload">Download SVG</a>
+        <button type="button" class="secondary-button" id="locationQrPrintButton" data-next-i18n="locations.qrPrint">Print QR</button>
+      </div>
     </div>
   </section>
   <nav class=\"""" + mobile_class + """\" aria-label="Mobile">
@@ -18363,7 +18501,7 @@ def ui_preview_html(
         movieEditReleaseDate: movie.release_date || "",
         movieEditCountry: movie.country || "",
         movieEditLanguage: movie.language || "",
-        movieEditLocation: movie.location || "",
+        movieEditLocation: typeof movie.location === "string" ? movie.location : "",
         movieEditRuntime: movie.runtime_minutes || "",
         movieEditDirector: valueText(metadata.director),
         movieEditGenre: valueText(metadata.genre),
@@ -18808,7 +18946,6 @@ def ui_preview_html(
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
         [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
-        [tNext("movieDetail.location", "Location"), movie.location],
         [tNext("movieDetail.director", "Director"), metadata.director],
         [tNext("movieDetail.genre", "Genre"), metadata.genre],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
@@ -18823,9 +18960,15 @@ def ui_preview_html(
         [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
         [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles]
       ]);
+      const releaseLocationText = typeof movie.location === "string" ? movie.location : "";
+      const storageLocationLabel = movie.location && typeof movie.location === "object"
+        ? movie.location.pathLabel || movie.location.name || ""
+        : "";
       const collectorsSubsection = detailFieldSubsection(tNext("movieDetail.collectors", "Collectors"), [
         [tNext("movieDetail.edition", "Edition"), movie.edition],
         [tNext("movieDetail.packaging", "Packaging"), releasePackaging],
+        [tNext("movieDetail.location", "Location"), releaseLocationText],
+        [tNext("locations.assign", "Storage location"), storageLocationLabel],
         [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
         [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
         ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
@@ -27369,14 +27512,33 @@ def ui_preview_html(
         setLocationMessage(error.message || String(error), "bad");
       }
     }
+    function closeLocationQr() {
+      document.getElementById("locationQrBackdrop")?.classList.add("hidden");
+      document.body.classList.remove("location-qr-print-open");
+    }
     function openLocationQr(locationId) {
       const node = locationById(locationId);
       if (!node) return;
       const url = `/api/next/locations/${encodeURIComponent(locationId)}/qr.svg`;
-      const win = window.open("", "_blank");
-      if (!win) return;
-      const title = escapeHtml(node.path_label || node.name || "");
-      win.document.write(`<!doctype html><title>${title}</title><body style="margin:0;display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px;font-family:sans-serif;background:#f8fafc"><h3>${title}</h3><img src="${url}" alt="QR" style="width:280px;height:280px"><a href="${url}" download="location-${escapeHtml(String(node.public_id || locationId))}.svg">${escapeHtml(tNext("locations.qrDownload", "Download SVG"))}</a></body>`);
+      const title = node.path_label || node.name || tNext("locations.qr", "QR");
+      const publicId = String(node.public_id || locationId || "");
+      const deepLink = publicId ? new URL(`/app/locations/${encodeURIComponent(publicId)}`, window.location.origin).toString() : "";
+      const titleNode = document.getElementById("locationQrTitle");
+      const pathNode = document.getElementById("locationQrPath");
+      const imageNode = document.getElementById("locationQrImage");
+      const downloadLink = document.getElementById("locationQrDownloadLink");
+      if (titleNode) titleNode.textContent = title;
+      if (pathNode) pathNode.textContent = deepLink;
+      if (imageNode) {
+        imageNode.src = url;
+        imageNode.alt = `QR for ${title}`;
+      }
+      if (downloadLink) {
+        downloadLink.href = url;
+        downloadLink.setAttribute("download", `location-${publicId}.svg`);
+      }
+      document.getElementById("locationQrBackdrop")?.classList.remove("hidden");
+      document.body.classList.add("location-qr-print-open");
     }
     function setStructureView(view) {
       structureView = view === "locations" ? "locations" : "containers";
@@ -29261,6 +29423,14 @@ def ui_preview_html(
       document.getElementById("preferencesBackdrop")?.addEventListener("click", (event) => {
         if (event.target.id === "preferencesBackdrop") event.currentTarget.classList.add("hidden");
       });
+      document.getElementById("locationQrCloseButton")?.addEventListener("click", () => closeLocationQr());
+      document.getElementById("locationQrPrintButton")?.addEventListener("click", () => {
+        document.body.classList.add("location-qr-print-open");
+        window.print();
+      });
+      document.getElementById("locationQrBackdrop")?.addEventListener("click", (event) => {
+        if (event.target.id === "locationQrBackdrop") closeLocationQr();
+      });
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
       document.getElementById("appReviewToggleButton")?.addEventListener("click", () => toggleReviewLogin());
       document.getElementById("appReviewForm")?.addEventListener("submit", (event) => loginReviewPassword(event));
@@ -29554,6 +29724,11 @@ def ui_preview_html(
             runCommandPaletteCommand();
             return;
           }
+        }
+        if (event.key === "Escape" && !document.getElementById("locationQrBackdrop")?.classList.contains("hidden")) {
+          event.preventDefault();
+          closeLocationQr();
+          return;
         }
         if (event.key === "Escape" && activeDetailMovieId) closeAppMovieDetail();
         if (event.key === "Escape" && activeContainerId) closeAppContainerDetail();
