@@ -30,20 +30,23 @@ feature-branch  ──PR──▶  release/v26-beta   ──(release)──▶  
 
 ## Promoveren naar productie (release-train)
 
-Ontwikkel alles in beta en promoveer op release-momenten door de hele
-`release/v26-beta` naar `main` te mergen:
+Ontwikkel alles in beta en promoveer op release-momenten door heel
+`release/v26-beta` via een **pull request** naar `main` te mergen:
 
 ```sh
-git checkout main
-git pull
-git merge --no-ff origin/release/v26-beta
-git push origin main
+gh pr create --base main --head release/v26-beta \
+  --title "release: promote v26-beta to production" --fill
+# na groene CET-checks:
+gh pr merge --merge
 ```
 
-`main` bouwt dan `:latest` + `:v26`. Zet daarna een release-tag:
+`main` is beschermd (PR vereist, `version-guard` moet groen zijn), dus promotie
+loopt altijd via een PR — niet via een directe push. Na de merge bouwt `main`
+`:latest` + `:v26`. Zet daarna een release-tag:
 
 ```sh
-git tag v26.<minor>.<patch>
+git fetch origin
+git tag v26.<minor>.<patch> origin/main
 git push origin v26.<minor>.<patch>
 ```
 
