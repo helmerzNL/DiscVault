@@ -974,6 +974,63 @@ def ui_preview_html(
       color: var(--accent);
       font-weight: 800;
     }
+    .toolbar-menu.create-menu .toolbar-menu-panel {
+      min-width: 260px;
+      gap: 8px;
+    }
+    .toolbar-menu-create-form {
+      display: grid;
+      gap: 8px;
+      padding: 2px;
+    }
+    .toolbar-menu-create-field {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 780;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+    .toolbar-menu-create-field input,
+    .toolbar-menu-create-field select {
+      min-height: 34px;
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 620;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+    .toolbar-menu-create-submit {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent) 82%, transparent);
+      color: var(--accent-contrast);
+      font-weight: 750;
+      cursor: pointer;
+    }
+    .toolbar-menu-create-message {
+      min-height: 1.1em;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .toolbar-menu-create-message.good {
+      color: var(--green, #1f9d55);
+    }
+    .toolbar-menu-create-message.bad {
+      color: var(--red, #e5484d);
+    }
     .filter-panel {
       min-width: 280px;
       max-width: 320px;
@@ -1075,6 +1132,11 @@ def ui_preview_html(
       cursor: not-allowed;
     }
     .view-mode-button.active {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      color: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    #selectModeButton.active {
       border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
       color: var(--accent);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
@@ -9027,6 +9089,33 @@ def ui_preview_html(
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5,5.6L10,7L8.6,4.5L10,2L7.5,3.4L5,2L6.4,4.5L5,7L7.5,5.6M19.5,15.4L17,14L18.4,16.5L17,19L19.5,17.6L22,19L20.6,16.5L22,14L19.5,15.4M22,2L19.5,3.4L17,2L18.4,4.5L17,7L19.5,5.6L22,7L20.6,4.5L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z"/></svg>
               <span class="metadata-job-badge hidden" id="advancedSearchBadge">0</span>
             </button>
+            <button type="button" class="icon-button" id="selectModeButton" aria-pressed="false" aria-label="Select" data-next-i18n-aria="bulk.select" title="Select" data-next-i18n-title="bulk.select">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2,5H4V19C4,20.11 4.89,21 6,21H20V19H6V5M18,3A2,2 0 0,1 20,5V15A2,2 0 0,1 18,17H8A2,2 0 0,1 6,15V5A2,2 0 0,1 8,3H18M9.5,11L11,12.5L16.5,7L18,8.5L11,15.5L8,12.5L9.5,11Z"/></svg>
+              <span class="visually-hidden" id="selectModeButtonLabel" data-next-i18n="bulk.select">Select</span>
+            </button>
+            <div class="toolbar-menu create-menu hidden" id="collectionCreateMenu">
+              <button type="button" class="icon-button toolbar-menu-trigger" id="collectionCreateTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Create container" data-next-i18n-aria="collection.createContainer" title="Create container" data-next-i18n-title="collection.createContainer">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/></svg>
+              </button>
+              <div class="toolbar-menu-panel hidden" id="collectionCreatePanel" role="dialog" aria-label="Create container" data-next-i18n-aria="collection.createContainer">
+                <form class="toolbar-menu-create-form" id="collectionCreateForm">
+                  <label class="toolbar-menu-create-field" for="collectionCreateType">
+                    <span data-next-i18n="containerDetail.fieldType">Type</span>
+                    <select id="collectionCreateType">
+                      <option value="box_set" data-next-i18n="containerTypes.box_set">Box-set</option>
+                      <option value="vault" data-next-i18n="containerTypes.vault">Vault</option>
+                      <option value="collection" data-next-i18n="containerTypes.collection">Collection</option>
+                    </select>
+                  </label>
+                  <label class="toolbar-menu-create-field" for="collectionCreateTitle">
+                    <span data-next-i18n="containerManage.titleLabel">Name</span>
+                    <input id="collectionCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="collection.createContainerNamePlaceholder" placeholder="New container name">
+                  </label>
+                  <button type="submit" class="toolbar-menu-create-submit" id="collectionCreateSubmitButton" data-next-i18n="containerManage.create">Create</button>
+                  <p class="toolbar-menu-create-message" id="collectionCreateMessage"></p>
+                </form>
+              </div>
+            </div>
             <span class="collection-controls-spacer" aria-hidden="true"></span>
             <div class="view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
               <button type="button" class="icon-button view-mode-button" data-library-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
@@ -9137,7 +9226,6 @@ def ui_preview_html(
         <div class="filter-row">
           <select id="groupFilter" aria-label="Group filter" data-next-i18n-aria="groups.filterLabel"></select>
           <span class="group-scope-pill" id="groupFilterStatus"></span>
-          <button type="button" class="icon-button" id="selectModeButton" data-next-i18n="bulk.select">Select</button>
           <button type="button" class="icon-button metadata-job-toggle hidden" id="libraryMetadataJobsToggleButton">
             <span data-next-i18n="metadataJobs.toggle">Metadata jobs</span>
             <span class="metadata-job-badge" id="libraryMetadataJobBadge">0</span>
@@ -10113,7 +10201,10 @@ def ui_preview_html(
                     <span data-next-i18n="containerDetail.scanToAdd">Scan / search to add</span>
                     <input id="containerScanAddBarcode" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
                   </label>
+<<<<<<< HEAD
                   <div class="import-source-meta import-scan-preview" id="containerScanAddPreview" hidden></div>
+=======
+>>>>>>> origin/release/v26-beta
                   <label for="containerScanAddTitle">
                     <span data-next-i18n="containerDetail.scanToAddTitle">Title (fallback)</span>
                     <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
@@ -11339,6 +11430,9 @@ def ui_preview_html(
     let activePersonId = "";
     let activePersonPayload = null;
     let personReturnRoute = null;
+    let activeLocationRoutePublicId = "";
+    let activeLocationRouteId = "";
+    let activeLocationRouteMissing = false;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
@@ -16111,10 +16205,33 @@ def ui_preview_html(
         status.title = label;
       }
     }
+    function syncSelectModeButton() {
+      const button = document.getElementById("selectModeButton");
+      if (!button) return;
+      const labelNode = document.getElementById("selectModeButtonLabel");
+      const labelKey = selectionMode ? "bulk.done" : "bulk.select";
+      const label = tNext(labelKey, selectionMode ? "Done" : "Select");
+      button.classList.toggle("active", selectionMode);
+      button.setAttribute("aria-pressed", selectionMode ? "true" : "false");
+      button.setAttribute("aria-label", label);
+      button.setAttribute("title", label);
+      button.dataset.nextI18nAria = labelKey;
+      button.dataset.nextI18nTitle = labelKey;
+      if (labelNode) {
+        labelNode.textContent = label;
+        labelNode.dataset.nextI18n = labelKey;
+      }
+    }
     function renderCollectionToolbar() {
       if (!collectorsModeEnabled() && collectionItemFilter === "containers") {
         collectionItemFilter = "all";
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+      }
+      const createMenu = document.getElementById("collectionCreateMenu");
+      const canCreateContainers = collectorsModeEnabled() && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
+      if (createMenu) {
+        createMenu.classList.toggle("hidden", !canCreateContainers);
+        if (!canCreateContainers) closeCollectionMenu("collectionCreateMenu");
       }
       advancedSearch = normalizeAdvancedSearch(advancedSearch);
       smartFilters = Array.isArray(smartFilters) ? smartFilters : [];
@@ -16130,6 +16247,8 @@ def ui_preview_html(
       });
       renderCollectionFilterMenu();
       syncAdvancedSearchControls();
+      syncSelectModeButton();
+      syncCollectionCreateControls();
     }
     function collectionFilterActiveCount() {
       let count = collectionFormatFilters ? collectionFormatFilters.size : 0;
@@ -16235,7 +16354,8 @@ def ui_preview_html(
     }
     const COLLECTION_MENUS = [
       {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
-      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"}
+      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"},
+      {menu: "collectionCreateMenu", trigger: "collectionCreateTrigger", panel: "collectionCreatePanel"}
     ];
     let collectionMenusBound = false;
     function closeCollectionMenu(menuId) {
@@ -16271,7 +16391,7 @@ def ui_preview_html(
           trigger.addEventListener("click", (event) => { event.stopPropagation(); toggleCollectionMenu(def.menu); });
         }
         const panel = document.getElementById(def.panel);
-        if (panel && !panel.dataset.menuBound && def.menu === "collectionFilterMenu") {
+        if (panel && !panel.dataset.menuBound && (def.menu === "collectionFilterMenu" || def.menu === "collectionCreateMenu")) {
           panel.dataset.menuBound = "1";
           panel.addEventListener("click", (event) => event.stopPropagation());
         }
@@ -16307,6 +16427,13 @@ def ui_preview_html(
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
         location: String(source.location || "any").trim() || "any"
       };
+    }
+    function effectiveAdvancedSearchFilters() {
+      const filters = normalizeAdvancedSearch(advancedSearch);
+      if (activeLocationRouteId) {
+        filters.location = String(activeLocationRouteId);
+      }
+      return filters;
     }
     function advancedSearchActiveCount(filters = advancedSearch) {
       const normalized = normalizeAdvancedSearch(filters);
@@ -16460,6 +16587,51 @@ def ui_preview_html(
       if (collectionSelect) collectionSelect.innerHTML = targetOptionHtml(collections, "bulk.noCollections", "No collections");
       if (vaultSelect) vaultSelect.innerHTML = targetOptionHtml(vaults, "bulk.noVaults", "No vaults");
     }
+    function setCollectionCreateMessage(message, tone) {
+      const node = document.getElementById("collectionCreateMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `toolbar-menu-create-message ${tone || ""}`.trim();
+    }
+    function syncCollectionCreateControls() {
+      const typeSelect = document.getElementById("collectionCreateType");
+      const submitButton = document.getElementById("collectionCreateSubmitButton");
+      if (!typeSelect || !submitButton) return;
+      const containerType = ["box_set", "vault", "collection"].includes(typeSelect.value) ? typeSelect.value : "box_set";
+      submitButton.textContent = tNext(`containerManage.create.${containerType}`, tNext("containerManage.create", "Create"));
+    }
+    async function createContainerFromLibraryMenu(event) {
+      event?.preventDefault();
+      if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) return;
+      const typeSelect = document.getElementById("collectionCreateType");
+      const titleInput = document.getElementById("collectionCreateTitle");
+      const title = String(titleInput?.value || "").trim();
+      if (!title) {
+        setCollectionCreateMessage(tNext("containerManage.titleRequired", "Enter a name first."), "bad");
+        titleInput?.focus();
+        return;
+      }
+      const containerType = ["box_set", "vault", "collection"].includes(typeSelect?.value || "") ? typeSelect.value : "box_set";
+      setCollectionCreateMessage(tNext("containerManage.saving", "Saving..."));
+      try {
+        const payload = await authApiJson("/api/next/containers", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({containerType, title})
+        });
+        if (titleInput) titleInput.value = "";
+        setCollectionCreateMessage(tNext("containerManage.created", "Created."), "good");
+        await loadAppSnapshot();
+        renderBulkTargets();
+        const newContainerId = String(payload?.detail?.container?.id || payload?.detail?.id || payload?.container?.id || "");
+        if (newContainerId) {
+          closeCollectionMenu("collectionCreateMenu");
+          openAppContainerDetail(newContainerId);
+        }
+      } catch (error) {
+        setCollectionCreateMessage(error.message || String(error), "bad");
+      }
+    }
     function collectorsModeEnabled() {
       return preferences.collectors_mode === true;
     }
@@ -16571,7 +16743,7 @@ def ui_preview_html(
       return !!(movie?.watched || movie?.is_watched || movie?.watched_count || movie?.last_watched_at || movie?.user_state?.watched);
     }
     function movieMatchesAdvancedSearch(movie) {
-      const filters = normalizeAdvancedSearch(advancedSearch);
+      const filters = effectiveAdvancedSearchFilters();
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
       const yearTo = Number.parseInt(filters.yearTo || "0", 10) || 0;
@@ -16635,7 +16807,7 @@ def ui_preview_html(
     }
     function containerMatchesAdvancedSearch(container) {
       if (!collectorsModeEnabled()) return false;
-      const filters = normalizeAdvancedSearch(advancedSearch);
+      const filters = effectiveAdvancedSearchFilters();
       const type = String(container?.container_type || "");
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
@@ -16690,7 +16862,15 @@ def ui_preview_html(
       return movieGenreValues(movie).some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase());
     }
     function movieLocationValue(movie) {
-      return String(movie?.location || movie?.metadata?.location || "").trim();
+      const direct = movie?.location;
+      if (direct && typeof direct === "object") {
+        return String(direct.path_label || direct.pathLabel || direct.name || "").trim();
+      }
+      const metadataValue = movie?.metadata?.location;
+      if (metadataValue && typeof metadataValue === "object") {
+        return String(metadataValue.path_label || metadataValue.pathLabel || metadataValue.name || "").trim();
+      }
+      return String(direct || metadataValue || "").trim();
     }
     function movieMatchesLocation(movie) {
       if (!collectionLocationFilter) return true;
@@ -16754,6 +16934,7 @@ def ui_preview_html(
       return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
     function libraryDisplayItems() {
+      const filters = effectiveAdvancedSearchFilters();
       const visibleMovies = (movies || []).filter((movie) => (
         movieMatchesGroup(movie)
         && movieMatchesSearch(movie)
@@ -16762,7 +16943,7 @@ def ui_preview_html(
         && movieMatchesGenre(movie)
         && movieMatchesLocation(movie)
         && movieMatchesAdvancedSearch(movie)
-        && !["container", "box_set", "collection", "vault"].includes(normalizeAdvancedSearch(advancedSearch).itemType)
+        && !["container", "box_set", "collection", "vault"].includes(filters.itemType)
       ));
       if (collectionItemFilter === "containers") {
         return sortLibraryItems(visibleContainerItems());
@@ -20172,7 +20353,11 @@ def ui_preview_html(
       }
       setContainerDetailMessage(tNext("containerDetail.adding", "Adding content..."));
       try {
+<<<<<<< HEAD
         const payload = await authApiJson("/api/next/import/movie", {
+=======
+        await authApiJson("/api/next/import/movie", {
+>>>>>>> origin/release/v26-beta
           method: "POST",
           headers: {"Content-Type": "application/json"},
           timeoutMs: 45000,
@@ -20189,6 +20374,7 @@ def ui_preview_html(
         if (barcodeInput) barcodeInput.value = "";
         if (titleInput) titleInput.value = "";
         if (yearInput) yearInput.value = "";
+<<<<<<< HEAD
         const scanPreview = document.getElementById("containerScanAddPreview");
         if (scanPreview) { scanPreview.hidden = true; scanPreview.textContent = ""; }
         const already = payload?.state === "already_exists";
@@ -20202,6 +20388,9 @@ def ui_preview_html(
           msg = tNext("containerDetail.memberVaultLinked", "Already in your vault \u2014 linked here.");
         }
         await refreshActiveContainerDetail(msg, tone);
+=======
+        await refreshActiveContainerDetail(tNext("containerDetail.added", "Content added."), "good");
+>>>>>>> origin/release/v26-beta
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
       }
@@ -20555,6 +20744,7 @@ def ui_preview_html(
         })
       });
     }
+<<<<<<< HEAD
     async function resolveImportMemberBarcode(barcode) {
       const code = normalizeImportBarcode(barcode);
       if (!code) return null;
@@ -20618,6 +20808,8 @@ def ui_preview_html(
       });
       input.addEventListener("change", run);
     }
+=======
+>>>>>>> origin/release/v26-beta
     function renderBoxSetBuilderBatch() {
       const list = document.getElementById("boxSetBuilderBatchList");
       if (!list) return;
@@ -20701,9 +20893,13 @@ def ui_preview_html(
             row.status = "added";
             row.message = (already && !changed)
               ? tNext("importCenter.boxSetBuilderMemberAlready", "Already linked to this box-set.")
+<<<<<<< HEAD
               : (already && changed)
                 ? tNext("importCenter.boxSetBuilderMemberVaultLinked", "Already in your vault \u2014 linked to this box-set.")
                 : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
+=======
+              : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
+>>>>>>> origin/release/v26-beta
             added += 1;
           } catch (error) {
             row.status = "error";
@@ -26120,6 +26316,7 @@ def ui_preview_html(
       if (route.view === "movie") openAppMovieDetail(route.movieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
+      else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
       else if (route.view === "import") showImportPage(false);
       else if (route.view === "lists") showListsPage(false);
@@ -26388,7 +26585,16 @@ def ui_preview_html(
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
-    function showLibraryPage(pushUrl = false, activeRoute = "library") {
+    function clearLocationRouteContext() {
+      activeLocationRoutePublicId = "";
+      activeLocationRouteId = "";
+      activeLocationRouteMissing = false;
+    }
+    function showLibraryPage(pushUrl = false, activeRoute = "library", options = {}) {
+      const preserveLocationContext = !!options.preserveLocationContext;
+      if (!preserveLocationContext) {
+        clearLocationRouteContext();
+      }
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -26399,7 +26605,7 @@ def ui_preview_html(
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("libraryView")?.classList.remove("hidden");
-      setActiveAppRoute(activeRoute);
+      setActiveAppRoute(activeRoute === "location" ? "library" : activeRoute);
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
@@ -26632,7 +26838,30 @@ def ui_preview_html(
       if (personMatch) {
         return {view: "person", personId: decodeURIComponent(personMatch[1] || personMatch[2])};
       }
+      const locationMatch = window.location.pathname.match(/^\\/app\\/locations\\/([^/]+)\\/?$|^\\/locations\\/([^/]+)\\/?$/);
+      if (locationMatch) {
+        return {view: "location", locationPublicId: decodeURIComponent(locationMatch[1] || locationMatch[2])};
+      }
       return {view: "library"};
+    }
+    function openAppLocationRoute(locationPublicId, pushUrl = true) {
+      const publicId = String(locationPublicId || "").trim();
+      if (!publicId) {
+        showLibraryPage(pushUrl);
+        return;
+      }
+      const node = locationByPublicId(publicId);
+      activeLocationRoutePublicId = publicId;
+      activeLocationRouteId = node ? String(node.id || "") : "";
+      activeLocationRouteMissing = !node;
+      showLibraryPage(pushUrl, "location", {preserveLocationContext: true});
+      renderLibrary();
+      if (pushUrl && appMode) {
+        const nextPath = `/locations/${encodeURIComponent(publicId)}`;
+        if (window.location.pathname !== nextPath) {
+          history.pushState({locationPublicId: publicId}, "", nextPath);
+        }
+      }
     }
     function openAppRoute(route) {
       if (route === "admin") {
@@ -27085,9 +27314,19 @@ def ui_preview_html(
       if (summary) {
         const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
         const tileLabel = tNext("collection.tiles", "tiles");
-        summary.textContent = mergeEditionsAsTitleEnabled()
+        let summaryText = mergeEditionsAsTitleEnabled()
           ? `${visibleMovieCount} / ${movies.length} ${movieLabel} · ${displayItems.length} ${tileLabel}`
           : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
+        if (activeLocationRoutePublicId) {
+          if (activeLocationRouteMissing) {
+            summaryText += ` · ${tNext("locations.routeNotFound", "Location not found.")}`;
+          } else {
+            const node = locationById(activeLocationRouteId);
+            const label = node?.path_label || node?.pathLabel || node?.name || activeLocationRoutePublicId;
+            summaryText += ` · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", label)}`;
+          }
+        }
+        summary.textContent = summaryText;
       }
       const navMovieCount = document.getElementById("navMovieCount");
       const navListCount = document.getElementById("navListCount");
@@ -27104,10 +27343,9 @@ def ui_preview_html(
     function toggleSelectMode(force) {
       selectionMode = typeof force === "boolean" ? force : !selectionMode;
       document.body.classList.toggle("select-mode", selectionMode);
-      const button = document.getElementById("selectModeButton");
-      if (button) button.textContent = selectionMode ? tNext("bulk.done", "Done") : tNext("bulk.select", "Select");
       if (!selectionMode) selectedMovieIds.clear();
       if (!selectionMode) selectedContainerIds.clear();
+      syncSelectModeButton();
       renderLibrary();
     }
     function toggleMovieSelection(movieId) {
@@ -27137,8 +27375,7 @@ def ui_preview_html(
       if (!selectionMode) {
         selectionMode = true;
         document.body.classList.add("select-mode");
-        const button = document.getElementById("selectModeButton");
-        if (button) button.textContent = tNext("bulk.done", "Done");
+        syncSelectModeButton();
       }
       selectedMovieIds.clear();
       selectedContainerIds.clear();
@@ -27929,6 +28166,18 @@ def ui_preview_html(
       const key = String(id || "");
       return locations.find((loc) => String(loc.id) === key) || null;
     }
+    function locationByPublicId(publicId) {
+      const key = String(publicId || "").trim();
+      if (!key) return null;
+      return locations.find((loc) => {
+        const routeKeys = [
+          loc.public_id,
+          loc.publicId,
+          loc.id
+        ].map((value) => String(value || "").trim()).filter(Boolean);
+        return routeKeys.includes(key);
+      }) || null;
+    }
     function locationChildren(parentId) {
       const key = parentId ? String(parentId) : "";
       return locations
@@ -28148,8 +28397,8 @@ def ui_preview_html(
       const node = locationById(locationId);
       if (!node) return;
       const url = `/api/next/locations/${encodeURIComponent(locationId)}/qr.svg`;
-      const title = node.path_label || node.name || tNext("locations.qr", "QR");
-      const publicId = String(node.public_id || locationId || "");
+      const title = node.path_label || node.pathLabel || node.name || tNext("locations.qr", "QR");
+      const publicId = String(node.public_id || node.publicId || node.id || locationId || "");
       const deepLink = publicId ? new URL(`/app/locations/${encodeURIComponent(publicId)}`, window.location.origin).toString() : "";
       const titleNode = document.getElementById("locationQrTitle");
       const pathNode = document.getElementById("locationQrPath");
@@ -29247,6 +29496,7 @@ def ui_preview_html(
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
+      else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
@@ -29346,6 +29596,9 @@ def ui_preview_html(
       document.getElementById("advancedSearchDeleteButton")?.addEventListener("click", deleteSmartFilter);
       document.getElementById("smartFilterSelect")?.addEventListener("change", (event) => applySmartFilter(event.target.value || ""));
       setupCollectionMenus();
+      document.getElementById("collectionCreateForm")?.addEventListener("submit", createContainerFromLibraryMenu);
+      document.getElementById("collectionCreateType")?.addEventListener("change", syncCollectionCreateControls);
+      document.getElementById("collectionCreateTitle")?.addEventListener("input", () => setCollectionCreateMessage(""));
       document.querySelectorAll("[data-sort-option]").forEach((button) => {
         button.addEventListener("click", () => {
           collectionSortMode = button.dataset.sortOption || "title_asc";
@@ -29882,7 +30135,10 @@ def ui_preview_html(
       document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
       document.getElementById("boxSetBuilderIdentifyForm")?.addEventListener("submit", (event) => identifyBoxSetBuilderTarget(event));
       document.getElementById("boxSetBuilderMemberForm")?.addEventListener("submit", (event) => addBoxSetBuilderMember(event));
+<<<<<<< HEAD
       wireImportScanPreview("boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberPreview");
+=======
+>>>>>>> origin/release/v26-beta
       document.getElementById("boxSetBuilderBatchButton")?.addEventListener("click", () => runBoxSetBuilderBatch());
       document.getElementById("boxSetBuilderCameraButton")?.addEventListener("click", () => startBoxSetBuilderCameraScan());
       document.getElementById("boxSetBuilderOpenButton")?.addEventListener("click", () => {
@@ -30198,7 +30454,10 @@ def ui_preview_html(
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerScanAddForm")?.addEventListener("submit", (event) => addContainerScanMember(event));
+<<<<<<< HEAD
       wireImportScanPreview("containerScanAddBarcode", "containerScanAddPreview");
+=======
+>>>>>>> origin/release/v26-beta
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
       document.addEventListener("click", (event) => {
@@ -30335,6 +30594,7 @@ def ui_preview_html(
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
         else if (route.view === "container") openAppContainerDetail(route.containerId, false);
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
+        else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
         else if (route.view === "people") showLibraryPage(false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);

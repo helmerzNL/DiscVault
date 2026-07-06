@@ -1065,6 +1065,8 @@
   "containerManage.renamed": "Hernoemd.",
   "containerManage.deleted": "Verwijderd.",
   "containerManage.deleteConfirm": "{title} verwijderen? Hiermee worden ook koppelingen met films en collecties verwijderd.",
+  "collection.createContainer": "Container aanmaken",
+  "collection.createContainerNamePlaceholder": "Nieuwe containernaam",
   "importCenter.jobType.collection": "Collectie",
   "importCenter.jobType.importSource": "Pluginimport",
   "importCenter.jobType.metadata": "Metadata",
@@ -1401,10 +1403,13 @@
   "importCenter.boxSetBuilderAdding": "Member toevoegen...",
   "importCenter.boxSetBuilderMemberLinked": "Member toegevoegd.",
   "importCenter.boxSetBuilderMemberAlready": "Al gekoppeld aan deze box-set.",
+<<<<<<< HEAD
   "importCenter.boxSetBuilderMemberVaultLinked": "Stond al in je vault \u2014 aan deze box-set gekoppeld.",
   "importCenter.scanPreviewExisting": "Staat al in je vault:",
   "importCenter.scanPreviewCandidates": "Match gevonden \u2014 wordt bij toevoegen ge\u00efmporteerd.",
   "importCenter.scanPreviewUnknown": "Onbekende barcode \u2014 maak 'm handmatig aan met een titel hieronder.",
+=======
+>>>>>>> origin/release/v26-beta
   "importCenter.boxSetBuilderBatchTitle": "Meerdere barcodes plakken",
   "importCenter.boxSetBuilderBatchHelp": "Plak of scan meerdere member-barcodes (één per regel). Ze worden allemaal aan deze box-set gekoppeld.",
   "importCenter.boxSetBuilderBatchRun": "Alles aan box-set toevoegen",
@@ -2088,6 +2093,8 @@
   "locations.none": "Geen locatie",
   "locations.movieCount": "{count} films",
   "locations.containerCount": "{count} containers",
+  "locations.routeContext": "Locatie: {path}",
+  "locations.routeNotFound": "Locatie niet gevonden.",
   "collection.locationFilter": "Locatie",
   "collection.locationFilterAny": "Elke locatie"
 }
