@@ -89,6 +89,24 @@ git push origin release/v26-beta
 
 Then open the promotion PR again and merge it with `--merge`.
 
+### Cleaning up after a merge
+
+Delete a **feature branch** as soon as its PR merges into `release/v26-beta` — stale
+branches pile up fast (we once had 19 to prune):
+
+```sh
+git push origin --delete <feature-branch>   # or use the PR "Delete branch" button
+```
+
+- A branch **ruleset** may print a warning like `Cannot delete this branch`; an admin
+  bypass still deletes it — the `[deleted]` line in the output confirms success.
+- **Never delete** the permanent branches: `main`, `release/v26-beta`, `legacy`.
+- Promotions (beta → `main`) only **merge** — they never delete `release/v26-beta`.
+- **Exception — active Copilot worktree / session branches:** do NOT delete a branch an
+  open session is still using. Session branches are **reused across multiple PRs**
+  (e.g. one session may open #144, #148, #149 from the same branch). Delete such a
+  branch only after the session is finished.
+
 ### Branch protection
 
 `main` is protected: PRs require review, the version-guard check, and Copilot review before
@@ -117,6 +135,9 @@ promotion rule, stop and warn the user before acting.
    unless the user opts out.
 4. Push and open the PR **into `release/v26-beta`** (feature PRs into beta may be squashed).
 5. Let it build/test on the beta channel before considering promotion.
+6. **After the PR merges, delete the feature branch** (`git push origin --delete <branch>`) —
+   unless it is the active Copilot session/worktree branch (reused across PRs) or a
+   permanent branch (`main`, `release/v26-beta`, `legacy`). If unsure, ask before deleting.
 
 **When the user asks to "ship", "promote", or "push to main"**
 
@@ -126,6 +147,7 @@ promotion rule, stop and warn the user before acting.
   recipe above.
 - After promotion, verify `main` and `release/v26-beta` are content-identical
   (`git diff origin/main origin/release/v26-beta --stat` empty).
+- Promotion only merges — **never delete `release/v26-beta`** afterwards.
 
 Full reference: **[DiscVault 26 — Branching & releases](https://wiki.zbonline.nl/en/Projecten/Coding/discvault/branching)**
 and the step-by-step **[feature → production workflow](https://wiki.zbonline.nl/en/Projecten/Coding/discvault/feature-workflow)** on the wiki.
