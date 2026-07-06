@@ -974,6 +974,63 @@ def ui_preview_html(
       color: var(--accent);
       font-weight: 800;
     }
+    .toolbar-menu.create-menu .toolbar-menu-panel {
+      min-width: 260px;
+      gap: 8px;
+    }
+    .toolbar-menu-create-form {
+      display: grid;
+      gap: 8px;
+      padding: 2px;
+    }
+    .toolbar-menu-create-field {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 780;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+    .toolbar-menu-create-field input,
+    .toolbar-menu-create-field select {
+      min-height: 34px;
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 620;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+    .toolbar-menu-create-submit {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent) 82%, transparent);
+      color: var(--accent-contrast);
+      font-weight: 750;
+      cursor: pointer;
+    }
+    .toolbar-menu-create-message {
+      min-height: 1.1em;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .toolbar-menu-create-message.good {
+      color: var(--green, #1f9d55);
+    }
+    .toolbar-menu-create-message.bad {
+      color: var(--red, #e5484d);
+    }
     .filter-panel {
       min-width: 280px;
       max-width: 320px;
@@ -9635,6 +9692,7 @@ def ui_preview_html(
                     <span data-next-i18n="importCenter.boxSetBuilderMemberBarcode">Member barcode</span>
                     <input id="boxSetBuilderMemberBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
                   </label>
+                  <div class="import-source-meta import-scan-preview" id="boxSetBuilderMemberPreview" hidden></div>
                   <label>
                     <span data-next-i18n="importCenter.boxSetBuilderMemberTitle">Title (fallback)</span>
                     <input id="boxSetBuilderMemberTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
@@ -9646,6 +9704,16 @@ def ui_preview_html(
                   <button type="submit" class="primary-button" id="boxSetBuilderMemberButton" data-next-i18n="importCenter.boxSetBuilderAddMember">Scan / add member</button>
                 </form>
                 <div class="login-message" id="boxSetBuilderMemberMessage"></div>
+                <details class="import-batch-paste" id="boxSetBuilderBatchCard">
+                  <summary data-next-i18n="importCenter.boxSetBuilderBatchTitle">Paste multiple barcodes</summary>
+                  <p class="import-source-meta" data-next-i18n="importCenter.boxSetBuilderBatchHelp">Paste or scan several member barcodes (one per line). All of them are linked to this box-set.</p>
+                  <textarea id="boxSetBuilderBatchInput" rows="4" autocomplete="off" data-next-i18n-placeholder="importCenter.batchPlaceholder" placeholder="One barcode per line"></textarea>
+                  <div class="button-row compact">
+                    <button type="button" class="primary-button" id="boxSetBuilderBatchButton" data-next-i18n="importCenter.boxSetBuilderBatchRun">Add all to box-set</button>
+                  </div>
+                  <div class="login-message" id="boxSetBuilderBatchMessage"></div>
+                  <div class="import-batch-list" id="boxSetBuilderBatchList"></div>
+                </details>
                 <div class="import-batch-list" id="boxSetBuilderMemberList"></div>
               </div>
             </div>
@@ -10166,6 +10234,25 @@ def ui_preview_html(
                   </label>
                   <div class="profile-form-actions">
                     <button type="submit" class="secondary-button" data-next-i18n="containerDetail.addMovieButton">Add movie</button>
+                  </div>
+                </form>
+                <form class="profile-form hidden" id="containerScanAddForm">
+                  <label for="containerScanAddBarcode">
+                    <span data-next-i18n="containerDetail.scanToAdd">Scan / search to add</span>
+                    <input id="containerScanAddBarcode" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
+                  </label>
+                  <div class="import-source-meta import-scan-preview" id="containerScanAddPreview" hidden></div>
+                  <label for="containerScanAddTitle">
+                    <span data-next-i18n="containerDetail.scanToAddTitle">Title (fallback)</span>
+                    <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                  </label>
+                  <label for="containerScanAddYear">
+                    <span data-next-i18n="importCenter.manualYear">Year</span>
+                    <input id="containerScanAddYear" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
+                  </label>
+                  <p class="import-source-meta" data-next-i18n="containerDetail.scanToAddHelp">Scan or type a member barcode to import the movie and link it here.</p>
+                  <div class="profile-form-actions">
+                    <button type="submit" class="secondary-button" data-next-i18n="containerDetail.scanToAddButton">Scan / add</button>
                   </div>
                 </form>
                 <form class="profile-form" id="containerAddItemForm">
@@ -11380,6 +11467,9 @@ def ui_preview_html(
     let activePersonId = "";
     let activePersonPayload = null;
     let personReturnRoute = null;
+    let activeLocationRoutePublicId = "";
+    let activeLocationRouteId = "";
+    let activeLocationRouteMissing = false;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
@@ -16174,6 +16264,12 @@ def ui_preview_html(
         collectionItemFilter = "all";
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
       }
+      const createMenu = document.getElementById("collectionCreateMenu");
+      const canCreateContainers = collectorsModeEnabled() && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
+      if (createMenu) {
+        createMenu.classList.toggle("hidden", !canCreateContainers);
+        if (!canCreateContainers) closeCollectionMenu("collectionCreateMenu");
+      }
       advancedSearch = normalizeAdvancedSearch(advancedSearch);
       smartFilters = Array.isArray(smartFilters) ? smartFilters : [];
       libraryViewMode = normalizeLibraryViewMode(libraryViewMode);
@@ -16295,7 +16391,8 @@ def ui_preview_html(
     }
     const COLLECTION_MENUS = [
       {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
-      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"}
+      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"},
+      {menu: "collectionCreateMenu", trigger: "collectionCreateTrigger", panel: "collectionCreatePanel"}
     ];
     let collectionMenusBound = false;
     function closeCollectionMenu(menuId) {
@@ -16331,7 +16428,7 @@ def ui_preview_html(
           trigger.addEventListener("click", (event) => { event.stopPropagation(); toggleCollectionMenu(def.menu); });
         }
         const panel = document.getElementById(def.panel);
-        if (panel && !panel.dataset.menuBound && def.menu === "collectionFilterMenu") {
+        if (panel && !panel.dataset.menuBound && (def.menu === "collectionFilterMenu" || def.menu === "collectionCreateMenu")) {
           panel.dataset.menuBound = "1";
           panel.addEventListener("click", (event) => event.stopPropagation());
         }
@@ -16367,6 +16464,13 @@ def ui_preview_html(
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
         location: String(source.location || "any").trim() || "any"
       };
+    }
+    function effectiveAdvancedSearchFilters() {
+      const filters = normalizeAdvancedSearch(advancedSearch);
+      if (activeLocationRouteId) {
+        filters.location = String(activeLocationRouteId);
+      }
+      return filters;
     }
     function advancedSearchActiveCount(filters = advancedSearch) {
       const normalized = normalizeAdvancedSearch(filters);
@@ -16638,6 +16742,51 @@ def ui_preview_html(
         if (summary) summary.textContent = message;
       }
     }
+    function setCollectionCreateMessage(message, tone) {
+      const node = document.getElementById("collectionCreateMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `toolbar-menu-create-message ${tone || ""}`.trim();
+    }
+    function syncCollectionCreateControls() {
+      const typeSelect = document.getElementById("collectionCreateType");
+      const submitButton = document.getElementById("collectionCreateSubmitButton");
+      if (!typeSelect || !submitButton) return;
+      const containerType = ["box_set", "vault", "collection"].includes(typeSelect.value) ? typeSelect.value : "box_set";
+      submitButton.textContent = tNext(`containerManage.create.${containerType}`, tNext("containerManage.create", "Create"));
+    }
+    async function createContainerFromLibraryMenu(event) {
+      event?.preventDefault();
+      if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) return;
+      const typeSelect = document.getElementById("collectionCreateType");
+      const titleInput = document.getElementById("collectionCreateTitle");
+      const title = String(titleInput?.value || "").trim();
+      if (!title) {
+        setCollectionCreateMessage(tNext("containerManage.titleRequired", "Enter a name first."), "bad");
+        titleInput?.focus();
+        return;
+      }
+      const containerType = ["box_set", "vault", "collection"].includes(typeSelect?.value || "") ? typeSelect.value : "box_set";
+      setCollectionCreateMessage(tNext("containerManage.saving", "Saving..."));
+      try {
+        const payload = await authApiJson("/api/next/containers", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({containerType, title})
+        });
+        if (titleInput) titleInput.value = "";
+        setCollectionCreateMessage(tNext("containerManage.created", "Created."), "good");
+        await loadAppSnapshot();
+        renderBulkTargets();
+        const newContainerId = String(payload?.detail?.container?.id || payload?.detail?.id || payload?.container?.id || "");
+        if (newContainerId) {
+          closeCollectionMenu("collectionCreateMenu");
+          openAppContainerDetail(newContainerId);
+        }
+      } catch (error) {
+        setCollectionCreateMessage(error.message || String(error), "bad");
+      }
+    }
     function collectorsModeEnabled() {
       return preferences.collectors_mode === true;
     }
@@ -16749,7 +16898,7 @@ def ui_preview_html(
       return !!(movie?.watched || movie?.is_watched || movie?.watched_count || movie?.last_watched_at || movie?.user_state?.watched);
     }
     function movieMatchesAdvancedSearch(movie) {
-      const filters = normalizeAdvancedSearch(advancedSearch);
+      const filters = effectiveAdvancedSearchFilters();
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
       const yearTo = Number.parseInt(filters.yearTo || "0", 10) || 0;
@@ -16813,7 +16962,7 @@ def ui_preview_html(
     }
     function containerMatchesAdvancedSearch(container) {
       if (!collectorsModeEnabled()) return false;
-      const filters = normalizeAdvancedSearch(advancedSearch);
+      const filters = effectiveAdvancedSearchFilters();
       const type = String(container?.container_type || "");
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
@@ -16868,7 +17017,15 @@ def ui_preview_html(
       return movieGenreValues(movie).some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase());
     }
     function movieLocationValue(movie) {
-      return String(movie?.location || movie?.metadata?.location || "").trim();
+      const direct = movie?.location;
+      if (direct && typeof direct === "object") {
+        return String(direct.path_label || direct.pathLabel || direct.name || "").trim();
+      }
+      const metadataValue = movie?.metadata?.location;
+      if (metadataValue && typeof metadataValue === "object") {
+        return String(metadataValue.path_label || metadataValue.pathLabel || metadataValue.name || "").trim();
+      }
+      return String(direct || metadataValue || "").trim();
     }
     function movieMatchesLocation(movie) {
       if (!collectionLocationFilter) return true;
@@ -16932,6 +17089,7 @@ def ui_preview_html(
       return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
     function libraryDisplayItems() {
+      const filters = effectiveAdvancedSearchFilters();
       const visibleMovies = (movies || []).filter((movie) => (
         movieMatchesGroup(movie)
         && movieMatchesSearch(movie)
@@ -16940,7 +17098,7 @@ def ui_preview_html(
         && movieMatchesGenre(movie)
         && movieMatchesLocation(movie)
         && movieMatchesAdvancedSearch(movie)
-        && !["container", "box_set", "collection", "vault"].includes(normalizeAdvancedSearch(advancedSearch).itemType)
+        && !["container", "box_set", "collection", "vault"].includes(filters.itemType)
       ));
       if (collectionItemFilter === "containers") {
         return sortLibraryItems(visibleContainerItems());
@@ -18060,16 +18218,21 @@ def ui_preview_html(
       const orderAttrs = options.orderKind === "item"
         ? `data-container-move-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
         : `data-container-move-movie="${escapeHtml(movie.id || "")}"`;
+      const coverContainer = (activeContainerPayload && activeContainerPayload.container) || {};
+      const primaryMovieId = String(coverContainer.primaryMovieId || "");
+      const canSetCover = canEdit && coverContainer.container_type === "box_set" && options.removeKind !== "item" && movie.id;
+      const isCover = canSetCover && primaryMovieId && String(movie.id) === primaryMovieId;
+      const coverButton = canSetCover ? `
+          <button type="button" class="detail-order-button container-cover-button ${isCover ? "active" : ""}" data-container-set-cover="${escapeHtml(movie.id || "")}" ${isCover ? "disabled" : ""} title="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}" aria-label="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}">${isCover ? "&#9733;" : "&#9734;"}</button>
+      ` : "";
       const orderControls = canEdit ? `
         <div class="container-member-actions">
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          ${coverButton}
           <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
         </div>
       ` : "";
-      return `
-        <div class="container-member-card ${canEdit ? "editable" : ""}" title="${escapeHtml(title)}">
-          <a class="container-member-poster" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}" title="${escapeHtml(title)}">
             ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}
             <span class="container-member-index">${escapeHtml(index + 1)}</span>
             ${physicalFormatBadgeHtml(movie.format || movie.edition_type || metadata.format)}
@@ -19479,6 +19642,8 @@ def ui_preview_html(
       const itemSelect = document.getElementById("containerAddItemSelect");
       const linkedMovieIds = new Set((detail.memberMovies || []).map((movie) => String(movie.id)));
       if (movieForm) movieForm.classList.toggle("hidden", !["box_set", "vault"].includes(type));
+      const scanForm = document.getElementById("containerScanAddForm");
+      if (scanForm) scanForm.classList.toggle("hidden", !["box_set", "vault"].includes(type));
       if (movieSelect) {
         const availableMovies = movies.filter((movie) => !linkedMovieIds.has(String(movie.id)));
         movieSelect.innerHTML = movieSelectOptions(availableMovies);
@@ -19591,7 +19756,14 @@ def ui_preview_html(
       }
       const posterNode = document.getElementById("containerDetailPoster");
       if (posterNode) {
-        posterNode.innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        let coverPoster = poster;
+        if (!coverPoster && container.container_type === "box_set" && container.primaryMovieId) {
+          const coverMember = (detail.memberMovies || []).find((movie) => String(movie.id) === String(container.primaryMovieId));
+          if (coverMember) {
+            coverPoster = usableImage(coverMember.poster_url || (coverMember.metadata || {}).poster_url || (coverMember.metadata || {}).posterUrl || (coverMember.metadata || {}).poster);
+          }
+        }
+        posterNode.innerHTML = coverPoster ? `<img src="${escapeHtml(coverPoster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       }
       const summary = detail.aggregateSummary || {};
       const directMovieCount = (detail.memberMovies || []).length;
@@ -20053,15 +20225,22 @@ def ui_preview_html(
       const orderAttrs = options.orderKind === "item"
         ? `data-container-move-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
         : `data-container-move-movie="${escapeHtml(movie.id || "")}"`;
+      const coverContainer = (activeContainerPayload && activeContainerPayload.container) || {};
+      const primaryMovieId = String(coverContainer.primaryMovieId || "");
+      const canSetCover = coverContainer.container_type === "box_set" && options.removeKind !== "item" && movie.id;
+      const isCover = canSetCover && primaryMovieId && String(movie.id) === primaryMovieId;
+      const coverButton = canSetCover ? `
+          <button type="button" class="detail-order-button container-cover-button ${isCover ? "active" : ""}" data-container-set-cover="${escapeHtml(movie.id || "")}" ${isCover ? "disabled" : ""} title="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}" aria-label="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}">${isCover ? "&#9733;" : "&#9734;"}</button>
+      ` : "";
       return `
         <span class="container-member-row-actions">
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          ${coverButton}
           <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
         </span>
       `;
     }
-    function containerMemberContainerRowActionsHtml(item, index, total, canEdit) {
       if (!canEdit) return "";
       const itemId = item.entity_id || item.item_id || item.id || "";
       const itemType = item.item_type || item.container_type || item.entity_type || "container";
@@ -20305,6 +20484,64 @@ def ui_preview_html(
         setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
+    async function addContainerScanMember(event) {
+      event.preventDefault();
+      if (!activeContainerId) return;
+      if (!hasPermission("containers.edit")) {
+        setContainerDetailMessage(tNext("common.noPermission", "You do not have permission for this action."), "bad");
+        return;
+      }
+      const barcodeInput = document.getElementById("containerScanAddBarcode");
+      const titleInput = document.getElementById("containerScanAddTitle");
+      const yearInput = document.getElementById("containerScanAddYear");
+      const barcode = normalizeImportBarcode(barcodeInput?.value || "");
+      const title = String(titleInput?.value || "").trim();
+      const year = String(yearInput?.value || "").trim();
+      if (!barcode && !title) {
+        setContainerDetailMessage(tNext("containerDetail.scanToAddNeedInput", "Scan a barcode or enter a title to add a member."), "bad");
+        return;
+      }
+      const container = activeContainer();
+      if (barcode && container.barcode && barcode === normalizeImportBarcode(container.barcode)) {
+        setContainerDetailMessage(tNext("importCenter.boxSetBuilderOwnBarcode", "That is the box-set's own barcode, not a member."), "warn");
+        return;
+      }
+      setContainerDetailMessage(tNext("containerDetail.adding", "Adding content..."));
+      try {
+        const payload = await authApiJson("/api/next/import/movie", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          timeoutMs: 45000,
+          body: JSON.stringify({
+            barcode,
+            title,
+            year,
+            format: "",
+            importMode: "movie",
+            detectBoxSets: false,
+            targetContainerId: activeContainerId
+          })
+        });
+        if (barcodeInput) barcodeInput.value = "";
+        if (titleInput) titleInput.value = "";
+        if (yearInput) yearInput.value = "";
+        const scanPreview = document.getElementById("containerScanAddPreview");
+        if (scanPreview) { scanPreview.hidden = true; scanPreview.textContent = ""; }
+        const already = payload?.state === "already_exists";
+        const changed = Number(payload?.linkChanged || 0) > 0;
+        let msg = tNext("containerDetail.added", "Content added.");
+        let tone = "good";
+        if (already && !changed) {
+          msg = tNext("containerDetail.memberAlready", "Already linked to this box-set.");
+          tone = "warn";
+        } else if (already && changed) {
+          msg = tNext("containerDetail.memberVaultLinked", "Already in your vault \u2014 linked here.");
+        }
+        await refreshActiveContainerDetail(msg, tone);
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
     async function addCollectionItem(event) {
       event.preventDefault();
       if (!activeContainerId) return;
@@ -20396,6 +20633,22 @@ def ui_preview_html(
         renderContainerDetail(payload.detail || {});
         await loadAppSnapshot();
         setContainerDetailMessage(tNext("containerDetail.removed", "Link removed."), "good");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function setContainerCoverMovie(movieId) {
+      if (!activeContainerId || !movieId) return;
+      setContainerDetailMessage(tNext("containerDetail.settingCover", "Updating cover..."));
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({primaryMovieId: movieId})
+        });
+        renderContainerDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setContainerDetailMessage(tNext("containerDetail.coverSet", "Cover updated."), "good");
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
       }
@@ -20621,6 +20874,190 @@ def ui_preview_html(
       }
       renderBoxSetBuilder();
     }
+    function postBoxSetBuilderMemberImport(fields) {
+      const state = boxSetBuilderState();
+      return authApiJson("/api/next/import/movie", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        timeoutMs: 45000,
+        body: JSON.stringify({
+          barcode: fields.barcode || "",
+          title: fields.title || "",
+          year: fields.year || "",
+          format: "",
+          importMode: "movie",
+          detectBoxSets: false,
+          targetContainerId: state.target.id
+        })
+      });
+    }
+    async function resolveImportMemberBarcode(barcode) {
+      const code = normalizeImportBarcode(barcode);
+      if (!code) return null;
+      const url = "/api/next/import/movie/resolve?barcode=" + encodeURIComponent(code);
+      return authApiJson(url, {method: "GET", timeoutMs: 15000});
+    }
+    function renderImportScanPreview(previewEl, payload) {
+      if (!previewEl) return;
+      if (!payload || payload.status !== "ok") {
+        previewEl.hidden = true;
+        previewEl.textContent = "";
+        return;
+      }
+      previewEl.hidden = false;
+      previewEl.classList.remove("is-good", "is-neutral");
+      if (payload.state === "existingMovie" && payload.movie) {
+        const movie = payload.movie;
+        const label = tNext("importCenter.scanPreviewExisting", "Already in your vault:");
+        const year = movie.year ? " (" + escapeHtml(String(movie.year)) + ")" : "";
+        previewEl.classList.add("is-good");
+        previewEl.innerHTML = escapeHtml(label) + " <strong>" + escapeHtml(movie.title || "") + "</strong>" + year;
+      } else if (payload.state === "candidates" && payload.candidateCount) {
+        const label = tNext("importCenter.scanPreviewCandidates", "Match found — will be imported on add.");
+        previewEl.classList.add("is-neutral");
+        previewEl.textContent = label;
+      } else {
+        const label = tNext("importCenter.scanPreviewUnknown", "Unknown barcode — create it manually with a title below.");
+        previewEl.classList.add("is-neutral");
+        previewEl.textContent = label;
+      }
+    }
+    function wireImportScanPreview(inputId, previewId) {
+      const input = document.getElementById(inputId);
+      const previewEl = document.getElementById(previewId);
+      if (!input || !previewEl || input.dataset.scanPreviewWired === "1") return;
+      input.dataset.scanPreviewWired = "1";
+      let timer = null;
+      let lastCode = "";
+      const run = async () => {
+        const code = normalizeImportBarcode(input.value);
+        if (!code) {
+          lastCode = "";
+          previewEl.hidden = true;
+          previewEl.textContent = "";
+          return;
+        }
+        if (code === lastCode) return;
+        lastCode = code;
+        try {
+          const payload = await resolveImportMemberBarcode(code);
+          if (normalizeImportBarcode(input.value) !== code) return;
+          renderImportScanPreview(previewEl, payload);
+        } catch (error) {
+          previewEl.hidden = true;
+          previewEl.textContent = "";
+        }
+      };
+      input.addEventListener("input", () => {
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(run, 450);
+      });
+      input.addEventListener("change", run);
+    }
+    function renderBoxSetBuilderBatch() {
+      const list = document.getElementById("boxSetBuilderBatchList");
+      if (!list) return;
+      const state = boxSetBuilderState();
+      const rows = (state.batch && state.batch.rows) || [];
+      if (!rows.length) {
+        list.innerHTML = "";
+        return;
+      }
+      list.innerHTML = rows.map((row) => {
+        const statusClass = row.status === "added"
+          ? "is-added"
+          : row.status === "error"
+            ? "is-error"
+            : row.status === "running"
+              ? "is-running"
+              : "";
+        const rowClass = ["import-batch-row", statusClass].filter(Boolean).join(" ");
+        const checkMark = row.status === "added" ? `<span class="import-batch-check" aria-hidden="true">&#10003;</span>` : "";
+        const spinner = row.status === "running" ? `<span class="import-batch-spinner" aria-hidden="true"></span>` : "";
+        return `
+          <div class="${rowClass}">
+            <span class="import-batch-info">
+              ${checkMark}
+              ${spinner}
+              <span class="import-batch-text">
+                <strong>${escapeHtml(row.barcode || "-")}</strong>
+                <span>${escapeHtml(row.message || tNext("importCenter.batchQueued", "Queued"))}</span>
+              </span>
+            </span>
+          </div>`;
+      }).join("");
+    }
+    async function runBoxSetBuilderBatch() {
+      const state = boxSetBuilderState();
+      if (!state.target?.id) {
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", tNext("importCenter.boxSetBuilderNoTarget", "Identify a box-set first."), "bad");
+        return;
+      }
+      if (state.busy) return;
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) {
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", tNext("common.noPermission", "You do not have permission for this action."), "bad");
+        return;
+      }
+      const textarea = document.getElementById("boxSetBuilderBatchInput");
+      const parsed = parseImportBatchBarcodes(textarea?.value || "");
+      const ownBarcode = state.target.barcode ? normalizeImportBarcode(state.target.barcode) : "";
+      const invalidMessage = tNext("importCenter.scanInvalid", "The scanned barcode was not a valid EAN or UPC.");
+      const rows = [
+        ...parsed.valid.map((barcode) => ({barcode, status: "queued", message: tNext("importCenter.batchQueued", "Queued")})),
+        ...parsed.invalid.map((barcode) => ({barcode, status: "error", message: invalidMessage}))
+      ];
+      state.batch = {rows, running: true};
+      if (!parsed.valid.length) {
+        state.batch.running = false;
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", tNext("importCenter.batchNoValid", "No valid EAN or UPC barcodes found."), "bad");
+        renderBoxSetBuilderBatch();
+        return;
+      }
+      state.busy = true;
+      setBoxSetBuilderMessage("boxSetBuilderBatchMessage", `${tNext("importCenter.batchRunning", "Checking batch...")} ${formatNumber(parsed.valid.length)}`);
+      renderBoxSetBuilderBatch();
+      let added = 0;
+      try {
+        for (const row of rows) {
+          if (row.status === "error") continue;
+          if (ownBarcode && normalizeImportBarcode(row.barcode) === ownBarcode) {
+            row.status = "error";
+            row.message = tNext("importCenter.boxSetBuilderOwnBarcode", "That is the box-set's own barcode, not a member.");
+            renderBoxSetBuilderBatch();
+            continue;
+          }
+          row.status = "running";
+          row.message = tNext("importCenter.boxSetBuilderAdding", "Adding member...");
+          renderBoxSetBuilderBatch();
+          try {
+            const payload = await postBoxSetBuilderMemberImport({barcode: row.barcode, title: "", year: ""});
+            applyBoxSetBuilderResult(payload);
+            const already = payload.state === "already_exists";
+            const changed = Number(payload.linkChanged || 0) > 0;
+            row.status = "added";
+            row.message = (already && !changed)
+              ? tNext("importCenter.boxSetBuilderMemberAlready", "Already linked to this box-set.")
+              : (already && changed)
+                ? tNext("importCenter.boxSetBuilderMemberVaultLinked", "Already in your vault \u2014 linked to this box-set.")
+                : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
+            added += 1;
+          } catch (error) {
+            row.status = "error";
+            row.message = error?.message || String(error);
+          }
+          renderBoxSetBuilderBatch();
+        }
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", `${tNext("importCenter.batchDone", "Batch check completed.")} ${formatNumber(added)}`, "good");
+        if (added && textarea) textarea.value = "";
+      } catch (error) {
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", error.message || String(error), "bad");
+      } finally {
+        state.batch.running = false;
+        state.busy = false;
+        await refreshBoxSetBuilderMembers();
+        renderBoxSetBuilderBatch();
+      }
+    }
     async function addBoxSetBuilderMember(codeOrEvent) {
       const isEvent = codeOrEvent && typeof codeOrEvent === "object" && typeof codeOrEvent.preventDefault === "function";
       if (isEvent) codeOrEvent.preventDefault();
@@ -20652,20 +21089,7 @@ def ui_preview_html(
       state.busy = true;
       setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("importCenter.boxSetBuilderAdding", "Adding member..."));
       try {
-        const payload = await authApiJson("/api/next/import/movie", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          timeoutMs: 45000,
-          body: JSON.stringify({
-            barcode,
-            title,
-            year,
-            format: "",
-            importMode: "movie",
-            detectBoxSets: false,
-            targetContainerId: state.target.id
-          })
-        });
+        const payload = await postBoxSetBuilderMemberImport({barcode, title, year});
         applyBoxSetBuilderResult(payload);
         const movie = payload.movie || payload.detail?.movie || {};
         const movieTitle = String(movie.title || title || barcode || "").trim();
@@ -20678,12 +21102,18 @@ def ui_preview_html(
           messageKey = "importCenter.boxSetBuilderMemberAlready";
           messageFallback = "Already linked to this box-set.";
           tone = "warn";
+        } else if (already && changed) {
+          messageKey = "importCenter.boxSetBuilderMemberVaultLinked";
+          messageFallback = "Already in your vault \u2014 linked to this box-set.";
+          tone = "good";
         }
         const prefix = movieTitle ? `${movieTitle}: ` : "";
         setBoxSetBuilderMessage("boxSetBuilderMemberMessage", `${prefix}${tNext(messageKey, messageFallback)}`, tone);
         if (barcodeInput) barcodeInput.value = "";
         if (titleInput) titleInput.value = "";
         if (yearInput) yearInput.value = "";
+        const memberPreview = document.getElementById("boxSetBuilderMemberPreview");
+        if (memberPreview) { memberPreview.hidden = true; memberPreview.textContent = ""; }
         barcodeInput?.focus();
         if (state.captureToCamera) {
           setImportScannerMessage(`${prefix}${tNext(messageKey, messageFallback)}`, tone);
@@ -20728,13 +21158,15 @@ def ui_preview_html(
       if (targetId) openAppContainerDetail(targetId);
     }
     function resetBoxSetBuilder() {
-      importCenter.boxSetBuilder = {target: null, members: [], captureToCamera: false, busy: false};
-      ["boxSetBuilderBarcodeInput", "boxSetBuilderTitleInput", "boxSetBuilderYearInput", "boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberTitleInput", "boxSetBuilderMemberYearInput"].forEach((id) => {
+      importCenter.boxSetBuilder = {target: null, members: [], captureToCamera: false, busy: false, batch: {rows: [], running: false}};
+      ["boxSetBuilderBarcodeInput", "boxSetBuilderTitleInput", "boxSetBuilderYearInput", "boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberTitleInput", "boxSetBuilderMemberYearInput", "boxSetBuilderBatchInput"].forEach((id) => {
         const node = document.getElementById(id);
         if (node) node.value = "";
       });
       setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", "");
       setBoxSetBuilderMessage("boxSetBuilderMemberMessage", "");
+      setBoxSetBuilderMessage("boxSetBuilderBatchMessage", "");
+      renderBoxSetBuilderBatch();
       renderBoxSetBuilder();
     }
     function jsonPreview(value, maxLength = 1200) {
@@ -26024,6 +26456,7 @@ def ui_preview_html(
       if (route.view === "movie") openAppMovieDetail(route.movieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
+      else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
       else if (route.view === "import") showImportPage(false);
       else if (route.view === "lists") showListsPage(false);
@@ -26292,7 +26725,16 @@ def ui_preview_html(
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
-    function showLibraryPage(pushUrl = false, activeRoute = "library") {
+    function clearLocationRouteContext() {
+      activeLocationRoutePublicId = "";
+      activeLocationRouteId = "";
+      activeLocationRouteMissing = false;
+    }
+    function showLibraryPage(pushUrl = false, activeRoute = "library", options = {}) {
+      const preserveLocationContext = !!options.preserveLocationContext;
+      if (!preserveLocationContext) {
+        clearLocationRouteContext();
+      }
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -26303,7 +26745,7 @@ def ui_preview_html(
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("libraryView")?.classList.remove("hidden");
-      setActiveAppRoute(activeRoute);
+      setActiveAppRoute(activeRoute === "location" ? "library" : activeRoute);
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
@@ -26536,7 +26978,30 @@ def ui_preview_html(
       if (personMatch) {
         return {view: "person", personId: decodeURIComponent(personMatch[1] || personMatch[2])};
       }
+      const locationMatch = window.location.pathname.match(/^\\/app\\/locations\\/([^/]+)\\/?$|^\\/locations\\/([^/]+)\\/?$/);
+      if (locationMatch) {
+        return {view: "location", locationPublicId: decodeURIComponent(locationMatch[1] || locationMatch[2])};
+      }
       return {view: "library"};
+    }
+    function openAppLocationRoute(locationPublicId, pushUrl = true) {
+      const publicId = String(locationPublicId || "").trim();
+      if (!publicId) {
+        showLibraryPage(pushUrl);
+        return;
+      }
+      const node = locationByPublicId(publicId);
+      activeLocationRoutePublicId = publicId;
+      activeLocationRouteId = node ? String(node.id || "") : "";
+      activeLocationRouteMissing = !node;
+      showLibraryPage(pushUrl, "location", {preserveLocationContext: true});
+      renderLibrary();
+      if (pushUrl && appMode) {
+        const nextPath = `/locations/${encodeURIComponent(publicId)}`;
+        if (window.location.pathname !== nextPath) {
+          history.pushState({locationPublicId: publicId}, "", nextPath);
+        }
+      }
     }
     function openAppRoute(route) {
       if (route === "admin") {
@@ -26989,9 +27454,19 @@ def ui_preview_html(
       if (summary) {
         const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
         const tileLabel = tNext("collection.tiles", "tiles");
-        summary.textContent = mergeEditionsAsTitleEnabled()
+        let summaryText = mergeEditionsAsTitleEnabled()
           ? `${visibleMovieCount} / ${movies.length} ${movieLabel} · ${displayItems.length} ${tileLabel}`
           : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
+        if (activeLocationRoutePublicId) {
+          if (activeLocationRouteMissing) {
+            summaryText += ` · ${tNext("locations.routeNotFound", "Location not found.")}`;
+          } else {
+            const node = locationById(activeLocationRouteId);
+            const label = node?.path_label || node?.pathLabel || node?.name || activeLocationRoutePublicId;
+            summaryText += ` · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", label)}`;
+          }
+        }
+        summary.textContent = summaryText;
       }
       const navMovieCount = document.getElementById("navMovieCount");
       const navListCount = document.getElementById("navListCount");
@@ -27834,6 +28309,18 @@ def ui_preview_html(
       const key = String(id || "");
       return locations.find((loc) => String(loc.id) === key) || null;
     }
+    function locationByPublicId(publicId) {
+      const key = String(publicId || "").trim();
+      if (!key) return null;
+      return locations.find((loc) => {
+        const routeKeys = [
+          loc.public_id,
+          loc.publicId,
+          loc.id
+        ].map((value) => String(value || "").trim()).filter(Boolean);
+        return routeKeys.includes(key);
+      }) || null;
+    }
     function locationChildren(parentId) {
       const key = parentId ? String(parentId) : "";
       return locations
@@ -28053,8 +28540,8 @@ def ui_preview_html(
       const node = locationById(locationId);
       if (!node) return;
       const url = `/api/next/locations/${encodeURIComponent(locationId)}/qr.svg`;
-      const title = node.path_label || node.name || tNext("locations.qr", "QR");
-      const publicId = String(node.public_id || locationId || "");
+      const title = node.path_label || node.pathLabel || node.name || tNext("locations.qr", "QR");
+      const publicId = String(node.public_id || node.publicId || node.id || locationId || "");
       const deepLink = publicId ? new URL(`/app/locations/${encodeURIComponent(publicId)}`, window.location.origin).toString() : "";
       const titleNode = document.getElementById("locationQrTitle");
       const pathNode = document.getElementById("locationQrPath");
@@ -29152,6 +29639,7 @@ def ui_preview_html(
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
+      else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
@@ -29802,6 +30290,8 @@ def ui_preview_html(
       document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
       document.getElementById("boxSetBuilderIdentifyForm")?.addEventListener("submit", (event) => identifyBoxSetBuilderTarget(event));
       document.getElementById("boxSetBuilderMemberForm")?.addEventListener("submit", (event) => addBoxSetBuilderMember(event));
+      wireImportScanPreview("boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberPreview");
+      document.getElementById("boxSetBuilderBatchButton")?.addEventListener("click", () => runBoxSetBuilderBatch());
       document.getElementById("boxSetBuilderCameraButton")?.addEventListener("click", () => startBoxSetBuilderCameraScan());
       document.getElementById("boxSetBuilderOpenButton")?.addEventListener("click", () => {
         const target = importCenter.boxSetBuilder?.target;
@@ -30115,6 +30605,8 @@ def ui_preview_html(
       document.getElementById("containerMetadataApplyButton")?.addEventListener("click", () => refreshActiveContainerMetadata(false));
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
+      document.getElementById("containerScanAddForm")?.addEventListener("submit", (event) => addContainerScanMember(event));
+      wireImportScanPreview("containerScanAddBarcode", "containerScanAddPreview");
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
       document.addEventListener("click", (event) => {
@@ -30186,6 +30678,12 @@ def ui_preview_html(
         const moveItem = event.target.closest("[data-container-move-item]");
         const removeMovie = event.target.closest("[data-container-remove-movie]");
         const removeItem = event.target.closest("[data-container-remove-item]");
+        const setCover = event.target.closest("[data-container-set-cover]");
+        if (setCover) {
+          event.preventDefault();
+          setContainerCoverMovie(setCover.dataset.containerSetCover);
+          return;
+        }
         if (moveMovie) {
           event.preventDefault();
           moveContainerMovie(moveMovie.dataset.containerMoveMovie, moveMovie.dataset.direction);
@@ -30245,6 +30743,7 @@ def ui_preview_html(
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
         else if (route.view === "container") openAppContainerDetail(route.containerId, false);
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
+        else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
         else if (route.view === "people") showLibraryPage(false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);

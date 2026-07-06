@@ -14248,6 +14248,9 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
     container = container_entity(conn, container_id)
     if not container:
         return None
+    if isinstance(container, dict):
+        primary_movie_id = container.get("primary_movie_id")
+        container["primaryMovieId"] = str(primary_movie_id) if primary_movie_id else None
     attach_location_summaries(conn, [container])
     aggregate_movies = container_aggregate_movie_entities(conn, container_id, actor=actor)
     aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
@@ -15056,6 +15059,10 @@ def apply_container_movie_delete(
         )
         changed = cur.rowcount
         if changed:
+            cur.execute(
+                "UPDATE containers SET primary_movie_id=NULL WHERE id=%s AND primary_movie_id=%s",
+                (container_id, movie_id),
+            )
             cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_id,))
     revision = emit_container_membership_change(conn, container_id) if changed else current_revision(conn)
     return {
@@ -17368,6 +17375,11 @@ def register_routes(flask_app: Flask) -> None:
                         (container_uuid, movie_uuid),
                     )
                     changed = cur.rowcount
+                    if changed:
+                        cur.execute(
+                            "UPDATE containers SET primary_movie_id=NULL WHERE id=%s AND primary_movie_id=%s",
+                            (container_uuid, movie_uuid),
+                        )
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
                 audit_event(
                     conn,
@@ -17459,6 +17471,109 @@ def register_routes(flask_app: Flask) -> None:
                         "year": row.get("year"),
                         "memberCount": member_count,
                     },
+                }
+            )
+
+    @flask_app.get("/api/next/import/movie/resolve")
+    def resolve_import_member_barcode():
+        # Read-only preview for the box-set builder / container scan: classify a
+        # scanned member barcode as an existing vault movie, metadata candidates,
+        # or nothing — WITHOUT importing. Metadata plugin lookups are only fired
+        # when includeCandidates is set, to keep live scan previews cheap.
+        barcode = clean_text(request.args.get("barcode")) or ""
+        title = clean_text(request.args.get("title") or request.args.get("query")) or ""
+        year = clean_text(request.args.get("year")) or ""
+        include_candidates = str(request.args.get("includeCandidates") or "").strip().lower() in {"1", "true", "yes"}
+        if not barcode and not title:
+            raise NextApiError("barcode or title is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                (
+                    "collection.add",
+                    "collection.add_own",
+                    "collection.import",
+                    "collection.edit_all",
+                    "metadata.search",
+                ),
+            )
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            if barcode:
+                visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""
+                        SELECT
+                            m.id,
+                            m.public_id,
+                            m.barcode,
+                            m.title,
+                            m.year,
+                            m.metadata->>'poster_url' AS poster_url
+                        FROM movies m
+                        WHERE m.barcode=%s
+                          AND {visibility_where}
+                        ORDER BY m.created_at ASC
+                        LIMIT 1
+                        """,
+                        (barcode, *visibility_params),
+                    )
+                    existing = cur.fetchone()
+                if existing:
+                    return response(
+                        {
+                            "status": "ok",
+                            "state": "existingMovie",
+                            "movie": {
+                                "id": str(existing["id"]),
+                                "publicId": existing.get("public_id"),
+                                "barcode": existing.get("barcode"),
+                                "title": existing.get("title"),
+                                "year": existing.get("year"),
+                                "posterUrl": existing.get("poster_url"),
+                            },
+                        }
+                    )
+            candidates: list[dict[str, Any]] = []
+            if include_candidates:
+                if not table_exists(conn, "plugins"):
+                    raise NextApiError("Plugin registry table is not available", 503)
+                lookup_payload = {
+                    "barcode": barcode,
+                    "title": title,
+                    "year": year,
+                    "detectBoxSets": False,
+                    "previewMode": True,
+                }
+                try:
+                    metadata_result = lookup_metadata_sources(conn, lookup_payload, actor)
+                except Exception:  # pragma: no cover - preview must never hard-fail
+                    metadata_result = {}
+                results = metadata_result.get("results") if isinstance(metadata_result.get("results"), list) else []
+                for item in results:
+                    if not isinstance(item, dict):
+                        continue
+                    summary = metadata_result_summary(item)
+                    candidate_title = clean_text(summary.get("title") or summary.get("name"))
+                    if not candidate_title:
+                        continue
+                    candidates.append(
+                        {
+                            "title": candidate_title,
+                            "year": summary.get("year"),
+                            "pluginId": summary.get("pluginId"),
+                        }
+                    )
+                    if len(candidates) >= 8:
+                        break
+            state = "candidates" if candidates else "none"
+            return response(
+                {
+                    "status": "ok",
+                    "state": state,
+                    "candidateCount": len(candidates),
+                    "candidates": candidates,
                 }
             )
 
@@ -17751,6 +17866,25 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Container not found", 404)
             payload = container_payload(body, existing=existing)
+            primary_provided = "primaryMovieId" in body or "primary_movie_id" in body
+            primary_movie_uuid = None
+            if primary_provided:
+                raw_primary = body.get("primaryMovieId", body.get("primary_movie_id"))
+                if raw_primary in (None, "", False):
+                    primary_movie_uuid = None
+                else:
+                    primary_movie_uuid = parse_uuid(raw_primary, "primaryMovieId")
+                    if not primary_movie_uuid:
+                        raise NextApiError("primaryMovieId must be a valid movie id", 400)
+                    if not table_exists(conn, "container_movies"):
+                        raise NextApiError("Container members are not available", 503)
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT 1 FROM container_movies WHERE container_id=%s AND movie_id=%s LIMIT 1",
+                            (container_uuid, primary_movie_uuid),
+                        )
+                        if not cur.fetchone():
+                            raise NextApiError("Cover movie must be a member of this box-set", 400)
             receiver_payload = container_receiver_payload(conn, existing, payload)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
             with conn.transaction():
@@ -17779,6 +17913,12 @@ def register_routes(flask_app: Flask) -> None:
                             container_uuid,
                         ),
                     )
+                if primary_provided:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE containers SET primary_movie_id=%s, updated_at=now() WHERE id=%s",
+                            (primary_movie_uuid, container_uuid),
+                        )
                 audit_event(
                     conn,
                     event_type="container.updated",
@@ -18116,6 +18256,11 @@ def register_routes(flask_app: Flask) -> None:
                             (container_uuid, movie_ids),
                         )
                         changed = cur.rowcount
+                        if changed:
+                            cur.execute(
+                                "UPDATE containers SET primary_movie_id=NULL WHERE id=%s AND primary_movie_id = ANY(%s)",
+                                (container_uuid, movie_ids),
+                            )
                     else:
                         cur.execute(
                             "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM container_movies WHERE container_id=%s",
@@ -18359,6 +18504,11 @@ def register_routes(flask_app: Flask) -> None:
                         (container_uuid, movie_uuid),
                     )
                     changed = cur.rowcount
+                    if changed:
+                        cur.execute(
+                            "UPDATE containers SET primary_movie_id=NULL WHERE id=%s AND primary_movie_id=%s",
+                            (container_uuid, movie_uuid),
+                        )
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
