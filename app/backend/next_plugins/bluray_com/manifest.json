@@ -1,12 +1,13 @@
 {
   "id": "bluray_com",
   "name": "Blu-ray.com",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["metadata_source"],
   "capabilities": [
     "search_barcode",
+    "search_title",
     "movie_details",
     "technical_specs",
     "box_set_candidates"

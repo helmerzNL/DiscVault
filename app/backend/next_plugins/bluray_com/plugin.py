@@ -499,27 +499,95 @@ def health_check(context=None):
     return {"status": "available", "message": "Blu-ray.com quicksearch runtime is available."}
 
 
+def _release_variants_requested(payload):
+    """True when the caller explicitly opts into the full release/edition list.
+
+    Regular metadata lookups (barcode scan, single-movie import) must keep
+    returning one canonical movie via ``movie_details``/``technical_specs``.
+    Only opt-in callers such as the wishlist edition picker want every
+    Blu-ray.com release variant (anniversary editions, steelbooks, country
+    imports, ...), so ``search_title`` stays a no-op unless one of these
+    switches is set.
+    """
+    payload = payload or {}
+    for key in (
+        "releaseVariants",
+        "release_variants",
+        "listReleases",
+        "list_releases",
+        "allReleases",
+        "all_releases",
+        "editions",
+    ):
+        value = payload.get(key)
+        if isinstance(value, str):
+            if value.strip().lower() in {"1", "true", "yes", "on"}:
+                return True
+        elif value:
+            return True
+    return False
+
+
 def search_title(payload, context=None):
-    title = str((payload or {}).get("title") or "").strip()
-    year = str((payload or {}).get("year") or "").strip()
-    preferred_format = str((payload or {}).get("format") or "").strip()
+    payload = payload or {}
+    title = str(payload.get("title") or "").strip()
+    year = str(payload.get("year") or "").strip()
+    preferred_format = str(payload.get("format") or "").strip()
     query = f"{title} {year}".strip()
     if not query:
         return {"status": "skipped", "provider": "bluray_com", "items": []}
+    # Opt-in switch: without it, defer to the single-movie entrypoints so the
+    # normal lookup/preview behaviour is unchanged.
+    if not _release_variants_requested(payload):
+        return {"status": "skipped", "provider": "bluray_com", "items": []}
+
+    limit = 8
+    try:
+        requested = int(payload.get("maxReleases") or payload.get("max_releases") or 0)
+    except (TypeError, ValueError):
+        requested = 0
+    if requested > 0:
+        limit = max(1, min(requested, 12))
+
     items = []
-    for url in _release_urls(query, preferred_format, limit=8):
+    for url in _release_urls(query, preferred_format, limit=limit):
         match = re.search(r"/(?:movies|dvd)/([^/]+)/(\d+)", url)
-        raw_title = re.sub(r"[-_]+", " ", match.group(1)).strip() if match else ""
-        items.append(
-            {
-                "provider": "bluray_com",
-                "providerLabel": "Blu-ray.com",
-                "id": match.group(2) if match else url,
-                "title": raw_title,
-                "sourceUrl": url,
-                "format": _normalize_format(url),
-            }
-        )
+        slug_title = re.sub(r"[-_]+", " ", match.group(1)).strip() if match else ""
+        item = {
+            "provider": "bluray_com",
+            "providerLabel": "Blu-ray.com",
+            "id": match.group(2) if match else url,
+            "title": slug_title,
+            "sourceUrl": url,
+            "sourceRef": url,
+            "format": _normalize_format(url),
+        }
+        try:
+            parsed = _parse_page(url)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, dict) and parsed.get("status") == "hit":
+            # In release-variants (wishlist edition picker) mode box sets and
+            # anniversary/trilogy editions are legitimate pickable editions, so
+            # keep them and flag them for the frontend to label.
+            if parsed.get("isBoxSetCandidate"):
+                item["isBoxSetCandidate"] = True
+            release_title = _clean_text(parsed.get("releaseTitle"))
+            movie = parsed.get("movie") if isinstance(parsed.get("movie"), dict) else {}
+            clean_movie_title = _clean_text(movie.get("title"))
+            if clean_movie_title:
+                item["title"] = clean_movie_title
+            if release_title:
+                item["releaseTitle"] = release_title
+            if movie.get("year"):
+                item["year"] = str(movie.get("year"))
+            if movie.get("posterUrl"):
+                item["posterUrl"] = movie.get("posterUrl")
+            if parsed.get("format"):
+                item["format"] = parsed.get("format")
+        if not str(item.get("title") or "").strip():
+            continue
+        items.append(item)
     return {"status": "hit" if items else "miss", "provider": "bluray_com", "items": items}
 
 
