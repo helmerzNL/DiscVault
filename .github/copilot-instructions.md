@@ -118,6 +118,13 @@ This process is **mandatory**. Follow it automatically on every feature, commit,
 do not wait to be reminded. If a request would break the two-branch model or the merge-commit
 promotion rule, stop and warn the user before acting.
 
+**Language: always write Git artifacts in English**
+
+Regardless of the conversation language, **all branch names, commit messages, PR titles, PR
+descriptions, and merge commit messages must be written in English.** This keeps the Git history
+and GitHub consistent and reviewable. (Chat replies to the user stay in the conversation
+language — only the Git/GitHub artifacts are English.)
+
 **At the start of every new piece of work — classify it first**
 
 Before creating a branch or writing any code, **ask the user what kind of work this is**:
