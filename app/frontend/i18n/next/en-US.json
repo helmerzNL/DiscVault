@@ -2079,6 +2079,7 @@
   "locations.maxDepth": "Locations can be at most four levels deep.",
   "locations.nameRequired": "Enter a name first.",
   "locations.qr": "QR",
+  "locations.qrPrint": "Print QR",
   "locations.qrDownload": "Download SVG",
   "locations.assign": "Storage location",
   "locations.none": "No location",
