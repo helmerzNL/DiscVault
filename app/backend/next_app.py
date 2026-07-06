@@ -5876,6 +5876,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
                     backdrop_asset.storage_key AS backdrop_asset_storage_key,
                     backdrop_asset.source_url AS backdrop_asset_source_url,
+                    m.location_id,
                     m.owner_id,
                     m.created_at,
                     m.updated_at
@@ -5913,7 +5914,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 conn,
                 attach_media_group_availability(
                     conn,
-                    attach_digital_availability(conn, [with_preview_media_urls(row) for row in cur.fetchall()]),
+                    attach_digital_availability(conn, attach_location_summaries(conn, [with_preview_media_urls(row) for row in cur.fetchall()])),
                 ),
             )
     with conn.cursor() as cur:
@@ -5944,6 +5945,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 ) AS metadata_search,
                 m.metadata->>'poster_url' AS poster_url,
                 m.metadata->>'backdrop_url' AS backdrop_url,
+                m.location_id,
                 m.owner_id,
                 m.created_at,
                 m.updated_at
@@ -5956,7 +5958,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
         )
         return attach_movie_search_credits(
             conn,
-            attach_media_group_availability(conn, attach_digital_availability(conn, cur.fetchall())),
+            attach_media_group_availability(conn, attach_digital_availability(conn, attach_location_summaries(conn, cur.fetchall()))),
         )
 
 
@@ -6052,6 +6054,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
                     backdrop_asset.storage_key AS backdrop_asset_storage_key,
                     backdrop_asset.source_url AS backdrop_asset_source_url,
+                    c.location_id,
                     c.created_at,
                     c.updated_at
                 FROM containers c
@@ -6083,7 +6086,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                 """,
                 (*visibility_params, limit),
             )
-            return [with_preview_media_urls(row) for row in cur.fetchall()]
+            return attach_location_summaries(conn, [with_preview_media_urls(row) for row in cur.fetchall()])
     with conn.cursor() as cur:
         cur.execute(
             f"""
@@ -6097,6 +6100,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                 c.year,
                 c.description,
                 c.metadata,
+                c.location_id,
                 c.created_at,
                 c.updated_at
             FROM containers c
@@ -6106,7 +6110,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
             """,
             (*visibility_params, limit),
         )
-        return cur.fetchall()
+        return attach_location_summaries(conn, cur.fetchall())
 
 
 def collection_container_membership_entities(conn, *, limit: int = 10000, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -6249,6 +6253,7 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "movies": movies,
         "containers": collection_container_preview_entities(conn, actor=user),
         "containerMembership": collection_container_membership_entities(conn, actor=user),
+        "locations": location_list_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
         "preferences": app_effective_preferences(conn, user_id),
@@ -6278,6 +6283,7 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "movies": [],
         "containers": [],
         "containerMembership": [],
+        "locations": [],
         "mediaGroups": [],
         "plugins": [],
         "preferences": dict(APP_PREFERENCE_DEFAULTS),
@@ -15488,6 +15494,10 @@ def ui_preview_html(
               <span data-next-i18n="collection.smartFilters">Smart filters</span>
               <select id="smartFilterSelect"></select>
             </label>
+            <label class="advanced-search-field">
+              <span data-next-i18n="collection.locationFilter">Location</span>
+              <select id="advancedLocationFilter"></select>
+            </label>
           </div>
           <div class="advanced-search-actions">
             <div class="smart-filter-picker">
@@ -16090,6 +16100,10 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.location">Location</span>
                       <input id="movieEditLocation" name="location" maxlength="160" autocomplete="off">
                     </label>
+                    <label for="movieEditLocationSelect">
+                      <span data-next-i18n="locations.assign">Storage location</span>
+                      <select id="movieEditLocationSelect" name="locationId"></select>
+                    </label>
                     <label for="movieEditDirector">
                       <span data-next-i18n="movieDetail.director">Director</span>
                       <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
@@ -16395,6 +16409,10 @@ def ui_preview_html(
                 <label for="containerEditDescription">
                   <span data-next-i18n="containerDetail.fieldDescription">Description</span>
                   <textarea id="containerEditDescription" name="description" maxlength="2000"></textarea>
+                </label>
+                <label for="containerEditLocationSelect">
+                  <span data-next-i18n="locations.assign">Storage location</span>
+                  <select id="containerEditLocationSelect" name="locationId"></select>
                 </label>
               </form>
             </div>
@@ -16781,9 +16799,10 @@ def ui_preview_html(
                   <button type="button" class="active" data-container-manager-type="box_set" data-next-i18n="containerManage.boxSets">Box-sets</button>
                   <button type="button" data-container-manager-type="vault" data-next-i18n="containerManage.vaults">Vaults</button>
                   <button type="button" data-container-manager-type="collection" data-next-i18n="containerManage.collections">Collections</button>
+                  <button type="button" data-structure-view="locations" data-next-i18n="locations.navLabel">Locations</button>
                 </nav>
               </div>
-              <form class="profile-form container-manager-create" id="containerManagerCreateForm">
+              <form class="profile-form container-manager-create" id="containerManagerCreateForm" data-structure-section="containers">
                 <label for="containerManagerTitle">
                   <span data-next-i18n="containerManage.titleLabel">Name</span>
                   <input id="containerManagerTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="containerManage.titlePlaceholder" placeholder="New collection name">
@@ -16793,7 +16812,28 @@ def ui_preview_html(
                   <span class="login-message" id="containerManagerMessage"></span>
                 </div>
               </form>
-              <div class="container-manager-list" id="containerManagerList"></div>
+              <div class="container-manager-list" id="containerManagerList" data-structure-section="containers"></div>
+              <div class="locations-manager hidden" data-structure-section="locations">
+                <form class="profile-form locations-create-form" id="locationCreateForm">
+                  <label for="locationCreateName">
+                    <span data-next-i18n="locations.name">Name</span>
+                    <input id="locationCreateName" maxlength="240" autocomplete="off" data-next-i18n-placeholder="locations.namePlaceholder" placeholder="Cabinet 01">
+                  </label>
+                  <label for="locationCreateParent">
+                    <span data-next-i18n="locations.parent">Parent</span>
+                    <select id="locationCreateParent"></select>
+                  </label>
+                  <label for="locationCreateDescription">
+                    <span data-next-i18n="locations.descriptionField">Description</span>
+                    <input id="locationCreateDescription" maxlength="2000" autocomplete="off" data-next-i18n-placeholder="locations.descriptionPlaceholder" placeholder="Optional description">
+                  </label>
+                  <div class="profile-form-actions">
+                    <button type="submit" class="secondary-button" id="locationCreateButton" data-next-i18n="locations.create">Create location</button>
+                    <span class="login-message" id="locationManagerMessage"></span>
+                  </div>
+                </form>
+                <div class="locations-tree" id="locationsTree"></div>
+              </div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="security">
               <div class="profile-section-grid">
@@ -17541,6 +17581,7 @@ def ui_preview_html(
     let state = JSON.parse(document.getElementById("initialState").textContent || "{}");
     let movies = state.movies || [];
     let containers = state.containers || [];
+    let locations = state.locations || [];
     let containerMembership = state.containerMembership || [];
     let mediaGroups = state.mediaGroups || [];
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
@@ -17593,6 +17634,8 @@ def ui_preview_html(
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
     let activeProfileApiTab = localStorage.getItem("dv_next_profile_api_tab") || "general";
     let containerManagerType = "box_set";
+    let structureView = "containers";
+    let locationDragId = "";
     let appAdmin = {
       activeTab: "access",
       activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "registry",
@@ -22528,7 +22571,8 @@ def ui_preview_html(
         digital: "any",
         artwork: "any",
         personal: "any",
-        itemType: "any"
+        itemType: "any",
+        location: "any"
       };
     }
     function normalizeAdvancedSearch(value) {
@@ -22541,7 +22585,8 @@ def ui_preview_html(
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
         personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged"].includes(source.personal) ? source.personal : "any",
-        itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any"
+        itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
+        location: String(source.location || "any").trim() || "any"
       };
     }
     function advancedSearchActiveCount(filters = advancedSearch) {
@@ -22554,6 +22599,7 @@ def ui_preview_html(
       if (normalized.artwork !== "any") count += 1;
       if (normalized.personal !== "any") count += 1;
       if (normalized.itemType !== "any") count += 1;
+      if (normalized.location !== "any") count += 1;
       return count;
     }
     function setAdvancedControlValue(id, value) {
@@ -22568,7 +22614,8 @@ def ui_preview_html(
         digital: document.getElementById("advancedDigitalFilter")?.value || "any",
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
         personal: document.getElementById("advancedPersonalFilter")?.value || "any",
-        itemType: document.getElementById("advancedContainerType")?.value || "any"
+        itemType: document.getElementById("advancedContainerType")?.value || "any",
+        location: document.getElementById("advancedLocationFilter")?.value || "any"
       });
     }
     function persistAdvancedSearch() {
@@ -22602,6 +22649,19 @@ def ui_preview_html(
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
       setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
       setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
+      const locationFilter = document.getElementById("advancedLocationFilter");
+      if (locationFilter) {
+        const anyLabel = tNext("collection.locationFilterAny", "Any location");
+        const options = [`<option value="any">${escapeHtml(anyLabel)}</option>`];
+        locations.forEach((loc) => {
+          const indent = "\u2007\u2007".repeat(Math.max(0, (loc.depth || 1) - 1));
+          options.push(`<option value="${escapeHtml(String(loc.id))}">${escapeHtml(indent + (loc.name || ""))}</option>`);
+        });
+        locationFilter.innerHTML = options.join("");
+        locationFilter.value = advancedSearch.location && locations.some((loc) => String(loc.id) === String(advancedSearch.location))
+          ? String(advancedSearch.location)
+          : "any";
+      }
       const select = document.getElementById("smartFilterSelect");
       if (select) {
         const filters = Array.isArray(smartFilters) ? smartFilters : [];
@@ -22811,6 +22871,10 @@ def ui_preview_html(
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
       if (filters.personal === "onloan" && !movie?.on_loan) return false;
       if (filters.personal === "tagged" && !movie?.has_tags) return false;
+      if (filters.location !== "any") {
+        const movieLoc = String((movie && (movie.location_id || (movie.location && movie.location.id))) || "");
+        if (!movieLoc || !locationSubtreeIds(filters.location).has(movieLoc)) return false;
+      }
       return true;
     }
     function containerMatchesGroup(container) {
@@ -22863,6 +22927,16 @@ def ui_preview_html(
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
       if (filters.artwork === "missingBackdrop" && containerBackdropValue(container)) return false;
       if (filters.artwork === "completeArtwork" && (!containerPosterValue(container) || !containerBackdropValue(container))) return false;
+      if (filters.location !== "any") {
+        const subtree = locationSubtreeIds(filters.location);
+        const ownLoc = String((container && (container.location_id || (container.location && container.location.id))) || "");
+        const ownMatch = Boolean(ownLoc && subtree.has(ownLoc));
+        const memberMatch = members.some((movie) => {
+          const ml = String((movie && (movie.location_id || (movie.location && movie.location.id))) || "");
+          return ml && subtree.has(ml);
+        });
+        if (!ownMatch && !memberMatch) return false;
+      }
       return true;
     }
     function movieFormatIsFourKBlurayCombo(value) {
@@ -24814,6 +24888,11 @@ def ui_preview_html(
         const input = document.getElementById(id);
         if (input && document.activeElement !== input) input.value = value;
       });
+      const locationSelect = document.getElementById("movieEditLocationSelect");
+      if (locationSelect && document.activeElement !== locationSelect) {
+        const currentLocationId = (movie.location && movie.location.id) || movie.location_id || "";
+        populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
+      }
       setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
     }
     function movie_locked_fields_from_metadata(metadata) {
@@ -25482,6 +25561,11 @@ def ui_preview_html(
       if (typeInput) {
         typeInput.value = container.container_type || "collection";
         typeInput.disabled = true;
+      }
+      const locationSelect = document.getElementById("containerEditLocationSelect");
+      if (locationSelect && document.activeElement !== locationSelect) {
+        const currentLocationId = (container.location && container.location.id) || container.location_id || "";
+        populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
       }
     }
     function renderContainerAddForms(detail = activeContainerPayload || {}) {
@@ -26282,7 +26366,8 @@ def ui_preview_html(
         year: formTextValue("containerEditYear"),
         barcode: formTextValue("containerEditBarcode"),
         badgeLabel: formTextValue("containerEditBadge"),
-        description: formTextValue("containerEditDescription")
+        description: formTextValue("containerEditDescription"),
+        locationId: document.getElementById("containerEditLocationSelect")?.value || null
       };
       try {
         const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`, {
@@ -32342,6 +32427,7 @@ def ui_preview_html(
         country: formTextValue("movieEditCountry"),
         language: formTextValue("movieEditLanguage"),
         location: formTextValue("movieEditLocation"),
+        locationId: document.getElementById("movieEditLocationSelect")?.value || null,
         runtimeMinutes: formTextValue("movieEditRuntime"),
         director: formTextValue("movieEditDirector"),
         genre: formTextValue("movieEditGenre"),
@@ -33564,6 +33650,296 @@ def ui_preview_html(
         setContainerManagerMessage(error.message || String(error), "bad");
       }
     }
+    const LOCATION_MAX_DEPTH = 4;
+    function locationsEnabled() {
+      return collectorsModeEnabled() && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
+    }
+    function setLocationMessage(message, tone) {
+      const node = document.getElementById("locationManagerMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function locationById(id) {
+      const key = String(id || "");
+      return locations.find((loc) => String(loc.id) === key) || null;
+    }
+    function locationChildren(parentId) {
+      const key = parentId ? String(parentId) : "";
+      return locations
+        .filter((loc) => String(loc.parent_id || "") === key)
+        .sort((a, b) => (a.sort_order - b.sort_order) || String(a.name || "").localeCompare(String(b.name || "")));
+    }
+    function locationDepthOf(id) {
+      let depth = 0;
+      let current = locationById(id);
+      const seen = new Set();
+      while (current && !seen.has(String(current.id))) {
+        seen.add(String(current.id));
+        depth += 1;
+        current = current.parent_id ? locationById(current.parent_id) : null;
+      }
+      return depth;
+    }
+    function locationSubtreeHeight(id) {
+      const kids = locationChildren(id);
+      if (!kids.length) return 1;
+      return 1 + Math.max(...kids.map((child) => locationSubtreeHeight(child.id)));
+    }
+    function locationSubtreeIds(id) {
+      const result = new Set();
+      if (!id) return result;
+      const walk = (nodeId) => {
+        const key = String(nodeId);
+        if (result.has(key)) return;
+        result.add(key);
+        locationChildren(nodeId).forEach((child) => walk(child.id));
+      };
+      walk(id);
+      return result;
+    }
+    function locationIsDescendant(candidateId, ancestorId) {
+      let current = locationById(candidateId);
+      const seen = new Set();
+      while (current && !seen.has(String(current.id))) {
+        if (String(current.id) === String(ancestorId)) return true;
+        seen.add(String(current.id));
+        current = current.parent_id ? locationById(current.parent_id) : null;
+      }
+      return false;
+    }
+    function locationMoveAllowed(nodeId, newParentId) {
+      if (!nodeId) return false;
+      if (String(nodeId) === String(newParentId || "")) return false;
+      if (newParentId && locationIsDescendant(newParentId, nodeId)) return false;
+      const parentDepth = newParentId ? locationDepthOf(newParentId) : 0;
+      const height = locationSubtreeHeight(nodeId);
+      return (parentDepth + height) <= LOCATION_MAX_DEPTH;
+    }
+    function populateLocationParentSelect(select, opts) {
+      opts = opts || {};
+      const excludeId = opts.excludeId ? String(opts.excludeId) : "";
+      const selectedId = opts.selectedId ? String(opts.selectedId) : "";
+      if (!select) return;
+      const rootLabel = opts.emptyLabel || tNext("locations.parentNone", "No parent (top level)");
+      const options = [`<option value="">${escapeHtml(rootLabel)}</option>`];
+      locations.forEach((loc) => {
+        if (excludeId && (String(loc.id) === excludeId || locationIsDescendant(loc.id, excludeId))) return;
+        const indent = "\u2007\u2007".repeat(Math.max(0, (loc.depth || 1) - 1));
+        options.push(`<option value="${escapeHtml(String(loc.id))}">${escapeHtml(indent + (loc.name || ""))}</option>`);
+      });
+      select.innerHTML = options.join("");
+      select.value = selectedId;
+    }
+    function renderLocationTreeNode(node) {
+      const id = escapeHtml(String(node.id || ""));
+      const canEdit = hasAnyPermission(["containers.edit", "collection.bulk_edit"]);
+      const canDelete = hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete);
+      const counts = [];
+      if (node.movie_count) counts.push(tNext("locations.movieCount", "{count} films").replace("{count}", node.movie_count));
+      if (node.container_count) counts.push(tNext("locations.containerCount", "{count} containers").replace("{count}", node.container_count));
+      const countLabel = counts.join(" / ");
+      const children = locationChildren(node.id);
+      const childHtml = children.length
+        ? `<div class="locations-children">${children.map(renderLocationTreeNode).join("")}</div>`
+        : "";
+      return `
+        <div class="locations-node" data-location-node="${id}" draggable="${canEdit ? "true" : "false"}">
+          <div class="locations-row" data-location-drop="${id}">
+            <span class="locations-handle" aria-hidden="true">\u2630</span>
+            <div class="locations-info">
+              <strong>${escapeHtml(node.name || tNext("common.untitled", "Untitled"))}</strong>
+              ${node.description ? `<span class="locations-desc">${escapeHtml(node.description)}</span>` : ""}
+              ${countLabel ? `<span class="locations-counts">${escapeHtml(countLabel)}</span>` : ""}
+            </div>
+            <div class="locations-actions">
+              ${canEdit ? `<button type="button" class="secondary-button" data-location-rename="${id}">${escapeHtml(tNext("locations.rename", "Rename"))}</button>` : ""}
+              <button type="button" class="secondary-button" data-location-qr="${id}">${escapeHtml(tNext("locations.qr", "QR"))}</button>
+              ${canDelete ? `<button type="button" class="secondary-button danger" data-location-delete="${id}">${escapeHtml(tNext("locations.delete", "Delete"))}</button>` : ""}
+            </div>
+          </div>
+          ${childHtml}
+        </div>
+      `;
+    }
+    function renderLocationsPanel() {
+      const parentSelect = document.getElementById("locationCreateParent");
+      if (parentSelect) populateLocationParentSelect(parentSelect, {selectedId: parentSelect.value});
+      const tree = document.getElementById("locationsTree");
+      if (!tree) return;
+      if (!locationsEnabled()) {
+        tree.innerHTML = "";
+        return;
+      }
+      const roots = locationChildren("");
+      if (!roots.length) {
+        tree.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("locations.empty", "No locations yet. Create your first cabinet."))}</div>`;
+        return;
+      }
+      tree.innerHTML = roots.map(renderLocationTreeNode).join("");
+      bindLocationTreeEvents();
+    }
+    async function reloadLocations() {
+      try {
+        const payload = await authApiJson("/api/next/locations", {headers: authHeaders()});
+        locations = payload.locations || payload.items || [];
+        if (state) state.locations = locations;
+      } catch (error) {
+        /* keep existing snapshot on failure */
+      }
+      renderLocationsPanel();
+    }
+    async function createLocation(event) {
+      event?.preventDefault();
+      if (!hasAnyPermission(["containers.edit", "collection.bulk_edit"])) return;
+      const nameInput = document.getElementById("locationCreateName");
+      const parentSelect = document.getElementById("locationCreateParent");
+      const descInput = document.getElementById("locationCreateDescription");
+      const name = String(nameInput?.value || "").trim();
+      if (!name) {
+        setLocationMessage(tNext("locations.nameRequired", "Enter a name first."), "bad");
+        return;
+      }
+      const parentId = String(parentSelect?.value || "");
+      if (parentId && (locationDepthOf(parentId) + 1) > LOCATION_MAX_DEPTH) {
+        setLocationMessage(tNext("locations.maxDepth", "Locations can be at most four levels deep."), "bad");
+        return;
+      }
+      setLocationMessage(tNext("locations.saving", "Saving..."));
+      try {
+        await authApiJson("/api/next/locations", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name, parentId: parentId || null, description: String(descInput?.value || "").trim() || null})
+        });
+        if (nameInput) nameInput.value = "";
+        if (descInput) descInput.value = "";
+        await reloadLocations();
+        setLocationMessage(tNext("locations.created", "Location created."), "good");
+      } catch (error) {
+        setLocationMessage(error.message || String(error), "bad");
+      }
+    }
+    async function renameLocation(locationId) {
+      if (!hasAnyPermission(["containers.edit", "collection.bulk_edit"])) return;
+      const node = locationById(locationId);
+      if (!node) return;
+      const next = window.prompt(tNext("locations.renamePrompt", "New location name"), node.name || "");
+      if (next === null) return;
+      const name = String(next).trim();
+      if (!name) return;
+      setLocationMessage(tNext("locations.saving", "Saving..."));
+      try {
+        await authApiJson(`/api/next/locations/${encodeURIComponent(locationId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name})
+        });
+        await reloadLocations();
+        setLocationMessage(tNext("locations.renamed", "Location renamed."), "good");
+      } catch (error) {
+        setLocationMessage(error.message || String(error), "bad");
+      }
+    }
+    async function reparentLocation(locationId, newParentId) {
+      if (!hasAnyPermission(["containers.edit", "collection.bulk_edit"])) return;
+      if (!locationMoveAllowed(locationId, newParentId)) {
+        setLocationMessage(tNext("locations.maxDepth", "Locations can be at most four levels deep."), "bad");
+        return;
+      }
+      setLocationMessage(tNext("locations.saving", "Saving..."));
+      try {
+        await authApiJson(`/api/next/locations/${encodeURIComponent(locationId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({parentId: newParentId || null})
+        });
+        await reloadLocations();
+        setLocationMessage(tNext("locations.moved", "Location moved."), "good");
+      } catch (error) {
+        setLocationMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteLocation(locationId) {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete)) return;
+      const node = locationById(locationId);
+      const name = node?.name || tNext("common.untitled", "Untitled");
+      const confirmed = window.confirm(tNext("locations.deleteConfirm", "Delete '{name}' and all nested locations?").replace("{name}", name));
+      if (!confirmed) return;
+      setLocationMessage(tNext("locations.saving", "Saving..."));
+      try {
+        await authApiJson(`/api/next/locations/${encodeURIComponent(locationId)}`, {method: "DELETE"});
+        await reloadLocations();
+        setLocationMessage(tNext("locations.deleted", "Location deleted."), "good");
+      } catch (error) {
+        setLocationMessage(error.message || String(error), "bad");
+      }
+    }
+    function openLocationQr(locationId) {
+      const node = locationById(locationId);
+      if (!node) return;
+      const url = `/api/next/locations/${encodeURIComponent(locationId)}/qr.svg`;
+      const win = window.open("", "_blank");
+      if (!win) return;
+      const title = escapeHtml(node.path_label || node.name || "");
+      win.document.write(`<!doctype html><title>${title}</title><body style="margin:0;display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px;font-family:sans-serif;background:#f8fafc"><h3>${title}</h3><img src="${url}" alt="QR" style="width:280px;height:280px"><a href="${url}" download="location-${escapeHtml(String(node.public_id || locationId))}.svg">${escapeHtml(tNext("locations.qrDownload", "Download SVG"))}</a></body>`);
+    }
+    function setStructureView(view) {
+      structureView = view === "locations" ? "locations" : "containers";
+      document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
+        button.classList.toggle("active", structureView === "containers" && button.dataset.containerManagerType === containerManagerType);
+      });
+      document.querySelectorAll("[data-structure-view]").forEach((button) => {
+        button.classList.toggle("active", structureView === "locations" && button.dataset.structureView === "locations");
+      });
+      document.querySelectorAll('[data-structure-section="containers"]').forEach((el) => el.classList.toggle("hidden", structureView !== "containers"));
+      document.querySelectorAll('[data-structure-section="locations"]').forEach((el) => el.classList.toggle("hidden", structureView !== "locations"));
+      if (structureView === "locations") renderLocationsPanel();
+      else renderContainerManager();
+    }
+    function bindLocationTreeEvents() {
+      const tree = document.getElementById("locationsTree");
+      if (!tree || tree.dataset.bound === "true") return;
+      tree.dataset.bound = "true";
+      tree.addEventListener("click", (event) => {
+        const renameBtn = event.target.closest("[data-location-rename]");
+        if (renameBtn) { renameLocation(renameBtn.dataset.locationRename); return; }
+        const qrBtn = event.target.closest("[data-location-qr]");
+        if (qrBtn) { openLocationQr(qrBtn.dataset.locationQr); return; }
+        const delBtn = event.target.closest("[data-location-delete]");
+        if (delBtn) { deleteLocation(delBtn.dataset.locationDelete); return; }
+      });
+      tree.addEventListener("dragstart", (event) => {
+        const node = event.target.closest("[data-location-node]");
+        if (!node) return;
+        locationDragId = node.dataset.locationNode || "";
+        event.dataTransfer.effectAllowed = "move";
+      });
+      tree.addEventListener("dragover", (event) => {
+        const row = event.target.closest("[data-location-drop]");
+        if (!row || !locationDragId) return;
+        const targetId = row.dataset.locationDrop;
+        if (locationMoveAllowed(locationDragId, targetId)) {
+          event.preventDefault();
+          row.classList.add("drop-target");
+        }
+      });
+      tree.addEventListener("dragleave", (event) => {
+        const row = event.target.closest("[data-location-drop]");
+        if (row) row.classList.remove("drop-target");
+      });
+      tree.addEventListener("drop", (event) => {
+        const row = event.target.closest("[data-location-drop]");
+        if (!row || !locationDragId) return;
+        event.preventDefault();
+        row.classList.remove("drop-target");
+        const targetId = row.dataset.locationDrop;
+        const dragId = locationDragId;
+        locationDragId = "";
+        if (String(dragId) !== String(targetId)) reparentLocation(dragId, targetId);
+      });
+      tree.addEventListener("dragend", () => { locationDragId = ""; });
+    }
     function renderStartup(startup) {
       const phase = startup.phase || "ready";
       const title = document.getElementById("startupTitle");
@@ -33665,6 +34041,7 @@ def ui_preview_html(
       renderProfileApiAccess();
       renderMemberGroups();
       renderContainerManager();
+      renderLocationsPanel();
       renderProfileOfflineStatus();
       renderProfileUpdateCheck();
       applyAppPermissionVisibility();
@@ -34881,10 +35258,14 @@ def ui_preview_html(
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.addEventListener("click", () => {
           containerManagerType = button.dataset.containerManagerType || "box_set";
-          renderContainerManager();
+          setStructureView("containers");
           setContainerManagerMessage("");
         });
       });
+      document.querySelectorAll("[data-structure-view]").forEach((button) => {
+        button.addEventListener("click", () => setStructureView(button.dataset.structureView || "containers"));
+      });
+      document.getElementById("locationCreateForm")?.addEventListener("submit", (event) => createLocation(event));
       document.getElementById("containerManagerCreateForm")?.addEventListener("submit", (event) => createManagedContainer(event));
       document.getElementById("containerManagerList")?.addEventListener("click", (event) => {
         const renameButton = event.target.closest("[data-container-manager-rename]");
@@ -41077,6 +41458,11 @@ def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None =
     if badge_label and len(badge_label) > 80:
         raise NextApiError("Container badge must be 80 characters or fewer", 400)
     metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else existing.get("metadata") or {}
+    if "locationId" in body or "location_id" in body:
+        raw_location = body.get("locationId", body.get("location_id"))
+        location_id = parse_uuid(raw_location, "locationId") if raw_location else None
+    else:
+        location_id = existing.get("location_id")
     return {
         "title": title,
         "description": description,
@@ -41084,7 +41470,286 @@ def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None =
         "barcode": barcode,
         "badge_label": badge_label,
         "metadata": metadata,
+        "location_id": location_id,
     }
+
+
+# ---------------------------------------------------------------------------
+# Locations (physical storage: Kast / Lade / Vak / Doos), max 4 levels deep.
+# ---------------------------------------------------------------------------
+
+LOCATION_MAX_DEPTH = 4
+LOCATION_NAME_LIMIT = 240
+LOCATION_DESCRIPTION_LIMIT = 2000
+LOCATION_MAX_DEPTH_ERROR = "Locations can be nested at most 4 levels deep"
+
+
+def location_public_id() -> str:
+    return f"next-location-{uuid.uuid4().hex[:12]}"
+
+
+def location_qr_token() -> str:
+    return secrets.token_urlsafe(18)
+
+
+def location_payload(body: dict[str, Any], *, existing: dict[str, Any] | None = None) -> dict[str, Any]:
+    existing = existing or {}
+    name = clean_text(body.get("name")) if "name" in body else existing.get("name")
+    if not name:
+        raise NextApiError("Location name is required", 400)
+    if len(name) > LOCATION_NAME_LIMIT:
+        raise NextApiError(f"Location name must be {LOCATION_NAME_LIMIT} characters or fewer", 400)
+    if "description" in body:
+        description = clean_text(body.get("description"))
+    else:
+        description = existing.get("description")
+    if description and len(description) > LOCATION_DESCRIPTION_LIMIT:
+        raise NextApiError(f"Location description must be {LOCATION_DESCRIPTION_LIMIT} characters or fewer", 400)
+    return {"name": name, "description": description}
+
+
+def location_entity(conn, location_id: UUID | str) -> dict[str, Any] | None:
+    if not table_exists(conn, "locations"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, public_id, parent_id, name, description, qr_token,
+                   sort_order, metadata, created_at, updated_at
+            FROM locations
+            WHERE id=%s
+            """,
+            (location_id,),
+        )
+        return cur.fetchone()
+
+
+def location_entity_by_public_id(conn, public_id: str) -> dict[str, Any] | None:
+    if not table_exists(conn, "locations"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, public_id, parent_id, name, description, qr_token,
+                   sort_order, metadata, created_at, updated_at
+            FROM locations
+            WHERE public_id=%s
+            """,
+            (public_id,),
+        )
+        return cur.fetchone()
+
+
+def location_list_entities(conn) -> list[dict[str, Any]]:
+    """Flat, pre-ordered list of every location with direct movie/container counts."""
+    if not table_exists(conn, "locations"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH RECURSIVE tree AS (
+                SELECT
+                    l.id, l.public_id, l.parent_id, l.name, l.description,
+                    l.qr_token, l.sort_order, l.created_at, l.updated_at,
+                    1 AS depth,
+                    ARRAY[lpad(l.sort_order::text, 12, '0') || ':' || lower(l.name)] AS sort_path,
+                    ARRAY[l.name]::text[] AS name_path
+                FROM locations l
+                WHERE l.parent_id IS NULL
+                UNION ALL
+                SELECT
+                    c.id, c.public_id, c.parent_id, c.name, c.description,
+                    c.qr_token, c.sort_order, c.created_at, c.updated_at,
+                    t.depth + 1,
+                    t.sort_path || (lpad(c.sort_order::text, 12, '0') || ':' || lower(c.name)),
+                    t.name_path || c.name
+                FROM locations c
+                JOIN tree t ON c.parent_id = t.id
+            )
+            SELECT id, public_id, parent_id, name, description, qr_token,
+                   sort_order, created_at, updated_at, depth, name_path
+            FROM tree
+            ORDER BY sort_path
+            """
+        )
+        rows = cur.fetchall()
+    movie_counts: dict[str, int] = {}
+    container_counts: dict[str, int] = {}
+    if table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT location_id, count(*) AS n FROM movies WHERE location_id IS NOT NULL GROUP BY location_id"
+            )
+            for row in cur.fetchall():
+                movie_counts[str(row.get("location_id"))] = int(row.get("n") or 0)
+    if table_exists(conn, "containers"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT location_id, count(*) AS n FROM containers WHERE location_id IS NOT NULL GROUP BY location_id"
+            )
+            for row in cur.fetchall():
+                container_counts[str(row.get("location_id"))] = int(row.get("n") or 0)
+    for row in rows:
+        key = str(row.get("id"))
+        path = row.get("name_path") or []
+        row["path"] = list(path)
+        row["path_label"] = " / ".join(path)
+        row["movie_count"] = movie_counts.get(key, 0)
+        row["container_count"] = container_counts.get(key, 0)
+    return rows
+
+
+def _all_locations_index(conn) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    if not table_exists(conn, "locations"):
+        return index
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, public_id, parent_id, name FROM locations")
+        for row in cur.fetchall():
+            index[str(row.get("id"))] = row
+    return index
+
+
+def _location_path_names(index: dict[str, dict[str, Any]], location_id: Any) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    current = index.get(str(location_id)) if location_id else None
+    while current and str(current.get("id")) not in seen:
+        seen.add(str(current.get("id")))
+        names.append(current.get("name"))
+        parent = current.get("parent_id")
+        current = index.get(str(parent)) if parent else None
+    names.reverse()
+    return names
+
+
+def location_summary_object(index: dict[str, dict[str, Any]], location_id: Any) -> dict[str, Any] | None:
+    if not location_id:
+        return None
+    row = index.get(str(location_id))
+    if not row:
+        return None
+    path = _location_path_names(index, location_id)
+    return {
+        "id": str(row.get("id")),
+        "publicId": row.get("public_id"),
+        "name": row.get("name"),
+        "parentId": str(row.get("parent_id")) if row.get("parent_id") else None,
+        "path": path,
+        "pathLabel": " / ".join(path),
+    }
+
+
+def attach_location_summaries(conn, rows: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+    """Attach a compact `location` object to any row that carries a `location_id`."""
+    if not rows:
+        return rows
+    has_any = any(isinstance(row, dict) and row.get("location_id") for row in rows)
+    index = _all_locations_index(conn) if has_any else {}
+    for row in rows:
+        if not isinstance(row, dict) or "location_id" not in row:
+            continue
+        row["location"] = location_summary_object(index, row.get("location_id")) if row.get("location_id") else None
+    return rows
+
+
+def _location_children_map(index: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
+    children: dict[str, list[str]] = {}
+    for row in index.values():
+        parent = row.get("parent_id")
+        if parent:
+            children.setdefault(str(parent), []).append(str(row.get("id")))
+    return children
+
+
+def _location_depth_of(index: dict[str, dict[str, Any]], location_id: Any) -> int:
+    depth = 0
+    seen: set[str] = set()
+    current = index.get(str(location_id)) if location_id else None
+    while current and str(current.get("id")) not in seen:
+        seen.add(str(current.get("id")))
+        depth += 1
+        parent = current.get("parent_id")
+        current = index.get(str(parent)) if parent else None
+    return depth
+
+
+def _location_subtree_height(children: dict[str, list[str]], node_id: Any) -> int:
+    best = 1
+    visited: set[str] = set()
+    stack: list[tuple[str, int]] = [(str(node_id), 1)]
+    while stack:
+        nid, height = stack.pop()
+        if nid in visited:
+            continue
+        visited.add(nid)
+        best = max(best, height)
+        for child in children.get(nid, []):
+            stack.append((child, height + 1))
+    return best
+
+
+def _location_is_descendant(children: dict[str, list[str]], node_id: Any, candidate_id: Any) -> bool:
+    target = str(candidate_id)
+    visited: set[str] = set()
+    stack: list[str] = list(children.get(str(node_id), []))
+    while stack:
+        nid = stack.pop()
+        if nid in visited:
+            continue
+        visited.add(nid)
+        if nid == target:
+            return True
+        stack.extend(children.get(nid, []))
+    return False
+
+
+def validate_location_move(conn, *, location_id: Any, parent_id: Any) -> None:
+    """App-level mirror of the DB depth trigger, for clean 400 errors."""
+    index = _all_locations_index(conn)
+    children = _location_children_map(index)
+    if parent_id:
+        if str(parent_id) not in index:
+            raise NextApiError("Parent location not found", 404)
+        if location_id and str(parent_id) == str(location_id):
+            raise NextApiError("A location cannot be its own parent", 400)
+        if location_id and _location_is_descendant(children, location_id, parent_id):
+            raise NextApiError("Cannot move a location into one of its descendants", 400)
+        parent_depth = _location_depth_of(index, parent_id)
+    else:
+        parent_depth = 0
+    height = _location_subtree_height(children, location_id) if location_id and str(location_id) in index else 1
+    if parent_depth + height > LOCATION_MAX_DEPTH:
+        raise NextApiError(LOCATION_MAX_DEPTH_ERROR, 400)
+
+
+def location_detail_entity(conn, location_id: UUID | str) -> dict[str, Any] | None:
+    entity = location_entity(conn, location_id)
+    if not entity:
+        return None
+    index = _all_locations_index(conn)
+    entity["path"] = _location_path_names(index, entity.get("id"))
+    entity["path_label"] = " / ".join(entity["path"])
+    entity["parent"] = location_summary_object(index, entity.get("parent_id")) if entity.get("parent_id") else None
+    return entity
+
+
+def location_qr_svg(url: str) -> str:
+    import segno
+
+    qr = segno.make(url, error="m")
+    buffer = io.BytesIO()
+    qr.save(buffer, kind="svg", scale=6, border=2, dark="#0f172a", light=None)
+    return buffer.getvalue().decode("utf-8")
+
+
+def location_deep_link(public_id: str) -> str:
+    root = ""
+    try:
+        root = (request.url_root or "").rstrip("/")
+    except Exception:
+        root = ""
+    return f"{root}/app/locations/{public_id}" if root else f"/app/locations/{public_id}"
 
 
 def container_receiver_member_payload(conn, container_id: UUID | str | None) -> list[dict[str, Any]]:
@@ -44243,6 +44908,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             overview=%s,
             notes=%s,
             location=%s,
+            location_id=%s,
             runtime_minutes=%s,
             metadata = COALESCE(metadata, '{}'::jsonb) || %s,
             updated_at=now()
@@ -44263,6 +44929,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             payload["overview"],
             payload["notes"],
             payload["location"],
+            payload.get("location_id"),
             payload.get("runtime_minutes"),
             Jsonb(json_ready(metadata_patch)),
             movie_uuid,
@@ -44313,6 +44980,12 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
     if not title:
         raise NextApiError("Movie title is required", 400)
 
+    if "locationId" in body or "location_id" in body:
+        raw_location = body.get("locationId", body.get("location_id"))
+        location_id = parse_uuid(raw_location, "locationId") if clean_text(raw_location) else None
+    else:
+        location_id = existing.get("location_id")
+
     return {
         "title": title,
         "sort_title": pick_text("sort_title", "sortTitle"),
@@ -44328,6 +45001,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "overview": pick_text("overview"),
         "notes": pick_text("notes"),
         "location": pick_text("location"),
+        "location_id": location_id,
         "runtime_minutes": movie_runtime_value(body, existing),
         "metadata_edits": movie_metadata_edits(body),
         "technical_edits": movie_technical_edits(body),
@@ -44480,6 +45154,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 purchase_date,
                 purchase_price,
                 location,
+                location_id,
                 owner_id,
                 metadata,
                 created_at,
@@ -46919,6 +47594,7 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     movie = movie_entity(conn, movie_id)
     if not movie:
         return None
+    attach_location_summaries(conn, [movie])
     metadata_debug = None
     try:
         metadata_debug = movie_metadata_debug_entity(conn, movie_id)
@@ -49110,6 +49786,7 @@ def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
                 year,
                 description,
                 primary_movie_id,
+                location_id,
                 metadata,
                 created_at,
                 updated_at
@@ -50025,6 +50702,7 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
     container = container_entity(conn, container_id)
     if not container:
         return None
+    attach_location_summaries(conn, [container])
     aggregate_movies = container_aggregate_movie_entities(conn, container_id, actor=actor)
     aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
     aggregate_videos = container_aggregate_video_entities(aggregate_movies)
@@ -53400,9 +54078,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -53413,6 +54091,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["badge_label"],
                             payload["year"],
                             payload["description"],
+                            payload["location_id"],
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -53463,6 +54142,7 @@ def register_routes(flask_app: Flask) -> None:
                             badge_label=%s,
                             year=%s,
                             description=%s,
+                            location_id=%s,
                             metadata=%s,
                             updated_at=now()
                         WHERE id=%s
@@ -53473,6 +54153,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["badge_label"],
                             payload["year"],
                             payload["description"],
+                            payload["location_id"],
                             Jsonb(json_ready(payload["metadata"])),
                             container_uuid,
                         ),
@@ -53609,6 +54290,174 @@ def register_routes(flask_app: Flask) -> None:
                 "deleteMembers": delete_members,
             }
         )
+
+    @flask_app.get("/api/next/locations")
+    def list_locations():
+        with connect() as conn:
+            require_any_next_permission(
+                conn,
+                ("containers.view", "collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
+            if not table_exists(conn, "locations"):
+                return response({"status": "ok", "items": []})
+            items = location_list_entities(conn)
+        return response({"status": "ok", "items": items})
+
+    @flask_app.post("/api/next/locations")
+    def create_location():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Location request body must be an object", 400)
+        payload = location_payload(body)
+        parent_uuid = parse_uuid(body.get("parentId") or body.get("parent_id"), "parentId") if (body.get("parentId") or body.get("parent_id")) else None
+        try:
+            sort_order = int(body.get("sortOrder", body.get("sort_order", 0)) or 0)
+        except (TypeError, ValueError):
+            sort_order = 0
+        location_uuid = uuid.uuid4()
+        public_id = clean_text(body.get("publicId") or body.get("public_id")) or location_public_id()
+        if len(public_id) > 160:
+            raise NextApiError("publicId must be 160 characters or fewer", 400)
+        qr_token = location_qr_token()
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            if not table_exists(conn, "locations"):
+                raise NextApiError("Location table is not available", 503)
+            validate_location_move(conn, location_id=None, parent_id=parent_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM locations WHERE public_id=%s", (public_id,))
+                    if cur.fetchone():
+                        raise NextApiError("A location with this public id already exists", 409)
+                    cur.execute(
+                        """
+                        INSERT INTO locations (
+                            id, public_id, parent_id, name, description, qr_token, sort_order, metadata, created_at, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        """,
+                        (
+                            location_uuid,
+                            public_id,
+                            parent_uuid,
+                            payload["name"],
+                            payload["description"],
+                            qr_token,
+                            sort_order,
+                            Jsonb({}),
+                        ),
+                    )
+                audit_event(
+                    conn,
+                    event_type="location.created",
+                    category="admin",
+                    actor=actor,
+                    target_type="location",
+                    target_id=location_uuid,
+                    summary=f"Created location {payload['name']}",
+                    metadata={"publicId": public_id, "name": payload["name"], "parentId": str(parent_uuid) if parent_uuid else None},
+                )
+            detail = location_detail_entity(conn, location_uuid)
+        return response({"status": "ok", "detail": detail}, 201)
+
+    @flask_app.patch("/api/next/locations/<location_id>")
+    def update_location(location_id: str):
+        location_uuid = parse_uuid(location_id, "locationId")
+        if not location_uuid:
+            raise NextApiError("locationId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Location request body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            existing = location_entity(conn, location_uuid)
+            if not existing:
+                raise NextApiError("Location not found", 404)
+            payload = location_payload(body, existing=existing)
+            reparent = "parentId" in body or "parent_id" in body
+            if reparent:
+                raw_parent = body.get("parentId") if "parentId" in body else body.get("parent_id")
+                parent_uuid = parse_uuid(raw_parent, "parentId") if raw_parent else None
+                validate_location_move(conn, location_id=location_uuid, parent_id=parent_uuid)
+            else:
+                parent_uuid = existing.get("parent_id")
+            if "sortOrder" in body or "sort_order" in body:
+                try:
+                    sort_order = int(body.get("sortOrder", body.get("sort_order", 0)) or 0)
+                except (TypeError, ValueError):
+                    sort_order = existing.get("sort_order") or 0
+            else:
+                sort_order = existing.get("sort_order") or 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE locations
+                        SET name=%s, description=%s, parent_id=%s, sort_order=%s, updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (payload["name"], payload["description"], parent_uuid, sort_order, location_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="location.updated",
+                    category="admin",
+                    actor=actor,
+                    target_type="location",
+                    target_id=location_uuid,
+                    summary=f"Updated location {payload['name']}",
+                    metadata={
+                        "publicId": existing.get("public_id"),
+                        "name": payload["name"],
+                        "previousName": existing.get("name"),
+                        "parentId": str(parent_uuid) if parent_uuid else None,
+                        "reparented": reparent,
+                    },
+                )
+            detail = location_detail_entity(conn, location_uuid)
+        return response({"status": "ok", "detail": detail})
+
+    @flask_app.delete("/api/next/locations/<location_id>")
+    def delete_location(location_id: str):
+        location_uuid = parse_uuid(location_id, "locationId")
+        if not location_uuid:
+            raise NextApiError("locationId is required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.delete")
+            existing = location_entity(conn, location_uuid)
+            if not existing:
+                raise NextApiError("Location not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM locations WHERE id=%s", (location_uuid,))
+                audit_event(
+                    conn,
+                    event_type="location.deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="location",
+                    target_id=location_uuid,
+                    summary=f"Deleted location {existing.get('name')}",
+                    metadata={"publicId": existing.get("public_id"), "name": existing.get("name")},
+                )
+        return response({"status": "ok", "locationId": str(location_uuid)})
+
+    @flask_app.get("/api/next/locations/<location_id>/qr.svg")
+    def location_qr(location_id: str):
+        with connect() as conn:
+            require_any_next_permission(
+                conn,
+                ("containers.view", "collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
+            if not table_exists(conn, "locations"):
+                raise NextApiError("Location table is not available", 503)
+            location_uuid = parse_uuid(location_id, "locationId")
+            entity = location_entity(conn, location_uuid) if location_uuid else location_entity_by_public_id(conn, location_id)
+            if not entity:
+                raise NextApiError("Location not found", 404)
+            public_id = entity.get("public_id")
+        svg = location_qr_svg(location_deep_link(public_id))
+        return Response(svg, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
 
     @flask_app.post("/api/next/bulk/containers/<container_id>/movies")
     def bulk_container_movies(container_id: str):
@@ -54424,9 +55273,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -54437,6 +55286,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["badge_label"],
                             payload["year"],
                             payload["description"],
+                            payload["location_id"],
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -54510,6 +55360,7 @@ def register_routes(flask_app: Flask) -> None:
                             badge_label=%s,
                             year=%s,
                             description=%s,
+                            location_id=%s,
                             metadata=%s,
                             updated_at=now()
                         WHERE id=%s
@@ -54520,6 +55371,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["badge_label"],
                             payload["year"],
                             payload["description"],
+                            payload["location_id"],
                             Jsonb(json_ready(payload["metadata"])),
                             container_uuid,
                         ),
@@ -60293,10 +61145,13 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/containers/<container_id>")
     @flask_app.get("/people/<person_id>")
     @flask_app.get("/app/people/<person_id>")
+    @flask_app.get("/locations/<location_id>")
+    @flask_app.get("/app/locations/<location_id>")
     def next_app_shell(
         movie_id: str | None = None,
         container_id: str | None = None,
         person_id: str | None = None,
+        location_id: str | None = None,
     ):
         with connect() as conn:
             user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
