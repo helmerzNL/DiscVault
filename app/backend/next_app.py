@@ -7297,6 +7297,8 @@ def ui_preview_html(
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     .collection-toolbar {
+      position: relative;
+      z-index: 30;
       display: grid;
       gap: 12px;
       padding: 12px;
