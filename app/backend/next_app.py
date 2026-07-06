@@ -22483,6 +22483,14 @@ def ui_preview_html(
       if (filters.artwork === "completeArtwork" && (!containerPosterValue(container) || !containerBackdropValue(container))) return false;
       return true;
     }
+    function movieFormatIsFourKBlurayCombo(value) {
+      const lower = String(value || "").toLowerCase();
+      const has4k = lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd");
+      if (!has4k) return false;
+      const hasBluray = /blu[\\s-]?ray/.test(lower) || /(^|[^a-z])bd([^a-z]|$)/.test(lower);
+      if (!hasBluray) return false;
+      return /[+/&]/.test(lower);
+    }
     function normalizedMovieFormat(movie) {
       return String(movie?.format || movie?.edition_type || movie?.metadata?.format || "").toLowerCase();
     }
@@ -22491,7 +22499,7 @@ def ui_preview_html(
       if (selected === "all") return true;
       const value = normalizedMovieFormat(movie);
       if (selected === "4k") return value.includes("4k") || value.includes("uhd") || value.includes("ultra hd");
-      if (selected === "bluray") return (value.includes("blu") || value.includes("bd")) && !movieMatchesFormatValue(value, "4k");
+      if (selected === "bluray") return (value.includes("blu") || value.includes("bd")) && (!movieMatchesFormatValue(value, "4k") || movieFormatIsFourKBlurayCombo(value));
       if (selected === "dvd") return value.includes("dvd") && !value.includes("blu") && !value.includes("uhd");
       return true;
     }
@@ -22865,6 +22873,7 @@ def ui_preview_html(
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
       if (!text) return "";
+      if (movieFormatIsFourKBlurayCombo(text)) return "4K UHD + Blu-ray";
       if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K UHD";
       if (lower.includes("blu") || lower.includes("bd")) return "Blu-ray";
       if (lower.includes("dvd")) return "DVD";
@@ -24229,14 +24238,16 @@ def ui_preview_html(
       {value: "DVD", collectorOnly: false},
       {value: "HD DVD", collectorOnly: true},
       {value: "LaserDisc", collectorOnly: true},
-      {value: "Ultra HD Blu-ray", collectorOnly: false},
+      {value: "4K UHD", collectorOnly: false},
+      {value: "4K UHD + Blu-ray", collectorOnly: false},
       {value: "VCD/SVCD", collectorOnly: true}
     ];
     function normalizedMovieFormatValue(value) {
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
       if (!text) return "";
-      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "Ultra HD Blu-ray";
+      if (movieFormatIsFourKBlurayCombo(text)) return "4K UHD + Blu-ray";
+      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K UHD";
       if (lower.includes("blu")) return "Blu-ray";
       if (lower.includes("hd dvd")) return "HD DVD";
       if (lower.includes("laser")) return "LaserDisc";
