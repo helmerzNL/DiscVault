@@ -974,6 +974,63 @@ def ui_preview_html(
       color: var(--accent);
       font-weight: 800;
     }
+    .toolbar-menu.create-menu .toolbar-menu-panel {
+      min-width: 260px;
+      gap: 8px;
+    }
+    .toolbar-menu-create-form {
+      display: grid;
+      gap: 8px;
+      padding: 2px;
+    }
+    .toolbar-menu-create-field {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 780;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+    .toolbar-menu-create-field input,
+    .toolbar-menu-create-field select {
+      min-height: 34px;
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 620;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+    .toolbar-menu-create-submit {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--accent) 82%, transparent);
+      color: var(--accent-contrast);
+      font-weight: 750;
+      cursor: pointer;
+    }
+    .toolbar-menu-create-message {
+      min-height: 1.1em;
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .toolbar-menu-create-message.good {
+      color: var(--green, #1f9d55);
+    }
+    .toolbar-menu-create-message.bad {
+      color: var(--red, #e5484d);
+    }
     .filter-panel {
       min-width: 280px;
       max-width: 320px;
@@ -1075,6 +1132,11 @@ def ui_preview_html(
       cursor: not-allowed;
     }
     .view-mode-button.active {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      color: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    #selectModeButton.active {
       border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
       color: var(--accent);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
@@ -9027,6 +9089,33 @@ def ui_preview_html(
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5,5.6L10,7L8.6,4.5L10,2L7.5,3.4L5,2L6.4,4.5L5,7L7.5,5.6M19.5,15.4L17,14L18.4,16.5L17,19L19.5,17.6L22,19L20.6,16.5L22,14L19.5,15.4M22,2L19.5,3.4L17,2L18.4,4.5L17,7L19.5,5.6L22,7L20.6,4.5L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z"/></svg>
               <span class="metadata-job-badge hidden" id="advancedSearchBadge">0</span>
             </button>
+            <button type="button" class="icon-button" id="selectModeButton" aria-pressed="false" aria-label="Select" data-next-i18n-aria="bulk.select" title="Select" data-next-i18n-title="bulk.select">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2,5H4V19C4,20.11 4.89,21 6,21H20V19H6V5M18,3A2,2 0 0,1 20,5V15A2,2 0 0,1 18,17H8A2,2 0 0,1 6,15V5A2,2 0 0,1 8,3H18M9.5,11L11,12.5L16.5,7L18,8.5L11,15.5L8,12.5L9.5,11Z"/></svg>
+              <span class="visually-hidden" id="selectModeButtonLabel" data-next-i18n="bulk.select">Select</span>
+            </button>
+            <div class="toolbar-menu create-menu hidden" id="collectionCreateMenu">
+              <button type="button" class="icon-button toolbar-menu-trigger" id="collectionCreateTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Create container" data-next-i18n-aria="collection.createContainer" title="Create container" data-next-i18n-title="collection.createContainer">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/></svg>
+              </button>
+              <div class="toolbar-menu-panel hidden" id="collectionCreatePanel" role="dialog" aria-label="Create container" data-next-i18n-aria="collection.createContainer">
+                <form class="toolbar-menu-create-form" id="collectionCreateForm">
+                  <label class="toolbar-menu-create-field" for="collectionCreateType">
+                    <span data-next-i18n="containerDetail.fieldType">Type</span>
+                    <select id="collectionCreateType">
+                      <option value="box_set" data-next-i18n="containerTypes.box_set">Box-set</option>
+                      <option value="vault" data-next-i18n="containerTypes.vault">Vault</option>
+                      <option value="collection" data-next-i18n="containerTypes.collection">Collection</option>
+                    </select>
+                  </label>
+                  <label class="toolbar-menu-create-field" for="collectionCreateTitle">
+                    <span data-next-i18n="containerManage.titleLabel">Name</span>
+                    <input id="collectionCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="collection.createContainerNamePlaceholder" placeholder="New container name">
+                  </label>
+                  <button type="submit" class="toolbar-menu-create-submit" id="collectionCreateSubmitButton" data-next-i18n="containerManage.create">Create</button>
+                  <p class="toolbar-menu-create-message" id="collectionCreateMessage"></p>
+                </form>
+              </div>
+            </div>
             <span class="collection-controls-spacer" aria-hidden="true"></span>
             <div class="view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
               <button type="button" class="icon-button view-mode-button" data-library-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
@@ -9137,7 +9226,6 @@ def ui_preview_html(
         <div class="filter-row">
           <select id="groupFilter" aria-label="Group filter" data-next-i18n-aria="groups.filterLabel"></select>
           <span class="group-scope-pill" id="groupFilterStatus"></span>
-          <button type="button" class="icon-button" id="selectModeButton" data-next-i18n="bulk.select">Select</button>
           <button type="button" class="icon-button metadata-job-toggle hidden" id="libraryMetadataJobsToggleButton">
             <span data-next-i18n="metadataJobs.toggle">Metadata jobs</span>
             <span class="metadata-job-badge" id="libraryMetadataJobBadge">0</span>
@@ -9445,6 +9533,7 @@ def ui_preview_html(
               <button type="button" class="active" data-import-method="camera" data-next-i18n="importCenter.methodCamera">Camera</button>
               <button type="button" data-import-method="single" data-next-i18n="importCenter.methodSingle">Single search</button>
               <button type="button" data-import-method="batch" data-next-i18n="importCenter.methodBatch">Batch</button>
+              <button type="button" data-import-method="boxset" data-next-i18n="importCenter.methodBoxSet">Box-set builder</button>
               <button type="button" data-import-method="csv" data-next-i18n="importCenter.methodCsv">CSV import</button>
             </nav>
             <div class="import-method-panel" data-import-method-panel="camera">
@@ -9521,6 +9610,71 @@ def ui_preview_html(
               <div class="login-message" id="importFileMessage"></div>
               <div class="import-file-summary" id="importFileSummary"></div>
             </div>
+            </div>
+            <div class="import-method-panel hidden" data-import-method-panel="boxset">
+              <div class="import-manual-card" id="boxSetBuilderIdentifyCard">
+                <div>
+                  <strong data-next-i18n="importCenter.boxSetBuilderTitle">Box-set builder</strong>
+                  <p class="import-source-meta" data-next-i18n="importCenter.boxSetBuilderHelp">Scan or type the box-set's own barcode to open it. If nothing is recognized, give it a title to create an empty box-set, then scan each film to add it as a member.</p>
+                </div>
+                <form class="import-barcode-form" id="boxSetBuilderIdentifyForm">
+                  <label>
+                    <span data-next-i18n="importCenter.boxSetBuilderBarcode">Box-set barcode</span>
+                    <input id="boxSetBuilderBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
+                  </label>
+                  <label>
+                    <span data-next-i18n="importCenter.boxSetBuilderName">Title</span>
+                    <input id="boxSetBuilderTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                  </label>
+                  <label>
+                    <span data-next-i18n="importCenter.manualYear">Year</span>
+                    <input id="boxSetBuilderYearInput" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
+                  </label>
+                  <button type="submit" class="primary-button" id="boxSetBuilderIdentifyButton" data-next-i18n="importCenter.boxSetBuilderIdentify">Identify / create</button>
+                </form>
+                <div class="login-message" id="boxSetBuilderIdentifyMessage"></div>
+              </div>
+              <div class="import-batch-card standalone hidden" id="boxSetBuilderActiveCard">
+                <div class="import-card-head">
+                  <div>
+                    <span class="eyebrow" data-next-i18n="importCenter.boxSetTargetActive">Active box-set</span>
+                    <strong id="boxSetBuilderActiveTitle"></strong>
+                    <p class="import-source-meta"><span id="boxSetBuilderMemberCount">0</span> <span data-next-i18n="importCenter.members">members</span></p>
+                  </div>
+                  <div class="button-row compact">
+                    <button type="button" class="secondary-button" id="boxSetBuilderCameraButton" data-next-i18n="importCenter.boxSetBuilderScanCamera">Scan with camera</button>
+                    <button type="button" class="secondary-button" id="boxSetBuilderOpenButton" data-next-i18n="importCenter.boxSetBuilderOpen">Open box-set</button>
+                    <button type="button" class="primary-button" id="boxSetBuilderDoneButton" data-next-i18n="importCenter.boxSetBuilderDone">Done</button>
+                  </div>
+                </div>
+                <form class="import-barcode-form" id="boxSetBuilderMemberForm">
+                  <label>
+                    <span data-next-i18n="importCenter.boxSetBuilderMemberBarcode">Member barcode</span>
+                    <input id="boxSetBuilderMemberBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
+                  </label>
+                  <label>
+                    <span data-next-i18n="importCenter.boxSetBuilderMemberTitle">Title (fallback)</span>
+                    <input id="boxSetBuilderMemberTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                  </label>
+                  <label>
+                    <span data-next-i18n="importCenter.manualYear">Year</span>
+                    <input id="boxSetBuilderMemberYearInput" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
+                  </label>
+                  <button type="submit" class="primary-button" id="boxSetBuilderMemberButton" data-next-i18n="importCenter.boxSetBuilderAddMember">Scan / add member</button>
+                </form>
+                <div class="login-message" id="boxSetBuilderMemberMessage"></div>
+                <details class="import-batch-paste" id="boxSetBuilderBatchCard">
+                  <summary data-next-i18n="importCenter.boxSetBuilderBatchTitle">Paste multiple barcodes</summary>
+                  <p class="import-source-meta" data-next-i18n="importCenter.boxSetBuilderBatchHelp">Paste or scan several member barcodes (one per line). All of them are linked to this box-set.</p>
+                  <textarea id="boxSetBuilderBatchInput" rows="4" autocomplete="off" data-next-i18n-placeholder="importCenter.batchPlaceholder" placeholder="One barcode per line"></textarea>
+                  <div class="button-row compact">
+                    <button type="button" class="primary-button" id="boxSetBuilderBatchButton" data-next-i18n="importCenter.boxSetBuilderBatchRun">Add all to box-set</button>
+                  </div>
+                  <div class="login-message" id="boxSetBuilderBatchMessage"></div>
+                  <div class="import-batch-list" id="boxSetBuilderBatchList"></div>
+                </details>
+                <div class="import-batch-list" id="boxSetBuilderMemberList"></div>
+              </div>
             </div>
             <div class="import-result-list" id="importBarcodeResults"></div>
           </div>
@@ -10039,6 +10193,24 @@ def ui_preview_html(
                   </label>
                   <div class="profile-form-actions">
                     <button type="submit" class="secondary-button" data-next-i18n="containerDetail.addMovieButton">Add movie</button>
+                  </div>
+                </form>
+                <form class="profile-form hidden" id="containerScanAddForm">
+                  <label for="containerScanAddBarcode">
+                    <span data-next-i18n="containerDetail.scanToAdd">Scan / search to add</span>
+                    <input id="containerScanAddBarcode" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
+                  </label>
+                  <label for="containerScanAddTitle">
+                    <span data-next-i18n="containerDetail.scanToAddTitle">Title (fallback)</span>
+                    <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                  </label>
+                  <label for="containerScanAddYear">
+                    <span data-next-i18n="importCenter.manualYear">Year</span>
+                    <input id="containerScanAddYear" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
+                  </label>
+                  <p class="import-source-meta" data-next-i18n="containerDetail.scanToAddHelp">Scan or type a member barcode to import the movie and link it here.</p>
+                  <div class="profile-form-actions">
+                    <button type="submit" class="secondary-button" data-next-i18n="containerDetail.scanToAddButton">Scan / add</button>
                   </div>
                 </form>
                 <form class="profile-form" id="containerAddItemForm">
@@ -11314,7 +11486,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera", boxSetBuilder: {target: null, members: [], captureToCamera: false, busy: false}};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -16028,10 +16200,33 @@ def ui_preview_html(
         status.title = label;
       }
     }
+    function syncSelectModeButton() {
+      const button = document.getElementById("selectModeButton");
+      if (!button) return;
+      const labelNode = document.getElementById("selectModeButtonLabel");
+      const labelKey = selectionMode ? "bulk.done" : "bulk.select";
+      const label = tNext(labelKey, selectionMode ? "Done" : "Select");
+      button.classList.toggle("active", selectionMode);
+      button.setAttribute("aria-pressed", selectionMode ? "true" : "false");
+      button.setAttribute("aria-label", label);
+      button.setAttribute("title", label);
+      button.dataset.nextI18nAria = labelKey;
+      button.dataset.nextI18nTitle = labelKey;
+      if (labelNode) {
+        labelNode.textContent = label;
+        labelNode.dataset.nextI18n = labelKey;
+      }
+    }
     function renderCollectionToolbar() {
       if (!collectorsModeEnabled() && collectionItemFilter === "containers") {
         collectionItemFilter = "all";
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+      }
+      const createMenu = document.getElementById("collectionCreateMenu");
+      const canCreateContainers = collectorsModeEnabled() && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
+      if (createMenu) {
+        createMenu.classList.toggle("hidden", !canCreateContainers);
+        if (!canCreateContainers) closeCollectionMenu("collectionCreateMenu");
       }
       advancedSearch = normalizeAdvancedSearch(advancedSearch);
       smartFilters = Array.isArray(smartFilters) ? smartFilters : [];
@@ -16047,6 +16242,8 @@ def ui_preview_html(
       });
       renderCollectionFilterMenu();
       syncAdvancedSearchControls();
+      syncSelectModeButton();
+      syncCollectionCreateControls();
     }
     function collectionFilterActiveCount() {
       let count = collectionFormatFilters ? collectionFormatFilters.size : 0;
@@ -16152,7 +16349,8 @@ def ui_preview_html(
     }
     const COLLECTION_MENUS = [
       {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
-      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"}
+      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"},
+      {menu: "collectionCreateMenu", trigger: "collectionCreateTrigger", panel: "collectionCreatePanel"}
     ];
     let collectionMenusBound = false;
     function closeCollectionMenu(menuId) {
@@ -16188,7 +16386,7 @@ def ui_preview_html(
           trigger.addEventListener("click", (event) => { event.stopPropagation(); toggleCollectionMenu(def.menu); });
         }
         const panel = document.getElementById(def.panel);
-        if (panel && !panel.dataset.menuBound && def.menu === "collectionFilterMenu") {
+        if (panel && !panel.dataset.menuBound && (def.menu === "collectionFilterMenu" || def.menu === "collectionCreateMenu")) {
           panel.dataset.menuBound = "1";
           panel.addEventListener("click", (event) => event.stopPropagation());
         }
@@ -16383,6 +16581,51 @@ def ui_preview_html(
       if (boxSetSelect) boxSetSelect.innerHTML = targetOptionHtml(boxSets, "bulk.noBoxSets", "No box-sets");
       if (collectionSelect) collectionSelect.innerHTML = targetOptionHtml(collections, "bulk.noCollections", "No collections");
       if (vaultSelect) vaultSelect.innerHTML = targetOptionHtml(vaults, "bulk.noVaults", "No vaults");
+    }
+    function setCollectionCreateMessage(message, tone) {
+      const node = document.getElementById("collectionCreateMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `toolbar-menu-create-message ${tone || ""}`.trim();
+    }
+    function syncCollectionCreateControls() {
+      const typeSelect = document.getElementById("collectionCreateType");
+      const submitButton = document.getElementById("collectionCreateSubmitButton");
+      if (!typeSelect || !submitButton) return;
+      const containerType = ["box_set", "vault", "collection"].includes(typeSelect.value) ? typeSelect.value : "box_set";
+      submitButton.textContent = tNext(`containerManage.create.${containerType}`, tNext("containerManage.create", "Create"));
+    }
+    async function createContainerFromLibraryMenu(event) {
+      event?.preventDefault();
+      if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) return;
+      const typeSelect = document.getElementById("collectionCreateType");
+      const titleInput = document.getElementById("collectionCreateTitle");
+      const title = String(titleInput?.value || "").trim();
+      if (!title) {
+        setCollectionCreateMessage(tNext("containerManage.titleRequired", "Enter a name first."), "bad");
+        titleInput?.focus();
+        return;
+      }
+      const containerType = ["box_set", "vault", "collection"].includes(typeSelect?.value || "") ? typeSelect.value : "box_set";
+      setCollectionCreateMessage(tNext("containerManage.saving", "Saving..."));
+      try {
+        const payload = await authApiJson("/api/next/containers", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({containerType, title})
+        });
+        if (titleInput) titleInput.value = "";
+        setCollectionCreateMessage(tNext("containerManage.created", "Created."), "good");
+        await loadAppSnapshot();
+        renderBulkTargets();
+        const newContainerId = String(payload?.detail?.container?.id || payload?.detail?.id || payload?.container?.id || "");
+        if (newContainerId) {
+          closeCollectionMenu("collectionCreateMenu");
+          openAppContainerDetail(newContainerId);
+        }
+      } catch (error) {
+        setCollectionCreateMessage(error.message || String(error), "bad");
+      }
     }
     function collectorsModeEnabled() {
       return preferences.collectors_mode === true;
@@ -19234,6 +19477,8 @@ def ui_preview_html(
       const itemSelect = document.getElementById("containerAddItemSelect");
       const linkedMovieIds = new Set((detail.memberMovies || []).map((movie) => String(movie.id)));
       if (movieForm) movieForm.classList.toggle("hidden", !["box_set", "vault"].includes(type));
+      const scanForm = document.getElementById("containerScanAddForm");
+      if (scanForm) scanForm.classList.toggle("hidden", !["box_set", "vault"].includes(type));
       if (movieSelect) {
         const availableMovies = movies.filter((movie) => !linkedMovieIds.has(String(movie.id)));
         movieSelect.innerHTML = movieSelectOptions(availableMovies);
@@ -20060,6 +20305,52 @@ def ui_preview_html(
         setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
+    async function addContainerScanMember(event) {
+      event.preventDefault();
+      if (!activeContainerId) return;
+      if (!hasPermission("containers.edit")) {
+        setContainerDetailMessage(tNext("common.noPermission", "You do not have permission for this action."), "bad");
+        return;
+      }
+      const barcodeInput = document.getElementById("containerScanAddBarcode");
+      const titleInput = document.getElementById("containerScanAddTitle");
+      const yearInput = document.getElementById("containerScanAddYear");
+      const barcode = normalizeImportBarcode(barcodeInput?.value || "");
+      const title = String(titleInput?.value || "").trim();
+      const year = String(yearInput?.value || "").trim();
+      if (!barcode && !title) {
+        setContainerDetailMessage(tNext("containerDetail.scanToAddNeedInput", "Scan a barcode or enter a title to add a member."), "bad");
+        return;
+      }
+      const container = activeContainer();
+      if (barcode && container.barcode && barcode === normalizeImportBarcode(container.barcode)) {
+        setContainerDetailMessage(tNext("importCenter.boxSetBuilderOwnBarcode", "That is the box-set's own barcode, not a member."), "warn");
+        return;
+      }
+      setContainerDetailMessage(tNext("containerDetail.adding", "Adding content..."));
+      try {
+        await authApiJson("/api/next/import/movie", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          timeoutMs: 45000,
+          body: JSON.stringify({
+            barcode,
+            title,
+            year,
+            format: "",
+            importMode: "movie",
+            detectBoxSets: false,
+            targetContainerId: activeContainerId
+          })
+        });
+        if (barcodeInput) barcodeInput.value = "";
+        if (titleInput) titleInput.value = "";
+        if (yearInput) yearInput.value = "";
+        await refreshActiveContainerDetail(tNext("containerDetail.added", "Content added."), "good");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
     async function addCollectionItem(event) {
       event.preventDefault();
       if (!activeContainerId) return;
@@ -20220,6 +20511,7 @@ def ui_preview_html(
       renderImportMethodTabs();
       if (importCenter.activeMethod !== "camera") {
         stopImportBarcodeScanner();
+        if (importCenter.boxSetBuilder) importCenter.boxSetBuilder.captureToCamera = false;
       }
     }
     function renderImportMethodTabs() {
@@ -20230,6 +20522,374 @@ def ui_preview_html(
       document.querySelectorAll("[data-import-method-panel]").forEach((panel) => {
         panel.classList.toggle("hidden", panel.dataset.importMethodPanel !== active);
       });
+    }
+    function boxSetBuilderState() {
+      if (!importCenter.boxSetBuilder || typeof importCenter.boxSetBuilder !== "object") {
+        importCenter.boxSetBuilder = {target: null, members: [], captureToCamera: false, busy: false};
+      }
+      return importCenter.boxSetBuilder;
+    }
+    function setBoxSetBuilderMessage(id, message, tone) {
+      const node = document.getElementById(id);
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function renderBoxSetBuilder() {
+      const state = boxSetBuilderState();
+      const identifyCard = document.getElementById("boxSetBuilderIdentifyCard");
+      const activeCard = document.getElementById("boxSetBuilderActiveCard");
+      const hasTarget = Boolean(state.target && state.target.id);
+      if (identifyCard) identifyCard.classList.toggle("hidden", hasTarget);
+      if (activeCard) activeCard.classList.toggle("hidden", !hasTarget);
+      if (hasTarget) {
+        const titleNode = document.getElementById("boxSetBuilderActiveTitle");
+        if (titleNode) {
+          const label = state.target.title || tNext("importCenter.boxSetUntitled", "Untitled box-set");
+          const barcode = state.target.barcode ? ` / ${state.target.barcode}` : "";
+          titleNode.textContent = `${label}${barcode}`;
+        }
+        const countNode = document.getElementById("boxSetBuilderMemberCount");
+        if (countNode) countNode.textContent = `${state.members.length}`;
+        renderBoxSetBuilderMembers();
+      }
+    }
+    function renderBoxSetBuilderMembers() {
+      const list = document.getElementById("boxSetBuilderMemberList");
+      if (!list) return;
+      const state = boxSetBuilderState();
+      const members = state.members || [];
+      if (!members.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("importCenter.boxSetNoMembersYet", "No members yet. Scan a film barcode to add it."))}</div>`;
+        return;
+      }
+      list.innerHTML = members.map((movie, index) => {
+        const id = String(movie.id || movie.movieId || "");
+        const title = String(movie.title || movie.name || tNext("importCenter.boxSetUntitledMember", "Untitled film"));
+        const metaParts = [movie.year, movie.format].map((part) => String(part || "").trim()).filter(Boolean);
+        const meta = metaParts.join(" / ");
+        return `
+          <div class="import-batch-row" data-box-builder-member="${escapeHtml(id)}">
+            <div class="import-batch-row-main">
+              <strong>${escapeHtml(String(index + 1))}. ${escapeHtml(title)}</strong>
+              ${meta ? `<span class="import-source-meta">${escapeHtml(meta)}</span>` : ""}
+            </div>
+            <div class="button-row compact">
+              <button type="button" class="secondary-button" data-box-builder-remove="${escapeHtml(id)}" data-next-i18n="common.remove">Remove</button>
+            </div>
+          </div>`;
+      }).join("");
+    }
+    function pinBoxSetBuilderTarget(container, members) {
+      const state = boxSetBuilderState();
+      state.target = {
+        id: String(container.id || container.containerId || ""),
+        publicId: container.publicId || container.public_id || "",
+        title: container.title || "",
+        barcode: container.barcode || "",
+        containerType: container.containerType || container.container_type || "box_set"
+      };
+      state.members = Array.isArray(members) ? members : [];
+      state.captureToCamera = false;
+      renderBoxSetBuilder();
+    }
+    async function identifyBoxSetBuilderTarget(event) {
+      event?.preventDefault();
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) {
+        setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", tNext("common.noPermission", "You do not have permission for this action."), "bad");
+        return;
+      }
+      const state = boxSetBuilderState();
+      if (state.busy) return;
+      const barcode = normalizeImportBarcode(document.getElementById("boxSetBuilderBarcodeInput")?.value || "");
+      const title = String(document.getElementById("boxSetBuilderTitleInput")?.value || "").trim();
+      const year = String(document.getElementById("boxSetBuilderYearInput")?.value || "").trim();
+      if (!barcode && !title) {
+        setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", tNext("importCenter.boxSetBuilderNeedInput", "Enter the box-set barcode or a title first."), "bad");
+        return;
+      }
+      state.busy = true;
+      try {
+        if (barcode) {
+          setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", tNext("importCenter.boxSetBuilderLooking", "Looking up box-set..."));
+          const lookup = await authApiJson(`/api/next/containers/lookup?barcode=${encodeURIComponent(barcode)}&type=box_set`);
+          if (lookup && lookup.found && lookup.container) {
+            pinBoxSetBuilderTarget(lookup.container, []);
+            await refreshBoxSetBuilderMembers();
+            setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", tNext("importCenter.boxSetBuilderOpened", "Box-set opened. Scan films to add them."), "good");
+            return;
+          }
+        }
+        if (!title) {
+          setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", tNext("importCenter.boxSetBuilderNotFound", "No box-set with that barcode. Add a title to create an empty box-set."), "warn");
+          return;
+        }
+        setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", tNext("importCenter.boxSetBuilderCreating", "Creating empty box-set..."));
+        const created = await authApiJson("/api/next/containers", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({containerType: "box_set", title, barcode, year})
+        });
+        const container = created.detail?.container || created.detail || created.container || {};
+        if (!container.id) {
+          setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", tNext("importCenter.boxSetBuilderCreateFailed", "Could not create the box-set."), "bad");
+          return;
+        }
+        pinBoxSetBuilderTarget(container, []);
+        await loadAppSnapshot();
+        setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", tNext("importCenter.boxSetBuilderCreated", "Empty box-set created. Scan films to add them."), "good");
+      } catch (error) {
+        setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", error.message || String(error), "bad");
+      } finally {
+        state.busy = false;
+      }
+    }
+    async function refreshBoxSetBuilderMembers() {
+      const state = boxSetBuilderState();
+      if (!state.target?.id) return;
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(state.target.id)}`);
+        const members = payload.detail?.memberMovies || payload.memberMovies || [];
+        state.members = Array.isArray(members) ? members : [];
+        if (state.target) state.target.memberCount = state.members.length;
+        renderBoxSetBuilder();
+      } catch {
+        // Non-fatal: keep whatever members we already tracked.
+      }
+    }
+    function applyBoxSetBuilderResult(payload) {
+      const state = boxSetBuilderState();
+      const container = payload?.container || {};
+      const members = container.memberMovies || [];
+      if (Array.isArray(members) && members.length) {
+        state.members = members;
+        if (state.target) state.target.memberCount = members.length;
+      }
+      renderBoxSetBuilder();
+    }
+    function postBoxSetBuilderMemberImport(fields) {
+      const state = boxSetBuilderState();
+      return authApiJson("/api/next/import/movie", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        timeoutMs: 45000,
+        body: JSON.stringify({
+          barcode: fields.barcode || "",
+          title: fields.title || "",
+          year: fields.year || "",
+          format: "",
+          importMode: "movie",
+          detectBoxSets: false,
+          targetContainerId: state.target.id
+        })
+      });
+    }
+    function renderBoxSetBuilderBatch() {
+      const list = document.getElementById("boxSetBuilderBatchList");
+      if (!list) return;
+      const state = boxSetBuilderState();
+      const rows = (state.batch && state.batch.rows) || [];
+      if (!rows.length) {
+        list.innerHTML = "";
+        return;
+      }
+      list.innerHTML = rows.map((row) => {
+        const statusClass = row.status === "added"
+          ? "is-added"
+          : row.status === "error"
+            ? "is-error"
+            : row.status === "running"
+              ? "is-running"
+              : "";
+        const rowClass = ["import-batch-row", statusClass].filter(Boolean).join(" ");
+        const checkMark = row.status === "added" ? `<span class="import-batch-check" aria-hidden="true">&#10003;</span>` : "";
+        const spinner = row.status === "running" ? `<span class="import-batch-spinner" aria-hidden="true"></span>` : "";
+        return `
+          <div class="${rowClass}">
+            <span class="import-batch-info">
+              ${checkMark}
+              ${spinner}
+              <span class="import-batch-text">
+                <strong>${escapeHtml(row.barcode || "-")}</strong>
+                <span>${escapeHtml(row.message || tNext("importCenter.batchQueued", "Queued"))}</span>
+              </span>
+            </span>
+          </div>`;
+      }).join("");
+    }
+    async function runBoxSetBuilderBatch() {
+      const state = boxSetBuilderState();
+      if (!state.target?.id) {
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", tNext("importCenter.boxSetBuilderNoTarget", "Identify a box-set first."), "bad");
+        return;
+      }
+      if (state.busy) return;
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) {
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", tNext("common.noPermission", "You do not have permission for this action."), "bad");
+        return;
+      }
+      const textarea = document.getElementById("boxSetBuilderBatchInput");
+      const parsed = parseImportBatchBarcodes(textarea?.value || "");
+      const ownBarcode = state.target.barcode ? normalizeImportBarcode(state.target.barcode) : "";
+      const invalidMessage = tNext("importCenter.scanInvalid", "The scanned barcode was not a valid EAN or UPC.");
+      const rows = [
+        ...parsed.valid.map((barcode) => ({barcode, status: "queued", message: tNext("importCenter.batchQueued", "Queued")})),
+        ...parsed.invalid.map((barcode) => ({barcode, status: "error", message: invalidMessage}))
+      ];
+      state.batch = {rows, running: true};
+      if (!parsed.valid.length) {
+        state.batch.running = false;
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", tNext("importCenter.batchNoValid", "No valid EAN or UPC barcodes found."), "bad");
+        renderBoxSetBuilderBatch();
+        return;
+      }
+      state.busy = true;
+      setBoxSetBuilderMessage("boxSetBuilderBatchMessage", `${tNext("importCenter.batchRunning", "Checking batch...")} ${formatNumber(parsed.valid.length)}`);
+      renderBoxSetBuilderBatch();
+      let added = 0;
+      try {
+        for (const row of rows) {
+          if (row.status === "error") continue;
+          if (ownBarcode && normalizeImportBarcode(row.barcode) === ownBarcode) {
+            row.status = "error";
+            row.message = tNext("importCenter.boxSetBuilderOwnBarcode", "That is the box-set's own barcode, not a member.");
+            renderBoxSetBuilderBatch();
+            continue;
+          }
+          row.status = "running";
+          row.message = tNext("importCenter.boxSetBuilderAdding", "Adding member...");
+          renderBoxSetBuilderBatch();
+          try {
+            const payload = await postBoxSetBuilderMemberImport({barcode: row.barcode, title: "", year: ""});
+            applyBoxSetBuilderResult(payload);
+            const already = payload.state === "already_exists";
+            const changed = Number(payload.linkChanged || 0) > 0;
+            row.status = "added";
+            row.message = (already && !changed)
+              ? tNext("importCenter.boxSetBuilderMemberAlready", "Already linked to this box-set.")
+              : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
+            added += 1;
+          } catch (error) {
+            row.status = "error";
+            row.message = error?.message || String(error);
+          }
+          renderBoxSetBuilderBatch();
+        }
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", `${tNext("importCenter.batchDone", "Batch check completed.")} ${formatNumber(added)}`, "good");
+        if (added && textarea) textarea.value = "";
+      } catch (error) {
+        setBoxSetBuilderMessage("boxSetBuilderBatchMessage", error.message || String(error), "bad");
+      } finally {
+        state.batch.running = false;
+        state.busy = false;
+        await refreshBoxSetBuilderMembers();
+        renderBoxSetBuilderBatch();
+      }
+    }
+    async function addBoxSetBuilderMember(codeOrEvent) {
+      const isEvent = codeOrEvent && typeof codeOrEvent === "object" && typeof codeOrEvent.preventDefault === "function";
+      if (isEvent) codeOrEvent.preventDefault();
+      const state = boxSetBuilderState();
+      if (!state.target?.id) {
+        setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("importCenter.boxSetBuilderNoTarget", "Identify a box-set first."), "bad");
+        return;
+      }
+      if (state.busy) return;
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) {
+        setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("common.noPermission", "You do not have permission for this action."), "bad");
+        return;
+      }
+      const scannedCode = typeof codeOrEvent === "string" ? codeOrEvent : "";
+      const barcodeInput = document.getElementById("boxSetBuilderMemberBarcodeInput");
+      const titleInput = document.getElementById("boxSetBuilderMemberTitleInput");
+      const yearInput = document.getElementById("boxSetBuilderMemberYearInput");
+      const barcode = normalizeImportBarcode(scannedCode || barcodeInput?.value || "");
+      const title = String(titleInput?.value || "").trim();
+      const year = String(yearInput?.value || "").trim();
+      if (!barcode && !title) {
+        setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("importCenter.boxSetBuilderMemberNeedInput", "Scan a barcode or enter a title to add a member."), "bad");
+        return;
+      }
+      if (barcode && state.target.barcode && barcode === normalizeImportBarcode(state.target.barcode)) {
+        setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("importCenter.boxSetBuilderOwnBarcode", "That is the box-set's own barcode, not a member."), "warn");
+        return;
+      }
+      state.busy = true;
+      setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("importCenter.boxSetBuilderAdding", "Adding member..."));
+      try {
+        const payload = await postBoxSetBuilderMemberImport({barcode, title, year});
+        applyBoxSetBuilderResult(payload);
+        const movie = payload.movie || payload.detail?.movie || {};
+        const movieTitle = String(movie.title || title || barcode || "").trim();
+        const already = payload.state === "already_exists";
+        const changed = Number(payload.linkChanged || 0) > 0;
+        let messageKey = "importCenter.boxSetBuilderMemberLinked";
+        let messageFallback = "Member added.";
+        let tone = "good";
+        if (already && !changed) {
+          messageKey = "importCenter.boxSetBuilderMemberAlready";
+          messageFallback = "Already linked to this box-set.";
+          tone = "warn";
+        }
+        const prefix = movieTitle ? `${movieTitle}: ` : "";
+        setBoxSetBuilderMessage("boxSetBuilderMemberMessage", `${prefix}${tNext(messageKey, messageFallback)}`, tone);
+        if (barcodeInput) barcodeInput.value = "";
+        if (titleInput) titleInput.value = "";
+        if (yearInput) yearInput.value = "";
+        barcodeInput?.focus();
+        if (state.captureToCamera) {
+          setImportScannerMessage(`${prefix}${tNext(messageKey, messageFallback)}`, tone);
+        }
+      } catch (error) {
+        setBoxSetBuilderMessage("boxSetBuilderMemberMessage", error.message || String(error), "bad");
+        if (state.captureToCamera) setImportScannerMessage(error.message || String(error), "bad");
+      } finally {
+        state.busy = false;
+      }
+    }
+    async function removeBoxSetBuilderMember(movieId) {
+      const state = boxSetBuilderState();
+      if (!state.target?.id || !movieId) return;
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return;
+      setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("importCenter.boxSetBuilderRemoving", "Removing member..."));
+      try {
+        await authApiJson(`/api/next/containers/${encodeURIComponent(state.target.id)}/movies/${encodeURIComponent(movieId)}`, {
+          method: "DELETE"
+        });
+        state.members = (state.members || []).filter((movie) => String(movie.id || movie.movieId || "") !== String(movieId));
+        if (state.target) state.target.memberCount = state.members.length;
+        renderBoxSetBuilder();
+        setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("importCenter.boxSetBuilderMemberRemoved", "Member removed."), "good");
+      } catch (error) {
+        setBoxSetBuilderMessage("boxSetBuilderMemberMessage", error.message || String(error), "bad");
+      }
+    }
+    function startBoxSetBuilderCameraScan() {
+      const state = boxSetBuilderState();
+      if (!state.target?.id) return;
+      state.captureToCamera = true;
+      setImportMethodTab("camera");
+      const label = state.target.title || tNext("importCenter.boxSetUntitled", "Untitled box-set");
+      setImportScannerMessage(`${tNext("importCenter.boxSetBuilderScanningInto", "Scanning members into")}: ${label}`, "good");
+      startImportBarcodeScanner();
+    }
+    function finishBoxSetBuilder() {
+      const state = boxSetBuilderState();
+      const targetId = state.target?.id || "";
+      resetBoxSetBuilder();
+      if (targetId) openAppContainerDetail(targetId);
+    }
+    function resetBoxSetBuilder() {
+      importCenter.boxSetBuilder = {target: null, members: [], captureToCamera: false, busy: false, batch: {rows: [], running: false}};
+      ["boxSetBuilderBarcodeInput", "boxSetBuilderTitleInput", "boxSetBuilderYearInput", "boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberTitleInput", "boxSetBuilderMemberYearInput", "boxSetBuilderBatchInput"].forEach((id) => {
+        const node = document.getElementById(id);
+        if (node) node.value = "";
+      });
+      setBoxSetBuilderMessage("boxSetBuilderIdentifyMessage", "");
+      setBoxSetBuilderMessage("boxSetBuilderMemberMessage", "");
+      setBoxSetBuilderMessage("boxSetBuilderBatchMessage", "");
+      renderBoxSetBuilderBatch();
+      renderBoxSetBuilder();
     }
     function jsonPreview(value, maxLength = 1200) {
       if (value === null || value === undefined || value === "") return "";
@@ -22031,6 +22691,12 @@ def ui_preview_html(
       if (barcode === importScanner.lastCode && now - importScanner.lastTime < 2200) return false;
       importScanner.lastCode = barcode;
       importScanner.lastTime = now;
+      const builder = importCenter.boxSetBuilder;
+      if (builder && builder.captureToCamera && builder.target && builder.target.id) {
+        setImportScannerMessage(tNext("importCenter.boxSetBuilderScanFound", "Barcode found. Adding to box-set..."), "good");
+        addBoxSetBuilderMember(barcode);
+        return true;
+      }
       stopImportBarcodeScanner();
       const input = document.getElementById("importBarcodeInput");
       if (input) input.value = barcode;
@@ -23211,6 +23877,7 @@ def ui_preview_html(
       renderImportFormatOptions();
       renderBarcodeLookup();
       renderImportBatchList();
+      renderBoxSetBuilder();
       applyAppPermissionVisibility();
     }
     async function loadImportCenter() {
@@ -26538,10 +27205,9 @@ def ui_preview_html(
     function toggleSelectMode(force) {
       selectionMode = typeof force === "boolean" ? force : !selectionMode;
       document.body.classList.toggle("select-mode", selectionMode);
-      const button = document.getElementById("selectModeButton");
-      if (button) button.textContent = selectionMode ? tNext("bulk.done", "Done") : tNext("bulk.select", "Select");
       if (!selectionMode) selectedMovieIds.clear();
       if (!selectionMode) selectedContainerIds.clear();
+      syncSelectModeButton();
       renderLibrary();
     }
     function toggleMovieSelection(movieId) {
@@ -26571,8 +27237,7 @@ def ui_preview_html(
       if (!selectionMode) {
         selectionMode = true;
         document.body.classList.add("select-mode");
-        const button = document.getElementById("selectModeButton");
-        if (button) button.textContent = tNext("bulk.done", "Done");
+        syncSelectModeButton();
       }
       selectedMovieIds.clear();
       selectedContainerIds.clear();
@@ -28793,6 +29458,9 @@ def ui_preview_html(
       document.getElementById("advancedSearchDeleteButton")?.addEventListener("click", deleteSmartFilter);
       document.getElementById("smartFilterSelect")?.addEventListener("change", (event) => applySmartFilter(event.target.value || ""));
       setupCollectionMenus();
+      document.getElementById("collectionCreateForm")?.addEventListener("submit", createContainerFromLibraryMenu);
+      document.getElementById("collectionCreateType")?.addEventListener("change", syncCollectionCreateControls);
+      document.getElementById("collectionCreateTitle")?.addEventListener("input", () => setCollectionCreateMessage(""));
       document.querySelectorAll("[data-sort-option]").forEach((button) => {
         button.addEventListener("click", () => {
           collectionSortMode = button.dataset.sortOption || "title_asc";
@@ -29327,6 +29995,22 @@ def ui_preview_html(
         previewBarcodeImport(event);
       });
       document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
+      document.getElementById("boxSetBuilderIdentifyForm")?.addEventListener("submit", (event) => identifyBoxSetBuilderTarget(event));
+      document.getElementById("boxSetBuilderMemberForm")?.addEventListener("submit", (event) => addBoxSetBuilderMember(event));
+      document.getElementById("boxSetBuilderBatchButton")?.addEventListener("click", () => runBoxSetBuilderBatch());
+      document.getElementById("boxSetBuilderCameraButton")?.addEventListener("click", () => startBoxSetBuilderCameraScan());
+      document.getElementById("boxSetBuilderOpenButton")?.addEventListener("click", () => {
+        const target = importCenter.boxSetBuilder?.target;
+        if (target?.id) openAppContainerDetail(target.id);
+      });
+      document.getElementById("boxSetBuilderDoneButton")?.addEventListener("click", () => finishBoxSetBuilder());
+      document.getElementById("boxSetBuilderMemberList")?.addEventListener("click", (event) => {
+        const removeButton = event.target.closest("[data-box-builder-remove]");
+        if (removeButton) {
+          event.preventDefault();
+          removeBoxSetBuilderMember(removeButton.dataset.boxBuilderRemove);
+        }
+      });
       document.getElementById("importBatchClearButton")?.addEventListener("click", () => {
         const input = document.getElementById("importBatchBarcodeInput");
         if (input) input.value = "";
@@ -29627,6 +30311,7 @@ def ui_preview_html(
       document.getElementById("containerMetadataApplyButton")?.addEventListener("click", () => refreshActiveContainerMetadata(false));
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
+      document.getElementById("containerScanAddForm")?.addEventListener("submit", (event) => addContainerScanMember(event));
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
       document.addEventListener("click", (event) => {
