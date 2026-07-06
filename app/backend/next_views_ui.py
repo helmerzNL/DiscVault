@@ -1523,6 +1523,45 @@ def ui_preview_html(
       font-size: .78rem;
       font-weight: 620;
     }
+    .bulk-inline-create {
+      display: grid;
+      gap: 6px;
+      margin-top: 2px;
+    }
+    .bulk-inline-create.hidden {
+      display: none;
+    }
+    .bulk-inline-create-form {
+      display: grid;
+      gap: 6px;
+    }
+    .bulk-inline-create-form input {
+      min-height: 32px;
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 9px;
+      font: inherit;
+      font-size: .76rem;
+      font-weight: 620;
+    }
+    .bulk-create-message {
+      min-height: 1.1em;
+      margin: 0;
+      color: var(--muted);
+      font-size: .72rem;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .bulk-create-message.good {
+      color: var(--green, #1f9d55);
+    }
+    .bulk-create-message.bad {
+      color: var(--red, #e5484d);
+    }
     .bulk-count {
       justify-self: start;
       display: inline-flex;
@@ -9093,29 +9132,6 @@ def ui_preview_html(
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2,5H4V19C4,20.11 4.89,21 6,21H20V19H6V5M18,3A2,2 0 0,1 20,5V15A2,2 0 0,1 18,17H8A2,2 0 0,1 6,15V5A2,2 0 0,1 8,3H18M9.5,11L11,12.5L16.5,7L18,8.5L11,15.5L8,12.5L9.5,11Z"/></svg>
               <span class="visually-hidden" id="selectModeButtonLabel" data-next-i18n="bulk.select">Select</span>
             </button>
-            <div class="toolbar-menu create-menu hidden" id="collectionCreateMenu">
-              <button type="button" class="icon-button toolbar-menu-trigger" id="collectionCreateTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Create container" data-next-i18n-aria="collection.createContainer" title="Create container" data-next-i18n-title="collection.createContainer">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"/></svg>
-              </button>
-              <div class="toolbar-menu-panel hidden" id="collectionCreatePanel" role="dialog" aria-label="Create container" data-next-i18n-aria="collection.createContainer">
-                <form class="toolbar-menu-create-form" id="collectionCreateForm">
-                  <label class="toolbar-menu-create-field" for="collectionCreateType">
-                    <span data-next-i18n="containerDetail.fieldType">Type</span>
-                    <select id="collectionCreateType">
-                      <option value="box_set" data-next-i18n="containerTypes.box_set">Box-set</option>
-                      <option value="vault" data-next-i18n="containerTypes.vault">Vault</option>
-                      <option value="collection" data-next-i18n="containerTypes.collection">Collection</option>
-                    </select>
-                  </label>
-                  <label class="toolbar-menu-create-field" for="collectionCreateTitle">
-                    <span data-next-i18n="containerManage.titleLabel">Name</span>
-                    <input id="collectionCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="collection.createContainerNamePlaceholder" placeholder="New container name">
-                  </label>
-                  <button type="submit" class="toolbar-menu-create-submit" id="collectionCreateSubmitButton" data-next-i18n="containerManage.create">Create</button>
-                  <p class="toolbar-menu-create-message" id="collectionCreateMessage"></p>
-                </form>
-              </div>
-            </div>
             <span class="collection-controls-spacer" aria-hidden="true"></span>
             <div class="view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
               <button type="button" class="icon-button view-mode-button" data-library-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
@@ -9261,6 +9277,14 @@ def ui_preview_html(
               <span data-next-i18n="bulk.boxSetTarget">Box-set</span>
               <select id="bulkBoxSetTarget"></select>
             </label>
+            <div class="bulk-inline-create hidden" id="bulkBoxSetCreateControls">
+              <form class="bulk-inline-create-form" id="bulkBoxSetCreateForm">
+                <label class="visually-hidden" for="bulkBoxSetCreateTitle" data-next-i18n="bulk.boxSetCreateTitleLabel">Box-set name</label>
+                <input id="bulkBoxSetCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.boxSetCreatePlaceholder" placeholder="New box-set name">
+                <button type="submit" class="bulk-action" id="bulkBoxSetCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
+              </form>
+              <p class="bulk-create-message" id="bulkBoxSetCreateMessage"></p>
+            </div>
             <button type="button" class="bulk-action" disabled data-bulk-action="boxset" data-next-i18n="bulk.addToBoxSet">Add to box-set</button>
           </div>
           <div class="bulk-target">
@@ -9268,6 +9292,14 @@ def ui_preview_html(
               <span data-next-i18n="bulk.vaultTarget">Vault</span>
               <select id="bulkVaultTarget"></select>
             </label>
+            <div class="bulk-inline-create hidden" id="bulkVaultCreateControls">
+              <form class="bulk-inline-create-form" id="bulkVaultCreateForm">
+                <label class="visually-hidden" for="bulkVaultCreateTitle" data-next-i18n="bulk.vaultCreateTitleLabel">Vault name</label>
+                <input id="bulkVaultCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.vaultCreatePlaceholder" placeholder="New vault name">
+                <button type="submit" class="bulk-action" id="bulkVaultCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
+              </form>
+              <p class="bulk-create-message" id="bulkVaultCreateMessage"></p>
+            </div>
             <button type="button" class="bulk-action" disabled data-bulk-action="vault" data-next-i18n="bulk.addToVault">Add to Vault</button>
           </div>
           <div class="bulk-target wide">
@@ -9275,6 +9307,14 @@ def ui_preview_html(
               <span data-next-i18n="bulk.collectionTarget">Collection</span>
               <select id="bulkCollectionTarget"></select>
             </label>
+            <div class="bulk-inline-create hidden" id="bulkCollectionCreateControls">
+              <form class="bulk-inline-create-form" id="bulkCollectionCreateForm">
+                <label class="visually-hidden" for="bulkCollectionCreateTitle" data-next-i18n="bulk.collectionCreateTitleLabel">Collection name</label>
+                <input id="bulkCollectionCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.collectionCreatePlaceholder" placeholder="New collection name">
+                <button type="submit" class="bulk-action" id="bulkCollectionCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
+              </form>
+              <p class="bulk-create-message" id="bulkCollectionCreateMessage"></p>
+            </div>
             <button type="button" class="bulk-action" disabled data-bulk-action="collection" data-next-i18n="bulk.addToCollection">Add to collection</button>
           </div>
           <div class="bulk-target">
@@ -9652,6 +9692,7 @@ def ui_preview_html(
                     <span data-next-i18n="importCenter.boxSetBuilderMemberBarcode">Member barcode</span>
                     <input id="boxSetBuilderMemberBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
                   </label>
+                  <div class="import-source-meta import-scan-preview" id="boxSetBuilderMemberPreview" hidden></div>
                   <label>
                     <span data-next-i18n="importCenter.boxSetBuilderMemberTitle">Title (fallback)</span>
                     <input id="boxSetBuilderMemberTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
@@ -10200,6 +10241,7 @@ def ui_preview_html(
                     <span data-next-i18n="containerDetail.scanToAdd">Scan / search to add</span>
                     <input id="containerScanAddBarcode" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
                   </label>
+                  <div class="import-source-meta import-scan-preview" id="containerScanAddPreview" hidden></div>
                   <label for="containerScanAddTitle">
                     <span data-next-i18n="containerDetail.scanToAddTitle">Title (fallback)</span>
                     <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
@@ -16243,7 +16285,7 @@ def ui_preview_html(
       renderCollectionFilterMenu();
       syncAdvancedSearchControls();
       syncSelectModeButton();
-      syncCollectionCreateControls();
+      syncBulkTargetCreateControls();
     }
     function collectionFilterActiveCount() {
       let count = collectionFormatFilters ? collectionFormatFilters.size : 0;
@@ -16560,12 +16602,41 @@ def ui_preview_html(
       persistAdvancedSearch();
       renderLibrary();
     }
-    function targetOptionHtml(items, emptyKey, emptyText) {
-      if (!items.length) return `<option value="">${escapeHtml(tNext(emptyKey, emptyText))}</option>`;
-      return [
-        `<option value="">${escapeHtml(tNext("bulk.chooseTarget", "Choose target"))}</option>`,
-        ...items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || item.title || item.public_id || item.id)}</option>`)
-      ].join("");
+    const BULK_CREATE_SENTINEL = "__create__";
+    const BULK_CREATE_TARGETS = {
+      box_set: {
+        selectId: "bulkBoxSetTarget",
+        controlsId: "bulkBoxSetCreateControls",
+        inputId: "bulkBoxSetCreateTitle",
+        messageId: "bulkBoxSetCreateMessage"
+      },
+      vault: {
+        selectId: "bulkVaultTarget",
+        controlsId: "bulkVaultCreateControls",
+        inputId: "bulkVaultCreateTitle",
+        messageId: "bulkVaultCreateMessage"
+      },
+      collection: {
+        selectId: "bulkCollectionTarget",
+        controlsId: "bulkCollectionCreateControls",
+        inputId: "bulkCollectionCreateTitle",
+        messageId: "bulkCollectionCreateMessage"
+      }
+    };
+    function bulkCreatePermissionGroup(targetType) {
+      return targetType === "collection" ? APP_PERMISSION_GROUPS.bulkCollections : APP_PERMISSION_GROUPS.bulkContainers;
+    }
+    function canCreateFromBulkTarget(targetType) {
+      return collectorsModeEnabled()
+        && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)
+        && hasAnyPermission(bulkCreatePermissionGroup(targetType));
+    }
+    function targetOptionHtml(items, emptyKey, emptyText, createOption = null) {
+      if (!items.length && !createOption) return `<option value="">${escapeHtml(tNext(emptyKey, emptyText))}</option>`;
+      const options = [`<option value="">${escapeHtml(tNext("bulk.chooseTarget", "Choose target"))}</option>`];
+      if (createOption) options.push(`<option value="${BULK_CREATE_SENTINEL}">${escapeHtml(createOption)}</option>`);
+      options.push(...items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || item.title || item.public_id || item.id)}</option>`));
+      return options.join("");
     }
     function renderBulkTargets() {
       const groups = mediaGroups || [];
@@ -16577,10 +16648,99 @@ def ui_preview_html(
       const boxSetSelect = document.getElementById("bulkBoxSetTarget");
       const collectionSelect = document.getElementById("bulkCollectionTarget");
       const vaultSelect = document.getElementById("bulkVaultTarget");
+      const currentGroupValue = groupSelect?.value || "";
+      const currentBoxSetValue = boxSetSelect?.value || "";
+      const currentCollectionValue = collectionSelect?.value || "";
+      const currentVaultValue = vaultSelect?.value || "";
       if (groupSelect) groupSelect.innerHTML = targetOptionHtml(groups, "bulk.noGroups", "No groups");
-      if (boxSetSelect) boxSetSelect.innerHTML = targetOptionHtml(boxSets, "bulk.noBoxSets", "No box-sets");
-      if (collectionSelect) collectionSelect.innerHTML = targetOptionHtml(collections, "bulk.noCollections", "No collections");
-      if (vaultSelect) vaultSelect.innerHTML = targetOptionHtml(vaults, "bulk.noVaults", "No vaults");
+      if (groupSelect && Array.from(groupSelect.options).some((option) => option.value === currentGroupValue)) groupSelect.value = currentGroupValue;
+      if (boxSetSelect) {
+        boxSetSelect.innerHTML = targetOptionHtml(
+          boxSets,
+          "bulk.noBoxSets",
+          "No box-sets",
+          canCreateFromBulkTarget("box_set") ? tNext("bulk.createNewBoxSet", "+ New box-set") : null
+        );
+        if (Array.from(boxSetSelect.options).some((option) => option.value === currentBoxSetValue)) boxSetSelect.value = currentBoxSetValue;
+      }
+      if (collectionSelect) {
+        collectionSelect.innerHTML = targetOptionHtml(
+          collections,
+          "bulk.noCollections",
+          "No collections",
+          canCreateFromBulkTarget("collection") ? tNext("bulk.createNewCollection", "+ New collection") : null
+        );
+        if (Array.from(collectionSelect.options).some((option) => option.value === currentCollectionValue)) collectionSelect.value = currentCollectionValue;
+      }
+      if (vaultSelect) {
+        vaultSelect.innerHTML = targetOptionHtml(
+          vaults,
+          "bulk.noVaults",
+          "No vaults",
+          canCreateFromBulkTarget("vault") ? tNext("bulk.createNewVault", "+ New vault") : null
+        );
+        if (Array.from(vaultSelect.options).some((option) => option.value === currentVaultValue)) vaultSelect.value = currentVaultValue;
+      }
+      syncBulkTargetCreateControls();
+    }
+    function setBulkCreateMessage(targetType, message, tone) {
+      const config = BULK_CREATE_TARGETS[targetType];
+      if (!config) return;
+      const node = document.getElementById(config.messageId);
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `bulk-create-message ${tone || ""}`.trim();
+    }
+    function syncBulkTargetCreateControls() {
+      Object.entries(BULK_CREATE_TARGETS).forEach(([targetType, config]) => {
+        const select = document.getElementById(config.selectId);
+        const controls = document.getElementById(config.controlsId);
+        const input = document.getElementById(config.inputId);
+        const canCreate = canCreateFromBulkTarget(targetType);
+        if (!canCreate && select?.value === BULK_CREATE_SENTINEL) select.value = "";
+        const showInlineCreate = canCreate && (select?.value || "") === BULK_CREATE_SENTINEL;
+        if (controls) controls.classList.toggle("hidden", !showInlineCreate);
+        if (!showInlineCreate) {
+          if (input) input.value = "";
+          setBulkCreateMessage(targetType, "");
+        }
+      });
+    }
+    async function createAndApplyBulkTarget(targetType) {
+      const config = BULK_CREATE_TARGETS[targetType];
+      if (!config || !canCreateFromBulkTarget(targetType)) return;
+      const titleInput = document.getElementById(config.inputId);
+      const title = String(titleInput?.value || "").trim();
+      if (!title) {
+        setBulkCreateMessage(targetType, tNext("containerManage.titleRequired", "Enter a name first."), "bad");
+        titleInput?.focus();
+        return;
+      }
+      const summary = document.getElementById("librarySummary");
+      setBulkCreateMessage(targetType, tNext("bulk.creatingContainer", "Creating container..."));
+      if (summary) summary.textContent = tNext("bulk.creatingContainer", "Creating container...");
+      try {
+        const payload = await authApiJson("/api/next/containers", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({containerType: targetType, title})
+        });
+        const newContainerId = String(payload?.detail?.container?.id || payload?.detail?.id || payload?.container?.id || "");
+        if (!newContainerId) throw new Error(tNext("bulk.createContainerFailed", "Container was created, but no target id was returned."));
+        const targetSelect = document.getElementById(config.selectId);
+        if (targetSelect) targetSelect.value = newContainerId;
+        if (titleInput) titleInput.value = "";
+        setBulkCreateMessage(targetType, tNext("containerManage.created", "Created."), "good");
+        if (targetType === "collection") {
+          await applyBulkCollection(newContainerId);
+        } else {
+          await applyBulkContainer(targetType, config.selectId, newContainerId);
+        }
+      } catch (error) {
+        const message = error.message || String(error);
+        setBulkCreateMessage(targetType, message, "bad");
+        if (summary) summary.textContent = message;
+      }
     }
     function setCollectionCreateMessage(message, tone) {
       const node = document.getElementById("collectionCreateMessage");
@@ -18058,10 +18218,18 @@ def ui_preview_html(
       const orderAttrs = options.orderKind === "item"
         ? `data-container-move-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
         : `data-container-move-movie="${escapeHtml(movie.id || "")}"`;
+      const coverContainer = (activeContainerPayload && activeContainerPayload.container) || {};
+      const primaryMovieId = String(coverContainer.primaryMovieId || "");
+      const canSetCover = canEdit && coverContainer.container_type === "box_set" && options.removeKind !== "item" && movie.id;
+      const isCover = canSetCover && primaryMovieId && String(movie.id) === primaryMovieId;
+      const coverButton = canSetCover ? `
+          <button type="button" class="detail-order-button container-cover-button ${isCover ? "active" : ""}" data-container-set-cover="${escapeHtml(movie.id || "")}" ${isCover ? "disabled" : ""} title="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}" aria-label="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}">${isCover ? "&#9733;" : "&#9734;"}</button>
+      ` : "";
       const orderControls = canEdit ? `
         <div class="container-member-actions">
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          ${coverButton}
           <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
         </div>
       ` : "";
@@ -19591,7 +19759,14 @@ def ui_preview_html(
       }
       const posterNode = document.getElementById("containerDetailPoster");
       if (posterNode) {
-        posterNode.innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        let coverPoster = poster;
+        if (!coverPoster && container.container_type === "box_set" && container.primaryMovieId) {
+          const coverMember = (detail.memberMovies || []).find((movie) => String(movie.id) === String(container.primaryMovieId));
+          if (coverMember) {
+            coverPoster = usableImage(coverMember.poster_url || (coverMember.metadata || {}).poster_url || (coverMember.metadata || {}).posterUrl || (coverMember.metadata || {}).poster);
+          }
+        }
+        posterNode.innerHTML = coverPoster ? `<img src="${escapeHtml(coverPoster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       }
       const summary = detail.aggregateSummary || {};
       const directMovieCount = (detail.memberMovies || []).length;
@@ -20053,10 +20228,18 @@ def ui_preview_html(
       const orderAttrs = options.orderKind === "item"
         ? `data-container-move-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
         : `data-container-move-movie="${escapeHtml(movie.id || "")}"`;
+      const coverContainer = (activeContainerPayload && activeContainerPayload.container) || {};
+      const primaryMovieId = String(coverContainer.primaryMovieId || "");
+      const canSetCover = coverContainer.container_type === "box_set" && options.removeKind !== "item" && movie.id;
+      const isCover = canSetCover && primaryMovieId && String(movie.id) === primaryMovieId;
+      const coverButton = canSetCover ? `
+          <button type="button" class="detail-order-button container-cover-button ${isCover ? "active" : ""}" data-container-set-cover="${escapeHtml(movie.id || "")}" ${isCover ? "disabled" : ""} title="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}" aria-label="${escapeHtml(isCover ? tNext("containerDetail.coverCurrent", "Current cover") : tNext("containerDetail.setAsCover", "Set as cover"))}">${isCover ? "&#9733;" : "&#9734;"}</button>
+      ` : "";
       return `
         <span class="container-member-row-actions">
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="up" ${index > 0 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveUp", "Move up"))}">&uarr;</button>
           <button type="button" class="detail-order-button" ${orderAttrs} data-direction="down" ${index < total - 1 ? "" : "disabled"} aria-label="${escapeHtml(tNext("containerDetail.moveDown", "Move down"))}">&darr;</button>
+          ${coverButton}
           <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
         </span>
       `;
@@ -20329,7 +20512,7 @@ def ui_preview_html(
       }
       setContainerDetailMessage(tNext("containerDetail.adding", "Adding content..."));
       try {
-        await authApiJson("/api/next/import/movie", {
+        const payload = await authApiJson("/api/next/import/movie", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           timeoutMs: 45000,
@@ -20346,7 +20529,19 @@ def ui_preview_html(
         if (barcodeInput) barcodeInput.value = "";
         if (titleInput) titleInput.value = "";
         if (yearInput) yearInput.value = "";
-        await refreshActiveContainerDetail(tNext("containerDetail.added", "Content added."), "good");
+        const scanPreview = document.getElementById("containerScanAddPreview");
+        if (scanPreview) { scanPreview.hidden = true; scanPreview.textContent = ""; }
+        const already = payload?.state === "already_exists";
+        const changed = Number(payload?.linkChanged || 0) > 0;
+        let msg = tNext("containerDetail.added", "Content added.");
+        let tone = "good";
+        if (already && !changed) {
+          msg = tNext("containerDetail.memberAlready", "Already linked to this box-set.");
+          tone = "warn";
+        } else if (already && changed) {
+          msg = tNext("containerDetail.memberVaultLinked", "Already in your vault \u2014 linked here.");
+        }
+        await refreshActiveContainerDetail(msg, tone);
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
       }
@@ -20442,6 +20637,22 @@ def ui_preview_html(
         renderContainerDetail(payload.detail || {});
         await loadAppSnapshot();
         setContainerDetailMessage(tNext("containerDetail.removed", "Link removed."), "good");
+      } catch (error) {
+        setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function setContainerCoverMovie(movieId) {
+      if (!activeContainerId || !movieId) return;
+      setContainerDetailMessage(tNext("containerDetail.settingCover", "Updating cover..."));
+      try {
+        const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({primaryMovieId: movieId})
+        });
+        renderContainerDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setContainerDetailMessage(tNext("containerDetail.coverSet", "Cover updated."), "good");
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
       }
@@ -20684,6 +20895,69 @@ def ui_preview_html(
         })
       });
     }
+    async function resolveImportMemberBarcode(barcode) {
+      const code = normalizeImportBarcode(barcode);
+      if (!code) return null;
+      const url = "/api/next/import/movie/resolve?barcode=" + encodeURIComponent(code);
+      return authApiJson(url, {method: "GET", timeoutMs: 15000});
+    }
+    function renderImportScanPreview(previewEl, payload) {
+      if (!previewEl) return;
+      if (!payload || payload.status !== "ok") {
+        previewEl.hidden = true;
+        previewEl.textContent = "";
+        return;
+      }
+      previewEl.hidden = false;
+      previewEl.classList.remove("is-good", "is-neutral");
+      if (payload.state === "existingMovie" && payload.movie) {
+        const movie = payload.movie;
+        const label = tNext("importCenter.scanPreviewExisting", "Already in your vault:");
+        const year = movie.year ? " (" + escapeHtml(String(movie.year)) + ")" : "";
+        previewEl.classList.add("is-good");
+        previewEl.innerHTML = escapeHtml(label) + " <strong>" + escapeHtml(movie.title || "") + "</strong>" + year;
+      } else if (payload.state === "candidates" && payload.candidateCount) {
+        const label = tNext("importCenter.scanPreviewCandidates", "Match found — will be imported on add.");
+        previewEl.classList.add("is-neutral");
+        previewEl.textContent = label;
+      } else {
+        const label = tNext("importCenter.scanPreviewUnknown", "Unknown barcode — create it manually with a title below.");
+        previewEl.classList.add("is-neutral");
+        previewEl.textContent = label;
+      }
+    }
+    function wireImportScanPreview(inputId, previewId) {
+      const input = document.getElementById(inputId);
+      const previewEl = document.getElementById(previewId);
+      if (!input || !previewEl || input.dataset.scanPreviewWired === "1") return;
+      input.dataset.scanPreviewWired = "1";
+      let timer = null;
+      let lastCode = "";
+      const run = async () => {
+        const code = normalizeImportBarcode(input.value);
+        if (!code) {
+          lastCode = "";
+          previewEl.hidden = true;
+          previewEl.textContent = "";
+          return;
+        }
+        if (code === lastCode) return;
+        lastCode = code;
+        try {
+          const payload = await resolveImportMemberBarcode(code);
+          if (normalizeImportBarcode(input.value) !== code) return;
+          renderImportScanPreview(previewEl, payload);
+        } catch (error) {
+          previewEl.hidden = true;
+          previewEl.textContent = "";
+        }
+      };
+      input.addEventListener("input", () => {
+        if (timer) window.clearTimeout(timer);
+        timer = window.setTimeout(run, 450);
+      });
+      input.addEventListener("change", run);
+    }
     function renderBoxSetBuilderBatch() {
       const list = document.getElementById("boxSetBuilderBatchList");
       if (!list) return;
@@ -20767,7 +21041,9 @@ def ui_preview_html(
             row.status = "added";
             row.message = (already && !changed)
               ? tNext("importCenter.boxSetBuilderMemberAlready", "Already linked to this box-set.")
-              : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
+              : (already && changed)
+                ? tNext("importCenter.boxSetBuilderMemberVaultLinked", "Already in your vault \u2014 linked to this box-set.")
+                : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
             added += 1;
           } catch (error) {
             row.status = "error";
@@ -20830,12 +21106,18 @@ def ui_preview_html(
           messageKey = "importCenter.boxSetBuilderMemberAlready";
           messageFallback = "Already linked to this box-set.";
           tone = "warn";
+        } else if (already && changed) {
+          messageKey = "importCenter.boxSetBuilderMemberVaultLinked";
+          messageFallback = "Already in your vault \u2014 linked to this box-set.";
+          tone = "good";
         }
         const prefix = movieTitle ? `${movieTitle}: ` : "";
         setBoxSetBuilderMessage("boxSetBuilderMemberMessage", `${prefix}${tNext(messageKey, messageFallback)}`, tone);
         if (barcodeInput) barcodeInput.value = "";
         if (titleInput) titleInput.value = "";
         if (yearInput) yearInput.value = "";
+        const memberPreview = document.getElementById("boxSetBuilderMemberPreview");
+        if (memberPreview) { memberPreview.hidden = true; memberPreview.textContent = ""; }
         barcodeInput?.focus();
         if (state.captureToCamera) {
           setImportScannerMessage(`${prefix}${tNext(messageKey, messageFallback)}`, tone);
@@ -27357,7 +27639,10 @@ def ui_preview_html(
     }
     function bulkTargetValue(selectId, emptyKey) {
       const target = document.getElementById(selectId)?.value || "";
-      if (!target) throw new Error(tNext(emptyKey, "Choose a target first."));
+      if (!target || target === BULK_CREATE_SENTINEL) {
+        if (target === BULK_CREATE_SENTINEL) throw new Error(tNext("bulk.finishCreateFirst", "Create a new target or choose an existing one first."));
+        throw new Error(tNext(emptyKey, "Choose a target first."));
+      }
       return target;
     }
     function finishBulkAction(message, details = {}) {
@@ -27401,7 +27686,7 @@ def ui_preview_html(
         if (summary) summary.textContent = error.message || String(error);
       }
     }
-    async function applyBulkContainer(targetType, selectId) {
+    async function applyBulkContainer(targetType, selectId, explicitContainerId = "") {
       if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers)) return;
       const movieIds = bulkSelectedMovieIds();
       const summary = document.getElementById("librarySummary");
@@ -27410,7 +27695,7 @@ def ui_preview_html(
         return;
       }
       try {
-        const containerId = bulkTargetValue(selectId, targetType === "vault" ? "bulk.chooseVaultFirst" : "bulk.chooseBoxSetFirst");
+        const containerId = explicitContainerId || bulkTargetValue(selectId, targetType === "vault" ? "bulk.chooseVaultFirst" : "bulk.chooseBoxSetFirst");
         if (summary) summary.textContent = tNext("bulk.savingContainerLinks", "Saving container links...");
         const payload = await authApiJson(`/api/next/bulk/containers/${encodeURIComponent(containerId)}/movies`, {
           method: "POST",
@@ -27424,12 +27709,12 @@ def ui_preview_html(
         if (summary) summary.textContent = error.message || String(error);
       }
     }
-    async function applyBulkCollection() {
+    async function applyBulkCollection(explicitCollectionId = "") {
       if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections)) return;
       const movieIds = bulkSelectedMovieIds();
       const summary = document.getElementById("librarySummary");
       try {
-        const collectionId = bulkTargetValue("bulkCollectionTarget", "bulk.chooseCollectionFirst");
+        const collectionId = explicitCollectionId || bulkTargetValue("bulkCollectionTarget", "bulk.chooseCollectionFirst");
         const containerIds = bulkSelectedContainerIds(collectionId);
         if (!movieIds.length && !containerIds.length) {
           if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
@@ -29458,9 +29743,21 @@ def ui_preview_html(
       document.getElementById("advancedSearchDeleteButton")?.addEventListener("click", deleteSmartFilter);
       document.getElementById("smartFilterSelect")?.addEventListener("change", (event) => applySmartFilter(event.target.value || ""));
       setupCollectionMenus();
-      document.getElementById("collectionCreateForm")?.addEventListener("submit", createContainerFromLibraryMenu);
-      document.getElementById("collectionCreateType")?.addEventListener("change", syncCollectionCreateControls);
-      document.getElementById("collectionCreateTitle")?.addEventListener("input", () => setCollectionCreateMessage(""));
+      document.getElementById("bulkBoxSetTarget")?.addEventListener("change", syncBulkTargetCreateControls);
+      document.getElementById("bulkVaultTarget")?.addEventListener("change", syncBulkTargetCreateControls);
+      document.getElementById("bulkCollectionTarget")?.addEventListener("change", syncBulkTargetCreateControls);
+      document.getElementById("bulkBoxSetCreateForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        createAndApplyBulkTarget("box_set");
+      });
+      document.getElementById("bulkVaultCreateForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        createAndApplyBulkTarget("vault");
+      });
+      document.getElementById("bulkCollectionCreateForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        createAndApplyBulkTarget("collection");
+      });
       document.querySelectorAll("[data-sort-option]").forEach((button) => {
         button.addEventListener("click", () => {
           collectionSortMode = button.dataset.sortOption || "title_asc";
@@ -29997,6 +30294,7 @@ def ui_preview_html(
       document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
       document.getElementById("boxSetBuilderIdentifyForm")?.addEventListener("submit", (event) => identifyBoxSetBuilderTarget(event));
       document.getElementById("boxSetBuilderMemberForm")?.addEventListener("submit", (event) => addBoxSetBuilderMember(event));
+      wireImportScanPreview("boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberPreview");
       document.getElementById("boxSetBuilderBatchButton")?.addEventListener("click", () => runBoxSetBuilderBatch());
       document.getElementById("boxSetBuilderCameraButton")?.addEventListener("click", () => startBoxSetBuilderCameraScan());
       document.getElementById("boxSetBuilderOpenButton")?.addEventListener("click", () => {
@@ -30312,6 +30610,7 @@ def ui_preview_html(
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerScanAddForm")?.addEventListener("submit", (event) => addContainerScanMember(event));
+      wireImportScanPreview("containerScanAddBarcode", "containerScanAddPreview");
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
       document.addEventListener("click", (event) => {
@@ -30383,6 +30682,12 @@ def ui_preview_html(
         const moveItem = event.target.closest("[data-container-move-item]");
         const removeMovie = event.target.closest("[data-container-remove-movie]");
         const removeItem = event.target.closest("[data-container-remove-item]");
+        const setCover = event.target.closest("[data-container-set-cover]");
+        if (setCover) {
+          event.preventDefault();
+          setContainerCoverMovie(setCover.dataset.containerSetCover);
+          return;
+        }
         if (moveMovie) {
           event.preventDefault();
           moveContainerMovie(moveMovie.dataset.containerMoveMovie, moveMovie.dataset.direction);
