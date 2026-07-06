@@ -21,10 +21,13 @@ from app.backend.next_metadata import canonicalize_plugin_result
 from app.backend.next_metadata import _clean_scanned_title
 from app.backend.next_metadata import _parse_import_country
 from app.backend.next_metadata import external_metadata_barcode
+from app.backend.next_metadata import filter_locked_artwork_updates
 from app.backend.next_metadata import metadata_field_decisions_with_write_state
 from app.backend.next_metadata import metadata_fetch_audit_payload
 from app.backend.next_metadata import metadata_source_plugin_allowed
 from app.backend.next_metadata import merge_metadata_results
+from app.backend.next_metadata import MOVIE_LOCKABLE_FIELDS
+from app.backend.next_metadata import movie_locked_fields
 from app.backend.next_metadata import normalize_media_format
 from app.backend.next_metadata import plugin_execution_plan
 from app.backend.next_metadata import query_from_payload
@@ -988,7 +991,25 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertEqual([item["entrypoint"] for item in plan], ["search_title", "movie_details", "box_set_candidates"])
 
-    def test_preview_barcode_and_title_is_title_driven(self):
+    def test_preview_title_lookup_propagates_release_variants_flag(self):
+        query = query_from_payload({
+            "title": "E.T. the Extra-Terrestrial",
+            "previewMode": True,
+            "releaseVariants": True,
+        })
+        self.assertTrue(query.get("releaseVariants"))
+        plan = plugin_execution_plan(
+            {"capabilities": ["search_title", "movie_details"]},
+            query,
+        )
+        title_step = next(item for item in plan if item["entrypoint"] == "search_title")
+        self.assertTrue(title_step["payload"].get("releaseVariants"))
+
+    def test_preview_title_lookup_release_variants_flag_defaults_off(self):
+        query = query_from_payload({"title": "E.T. the Extra-Terrestrial", "previewMode": True})
+        self.assertFalse(query.get("releaseVariants"))
+
+
         query = query_from_payload({
             "barcode": "5051892000000",
             "title": "Lethal Weapon",
@@ -1431,6 +1452,82 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(by_lang["fr"].get("title"), "Heat FR")
         self.assertNotIn("overview", by_lang["fr"])
         self.assertNotIn("es", by_lang)
+
+
+class NextArtworkLockTests(unittest.TestCase):
+    def test_poster_and_backdrop_are_lockable_fields(self):
+        self.assertIn("poster", MOVIE_LOCKABLE_FIELDS)
+        self.assertIn("backdrop", MOVIE_LOCKABLE_FIELDS)
+
+    def test_movie_locked_fields_recognizes_artwork_locks(self):
+        metadata = {"field_locks": ["poster", "backdrop", "overview"]}
+        locked = movie_locked_fields(metadata)
+        self.assertIn("poster", locked)
+        self.assertIn("backdrop", locked)
+
+    def test_locked_poster_metadata_url_is_stripped(self):
+        metadata_updates = {"poster_url": "http://new/poster.jpg", "overview": "New"}
+        media_updates = {"poster": {"url": "http://new/poster.jpg"}}
+        result_meta, result_media = filter_locked_artwork_updates(
+            metadata_updates,
+            media_updates,
+            metadata_locked_kinds={"poster"},
+            media_locked_kinds={"poster"},
+        )
+        self.assertNotIn("poster_url", result_meta)
+        self.assertEqual(result_meta.get("overview"), "New")
+        self.assertNotIn("poster", result_media)
+
+    def test_locked_backdrop_variants_are_stripped(self):
+        metadata_updates = {
+            "backdrop_url": "http://x/b.jpg",
+            "backdropUrl": "http://x/b2.jpg",
+            "backdrop": "http://x/b3.jpg",
+        }
+        result_meta, _ = filter_locked_artwork_updates(
+            metadata_updates,
+            {},
+            metadata_locked_kinds={"backdrop"},
+            media_locked_kinds=set(),
+        )
+        self.assertEqual(result_meta, {})
+
+    def test_media_asset_lock_keeps_media_option(self):
+        # metadata URL protected, but media still allowed as a non-primary option
+        metadata_updates = {"poster_url": "http://new/poster.jpg"}
+        media_updates = {"poster": {"url": "http://new/poster.jpg"}}
+        result_meta, result_media = filter_locked_artwork_updates(
+            metadata_updates,
+            media_updates,
+            metadata_locked_kinds={"poster"},
+            media_locked_kinds=set(),
+        )
+        self.assertNotIn("poster_url", result_meta)
+        self.assertIn("poster", result_media)
+
+    def test_unlocked_artwork_is_untouched(self):
+        metadata_updates = {"poster_url": "http://new/poster.jpg"}
+        media_updates = {"poster": {"url": "http://new/poster.jpg"}}
+        result_meta, result_media = filter_locked_artwork_updates(
+            metadata_updates,
+            media_updates,
+            metadata_locked_kinds=set(),
+            media_locked_kinds=set(),
+        )
+        self.assertEqual(result_meta.get("poster_url"), "http://new/poster.jpg")
+        self.assertIn("poster", result_media)
+
+    def test_inputs_are_not_mutated(self):
+        metadata_updates = {"poster_url": "http://new/poster.jpg"}
+        media_updates = {"poster": {"url": "http://new/poster.jpg"}}
+        filter_locked_artwork_updates(
+            metadata_updates,
+            media_updates,
+            metadata_locked_kinds={"poster"},
+            media_locked_kinds={"poster"},
+        )
+        self.assertIn("poster_url", metadata_updates)
+        self.assertIn("poster", media_updates)
 
 
 if __name__ == "__main__":

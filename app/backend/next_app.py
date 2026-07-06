@@ -1078,6 +1078,29 @@ def next_i18n_messages(locale: str) -> dict[str, Any]:
     return messages
 
 
+def next_translate(locale: str | None, key: str, default: str | None = None, **params: Any) -> str:
+    """Translate an i18n key server-side using the flat locale catalog.
+
+    Substitutes ``{param}`` placeholders. Falls back to ``default`` (or the key
+    itself) when the catalog does not provide the key.
+    """
+
+    template: str | None = None
+    try:
+        messages = next_i18n_messages(locale or NEXT_I18N_DEFAULT_LOCALE)
+        candidate = messages.get(key)
+        if isinstance(candidate, str) and candidate:
+            template = candidate
+    except Exception:
+        template = None
+    if template is None:
+        template = default if default is not None else key
+    if params:
+        for name, value in params.items():
+            template = template.replace("{" + str(name) + "}", str(value))
+    return template
+
+
 def legacy_data_dir() -> Path:
     raw = (
         os.environ.get("DISCVAULT_LEGACY_DATA_DIR")
@@ -6229,6 +6252,9 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
         "preferences": app_effective_preferences(conn, user_id),
+        "instanceSettings": {
+            "loansSystemEnabled": loans_system_enabled(conn),
+        },
         "user": {
             "id": user.get("id"),
             "username": user.get("username"),
@@ -6255,6 +6281,9 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "mediaGroups": [],
         "plugins": [],
         "preferences": dict(APP_PREFERENCE_DEFAULTS),
+        "instanceSettings": {
+            "loansSystemEnabled": False,
+        },
         "user": None,
         "build": {
             "version": build_version(),
@@ -8514,6 +8543,33 @@ def ui_preview_html(
     .wishlist-search-meta.muted {
       opacity: .8;
     }
+    .wishlist-search-meta.edition {
+      color: var(--accent, #6ea8fe);
+      font-weight: 600;
+    }
+    .wishlist-search-badge {
+      justify-self: start;
+      display: inline-block;
+      font-size: .68rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+      color: var(--bg-solid, #10131a);
+      background: var(--accent, #6ea8fe);
+      border-radius: 999px;
+      padding: 1px 8px;
+    }
+    .wishlist-search-resultbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 2px 2px 4px;
+    }
+    .wishlist-search-count {
+      color: var(--muted);
+      font-size: .82rem;
+    }
     .wishlist-manual {
       margin-bottom: 14px;
     }
@@ -8558,6 +8614,397 @@ def ui_preview_html(
     }
     .lists-poster-badge.danger {
       background: var(--red);
+    }
+    .lists-static-poster .preview-poster-art {
+      cursor: pointer;
+    }
+    .lists-static-poster .lists-poster-actions {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      margin-top: 0;
+      transition: max-height .2s ease, opacity .2s ease, margin-top .2s ease;
+    }
+    .lists-static-poster.actions-visible .lists-poster-actions {
+      max-height: 200px;
+      opacity: 1;
+      margin-top: 6px;
+    }
+    .wishlist-section {
+      margin-bottom: 18px;
+    }
+    .wishlist-section-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0 10px;
+    }
+    .wishlist-section-head h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .wishlist-section-head span {
+      font-size: .78rem;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--bg-solid) 80%, transparent);
+      border-radius: 999px;
+      padding: 1px 8px;
+    }
+    .wishlist-section-empty {
+      color: var(--muted);
+      font-size: .85rem;
+      padding: 4px 0 10px;
+    }
+    .lists-loans-toolbar,
+    .lists-tags-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .lists-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+      padding: 16px;
+    }
+    .lists-modal {
+      background: var(--bg-solid);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      width: min(520px, 100%);
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 18px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+    }
+    .lists-modal-head h3 {
+      margin: 0 0 12px;
+    }
+    .lists-modal-body {
+      display: flex;
+      gap: 14px;
+    }
+    .lists-meerinfo .lists-modal-poster {
+      flex: 0 0 130px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .lists-meerinfo .lists-modal-poster img {
+      width: 130px;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+    .lists-modal-poster-empty {
+      width: 130px;
+      height: 190px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: .78rem;
+      text-align: center;
+    }
+    .lists-modal-poster-btn {
+      padding: 5px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      font-size: .74rem;
+      cursor: pointer;
+    }
+    .lists-modal-fields {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .lists-modal-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .lists-modal-field > span:first-child {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+    }
+    .lists-modal-field input,
+    .lists-modal-field select,
+    .lists-modal-field textarea {
+      width: 100%;
+      padding: 7px 9px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      box-sizing: border-box;
+    }
+    .lists-modal:not(.editing) [data-edit] {
+      display: none;
+    }
+    .lists-modal.editing [data-read] {
+      display: none;
+    }
+    .lists-actionsheet-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 4px 0 2px;
+    }
+    .lists-actionsheet-btn {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      font-size: .95rem;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .lists-actionsheet-btn:hover {
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .lists-actionsheet-btn.danger {
+      color: var(--danger, #e5484d);
+      border-color: color-mix(in srgb, var(--danger, #e5484d) 45%, var(--line));
+    }
+    .lists-modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+    .lists-modal-actions button {
+      padding: 8px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .lists-modal-actions button.ghost {
+      background: transparent;
+      color: var(--text);
+    }
+    .lists-modal-message {
+      min-height: 1.1em;
+      font-size: .82rem;
+      color: var(--muted);
+      margin: 8px 0 0;
+    }
+    .lists-modal-message.bad {
+      color: var(--red);
+    }
+    .lists-modal.lists-history {
+      max-width: 720px;
+      width: min(92vw, 720px);
+    }
+    .lists-history-filter {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .lists-history-filter button {
+      padding: 6px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--text);
+      font-weight: 600;
+      font-size: .82rem;
+      cursor: pointer;
+    }
+    .lists-history-filter button.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .lists-history-table {
+      display: flex;
+      flex-direction: column;
+      max-height: 56vh;
+      overflow-y: auto;
+    }
+    .lists-history-row {
+      display: grid;
+      grid-template-columns: 52px 1.6fr 1fr 0.9fr 1.4fr;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--line);
+      font-size: .84rem;
+    }
+    .lists-history-row.head {
+      font-weight: 700;
+      color: var(--muted);
+      font-size: .74rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      position: sticky;
+      top: 0;
+      background: var(--bg-solid);
+    }
+    .lists-history-poster img,
+    .lists-history-poster span {
+      width: 44px;
+      height: 62px;
+      border-radius: 6px;
+      object-fit: cover;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      font-size: .6rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    @media (max-width: 640px) {
+      .lists-history-row {
+        grid-template-columns: 44px 1.4fr 1.2fr;
+      }
+      .lists-history-row > span:nth-child(3),
+      .lists-history-row > span:nth-child(4) {
+        display: none;
+      }
+    }
+    .lists-picker-results {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 50vh;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    .lists-picker-item {
+      text-align: left;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .lists-picker-item:hover {
+      border-color: var(--accent);
+    }
+    .lists-picker-searchbar input {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      box-sizing: border-box;
+    }
+    .lists-loan-form {
+      flex-direction: column;
+    }
+    .lists-loan-movie {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .lists-borrower-results {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .lists-borrower-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .lists-borrower-item:hover {
+      border-color: var(--accent);
+    }
+    .lists-borrower-item em {
+      color: var(--muted);
+      font-style: normal;
+    }
+    .lists-borrower-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: #fff;
+      font-size: .78rem;
+      font-weight: 600;
+      flex: 0 0 auto;
+    }
+    .lists-switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .lists-switch {
+      position: relative;
+      display: inline-flex;
+      width: 42px;
+      height: 24px;
+      flex: 0 0 auto;
+    }
+    .lists-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .lists-switch span {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: var(--line);
+      transition: background .2s ease;
+    }
+    .lists-switch span::before {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .2s ease;
+    }
+    .lists-switch input:checked + span {
+      background: var(--accent);
+    }
+    .lists-switch input:checked + span::before {
+      transform: translateX(18px);
+    }
+    .wishlist-tools {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 14px;
     }
     .tag-poster-art {
       display: flex;
@@ -9313,6 +9760,51 @@ def ui_preview_html(
     .import-tab-panel {
       display: grid;
       gap: 16px;
+    }
+    .import-method-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 14px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 66%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .import-method-tabs button {
+      flex: 1 1 auto;
+      min-height: 36px;
+      border: 0;
+      border-radius: 12px;
+      padding: 0 12px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-weight: 720;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .import-method-tabs button.active {
+      background: var(--bg-elevated);
+      color: var(--text);
+      box-shadow: 0 8px 20px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.16);
+    }
+    .import-method-panel {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+      min-width: 0;
+    }
+    .import-method-panel.hidden {
+      display: none;
+    }
+    .import-method-panel .import-batch-card.standalone {
+      padding-top: 0;
+      border-top: 0;
+    }
+    .import-method-panel .import-file-upload-card.secondary {
+      margin-top: 0;
     }
     .import-scanner-card {
       overflow: hidden;
@@ -10335,27 +10827,82 @@ def ui_preview_html(
     .import-batch-row span {
       overflow-wrap: anywhere;
     }
-    .import-batch-row.added {
-      border-color: color-mix(in srgb, var(--success) 46%, var(--line));
-      background: color-mix(in srgb, var(--success) 8%, transparent);
+    .import-batch-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
     }
-    .import-batch-row.active {
-      border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+    .import-batch-text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
     }
     .import-batch-check {
-      color: var(--success);
-      font-weight: 700;
-      margin-right: 6px;
-    }
-    .import-batch-added-label {
+      flex: 0 0 auto;
       display: inline-flex;
       align-items: center;
-      font-weight: 600;
-      white-space: nowrap;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: var(--green, #1f9d55);
+      color: #fff;
+      font-weight: 800;
+      font-size: .82rem;
+      line-height: 1;
     }
-    .import-batch-added-label.good,
-    .import-batch-complete.good {
-      color: var(--success);
+    .import-batch-row.is-active {
+      border-color: var(--accent, #3b82f6);
+      background: color-mix(in srgb, var(--accent, #3b82f6) 14%, var(--bg-solid));
+    }
+    .import-batch-row.is-added {
+      border-color: color-mix(in srgb, var(--green, #1f9d55) 55%, var(--line));
+      background: color-mix(in srgb, var(--green, #1f9d55) 12%, var(--bg-solid));
+    }
+    .import-batch-row.is-added strong {
+      color: var(--green, #1f9d55);
+    }
+    .import-batch-spinner {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, var(--accent, #3b82f6) 28%, transparent);
+      border-top-color: var(--accent, #3b82f6);
+      animation: importBatchSpin .7s linear infinite;
+    }
+    @keyframes importBatchSpin {
+      to { transform: rotate(360deg); }
+    }
+    /* Issue #111: give the "Use selected match" / "Add box-set" action button an
+       immediate busy animation on click. Box-set resolution can take a few
+       seconds, so this confirms the click registered and a search is running. */
+    .primary-button.is-loading,
+    .secondary-button.is-loading {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      pointer-events: none;
+      opacity: .85;
+    }
+    .primary-button.is-loading::after,
+    .secondary-button.is-loading::after {
+      content: "";
+      flex: 0 0 auto;
+      width: 15px;
+      height: 15px;
+      border-radius: 999px;
+      border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
+      border-top-color: currentColor;
+      animation: importBatchSpin .7s linear infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .primary-button.is-loading::after,
+      .secondary-button.is-loading::after {
+        animation-duration: 1.6s;
+      }
     }
     .import-batch-footer {
       display: flex;
@@ -10368,6 +10915,7 @@ def ui_preview_html(
     .import-batch-complete {
       font-weight: 600;
       margin-right: auto;
+      color: var(--green, #1f9d55);
     }
     .barcode-scanner-viewport video,
     .barcode-scanner-viewport canvas {
@@ -10824,6 +11372,18 @@ def ui_preview_html(
       background: var(--bg-solid);
       color: var(--text);
       box-shadow: 0 7px 18px rgba(0,0,0,.12);
+    }
+    .detail-submenu button.lists-seg {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .lists-seg-icon {
+      width: 17px;
+      height: 17px;
+      fill: currentColor;
+      flex: 0 0 auto;
+      display: block;
     }
     .detail-subpanel {
       min-width: 0;
@@ -14271,6 +14831,18 @@ def ui_preview_html(
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      .detail-submenu button.lists-seg {
+        max-width: none;
+        padding: 0 12px;
+        justify-content: center;
+      }
+      .detail-submenu button.lists-seg .lists-seg-label {
+        display: none;
+      }
+      .detail-submenu button.lists-seg .lists-seg-icon {
+        width: 20px;
+        height: 20px;
+      }
       .profile-hero {
         align-items: stretch;
         flex-direction: column;
@@ -14763,6 +15335,8 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
       <div class="sidebar-footer">
+        <strong data-next-i18n="profile.appVersion">App version</strong><br>
+        """ + h(build.get("version") or "unknown") + """<br>
         <strong data-next-i18n="uiPreview.build">Build</strong><br>
         """ + h((build.get("sha") or "unknown")[:12]) + """
       </div>
@@ -14892,6 +15466,8 @@ def ui_preview_html(
                 <option value="any" data-next-i18n="common.any">Any</option>
                 <option value="watchlist" data-next-i18n="lists.watchlist">Watchlist</option>
                 <option value="watched" data-next-i18n="lists.watched">Watched</option>
+                <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
+                <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
                 <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
               </select>
             </label>
@@ -15074,7 +15650,7 @@ def ui_preview_html(
               <strong id="listsWishlistCount">0</strong>
               <span data-next-i18n="lists.wishlist">Wishlist</span>
             </div>
-            <div class="list-count-pill">
+            <div class="list-count-pill" id="listsLoansCountPill">
               <strong id="listsLoansCount">0</strong>
               <span data-next-i18n="lists.loans">On loan</span>
             </div>
@@ -15085,11 +15661,11 @@ def ui_preview_html(
             <h3 data-next-i18n="lists.collectionTitle">My viewing lists</h3>
             <div class="detail-card-actions">
               <div class="detail-submenu" role="tablist" aria-label="Lists" data-next-i18n-aria="uiPreview.navLists">
-                <button type="button" class="active" data-lists-tab="watchlist" data-next-i18n="lists.watchlist">Watchlist</button>
-                <button type="button" data-lists-tab="watched" data-next-i18n="lists.watched">Watched</button>
-                <button type="button" data-lists-tab="wishlist" data-next-i18n="lists.wishlist">Wishlist</button>
-                <button type="button" data-lists-tab="tags" data-next-i18n="lists.tags">Tags</button>
-                <button type="button" data-lists-tab="loans" data-next-i18n="lists.loans">On loan</button>
+                <button type="button" class="active lists-seg" data-lists-tab="watchlist" data-next-i18n-aria="lists.watchlist" aria-label="Watchlist"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17,18V5H7V18L12,15.82L17,18M17,3A2,2 0 0,1 19,5V21L12,18L5,21V5C5,3.89 5.9,3 7,3H17Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.watchlist">Watchlist</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="watched" data-next-i18n-aria="lists.watched" aria-label="Watched"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.watched">Watched</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="wishlist" data-next-i18n-aria="lists.wishlist" aria-label="Wishlist"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.1,18.55L12,18.65L11.89,18.55C7.14,14.24 4,11.39 4,8.5C4,6.5 5.5,5 7.5,5C9.04,5 10.54,6 11.07,7.36H12.93C13.46,6 14.96,5 16.5,5C18.5,5 20,6.5 20,8.5C20,11.39 16.86,14.24 12.1,18.55M16.5,3C14.76,3 13.09,3.81 12,5.08C10.91,3.81 9.24,3 7.5,3C4.42,3 2,5.41 2,8.5C2,12.27 5.4,15.36 10.55,20.03L12,21.35L13.45,20.03C18.6,15.36 22,12.27 22,8.5C22,5.41 19.58,3 16.5,3Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.wishlist">Wishlist</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="tags" data-next-i18n-aria="lists.tags" aria-label="Tags"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41,11.58L12.41,2.58C12.04,2.21 11.53,2 11,2H4A2,2 0 0,0 2,4V11C2,11.53 2.21,12.04 2.59,12.42L11.59,21.42C11.96,21.79 12.47,22 13,22C13.53,22 14.04,21.79 14.41,21.41L21.41,14.41C21.79,14.04 22,13.53 22,13C22,12.47 21.79,11.96 21.41,11.58M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.tags">Tags</span></button>
+                <button type="button" class="lists-seg" data-lists-tab="loans" data-next-i18n-aria="lists.loans" aria-label="On loan"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16,17V19H2V17S2,13 9,13 16,17 16,17M12.5,7.5A3.5,3.5 0 1,0 9,11A3.5,3.5 0 0,0 12.5,7.5M15.94,13A5.32,5.32 0 0,1 18,17V19H22V17S22,13.37 15.94,13M15,4A3.39,3.39 0 0,0 13.07,4.59A5,5 0 0,1 13.07,10.41A3.39,3.39 0 0,0 15,11A3.5,3.5 0 0,0 15,4Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.loans">On loan</span></button>
               </div>
               <div class="segmented compact view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
                 <button type="button" class="active" data-lists-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
@@ -15101,34 +15677,57 @@ def ui_preview_html(
           <div class="lists-grid" id="listsWatchlistGrid"></div>
           <div class="lists-history hidden" id="listsWatchedList"></div>
           <div class="lists-wishlist hidden" id="listsWishlistPanel">
-            <form class="wishlist-search-form" id="wishlistSearchForm" autocomplete="off">
-              <div class="wishlist-search-row">
-                <input type="text" id="wishlistSearchInput" required data-next-i18n-placeholder="lists.wishlistSearchPlaceholder" placeholder="Search a title to find editions">
-                <button type="submit" class="primary-button" data-next-i18n="lists.wishlistSearchButton">Find editions</button>
-              </div>
-              <p class="form-message" id="wishlistSearchMessage" role="status"></p>
-            </form>
-            <div class="wishlist-search-results" id="wishlistSearchResults"></div>
-            <details class="wishlist-manual">
-              <summary data-next-i18n="lists.wishlistManualToggle">Add manually</summary>
-              <form class="wishlist-add-form" id="wishlistAddForm" autocomplete="off">
-                <div class="wishlist-add-fields">
-                  <input type="text" id="wishlistAddTitle" required data-next-i18n-placeholder="lists.wishlistTitlePlaceholder" placeholder="Title">
-                  <input type="text" id="wishlistAddYear" inputmode="numeric" data-next-i18n-placeholder="lists.wishlistYearPlaceholder" placeholder="Year">
-                  <input type="text" id="wishlistAddFormat" data-next-i18n-placeholder="lists.wishlistFormatPlaceholder" placeholder="Format">
-                  <input type="text" id="wishlistAddBarcode" data-next-i18n-placeholder="lists.wishlistBarcodePlaceholder" placeholder="Barcode">
-                  <button type="submit" class="primary-button" data-next-i18n="lists.wishlistAdd">Add to wishlist</button>
+            <div class="wishlist-tools">
+              <form class="wishlist-search-form" id="wishlistSearchForm" autocomplete="off">
+                <div class="wishlist-search-row">
+                  <input type="text" id="wishlistSearchInput" required data-next-i18n-placeholder="lists.wishlistSearchPlaceholder" placeholder="Search a title to find editions">
+                  <button type="submit" class="primary-button" data-next-i18n="lists.wishlistSearchButton">Find editions</button>
                 </div>
-                <p class="form-message" id="wishlistAddMessage" role="status"></p>
+                <p class="form-message" id="wishlistSearchMessage" role="status"></p>
               </form>
-            </details>
+              <div class="wishlist-search-results" id="wishlistSearchResults"></div>
+              <details class="wishlist-manual">
+                <summary data-next-i18n="lists.wishlistManualToggle">Add manually</summary>
+                <form class="wishlist-add-form" id="wishlistAddForm" autocomplete="off">
+                  <div class="wishlist-add-fields">
+                    <input type="text" id="wishlistAddTitle" required data-next-i18n-placeholder="lists.wishlistTitlePlaceholder" placeholder="Title">
+                    <input type="text" id="wishlistAddYear" inputmode="numeric" data-next-i18n-placeholder="lists.wishlistYearPlaceholder" placeholder="Year">
+                    <select id="wishlistAddFormat" data-next-i18n-aria="movieDetail.format" aria-label="Format"></select>
+                    <input type="text" id="wishlistAddBarcode" data-next-i18n-placeholder="lists.wishlistBarcodePlaceholder" placeholder="Barcode">
+                  </div>
+                  <textarea id="wishlistAddNote" rows="2" class="wishlist-add-note" data-next-i18n-placeholder="lists.wishlistNotePlaceholder" placeholder="Note"></textarea>
+                  <div class="wishlist-add-actions">
+                    <button type="submit" class="primary-button" data-next-i18n="lists.wishlistAdd">Add to wishlist</button>
+                  </div>
+                  <p class="form-message" id="wishlistAddMessage" role="status"></p>
+                </form>
+              </details>
+            </div>
             <div class="lists-simple-list" id="listsWishlistList"></div>
           </div>
           <div class="lists-tags-panel hidden" id="listsTagsPanel">
+            <div class="lists-tags-toolbar">
+              <button type="button" class="primary-button" id="tagCreateButton" data-next-i18n="lists.tagCreateButton">New tag</button>
+            </div>
             <div class="lists-simple-list tags-list" id="listsTagsList"></div>
           </div>
           <div class="lists-loans-panel hidden" id="listsLoansPanel">
+            <div class="lists-loans-toolbar">
+              <button type="button" class="primary-button" id="loanCreateButton" data-next-i18n="lists.loanAddButton">Lend a disc</button>
+              <button type="button" class="secondary-button" id="loanHistoryButton" data-next-i18n="lists.loanHistoryButton">History</button>
+            </div>
             <div class="lists-simple-list loans-list" id="listsLoansList"></div>
+            <div class="lists-loan-requests" id="listsLoanRequests">
+              <div class="detail-card-head compact">
+                <h4 data-next-i18n="lists.loanRequestsTitle">Borrow requests</h4>
+                <div class="detail-submenu" role="tablist" aria-label="Borrow requests">
+                  <button type="button" class="active lists-seg" data-loan-requests-tab="incoming"><span class="lists-seg-label" data-next-i18n="lists.loanRequestsIncomingTitle">To review</span></button>
+                  <button type="button" class="lists-seg" data-loan-requests-tab="outgoing"><span class="lists-seg-label" data-next-i18n="lists.loanRequestsOutgoingTitle">My requests</span></button>
+                </div>
+              </div>
+              <div class="lists-simple-list" id="listsLoanRequestsIncoming"></div>
+              <div class="lists-simple-list hidden" id="listsLoanRequestsOutgoing"></div>
+            </div>
           </div>
           <div class="preview-empty hidden" id="listsEmptyMessage"></div>
         </section>
@@ -15227,7 +15826,13 @@ def ui_preview_html(
                 <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding a movie.</p>
               </div>
             </div>
-            <div class="import-scanner-spotlight">
+            <nav class="import-method-tabs" aria-label="Import method" data-next-i18n-aria="importCenter.methods">
+              <button type="button" class="active" data-import-method="camera" data-next-i18n="importCenter.methodCamera">Camera</button>
+              <button type="button" data-import-method="single" data-next-i18n="importCenter.methodSingle">Single search</button>
+              <button type="button" data-import-method="batch" data-next-i18n="importCenter.methodBatch">Batch</button>
+              <button type="button" data-import-method="csv" data-next-i18n="importCenter.methodCsv">CSV import</button>
+            </nav>
+            <div class="import-method-panel" data-import-method-panel="camera">
               <div class="barcode-scanner-shell">
                 <div class="import-card-head">
                   <div>
@@ -15244,6 +15849,8 @@ def ui_preview_html(
                 </div>
                 <div class="login-message" id="importScannerMessage"></div>
               </div>
+            </div>
+            <div class="import-method-panel hidden" data-import-method-panel="single">
               <div class="import-manual-card">
                 <div>
                   <strong data-next-i18n="importCenter.manualTitleCard">Manual search</strong>
@@ -15268,10 +15875,13 @@ def ui_preview_html(
                   </label>
                   <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Search</button>
                 </form>
-                <div class="import-batch-card">
+              </div>
+            </div>
+            <div class="import-method-panel hidden" data-import-method-panel="batch">
+              <div class="import-batch-card standalone">
                   <div>
                     <strong data-next-i18n="importCenter.batchTitle">Batch barcodes</strong>
-                    <p class="import-source-meta" data-next-i18n="importCenter.batchHelp">Paste multiple EAN or UPC barcodes. DiscVault checks them one by one through the same metadata plugin flow.</p>
+                    <p class="import-source-meta" data-next-i18n="importCenter.batchHelp">Scan or paste all EAN/UPC barcodes first, then run Check batch. Work down the list: Search a line, add the film, and it gets checked off so you can continue with the next one.</p>
                   </div>
                   <textarea id="importBatchBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.batchPlaceholder" placeholder="8712626064312&#10;5051890315526"></textarea>
                   <div class="button-row compact">
@@ -15282,8 +15892,8 @@ def ui_preview_html(
                   <div class="import-batch-list" id="importBatchList"></div>
                 </div>
               </div>
-            </div>
-            <div class="import-file-upload-card secondary" id="importFileUploadCard">
+            <div class="import-method-panel hidden" data-import-method-panel="csv">
+              <div class="import-file-upload-card secondary" id="importFileUploadCard">
               <div>
                 <strong data-next-i18n="importCenter.fileTitle">Import file</strong>
                 <p class="import-source-meta" data-next-i18n="importCenter.fileHelp">Upload a CSV, TSV, JSON, XML or ZIP file. DiscVault asks the enabled import plugins which one recognizes it.</p>
@@ -15295,6 +15905,7 @@ def ui_preview_html(
               </div>
               <div class="login-message" id="importFileMessage"></div>
               <div class="import-file-summary" id="importFileSummary"></div>
+            </div>
             </div>
             <div class="import-result-list" id="importBarcodeResults"></div>
           </div>
@@ -15595,6 +16206,19 @@ def ui_preview_html(
                 <input type="date" id="movieLoanDue" aria-label="Due date" data-next-i18n-aria="lists.loanDue">
                 <button type="submit" class="secondary-button" data-next-i18n="lists.loanLend">Lend disc</button>
               </form>
+              <div class="movie-loan-request-status" id="movieLoanRequestStatus"></div>
+              <form class="movie-loan-request hidden" id="movieLoanRequestForm" autocomplete="off">
+                <label class="loan-request-field">
+                  <span data-next-i18n="lists.loanRequestFrom">Borrow from</span>
+                  <input type="date" id="movieLoanRequestFrom" aria-label="Borrow from" data-next-i18n-aria="lists.loanRequestFrom">
+                </label>
+                <label class="loan-request-field">
+                  <span data-next-i18n="lists.loanRequestReturnBy">Return by</span>
+                  <input type="date" id="movieLoanRequestReturnBy" aria-label="Return by" data-next-i18n-aria="lists.loanRequestReturnBy">
+                </label>
+                <input type="text" id="movieLoanRequestNote" data-next-i18n-placeholder="lists.loanRequestNotePlaceholder" placeholder="Optional message to the owner">
+                <button type="submit" class="secondary-button" data-next-i18n="lists.loanRequestSubmit">Send request</button>
+              </form>
               <p class="form-message" id="movieLoanMessage"></p>
             </div>
           </div>
@@ -15657,6 +16281,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="moviePosterUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="poster" data-input="moviePosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="moviePosterLockToggle" data-artwork-lock="movie" data-kind="poster" aria-pressed="false">Lock poster</button>
               </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaBackdrops">
@@ -15664,6 +16289,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="movieBackdropUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="backdrop" data-input="movieBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="movieBackdropLockToggle" data-artwork-lock="movie" data-kind="backdrop" aria-pressed="false">Lock backdrop</button>
               </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
@@ -15840,6 +16466,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="containerPosterUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="container" data-kind="poster" data-input="containerPosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="containerPosterLockToggle" data-artwork-lock="container" data-kind="poster" aria-pressed="false">Lock poster</button>
               </div>
             </div>
           </div>
@@ -15850,6 +16477,7 @@ def ui_preview_html(
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="containerBackdropUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="container" data-kind="backdrop" data-input="containerBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+                <button type="button" class="secondary-button artwork-lock-toggle" id="containerBackdropLockToggle" data-artwork-lock="container" data-kind="backdrop" aria-pressed="false">Lock backdrop</button>
               </div>
             </div>
           </div>
@@ -16073,6 +16701,7 @@ def ui_preview_html(
               </div>
               <div class="detail-subpanel hidden" data-preferences-panel="collectors">
                 <div class="preference-list" id="profileCollectorPreferenceList"></div>
+                <div class="preference-list hidden" id="loansSystemSettingRow"></div>
               </div>
               <div class="login-message" id="preferencesMessage"></div>
             </div>
@@ -16949,7 +17578,7 @@ def ui_preview_html(
     let activePersonPayload = null;
     let personReturnRoute = null;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
-    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
+    let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
@@ -17004,7 +17633,7 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add"};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera"};
     let bulkLastResult = null;
     let importScanner = {
       running: false,
@@ -17740,6 +18369,13 @@ def ui_preview_html(
     function currentUserId() {
       return currentAuthStatus.user_id || currentAuthStatus.userId || (state.user || {}).id || "";
     }
+    function loansSystemEnabled() {
+      const settings = (state && state.instanceSettings) || {};
+      return settings.loansSystemEnabled !== false;
+    }
+    function canManageLoansSystem() {
+      return hasActualPermission("security.manage_loans_system");
+    }
     function canViewFullCollectionByDefault() {
       return hasActualPermission("collection.view_all");
     }
@@ -17815,6 +18451,7 @@ def ui_preview_html(
         activePreferenceTab = "appearance";
       }
       syncPreferencePanelVisibility();
+      renderLoansSystemSetting();
       setElementVisible(document.querySelector('[data-profile-tab="structure"]'), canManageContainers);
       if (!canManageContainers && activeProfileTab === "structure") {
         activeProfileTab = "account";
@@ -21583,6 +22220,19 @@ def ui_preview_html(
       });
       renderAppRegistrationMode();
     }
+    let lastPersistedLocale = null;
+    function persistNextLocale(locale) {
+      const value = String(locale || "").trim();
+      if (!value || value === lastPersistedLocale) return;
+      const token = localStorage.getItem("dv_next_token");
+      if (!token) return;
+      lastPersistedLocale = value;
+      authApiJson("/api/next/preferences/locale", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locale: value })
+      }).catch(() => { lastPersistedLocale = null; });
+    }
     async function loadLocale(locale) {
       const normalized = locale || "nl-NL";
       try {
@@ -21593,6 +22243,7 @@ def ui_preview_html(
         localeState.messages = payload.messages || {};
         localStorage.setItem("dv_next_locale", localeState.locale);
         localStorage.setItem("dv_lang", legacyLocaleForApp(localeState.locale));
+        persistNextLocale(localeState.locale);
       } catch (error) {
         console.warn("Next i18n catalog unavailable", error);
       }
@@ -21887,7 +22538,7 @@ def ui_preview_html(
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
-        personal: ["any", "watchlist", "watched", "unlisted"].includes(source.personal) ? source.personal : "any",
+        personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged"].includes(source.personal) ? source.personal : "any",
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any"
       };
     }
@@ -22156,6 +22807,8 @@ def ui_preview_html(
       if (filters.personal === "watchlist" && !movie?.on_watchlist) return false;
       if (filters.personal === "watched" && !movieIsWatched(movie)) return false;
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
+      if (filters.personal === "onloan" && !movie?.on_loan) return false;
+      if (filters.personal === "tagged" && !movie?.has_tags) return false;
       return true;
     }
     function containerMatchesGroup(container) {
@@ -22202,13 +22855,21 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted"].includes(filters.personal)) {
+      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged"].includes(filters.personal)) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
       if (filters.artwork === "missingBackdrop" && containerBackdropValue(container)) return false;
       if (filters.artwork === "completeArtwork" && (!containerPosterValue(container) || !containerBackdropValue(container))) return false;
       return true;
+    }
+    function movieFormatIsFourKBlurayCombo(value) {
+      const lower = String(value || "").toLowerCase();
+      const has4k = lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd");
+      if (!has4k) return false;
+      const hasBluray = /blu[\\s-]?ray/.test(lower) || /(^|[^a-z])bd([^a-z]|$)/.test(lower);
+      if (!hasBluray) return false;
+      return /[+/&]/.test(lower);
     }
     function normalizedMovieFormat(movie) {
       return String(movie?.format || movie?.edition_type || movie?.metadata?.format || "");
@@ -22219,7 +22880,7 @@ def ui_preview_html(
       const normalized = normalizedMovieFormatValue(normalizedMovieFormat(movie));
       if (!normalized) return false;
       if (selected.has(normalized)) return true;
-      if (normalized === "4K UHD + Blu-ray" && (selected.has("Ultra HD Blu-ray") || selected.has("Blu-ray"))) return true;
+      if (normalized === "4K UHD + Blu-ray" && (selected.has("4K UHD") || selected.has("Blu-ray"))) return true;
       return false;
     }
     function movieGenreValues(movie) {
@@ -22615,6 +23276,7 @@ def ui_preview_html(
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
       if (!text) return "";
+      if (movieFormatIsFourKBlurayCombo(text)) return "4K UHD + Blu-ray";
       if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K UHD";
       if (lower.includes("blu") || lower.includes("bd")) return "Blu-ray";
       if (lower.includes("dvd")) return "DVD";
@@ -23980,19 +24642,17 @@ def ui_preview_html(
       {value: "DVD", collectorOnly: false},
       {value: "HD DVD", collectorOnly: true},
       {value: "LaserDisc", collectorOnly: true},
-      {value: "Ultra HD Blu-ray", collectorOnly: false},
+      {value: "4K UHD", collectorOnly: false},
+      {value: "4K UHD + Blu-ray", collectorOnly: false},
       {value: "VCD/SVCD", collectorOnly: true}
     ];
     function normalizedMovieFormatValue(value) {
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
       if (!text) return "";
-      const has4k = lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd");
-      const hasBlu = lower.includes("blu");
-      const combined = has4k && hasBlu && /[+&]|combo|combi/.test(lower);
-      if (combined) return "4K UHD + Blu-ray";
-      if (has4k) return "Ultra HD Blu-ray";
-      if (hasBlu) return "Blu-ray";
+      if (movieFormatIsFourKBlurayCombo(text)) return "4K UHD + Blu-ray";
+      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K UHD";
+      if (lower.includes("blu")) return "Blu-ray";
       if (lower.includes("hd dvd")) return "HD DVD";
       if (lower.includes("laser")) return "LaserDisc";
       if (lower.includes("vcd") || lower.includes("svcd")) return "VCD/SVCD";
@@ -24019,6 +24679,21 @@ def ui_preview_html(
         return `<option value="${escapeHtml(item.value)}">${escapeHtml(item.value)}</option>`;
       }).join("");
       select.value = normalized;
+    }
+    function movieFormatOptionsHtml(selectedValue = "") {
+      const normalized = normalizedMovieFormatValue(selectedValue);
+      const collectorMode = collectorsModeEnabled();
+      const allowed = MOVIE_FORMAT_OPTIONS.filter((item) => collectorMode || !item.collectorOnly);
+      const allowedValues = new Set(allowed.map((item) => item.value));
+      const knownValues = new Set(MOVIE_FORMAT_OPTIONS.map((item) => item.value));
+      const customOption = normalized && !allowedValues.has(normalized) && !knownValues.has(normalized)
+        ? [{value: normalized}]
+        : [];
+      return [
+        `<option value="">${escapeHtml(tNext("lists.wishlistFormatPlaceholder", "Format"))}</option>`,
+        ...allowed.map((item) => `<option value="${escapeHtml(item.value)}"${item.value === normalized ? " selected" : ""}>${escapeHtml(item.value)}</option>`),
+        ...customOption.map((item) => `<option value="${escapeHtml(item.value)}" selected>${escapeHtml(item.value)}</option>`)
+      ].join("");
     }
     function renderImportFormatOptions() {
       const select = document.getElementById("importFormatInput");
@@ -24203,25 +24878,83 @@ def ui_preview_html(
     function renderMovieLoan(state) {
       const statusNode = document.getElementById("movieLoanStatus");
       const addForm = document.getElementById("movieLoanAddForm");
+      const requestForm = document.getElementById("movieLoanRequestForm");
+      const requestStatusNode = document.getElementById("movieLoanRequestStatus");
+      const section = document.getElementById("movieLoanSection");
+      if (section) section.classList.toggle("hidden", !loansSystemEnabled());
+      if (!loansSystemEnabled()) {
+        if (addForm) addForm.classList.add("hidden");
+        if (requestForm) requestForm.classList.add("hidden");
+        if (statusNode) statusNode.innerHTML = "";
+        if (requestStatusNode) requestStatusNode.innerHTML = "";
+        return;
+      }
+      const movie = (activeDetailPayload && activeDetailPayload.movie) || {};
+      const ownerId = String(movie.owner_id || movie.ownerId || "");
+      const viewerId = String(currentUserId() || "");
+      // Prefer the backend-computed borrow-eligibility flag: it knows group membership
+      // and is robust against NULL/legacy owner_id (which would otherwise make every
+      // viewer look like the owner). Fall back to the owner_id comparison for payloads
+      // from older backends that don't send the flag.
+      let isOwner;
+      if (typeof state.canRequestBorrow === "boolean") {
+        isOwner = !state.canRequestBorrow;
+      } else {
+        isOwner = !ownerId || (!!viewerId && ownerId === viewerId);
+      }
       const loan = state.activeLoan;
-      if (statusNode) {
-        if (loan) {
-          const borrower = loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
-          const due = loan.dueAt ? `${tNext("lists.loanDue", "Due")} ${escapeHtml(formatAppDate(loan.dueAt))}` : "";
-          statusNode.innerHTML = `
-            <div class="movie-loan-active">
-              <span>${escapeHtml(tNext("lists.loanTo", "Lent to"))} <strong>${escapeHtml(borrower)}</strong>${due ? ` · ${due}` : ""}</span>
-              <div class="button-row compact">
-                <button type="button" class="secondary-button" data-loan-return="${escapeHtml(loan.id)}" data-next-i18n="lists.loanMarkReturned">Mark returned</button>
-                <button type="button" class="list-pill-button danger" data-loan-delete="${escapeHtml(loan.id)}" data-next-i18n="common.delete">Delete</button>
+      if (isOwner) {
+        if (requestForm) requestForm.classList.add("hidden");
+        if (requestStatusNode) requestStatusNode.innerHTML = "";
+        if (statusNode) {
+          if (loan) {
+            const borrower = loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+            const due = loan.dueAt ? `${tNext("lists.loanDue", "Due")} ${escapeHtml(formatAppDate(loan.dueAt))}` : "";
+            statusNode.innerHTML = `
+              <div class="movie-loan-active">
+                <span>${escapeHtml(tNext("lists.loanTo", "Lent to"))} <strong>${escapeHtml(borrower)}</strong>${due ? ` · ${due}` : ""}</span>
+                <div class="button-row compact">
+                  <button type="button" class="secondary-button" data-loan-return="${escapeHtml(loan.id)}" data-next-i18n="lists.loanMarkReturned">Mark returned</button>
+                  <button type="button" class="list-pill-button danger" data-loan-delete="${escapeHtml(loan.id)}" data-next-i18n="common.delete">Delete</button>
+                </div>
               </div>
-            </div>
-          `;
+            `;
+          } else {
+            statusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanNone", "This disc is not on loan."))}</span>`;
+          }
+        }
+        if (addForm) addForm.classList.toggle("hidden", !!loan);
+        return;
+      }
+      // Non-owner (group member): you cannot lend someone else's disc, so offer a borrow request.
+      if (addForm) addForm.classList.add("hidden");
+      if (statusNode) statusNode.innerHTML = "";
+      const req = state.loanRequest;
+      const status = req && req.status;
+      const pending = status === "pending";
+      const approved = status === "approved";
+      const declined = status === "declined";
+      if (requestStatusNode) {
+        if (pending) {
+          const from = req.borrowFrom ? escapeHtml(formatAppDate(req.borrowFrom)) : "";
+          const until = req.returnBy ? escapeHtml(formatAppDate(req.returnBy)) : "";
+          const range = from && until ? ` · ${from} → ${until}` : "";
+          requestStatusNode.innerHTML = `
+            <div class="movie-loan-request-active">
+              <span class="status-pill">${escapeHtml(tNext("lists.loanRequestPending", "Borrow request pending"))}${range}</span>
+              <div class="button-row compact">
+                <button type="button" class="list-pill-button" data-loan-request-cancel="${escapeHtml(req.id)}" data-next-i18n="lists.loanRequestCancel">Cancel request</button>
+              </div>
+            </div>`;
+        } else if (approved) {
+          requestStatusNode.innerHTML = `<span class="status-pill good">${escapeHtml(tNext("lists.loanRequestApproved", "Borrow request approved"))}</span>`;
+        } else if (declined) {
+          requestStatusNode.innerHTML = `<span class="status-pill bad">${escapeHtml(tNext("lists.loanRequestDeclined", "Borrow request declined"))}</span>`;
         } else {
-          statusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanNone", "This disc is not on loan."))}</span>`;
+          requestStatusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanRequestHelp", "Ask the owner if you may borrow this disc."))}</span>`;
         }
       }
-      if (addForm) addForm.classList.toggle("hidden", !!loan);
+      if (requestForm) requestForm.classList.toggle("hidden", pending || approved);
     }
     async function attachActiveMovieTag(name) {
       if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
@@ -24283,6 +25016,49 @@ def ui_preview_html(
         if (borrowerInput) borrowerInput.value = "";
         if (dueInput) dueInput.value = "";
         setMovieLoanMessage(tNext("lists.loanRecorded", "Loan recorded."), "good");
+      } catch (error) {
+        setMovieLoanMessage(error.message || String(error), "bad");
+      }
+    }
+    async function requestBorrowActiveMovie(borrowFrom, returnBy, note) {
+      if (!activeDetailMovieId || !hasPermission("lending.request")) return;
+      const from = String(borrowFrom || "").trim();
+      const until = String(returnBy || "").trim();
+      if (!from || !until) {
+        setMovieLoanMessage(tNext("lists.loanRequestDatesRequired", "Choose both a borrow-from and a return-by date."), "bad");
+        return;
+      }
+      if (until < from) {
+        setMovieLoanMessage(tNext("lists.loanRequestDateError", "The return-by date must be on or after the borrow-from date."), "bad");
+        return;
+      }
+      const body = {borrowFrom: from, returnBy: until};
+      const message = String(note || "").trim();
+      if (message) body.note = message;
+      setMovieLoanMessage(tNext("lists.loanRequestSubmitting", "Sending request..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/loan-requests`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        const noteInput = document.getElementById("movieLoanRequestNote");
+        if (noteInput) noteInput.value = "";
+        setMovieLoanMessage(tNext("lists.loanRequestSent", "Request sent to the owner."), "good");
+      } catch (error) {
+        setMovieLoanMessage(error.message || String(error), "bad");
+      }
+    }
+    async function cancelActiveMovieLoanRequest(requestId) {
+      if (!requestId || !hasPermission("lending.request")) return;
+      setMovieLoanMessage(tNext("lists.loanRequestCancelling", "Cancelling request..."));
+      try {
+        const payload = await authApiJson(`/api/next/loan-requests/${encodeURIComponent(requestId)}/cancel`, {method: "POST"});
+        if (payload && payload.userState) activeDetailPayload.userState = payload.userState;
+        renderMovieListState(activeDetailPayload);
+        setMovieLoanMessage(tNext("lists.loanRequestCancelledMsg", "Request cancelled."), "good");
       } catch (error) {
         setMovieLoanMessage(error.message || String(error), "bad");
       }
@@ -24531,6 +25307,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       renderMovieArtworkManagerStatus(detail);
+      reflectArtworkLockButtons(detail, "movie");
       document.getElementById("movieDetailVideos").innerHTML = movieVideoGroupsHtml(movieVideoItems(movie, metadata));
       const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
@@ -24893,6 +25670,7 @@ def ui_preview_html(
       if (containerDebugSources) containerDebugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      reflectArtworkLockButtons(detail, "container");
       document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
       activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailFilmsPanel");
       syncContainerViewModeControls();
@@ -25692,6 +26470,22 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-import-panel]").forEach((panel) => {
         panel.classList.toggle("hidden", panel.dataset.importPanel !== active);
+      });
+    }
+    function setImportMethodTab(method) {
+      importCenter.activeMethod = method || "camera";
+      renderImportMethodTabs();
+      if (importCenter.activeMethod !== "camera") {
+        stopImportBarcodeScanner();
+      }
+    }
+    function renderImportMethodTabs() {
+      const active = importCenter.activeMethod || "camera";
+      document.querySelectorAll("[data-import-method]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.importMethod === active);
+      });
+      document.querySelectorAll("[data-import-method-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.importMethodPanel !== active);
       });
     }
     function jsonPreview(value, maxLength = 1200) {
@@ -26706,7 +27500,7 @@ def ui_preview_html(
         state.textContent = stateText;
         state.className = `tag ${canStartSelected ? "good" : ""}`.trim();
       }
-      if (navState) navState.textContent = canStartSelected ? tNext("importCenter.ready", "Ready") : stateText;
+      if (navState) navState.textContent = canStartSelected ? tNext("importCenter.ready", "Ready") : "";
       if (startButton) startButton.disabled = !canStartSelected;
       if (pathInput && document.activeElement !== pathInput) {
         pathInput.value = importCenter.sourcePath || source.sourcePath || "";
@@ -27203,40 +27997,140 @@ def ui_preview_html(
       const list = document.getElementById("importBatchList");
       if (!list) return;
       const rows = importCenter.batchResults || [];
-      const addedCount = rows.filter((row) => row.status === "added").length;
-      const addableRows = rows.filter((row) => row.status !== "error");
-      const allAdded = addableRows.length > 0 && addableRows.every((row) => row.status === "added");
+      const activeBarcode = normalizeImportBarcode(importCenter.activeBatchBarcode || "");
       const rowsHtml = rows.length ? rows.map((row) => {
         const isAdded = row.status === "added";
-        const statusClass = isAdded ? "added" : row.status === "ok" ? "good" : row.status === "error" ? "bad" : "blue";
-        const isActive = row.barcode && row.barcode === importCenter.activeBatchBarcode;
+        // Issue #111: during the initial bulk check the blue active marker
+        // should follow the row that is currently being searched, so the user
+        // can see which barcode we are looking up right now.
+        const isActive = !isAdded && (
+          (activeBarcode && normalizeImportBarcode(row.barcode || "") === activeBarcode)
+          || (importCenter.batchRunning && row.status === "running")
+        );
+        const statusClass = isAdded
+          ? "is-added"
+          : row.status === "error"
+            ? "is-error"
+            : row.status === "ok"
+              ? "is-ready"
+              : row.status === "running"
+                ? "is-running"
+                : "";
+        const rowClass = ["import-batch-row", statusClass, isActive ? "is-active" : ""].filter(Boolean).join(" ");
         const countText = [
           row.movieCandidates !== undefined ? `${formatNumber(row.movieCandidates)} ${tNext("importCenter.batchMovies", "movies")}` : "",
           row.boxSetCandidates !== undefined ? `${formatNumber(row.boxSetCandidates)} ${tNext("importCenter.batchBoxSets", "box-sets")}` : ""
         ].filter(Boolean).join(" / ");
-        const checkMark = isAdded ? `<span class="import-batch-check" aria-hidden="true">✓</span>` : "";
-        const actionCell = isAdded
-          ? `<span class="import-batch-added-label good">${escapeHtml(tNext("importCenter.batchAdded", "Added"))}</span>`
-          : `<button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${row.status === "running" ? "disabled" : ""}>${escapeHtml(tNext("importCenter.previewBarcode", "Search"))}</button>`;
+        const checkMark = isAdded ? `<span class="import-batch-check" aria-hidden="true">&#10003;</span>` : "";
+        const isSearching = row.status === "running";
+        const spinner = isSearching ? `<span class="import-batch-spinner" aria-hidden="true"></span>` : "";
+        const buttonLabel = isAdded
+          ? tNext("importCenter.batchAdded", "Added")
+          : tNext("importCenter.previewBarcode", "Search");
         return `
-          <div class="import-batch-row ${isAdded ? "added" : ""} ${isActive ? "active" : ""}">
-            <span>
-              <strong>${checkMark}${escapeHtml(row.barcode || "-")}</strong>
-              <span class="${escapeHtml(statusClass)}">${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
+          <div class="${rowClass}">
+            <span class="import-batch-info">
+              ${checkMark}
+              ${spinner}
+              <span class="import-batch-text">
+                <strong>${escapeHtml(row.barcode || "-")}</strong>
+                <span>${escapeHtml(row.message || countText || tNext("importCenter.batchQueued", "Queued"))}</span>
+              </span>
             </span>
-            ${actionCell}
+            ${(!isAdded && !isActive) ? `<button type="button" class="secondary-button" data-import-batch-preview="${escapeHtml(row.barcode || "")}" ${importCenter.batchRunning ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>` : ""}
           </div>
         `;
       }).join("") : "";
+      const addedCount = rows.filter((row) => row.status === "added").length;
+      const addableRows = rows.filter((row) => row.status !== "error");
+      const allAdded = addableRows.length > 0 && addableRows.every((row) => row.status === "added");
       const libraryFooter = addedCount > 0
         ? `
           <div class="import-batch-footer">
-            ${allAdded ? `<span class="import-batch-complete good">${escapeHtml(tNext("importCenter.batchAllMatched", "All barcodes matched."))}</span>` : ""}
+            ${allAdded ? `<span class="import-batch-complete">${escapeHtml(tNext("importCenter.batchAllMatched", "All barcodes matched."))}</span>` : ""}
             <button type="button" class="primary-button" data-import-batch-library="1">${escapeHtml(tNext("importCenter.goToLibrary", "Go to Library"))}</button>
           </div>
         `
         : "";
       list.innerHTML = rowsHtml ? rowsHtml + libraryFooter : "";
+    }
+    function markImportBatchAdded(barcode, payload) {
+      const rows = importCenter.batchResults || [];
+      const target = normalizeImportBarcode(barcode);
+      if (!target) return null;
+      const row = rows.find((item) => normalizeImportBarcode(item.barcode || "") === target);
+      if (!row) return null;
+      const isBoxSet = !!(payload && (payload.state === "box_set_created" || payload.boxSet));
+      const alreadyExists = !!(payload && payload.state === "already_exists");
+      row.status = "added";
+      row.movieCandidates = undefined;
+      row.boxSetCandidates = undefined;
+      row.message = alreadyExists
+        ? tNext("importCenter.batchAlreadyExists", "Already in your library.")
+        : isBoxSet
+          ? tNext("importCenter.batchAddedBoxSet", "Box-set added.")
+          : tNext("importCenter.batchAdded", "Added");
+      return row;
+    }
+    function importBatchRowHasCandidates(row) {
+      if (!row) return false;
+      const known = row.movieCandidates !== undefined || row.boxSetCandidates !== undefined;
+      if (!known) return true;
+      return Number(row.movieCandidates) > 0 || Number(row.boxSetCandidates) > 0;
+    }
+    function openNextImportBatchRow(afterBarcode) {
+      const rows = importCenter.batchResults || [];
+      const target = normalizeImportBarcode(afterBarcode || "");
+      const startIndex = target
+        ? rows.findIndex((item) => normalizeImportBarcode(item.barcode || "") === target)
+        : -1;
+      const eligible = (row) => row && row.status !== "added" && row.status !== "error" && importBatchRowHasCandidates(row);
+      let next = null;
+      for (let index = startIndex + 1; index < rows.length; index += 1) {
+        if (eligible(rows[index])) { next = rows[index]; break; }
+      }
+      if (!next) {
+        for (let index = 0; index <= startIndex && index < rows.length; index += 1) {
+          if (eligible(rows[index])) { next = rows[index]; break; }
+        }
+      }
+      if (!next) return false;
+      importCenter.activeBatchBarcode = next.barcode || "";
+      // Show the search running on the freshly opened (blue) row and disable
+      // its Search button until the lookup resolves (issue #111).
+      next.status = "running";
+      next.message = tNext("importCenter.previewingLookup", "Searching metadata...");
+      renderImportBatchList();
+      const results = document.getElementById("importBarcodeResults");
+      if (results) {
+        try { results.scrollIntoView({behavior: "smooth", block: "start"}); } catch (error) { results.scrollIntoView(); }
+      }
+      searchActiveBatchRow(next);
+      return true;
+    }
+    async function searchActiveBatchRow(row) {
+      if (!row) return;
+      try {
+        const payload = await previewImportBatchBarcode(row.barcode || "");
+        if (!payload) {
+          row.status = "error";
+          row.message = importCenter.lookupPreviewMessage || tNext("importCenter.noBarcodeResults", "No barcode candidates found.");
+        } else {
+          const movieCount = lookupMovieCandidates().length;
+          const boxSetCount = barcodeBoxSetProposals().length;
+          row.status = "ok";
+          row.movieCandidates = movieCount;
+          row.boxSetCandidates = boxSetCount;
+          row.message = movieCount || boxSetCount
+            ? `${formatNumber(movieCount)} ${tNext("importCenter.batchMovies", "movies")} / ${formatNumber(boxSetCount)} ${tNext("importCenter.batchBoxSets", "box-sets")}`
+            : tNext("importCenter.noBarcodeResults", "No barcode candidates found.");
+        }
+      } catch (error) {
+        row.status = "error";
+        row.message = error?.message || String(error);
+      } finally {
+        renderImportBatchList();
+      }
     }
     async function previewImportBatchBarcode(barcode) {
       const input = document.getElementById("importBarcodeInput");
@@ -27249,6 +28143,7 @@ def ui_preview_html(
     }
     async function runImportBatchLookup() {
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd) || importCenter.batchRunning) return;
+      importCenter.activeBatchBarcode = "";
       const textarea = document.getElementById("importBatchBarcodeInput");
       const parsed = parseImportBatchBarcodes(textarea?.value || "");
       if (!parsed.valid.length) {
@@ -27301,6 +28196,10 @@ def ui_preview_html(
       } finally {
         importCenter.batchRunning = false;
         renderImportBatchList();
+        // Issue #111: after the bulk check, drop straight into the first
+        // barcode that has candidates so the user can pick a match without
+        // clicking Search again on each row.
+        openNextImportBatchRow("");
       }
     }
     async function applyImportScannerFocus(stream) {
@@ -28529,14 +29428,21 @@ def ui_preview_html(
       );
       const primaryImportMode = selectedBoxSetForAction ? "box-set" : "movie";
       const inBatchContext = Boolean(importCenter.activeBatchBarcode);
-      const primaryImportLabel = selectedBoxSetForAction
-        ? tNext("importCenter.addBoxSet", "Add box-set")
-        : (inBatchContext && selectedMovieCandidate)
-          ? tNext("importCenter.useSelectedMatch", "Use selected match")
+      // Issue #111: once every batch barcode has been added there is nothing
+      // left to confirm, so hide the bottom "Add movie" / "Use selected match"
+      // action button (the "Go to Library" footer takes over).
+      const batchRows = importCenter.batchResults || [];
+      const addableBatchRows = batchRows.filter((row) => row.status !== "error");
+      const allBatchAdded = batchRows.length > 0 && addableBatchRows.length > 0
+        && addableBatchRows.every((row) => row.status === "added");
+      const primaryImportLabel = (inBatchContext && (selectedMovieCandidate || selectedBoxSetForAction))
+        ? tNext("importCenter.useSelectedMatch", "Use selected match")
+        : selectedBoxSetForAction
+          ? tNext("importCenter.addBoxSet", "Add box-set")
           : tNext("importCenter.addMovie", "Add movie");
       const lookupActionFooter = `
         <div class="import-result-action-footer">
-          ${hasMovieCandidate ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
+          ${hasMovieCandidate && !allBatchAdded ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
           ${secondaryBoxSetActionKey ? `<button type="button" class="secondary-button" data-import-add-lookup="1" data-import-mode="box-set" data-box-set-proposal-key="${escapeHtml(secondaryBoxSetActionKey)}" title="${escapeHtml(lookupActionTitle)}">${escapeHtml(tNext("importCenter.addBoxSet", "Add box-set"))}</button>` : ""}
           <div id="importLookupActionStatus" class="import-result-action-status ${escapeHtml(importCenter.lookupActionTone || "")} ${importCenter.lookupActionMessage ? "" : "hidden"}">${escapeHtml(importCenter.lookupActionMessage || "")}</div>
         </div>
@@ -28793,7 +29699,15 @@ def ui_preview_html(
           ? `${tNext("importCenter.addBoxSet", "Add box-set")}: ${tNext("importCenter.resolvingSelection", "resolving selection...")}`
           : tNext("importCenter.addingMovie", "Adding movie...")
       );
-      if (button) button.disabled = true;
+      if (button) {
+        // Immediate click feedback: spinner + busy state. This stays visible
+        // through the whole request (box-set resolution can take a few seconds)
+        // because the status messages above update text nodes in place and do
+        // not re-render the button until the request resolves (issue #111).
+        button.disabled = true;
+        button.classList.add("is-loading");
+        button.setAttribute("aria-busy", "true");
+      }
       try {
         const selectedProposal = wantsBoxSet
           ? (boxSetProposalByKey(importCenter.selectedBoxSetProposalKey) || selectedBoxSetProposal())
@@ -28861,38 +29775,25 @@ def ui_preview_html(
             : "Movie added.";
         setImportLookupActionMessage(tNext(messageKey, messageFallback), "good");
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
-        const batchBarcode = importCenter.activeBatchBarcode;
-        if (batchBarcode) {
-          const batchRow = (importCenter.batchResults || []).find((item) => item.barcode === batchBarcode);
-          if (batchRow) {
-            const addedTitle = payload.boxSet?.container?.title || movie.title || movie.original_title || "";
-            batchRow.status = "added";
-            batchRow.addedTitle = addedTitle;
-            batchRow.message = addedTitle
-              ? `${tNext("importCenter.batchAdded", "Added")}: ${addedTitle}`
-              : tNext("importCenter.batchAdded", "Added");
-          }
+        renderBarcodeLookup();
+        const activeBatchBarcode = importCenter.activeBatchBarcode || "";
+        const batchRow = activeBatchBarcode && normalizeImportBarcode(activeBatchBarcode) === barcode
+          ? markImportBatchAdded(barcode, payload)
+          : null;
+        if (batchRow) {
+          // Batch workflow: check the line off and stay in place instead of
+          // navigating into the movie/box-set detail page (issue #111).
           importCenter.activeBatchBarcode = "";
-          importCenter.barcodeLookup = null;
-          importCenter.addResult = null;
-          importCenter.selectedMovieCandidateKey = "";
-          importCenter.selectedBoxSetProposalKey = "";
-          importCenter.selectedBoxSetProposalSnapshot = null;
-          importCenter.boxSetMemberEdits = {};
-          const barcodeInputEl = document.getElementById("importBarcodeInput");
-          const titleInputEl = document.getElementById("importTitleInput");
-          const yearInputEl = document.getElementById("importYearInput");
-          if (barcodeInputEl) barcodeInputEl.value = "";
-          if (titleInputEl) titleInputEl.value = "";
-          if (yearInputEl) yearInputEl.value = "";
-          setImportLookupActionMessage("", "");
-          setImportLookupPreviewMessage(tNext("importCenter.batchNextPrompt", "Added. Click Search on the next barcode to continue."), "good");
-          renderBarcodeLookup();
           renderImportBatchList();
-        } else {
-          renderBarcodeLookup();
-          if (importedContainerId) openAppContainerDetail(importedContainerId);
-          else if (movie.id) openAppMovieDetail(movie.id);
+          // Auto-advance: open the next barcode with candidates for selection.
+          // Only fall back to the "pick the next barcode" hint when none remain.
+          if (!openNextImportBatchRow(barcode)) {
+            setImportBatchMessage(tNext("importCenter.batchWorkflowNext", "Added. Pick the next barcode to continue."), "good");
+          }
+        } else if (importedContainerId) {
+          openAppContainerDetail(importedContainerId);
+        } else if (movie.id) {
+          openAppMovieDetail(movie.id);
         }
         loadAppSnapshot().catch((error) => {
           console.warn("Snapshot refresh after import failed", error);
@@ -28902,7 +29803,11 @@ def ui_preview_html(
         setImportLookupActionMessage(error.message || String(error), "bad");
         setImportCenterMessage(error.message || String(error), "bad");
       } finally {
-        if (button) button.disabled = false;
+        if (button) {
+          button.disabled = false;
+          button.classList.remove("is-loading");
+          button.removeAttribute("aria-busy");
+        }
         renderBarcodeLookup();
       }
     }
@@ -29123,7 +30028,7 @@ def ui_preview_html(
           <div class="list-simple-actions">
             ${acquired
               ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
-              : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+              : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
             <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
           </div>
         </div>
@@ -29170,6 +30075,123 @@ def ui_preview_html(
         </div>
       `;
     }
+    function loanRequestStatusLabel(status) {
+      if (status === "pending") return tNext("lists.loanRequestPending", "Pending");
+      if (status === "approved") return tNext("lists.loanRequestApproved", "Approved");
+      if (status === "declined") return tNext("lists.loanRequestDeclined", "Declined");
+      if (status === "cancelled") return tNext("lists.loanRequestCancelled", "Cancelled");
+      return status || "";
+    }
+    function loanRequestRowHtml(req, role) {
+      const snapshot = req.snapshot || {};
+      const title = snapshot.title || tNext("common.untitled", "Untitled");
+      const status = req.status || "pending";
+      const person = role === "incoming"
+        ? (req.requesterDisplayName || req.requesterUsername || tNext("notifications.loanRequestRequesterFallback", "A DiscVault member"))
+        : (req.ownerDisplayName || req.ownerUsername || tNext("notifications.loanRequestOwnerFallback", "The owner"));
+      const personLabel = role === "incoming" ? tNext("lists.loanRequestRequestedBy", "Requested by") : tNext("lists.loanRequestOwnerLabel", "Owner");
+      const dates = (req.borrowFrom && req.returnBy)
+        ? `${escapeHtml(formatAppDate(req.borrowFrom))} → ${escapeHtml(formatAppDate(req.returnBy))}`
+        : "";
+      const metaParts = [
+        `${escapeHtml(personLabel)}: ${escapeHtml(person)}`,
+        dates
+      ].filter(Boolean);
+      let actions = "";
+      if (role === "incoming" && status === "pending") {
+        actions = `
+          <button type="button" data-loan-request-approve="${escapeHtml(req.id)}">${escapeHtml(tNext("lists.loanRequestApprove", "Approve"))}</button>
+          <button type="button" class="danger" data-loan-request-decline="${escapeHtml(req.id)}">${escapeHtml(tNext("lists.loanRequestDecline", "Decline"))}</button>`;
+      } else if (role === "outgoing" && status === "pending") {
+        actions = `<button type="button" class="danger" data-loan-request-cancel-row="${escapeHtml(req.id)}">${escapeHtml(tNext("lists.loanRequestCancel", "Cancel request"))}</button>`;
+      }
+      const statusClass = status === "approved" ? "good" : (status === "declined" || status === "cancelled" ? "bad" : "");
+      return `
+        <div class="list-simple-card">
+          <div class="list-simple-body">
+            <span class="list-simple-title">${escapeHtml(title)}</span>
+            <span class="list-simple-meta">${metaParts.join(" / ")}</span>
+            ${req.note ? `<span class="list-simple-meta">${escapeHtml(req.note)}</span>` : ""}
+            <span class="tag ${statusClass}">${escapeHtml(loanRequestStatusLabel(status))}</span>
+          </div>
+          <div class="list-simple-actions">${actions}</div>
+        </div>
+      `;
+    }
+    function renderLoanRequestsSection() {
+      const wrap = document.getElementById("listsLoanRequests");
+      if (!wrap) return;
+      if (!hasPermission("lending.request")) {
+        wrap.classList.add("hidden");
+        return;
+      }
+      wrap.classList.remove("hidden");
+      const tab = listsState.loanRequestsTab === "outgoing" ? "outgoing" : "incoming";
+      document.querySelectorAll("[data-loan-requests-tab]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.loanRequestsTab === tab);
+      });
+      const incomingNode = document.getElementById("listsLoanRequestsIncoming");
+      const outgoingNode = document.getElementById("listsLoanRequestsOutgoing");
+      const incoming = (listsState.loanRequests && listsState.loanRequests.incoming) || [];
+      const outgoing = (listsState.loanRequests && listsState.loanRequests.outgoing) || [];
+      if (incomingNode) {
+        incomingNode.classList.toggle("hidden", tab !== "incoming");
+        incomingNode.innerHTML = incoming.length
+          ? incoming.map((req) => loanRequestRowHtml(req, "incoming")).join("")
+          : `<p class="import-source-meta">${escapeHtml(tNext("lists.loanRequestsIncomingEmpty", "No borrow requests to review."))}</p>`;
+      }
+      if (outgoingNode) {
+        outgoingNode.classList.toggle("hidden", tab !== "outgoing");
+        outgoingNode.innerHTML = outgoing.length
+          ? outgoing.map((req) => loanRequestRowHtml(req, "outgoing")).join("")
+          : `<p class="import-source-meta">${escapeHtml(tNext("lists.loanRequestsOutgoingEmpty", "You have no borrow requests."))}</p>`;
+      }
+      bindLoanRequestInteractions();
+    }
+    function bindLoanRequestInteractions() {
+      const wrap = document.getElementById("listsLoanRequests");
+      if (!wrap || wrap.dataset.bound === "true") return;
+      wrap.dataset.bound = "true";
+      wrap.addEventListener("click", (event) => {
+        const approveBtn = event.target.closest("[data-loan-request-approve]");
+        const declineBtn = event.target.closest("[data-loan-request-decline]");
+        const cancelBtn = event.target.closest("[data-loan-request-cancel-row]");
+        if (approveBtn) { decideLoanRequest(approveBtn.dataset.loanRequestApprove, "approve"); return; }
+        if (declineBtn) { decideLoanRequest(declineBtn.dataset.loanRequestDecline, "decline"); return; }
+        if (cancelBtn) { decideLoanRequest(cancelBtn.dataset.loanRequestCancelRow, "cancel"); return; }
+      });
+    }
+    async function decideLoanRequest(requestId, action) {
+      if (!requestId || !["approve", "decline", "cancel"].includes(action)) return;
+      try {
+        await authApiJson(`/api/next/loan-requests/${encodeURIComponent(requestId)}/${action}`, {method: "POST"});
+        await loadLoanRequests(true);
+        if (action === "approve") { try { await loadListsView(true); } catch (e) { /* ignore */ } }
+      } catch (error) {
+        setWishlistMessage(error.message || String(error), "bad");
+      }
+    }
+    async function loadLoanRequests(force = false) {
+      if (!hasPermission("lending.request")) return;
+      if (listsState.loanRequestsLoaded && !force) {
+        renderLoanRequestsSection();
+        return;
+      }
+      try {
+        const [incoming, outgoing] = await Promise.all([
+          authApiJson("/api/next/loan-requests?role=incoming"),
+          authApiJson("/api/next/loan-requests?role=outgoing")
+        ]);
+        listsState.loanRequests = {
+          incoming: (incoming && incoming.loanRequests) || [],
+          outgoing: (outgoing && outgoing.loanRequests) || []
+        };
+        listsState.loanRequestsLoaded = true;
+        renderLoanRequestsSection();
+      } catch (error) {
+        /* ignore loan request load errors */
+      }
+    }
     function listsSimpleModeClass(mode) {
       if (mode === "list") return "mode-list-grid";
       if (mode === "detail") return "mode-detail-grid";
@@ -29181,12 +30203,13 @@ def ui_preview_html(
       const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
       const acquired = !!item.acquiredAt;
       return `
-        <div class="preview-poster lists-static-poster">
-          <span class="preview-poster-art">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
+        <div class="preview-poster lists-static-poster" data-wishlist-card="${escapeHtml(item.id)}">
+          <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
           <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
           <span class="lists-poster-actions">
-            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
+            <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
             <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
           </span>
         </div>
@@ -29206,7 +30229,8 @@ def ui_preview_html(
             <span class="list-simple-actions">
               ${acquired
                 ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
-                : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+                : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
+              <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
               <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
             </span>
           </span>
@@ -29234,7 +30258,8 @@ def ui_preview_html(
                 <span role="cell" class="list-simple-actions">
                   ${acquired
                     ? `<span class="tag good">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>`
-                    : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark acquired"))}</button>`}
+                    : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
+                  <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
                   <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
                 </span>
               </div>
@@ -29244,8 +30269,28 @@ def ui_preview_html(
       `;
     }
     function wishlistRenderRows(rows, mode) {
-      if (mode === "detail") return wishlistDetailTableHtml(rows || []);
-      return (rows || []).map(mode === "list" ? wishlistListCardHtml : wishlistPosterCardHtml).join("");
+      const all = rows || [];
+      const pending = all.filter((item) => !item.acquiredAt);
+      const acquired = all.filter((item) => !!item.acquiredAt);
+      const renderGroup = (groupRows) => {
+        if (mode === "detail") return wishlistDetailTableHtml(groupRows);
+        return groupRows.map(mode === "list" ? wishlistListCardHtml : wishlistPosterCardHtml).join("");
+      };
+      const sectionInner = (groupRows) => mode === "poster"
+        ? `<div class="lists-grid">${renderGroup(groupRows)}</div>`
+        : (mode === "list"
+          ? `<div class="mode-list-grid">${renderGroup(groupRows)}</div>`
+          : renderGroup(groupRows));
+      const section = (title, groupRows) => `
+        <section class="wishlist-section">
+          <header class="wishlist-section-head"><h3>${escapeHtml(title)}</h3><span>${groupRows.length}</span></header>
+          ${groupRows.length
+            ? sectionInner(groupRows)
+            : `<p class="wishlist-section-empty">${escapeHtml(tNext("lists.wishlistSectionEmpty", "Nothing here yet."))}</p>`}
+        </section>
+      `;
+      return section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
+        + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
     function tagPosterCardHtml(tag) {
       const count = tag.movieCount || 0;
@@ -29297,8 +30342,40 @@ def ui_preview_html(
       const snapshot = loan.snapshot || {};
       return snapshot.title || loan.title || tNext("common.untitled", "Untitled");
     }
-    function loanBorrowerLabel(loan) {
+    function loanBorrowerDisplayName(loan) {
+      if (loan.borrowerUserId) {
+        return loan.borrowerDisplayName || loan.borrowerUsername || loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+      }
       return loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
+    }
+    function loanBorrowerLabel(loan) {
+      const name = loanBorrowerDisplayName(loan);
+      if (loan.borrowerUserId) {
+        return name + " (" + tNext("lists.loanDiscvaultUser", "DiscVault user") + ")";
+      }
+      return name;
+    }
+    function loanIsBorrowed(loan) {
+      return loan && loan.direction === "in";
+    }
+    function loanLenderDisplayName(loan) {
+      return (loan && (loan.lenderName || loan.lenderUsername)) || tNext("lists.loanLinkedAccount", "Linked account");
+    }
+    function loanLenderLabel(loan) {
+      return loanLenderDisplayName(loan) + " (" + tNext("lists.loanDiscvaultUser", "DiscVault user") + ")";
+    }
+    function loanCounterpartyLabel(loan) {
+      if (loanIsBorrowed(loan)) {
+        return tNext("lists.loanFrom", "Borrowed from") + ": " + loanLenderLabel(loan);
+      }
+      return tNext("lists.loanTo", "Lent to") + ": " + loanBorrowerLabel(loan);
+    }
+    function loanActionButtonsHtml(loan) {
+      const meerInfo = `<button type="button" data-loan-meerinfo="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>`;
+      if (loanIsBorrowed(loan)) return meerInfo;
+      const ret = loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`;
+      const remove = `<button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>`;
+      return `${ret}${meerInfo}${remove}`;
     }
     function loanPosterCardHtml(loan) {
       const poster = loanPosterUrl(loan);
@@ -29308,13 +30385,12 @@ def ui_preview_html(
         ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.loanReturned", "Returned"))}</span>`
         : (overdue ? `<span class="lists-poster-badge danger">${escapeHtml(tNext("lists.loanOverdueBadge", "Overdue"))}</span>` : "");
       return `
-        <div class="preview-poster lists-static-poster">
-          <span class="preview-poster-art">${posterHtml}${badge}</span>
+        <div class="preview-poster lists-static-poster" data-loan-card="${escapeHtml(loan.id)}">
+          <span class="preview-poster-art" data-loan-poster="${escapeHtml(loan.id)}" data-loan-movie="${escapeHtml(loan.movieId || "")}" role="button" tabindex="0">${posterHtml}${badge}</span>
           <span class="preview-poster-title">${escapeHtml(loanTitle(loan))}</span>
-          <span class="preview-poster-meta">${escapeHtml(tNext("lists.loanTo", "Lent to") + ": " + loanBorrowerLabel(loan))}</span>
+          <span class="preview-poster-meta">${escapeHtml(loanCounterpartyLabel(loan))}</span>
           <span class="lists-poster-actions">
-            ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
-            <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+            ${loanActionButtonsHtml(loan)}
           </span>
         </div>
       `;
@@ -29323,7 +30399,7 @@ def ui_preview_html(
       const poster = loanPosterUrl(loan);
       const overdue = !loan.returned && loan.dueAt && new Date(loan.dueAt) < new Date();
       const metaParts = [
-        `${tNext("lists.loanTo", "Lent to")}: ${loanBorrowerLabel(loan)}`,
+        loanCounterpartyLabel(loan),
         loan.loanedAt ? `${tNext("lists.loanedOn", "Loaned")}: ${formatAppDate(loan.loanedAt)}` : "",
         loan.dueAt ? `${tNext("lists.loanDue", "Due")}: ${formatAppDate(loan.dueAt)}` : "",
         loan.returned && loan.returnedAt ? `${tNext("lists.loanReturned", "Returned")}: ${formatAppDate(loan.returnedAt)}` : ""
@@ -29336,8 +30412,7 @@ def ui_preview_html(
             <span class="mode-list-meta ${overdue ? "loan-overdue" : ""}">${escapeHtml(metaParts.join(" / "))}</span>
             ${loan.note ? `<span class="mode-list-meta">${escapeHtml(loan.note)}</span>` : ""}
             <span class="list-simple-actions">
-              ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
-              <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+              ${loanActionButtonsHtml(loan)}
             </span>
           </span>
         </article>
@@ -29358,15 +30433,15 @@ def ui_preview_html(
             const status = loan.returned
               ? tNext("lists.loanReturned", "Returned")
               : (overdue ? tNext("lists.loanOverdueBadge", "Overdue") : tNext("lists.loanActive", "On loan"));
+            const counterparty = loanIsBorrowed(loan) ? loanLenderLabel(loan) : loanBorrowerLabel(loan);
             return `
               <div class="watched-detail-row" role="row">
                 <span role="cell"><strong>${escapeHtml(loanTitle(loan))}</strong>${loan.note ? `<span class="list-simple-meta">${escapeHtml(loan.note)}</span>` : ""}</span>
-                <span role="cell">${escapeHtml(loanBorrowerLabel(loan))}</span>
+                <span role="cell">${escapeHtml(counterparty)}</span>
                 <span role="cell">${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
                 <span role="cell" class="${overdue ? "loan-overdue" : ""}">${escapeHtml(status)}</span>
                 <span role="cell" class="list-simple-actions">
-                  ${loan.returned ? "" : `<button type="button" data-loan-return="${escapeHtml(loan.id)}">${escapeHtml(tNext("lists.loanMarkReturned", "Mark returned"))}</button>`}
-                  <button type="button" class="danger" data-loan-remove="${escapeHtml(loan.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
+                  ${loanActionButtonsHtml(loan)}
                 </span>
               </div>
             `;
@@ -29379,7 +30454,11 @@ def ui_preview_html(
       return (rows || []).map(mode === "list" ? loanListCardHtml : loanPosterCardHtml).join("");
     }
     function wishlistNormalizeCandidate(result, resultIndex, candidate, candidateIndex) {
-      if (!candidate || typeof candidate !== "object" || lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result))) return null;
+      if (!candidate || typeof candidate !== "object") return null;
+      // In the wishlist edition picker box sets / anniversary / trilogy editions
+      // are legitimate pickable editions, so we keep them (flagged) instead of
+      // dropping them the way the shared import/lookup flow does.
+      const isBoxSet = lookupCandidateLooksLikeBoxSet(candidate) || (candidate === result && lookupCandidateLooksLikeBoxSet(result));
       const movieUpdates = result?.movieUpdates && typeof result.movieUpdates === "object" ? result.movieUpdates : {};
       const technicalUpdates = result?.technicalUpdates && typeof result.technicalUpdates === "object" ? result.technicalUpdates : {};
       const rawIdentifiers = candidate.identifiers && typeof candidate.identifiers === "object"
@@ -29411,18 +30490,22 @@ def ui_preview_html(
         || (provider.toLowerCase().includes("movievault") ? sourceRef : "")
         || ""
       ).trim();
-      const keyParts = [provider, title.toLowerCase(), year, format.toLowerCase(), identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "", identifiers.imdb ? `imdb:${identifiers.imdb}` : "", sourceRef, posterUrl, resultIndex, candidateIndex];
+      const keyParts = [provider, title.toLowerCase(), explicitReleaseTitle.toLowerCase(), year, format.toLowerCase(), identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "", identifiers.imdb ? `imdb:${identifiers.imdb}` : "", sourceRef, posterUrl, resultIndex, candidateIndex];
+      const editionLabel = (explicitReleaseTitle && explicitReleaseTitle.toLowerCase() !== title.toLowerCase()) ? explicitReleaseTitle : "";
       return {
         candidateKey: keyParts.join("|"),
         provider,
         sourceLabel,
         sourceRef,
         title,
+        releaseTitle: explicitReleaseTitle,
+        editionLabel,
         year,
         format,
         barcode,
         posterUrl,
         movievaultId,
+        isBoxSet,
         identifiers
       };
     }
@@ -29435,7 +30518,7 @@ def ui_preview_html(
         lookupResultCandidates(result).forEach((candidate, candidateIndex) => {
           const normalized = wishlistNormalizeCandidate(result, resultIndex, candidate, candidateIndex);
           if (!normalized) return;
-          const identity = [normalized.provider, normalized.title.toLowerCase(), normalized.year, normalized.format.toLowerCase(), normalized.identifiers.tmdb, normalized.identifiers.imdb, normalized.sourceRef, normalized.posterUrl].join("|");
+          const identity = [normalized.provider, normalized.title.toLowerCase(), (normalized.releaseTitle || "").toLowerCase(), normalized.year, normalized.format.toLowerCase(), normalized.identifiers.tmdb, normalized.identifiers.imdb, normalized.sourceRef, normalized.posterUrl].join("|");
           if (seen.has(identity)) return;
           seen.add(identity);
           candidates.push(normalized);
@@ -29462,6 +30545,8 @@ def ui_preview_html(
           <span class="wishlist-search-poster">${posterHtml}</span>
           <span class="wishlist-search-body">
             <strong>${escapeHtml(candidate.title || "")}</strong>
+            ${candidate.isBoxSet ? `<span class="wishlist-search-badge">${escapeHtml(tNext("lists.wishlistBoxSetBadge", "Box set"))}</span>` : ""}
+            ${candidate.editionLabel ? `<span class="wishlist-search-meta edition">${escapeHtml(candidate.editionLabel)}</span>` : ""}
             <span class="wishlist-search-meta">${escapeHtml(metaParts.join(" / "))}</span>
             ${sub.length ? `<span class="wishlist-search-meta muted">${escapeHtml(sub.join(" · "))}</span>` : ""}
           </span>
@@ -29486,10 +30571,29 @@ def ui_preview_html(
         }
         return;
       }
-      wrap.innerHTML = candidates.map(wishlistSearchCardHtml).join("");
+      wrap.innerHTML = `
+        <div class="wishlist-search-resultbar">
+          <span class="wishlist-search-count">${escapeHtml(tNext("lists.wishlistResultsCount", "Editions found"))}: ${candidates.length}</span>
+          <button type="button" class="link-button" id="wishlistSearchCloseBtn">${escapeHtml(tNext("lists.wishlistCloseResults", "Close"))}</button>
+        </div>
+        ${candidates.map(wishlistSearchCardHtml).join("")}
+      `;
+      const closeBtn = document.getElementById("wishlistSearchCloseBtn");
+      if (closeBtn) closeBtn.addEventListener("click", () => closeWishlistSearch());
       wrap.querySelectorAll("[data-wishlist-pick]").forEach((btn) => {
         btn.addEventListener("click", () => addWishlistFromCandidate(btn.getAttribute("data-wishlist-pick")));
       });
+    }
+    function closeWishlistSearch() {
+      const state = listsState.wishlistSearch || (listsState.wishlistSearch = { query: "", loading: false, error: "", candidates: [] });
+      state.query = "";
+      state.error = "";
+      state.candidates = [];
+      state.loading = false;
+      const input = document.getElementById("wishlistSearchInput");
+      if (input) input.value = "";
+      setWishlistSearchMessage("", "");
+      renderWishlistSearchResults();
     }
     async function submitWishlistSearch(event) {
       if (event) event.preventDefault();
@@ -29510,7 +30614,7 @@ def ui_preview_html(
           method: "POST",
           headers: { "Content-Type": "application/json" },
           timeoutMs: 30000,
-          body: JSON.stringify({ title: query, detectBoxSets: false, previewMode: true })
+          body: JSON.stringify({ title: query, detectBoxSets: false, previewMode: true, releaseVariants: true, listReleases: true })
         });
         const metadata = (payload && (payload.metadata || payload.result || payload)) || {};
         state.candidates = wishlistLookupCandidates(metadata);
@@ -29541,9 +30645,12 @@ def ui_preview_html(
             format: candidate.format || null,
             barcode: candidate.barcode || null,
             posterUrl: candidate.posterUrl || null,
-            movievaultId: candidate.movievaultId || null
+            movievaultId: candidate.movievaultId || null,
+            note: candidate.editionLabel || null
           })
         });
+        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        closeWishlistSearch();
         setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
         await loadListsView(true);
       } catch (err) {
@@ -29566,6 +30673,12 @@ def ui_preview_html(
       document.querySelectorAll("[data-loan-remove]").forEach((btn) => {
         btn.addEventListener("click", () => deleteLoanItem(btn.dataset.loanRemove));
       });
+      document.querySelectorAll("[data-wishlist-meerinfo]").forEach((btn) => {
+        btn.addEventListener("click", (event) => { event.stopPropagation(); openWishlistMeerInfo(btn.dataset.wishlistMeerinfo); });
+      });
+      document.querySelectorAll("[data-loan-meerinfo]").forEach((btn) => {
+        btn.addEventListener("click", (event) => { event.stopPropagation(); openLoanMeerInfo(btn.dataset.loanMeerinfo); });
+      });
     }
     function setWishlistMessage(text, tone) {
       const node = document.getElementById("wishlistAddMessage");
@@ -29585,14 +30698,15 @@ def ui_preview_html(
       const body = {
         title,
         format: (document.getElementById("wishlistAddFormat")?.value || "").trim() || null,
-        barcode: (document.getElementById("wishlistAddBarcode")?.value || "").trim() || null
+        barcode: (document.getElementById("wishlistAddBarcode")?.value || "").trim() || null,
+        note: (document.getElementById("wishlistAddNote")?.value || "").trim() || null
       };
       const yearNum = parseInt(yearRaw, 10);
       if (!Number.isNaN(yearNum)) body.year = yearNum;
       setWishlistMessage(tNext("lists.wishlistAdding", "Adding..."));
       try {
         await authApiJson("/api/next/lists/wishlist", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
-        ["wishlistAddTitle", "wishlistAddYear", "wishlistAddFormat", "wishlistAddBarcode"].forEach((fid) => {
+        ["wishlistAddTitle", "wishlistAddYear", "wishlistAddFormat", "wishlistAddBarcode", "wishlistAddNote"].forEach((fid) => {
           const node = document.getElementById(fid);
           if (node) node.value = "";
         });
@@ -29664,6 +30778,14 @@ def ui_preview_html(
       if (navNode) navNode.textContent = String(watchlistCount || 0);
     }
     function renderListsView() {
+      const loansOn = loansSystemEnabled();
+      const loansTabButton = document.querySelector('[data-lists-tab="loans"]');
+      if (loansTabButton) loansTabButton.classList.toggle("hidden", !loansOn);
+      const loansCountPill = document.getElementById("listsLoansCountPill");
+      if (loansCountPill) loansCountPill.classList.toggle("hidden", !loansOn);
+      if (!loansOn && listsState.active === "loans") {
+        listsState.active = "watchlist";
+      }
       document.querySelectorAll("[data-lists-tab]").forEach((button) => {
         button.classList.toggle("active", button.dataset.listsTab === listsState.active);
       });
@@ -29726,9 +30848,13 @@ def ui_preview_html(
       } else if (active === "wishlist") {
         const list = document.getElementById("listsWishlistList");
         if (list) {
-          configureSimpleListNode(list);
+          list.className = "wishlist-sections";
+          list.dataset.viewMode = listsViewMode;
           list.innerHTML = wishlistRenderRows(listsState.wishlist || [], listsViewMode);
         }
+        const fmt = document.getElementById("wishlistAddFormat");
+        if (fmt && fmt.tagName === "SELECT") fmt.innerHTML = movieFormatOptionsHtml(fmt.value || "");
+        bindWishlistCardInteractions();
         renderWishlistSearchResults();
         if (empty) {
           empty.textContent = tNext("lists.emptyWishlist", "Your wishlist is empty.");
@@ -29746,14 +30872,18 @@ def ui_preview_html(
         }
       } else if (active === "loans") {
         const list = document.getElementById("listsLoansList");
+        const activeLoans = (listsState.loans || []).filter((loan) => !loan.returned);
         if (list) {
           configureSimpleListNode(list);
-          list.innerHTML = loanRenderRows(listsState.loans || [], listsViewMode);
+          list.innerHTML = loanRenderRows(activeLoans, listsViewMode);
         }
+        bindLoanCardInteractions();
         if (empty) {
           empty.textContent = tNext("lists.emptyLoans", "No discs are currently on loan.");
-          empty.classList.toggle("hidden", !!(listsState.loans || []).length);
+          empty.classList.toggle("hidden", !!activeLoans.length);
         }
+        renderLoanRequestsSection();
+        loadLoanRequests();
       }
       bindListsSimpleActions();
       document.querySelectorAll("[data-list-movie]").forEach((button) => {
@@ -29784,19 +30914,23 @@ def ui_preview_html(
         empty.classList.remove("hidden");
       }
       try {
-        const [payload, wishlistPayload, tagsPayload, loansPayload] = await Promise.all([
+        const [payload, wishlistPayload, tagsPayload, loansPayload, borrowedPayload] = await Promise.all([
           authApiJson("/api/next/lists?limit=500"),
           authApiJson("/api/next/lists/wishlist").catch(() => ({items: []})),
           authApiJson("/api/next/tags").catch(() => ({tags: []})),
-          authApiJson("/api/next/loans?status=all").catch(() => ({loans: []}))
+          authApiJson("/api/next/loans?status=all").catch(() => ({loans: []})),
+          authApiJson("/api/next/loans/borrowed?status=all").catch(() => ({loans: []}))
         ]);
         listsState.watchlist = payload.watchlist || [];
         listsState.watched = payload.watched || [];
         listsState.wishlist = wishlistPayload.items || [];
         listsState.tags = tagsPayload.tags || [];
-        listsState.loans = loansPayload.loans || [];
+        const lentLoans = (loansPayload.loans || []).map((loan) => { loan.direction = "out"; return loan; });
+        const borrowedLoans = (borrowedPayload.loans || []).map((loan) => { loan.direction = "in"; return loan; });
+        listsState.loans = lentLoans.concat(borrowedLoans);
         listsState.counts = payload.counts || {};
         listsState.loaded = true;
+        persistNextLocale(localeState.locale);
         renderListsView();
       } catch (error) {
         if (empty) {
@@ -29804,6 +30938,564 @@ def ui_preview_html(
           empty.classList.remove("hidden");
         }
       }
+    }
+    function bindLongPress(el, opts) {
+      if (!el) return;
+      const onClick = (opts && opts.onClick) || (function () {});
+      const onLongPress = (opts && opts.onLongPress) || (function () {});
+      let timer = null;
+      let longFired = false;
+      let startX = 0;
+      let startY = 0;
+      const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      const start = (x, y) => {
+        longFired = false;
+        startX = x;
+        startY = y;
+        clear();
+        timer = setTimeout(() => { longFired = true; onLongPress(); }, 480);
+      };
+      el.addEventListener("pointerdown", (event) => {
+        if (typeof event.button === "number" && event.button !== 0) return;
+        start(event.clientX, event.clientY);
+      });
+      el.addEventListener("pointermove", (event) => {
+        if (!timer) return;
+        if (Math.abs(event.clientX - startX) > 12 || Math.abs(event.clientY - startY) > 12) clear();
+      });
+      el.addEventListener("pointerup", (event) => {
+        const wasLong = longFired;
+        clear();
+        if (wasLong) { event.preventDefault(); return; }
+        onClick();
+      });
+      el.addEventListener("pointerleave", clear);
+      el.addEventListener("pointercancel", clear);
+      el.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onClick(); }
+      });
+    }
+    function bindWishlistCardInteractions() {
+      document.querySelectorAll("#listsWishlistList [data-wishlist-poster]").forEach((poster) => {
+        const id = poster.dataset.wishlistPoster;
+        const card = poster.closest("[data-wishlist-card]");
+        bindLongPress(poster, {
+          onClick: () => openWishlistMeerInfo(id),
+          onLongPress: () => { if (card) card.classList.toggle("actions-visible"); }
+        });
+      });
+    }
+    function bindLoanCardInteractions() {
+      document.querySelectorAll("#listsLoansList [data-loan-poster]").forEach((poster) => {
+        const loanId = poster.dataset.loanPoster;
+        const movieId = poster.dataset.loanMovie || "";
+        const card = poster.closest("[data-loan-card]");
+        bindLongPress(poster, {
+          onClick: () => { if (movieId) openAppMovieDetail(movieId); else openLoanMeerInfo(loanId); },
+          onLongPress: () => openLoanActionsMenu(loanId)
+        });
+      });
+    }
+    function openLoanActionsMenu(loanId) {
+      const loan = listsFindLoan(loanId);
+      if (!loan) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      const actions = [];
+      const borrowed = loanIsBorrowed(loan);
+      if (!borrowed && !loan.returned) {
+        actions.push({ key: "return", label: tNext("lists.loanMarkReturned", "Mark returned"), run: () => returnLoanItem(loanId) });
+      }
+      actions.push({ key: "meerinfo", label: tNext("lists.moreInfo", "More info"), run: () => openLoanMeerInfo(loanId) });
+      if (!borrowed) {
+        actions.push({ key: "remove", label: tNext("common.remove", "Remove"), tone: "danger", run: () => deleteLoanItem(loanId) });
+      }
+      const buttonsHtml = actions.map((action, index) =>
+        `<button type="button" class="lists-actionsheet-btn${action.tone === "danger" ? " danger" : ""}" data-action-index="${index}">${escapeHtml(action.label)}</button>`
+      ).join("");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(loanTitle(loan))}</h3></header>
+        <div class="lists-actionsheet-list">${buttonsHtml}</div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-action-index]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const action = actions[Number(btn.dataset.actionIndex)];
+          listsCloseOverlay(overlay);
+          if (action && typeof action.run === "function") action.run();
+        });
+      });
+    }
+    function listsCloseOverlay(overlay) {
+      if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    }
+    function listsCreateOverlay(className) {
+      const overlay = document.createElement("div");
+      overlay.className = "lists-modal-overlay";
+      const panel = document.createElement("div");
+      panel.className = "lists-modal " + (className || "");
+      overlay.appendChild(panel);
+      overlay.addEventListener("mousedown", (event) => { if (event.target === overlay) listsCloseOverlay(overlay); });
+      document.body.appendChild(overlay);
+      return { overlay, panel };
+    }
+    function listsFindWishlist(id) {
+      return (listsState.wishlist || []).find((item) => String(item.id) === String(id)) || null;
+    }
+    function listsFindLoan(id) {
+      return (listsState.loans || []).find((loan) => String(loan.id) === String(id)) || null;
+    }
+    function openWishlistMeerInfo(id) {
+      const item = listsFindWishlist(id);
+      if (!item) return;
+      const { overlay, panel } = listsCreateOverlay("lists-meerinfo");
+      let editing = false;
+      let posterUrl = usableImage(item.posterUrl || item.poster_url) || "";
+      let pendingPosterFile = null;
+      const render = () => {
+        const posterPreview = posterUrl
+          ? `<img src="${escapeHtml(posterUrl)}" alt="">`
+          : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        panel.className = "lists-modal lists-meerinfo" + (editing ? " editing" : "");
+        panel.innerHTML = `
+          <header class="lists-modal-head">
+            <h3>${escapeHtml(editing ? tNext("lists.meerInfoEditTitle", "Edit item") : (item.title || tNext("common.untitled", "Untitled")))}</h3>
+          </header>
+          <div class="lists-modal-body">
+            <div class="lists-modal-poster">
+              ${posterPreview}
+              ${editing ? `<button type="button" class="lists-modal-poster-btn" data-poster-replace>${escapeHtml(tNext("lists.replacePoster", "Replace poster"))}</button><input type="file" accept="image/*" hidden data-poster-input>` : ""}
+            </div>
+            <div class="lists-modal-fields">
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+                <span data-read>${escapeHtml(item.title || "")}</span>
+                <input data-edit data-field="title" type="text" value="${escapeHtml(item.title || "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span>
+                <span data-read>${escapeHtml(physicalFormatLabel(item.format) || item.format || "")}</span>
+                <select data-edit data-field="format">${movieFormatOptionsHtml(item.format || "")}</select></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistYearColumn", "Year"))}</span>
+                <span data-read>${escapeHtml(item.year ? String(item.year) : "")}</span>
+                <input data-edit data-field="year" type="number" value="${escapeHtml(item.year ? String(item.year) : "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistBarcodeColumn", "Barcode"))}</span>
+                <span data-read>${escapeHtml(item.barcode || "")}</span>
+                <input data-edit data-field="barcode" type="text" value="${escapeHtml(item.barcode || "")}"></label>
+              <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+                <span data-read>${escapeHtml(item.note || "")}</span>
+                <textarea data-edit data-field="note" rows="2">${escapeHtml(item.note || "")}</textarea></label>
+            </div>
+          </div>
+          <p class="lists-modal-message" data-message></p>
+          <footer class="lists-modal-actions">
+            <button type="button" data-primary>${escapeHtml(editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit"))}</button>
+            <button type="button" class="ghost" data-secondary>${escapeHtml(editing ? tNext("common.cancel", "Cancel") : tNext("common.close", "Close"))}</button>
+          </footer>
+        `;
+        const messageNode = panel.querySelector("[data-message]");
+        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        panel.querySelector("[data-secondary]").addEventListener("click", () => {
+          if (editing) { editing = false; pendingPosterFile = null; posterUrl = usableImage(item.posterUrl || item.poster_url) || ""; render(); }
+          else listsCloseOverlay(overlay);
+        });
+        panel.querySelector("[data-primary]").addEventListener("click", async () => {
+          if (!editing) { editing = true; render(); return; }
+          const body = {
+            title: (panel.querySelector('[data-field="title"]').value || "").trim(),
+            format: (panel.querySelector('[data-field="format"]').value || "").trim() || null,
+            barcode: (panel.querySelector('[data-field="barcode"]').value || "").trim() || null,
+            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null
+          };
+          const yearRaw = (panel.querySelector('[data-field="year"]').value || "").trim();
+          const yearNum = parseInt(yearRaw, 10);
+          body.year = Number.isNaN(yearNum) ? null : yearNum;
+          if (!body.title) { setMessage(tNext("lists.wishlistTitleRequired", "Title is required."), "bad"); return; }
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            if (pendingPosterFile) {
+              const form = new FormData();
+              form.append("file", pendingPosterFile);
+              await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id) + "/poster", { method: "POST", body: form });
+              pendingPosterFile = null;
+            }
+            await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            listsCloseOverlay(overlay);
+            await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+        if (editing) {
+          const replaceBtn = panel.querySelector("[data-poster-replace]");
+          const fileInput = panel.querySelector("[data-poster-input]");
+          if (replaceBtn && fileInput) {
+            replaceBtn.addEventListener("click", () => fileInput.click());
+            fileInput.addEventListener("change", () => {
+              const file = fileInput.files && fileInput.files[0];
+              if (!file) return;
+              pendingPosterFile = file;
+              const reader = new FileReader();
+              reader.onload = () => { posterUrl = reader.result; render(); };
+              reader.readAsDataURL(file);
+            });
+          }
+        }
+      };
+      render();
+    }
+    function openLoanMeerInfo(id) {
+      const loan = listsFindLoan(id);
+      if (!loan) return;
+      const snapshot = loan.snapshot || {};
+      const { overlay, panel } = listsCreateOverlay("lists-meerinfo");
+      let editing = false;
+      const toDateInput = (value) => {
+        if (!value) return "";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "";
+        return d.toISOString().slice(0, 10);
+      };
+      const canEdit = !loanIsBorrowed(loan);
+      const render = () => {
+        const poster = loanPosterUrl(loan);
+        const posterPreview = poster
+          ? `<img src="${escapeHtml(poster)}" alt="">`
+          : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        const barcode = snapshot.barcode || loan.barcode || "";
+        const format = snapshot.format || loan.format || "";
+        const counterpartyRow = canEdit
+          ? `<label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
+                <span data-read>${escapeHtml(loanBorrowerLabel(loan))}</span>
+                <input data-edit data-field="borrowerName" type="text" value="${escapeHtml(loanBorrowerDisplayName(loan) || "")}"></label>`
+          : `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanFrom", "Borrowed from"))}</span><span data-static>${escapeHtml(loanLenderLabel(loan))}</span></div>`;
+        const dueRow = canEdit
+          ? `<label class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanDue", "Due"))}</span>
+                <span data-read>${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "")}</span>
+                <input data-edit data-field="dueAt" type="date" value="${escapeHtml(toDateInput(loan.dueAt))}"></label>`
+          : `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanDue", "Due"))}</span><span data-static>${escapeHtml(loan.dueAt ? formatAppDate(loan.dueAt) : "—")}</span></div>`;
+        const noteRow = canEdit
+          ? `<label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+                <span data-read>${escapeHtml(loan.note || "")}</span>
+                <textarea data-edit data-field="note" rows="2">${escapeHtml(loan.note || "")}</textarea></label>`
+          : `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span><span data-static>${escapeHtml(loan.note || "—")}</span></div>`;
+        panel.className = "lists-modal lists-meerinfo" + (editing ? " editing" : "");
+        panel.innerHTML = `
+          <header class="lists-modal-head"><h3>${escapeHtml(loanTitle(loan))}</h3></header>
+          <div class="lists-modal-body">
+            <div class="lists-modal-poster">${posterPreview}</div>
+            <div class="lists-modal-fields">
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistBarcodeColumn", "Barcode"))}</span><span data-static>${escapeHtml(barcode || "—")}</span></div>
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span data-static>${escapeHtml(physicalFormatLabel(format) || format || "—")}</span></div>
+              <div class="lists-modal-field"><span>${escapeHtml(tNext("lists.loanedOn", "Loaned"))}</span>
+                <span data-static>${escapeHtml(loan.loanedAt ? formatAppDate(loan.loanedAt) : "—")}</span></div>
+              ${dueRow}
+              ${counterpartyRow}
+              ${noteRow}
+            </div>
+          </div>
+          <p class="lists-modal-message" data-message></p>
+          <footer class="lists-modal-actions">
+            ${canEdit ? `<button type="button" data-primary>${escapeHtml(editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit"))}</button>` : ""}
+            <button type="button" class="ghost" data-secondary>${escapeHtml(editing ? tNext("common.cancel", "Cancel") : tNext("common.close", "Close"))}</button>
+          </footer>
+        `;
+        const messageNode = panel.querySelector("[data-message]");
+        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        panel.querySelector("[data-secondary]").addEventListener("click", () => {
+          if (editing) { editing = false; render(); }
+          else listsCloseOverlay(overlay);
+        });
+        const primary = panel.querySelector("[data-primary]");
+        if (primary) primary.addEventListener("click", async () => {
+          if (!editing) { editing = true; render(); return; }
+          const dueRaw = (panel.querySelector('[data-field="dueAt"]').value || "").trim();
+          const body = {
+            borrowerName: (panel.querySelector('[data-field="borrowerName"]').value || "").trim() || null,
+            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null,
+            dueAt: dueRaw ? new Date(dueRaw + "T00:00:00").toISOString() : null
+          };
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            await authApiJson("/api/next/loans/" + encodeURIComponent(id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            listsCloseOverlay(overlay);
+            await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+      };
+      render();
+    }
+    function loanLibraryEntryLabel(movie) {
+      const title = movie.title || movie.name || tNext("common.untitled", "Untitled");
+      const year = movie.year || movie.releaseYear || "";
+      const format = physicalFormatLabel(movie.format) || movie.format || "";
+      const suffix = [year, format ? `(${format})` : ""].filter(Boolean).join(" ");
+      return suffix ? `${title} ${suffix}` : title;
+    }
+    function loanDurationDays(loan) {
+      if (!loan.loanedAt || !loan.returnedAt) return null;
+      const start = new Date(loan.loanedAt).getTime();
+      const end = new Date(loan.returnedAt).getTime();
+      if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
+      return Math.max(1, Math.round((end - start) / 86400000));
+    }
+    function openLoanHistory() {
+      const { overlay, panel } = listsCreateOverlay("lists-history");
+      let filter = "all";
+      const render = () => {
+        const all = (listsState.loans || []).filter((loan) => loan.returned);
+        const rows = all.filter((loan) => {
+          if (filter === "out") return !loanIsBorrowed(loan);
+          if (filter === "in") return loanIsBorrowed(loan);
+          return true;
+        }).sort((a, b) => new Date(b.returnedAt || 0) - new Date(a.returnedAt || 0));
+        const dayUnit = tNext("lists.loanDaysUnit", "days");
+        const body = rows.length
+          ? rows.map((loan) => {
+              const poster = loanPosterUrl(loan);
+              const posterHtml = poster
+                ? `<img src="${escapeHtml(poster)}" alt="">`
+                : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+              const days = loanDurationDays(loan);
+              const duration = days == null ? "—" : `${days} ${dayUnit}`;
+              const counterparty = loanIsBorrowed(loan)
+                ? `${tNext("lists.loanFrom", "Borrowed from")}: ${loanLenderLabel(loan)}`
+                : `${tNext("lists.loanTo", "Lent to")}: ${loanBorrowerLabel(loan)}`;
+              return `
+                <div class="lists-history-row" role="row">
+                  <span class="lists-history-poster" role="cell">${posterHtml}</span>
+                  <span role="cell"><strong>${escapeHtml(loanTitle(loan))}</strong></span>
+                  <span role="cell">${escapeHtml(loan.loanedAt ? formatAppDate(loan.loanedAt) : "—")}</span>
+                  <span role="cell">${escapeHtml(duration)}</span>
+                  <span role="cell">${escapeHtml(counterparty)}</span>
+                </div>`;
+            }).join("")
+          : `<p class="lists-modal-message">${escapeHtml(tNext("lists.loanHistoryEmpty", "No returned loans yet."))}</p>`;
+        panel.className = "lists-modal lists-history";
+        panel.innerHTML = `
+          <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.loanHistoryTitle", "Loan history"))}</h3></header>
+          <div class="lists-history-filter" role="tablist">
+            <button type="button" data-filter="all" class="${filter === "all" ? "active" : ""}">${escapeHtml(tNext("lists.loanFilterAll", "All"))}</button>
+            <button type="button" data-filter="out" class="${filter === "out" ? "active" : ""}">${escapeHtml(tNext("lists.loanFilterLent", "Lent out"))}</button>
+            <button type="button" data-filter="in" class="${filter === "in" ? "active" : ""}">${escapeHtml(tNext("lists.loanFilterBorrowed", "Borrowed"))}</button>
+          </div>
+          <div class="lists-history-table" role="table">
+            <div class="lists-history-row head" role="row">
+              <span role="columnheader">${escapeHtml(tNext("lists.loanPosterColumn", "Poster"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("lists.loanedOn", "Loaned"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("lists.loanDurationColumn", "Duration"))}</span>
+              <span role="columnheader">${escapeHtml(tNext("lists.loanCounterpartyColumn", "Borrower / Lender"))}</span>
+            </div>
+            ${body}
+          </div>
+          <footer class="lists-modal-actions">
+            <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+          </footer>
+        `;
+        panel.querySelectorAll("[data-filter]").forEach((btn) => {
+          btn.addEventListener("click", () => { filter = btn.getAttribute("data-filter"); render(); });
+        });
+        panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      };
+      render();
+    }
+    function openTagCreate() {
+      const { overlay, panel } = listsCreateOverlay("lists-tag-create");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.tagCreateTitle", "New tag"))}</h3></header>
+        <div class="lists-modal-fields">
+          <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.tagNameLabel", "Name"))}</span>
+            <input data-field="name" type="text" maxlength="60" placeholder="${escapeHtml(tNext("lists.tagNamePlaceholder", "Tag name"))}"></label>
+          <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.tagColorLabel", "Colour"))}</span>
+            <input data-field="color" type="color" value="#4f7cff"></label>
+        </div>
+        <p class="lists-modal-message" data-message></p>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+          <button type="button" data-primary>${escapeHtml(tNext("lists.tagCreateSubmit", "Create"))}</button>
+        </footer>
+      `;
+      const nameInput = panel.querySelector('[data-field="name"]');
+      const colorInput = panel.querySelector('[data-field="color"]');
+      const message = panel.querySelector("[data-message]");
+      const submit = async () => {
+        const name = (nameInput.value || "").trim();
+        if (!name) {
+          message.textContent = tNext("lists.tagNameRequired", "Enter a tag name.");
+          message.classList.add("bad");
+          nameInput.focus();
+          return;
+        }
+        message.classList.remove("bad");
+        message.textContent = tNext("common.saving", "Saving...");
+        try {
+          await authApiJson("/api/next/tags", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name, color: colorInput.value || null})});
+          listsCloseOverlay(overlay);
+          await loadListsView(true);
+        } catch (error) {
+          message.textContent = error.message || String(error);
+          message.classList.add("bad");
+        }
+      };
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelector("[data-primary]").addEventListener("click", submit);
+      nameInput.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); submit(); } });
+      nameInput.focus();
+    }
+    async function openLoanLibraryPicker() {
+      const { overlay, panel } = listsCreateOverlay("lists-picker");
+      let debounce = null;
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.loanPickTitle", "Select a film"))}</h3></header>
+        <div class="lists-picker-results" data-results><p class="lists-modal-message">${escapeHtml(tNext("common.loading", "Loading..."))}</p></div>
+        <div class="lists-picker-searchbar">
+          <input type="search" data-picker-search placeholder="${escapeHtml(tNext("lists.loanPickSearch", "Search library..."))}">
+        </div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      const resultsNode = panel.querySelector("[data-results]");
+      const searchNode = panel.querySelector("[data-picker-search]");
+      const renderResults = (movies) => {
+        if (!movies.length) {
+          resultsNode.innerHTML = `<p class="lists-modal-message">${escapeHtml(tNext("lists.loanPickEmpty", "No films found."))}</p>`;
+          return;
+        }
+        resultsNode.innerHTML = movies.map((movie) => `
+          <button type="button" class="lists-picker-item" data-pick-movie="${escapeHtml(String(movie.id || movie.movieId || ""))}">
+            <span>${escapeHtml(loanLibraryEntryLabel(movie))}</span>
+          </button>
+        `).join("");
+        resultsNode.querySelectorAll("[data-pick-movie]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const movieId = btn.dataset.pickMovie;
+            const movie = movies.find((m) => String(m.id || m.movieId) === String(movieId));
+            listsCloseOverlay(overlay);
+            openLoanCreateScreen(movie);
+          });
+        });
+      };
+      const search = async (query) => {
+        try {
+          const params = new URLSearchParams();
+          if (query) params.set("q", query);
+          params.set("limit", "50");
+          const data = await authApiJson("/api/next/movies?" + params.toString());
+          const movies = (data && (data.movies || data.items || data.results)) || [];
+          renderResults(movies);
+        } catch (error) {
+          resultsNode.innerHTML = `<p class="lists-modal-message bad">${escapeHtml((error && error.message) || String(error))}</p>`;
+        }
+      };
+      searchNode.addEventListener("input", () => {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(() => search(searchNode.value.trim()), 220);
+      });
+      search("");
+    }
+    function openLoanCreateScreen(movie) {
+      let selectedMovie = movie || null;
+      const { overlay, panel } = listsCreateOverlay("lists-loan-create");
+      let borrowerUserId = null;
+      let borrowerDebounce = null;
+      const render = () => {
+        panel.innerHTML = `
+          <header class="lists-modal-head"><h3>${escapeHtml(tNext("lists.loanCreateTitle", "Lend film"))}</h3></header>
+          <div class="lists-modal-body lists-loan-form">
+            <div class="lists-modal-field">
+              <span>${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
+              <div class="lists-loan-movie">
+                <strong>${selectedMovie ? escapeHtml(loanLibraryEntryLabel(selectedMovie)) : escapeHtml(tNext("lists.loanNoFilm", "No film selected"))}</strong>
+                <button type="button" class="ghost" data-change-movie>${escapeHtml(tNext("lists.loanChangeFilm", "Change"))}</button>
+              </div>
+            </div>
+            <label class="lists-modal-field">
+              <span>${escapeHtml(tNext("lists.loanBorrower", "Borrower"))}</span>
+              <input type="text" data-borrower-name placeholder="${escapeHtml(tNext("lists.loanBorrowerPlaceholder", "Search members or type a name"))}">
+              <div class="lists-borrower-results" data-borrower-results></div>
+            </label>
+            <div class="lists-modal-field">
+              <span class="lists-switch-row">
+                <span>${escapeHtml(tNext("lists.loanDueSwitch", "Set expected return date"))}</span>
+                <label class="lists-switch"><input type="checkbox" data-due-switch><span></span></label>
+              </span>
+              <input type="date" data-due-date class="hidden">
+            </div>
+            <label class="lists-modal-field">
+              <span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
+              <textarea data-loan-note rows="2"></textarea>
+            </label>
+          </div>
+          <p class="lists-modal-message" data-message></p>
+          <footer class="lists-modal-actions">
+            <button type="button" data-primary>${escapeHtml(tNext("lists.loanSubmit", "Lend"))}</button>
+            <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+          </footer>
+        `;
+        const messageNode = panel.querySelector("[data-message]");
+        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+        panel.querySelector("[data-change-movie]").addEventListener("click", () => {
+          listsCloseOverlay(overlay);
+          openLoanLibraryPicker();
+        });
+        const dueSwitch = panel.querySelector("[data-due-switch]");
+        const dueDate = panel.querySelector("[data-due-date]");
+        dueSwitch.addEventListener("change", () => { dueDate.classList.toggle("hidden", !dueSwitch.checked); });
+        const borrowerInput = panel.querySelector("[data-borrower-name]");
+        const borrowerResults = panel.querySelector("[data-borrower-results]");
+        borrowerInput.addEventListener("input", () => {
+          borrowerUserId = null;
+          const query = borrowerInput.value.trim();
+          if (borrowerDebounce) clearTimeout(borrowerDebounce);
+          if (query.length < 2) { borrowerResults.innerHTML = ""; return; }
+          borrowerDebounce = setTimeout(async () => {
+            try {
+              const data = await authApiJson("/api/next/loans/borrowers/search?q=" + encodeURIComponent(query) + "&limit=8");
+              const members = (data && (data.members || data.results || data.borrowers)) || [];
+              if (!members.length) { borrowerResults.innerHTML = ""; return; }
+              borrowerResults.innerHTML = members.map((m) => `
+                <button type="button" class="lists-borrower-item" data-borrower-id="${escapeHtml(String(m.id))}" data-borrower-label="${escapeHtml(m.displayName || m.username || "")}">
+                  <span class="lists-borrower-avatar">${escapeHtml(((m.displayName || m.username || "?").trim()[0] || "?").toUpperCase())}</span>
+                  <span>${escapeHtml(m.displayName || m.username || "")}${m.username ? ` <em>@${escapeHtml(m.username)}</em>` : ""}</span>
+                </button>
+              `).join("");
+              borrowerResults.querySelectorAll("[data-borrower-id]").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                  borrowerUserId = btn.dataset.borrowerId;
+                  borrowerInput.value = btn.dataset.borrowerLabel;
+                  borrowerResults.innerHTML = "";
+                });
+              });
+            } catch (error) {
+              borrowerResults.innerHTML = "";
+            }
+          }, 220);
+        });
+        panel.querySelector("[data-primary]").addEventListener("click", async () => {
+          if (!selectedMovie) { setMessage(tNext("lists.loanNoFilm", "No film selected"), "bad"); return; }
+          const borrowerName = borrowerInput.value.trim();
+          if (!borrowerUserId && !borrowerName) { setMessage(tNext("lists.loanBorrowerRequired", "Enter a borrower."), "bad"); return; }
+          const body = { note: (panel.querySelector("[data-loan-note]").value || "").trim() || null };
+          if (borrowerUserId) body.borrower_user_id = borrowerUserId;
+          else body.borrower_name = borrowerName;
+          if (dueSwitch.checked && dueDate.value) body.due_at = new Date(dueDate.value + "T00:00:00").toISOString();
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            const movieId = selectedMovie.id || selectedMovie.movieId;
+            await authApiJson("/api/next/movies/" + encodeURIComponent(movieId) + "/loans", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            listsCloseOverlay(overlay);
+            await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+      };
+      render();
     }
     const statsState = {loaded: false, data: null};
     function statsBarsHtml(rows) {
@@ -29903,6 +31595,17 @@ def ui_preview_html(
         </span>
       `;
     }
+    function notificationLoanRequestActionsHtml(notification) {
+      const payload = notification.payload || {};
+      if (payload.kind !== "loan_request" || !payload.loanRequestId) return "";
+      const requestId = escapeHtml(payload.loanRequestId);
+      return `
+        <span class="notification-actions">
+          <button type="button" class="secondary-button" data-notification-loan-request-approve="${requestId}">${escapeHtml(tNext("lists.loanRequestApprove", "Approve"))}</button>
+          <button type="button" class="secondary-button" data-notification-loan-request-decline="${requestId}">${escapeHtml(tNext("lists.loanRequestDecline", "Decline"))}</button>
+        </span>
+      `;
+    }
     function notificationPrefKey(notification) {
       const payload = notification?.payload || {};
       return String(payload.prefKey || payload.pref_key || payload.kind || "app_updates");
@@ -29941,6 +31644,7 @@ def ui_preview_html(
             ${cardBody ? `<p>${escapeHtml(cardBody)}</p>` : ""}
             <span class="notification-meta">${escapeHtml(created)}${prefKey ? ` / ${escapeHtml(tNext(`notifications.pref.${prefKey}`, prefKey.replaceAll("_", " ")))}` : ""}</span>
             ${notificationInviteActionsHtml(notification)}
+            ${notificationLoanRequestActionsHtml(notification)}
           </span>
           <span class="notification-dot" aria-hidden="true"></span>
         </article>
@@ -29994,6 +31698,21 @@ def ui_preview_html(
         notificationsState.loaded = false;
         await loadNotifications(true);
         await loadAppSnapshot();
+      } catch (error) {
+        const empty = document.getElementById("notificationsEmptyMessage");
+        if (empty) {
+          empty.textContent = error.message || String(error);
+          empty.classList.remove("hidden");
+        }
+      }
+    }
+    async function respondToLoanRequest(requestId, action) {
+      if (!requestId || !["approve", "decline"].includes(action)) return;
+      try {
+        await authApiJson(`/api/next/loan-requests/${encodeURIComponent(requestId)}/${action}`, {method: "POST"});
+        notificationsState.loaded = false;
+        await loadNotifications(true);
+        if (typeof loadLoanRequests === "function") { try { await loadLoanRequests(true); } catch (e) { /* ignore */ } }
       } catch (error) {
         const empty = document.getElementById("notificationsEmptyMessage");
         if (empty) {
@@ -30850,6 +32569,86 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    function movieArtworkLockSet(detail) {
+      const metadata = (((detail || {}).movie || {}).metadata) || {};
+      let raw = metadata.field_locks;
+      if (raw == null) raw = metadata.fieldLocks;
+      return new Set((Array.isArray(raw) ? raw : []).map((item) => String(item)));
+    }
+    function artworkLockState(entity, kind) {
+      if (entity === "container") {
+        const metadata = (((activeContainerPayload || {}).container || {}).metadata) || {};
+        return Boolean(metadata[`${kind}_locked`]);
+      }
+      return movieArtworkLockSet(activeDetailPayload).has(kind);
+    }
+    function reflectArtworkLockButtons(detail, entity) {
+      const kinds = ["poster", "backdrop"];
+      const prefix = entity === "container" ? "container" : "movie";
+      kinds.forEach((kind) => {
+        const id = `${prefix}${kind === "poster" ? "Poster" : "Backdrop"}LockToggle`;
+        const button = document.getElementById(id);
+        if (!button) return;
+        const canEdit = entity === "container" ? hasPermission("containers.edit") : hasPermission("collection.edit_all");
+        button.classList.toggle("hidden", !canEdit);
+        let locked;
+        if (entity === "container") {
+          const metadata = (((detail || {}).container || {}).metadata) || {};
+          locked = Boolean(metadata[`${kind}_locked`]);
+        } else {
+          locked = movieArtworkLockSet(detail).has(kind);
+        }
+        button.classList.toggle("locked", locked);
+        button.setAttribute("aria-pressed", locked ? "true" : "false");
+        const lockKey = kind === "poster" ? "movieDetail.lockPoster" : "movieDetail.lockBackdrop";
+        const unlockKey = kind === "poster" ? "movieDetail.unlockPoster" : "movieDetail.unlockBackdrop";
+        const lockLabel = kind === "poster" ? "Lock poster" : "Lock backdrop";
+        const unlockLabel = kind === "poster" ? "Unlock poster" : "Unlock backdrop";
+        button.textContent = locked ? tNext(unlockKey, unlockLabel) : tNext(lockKey, lockLabel);
+      });
+    }
+    async function toggleArtworkLock(entity, kind) {
+      if (kind !== "poster" && kind !== "backdrop") return;
+      if (entity === "container") {
+        if (!hasPermission("containers.edit") || !activeContainerId) return;
+        const nextLocked = !artworkLockState("container", kind);
+        setContainerDetailMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+        try {
+          const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}/artwork-locks`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({[kind]: nextLocked})
+          });
+          renderContainerDetail(payload.detail || {});
+          await loadAppSnapshot();
+          setContainerDetailMessage(nextLocked ? tNext("movieDetail.artworkLockOn", "Artwork locked.") : tNext("movieDetail.artworkLockOff", "Artwork unlocked."), "good");
+        } catch (error) {
+          setContainerDetailMessage(error.message || String(error), "bad");
+        }
+        return;
+      }
+      if (!hasPermission("collection.edit_all") || !activeDetailMovieId) return;
+      const locks = movieArtworkLockSet(activeDetailPayload);
+      const nextLocked = !locks.has(kind);
+      if (nextLocked) locks.add(kind); else locks.delete(kind);
+      if (typeof movieEditLockedFields !== "undefined" && movieEditLockedFields) {
+        if (nextLocked) movieEditLockedFields.add(kind); else movieEditLockedFields.delete(kind);
+      }
+      setMovieDetailMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+      try {
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/field-locks`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({fieldLocks: Array.from(locks)})
+        });
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
+        renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMovieDetailMessage(nextLocked ? tNext("movieDetail.artworkLockOn", "Artwork locked.") : tNext("movieDetail.artworkLockOff", "Artwork unlocked."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
     async function copyArtworkUrl(url) {
       if (!url) return;
       const setMessage = activeContainerId ? setContainerDetailMessage : setMovieDetailMessage;
@@ -31370,6 +33169,50 @@ def ui_preview_html(
         loadProfileApiAuditEvents();
       }
     }
+    function renderLoansSystemSetting() {
+      const row = document.getElementById("loansSystemSettingRow");
+      if (!row) return;
+      if (!canManageLoansSystem()) {
+        row.classList.add("hidden");
+        row.innerHTML = "";
+        return;
+      }
+      const active = loansSystemEnabled();
+      row.classList.remove("hidden");
+      row.innerHTML = `
+        <div class="preference-row">
+          <span>
+            <strong>${escapeHtml(tNext("preferences.loansSystemLabel", "Loans System"))}</strong>
+            <span>${escapeHtml(tNext("preferences.loansSystemHelp", "Enable lending and borrow requests across the collection."))}</span>
+          </span>
+          <button type="button" class="switch ${active ? "on" : ""}" id="loansSystemToggle" aria-pressed="${active ? "true" : "false"}"></button>
+        </div>
+      `;
+      const toggle = document.getElementById("loansSystemToggle");
+      if (toggle) toggle.addEventListener("click", () => toggleLoansSystem(!active));
+    }
+    async function toggleLoansSystem(enabled) {
+      const toggle = document.getElementById("loansSystemToggle");
+      if (toggle) toggle.disabled = true;
+      try {
+        await authApiJson("/api/next/admin/settings/loans-system", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ enabled: !!enabled })
+        });
+        await loadAppSnapshot();
+        renderLoansSystemSetting();
+      } catch (error) {
+        if (toggle) toggle.disabled = false;
+        setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
+      }
+    }
+    function setPreferencesMessage(message, tone) {
+      const node = document.getElementById("preferencesMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
     function renderPreferences() {
       const libraryList = document.getElementById("profilePreferenceList");
       const collectorList = document.getElementById("profileCollectorPreferenceList");
@@ -31382,6 +33225,7 @@ def ui_preview_html(
         collectorList.innerHTML = preferenceRowsHtml(preferenceCollectorLabels);
         bindPreferenceList(collectorList);
       }
+      renderLoansSystemSetting();
       if (legacyList) {
         legacyList.innerHTML = preferenceRowsHtml(preferenceLabels);
         bindPreferenceList(legacyList);
@@ -32950,8 +34794,17 @@ def ui_preview_html(
           renderListsView();
         });
       });
+      document.querySelectorAll("[data-loan-requests-tab]").forEach((button) => {
+        button.addEventListener("click", () => {
+          listsState.loanRequestsTab = button.dataset.loanRequestsTab || "incoming";
+          renderLoanRequestsSection();
+        });
+      });
       document.getElementById("wishlistAddForm")?.addEventListener("submit", submitWishlistAdd);
       document.getElementById("wishlistSearchForm")?.addEventListener("submit", submitWishlistSearch);
+      document.getElementById("loanCreateButton")?.addEventListener("click", () => openLoanLibraryPicker());
+      document.getElementById("loanHistoryButton")?.addEventListener("click", () => openLoanHistory());
+      document.getElementById("tagCreateButton")?.addEventListener("click", () => openTagCreate());
       document.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           listsViewMode = normalizeViewMode(button.dataset.listsViewMode);
@@ -32971,6 +34824,8 @@ def ui_preview_html(
       document.getElementById("notificationsList")?.addEventListener("click", (event) => {
         const acceptButton = event.target.closest("[data-notification-invite-accept]");
         const declineButton = event.target.closest("[data-notification-invite-decline]");
+        const loanApproveButton = event.target.closest("[data-notification-loan-request-approve]");
+        const loanDeclineButton = event.target.closest("[data-notification-loan-request-decline]");
         if (acceptButton) {
           event.preventDefault();
           event.stopPropagation();
@@ -32979,6 +34834,14 @@ def ui_preview_html(
           event.preventDefault();
           event.stopPropagation();
           respondToMediaGroupInvite(declineButton.dataset.notificationInviteDecline, "decline");
+        } else if (loanApproveButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          respondToLoanRequest(loanApproveButton.dataset.notificationLoanRequestApprove, "approve");
+        } else if (loanDeclineButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          respondToLoanRequest(loanDeclineButton.dataset.notificationLoanRequestDecline, "decline");
         }
       });
       document.getElementById("pushEnableButton")?.addEventListener("click", () => enablePushNotifications());
@@ -33344,7 +35207,11 @@ def ui_preview_html(
         if (metadataButton) queueImportMovieMetadataRefresh(metadataButton.dataset.importMetadataRefresh);
         if (metadataJobButton) queueImportJobMetadataRefresh(metadataJobButton.dataset.importMetadataRefreshJob);
       });
-      document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => previewBarcodeImport(event));
+      document.getElementById("importBarcodeForm")?.addEventListener("submit", (event) => {
+        importCenter.activeBatchBarcode = "";
+        renderImportBatchList();
+        previewBarcodeImport(event);
+      });
       document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
       document.getElementById("importBatchClearButton")?.addEventListener("click", () => {
         const input = document.getElementById("importBatchBarcodeInput");
@@ -33363,11 +35230,15 @@ def ui_preview_html(
           return;
         }
         const previewButton = event.target.closest("[data-import-batch-preview]");
-        if (previewButton) {
-          const barcode = previewButton.dataset.importBatchPreview || "";
-          importCenter.activeBatchBarcode = barcode;
-          previewImportBatchBarcode(barcode);
+        if (!previewButton) return;
+        const barcode = previewButton.dataset.importBatchPreview || "";
+        importCenter.activeBatchBarcode = barcode;
+        renderImportBatchList();
+        const results = document.getElementById("importBarcodeResults");
+        if (results) {
+          try { results.scrollIntoView({behavior: "smooth", block: "start"}); } catch (error) { results.scrollIntoView(); }
         }
+        previewImportBatchBarcode(barcode);
       });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
@@ -33475,6 +35346,10 @@ def ui_preview_html(
       document.querySelectorAll("[data-import-tab]").forEach((button) => {
         button.addEventListener("click", () => setImportCenterTab(button.dataset.importTab || "add"));
       });
+      document.querySelectorAll("[data-import-method]").forEach((button) => {
+        button.addEventListener("click", () => setImportMethodTab(button.dataset.importMethod || "camera"));
+      });
+      renderImportMethodTabs();
       document.addEventListener("click", (event) => {
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
         if (!addLookupButton) return;
@@ -33605,6 +35480,18 @@ def ui_preview_html(
           document.getElementById("movieLoanDue")?.value || ""
         );
       });
+      document.getElementById("movieLoanRequestForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        requestBorrowActiveMovie(
+          document.getElementById("movieLoanRequestFrom")?.value || "",
+          document.getElementById("movieLoanRequestReturnBy")?.value || "",
+          document.getElementById("movieLoanRequestNote")?.value || ""
+        );
+      });
+      document.getElementById("movieLoanRequestStatus")?.addEventListener("click", (event) => {
+        const cancelButton = event.target.closest("[data-loan-request-cancel]");
+        if (cancelButton) cancelActiveMovieLoanRequest(cancelButton.dataset.loanRequestCancel);
+      });
       document.getElementById("movieLoanStatus")?.addEventListener("click", (event) => {
         const returnButton = event.target.closest("[data-loan-return]");
         if (returnButton) { returnActiveMovieLoan(returnButton.dataset.loanReturn); return; }
@@ -33631,6 +35518,12 @@ def ui_preview_html(
         if (uploadArtwork) {
           event.preventDefault();
           uploadDetailArtwork(uploadArtwork.dataset.uploadArtwork || "movie", uploadArtwork.dataset.kind, uploadArtwork.dataset.input);
+          return;
+        }
+        const artworkLock = event.target.closest("[data-artwork-lock]");
+        if (artworkLock) {
+          event.preventDefault();
+          toggleArtworkLock(artworkLock.dataset.artworkLock || "movie", artworkLock.dataset.kind);
           return;
         }
         const deleteArtwork = event.target.closest("[data-app-artwork-delete]");
@@ -40148,6 +42041,11 @@ def set_app_setting_value(conn, key: str, value: Any, *, is_secret: bool = False
         )
 
 
+def loans_system_enabled(conn) -> bool:
+    """Instance-wide flag: is the Loans System (loans + borrow requests) enabled?"""
+    return bool(app_setting_value(conn, "loans_system_enabled", False))
+
+
 def push_vapid_subject() -> str:
     return os.environ.get("VAPID_SUBJECT") or os.environ.get("DISCVAULT_VAPID_SUBJECT") or "mailto:no-reply@discvault.app"
 
@@ -40740,6 +42638,48 @@ def set_app_user_preferences(conn, user_id: UUID | str, updates: dict[str, Any])
     return app_effective_preferences(conn, user_id)
 
 
+def get_user_locale(conn, user_id: UUID | str | None) -> str:
+    """Return the persisted UI locale for a user, or the default locale."""
+
+    if not user_id or not table_exists(conn, "user_preferences"):
+        return NEXT_I18N_DEFAULT_LOCALE
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT value FROM user_preferences WHERE user_id=%s AND key=%s",
+                (user_id, "locale"),
+            )
+            row = cur.fetchone()
+    except Exception:
+        return NEXT_I18N_DEFAULT_LOCALE
+    if not row:
+        return NEXT_I18N_DEFAULT_LOCALE
+    value = row["value"] if isinstance(row, dict) else row[0]
+    if isinstance(value, str):
+        return normalize_next_locale(value)
+    return normalize_next_locale(str(value or ""))
+
+
+def set_user_locale(conn, user_id: UUID | str, locale: str | None) -> str:
+    """Persist the UI locale for a user in the user_preferences KV table."""
+
+    if not table_exists(conn, "user_preferences"):
+        raise NextApiError("User preferences table is not available", 503)
+    normalized = normalize_next_locale(locale)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO user_preferences (user_id, key, value, updated_at)
+            VALUES (%s, %s, %s, now())
+            ON CONFLICT (user_id, key) DO UPDATE SET
+                value=EXCLUDED.value,
+                updated_at=now()
+            """,
+            (user_id, "locale", Jsonb(normalized)),
+        )
+    return normalized
+
+
 PLUGIN_AUTO_UPDATE_SETTING_KEY = "plugins_auto_update"
 
 
@@ -40907,6 +42847,8 @@ def mobile_feature_capabilities(conn, actor: dict[str, Any]) -> dict[str, Any]:
             "watchlist": has_any("watchlist.manage"),
             "notifications": True,
             "push": True,
+            "loanRequests": has_any("lending.request"),
+            "manageLoansSystem": has_any("security.manage_loans_system"),
         },
         "api": {
             "read": has_any("api.read"),
@@ -40954,6 +42896,18 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "refreshMovie": "/api/next/movies/{movieId}/metadata/refresh",
             "refreshContainer": "/api/next/containers/{containerId}/metadata/refresh",
             "jobs": "/api/next/metadata/jobs",
+        },
+        "loans": {
+            "list": "/api/next/loans",
+            "borrowed": "/api/next/loans/borrowed",
+            "return": "/api/next/loans/{loanId}/return",
+        },
+        "loanRequests": {
+            "create": "/api/next/movies/{movieId}/loan-requests",
+            "list": "/api/next/loan-requests",
+            "approve": "/api/next/loan-requests/{loanRequestId}/approve",
+            "decline": "/api/next/loan-requests/{loanRequestId}/decline",
+            "cancel": "/api/next/loan-requests/{loanRequestId}/cancel",
         },
     }
 
@@ -42957,11 +44911,37 @@ def attach_personal_list_state(conn, rows: list[dict[str, Any]], user_id: UUID |
                 (user_id, ids),
             )
             watched_by_movie = {row["movie_id"]: row.get("watched_at") for row in cur.fetchall()}
+    loaned_movies: set[Any] = set()
+    if table_exists(conn, "loans"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT movie_id
+                FROM loans
+                WHERE user_id=%s AND movie_id = ANY(%s) AND returned_at IS NULL
+                """,
+                (user_id, ids),
+            )
+            loaned_movies = {row["movie_id"] for row in cur.fetchall()}
+    tagged_movies: set[Any] = set()
+    if table_exists(conn, "movie_tags"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT movie_id
+                FROM movie_tags
+                WHERE user_id=%s AND movie_id = ANY(%s)
+                """,
+                (user_id, ids),
+            )
+            tagged_movies = {row["movie_id"] for row in cur.fetchall()}
     for row in rows:
         movie_id = row.get("id")
         row["on_watchlist"] = movie_id in watchlist_by_movie
         row["watchlist_added_at"] = watchlist_by_movie.get(movie_id)
         row["last_watched"] = watched_by_movie.get(movie_id)
+        row["on_loan"] = movie_id in loaned_movies
+        row["has_tags"] = movie_id in tagged_movies
     return rows
 
 
@@ -43238,6 +45218,11 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         "history": [],
         "tags": [],
         "activeLoan": None,
+        "loanRequest": None,
+        "incomingLoanRequests": 0,
+        "ownerUserId": None,
+        "isOwnMovie": False,
+        "canRequestBorrow": False,
     }
     if not user_id:
         return state
@@ -43310,6 +45295,19 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
             loan_row = cur.fetchone()
         if loan_row:
             state["activeLoan"] = _loan_row_entity(loan_row)
+    if table_exists(conn, "loan_requests"):
+        request_state = personal_movie_loan_request_state(conn, movie_id, user_id)
+        state["loanRequest"] = request_state.get("outgoing")
+        state["incomingLoanRequests"] = request_state.get("incomingPending") or 0
+    # Authoritative ownership / borrow-eligibility flags. The frontend cannot rely on
+    # a bare owner_id comparison because movies created via the sync/import path carry
+    # a NULL owner_id, which would make every viewer look like the owner. Compute the
+    # decision here where group membership is known.
+    actor = {"id": user_id}
+    owner_id = resolve_movie_owner_id(conn, movie_id, viewer_id=user_id)
+    state["ownerUserId"] = str(owner_id) if owner_id else None
+    state["isOwnMovie"] = bool(owner_id) and str(owner_id) == str(user_id)
+    state["canRequestBorrow"] = movie_borrowable_from_other(conn, actor, movie_id)
     return state
 
 
@@ -43473,6 +45471,7 @@ def emit_watch_history_change(conn, user_id, entry_id, *, operation: str, movie_
 
 def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
     acquired_movie = row.get("acquired_movie_id")
+    created_by = row.get("created_by_user_id")
     return {
         "id": str(row.get("id")),
         "title": row.get("title"),
@@ -43486,6 +45485,7 @@ def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
         "addedAt": row.get("added_at"),
         "acquiredAt": row.get("acquired_at"),
         "acquiredMovieId": str(acquired_movie) if acquired_movie else None,
+        "createdByUserId": str(created_by) if created_by else None,
     }
 
 
@@ -43496,7 +45496,8 @@ def wishlist_sync_entity(conn, user_id, item_id) -> dict[str, Any] | None:
         cur.execute(
             """
             SELECT id, title, year, barcode, format, movievault_id, poster_url,
-                   note, snapshot, added_at, acquired_at, acquired_movie_id
+                   note, snapshot, added_at, acquired_at, acquired_movie_id,
+                   created_by_user_id
             FROM wishlist_items
             WHERE user_id=%s AND id=%s
             """,
@@ -43513,7 +45514,8 @@ def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
         cur.execute(
             """
             SELECT id, title, year, barcode, format, movievault_id, poster_url,
-                   note, snapshot, added_at, acquired_at, acquired_movie_id
+                   note, snapshot, added_at, acquired_at, acquired_movie_id,
+                   created_by_user_id
             FROM wishlist_items
             WHERE user_id=%s
             ORDER BY added_at
@@ -43671,32 +45673,50 @@ def emit_movie_tag_change(
 def _loan_row_entity(row: dict[str, Any]) -> dict[str, Any]:
     movie = row.get("movie_id")
     borrower_user = row.get("borrower_user_id")
+    created_by = row.get("created_by_user_id")
     returned_at = row.get("returned_at")
+    borrower_display = row.get("borrower_display_name") or None
+    borrower_username = row.get("borrower_username") or None
     return {
         "id": str(row.get("id")),
         "movieId": str(movie) if movie else None,
         "snapshot": row.get("snapshot") or {},
         "borrowerName": row.get("borrower_name"),
         "borrowerUserId": str(borrower_user) if borrower_user else None,
+        "borrowerDisplayName": borrower_display or borrower_username,
+        "borrowerUsername": borrower_username,
         "loanedAt": row.get("loaned_at"),
         "dueAt": row.get("due_at"),
         "returnedAt": returned_at,
         "returned": returned_at is not None,
         "note": row.get("note"),
         "createdAt": row.get("created_at"),
+        "createdByUserId": str(created_by) if created_by else None,
     }
 
 
 def loan_sync_entity(conn, user_id, loan_id) -> dict[str, Any] | None:
     if not table_exists(conn, "loans"):
         return None
+    join_users = table_exists(conn, "users")
+    borrower_select = (
+        "borrower.username AS borrower_username, borrower.display_name AS borrower_display_name"
+        if join_users
+        else "NULL AS borrower_username, NULL AS borrower_display_name"
+    )
+    borrower_join = (
+        "LEFT JOIN users borrower ON borrower.id = l.borrower_user_id" if join_users else ""
+    )
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT id, movie_id, snapshot, borrower_name, borrower_user_id,
-                   loaned_at, due_at, returned_at, note, created_at
-            FROM loans
-            WHERE user_id=%s AND id=%s
+            f"""
+            SELECT l.id, l.movie_id, l.snapshot, l.borrower_name, l.borrower_user_id,
+                   l.loaned_at, l.due_at, l.returned_at, l.note, l.created_at,
+                   l.created_by_user_id,
+                   {borrower_select}
+            FROM loans l
+            {borrower_join}
+            WHERE l.user_id=%s AND l.id=%s
             """,
             (user_id, loan_id),
         )
@@ -43707,14 +45727,26 @@ def loan_sync_entity(conn, user_id, loan_id) -> dict[str, Any] | None:
 def all_loan_sync_entities(conn, user_id) -> list[dict[str, Any]]:
     if not user_id or not table_exists(conn, "loans"):
         return []
+    join_users = table_exists(conn, "users")
+    borrower_select = (
+        "borrower.username AS borrower_username, borrower.display_name AS borrower_display_name"
+        if join_users
+        else "NULL AS borrower_username, NULL AS borrower_display_name"
+    )
+    borrower_join = (
+        "LEFT JOIN users borrower ON borrower.id = l.borrower_user_id" if join_users else ""
+    )
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT id, movie_id, snapshot, borrower_name, borrower_user_id,
-                   loaned_at, due_at, returned_at, note, created_at
-            FROM loans
-            WHERE user_id=%s
-            ORDER BY loaned_at
+            f"""
+            SELECT l.id, l.movie_id, l.snapshot, l.borrower_name, l.borrower_user_id,
+                   l.loaned_at, l.due_at, l.returned_at, l.note, l.created_at,
+                   l.created_by_user_id,
+                   {borrower_select}
+            FROM loans l
+            {borrower_join}
+            WHERE l.user_id=%s
+            ORDER BY l.loaned_at
             """,
             (user_id,),
         )
@@ -43740,6 +45772,291 @@ def emit_loan_change(conn, user_id, loan_id, *, operation: str, movie_id=None) -
         operation=operation,
         payload=payload,
     )
+
+
+def _borrowed_loan_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    entity = _loan_row_entity(row)
+    lender_user = row.get("user_id")
+    entity["lenderUserId"] = str(lender_user) if lender_user else None
+    entity["lenderName"] = (
+        row.get("lender_display_name")
+        or row.get("lender_username")
+        or None
+    )
+    entity["lenderUsername"] = row.get("lender_username")
+    return entity
+
+
+def all_borrowed_loan_entities(conn, borrower_user_id) -> list[dict[str, Any]]:
+    """Loans where the given user is the borrower (incoming loan list)."""
+    if not borrower_user_id or not table_exists(conn, "loans"):
+        return []
+    join_users = table_exists(conn, "users")
+    lender_select = (
+        "lender.username AS lender_username, lender.display_name AS lender_display_name"
+        if join_users
+        else "NULL AS lender_username, NULL AS lender_display_name"
+    )
+    lender_join = "LEFT JOIN users lender ON lender.id = l.user_id" if join_users else ""
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT l.id, l.user_id, l.movie_id, l.snapshot, l.borrower_name,
+                   l.borrower_user_id, l.loaned_at, l.due_at, l.returned_at,
+                   l.note, l.created_at, l.created_by_user_id,
+                   {lender_select}
+            FROM loans l
+            {lender_join}
+            WHERE l.borrower_user_id=%s
+            ORDER BY l.loaned_at DESC
+            """,
+            (borrower_user_id,),
+        )
+        rows = cur.fetchall()
+    return [_borrowed_loan_row_entity(row) for row in rows]
+
+
+def movie_owner_id(conn, movie_id: UUID) -> UUID | None:
+    """Return the owner_id for a movie, or None when the movie/column is absent."""
+    if not table_exists(conn, "movies"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT owner_id FROM movies WHERE id=%s", (movie_id,))
+        row = cur.fetchone()
+    return row.get("owner_id") if row else None
+
+
+def resolve_movie_owner_id(conn, movie_id: UUID, *, viewer_id: Any = None) -> UUID | None:
+    """Best-effort owner of a movie for lending / borrow-request attribution.
+
+    Prefers the explicit ``movies.owner_id``. When that is NULL -- e.g. discs created
+    via the device sync/import path, which runs without an authenticated actor and so
+    never stamps an owner -- fall back to the person who shared the disc into a media
+    group: the per-share ``added_by`` recorded in ``media_group_movies.metadata`` when
+    present, otherwise the group's ``created_by``. Groups the viewer belongs to are
+    preferred so a borrow request is routed to a collection the viewer can actually
+    see. Returns None only when no owner can be attributed at all.
+    """
+    owner = movie_owner_id(conn, movie_id)
+    if owner is not None:
+        return owner
+    if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT mgm.metadata->>'added_by' AS added_by,
+                   g.created_by            AS created_by
+            FROM media_group_movies mgm
+            JOIN media_groups g ON g.id = mgm.group_id
+            LEFT JOIN media_group_members mem
+                ON mem.group_id = mgm.group_id AND mem.user_id = %s
+            WHERE mgm.movie_id = %s
+            ORDER BY (mem.user_id IS NOT NULL) DESC, mgm.created_at ASC
+            """,
+            (viewer_id, movie_id),
+        )
+        rows = cur.fetchall() or []
+    for row in rows:
+        added_by = row.get("added_by")
+        if added_by:
+            try:
+                return added_by if isinstance(added_by, UUID) else UUID(str(added_by))
+            except (ValueError, AttributeError, TypeError):
+                pass
+        created_by = row.get("created_by")
+        if created_by:
+            try:
+                return created_by if isinstance(created_by, UUID) else UUID(str(created_by))
+            except (ValueError, AttributeError, TypeError):
+                pass
+    return None
+
+
+def movie_borrowable_from_other(conn, actor: dict[str, Any] | None, movie_id: UUID) -> bool:
+    """True when the actor can see this movie via a shared group but is NOT its owner.
+
+    This is the predicate for showing the "Ask to borrow" control instead of the
+    owner-only "Lend" form: you cannot lend someone else's disc, so a group member
+    viewing another member's movie may raise a borrow request instead. Ownership is
+    resolved authoritatively (see ``resolve_movie_owner_id``) so a NULL-owner disc
+    whose group the actor created is correctly treated as the actor's own.
+    """
+    actor_id = (actor or {}).get("id")
+    if not actor_id:
+        return False
+    owner = resolve_movie_owner_id(conn, movie_id, viewer_id=actor_id)
+    if owner is not None and str(owner) == str(actor_id):
+        return False
+    return movie_is_shared_with_actor(conn, actor, movie_id)
+
+
+def _loan_request_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    movie = row.get("movie_id")
+    requester = row.get("requester_user_id")
+    owner = row.get("owner_user_id")
+    resulting_loan = row.get("resulting_loan_id")
+    borrow_from = row.get("borrow_from")
+    return_by = row.get("return_by")
+    decided_at = row.get("decided_at")
+    return {
+        "id": str(row.get("id")),
+        "movieId": str(movie) if movie else None,
+        "snapshot": row.get("snapshot") or {},
+        "requesterUserId": str(requester) if requester else None,
+        "requesterDisplayName": (
+            row.get("requester_display_name") or row.get("requester_username") or None
+        ),
+        "requesterUsername": row.get("requester_username"),
+        "ownerUserId": str(owner) if owner else None,
+        "ownerDisplayName": row.get("owner_display_name") or row.get("owner_username") or None,
+        "ownerUsername": row.get("owner_username"),
+        "borrowFrom": borrow_from.isoformat() if hasattr(borrow_from, "isoformat") else borrow_from,
+        "returnBy": return_by.isoformat() if hasattr(return_by, "isoformat") else return_by,
+        "status": row.get("status"),
+        "note": row.get("note"),
+        "resultingLoanId": str(resulting_loan) if resulting_loan else None,
+        "decidedAt": decided_at,
+        "createdAt": row.get("created_at"),
+        "updatedAt": row.get("updated_at"),
+    }
+
+
+def _loan_request_select(join_users: bool) -> tuple[str, str]:
+    """Return (extra_select, joins) that resolve requester/owner display names."""
+    if not join_users:
+        extra = (
+            "NULL AS requester_username, NULL AS requester_display_name, "
+            "NULL AS owner_username, NULL AS owner_display_name"
+        )
+        return extra, ""
+    extra = (
+        "requester.username AS requester_username, "
+        "requester.display_name AS requester_display_name, "
+        "owner.username AS owner_username, "
+        "owner.display_name AS owner_display_name"
+    )
+    joins = (
+        "LEFT JOIN users requester ON requester.id = lr.requester_user_id "
+        "LEFT JOIN users owner ON owner.id = lr.owner_user_id"
+    )
+    return extra, joins
+
+
+def loan_request_entity(conn, request_id: UUID) -> dict[str, Any] | None:
+    if not table_exists(conn, "loan_requests"):
+        return None
+    extra, joins = _loan_request_select(table_exists(conn, "users"))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT lr.id, lr.movie_id, lr.requester_user_id, lr.owner_user_id, lr.snapshot,
+                   lr.borrow_from, lr.return_by, lr.status, lr.note, lr.resulting_loan_id,
+                   lr.decided_at, lr.created_at, lr.updated_at,
+                   {extra}
+            FROM loan_requests lr
+            {joins}
+            WHERE lr.id=%s
+            """,
+            (request_id,),
+        )
+        row = cur.fetchone()
+    return _loan_request_row_entity(row) if row else None
+
+
+def all_loan_requests(conn, user_id: UUID | str, *, role: str = "incoming") -> list[dict[str, Any]]:
+    """List loan requests where the user is the owner ('incoming') or requester ('outgoing')."""
+    if not user_id or not table_exists(conn, "loan_requests"):
+        return []
+    column = "owner_user_id" if role == "incoming" else "requester_user_id"
+    extra, joins = _loan_request_select(table_exists(conn, "users"))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT lr.id, lr.movie_id, lr.requester_user_id, lr.owner_user_id, lr.snapshot,
+                   lr.borrow_from, lr.return_by, lr.status, lr.note, lr.resulting_loan_id,
+                   lr.decided_at, lr.created_at, lr.updated_at,
+                   {extra}
+            FROM loan_requests lr
+            {joins}
+            WHERE lr.{column}=%s
+            ORDER BY
+                CASE WHEN lr.status='pending' THEN 0 ELSE 1 END,
+                lr.created_at DESC
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return [_loan_request_row_entity(row) for row in rows]
+
+
+def personal_movie_loan_request_state(
+    conn, movie_id: UUID, user_id: UUID | str | None
+) -> dict[str, Any]:
+    """Borrow-request state for the movie-detail panel of a given viewer."""
+    state: dict[str, Any] = {"outgoing": None, "incomingPending": 0}
+    if not user_id or not table_exists(conn, "loan_requests"):
+        return state
+    extra, joins = _loan_request_select(table_exists(conn, "users"))
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT lr.id, lr.movie_id, lr.requester_user_id, lr.owner_user_id, lr.snapshot,
+                   lr.borrow_from, lr.return_by, lr.status, lr.note, lr.resulting_loan_id,
+                   lr.decided_at, lr.created_at, lr.updated_at,
+                   {extra}
+            FROM loan_requests lr
+            {joins}
+            WHERE lr.movie_id=%s AND lr.requester_user_id=%s
+            ORDER BY lr.created_at DESC
+            LIMIT 1
+            """,
+            (movie_id, user_id),
+        )
+        outgoing = cur.fetchone()
+    if outgoing:
+        state["outgoing"] = _loan_request_row_entity(outgoing)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*)::int AS count
+            FROM loan_requests
+            WHERE movie_id=%s AND owner_user_id=%s AND status='pending'
+            """,
+            (movie_id, user_id),
+        )
+        state["incomingPending"] = int((cur.fetchone() or {}).get("count") or 0)
+    return state
+
+
+def create_loan_from_request(conn, request_row: dict[str, Any], actor: dict[str, Any] | None) -> UUID | None:
+    """Materialize an outbound loan from an approved borrow request.
+
+    The owner becomes the lender (loans.user_id), the requester the borrower, and
+    the requested return date becomes the loan due date. Returns the new loan id.
+    """
+    if not table_exists(conn, "loans"):
+        return None
+    owner_id = request_row.get("owner_user_id")
+    requester_id = request_row.get("requester_user_id")
+    movie_id = request_row.get("movie_id")
+    snapshot = request_row.get("snapshot") or {}
+    return_by = request_row.get("return_by")
+    created_by = (actor or {}).get("id") or owner_id
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO loans
+                (user_id, movie_id, snapshot, borrower_user_id, due_at, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (owner_id, movie_id, Jsonb(snapshot), requester_id, return_by, created_by),
+        )
+        loan_id = (cur.fetchone() or {}).get("id")
+    if loan_id is not None:
+        emit_loan_change(conn, owner_id, loan_id, operation="upsert", movie_id=movie_id)
+    return loan_id
 
 
 def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit: int = 200) -> list[dict[str, Any]]:
@@ -45784,6 +48101,87 @@ def create_uploaded_profile_avatar_asset(
                 Jsonb(
                     {
                         "source": "profile_upload",
+                        "originalFilename": upload_info.get("originalFilename"),
+                        "uploadedBy": actor_job_payload(actor or {}) if actor else None,
+                    }
+                ),
+            ),
+        )
+        return cur.fetchone()
+
+
+def store_uploaded_poster_asset(
+    conn,
+    *,
+    upload_info: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Persist an uploaded poster image as a shared media asset and return the row.
+
+    Used by lightweight entities (e.g. wishlist items) that keep a poster URL
+    string rather than an entity_media relation. Serve via media_asset_public_url.
+    """
+    if not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset table is not available", 503)
+    storage_key = clean_text(upload_info.get("storageKey")) or ""
+    if not storage_key:
+        raise NextApiError("Uploaded poster did not produce a storage key", 500)
+    media_id = media_asset_uuid(storage_key)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO media_assets (
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata
+            )
+            VALUES (%s, 'poster', 'original', 'local', %s, NULL, 'upload', %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (kind, variant, sha256) DO UPDATE SET
+                storage_backend=EXCLUDED.storage_backend,
+                storage_key=EXCLUDED.storage_key,
+                provider_id=EXCLUDED.provider_id,
+                content_type=EXCLUDED.content_type,
+                width=EXCLUDED.width,
+                height=EXCLUDED.height,
+                size_bytes=EXCLUDED.size_bytes,
+                metadata=EXCLUDED.metadata
+            RETURNING
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata,
+                created_at
+            """,
+            (
+                media_id,
+                storage_key,
+                upload_info.get("contentType"),
+                upload_info.get("width"),
+                upload_info.get("height"),
+                upload_info.get("sizeBytes"),
+                upload_info.get("sha256"),
+                Jsonb(
+                    {
+                        "source": "wishlist_upload",
                         "originalFilename": upload_info.get("originalFilename"),
                         "uploadedBy": actor_job_payload(actor or {}) if actor else None,
                     }
@@ -50626,16 +53024,25 @@ def register_routes(flask_app: Flask) -> None:
                         )
                         changed = cur.rowcount
                     else:
+                        actor_id = actor.get("id")
                         for movie_id in movie_ids:
                             cur.execute(
                                 """
                                 INSERT INTO media_group_movies (group_id, movie_id, metadata, created_at, updated_at)
-                                VALUES (%s, %s, '{}'::jsonb, now(), now())
+                                VALUES (%s, %s, jsonb_build_object('added_by', %s::text), now(), now())
                                 ON CONFLICT (group_id, movie_id) DO NOTHING
                                 """,
-                                (group_uuid, movie_id),
+                                (group_uuid, movie_id, str(actor_id) if actor_id else None),
                             )
                             changed += cur.rowcount
+                            if actor_id:
+                                # Discs synced from a device have no owner; the member who
+                                # shares one into a group becomes its owner so it can be
+                                # lent/borrowed. Never overwrite an existing owner.
+                                cur.execute(
+                                    "UPDATE movies SET owner_id=%s WHERE id=%s AND owner_id IS NULL",
+                                    (actor_id, movie_id),
+                                )
                     cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
         return response(
             {
@@ -50880,15 +53287,24 @@ def register_routes(flask_app: Flask) -> None:
             changed = 0
             with conn.transaction():
                 with conn.cursor() as cur:
+                    actor_id = actor.get("id")
                     cur.execute(
                         """
                         INSERT INTO media_group_movies (group_id, movie_id, metadata, created_at, updated_at)
-                        VALUES (%s, %s, '{}'::jsonb, now(), now())
+                        VALUES (%s, %s, jsonb_build_object('added_by', %s::text), now(), now())
                         ON CONFLICT (group_id, movie_id) DO NOTHING
                         """,
-                        (group_uuid, movie_uuid),
+                        (group_uuid, movie_uuid, str(actor_id) if actor_id else None),
                     )
                     changed = cur.rowcount
+                    if actor_id:
+                        # Discs synced from a device have no owner; the member who shares
+                        # one into a group becomes its owner so it can be lent/borrowed.
+                        # Never overwrite an existing owner.
+                        cur.execute(
+                            "UPDATE movies SET owner_id=%s WHERE id=%s AND owner_id IS NULL",
+                            (actor_id, movie_uuid),
+                        )
                     cur.execute("UPDATE media_groups SET updated_at=now() WHERE id=%s", (group_uuid,))
                 audit_event(
                     conn,
@@ -51102,6 +53518,59 @@ def register_routes(flask_app: Flask) -> None:
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
+
+    @flask_app.put("/api/next/containers/<container_id>/artwork-locks")
+    def set_container_artwork_locks(container_id: str):
+        container_uuid = parse_uuid(container_id, "containerId")
+        if not container_uuid:
+            raise NextApiError("containerId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Artwork lock request body must be an object", 400)
+        updates: dict[str, bool] = {}
+        alias = {
+            "poster": "poster_locked",
+            "posterLocked": "poster_locked",
+            "poster_locked": "poster_locked",
+            "backdrop": "backdrop_locked",
+            "backdropLocked": "backdrop_locked",
+            "backdrop_locked": "backdrop_locked",
+        }
+        for key, value in body.items():
+            target = alias.get(key)
+            if not target:
+                continue
+            updates[target] = bool(value)
+        if not updates:
+            raise NextApiError("No poster/backdrop lock values provided", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            existing = container_entity(conn, container_uuid)
+            if not existing:
+                raise NextApiError("Container not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE containers SET metadata=COALESCE(metadata, '{}'::jsonb) || %s, updated_at=now() WHERE id=%s",
+                        (Jsonb(json_ready(updates)), container_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="container.updated",
+                    category="admin",
+                    actor=actor,
+                    target_type="container",
+                    target_id=container_uuid,
+                    summary=f"Updated artwork locks for container {existing.get('title')}",
+                    metadata={
+                        "containerType": existing.get("container_type"),
+                        "title": existing.get("title"),
+                        "artworkLocks": updates,
+                    },
+                )
+                emit_container_change(conn, container_uuid, operation="upsert")
+            detail = container_detail_entity(conn, container_uuid)
+        return response({"status": "ok", "detail": detail, "artworkLocks": updates})
 
     @flask_app.delete("/api/next/containers/<container_id>")
     def delete_container(container_id: str):
@@ -53652,8 +56121,8 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO wishlist_items
-                            (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot, created_by_user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
                         """,
                         (
@@ -53666,6 +56135,7 @@ def register_routes(flask_app: Flask) -> None:
                             fields["poster_url"],
                             fields["note"],
                             Jsonb(snapshot),
+                            actor.get("id"),
                         ),
                     )
                     item_id = (cur.fetchone() or {}).get("id")
@@ -53764,6 +56234,162 @@ def register_routes(flask_app: Flask) -> None:
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "counts": personal_list_counts(conn, user_id),
                 }
+            )
+
+    @flask_app.patch("/api/next/lists/wishlist/<item_id>")
+    def update_wishlist_item(item_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Wishlist request body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT title, year, barcode, format, movievault_id, poster_url, note
+                    FROM wishlist_items
+                    WHERE user_id=%s AND id=%s
+                    """,
+                    (user_id, item_uuid),
+                )
+                current = cur.fetchone()
+            if not current:
+                raise NextApiError("Wishlist entry not found", 404)
+
+            fields = {
+                "title": current.get("title"),
+                "year": current.get("year"),
+                "barcode": current.get("barcode"),
+                "format": current.get("format"),
+                "movievault_id": current.get("movievault_id"),
+                "poster_url": current.get("poster_url"),
+                "note": current.get("note"),
+            }
+            if "title" in body:
+                new_title = clean_text(body.get("title"))
+                if not new_title:
+                    raise NextApiError("Wishlist entry requires a title", 400)
+                fields["title"] = new_title
+            if "year" in body:
+                year_raw = body.get("year")
+                fields["year"] = (
+                    int(year_raw)
+                    if isinstance(year_raw, (int, float))
+                    or (isinstance(year_raw, str) and year_raw.strip().isdigit())
+                    else None
+                )
+            if "barcode" in body:
+                fields["barcode"] = clean_text(body.get("barcode"))
+            if "format" in body:
+                fields["format"] = clean_text(body.get("format"))
+            if "movievaultId" in body or "movievault_id" in body:
+                fields["movievault_id"] = clean_text(body.get("movievaultId") or body.get("movievault_id"))
+            if "posterUrl" in body or "poster_url" in body:
+                fields["poster_url"] = clean_text(body.get("posterUrl") or body.get("poster_url"))
+            if "note" in body:
+                fields["note"] = clean_text(body.get("note"))
+
+            snapshot = _wishlist_snapshot(fields)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE wishlist_items
+                        SET title=%s, year=%s, barcode=%s, format=%s,
+                            movievault_id=%s, poster_url=%s, note=%s, snapshot=%s
+                        WHERE user_id=%s AND id=%s
+                        """,
+                        (
+                            fields["title"],
+                            fields["year"],
+                            fields["barcode"],
+                            fields["format"],
+                            fields["movievault_id"],
+                            fields["poster_url"],
+                            fields["note"],
+                            Jsonb(snapshot),
+                            user_id,
+                            item_uuid,
+                        ),
+                    )
+                emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.updated",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_uuid,
+                    summary="Updated wishlist entry",
+                    metadata={"title": fields["title"]},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "entry": wishlist_sync_entity(conn, user_id, item_uuid),
+                    "counts": personal_list_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.post("/api/next/lists/wishlist/<item_id>/poster")
+    def upload_wishlist_poster(item_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
+            raise NextApiError("Poster upload may not exceed 20 MB", 413)
+        upload, _inferred = uploaded_artwork_file()
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT title, year, barcode, format, movievault_id, poster_url, note FROM wishlist_items WHERE user_id=%s AND id=%s",
+                    (user_id, item_uuid),
+                )
+                current = cur.fetchone()
+            if not current:
+                raise NextApiError("Wishlist entry not found", 404)
+            upload_info = save_uploaded_artwork_file(upload, kind="poster")
+            with conn.transaction():
+                asset = store_uploaded_poster_asset(conn, upload_info=upload_info, actor=actor)
+                poster_url = media_asset_public_url(asset)
+                fields = {
+                    "title": current.get("title"),
+                    "year": current.get("year"),
+                    "barcode": current.get("barcode"),
+                    "format": current.get("format"),
+                    "movievault_id": current.get("movievault_id"),
+                    "poster_url": poster_url,
+                }
+                snapshot = _wishlist_snapshot(fields)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE wishlist_items SET poster_url=%s, snapshot=%s WHERE user_id=%s AND id=%s",
+                        (poster_url, Jsonb(snapshot), user_id, item_uuid),
+                    )
+                emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.poster_uploaded",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_uuid,
+                    summary="Uploaded wishlist poster",
+                    metadata={"posterUrl": poster_url},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "posterUrl": poster_url,
+                    "entry": wishlist_sync_entity(conn, user_id, item_uuid),
+                },
+                201,
             )
 
     # ------------------------------------------------------------------
@@ -54041,6 +56667,8 @@ def register_routes(flask_app: Flask) -> None:
         note = clean_text(body.get("note"))
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            if not loans_system_enabled(conn):
+                raise NextApiError("Loans system is disabled", 409)
             if not table_exists(conn, "loans"):
                 raise NextApiError("Loans table is not available", 503)
             user_id = actor.get("id")
@@ -54052,15 +56680,53 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO loans
-                            (user_id, movie_id, snapshot, borrower_name, borrower_user_id, due_at, note)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            (user_id, movie_id, snapshot, borrower_name, borrower_user_id, due_at, note, created_by_user_id)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
                         """,
-                        (user_id, movie_uuid, Jsonb(snapshot), borrower_name, borrower_uuid, due_at, note),
+                        (user_id, movie_uuid, Jsonb(snapshot), borrower_name, borrower_uuid, due_at, note, actor.get("id")),
                     )
                     loan_id = (cur.fetchone() or {}).get("id")
                 if loan_id is not None:
                     emit_loan_change(conn, user_id, loan_id, operation="upsert", movie_id=movie_uuid)
+                    if borrower_uuid is not None and table_exists(conn, "user_notifications"):
+                        movie_title = clean_text((snapshot or {}).get("title")) or None
+                        lender_label = actor.get("display_name") or actor.get("username") or None
+                        recipient_locale = get_user_locale(conn, borrower_uuid)
+                        lender_text = lender_label or next_translate(
+                            recipient_locale, "notifications.loanLenderFallback", "A DiscVault member"
+                        )
+                        title_text = next_translate(
+                            recipient_locale, "notifications.loanCreatedTitle", "Disc lent to you"
+                        )
+                        movie_text = movie_title or next_translate(
+                            recipient_locale, "notifications.loanTitleFallback", "a disc"
+                        )
+                        body_text = next_translate(
+                            recipient_locale,
+                            "notifications.loanCreatedBody",
+                            "{lender} lent you {title}.",
+                            lender=lender_text,
+                            title=movie_text,
+                        )
+                        try:
+                            create_user_notification(
+                                conn,
+                                borrower_uuid,
+                                title=title_text,
+                                body=body_text,
+                                url="/lists",
+                                pref_key="app_updates",
+                                payload={
+                                    "kind": "loan_created",
+                                    "loanId": str(loan_id),
+                                    "movieId": str(movie_uuid),
+                                    "movieTitle": movie_text,
+                                    "lenderId": str(user_id or ""),
+                                },
+                            )
+                        except Exception:
+                            pass
                 audit_event(
                     conn,
                     event_type="loan.created",
@@ -54147,6 +56813,518 @@ def register_routes(flask_app: Flask) -> None:
                         metadata={},
                     )
             return response({"status": "ok", "deleted": deleted})
+
+    @flask_app.patch("/api/next/loans/<loan_id>")
+    def update_loan(loan_id: str):
+        loan_uuid = parse_uuid(loan_id, "loanId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Loan request body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "loans"):
+                raise NextApiError("Loans table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT movie_id, borrower_name, borrower_user_id, loaned_at, due_at, note
+                    FROM loans
+                    WHERE user_id=%s AND id=%s
+                    """,
+                    (user_id, loan_uuid),
+                )
+                current = cur.fetchone()
+            if not current:
+                raise NextApiError("Loan not found", 404)
+
+            borrower_name = current.get("borrower_name")
+            borrower_uuid = current.get("borrower_user_id")
+            due_at = current.get("due_at")
+            loaned_at = current.get("loaned_at")
+            note = current.get("note")
+
+            if "borrowerName" in body or "borrower_name" in body:
+                borrower_name = clean_text(body.get("borrowerName") or body.get("borrower_name"))
+            if "borrowerUserId" in body or "borrower_user_id" in body:
+                borrower_ref = clean_text(body.get("borrowerUserId") or body.get("borrower_user_id"))
+                borrower_uuid = parse_uuid(borrower_ref, "borrowerUserId") if borrower_ref else None
+            if "dueAt" in body or "due_at" in body:
+                due_at = clean_text(body.get("dueAt") or body.get("due_at")) or None
+            if "loanedAt" in body or "loaned_at" in body:
+                loaned_raw = clean_text(body.get("loanedAt") or body.get("loaned_at"))
+                if loaned_raw:
+                    loaned_at = loaned_raw
+            if "note" in body:
+                note = clean_text(body.get("note"))
+
+            if not borrower_name and borrower_uuid is None:
+                raise NextApiError("Provide borrowerName or borrowerUserId", 400)
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE loans
+                        SET borrower_name=%s, borrower_user_id=%s, due_at=%s,
+                            loaned_at=%s, note=%s
+                        WHERE user_id=%s AND id=%s
+                        """,
+                        (
+                            borrower_name,
+                            borrower_uuid,
+                            due_at,
+                            loaned_at,
+                            note,
+                            user_id,
+                            loan_uuid,
+                        ),
+                    )
+                emit_loan_change(
+                    conn, user_id, loan_uuid, operation="upsert", movie_id=current.get("movie_id")
+                )
+                audit_event(
+                    conn,
+                    event_type="loan.updated",
+                    category="personal",
+                    actor=actor,
+                    target_type="loan",
+                    target_id=loan_uuid,
+                    summary="Updated loan",
+                    metadata={"borrower": borrower_name or str(borrower_uuid)},
+                )
+            return response({"status": "ok", "loan": loan_sync_entity(conn, user_id, loan_uuid)})
+
+    @flask_app.get("/api/next/loans/borrowers/search")
+    def search_loan_borrowers():
+        query = clean_text(request.args.get("q") or request.args.get("query")) or ""
+        limit = min(max(int(request.args.get("limit", 10) or 10), 1), 25)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "users"):
+                return response({"status": "ok", "borrowers": []})
+            results: list[dict[str, Any]] = []
+            if len(query) >= 1:
+                like = f"%{query.lower()}%"
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, username, display_name
+                        FROM users
+                        WHERE (lower(username) LIKE %s OR lower(coalesce(display_name, '')) LIKE %s)
+                          AND id <> %s
+                        ORDER BY
+                            CASE WHEN lower(username) = %s THEN 0 ELSE 1 END,
+                            lower(coalesce(display_name, username))
+                        LIMIT %s
+                        """,
+                        (like, like, actor.get("id"), query.lower(), limit),
+                    )
+                    rows = cur.fetchall()
+                results = [
+                    {
+                        "id": str(row.get("id")),
+                        "username": row.get("username"),
+                        "displayName": row.get("display_name") or row.get("username"),
+                    }
+                    for row in rows
+                ]
+            return response({"status": "ok", "borrowers": results})
+
+    @flask_app.get("/api/next/loans/borrowed")
+    def list_borrowed_loans():
+        status_filter = clean_text(request.args.get("status")) or "all"
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            user_id = actor.get("id")
+            loans = all_borrowed_loan_entities(conn, user_id)
+            if status_filter == "active":
+                loans = [ln for ln in loans if not ln.get("returned")]
+            elif status_filter == "returned":
+                loans = [ln for ln in loans if ln.get("returned")]
+            return response({"status": "ok", "loans": loans})
+
+    def _load_loan_request_raw(conn, request_uuid: UUID, *, for_update: bool = False):
+        lock = " FOR UPDATE" if for_update else ""
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT id, movie_id, requester_user_id, owner_user_id, snapshot,
+                       borrow_from, return_by, status, note, resulting_loan_id
+                FROM loan_requests
+                WHERE id=%s{lock}
+                """,
+                (request_uuid,),
+            )
+            return cur.fetchone()
+
+    def _notify_loan_request(conn, recipient_id, *, title_key, title_default,
+                             body_key, body_default, payload, url="/lists", **body_kwargs):
+        if not recipient_id or not table_exists(conn, "user_notifications"):
+            return
+        recipient_locale = get_user_locale(conn, recipient_id)
+        title_text = next_translate(recipient_locale, title_key, title_default)
+        body_text = next_translate(recipient_locale, body_key, body_default, **body_kwargs)
+        try:
+            create_user_notification(
+                conn,
+                recipient_id,
+                title=title_text,
+                body=body_text,
+                url=url,
+                pref_key="app_updates",
+                payload=payload,
+            )
+        except Exception:
+            pass
+
+    @flask_app.post("/api/next/movies/<movie_id>/loan-requests")
+    def create_loan_request(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Loan request body must be an object", 400)
+        borrow_from = parse_optional_date(body.get("borrowFrom") or body.get("borrow_from"), "borrowFrom")
+        return_by = parse_optional_date(body.get("returnBy") or body.get("return_by"), "returnBy")
+        if borrow_from is None:
+            raise NextApiError("A borrow-from date is required", 400)
+        if return_by is None:
+            raise NextApiError("A return-by date is required", 400)
+        if return_by < borrow_from:
+            raise NextApiError("The return-by date must be on or after the borrow-from date", 400)
+        note = clean_text(body.get("note"))
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            if not loans_system_enabled(conn):
+                raise NextApiError("Loans system is disabled", 409)
+            if not table_exists(conn, "loan_requests"):
+                raise NextApiError("Loan requests are not available", 503)
+            requester_id = actor.get("id")
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            owner_id = resolve_movie_owner_id(conn, movie_uuid, viewer_id=requester_id)
+            if owner_id is None:
+                raise NextApiError("This disc has no owner to borrow from", 409)
+            if str(owner_id) == str(requester_id):
+                raise NextApiError("You already own this disc", 409)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id FROM loan_requests
+                    WHERE movie_id=%s AND requester_user_id=%s AND status='pending'
+                    LIMIT 1
+                    """,
+                    (movie_uuid, requester_id),
+                )
+                if cur.fetchone():
+                    raise NextApiError("You already have a pending request for this disc", 409)
+            snapshot = personal_list_movie_snapshot(conn, movie_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO loan_requests
+                            (movie_id, requester_user_id, owner_user_id, snapshot,
+                             borrow_from, return_by, note)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (movie_uuid, requester_id, owner_id, Jsonb(snapshot),
+                         borrow_from, return_by, note),
+                    )
+                    request_uuid = (cur.fetchone() or {}).get("id")
+                requester_label = actor.get("display_name") or actor.get("username") or None
+                movie_title = clean_text((snapshot or {}).get("title")) or None
+                owner_locale = get_user_locale(conn, owner_id)
+                requester_text = requester_label or next_translate(
+                    owner_locale, "notifications.loanRequestRequesterFallback", "A DiscVault member"
+                )
+                movie_text = movie_title or next_translate(
+                    owner_locale, "notifications.loanTitleFallback", "a disc"
+                )
+                _notify_loan_request(
+                    conn,
+                    owner_id,
+                    title_key="notifications.loanRequestTitle",
+                    title_default="New borrow request",
+                    body_key="notifications.loanRequestBody",
+                    body_default="{requester} would like to borrow {title}.",
+                    requester=requester_text,
+                    title=movie_text,
+                    payload={
+                        "kind": "loan_request",
+                        "loanRequestId": str(request_uuid),
+                        "movieId": str(movie_uuid),
+                        "movieTitle": movie_text,
+                        "requesterId": str(requester_id or ""),
+                        "borrowFrom": borrow_from.isoformat(),
+                        "returnBy": return_by.isoformat(),
+                    },
+                )
+                audit_event(
+                    conn,
+                    event_type="loan_request.created",
+                    category="personal",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Requested to borrow disc",
+                    metadata={"owner": str(owner_id), "returnBy": return_by.isoformat()},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "loanRequest": loan_request_entity(conn, request_uuid) if request_uuid else None,
+                    "userState": personal_movie_state(conn, movie_uuid, requester_id),
+                },
+                201,
+            )
+
+    @flask_app.get("/api/next/loan-requests")
+    def list_loan_requests():
+        role = clean_text(request.args.get("role")) or "incoming"
+        if role not in ("incoming", "outgoing"):
+            raise NextApiError("role must be 'incoming' or 'outgoing'", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            user_id = actor.get("id")
+            requests = all_loan_requests(conn, user_id, role=role)
+            return response({"status": "ok", "role": role, "loanRequests": requests})
+
+    @flask_app.post("/api/next/loan-requests/<request_id>/approve")
+    def approve_loan_request(request_id: str):
+        request_uuid = parse_uuid(request_id, "loanRequestId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            if not loans_system_enabled(conn):
+                raise NextApiError("Loans system is disabled", 409)
+            if not table_exists(conn, "loan_requests"):
+                raise NextApiError("Loan requests are not available", 503)
+            actor_id = actor.get("id")
+            with conn.transaction():
+                row = _load_loan_request_raw(conn, request_uuid, for_update=True)
+                if not row:
+                    raise NextApiError("Loan request not found", 404)
+                if str(row.get("owner_user_id")) != str(actor_id):
+                    raise NextApiError("Only the disc owner can approve this request", 403)
+                if row.get("status") != "pending":
+                    raise NextApiError("This request has already been decided", 409)
+                loan_id = create_loan_from_request(conn, row, actor)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE loan_requests
+                        SET status='approved', decided_at=now(), updated_at=now(),
+                            resulting_loan_id=%s
+                        WHERE id=%s
+                        """,
+                        (loan_id, request_uuid),
+                    )
+                snapshot = row.get("snapshot") or {}
+                movie_uuid = row.get("movie_id")
+                requester_id = row.get("requester_user_id")
+                owner_label = actor.get("display_name") or actor.get("username") or None
+                requester_locale = get_user_locale(conn, requester_id)
+                owner_text = owner_label or next_translate(
+                    requester_locale, "notifications.loanRequestOwnerFallback", "The owner"
+                )
+                movie_text = clean_text((snapshot or {}).get("title")) or next_translate(
+                    requester_locale, "notifications.loanTitleFallback", "a disc"
+                )
+                _notify_loan_request(
+                    conn,
+                    requester_id,
+                    title_key="notifications.loanRequestApprovedTitle",
+                    title_default="Borrow request approved",
+                    body_key="notifications.loanRequestApprovedBody",
+                    body_default="{owner} approved your request to borrow {title}.",
+                    owner=owner_text,
+                    title=movie_text,
+                    payload={
+                        "kind": "loan_request_decided",
+                        "loanRequestId": str(request_uuid),
+                        "status": "approved",
+                        "movieId": str(movie_uuid) if movie_uuid else None,
+                        "movieTitle": movie_text,
+                        "loanId": str(loan_id) if loan_id else None,
+                    },
+                )
+                audit_event(
+                    conn,
+                    event_type="loan_request.approved",
+                    category="personal",
+                    actor=actor,
+                    target_type="loan_request",
+                    target_id=request_uuid,
+                    summary="Approved borrow request",
+                    metadata={"loanId": str(loan_id) if loan_id else None},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "loanRequest": loan_request_entity(conn, request_uuid),
+                }
+            )
+
+    @flask_app.post("/api/next/loan-requests/<request_id>/decline")
+    def decline_loan_request(request_id: str):
+        request_uuid = parse_uuid(request_id, "loanRequestId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            if not table_exists(conn, "loan_requests"):
+                raise NextApiError("Loan requests are not available", 503)
+            actor_id = actor.get("id")
+            with conn.transaction():
+                row = _load_loan_request_raw(conn, request_uuid, for_update=True)
+                if not row:
+                    raise NextApiError("Loan request not found", 404)
+                if str(row.get("owner_user_id")) != str(actor_id):
+                    raise NextApiError("Only the disc owner can decline this request", 403)
+                if row.get("status") != "pending":
+                    raise NextApiError("This request has already been decided", 409)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE loan_requests
+                        SET status='declined', decided_at=now(), updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (request_uuid,),
+                    )
+                snapshot = row.get("snapshot") or {}
+                movie_uuid = row.get("movie_id")
+                requester_id = row.get("requester_user_id")
+                owner_label = actor.get("display_name") or actor.get("username") or None
+                requester_locale = get_user_locale(conn, requester_id)
+                owner_text = owner_label or next_translate(
+                    requester_locale, "notifications.loanRequestOwnerFallback", "The owner"
+                )
+                movie_text = clean_text((snapshot or {}).get("title")) or next_translate(
+                    requester_locale, "notifications.loanTitleFallback", "a disc"
+                )
+                _notify_loan_request(
+                    conn,
+                    requester_id,
+                    title_key="notifications.loanRequestDeclinedTitle",
+                    title_default="Borrow request declined",
+                    body_key="notifications.loanRequestDeclinedBody",
+                    body_default="{owner} declined your request to borrow {title}.",
+                    owner=owner_text,
+                    title=movie_text,
+                    payload={
+                        "kind": "loan_request_decided",
+                        "loanRequestId": str(request_uuid),
+                        "status": "declined",
+                        "movieId": str(movie_uuid) if movie_uuid else None,
+                        "movieTitle": movie_text,
+                    },
+                )
+                audit_event(
+                    conn,
+                    event_type="loan_request.declined",
+                    category="personal",
+                    actor=actor,
+                    target_type="loan_request",
+                    target_id=request_uuid,
+                    summary="Declined borrow request",
+                    metadata={},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "loanRequest": loan_request_entity(conn, request_uuid),
+                }
+            )
+
+    @flask_app.post("/api/next/loan-requests/<request_id>/cancel")
+    def cancel_loan_request(request_id: str):
+        request_uuid = parse_uuid(request_id, "loanRequestId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "lending.request")
+            if not table_exists(conn, "loan_requests"):
+                raise NextApiError("Loan requests are not available", 503)
+            actor_id = actor.get("id")
+            with conn.transaction():
+                row = _load_loan_request_raw(conn, request_uuid, for_update=True)
+                if not row:
+                    raise NextApiError("Loan request not found", 404)
+                if str(row.get("requester_user_id")) != str(actor_id):
+                    raise NextApiError("Only the requester can cancel this request", 403)
+                if row.get("status") != "pending":
+                    raise NextApiError("Only pending requests can be cancelled", 409)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE loan_requests
+                        SET status='cancelled', decided_at=now(), updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (request_uuid,),
+                    )
+                audit_event(
+                    conn,
+                    event_type="loan_request.cancelled",
+                    category="personal",
+                    actor=actor,
+                    target_type="loan_request",
+                    target_id=request_uuid,
+                    summary="Cancelled borrow request",
+                    metadata={},
+                )
+            movie_uuid = row.get("movie_id")
+            return response(
+                {
+                    "status": "ok",
+                    "loanRequest": loan_request_entity(conn, request_uuid),
+                    "userState": (
+                        personal_movie_state(conn, movie_uuid, actor_id) if movie_uuid else None
+                    ),
+                }
+            )
+
+    @flask_app.patch("/api/next/admin/settings/loans-system")
+    def set_loans_system_setting():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        if "enabled" not in body:
+            raise NextApiError("An 'enabled' boolean is required", 400)
+        enabled = bool(body.get("enabled"))
+        with connect() as conn:
+            actor = require_next_permission(conn, "security.manage_loans_system")
+            with conn.transaction():
+                set_app_setting_value(
+                    conn,
+                    "loans_system_enabled",
+                    enabled,
+                    actor_id=actor.get("id"),
+                )
+                audit_event(
+                    conn,
+                    event_type="settings.loans_system",
+                    category="security",
+                    actor=actor,
+                    target_type="app_setting",
+                    target_id=None,
+                    summary=("Enabled" if enabled else "Disabled") + " the Loans System",
+                    metadata={"enabled": enabled},
+                )
+            return response({"status": "ok", "loansSystemEnabled": enabled})
+
+    @flask_app.post("/api/next/preferences/locale")
+    def set_preferences_locale():
+        body = request.get_json(silent=True) or {}
+        locale = clean_text(body.get("locale") or body.get("value"))
+        if not locale:
+            raise NextApiError("A locale is required", 400)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            user_id = actor.get("id")
+            if not user_id:
+                raise NextApiError("Unauthorized", 401)
+            with conn.transaction():
+                normalized = set_user_locale(conn, user_id, locale)
+            return response({"status": "ok", "locale": normalized})
 
     @flask_app.get("/api/next/stats/personal")
     def personal_statistics():
