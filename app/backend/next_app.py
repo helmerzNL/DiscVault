@@ -671,9 +671,9 @@ def build_sha() -> str:
 
 UPDATE_GITHUB_REPO = "helmerzNL/DiscVault"
 UPDATE_IMAGE_NAME = "ghcr.io/helmerznl/discvault"
-UPDATE_CHANNELS = ("auto", "beta", "stable", "v26")
-UPDATE_CHANNEL_IMAGE_TAG = {"beta": "v26-beta", "v26": "v26", "stable": "stable"}
-UPDATE_CHANNEL_BRANCH = {"beta": "release/v26-beta", "v26": "main"}
+UPDATE_CHANNELS = ("auto", "beta", "stable")
+UPDATE_CHANNEL_IMAGE_TAG = {"beta": "v26-beta", "stable": "stable"}
+UPDATE_CHANNEL_BRANCH = {"beta": "release/v26-beta", "stable": "main"}
 UPDATE_CHANNEL_SETTING_KEY = "update_channel"
 UPDATE_HTTP_TIMEOUT = 8.0
 UPDATE_USER_AGENT = "DiscVault-UpdateCheck"
@@ -701,6 +701,10 @@ def _update_version_tuple(value: Any) -> tuple[int, ...]:
 
 def normalize_update_channel(value: Any) -> str:
     text = str(value or "").strip().lower()
+    if text == "v26":
+        # Legacy channel retired in the 2-image model; treat any persisted
+        # "v26" preference as its successor "stable" (main == the old v26 line).
+        return "stable"
     return text if text in UPDATE_CHANNELS else "auto"
 
 
@@ -792,10 +796,11 @@ def perform_update_check(conn, requested_channel: Any = None) -> dict[str, Any]:
     checked_at = datetime.now(timezone.utc).isoformat()
     try:
         channel, channel_source = resolve_update_channel(conn, requested_channel)
-        if channel == "stable":
-            latest = github_latest_stable_release()
-        else:
-            latest = github_branch_version(UPDATE_CHANNEL_BRANCH[channel])
+        # Every channel resolves its "latest" from an app/VERSION on a branch:
+        # stable -> main, beta -> release/v26-beta. This keeps the reported
+        # version, the published image and the source branch in lockstep, with
+        # no drift against independently-cut GitHub Releases (changelogs only).
+        latest = github_branch_version(UPDATE_CHANNEL_BRANCH.get(channel, "main"))
         if not latest:
             return {
                 "status": "error",
@@ -16964,7 +16969,6 @@ def ui_preview_html(
                         <option value="auto" data-next-i18n="profile.channelAuto">Automatic</option>
                         <option value="beta" data-next-i18n="profile.channelBeta">Beta</option>
                         <option value="stable" data-next-i18n="profile.channelStable">Stable</option>
-                        <option value="v26" data-next-i18n="profile.channelV26">v26</option>
                       </select>
                     </label>
                     <button type="button" class="secondary-button" id="profileUpdateCheckButton" data-next-i18n="profile.checkForUpdate">Check for update</button>
