@@ -118,12 +118,34 @@ This process is **mandatory**. Follow it automatically on every feature, commit,
 do not wait to be reminded. If a request would break the two-branch model or the merge-commit
 promotion rule, stop and warn the user before acting.
 
-**When the user starts a new feature**
+**At the start of every new piece of work — classify it first**
+
+Before creating a branch or writing any code, **ask the user what kind of work this is**:
+a **bug** fix, a **feature**, or **something else** (docs, chore, refactor, etc.). Skip the
+question only when the answer is already unambiguous from the request (then state the type you
+inferred). Carry the chosen type through the whole flow:
+
+| Type | Branch prefix | Commit / PR prefix |
+|---|---|---|
+| bug | `fix/` | `fix:` |
+| feature | `feat/` | `feat:` |
+| docs | `docs/` | `docs:` |
+| chore | `chore/` | `chore:` |
+| refactor | `refactor/` | `refactor:` |
+
+- **Branch name:** `<prefix>/<short-kebab-description>` (e.g. `fix/loans-toggle-missing`).
+- **Commit + PR title:** start with the matching Conventional-Commits prefix (e.g. `feat: …`).
+- **Merge:** the type does not change the merge rule — feature PRs into beta may be squashed,
+  promotions to `main` are always merge-commits — but keep the prefix in the resulting title.
+- In an existing worktree session whose branch is already fixed, keep the existing branch but
+  still apply the type prefix to commits and the PR title.
+
+**When the user starts a new feature (or bug/other work)**
 
 1. Base the work on `release/v26-beta`, **never** on `main` or `legacy`. In a worktree session
    whose branch already targets beta, that is fine; otherwise branch off `origin/release/v26-beta`.
-2. Give the branch a short, descriptive kebab-case name.
-3. Plan the change against beta and keep the scope to that one feature.
+2. Name the branch `<type-prefix>/<short-kebab-description>` using the classified type above.
+3. Plan the change against beta and keep the scope to that one bug/feature.
 
 **When the user asks to commit (or you are about to commit)**
 
@@ -131,9 +153,11 @@ promotion rule, stop and warn the user before acting.
 2. If the change touches any protected path (see the Version-guard list above), make sure
    `app/VERSION` is bumped — run `python app/scripts/bump_version.py` (or rely on the
    `core.hooksPath .githooks` pre-commit hook). Docs-only (`*.md`/`*.txt`) needs no bump.
-3. Include the `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer
+3. Start the commit message with the classified type prefix (`fix:`/`feat:`/`docs:`/…) and
+   include the `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer
    unless the user opts out.
-4. Push and open the PR **into `release/v26-beta`** (feature PRs into beta may be squashed).
+4. Push and open the PR **into `release/v26-beta`**, giving the PR the same type prefix in its
+   title (feature PRs into beta may be squashed).
 5. Let it build/test on the beta channel before considering promotion.
 6. **After the PR merges, delete the feature branch** (`git push origin --delete <branch>`) —
    unless it is the active Copilot session/worktree branch (reused across PRs) or a
