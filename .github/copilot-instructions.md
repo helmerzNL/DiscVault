@@ -94,9 +94,31 @@ Then open the promotion PR again and merge it with `--merge`.
 `main` is protected: PRs require review, the version-guard check, and Copilot review before
 merge. Do not push directly to `main`.
 
-### Agent behaviour (for Copilot)
+### Agent behaviour (for Copilot) — ALWAYS follow this
 
-When the user asks to "ship", "promote", or "push to main":
+This process is **mandatory**. Follow it automatically on every feature, commit, and promotion —
+do not wait to be reminded. If a request would break the two-branch model or the merge-commit
+promotion rule, stop and warn the user before acting.
+
+**When the user starts a new feature**
+
+1. Base the work on `release/v26-beta`, **never** on `main` or `legacy`. In a worktree session
+   whose branch already targets beta, that is fine; otherwise branch off `origin/release/v26-beta`.
+2. Give the branch a short, descriptive kebab-case name.
+3. Plan the change against beta and keep the scope to that one feature.
+
+**When the user asks to commit (or you are about to commit)**
+
+1. Confirm you are on a **beta-based feature branch**, not directly on `main`.
+2. If the change touches any protected path (see the Version-guard list above), make sure
+   `app/VERSION` is bumped — run `python app/scripts/bump_version.py` (or rely on the
+   `core.hooksPath .githooks` pre-commit hook). Docs-only (`*.md`/`*.txt`) needs no bump.
+3. Include the `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer
+   unless the user opts out.
+4. Push and open the PR **into `release/v26-beta`** (feature PRs into beta may be squashed).
+5. Let it build/test on the beta channel before considering promotion.
+
+**When the user asks to "ship", "promote", or "push to main"**
 
 - Confirm the change landed on `release/v26-beta` first.
 - Promote via a PR merged with `--merge` (a merge commit). **Never squash a promotion.**
@@ -105,4 +127,5 @@ When the user asks to "ship", "promote", or "push to main":
 - After promotion, verify `main` and `release/v26-beta` are content-identical
   (`git diff origin/main origin/release/v26-beta --stat` empty).
 
-Full reference: **[DiscVault 26 — Branching & releases](https://wiki.zbonline.nl/en/Projecten/Coding/discvault/branching)** on the wiki.
+Full reference: **[DiscVault 26 — Branching & releases](https://wiki.zbonline.nl/en/Projecten/Coding/discvault/branching)**
+and the step-by-step **[feature → production workflow](https://wiki.zbonline.nl/en/Projecten/Coding/discvault/feature-workflow)** on the wiki.
