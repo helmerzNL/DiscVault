@@ -11337,6 +11337,9 @@ def ui_preview_html(
     let activePersonId = "";
     let activePersonPayload = null;
     let personReturnRoute = null;
+    let activeLocationRoutePublicId = "";
+    let activeLocationRouteId = "";
+    let activeLocationRouteMissing = false;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
@@ -16306,6 +16309,13 @@ def ui_preview_html(
         location: String(source.location || "any").trim() || "any"
       };
     }
+    function effectiveAdvancedSearchFilters() {
+      const filters = normalizeAdvancedSearch(advancedSearch);
+      if (activeLocationRouteId) {
+        filters.location = String(activeLocationRouteId);
+      }
+      return filters;
+    }
     function advancedSearchActiveCount(filters = advancedSearch) {
       const normalized = normalizeAdvancedSearch(filters);
       let count = 0;
@@ -16569,7 +16579,7 @@ def ui_preview_html(
       return !!(movie?.watched || movie?.is_watched || movie?.watched_count || movie?.last_watched_at || movie?.user_state?.watched);
     }
     function movieMatchesAdvancedSearch(movie) {
-      const filters = normalizeAdvancedSearch(advancedSearch);
+      const filters = effectiveAdvancedSearchFilters();
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
       const yearTo = Number.parseInt(filters.yearTo || "0", 10) || 0;
@@ -16633,7 +16643,7 @@ def ui_preview_html(
     }
     function containerMatchesAdvancedSearch(container) {
       if (!collectorsModeEnabled()) return false;
-      const filters = normalizeAdvancedSearch(advancedSearch);
+      const filters = effectiveAdvancedSearchFilters();
       const type = String(container?.container_type || "");
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
@@ -16752,6 +16762,7 @@ def ui_preview_html(
       return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
     function libraryDisplayItems() {
+      const filters = effectiveAdvancedSearchFilters();
       const visibleMovies = (movies || []).filter((movie) => (
         movieMatchesGroup(movie)
         && movieMatchesSearch(movie)
@@ -16760,7 +16771,7 @@ def ui_preview_html(
         && movieMatchesGenre(movie)
         && movieMatchesLocation(movie)
         && movieMatchesAdvancedSearch(movie)
-        && !["container", "box_set", "collection", "vault"].includes(normalizeAdvancedSearch(advancedSearch).itemType)
+        && !["container", "box_set", "collection", "vault"].includes(filters.itemType)
       ));
       if (collectionItemFilter === "containers") {
         return sortLibraryItems(visibleContainerItems());
@@ -26000,6 +26011,7 @@ def ui_preview_html(
       if (route.view === "movie") openAppMovieDetail(route.movieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
+      else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
       else if (route.view === "import") showImportPage(false);
       else if (route.view === "lists") showListsPage(false);
@@ -26268,7 +26280,16 @@ def ui_preview_html(
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
-    function showLibraryPage(pushUrl = false, activeRoute = "library") {
+    function clearLocationRouteContext() {
+      activeLocationRoutePublicId = "";
+      activeLocationRouteId = "";
+      activeLocationRouteMissing = false;
+    }
+    function showLibraryPage(pushUrl = false, activeRoute = "library", options = {}) {
+      const preserveLocationContext = !!options.preserveLocationContext;
+      if (!preserveLocationContext) {
+        clearLocationRouteContext();
+      }
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -26279,7 +26300,7 @@ def ui_preview_html(
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("libraryView")?.classList.remove("hidden");
-      setActiveAppRoute(activeRoute);
+      setActiveAppRoute(activeRoute === "location" ? "library" : activeRoute);
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
@@ -26512,7 +26533,30 @@ def ui_preview_html(
       if (personMatch) {
         return {view: "person", personId: decodeURIComponent(personMatch[1] || personMatch[2])};
       }
+      const locationMatch = window.location.pathname.match(/^\\/app\\/locations\\/([^/]+)\\/?$|^\\/locations\\/([^/]+)\\/?$/);
+      if (locationMatch) {
+        return {view: "location", locationPublicId: decodeURIComponent(locationMatch[1] || locationMatch[2])};
+      }
       return {view: "library"};
+    }
+    function openAppLocationRoute(locationPublicId, pushUrl = true) {
+      const publicId = String(locationPublicId || "").trim();
+      if (!publicId) {
+        showLibraryPage(pushUrl);
+        return;
+      }
+      const node = locationByPublicId(publicId);
+      activeLocationRoutePublicId = publicId;
+      activeLocationRouteId = node ? String(node.id || "") : "";
+      activeLocationRouteMissing = !node;
+      showLibraryPage(pushUrl, "location", {preserveLocationContext: true});
+      renderLibrary();
+      if (pushUrl && appMode) {
+        const nextPath = `/locations/${encodeURIComponent(publicId)}`;
+        if (window.location.pathname !== nextPath) {
+          history.pushState({locationPublicId: publicId}, "", nextPath);
+        }
+      }
     }
     function openAppRoute(route) {
       if (route === "admin") {
@@ -26965,9 +27009,19 @@ def ui_preview_html(
       if (summary) {
         const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
         const tileLabel = tNext("collection.tiles", "tiles");
-        summary.textContent = mergeEditionsAsTitleEnabled()
+        let summaryText = mergeEditionsAsTitleEnabled()
           ? `${visibleMovieCount} / ${movies.length} ${movieLabel} · ${displayItems.length} ${tileLabel}`
           : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
+        if (activeLocationRoutePublicId) {
+          if (activeLocationRouteMissing) {
+            summaryText += ` · ${tNext("locations.routeNotFound", "Location not found.")}`;
+          } else {
+            const node = locationById(activeLocationRouteId);
+            const label = node?.path_label || node?.name || activeLocationRoutePublicId;
+            summaryText += ` · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", label)}`;
+          }
+        }
+        summary.textContent = summaryText;
       }
       const navMovieCount = document.getElementById("navMovieCount");
       const navListCount = document.getElementById("navListCount");
@@ -27808,6 +27862,11 @@ def ui_preview_html(
     function locationById(id) {
       const key = String(id || "");
       return locations.find((loc) => String(loc.id) === key) || null;
+    }
+    function locationByPublicId(publicId) {
+      const key = String(publicId || "").trim();
+      if (!key) return null;
+      return locations.find((loc) => String(loc.public_id || "") === key) || null;
     }
     function locationChildren(parentId) {
       const key = parentId ? String(parentId) : "";
@@ -29127,6 +29186,7 @@ def ui_preview_html(
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
+      else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
@@ -30207,6 +30267,7 @@ def ui_preview_html(
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
         else if (route.view === "container") openAppContainerDetail(route.containerId, false);
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
+        else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
         else if (route.view === "people") showLibraryPage(false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);
