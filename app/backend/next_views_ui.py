@@ -16857,7 +16857,15 @@ def ui_preview_html(
       return movieGenreValues(movie).some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase());
     }
     function movieLocationValue(movie) {
-      return String(movie?.location || movie?.metadata?.location || "").trim();
+      const direct = movie?.location;
+      if (direct && typeof direct === "object") {
+        return String(direct.path_label || direct.pathLabel || direct.name || "").trim();
+      }
+      const metadataValue = movie?.metadata?.location;
+      if (metadataValue && typeof metadataValue === "object") {
+        return String(metadataValue.path_label || metadataValue.pathLabel || metadataValue.name || "").trim();
+      }
+      return String(direct || metadataValue || "").trim();
     }
     function movieMatchesLocation(movie) {
       if (!collectionLocationFilter) return true;
@@ -27176,7 +27184,7 @@ def ui_preview_html(
             summaryText += ` · ${tNext("locations.routeNotFound", "Location not found.")}`;
           } else {
             const node = locationById(activeLocationRouteId);
-            const label = node?.path_label || node?.name || activeLocationRoutePublicId;
+            const label = node?.path_label || node?.pathLabel || node?.name || activeLocationRoutePublicId;
             summaryText += ` · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", label)}`;
           }
         }
@@ -28023,7 +28031,14 @@ def ui_preview_html(
     function locationByPublicId(publicId) {
       const key = String(publicId || "").trim();
       if (!key) return null;
-      return locations.find((loc) => String(loc.public_id || "") === key) || null;
+      return locations.find((loc) => {
+        const routeKeys = [
+          loc.public_id,
+          loc.publicId,
+          loc.id
+        ].map((value) => String(value || "").trim()).filter(Boolean);
+        return routeKeys.includes(key);
+      }) || null;
     }
     function locationChildren(parentId) {
       const key = parentId ? String(parentId) : "";
@@ -28244,8 +28259,8 @@ def ui_preview_html(
       const node = locationById(locationId);
       if (!node) return;
       const url = `/api/next/locations/${encodeURIComponent(locationId)}/qr.svg`;
-      const title = node.path_label || node.name || tNext("locations.qr", "QR");
-      const publicId = String(node.public_id || locationId || "");
+      const title = node.path_label || node.pathLabel || node.name || tNext("locations.qr", "QR");
+      const publicId = String(node.public_id || node.publicId || node.id || locationId || "");
       const deepLink = publicId ? new URL(`/app/locations/${encodeURIComponent(publicId)}`, window.location.origin).toString() : "";
       const titleNode = document.getElementById("locationQrTitle");
       const pathNode = document.getElementById("locationQrPath");
