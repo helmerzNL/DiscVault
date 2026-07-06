@@ -5235,7 +5235,7 @@ def location_detail_entity(conn, location_id: UUID | str) -> dict[str, Any] | No
 def location_qr_svg(url: str) -> str:
     import segno
 
-    qr = segno.make(url, error="m")
+    qr = segno.make(url, error="h")
     buffer = io.BytesIO()
     qr.save(buffer, kind="svg", scale=6, border=2, dark="#0f172a", light=None)
     return buffer.getvalue().decode("utf-8")
