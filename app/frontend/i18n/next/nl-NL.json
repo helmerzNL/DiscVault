@@ -2078,6 +2078,8 @@
   "locations.none": "Geen locatie",
   "locations.movieCount": "{count} films",
   "locations.containerCount": "{count} containers",
+  "locations.routeContext": "Locatie: {path}",
+  "locations.routeNotFound": "Locatie niet gevonden.",
   "collection.locationFilter": "Locatie",
   "collection.locationFilterAny": "Elke locatie"
 }
