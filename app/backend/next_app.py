@@ -5830,6 +5830,8 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     m.year,
                     m.format,
                     m.edition,
+                    m.location,
+                    m.metadata->>'genre' AS genre,
                     m.metadata->>'audience_rating' AS audience_rating,
                     m.rating,
                     mts.content_ratings,
@@ -5904,6 +5906,8 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 m.year,
                 m.format,
                 m.edition,
+                m.location,
+                m.metadata->>'genre' AS genre,
                 m.metadata->>'audience_rating' AS audience_rating,
                 m.rating,
                 NULL::jsonb AS content_ratings,
@@ -7364,6 +7368,191 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 8px;
       min-width: 0;
+    }
+    .collection-controls .icon-button {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .collection-controls .icon-button svg,
+    .filter-toggle-row svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+    .collection-controls-spacer {
+      flex: 0 0 auto;
+      width: 14px;
+    }
+    .toolbar-menu {
+      position: relative;
+      display: inline-flex;
+    }
+    .toolbar-menu-trigger {
+      position: relative;
+    }
+    .toolbar-menu.open .toolbar-menu-trigger,
+    .toolbar-menu-trigger[aria-expanded="true"] {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      color: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .toolbar-menu-panel {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 40;
+      min-width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      backdrop-filter: blur(20px) saturate(160%);
+      box-shadow: var(--shadow-soft);
+    }
+    .toolbar-menu-panel.hidden {
+      display: none;
+    }
+    .toolbar-menu-option {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-height: 34px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+      text-align: left;
+      cursor: pointer;
+    }
+    .toolbar-menu-option:hover {
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+    .toolbar-menu-option.active {
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
+      color: var(--accent);
+      font-weight: 800;
+    }
+    .filter-panel {
+      min-width: 280px;
+      max-width: 320px;
+      gap: 14px;
+      padding: 14px;
+    }
+    .filter-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .filter-section.hidden {
+      display: none;
+    }
+    .filter-section-title {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .filter-switch-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .filter-switch-list .filter-empty {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .filter-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 30px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .filter-toggle-row input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      position: relative;
+      flex: 0 0 auto;
+      width: 38px;
+      height: 22px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--muted) 24%, transparent);
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+    .filter-toggle-row input[type="checkbox"]::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .15s ease;
+    }
+    .filter-toggle-row input[type="checkbox"]:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .filter-toggle-row input[type="checkbox"]:checked::after {
+      transform: translateX(16px);
+    }
+    .filter-select-field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .filter-select-field select {
+      width: 100%;
+      min-width: 0;
+      max-width: none;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+    }
+    .filter-panel .segmented.compact {
+      flex-wrap: wrap;
+    }
+    .filter-panel-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .segmented button.is-disabled,
+    .segmented button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+    .view-mode-button.active {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      color: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    #collectionFilterBadge:not(.hidden),
+    #advancedSearchBadge:not(.hidden) {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: var(--accent);
+      color: #fff;
     }
     .segmented.compact button {
       min-width: 0;
@@ -14595,38 +14784,73 @@ def ui_preview_html(
             <input id="previewSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
           </label>
           <div class="collection-controls">
-            <button type="button" class="icon-button advanced-search-toggle" id="advancedSearchToggleButton">
-              <span data-next-i18n="collection.advancedSearch">Advanced</span>
+            <div class="toolbar-menu" id="collectionSortMenu">
+              <button type="button" class="icon-button toolbar-menu-trigger" id="collectionSortTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Sort collection" data-next-i18n-aria="collection.sort" title="Sort" data-next-i18n-title="collection.sort">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9,3L5,6.99H8V14H10V6.99H13M16,17.01V10H14V17.01H11L15,21L19,17.01H16Z"/></svg>
+              </button>
+              <div class="toolbar-menu-panel hidden" id="collectionSortPanel" role="menu" aria-label="Sort options" data-next-i18n-aria="collection.sort">
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="added_desc" data-next-i18n="collection.sortAddedNewest">Date Added (newest)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="added_asc" data-next-i18n="collection.sortAddedOldest">Date Added (oldest)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="title_asc" data-next-i18n="collection.sortNameAsc">Name (A-Z)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="title_desc" data-next-i18n="collection.sortNameDesc">Name (Z-A)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="year_desc" data-next-i18n="collection.sortYearNewest">Release Year (newest)</button>
+                <button type="button" class="toolbar-menu-option" role="menuitemradio" data-sort-option="year_asc" data-next-i18n="collection.sortYearOldest">Release Year (oldest)</button>
+              </div>
+            </div>
+            <div class="toolbar-menu" id="collectionFilterMenu">
+              <button type="button" class="icon-button toolbar-menu-trigger" id="collectionFilterTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Filter collection" data-next-i18n-aria="collection.filter" title="Filter" data-next-i18n-title="collection.filter">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 13H18V11H6M3 6V8H21V6M10 18H14V16H10V18Z"/></svg>
+                <span class="metadata-job-badge hidden" id="collectionFilterBadge">0</span>
+              </button>
+              <div class="toolbar-menu-panel filter-panel hidden" id="collectionFilterPanel" role="dialog" aria-label="Filters" data-next-i18n-aria="collection.filter">
+                <div class="filter-section">
+                  <span class="filter-section-title" data-next-i18n="collection.filterFormat">Format</span>
+                  <div class="filter-switch-list" id="collectionFormatSwitches"></div>
+                </div>
+                <div class="filter-section">
+                  <span class="filter-section-title" data-next-i18n="collection.filterType">Type</span>
+                  <div class="segmented compact" id="collectionTypeFilter" role="group" aria-label="Type filter" data-next-i18n-aria="collection.filterType">
+                    <button type="button" class="active" data-type-filter="all" data-next-i18n="common.all">All</button>
+                    <button type="button" data-type-filter="movie" data-next-i18n="collection.typeMovie">Movie</button>
+                    <button type="button" data-type-filter="tv" class="is-disabled" disabled aria-disabled="true" data-next-i18n="collection.typeTvShow">TV Show</button>
+                  </div>
+                </div>
+                <div class="filter-section">
+                  <label class="filter-select-field" for="collectionGenreSelect">
+                    <span class="filter-section-title" data-next-i18n="collection.filterGenre">Genre</span>
+                    <select id="collectionGenreSelect" aria-label="Genre filter" data-next-i18n-aria="collection.filterGenre"></select>
+                  </label>
+                </div>
+                <div class="filter-section">
+                  <label class="filter-select-field" for="collectionLocationSelect">
+                    <span class="filter-section-title" data-next-i18n="collection.filterLocation">Location</span>
+                    <select id="collectionLocationSelect" aria-label="Location filter" data-next-i18n-aria="collection.filterLocation"></select>
+                  </label>
+                </div>
+                <div class="filter-section filter-section-containers hidden" id="collectionContainersSection">
+                  <label class="filter-toggle-row">
+                    <span data-next-i18n="collection.onlyContainers">Only show Containers</span>
+                    <input type="checkbox" id="collectionContainersSwitch" role="switch">
+                  </label>
+                </div>
+                <div class="filter-panel-actions">
+                  <button type="button" class="secondary-button compact-button" id="collectionFilterResetButton" data-next-i18n="common.reset">Reset</button>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="icon-button advanced-search-toggle" id="advancedSearchToggleButton" aria-label="Advanced search" data-next-i18n-aria="collection.advancedSearch" title="Advanced" data-next-i18n-title="collection.advancedSearch">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5,5.6L10,7L8.6,4.5L10,2L7.5,3.4L5,2L6.4,4.5L5,7L7.5,5.6M19.5,15.4L17,14L18.4,16.5L17,19L19.5,17.6L22,19L20.6,16.5L22,14L19.5,15.4M22,2L19.5,3.4L17,2L18.4,4.5L17,7L19.5,5.6L22,7L20.6,4.5L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z"/></svg>
               <span class="metadata-job-badge hidden" id="advancedSearchBadge">0</span>
             </button>
-            <div class="segmented compact view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
-              <button type="button" class="active" data-library-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
-              <button type="button" data-library-view-mode="list" data-next-i18n="collection.viewList">List</button>
-              <button type="button" data-library-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+            <span class="collection-controls-spacer" aria-hidden="true"></span>
+            <div class="view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+              <button type="button" class="icon-button view-mode-button" data-library-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg>
+              </button>
+              <button type="button" class="icon-button view-mode-button active" data-library-view-mode="poster" aria-label="Poster view" data-next-i18n-aria="collection.viewPoster" title="Posters" data-next-i18n-title="collection.viewPoster">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3H11V11H3V3M13 3H21V11H13V3M3 13H11V21H3V13M13 13H21V21H13V13Z"/></svg>
+              </button>
             </div>
-            <label class="sort-menu" for="collectionSortSelect">
-              <span data-next-i18n="collection.sort">Sort</span>
-              <select id="collectionSortSelect" aria-label="Sort collection" data-next-i18n-aria="collection.sort">
-                <option value="title_asc" data-next-i18n="collection.sortTitleAsc">Title A-Z</option>
-                <option value="title_desc" data-next-i18n="collection.sortTitleDesc">Title Z-A</option>
-                <option value="added_desc" data-next-i18n="collection.sortAddedDesc">Added newest first</option>
-                <option value="added_asc" data-next-i18n="collection.sortAddedAsc">Added oldest first</option>
-                <option value="year_desc" data-next-i18n="collection.sortYearDesc">Year newest first</option>
-                <option value="year_asc" data-next-i18n="collection.sortYearAsc">Year oldest first</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        <div class="collection-toolbar-row">
-          <div class="segmented compact" id="collectionFormatFilter" role="group" aria-label="Format filter" data-next-i18n-aria="collection.formatFilter">
-            <button type="button" class="active" data-format-filter="all" data-next-i18n="common.all">All</button>
-            <button type="button" data-format-filter="4k" data-next-i18n="collection.format4k">4K UHD</button>
-            <button type="button" data-format-filter="bluray" data-next-i18n="collection.formatBluray">Blu-ray</button>
-            <button type="button" data-format-filter="dvd" data-next-i18n="collection.formatDvd">DVD</button>
-          </div>
-          <div class="segmented compact" id="collectionItemFilter" role="group" aria-label="Item filter" data-next-i18n-aria="collection.itemFilter">
-            <button type="button" class="active" data-item-filter="all" data-next-i18n="common.all">All</button>
-            <button type="button" data-item-filter="containers" data-next-i18n="collection.containers">Containers</button>
           </div>
         </div>
         <div class="advanced-search-panel hidden" id="advancedSearchPanel">
@@ -16691,9 +16915,20 @@ def ui_preview_html(
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
     let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
     let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
+    function readStoredFormatFilters() {
+      try {
+        const raw = JSON.parse(localStorage.getItem("dv_next_collection_formats") || "[]");
+        if (Array.isArray(raw)) return raw.map((value) => String(value || "")).filter(Boolean);
+      } catch (error) {}
+      return [];
+    }
+    let collectionFormatFilters = new Set(readStoredFormatFilters());
+    let collectionTypeFilter = localStorage.getItem("dv_next_collection_type") || "all";
+    let collectionGenreFilter = localStorage.getItem("dv_next_collection_genre") || "";
+    let collectionLocationFilter = localStorage.getItem("dv_next_collection_location") || "";
     let collectionItemFilter = localStorage.getItem("dv_next_collection_item_filter") || "all";
     let activeCollectionGroupFilter = localStorage.getItem("dv_next_collection_group_filter") || "";
-    let libraryViewMode = localStorage.getItem("dv_next_library_view_mode") || "poster";
+    let libraryViewMode = normalizeLibraryViewMode(localStorage.getItem("dv_next_library_view_mode"));
     let libraryDetailSort = JSON.parse(localStorage.getItem("dv_next_library_detail_sort") || '{"key":"title","direction":"asc"}');
     let advancedSearchOpen = localStorage.getItem("dv_next_advanced_search_open") === "true";
     let advancedSearch = parseLocalJson("dv_next_advanced_search", {});
@@ -21468,24 +21703,169 @@ def ui_preview_html(
       }
       advancedSearch = normalizeAdvancedSearch(advancedSearch);
       smartFilters = Array.isArray(smartFilters) ? smartFilters : [];
-      libraryViewMode = normalizeViewMode(libraryViewMode);
+      libraryViewMode = normalizeLibraryViewMode(libraryViewMode);
       document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
         button.classList.toggle("active", button.dataset.libraryViewMode === libraryViewMode);
         button.setAttribute("aria-pressed", button.dataset.libraryViewMode === libraryViewMode ? "true" : "false");
       });
-      const sortSelect = document.getElementById("collectionSortSelect");
-      if (sortSelect && sortSelect.value !== collectionSortMode) sortSelect.value = collectionSortMode;
-      document.querySelectorAll("[data-format-filter]").forEach((button) => {
-        button.classList.toggle("active", button.dataset.formatFilter === collectionFormatFilter);
-        button.setAttribute("aria-pressed", button.dataset.formatFilter === collectionFormatFilter ? "true" : "false");
+      document.querySelectorAll("[data-sort-option]").forEach((button) => {
+        const active = button.dataset.sortOption === collectionSortMode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-checked", active ? "true" : "false");
       });
-      const itemFilter = document.getElementById("collectionItemFilter");
-      if (itemFilter) itemFilter.classList.toggle("hidden", !collectorsModeEnabled());
-      document.querySelectorAll("[data-item-filter]").forEach((button) => {
-        button.classList.toggle("active", button.dataset.itemFilter === collectionItemFilter);
-        button.setAttribute("aria-pressed", button.dataset.itemFilter === collectionItemFilter ? "true" : "false");
-      });
+      renderCollectionFilterMenu();
       syncAdvancedSearchControls();
+    }
+    function collectionFilterActiveCount() {
+      let count = collectionFormatFilters ? collectionFormatFilters.size : 0;
+      if (collectionTypeFilter && collectionTypeFilter !== "all") count += 1;
+      if (collectionGenreFilter) count += 1;
+      if (collectionLocationFilter) count += 1;
+      if (collectorsModeEnabled() && collectionItemFilter === "containers") count += 1;
+      return count;
+    }
+    function collectionGenreOptionValues() {
+      const seen = new Map();
+      (movies || []).forEach((movie) => {
+        movieGenreValues(movie).forEach((value) => {
+          const key = value.toLowerCase();
+          if (!seen.has(key)) seen.set(key, value);
+        });
+      });
+      return [...seen.values()].sort((a, b) => a.localeCompare(b, localeState.locale || undefined, {sensitivity: "base"}));
+    }
+    function collectionLocationOptionValues() {
+      const seen = new Map();
+      (movies || []).forEach((movie) => {
+        const value = movieLocationValue(movie);
+        if (!value) return;
+        const key = value.toLowerCase();
+        if (!seen.has(key)) seen.set(key, value);
+      });
+      return [...seen.values()].sort((a, b) => a.localeCompare(b, localeState.locale || undefined, {sensitivity: "base"}));
+    }
+    function renderCollectionFilterMenu() {
+      const collectorMode = collectorsModeEnabled();
+      const formatHost = document.getElementById("collectionFormatSwitches");
+      if (formatHost) {
+        const allowed = MOVIE_FORMAT_OPTIONS
+          .filter((item) => collectorMode || !item.collectorOnly)
+          .slice()
+          .sort((a, b) => a.value.localeCompare(b.value, localeState.locale || undefined, {sensitivity: "base"}));
+        formatHost.innerHTML = allowed.map((item) => {
+          const checked = collectionFormatFilters.has(item.value) ? " checked" : "";
+          return `<label class="filter-toggle-row"><span>${escapeHtml(formatFilterLabel(item.value))}</span><input type="checkbox" role="switch" data-format-switch="${escapeHtml(item.value)}"${checked}></label>`;
+        }).join("");
+      }
+      // Drop selected formats that are no longer available (e.g. collector mode off)
+      const allowedValues = new Set(MOVIE_FORMAT_OPTIONS.filter((item) => collectorMode || !item.collectorOnly).map((item) => item.value));
+      let formatsChanged = false;
+      collectionFormatFilters.forEach((value) => {
+        if (!allowedValues.has(value)) { collectionFormatFilters.delete(value); formatsChanged = true; }
+      });
+      if (formatsChanged) persistCollectionFormatFilters();
+      document.querySelectorAll("[data-type-filter]").forEach((button) => {
+        const active = button.dataset.typeFilter === collectionTypeFilter;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      const genreSelect = document.getElementById("collectionGenreSelect");
+      if (genreSelect) {
+        const options = collectionGenreOptionValues();
+        if (collectionGenreFilter && !options.some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase())) {
+          collectionGenreFilter = "";
+          localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
+        }
+        const anyLabel = tNext("common.all", "All");
+        genreSelect.innerHTML = [`<option value="">${escapeHtml(anyLabel)}</option>`]
+          .concat(options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
+          .join("");
+        genreSelect.value = collectionGenreFilter;
+      }
+      const locationSelect = document.getElementById("collectionLocationSelect");
+      if (locationSelect) {
+        const options = collectionLocationOptionValues();
+        if (collectionLocationFilter && !options.some((value) => value.toLowerCase() === collectionLocationFilter.toLowerCase())) {
+          collectionLocationFilter = "";
+          localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
+        }
+        const anyLabel = tNext("common.all", "All");
+        locationSelect.innerHTML = [`<option value="">${escapeHtml(anyLabel)}</option>`]
+          .concat(options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
+          .join("");
+        locationSelect.value = collectionLocationFilter;
+      }
+      const containersSection = document.getElementById("collectionContainersSection");
+      if (containersSection) containersSection.classList.toggle("hidden", !collectorMode);
+      const containersSwitch = document.getElementById("collectionContainersSwitch");
+      if (containersSwitch) containersSwitch.checked = collectorMode && collectionItemFilter === "containers";
+      const badge = document.getElementById("collectionFilterBadge");
+      if (badge) {
+        const count = collectionFilterActiveCount();
+        badge.textContent = String(count);
+        badge.classList.toggle("hidden", count === 0);
+      }
+    }
+    function formatFilterLabel(value) {
+      const map = {
+        "Ultra HD Blu-ray": tNext("collection.format4k", "4K UHD"),
+        "4K UHD + Blu-ray": tNext("collection.format4kBluray", "4K UHD + Blu-ray"),
+        "Blu-ray": tNext("collection.formatBluray", "Blu-ray"),
+        "DVD": tNext("collection.formatDvd", "DVD")
+      };
+      return map[value] || value;
+    }
+    function persistCollectionFormatFilters() {
+      localStorage.setItem("dv_next_collection_formats", JSON.stringify([...collectionFormatFilters]));
+    }
+    const COLLECTION_MENUS = [
+      {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
+      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"}
+    ];
+    let collectionMenusBound = false;
+    function closeCollectionMenu(menuId) {
+      const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
+      if (!def) return;
+      document.getElementById(def.panel)?.classList.add("hidden");
+      document.getElementById(def.trigger)?.setAttribute("aria-expanded", "false");
+      document.getElementById(def.menu)?.classList.remove("open");
+    }
+    function closeAllCollectionMenus(except) {
+      COLLECTION_MENUS.forEach((def) => { if (def.menu !== except) closeCollectionMenu(def.menu); });
+    }
+    function openCollectionMenu(menuId) {
+      closeAllCollectionMenus(menuId);
+      const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
+      if (!def) return;
+      document.getElementById(def.panel)?.classList.remove("hidden");
+      document.getElementById(def.trigger)?.setAttribute("aria-expanded", "true");
+      document.getElementById(def.menu)?.classList.add("open");
+    }
+    function toggleCollectionMenu(menuId) {
+      const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
+      if (!def) return;
+      const panel = document.getElementById(def.panel);
+      if (panel && !panel.classList.contains("hidden")) closeCollectionMenu(menuId);
+      else openCollectionMenu(menuId);
+    }
+    function setupCollectionMenus() {
+      COLLECTION_MENUS.forEach((def) => {
+        const trigger = document.getElementById(def.trigger);
+        if (trigger && !trigger.dataset.menuBound) {
+          trigger.dataset.menuBound = "1";
+          trigger.addEventListener("click", (event) => { event.stopPropagation(); toggleCollectionMenu(def.menu); });
+        }
+        const panel = document.getElementById(def.panel);
+        if (panel && !panel.dataset.menuBound && def.menu === "collectionFilterMenu") {
+          panel.dataset.menuBound = "1";
+          panel.addEventListener("click", (event) => event.stopPropagation());
+        }
+      });
+      if (!collectionMenusBound) {
+        collectionMenusBound = true;
+        document.addEventListener("click", () => closeAllCollectionMenus());
+        document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeAllCollectionMenus(); });
+      }
     }
     function advancedSearchDefaults() {
       return {
@@ -21831,27 +22211,44 @@ def ui_preview_html(
       return true;
     }
     function normalizedMovieFormat(movie) {
-      return String(movie?.format || movie?.edition_type || movie?.metadata?.format || "").toLowerCase();
+      return String(movie?.format || movie?.edition_type || movie?.metadata?.format || "");
     }
     function movieMatchesFormat(movie) {
-      const selected = collectionFormatFilter || "all";
-      if (selected === "all") return true;
-      const value = normalizedMovieFormat(movie);
-      if (selected === "4k") return value.includes("4k") || value.includes("uhd") || value.includes("ultra hd");
-      if (selected === "bluray") return (value.includes("blu") || value.includes("bd")) && !movieMatchesFormatValue(value, "4k");
-      if (selected === "dvd") return value.includes("dvd") && !value.includes("blu") && !value.includes("uhd");
-      return true;
+      const selected = collectionFormatFilters;
+      if (!selected || selected.size === 0) return true;
+      const normalized = normalizedMovieFormatValue(normalizedMovieFormat(movie));
+      if (!normalized) return false;
+      if (selected.has(normalized)) return true;
+      if (normalized === "4K UHD + Blu-ray" && (selected.has("Ultra HD Blu-ray") || selected.has("Blu-ray"))) return true;
+      return false;
     }
-    function movieMatchesFormatValue(value, selected) {
-      const normalized = String(value || "").toLowerCase();
-      if (selected === "4k") return normalized.includes("4k") || normalized.includes("uhd") || normalized.includes("ultra hd");
-      if (selected === "bluray") return normalized.includes("blu") || normalized.includes("bd");
-      if (selected === "dvd") return normalized.includes("dvd");
+    function movieGenreValues(movie) {
+      const raw = movie?.genre || movie?.metadata?.genre || "";
+      return String(raw)
+        .split(/[,/|]/)
+        .map((value) => value.trim())
+        .filter(Boolean);
+    }
+    function movieMatchesGenre(movie) {
+      if (!collectionGenreFilter) return true;
+      return movieGenreValues(movie).some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase());
+    }
+    function movieLocationValue(movie) {
+      return String(movie?.location || movie?.metadata?.location || "").trim();
+    }
+    function movieMatchesLocation(movie) {
+      if (!collectionLocationFilter) return true;
+      return movieLocationValue(movie).toLowerCase() === collectionLocationFilter.toLowerCase();
+    }
+    function movieMatchesType(movie) {
+      const selected = collectionTypeFilter || "all";
+      if (selected === "all") return true;
+      if (selected === "tv") return false;
       return true;
     }
     function containerMatchesFormat(container) {
       if (!collectorsModeEnabled()) return false;
-      if ((collectionFormatFilter || "all") === "all") return true;
+      if (!collectionFormatFilters || collectionFormatFilters.size === 0) return true;
       return containerMemberMovies(container.id).some((movie) => movieMatchesFormat(movie));
     }
     function itemDateValue(item, mode) {
@@ -21905,6 +22302,9 @@ def ui_preview_html(
         movieMatchesGroup(movie)
         && movieMatchesSearch(movie)
         && movieMatchesFormat(movie)
+        && movieMatchesType(movie)
+        && movieMatchesGenre(movie)
+        && movieMatchesLocation(movie)
         && movieMatchesAdvancedSearch(movie)
         && !["container", "box_set", "collection", "vault"].includes(normalizeAdvancedSearch(advancedSearch).itemType)
       ));
@@ -21961,6 +22361,9 @@ def ui_preview_html(
     }
     function normalizeViewMode(value) {
       return ["poster", "list", "detail"].includes(value) ? value : "poster";
+    }
+    function normalizeLibraryViewMode(value) {
+      return value === "list" ? "list" : "poster";
     }
     function splitCreditText(value, limit = 5) {
       return String(value || "")
@@ -23572,6 +23975,7 @@ def ui_preview_html(
       setMovieDetailMessage("");
     }
     const MOVIE_FORMAT_OPTIONS = [
+      {value: "4K UHD + Blu-ray", collectorOnly: false},
       {value: "Blu-ray", collectorOnly: false},
       {value: "DVD", collectorOnly: false},
       {value: "HD DVD", collectorOnly: true},
@@ -23583,8 +23987,12 @@ def ui_preview_html(
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
       if (!text) return "";
-      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "Ultra HD Blu-ray";
-      if (lower.includes("blu")) return "Blu-ray";
+      const has4k = lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd");
+      const hasBlu = lower.includes("blu");
+      const combined = has4k && hasBlu && /[+&]|combo|combi/.test(lower);
+      if (combined) return "4K UHD + Blu-ray";
+      if (has4k) return "Ultra HD Blu-ray";
+      if (hasBlu) return "Blu-ray";
       if (lower.includes("hd dvd")) return "HD DVD";
       if (lower.includes("laser")) return "LaserDisc";
       if (lower.includes("vcd") || lower.includes("svcd")) return "VCD/SVCD";
@@ -30480,21 +30888,19 @@ def ui_preview_html(
       const rail = document.getElementById("posterRail");
       if (rail) {
         rail.classList.toggle("mode-list-grid", libraryViewMode === "list");
-        rail.classList.toggle("mode-detail-grid", libraryViewMode === "detail");
+        rail.classList.remove("mode-detail-grid");
         rail.classList.toggle("poster-rail", libraryViewMode === "poster");
-        rail.innerHTML = displayItems.length && libraryViewMode === "detail"
-          ? detailTableHtml(displayItems.slice(0, 120), "library", libraryDetailSort)
-          : displayItems.length
-            ? displayItems.slice(0, 80).map((item, index) => (
-                libraryViewMode === "list"
-                  ? libraryListItemHtml(item)
-                  : (
+        rail.innerHTML = displayItems.length
+          ? displayItems.slice(0, 80).map((item, index) => (
+              libraryViewMode === "list"
+                ? libraryListItemHtml(item)
+                : (
               item.kind === "container"
                 ? containerPosterCardHtml(item.container, index)
                 : posterCardHtml(item.movie, index)
-                  )
-              )).join("")
-            : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
+                )
+            )).join("")
+          : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
       }
       document.querySelectorAll("[data-preview-movie]").forEach((button) => {
         button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
@@ -32432,14 +32838,18 @@ def ui_preview_html(
       document.getElementById("advancedSearchSaveButton")?.addEventListener("click", saveSmartFilter);
       document.getElementById("advancedSearchDeleteButton")?.addEventListener("click", deleteSmartFilter);
       document.getElementById("smartFilterSelect")?.addEventListener("change", (event) => applySmartFilter(event.target.value || ""));
-      document.getElementById("collectionSortSelect")?.addEventListener("change", (event) => {
-        collectionSortMode = event.target.value || "title_asc";
-        localStorage.setItem("dv_next_collection_sort", collectionSortMode);
-        renderLibrary();
+      setupCollectionMenus();
+      document.querySelectorAll("[data-sort-option]").forEach((button) => {
+        button.addEventListener("click", () => {
+          collectionSortMode = button.dataset.sortOption || "title_asc";
+          localStorage.setItem("dv_next_collection_sort", collectionSortMode);
+          closeCollectionMenu("collectionSortMenu");
+          renderLibrary();
+        });
       });
       document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
-          libraryViewMode = normalizeViewMode(button.dataset.libraryViewMode);
+          libraryViewMode = normalizeLibraryViewMode(button.dataset.libraryViewMode);
           localStorage.setItem("dv_next_library_view_mode", libraryViewMode);
           renderLibrary();
         });
@@ -32459,19 +32869,50 @@ def ui_preview_html(
           else syncContainerViewModeControls();
         });
       });
-      document.querySelectorAll("[data-format-filter]").forEach((button) => {
+      document.getElementById("collectionFormatSwitches")?.addEventListener("change", (event) => {
+        const input = event.target.closest("[data-format-switch]");
+        if (!input) return;
+        const value = input.dataset.formatSwitch;
+        if (input.checked) collectionFormatFilters.add(value);
+        else collectionFormatFilters.delete(value);
+        persistCollectionFormatFilters();
+        renderLibrary();
+      });
+      document.querySelectorAll("[data-type-filter]").forEach((button) => {
         button.addEventListener("click", () => {
-          collectionFormatFilter = button.dataset.formatFilter || "all";
-          localStorage.setItem("dv_next_collection_format", collectionFormatFilter);
+          if (button.disabled) return;
+          collectionTypeFilter = button.dataset.typeFilter || "all";
+          localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
           renderLibrary();
         });
       });
-      document.querySelectorAll("[data-item-filter]").forEach((button) => {
-        button.addEventListener("click", () => {
-          collectionItemFilter = button.dataset.itemFilter || "all";
-          localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
-          renderLibrary();
-        });
+      document.getElementById("collectionGenreSelect")?.addEventListener("change", (event) => {
+        collectionGenreFilter = event.target.value || "";
+        localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
+        renderLibrary();
+      });
+      document.getElementById("collectionLocationSelect")?.addEventListener("change", (event) => {
+        collectionLocationFilter = event.target.value || "";
+        localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
+        renderLibrary();
+      });
+      document.getElementById("collectionContainersSwitch")?.addEventListener("change", (event) => {
+        collectionItemFilter = event.target.checked ? "containers" : "all";
+        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+        renderLibrary();
+      });
+      document.getElementById("collectionFilterResetButton")?.addEventListener("click", () => {
+        collectionFormatFilters.clear();
+        persistCollectionFormatFilters();
+        collectionTypeFilter = "all";
+        collectionGenreFilter = "";
+        collectionLocationFilter = "";
+        if (collectionItemFilter === "containers") collectionItemFilter = "all";
+        localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
+        localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
+        localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
+        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+        renderLibrary();
       });
       document.getElementById("groupFilter")?.addEventListener("change", (event) => {
         activeCollectionGroupFilter = validCollectionGroupFilter(event.target.value || "");
