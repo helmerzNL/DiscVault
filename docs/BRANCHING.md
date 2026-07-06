@@ -1,105 +1,105 @@
-# Branch- & release-strategie
+# Branch & release strategy
 
-DiscVault gebruikt één schone promotieketen met **twee logische images**. Alle
-ontwikkeling gebeurt in de beta-branch; features stromen daarna gecontroleerd —
-per feature — door naar productie.
+DiscVault uses one clean promotion chain with **two logical images**. All
+development happens in the beta branch; features then flow in a controlled
+manner — per feature — through to production.
 
 ```
-feature-branch  ──PR──▶  release/v26-beta   (integratie/test)   image :v26-beta + :beta
-   (van main)     │
-                  └──PR──▶  main             (productie)         image :latest + :v26 + :stable
-                            └─ release.yml ──▶ tag v26.x.x         image :v26.x.x (+ :v26, :stable)
+feature-branch  ──PR──▶  release/v26-beta   (integration/test)   image :v26-beta + :beta
+   (from main)    │
+                  └──PR──▶  main             (production)         image :latest + :v26 + :stable
+                           └─ release.yml ──▶ tag v26.x.x         image :v26.x.x (+ :v26, :stable)
 ```
 
-## Twee images
+## Two images
 
-| Image | Bron | Docker-tags |
+| Image | Source | Docker tags |
 |---|---|---|
-| **Productie** | branch `main` | `:latest`, `:v26`, `:stable` |
-| **Ontwikkeling** | branch `release/v26-beta` | `:v26-beta`, `:beta` |
-| **Release-snapshot** | git-tag `v26.x.x` op een `main`-commit | `:v26.x.x`, `:v26`, `:stable` |
-| **Handmatige escape** | workflow_dispatch (Actions) | `:dev`, `:dev-<sha>` |
+| **Production** | branch `main` | `:latest`, `:v26`, `:stable` |
+| **Development** | branch `release/v26-beta` | `:v26-beta`, `:beta` |
+| **Release snapshot** | git tag `v26.x.x` on a `main` commit | `:v26.x.x`, `:v26`, `:stable` |
+| **Manual escape** | workflow_dispatch (Actions) | `:dev`, `:dev-<sha>` |
 
-`:stable` volgt sinds het 2-image-model **`main`** (niet langer alleen een
-losse tag). Daardoor zijn `:latest` en `:stable` altijd hetzelfde image en kan
-`:stable` niet meer per ongeluk vooruitlopen op productie doordat een tag vanaf
-beta werd gezet.
+`:stable` has followed **`main`** since the 2-image model (no longer just a
+standalone tag). As a result, `:latest` and `:stable` are always the same image
+and `:stable` can no longer accidentally get ahead of production because a tag
+was set from beta.
 
-> `release/v26` is uitgefaseerd: het produceerde dezelfde `:latest`/`:v26`
-> images als `main` en veroorzaakte tag-races. Gebruik `main`.
+> `release/v26` is deprecated: it produced the same `:latest`/`:v26`
+> images as `main` and caused tag races. Use `main`.
 
-## Update-kanalen (in de app)
+## Update channels (in the app)
 
-De in-app update-check kent drie kanalen. Elk kanaal leest zijn "laatste versie"
-uit `app/VERSION` op een branch — geen afhankelijkheid meer van los geknipte
-GitHub Releases:
+The in-app update check has three channels. Each channel reads its "latest
+version" from `app/VERSION` on a branch — no longer dependent on separately
+cut GitHub Releases:
 
-| Kanaal | Bron-branch | Image |
+| Channel | Source branch | Image |
 |---|---|---|
 | `stable` | `main` | `:stable` |
 | `beta` | `release/v26-beta` | `:v26-beta` |
-| `auto` | heuristiek (kiest stable of beta) | — |
+| `auto` | heuristic (chooses stable or beta) | — |
 
-Het oude `v26`-kanaal is vervallen; een opgeslagen `v26`-voorkeur wordt
-automatisch als `stable` behandeld (`main` == de oude v26-lijn).
+The old `v26` channel is discontinued; a saved `v26` preference is automatically
+treated as `stable` (`main` == the old v26 line).
 
-## Dagelijkse workflow (per feature)
+## Daily workflow (per feature)
 
-1. Vertak een feature-branch **vanaf `main`**.
-2. Open een PR naar **`release/v26-beta`**. CI bouwt de `:v26-beta`/`:beta`
-   image om integraal te testen.
-3. Merge de PR in `release/v26-beta` zodra hij groen en gereviewd is.
+1. Branch a feature branch **from `main`**.
+2. Open a PR to **`release/v26-beta`**. CI builds the `:v26-beta`/`:beta`
+   image for integration testing.
+3. Merge the PR into `release/v26-beta` once it is green and reviewed.
 
-Omdat elke feature-branch vanaf `main` vertakt, kun je hem later **individueel**
-promoveren zonder de rest van beta mee te nemen.
+Because each feature branch is branched from `main`, you can later **individually**
+promote it without pulling in the rest of beta.
 
-## Een feature promoveren naar productie
+## Promoting a feature to production
 
-Wanneer een feature productie-klaar is, open je een **tweede PR** vanuit
-diezelfde feature-branch naar `main`:
+When a feature is production-ready, open a **second PR** from that same feature
+branch to `main`:
 
 ```sh
 gh pr create --base main --head <feature-branch> \
   --title "promote: <feature>" --fill
-# na groene checks + review:
+# after green checks + review:
 gh pr merge --merge
 ```
 
-`main` is beschermd (PR vereist, `version-guard` moet groen zijn, Copilot-review),
-dus promotie loopt altijd via een PR — nooit via een directe push. Na de merge
-bouwt `main` `:latest` + `:v26` + `:stable`.
+`main` is protected (PR required, `version-guard` must be green, Copilot review),
+so promotion always goes through a PR — never via a direct push. After the merge,
+`main` builds `:latest` + `:v26` + `:stable`.
 
-> Werkt een feature nog niet los te koppelen van andere beta-wijzigingen? Zet
-> hem dan achter een **feature-flag** in plaats van commits te cherry-picken —
-> zo blijft de lineage schoon en voorkom je drift.
+> Does a feature not yet decouple from other beta changes? Put it behind a
+> **feature flag** instead of cherry-picking commits — this keeps the lineage
+> clean and prevents drift.
 
-## Een release knippen
+## Cutting a release
 
-`app/VERSION` is de enige bron van waarheid voor het versienummer. Nadat
-promotie-PR('s) op `main` zijn geland en de version-guard `app/VERSION` heeft
-gebumpt, knip je een release via de **`Release (tag main)`**-workflow:
+`app/VERSION` is the single source of truth for the version number. After
+promotion PR(s) have landed on `main` and the version-guard has bumped
+`app/VERSION`, cut a release via the **`Release (tag main)`** workflow:
 
 1. GitHub -> **Actions** -> **Release (tag main)** -> **Run workflow**.
-2. Kies branch **`main`** en start.
+2. Choose branch **`main`** and start.
 
-De workflow leest `app/VERSION`, controleert dat de tag nog niet bestaat, zet
-`v<VERSION>` op de huidige `main`-commit en publiceert een GitHub Release met
-gegenereerde notes. De tag-push triggert vervolgens `docker-publish.yml`, die de
-release-snapshot (`:v26.x.x` + ververste `:v26`/`:stable`) bouwt vanaf exact die
-commit.
+The workflow reads `app/VERSION`, checks that the tag doesn't exist yet, puts
+`v<VERSION>` on the current `main` commit, and publishes a GitHub Release with
+generated notes. The tag push then triggers `docker-publish.yml`, which builds
+the release snapshot (`:v26.x.x` + refreshed `:v26`/`:stable`) from exactly
+that commit.
 
-> Vermijd het handmatig cherry-picken/porten van losse commits tussen branches:
-> dat was de oorzaak van de eerdere divergentie tussen `main`, `v26` en
+> Avoid manually cherry-picking/porting individual commits between branches:
+> that was the cause of the earlier divergence between `main`, `v26`, and
 > `v26-beta`.
 
-## Versiebeheer
+## Version management
 
-Wijzigingen aan beschermde paden (`app/**`, `.github/workflows/`, `app/deploy/`,
-`dist/plugins/`, ...) vereisen een bump van [`app/VERSION`](../app/VERSION).
-Zie de version-guard workflow. Documentatie (`*.md`, `*.txt`) is vrijgesteld.
+Changes to protected paths (`app/**`, `.github/workflows/`, `app/deploy/`,
+`dist/plugins/`, ...) require a bump of [`app/VERSION`](../app/VERSION).
+See the version-guard workflow. Documentation (`*.md`, `*.txt`) is exempt.
 
-Automatisch bumpen:
+Auto-bump:
 
 ```sh
-git config core.hooksPath .githooks   # eenmalig per clone/worktree
+git config core.hooksPath .githooks   # once per clone/worktree
 ```
