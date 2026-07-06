@@ -10201,10 +10201,7 @@ def ui_preview_html(
                     <span data-next-i18n="containerDetail.scanToAdd">Scan / search to add</span>
                     <input id="containerScanAddBarcode" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.barcodePlaceholder" placeholder="EAN / UPC">
                   </label>
-<<<<<<< HEAD
                   <div class="import-source-meta import-scan-preview" id="containerScanAddPreview" hidden></div>
-=======
->>>>>>> origin/release/v26-beta
                   <label for="containerScanAddTitle">
                     <span data-next-i18n="containerDetail.scanToAddTitle">Title (fallback)</span>
                     <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
@@ -20353,11 +20350,7 @@ def ui_preview_html(
       }
       setContainerDetailMessage(tNext("containerDetail.adding", "Adding content..."));
       try {
-<<<<<<< HEAD
         const payload = await authApiJson("/api/next/import/movie", {
-=======
-        await authApiJson("/api/next/import/movie", {
->>>>>>> origin/release/v26-beta
           method: "POST",
           headers: {"Content-Type": "application/json"},
           timeoutMs: 45000,
@@ -20374,7 +20367,6 @@ def ui_preview_html(
         if (barcodeInput) barcodeInput.value = "";
         if (titleInput) titleInput.value = "";
         if (yearInput) yearInput.value = "";
-<<<<<<< HEAD
         const scanPreview = document.getElementById("containerScanAddPreview");
         if (scanPreview) { scanPreview.hidden = true; scanPreview.textContent = ""; }
         const already = payload?.state === "already_exists";
@@ -20388,9 +20380,6 @@ def ui_preview_html(
           msg = tNext("containerDetail.memberVaultLinked", "Already in your vault \u2014 linked here.");
         }
         await refreshActiveContainerDetail(msg, tone);
-=======
-        await refreshActiveContainerDetail(tNext("containerDetail.added", "Content added."), "good");
->>>>>>> origin/release/v26-beta
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
       }
@@ -20744,7 +20733,6 @@ def ui_preview_html(
         })
       });
     }
-<<<<<<< HEAD
     async function resolveImportMemberBarcode(barcode) {
       const code = normalizeImportBarcode(barcode);
       if (!code) return null;
@@ -20808,8 +20796,6 @@ def ui_preview_html(
       });
       input.addEventListener("change", run);
     }
-=======
->>>>>>> origin/release/v26-beta
     function renderBoxSetBuilderBatch() {
       const list = document.getElementById("boxSetBuilderBatchList");
       if (!list) return;
@@ -20893,13 +20879,9 @@ def ui_preview_html(
             row.status = "added";
             row.message = (already && !changed)
               ? tNext("importCenter.boxSetBuilderMemberAlready", "Already linked to this box-set.")
-<<<<<<< HEAD
               : (already && changed)
                 ? tNext("importCenter.boxSetBuilderMemberVaultLinked", "Already in your vault \u2014 linked to this box-set.")
                 : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
-=======
-              : tNext("importCenter.boxSetBuilderMemberLinked", "Member added.");
->>>>>>> origin/release/v26-beta
             added += 1;
           } catch (error) {
             row.status = "error";
@@ -30135,10 +30117,7 @@ def ui_preview_html(
       document.getElementById("importBatchLookupButton")?.addEventListener("click", () => runImportBatchLookup());
       document.getElementById("boxSetBuilderIdentifyForm")?.addEventListener("submit", (event) => identifyBoxSetBuilderTarget(event));
       document.getElementById("boxSetBuilderMemberForm")?.addEventListener("submit", (event) => addBoxSetBuilderMember(event));
-<<<<<<< HEAD
       wireImportScanPreview("boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberPreview");
-=======
->>>>>>> origin/release/v26-beta
       document.getElementById("boxSetBuilderBatchButton")?.addEventListener("click", () => runBoxSetBuilderBatch());
       document.getElementById("boxSetBuilderCameraButton")?.addEventListener("click", () => startBoxSetBuilderCameraScan());
       document.getElementById("boxSetBuilderOpenButton")?.addEventListener("click", () => {
@@ -30454,10 +30433,7 @@ def ui_preview_html(
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerScanAddForm")?.addEventListener("submit", (event) => addContainerScanMember(event));
-<<<<<<< HEAD
       wireImportScanPreview("containerScanAddBarcode", "containerScanAddPreview");
-=======
->>>>>>> origin/release/v26-beta
       document.getElementById("containerAddItemForm")?.addEventListener("submit", (event) => addCollectionItem(event));
       document.getElementById("containerAddItemType")?.addEventListener("change", () => renderContainerAddForms(activeContainerPayload || {}));
       document.addEventListener("click", (event) => {

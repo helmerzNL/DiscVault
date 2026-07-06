@@ -1409,13 +1409,10 @@
   "importCenter.boxSetBuilderAdding": "Adding member...",
   "importCenter.boxSetBuilderMemberLinked": "Member added.",
   "importCenter.boxSetBuilderMemberAlready": "Already linked to this box-set.",
-<<<<<<< HEAD
   "importCenter.boxSetBuilderMemberVaultLinked": "Already in your vault \u2014 linked to this box-set.",
   "importCenter.scanPreviewExisting": "Already in your vault:",
   "importCenter.scanPreviewCandidates": "Match found \u2014 will be imported on add.",
   "importCenter.scanPreviewUnknown": "Unknown barcode \u2014 create it manually with a title below.",
-=======
->>>>>>> origin/release/v26-beta
   "importCenter.boxSetBuilderBatchTitle": "Paste multiple barcodes",
   "importCenter.boxSetBuilderBatchHelp": "Paste or scan several member barcodes (one per line). All of them are linked to this box-set.",
   "importCenter.boxSetBuilderBatchRun": "Add all to box-set",
