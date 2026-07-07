@@ -42,9 +42,11 @@ except ModuleNotFoundError:  # pragma: no cover - test environments without psyc
 try:
     from .next_common import NextApiError, json_ready, table_exists
     from .next_notifications import create_user_notification
+    from .next_plugin_runtime import run_plugin_entrypoint
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import NextApiError, json_ready, table_exists
     from next_notifications import create_user_notification
+    from next_plugin_runtime import run_plugin_entrypoint
 
 PRICE_ALERT_JOB_TYPE = "price_alert.sweep"
 
@@ -392,10 +394,30 @@ def run_price_alert_sweep(conn, *, limit: int = _SWEEP_BATCH_LIMIT) -> dict[str,
                 errors += 1
                 continue
 
-        # PLUGIN_HOOK: if new_price is None and movievault_id is set,
-        # call run_plugin_entrypoint(plugin_id, "price_check",
-        #   {"movievaultId": movievault_id, ...}) here.
-        # For now, skip items where we cannot determine a price.
+        # --- Plugin-based extraction (fallback when URL yields nothing) ---
+        if new_price is None and movievault_id:
+            try:
+                with conn.cursor() as pcur:
+                    pcur.execute(
+                        "SELECT id FROM plugin_registry WHERE capabilities @> '[\"price_check\"]' AND enabled = true"
+                    )
+                    plugin_rows = pcur.fetchall()
+                for plugin_row in plugin_rows:
+                    result = run_plugin_entrypoint(
+                        plugin_row["id"],
+                        "price_check",
+                        {"movievaultId": str(movievault_id), "itemId": str(item.get("id"))},
+                        {},
+                    )
+                    if result.get("status") == "ok":
+                        plugin_result = result.get("result") or {}
+                        raw = plugin_result.get("price")
+                        if raw is not None:
+                            new_price = float(raw)
+                            currency = plugin_result.get("currency") or currency
+                            break
+            except Exception:  # noqa: BLE001
+                pass
 
         if new_price is None:
             skipped += 1
