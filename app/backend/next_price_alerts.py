@@ -249,7 +249,19 @@ def evaluate_price_alert(
     if not item_id or not user_id:
         return False
 
-    currency_value = (currency or item.get("price_currency") or "EUR").upper()
+    expected_currency = str(item.get("price_currency") or "EUR").strip().upper() or "EUR"
+    seen_currency = str(currency or expected_currency).strip().upper() or expected_currency
+    currency_value = expected_currency
+
+    # Avoid comparing prices across currencies (no conversion support).
+    if currency and seen_currency != expected_currency:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE wishlist_items SET last_price_checked_at = now() WHERE id = %s AND user_id = %s",
+                    (item_id, user_id),
+                )
+        return False
 
     with conn.transaction():
         with conn.cursor() as cur:
@@ -257,11 +269,10 @@ def evaluate_price_alert(
                 """
                 UPDATE wishlist_items
                 SET last_seen_price = %s,
-                    price_currency = %s,
                     last_price_checked_at = now()
                 WHERE id = %s AND user_id = %s
                 """,
-                (new_price, currency_value, item_id, user_id),
+                (new_price, item_id, user_id),
             )
 
     # Decide whether to notify.
