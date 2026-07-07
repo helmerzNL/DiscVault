@@ -2450,6 +2450,26 @@ def ui_preview_html(
     .lists-modal-message.bad {
       color: var(--red);
     }
+    .lists-modal-section-divider {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 10px 0 4px;
+      border-top: 1px solid var(--line);
+      margin-top: 4px;
+    }
+    .lists-modal-field-check [data-edit] {
+      width: auto;
+      align-self: center;
+    }
+    .lists-modal-field [data-static] {
+      display: block;
+      font-size: .82rem;
+      color: var(--muted);
+      padding: 4px 0;
+    }
     .lists-modal.lists-history {
       max-width: 720px;
       width: min(92vw, 720px);
@@ -25972,6 +25992,28 @@ def ui_preview_html(
               <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
                 <span data-read>${escapeHtml(item.note || "")}</span>
                 <textarea data-edit data-field="note" rows="2">${escapeHtml(item.note || "")}</textarea></label>
+              <div class="lists-modal-section-divider">${escapeHtml(tNext("lists.wishlistPriceDropAlert", "Price drop alert"))}</div>
+              <label class="lists-modal-field lists-modal-field-check">
+                <span>${escapeHtml(tNext("lists.wishlistAlertEnabled", "Alert on price drop"))}</span>
+                <span data-read>${item.alertEnabled ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}</span>
+                <input data-edit data-field="alertEnabled" type="checkbox"${item.alertEnabled ? " checked" : ""}>
+              </label>
+              <label class="lists-modal-field">
+                <span>${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}</span>
+                <span data-read>${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : "—"}</span>
+                <input data-edit data-field="targetPrice" type="number" min="0" step="0.01" value="${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : ""}">
+              </label>
+              <label class="lists-modal-field">
+                <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
+                <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
+              </label>
+              <label class="lists-modal-field">
+                <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
+                <span data-read>${item.priceUrl ? `<a href="${escapeHtml(item.priceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.priceUrl)}</a>` : "—"}</span>
+                <input data-edit data-field="priceUrl" type="url" value="${escapeHtml(item.priceUrl || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
+              </label>
+              ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(String(item.lastSeenPrice))} ${escapeHtml(item.priceCurrency || "EUR")}</span></div>` : ""}
             </div>
           </div>
           <p class="lists-modal-message" data-message></p>
@@ -25988,11 +26030,22 @@ def ui_preview_html(
         });
         panel.querySelector("[data-primary]").addEventListener("click", async () => {
           if (!editing) { editing = true; render(); return; }
+          const priceUrlRaw = (panel.querySelector('[data-field="priceUrl"]').value || "").trim();
+          if (priceUrlRaw && !/^https?:\/\//i.test(priceUrlRaw)) {
+            setMessage(tNext("lists.wishlistPriceUrlInvalid", "Shop URL must start with http:// or https://"), "bad");
+            return;
+          }
+          const targetPriceRaw = (panel.querySelector('[data-field="targetPrice"]').value || "").trim();
+          const targetPriceNum = targetPriceRaw ? parseFloat(targetPriceRaw) : null;
           const body = {
             title: (panel.querySelector('[data-field="title"]').value || "").trim(),
             format: (panel.querySelector('[data-field="format"]').value || "").trim() || null,
             barcode: (panel.querySelector('[data-field="barcode"]').value || "").trim() || null,
-            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null
+            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null,
+            alertEnabled: panel.querySelector('[data-field="alertEnabled"]').checked,
+            targetPrice: (targetPriceNum != null && !Number.isNaN(targetPriceNum)) ? targetPriceNum : null,
+            priceCurrency: (panel.querySelector('[data-field="priceCurrency"]').value || "").trim().toUpperCase() || "EUR",
+            priceUrl: priceUrlRaw || null
           };
           const yearRaw = (panel.querySelector('[data-field="year"]').value || "").trim();
           const yearNum = parseInt(yearRaw, 10);

@@ -2295,8 +2295,55 @@ def run_once(worker_id: str, *, quiet_idle: bool = False) -> int:
             return 1
 
 
+def _maybe_enqueue_price_sweep(worker_id: str) -> None:
+    """Auto-enqueue a price-alert sweep job if none is pending/running.
+
+    The interval is controlled by the ``DISCVAULT_PRICE_SWEEP_INTERVAL_HOURS``
+    environment variable (default: 6 hours).
+    """
+    try:
+        interval_hours = float(os.environ.get("DISCVAULT_PRICE_SWEEP_INTERVAL_HOURS", "6"))
+    except ValueError:
+        interval_hours = 6.0
+    try:
+        with connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1 FROM background_jobs
+                    WHERE job_type = %s
+                      AND status IN ('pending', 'running')
+                    LIMIT 1
+                    """,
+                    (PRICE_ALERT_JOB_TYPE,),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    """
+                    SELECT 1 FROM background_jobs
+                    WHERE job_type = %s
+                      AND created_at >= now() - (%s * interval '1 hour')
+                    LIMIT 1
+                    """,
+                    (PRICE_ALERT_JOB_TYPE, interval_hours),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    """
+                    INSERT INTO background_jobs (job_type, payload)
+                    VALUES (%s, %s)
+                    """,
+                    (PRICE_ALERT_JOB_TYPE, Jsonb(json_ready({"source": "scheduler", "workerId": worker_id}))),
+                )
+    except Exception:  # noqa: BLE001 - never crash the poll loop
+        pass
+
+
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
+        _maybe_enqueue_price_sweep(worker_id)
         run_once(worker_id, quiet_idle=True)
         if STOP:
             break
