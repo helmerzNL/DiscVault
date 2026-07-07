@@ -18237,6 +18237,9 @@ def ui_preview_html(
           <button type="button" class="detail-remove-button" ${removeAttrs}>${escapeHtml(tNext("containerDetail.remove", "Remove"))}</button>
         </div>
       ` : "";
+      return `
+        <div class="container-member-card ${canEdit ? "editable" : ""}" title="${escapeHtml(title)}">
+          <a class="container-member-poster" href="${escapeHtml(href)}" data-open-movie="${escapeHtml(movie.id || "")}" title="${escapeHtml(title)}">
             ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}
             <span class="container-member-index">${escapeHtml(index + 1)}</span>
             ${physicalFormatBadgeHtml(movie.format || movie.edition_type || metadata.format)}
@@ -20245,6 +20248,7 @@ def ui_preview_html(
         </span>
       `;
     }
+    function containerMemberContainerRowActionsHtml(item, index, total, canEdit) {
       if (!canEdit) return "";
       const itemId = item.entity_id || item.item_id || item.id || "";
       const itemType = item.item_type || item.container_type || item.entity_type || "container";
