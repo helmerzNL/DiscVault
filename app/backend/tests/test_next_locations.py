@@ -1,6 +1,12 @@
 import os
 import sys
+import io
+import re
+import shutil
+import subprocess
+import tempfile
 import unittest
+from PIL import Image
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -16,8 +22,11 @@ try:
     from app.backend.next_app import location_public_id
     from app.backend.next_app import location_qr_token
     from app.backend.next_app import location_qr_svg
+    from app.backend.next_app import location_qr_png
     from app.backend.next_app import location_deep_link
+    from app.backend.next_app import PUBLIC_NEXT_PREFIXES
     from app.backend.next_app import location_summary_object
+    from app.backend.next_app import collection_dashboard_html
     from app.backend.next_app import _location_path_names
     from app.backend.next_app import _location_children_map
     from app.backend.next_app import _location_depth_of
@@ -34,8 +43,11 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     location_public_id = None
     location_qr_token = None
     location_qr_svg = None
+    location_qr_png = None
     location_deep_link = None
+    PUBLIC_NEXT_PREFIXES = ()
     location_summary_object = None
+    collection_dashboard_html = None
     _location_path_names = None
     _location_children_map = None
     _location_depth_of = None
@@ -140,12 +152,59 @@ class LocationQrTests(unittest.TestCase):
         self.assertNotEqual(location_qr_token(), location_qr_token())
 
     def test_deep_link_without_request_context(self):
-        self.assertEqual(location_deep_link("next-location-abc"), "/app/locations/next-location-abc")
+        self.assertEqual(location_deep_link("next-location-abc"), "/open/locations/next-location-abc")
+
+    def test_public_prefixes_allow_app_location_routes(self):
+        self.assertIn("/app/locations/", PUBLIC_NEXT_PREFIXES)
 
     def test_qr_svg_encodes_link(self):
         svg = location_qr_svg("https://discvault.example/app/locations/next-location-abc")
         self.assertIn("<svg", svg)
         self.assertIn("</svg>", svg)
+
+    def test_qr_png_is_square(self):
+        png = location_qr_png("https://discvault.example/app/locations/next-location-abc")
+        self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
+        with Image.open(io.BytesIO(png)) as qr_image:
+            self.assertEqual(qr_image.width, qr_image.height)
+
+
+@unittest.skipIf(collection_dashboard_html is None, "Flask is not installed in this test environment")
+class UiShellScriptSyntaxTests(unittest.TestCase):
+    def test_collection_dashboard_executable_scripts_are_valid_javascript(self):
+        node_binary = shutil.which("node")
+        if not node_binary:
+            self.skipTest("node is not installed in this test environment")
+
+        html = collection_dashboard_html({})
+        script_pattern = re.compile(r"<script([^>]*)>([\s\S]*?)</script>", re.IGNORECASE)
+        script_blocks = list(script_pattern.finditer(html))
+        self.assertGreater(len(script_blocks), 0)
+
+        executable_scripts = 0
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for index, match in enumerate(script_blocks, start=1):
+                attrs = match.group(1) or ""
+                if re.search(r'type\s*=\s*["\']application/json["\']', attrs, re.IGNORECASE):
+                    continue
+                executable_scripts += 1
+                script_body = match.group(2) or ""
+                script_path = os.path.join(temp_dir, f"script_{index}.js")
+                with open(script_path, "w", encoding="utf-8") as handle:
+                    handle.write(script_body)
+                result = subprocess.run(
+                    [node_binary, "--check", script_path],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(
+                    result.returncode,
+                    0,
+                    msg=f"Inline executable script block {index} is invalid JavaScript:\n{result.stderr}",
+                )
+
+        self.assertGreater(executable_scripts, 0)
 
 
 if __name__ == "__main__":

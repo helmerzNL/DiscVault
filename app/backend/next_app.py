@@ -5254,13 +5254,48 @@ def location_qr_svg(url: str) -> str:
     return buffer.getvalue().decode("utf-8")
 
 
+def location_qr_png(url: str) -> bytes:
+    import segno
+
+    qr = segno.make(url, error="h")
+    qr_bytes = io.BytesIO()
+    qr.save(qr_bytes, kind="png", scale=10, border=2, dark="#0f172a", light="#ffffff")
+    qr_bytes.seek(0)
+
+    with Image.open(qr_bytes) as qr_image:
+        qr_rgba = qr_image.convert("RGBA")
+
+    logo_path = next_frontend_dir() / "pwa-icon-192.png"
+    if logo_path.exists():
+        with Image.open(logo_path) as logo_image:
+            logo_rgba = logo_image.convert("RGBA")
+        logo_size = max(24, int(qr_rgba.width * 0.22))
+        logo_rgba.thumbnail((logo_size, logo_size), Image.Resampling.LANCZOS)
+        frame_padding = max(4, logo_rgba.width // 7)
+        frame_size = logo_rgba.width + (frame_padding * 2)
+        frame = Image.new("RGBA", (frame_size, frame_size), (255, 255, 255, 255))
+        frame_x = (qr_rgba.width - frame_size) // 2
+        frame_y = (qr_rgba.height - frame_size) // 2
+        qr_rgba.paste(frame, (frame_x, frame_y), frame)
+        logo_x = frame_x + frame_padding
+        logo_y = frame_y + frame_padding
+        qr_rgba.paste(logo_rgba, (logo_x, logo_y), logo_rgba)
+
+    out = io.BytesIO()
+    qr_rgba.save(out, format="PNG")
+    return out.getvalue()
+
+
 def location_deep_link(public_id: str) -> str:
+    target = quote(str(public_id or "").strip(), safe="")
+    if not target:
+        return "/open/locations"
     root = ""
     try:
         root = (request.url_root or "").rstrip("/")
     except Exception:
         root = ""
-    return f"{root}/app/locations/{public_id}" if root else f"/app/locations/{public_id}"
+    return f"{root}/open/locations/{target}" if root else f"/open/locations/{target}"
 
 
 def container_receiver_member_payload(conn, container_id: UUID | str | None) -> list[dict[str, Any]]:
@@ -16545,6 +16580,7 @@ PUBLIC_NEXT_PREFIXES = (
     "/app/movies/",
     "/app/containers/",
     "/app/people/",
+    "/app/locations/",
 )
 
 
@@ -18253,6 +18289,23 @@ def register_routes(flask_app: Flask) -> None:
             public_id = entity.get("public_id")
         svg = location_qr_svg(location_deep_link(public_id))
         return Response(svg, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+    @flask_app.get("/api/next/locations/<location_id>/qr.png")
+    def location_qr_png_route(location_id: str):
+        with connect() as conn:
+            require_any_next_permission(
+                conn,
+                ("containers.view", "collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
+            if not table_exists(conn, "locations"):
+                raise NextApiError("Location table is not available", 503)
+            location_uuid = parse_uuid(location_id, "locationId")
+            entity = location_entity(conn, location_uuid) if location_uuid else location_entity_by_public_id(conn, location_id)
+            if not entity:
+                raise NextApiError("Location not found", 404)
+            public_id = entity.get("public_id")
+        png = location_qr_png(location_deep_link(public_id))
+        return Response(png, mimetype="image/png", headers={"Cache-Control": "no-store"})
 
     @flask_app.post("/api/next/locations/<location_id>/backdrop/upload")
     def location_backdrop_upload(location_id: str):
@@ -25034,6 +25087,37 @@ def register_routes(flask_app: Flask) -> None:
             else:
                 snapshot = collection_dashboard_snapshot(conn)
         return html_response(collection_dashboard_html(snapshot))
+
+    @flask_app.get("/open/locations/<location_id>")
+    def open_location_deep_link(location_id: str):
+        target = quote(str(location_id or "").strip(), safe="")
+        if not target:
+            raise NextApiError("Location ID is required", 400)
+        web_url = f"/locations/{target}"
+        native_url = f"discvault://locations/{target}"
+        html = (
+            "<!doctype html>"
+            "<html lang='en'>"
+            "<head>"
+            "<meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            "<title>Open DiscVault</title>"
+            f"<meta http-equiv='refresh' content='2;url={html_lib.escape(web_url, quote=True)}'>"
+            "</head>"
+            "<body>"
+            "<p>Opening DiscVault…</p>"
+            f"<p><a href='{html_lib.escape(web_url, quote=True)}'>Continue in browser</a></p>"
+            "<script>"
+            f"const nativeUrl = {json_lib.dumps(native_url)};"
+            f"const webUrl = {json_lib.dumps(web_url)};"
+            "const fallback = setTimeout(() => { window.location.replace(webUrl); }, 1200);"
+            "window.addEventListener('pagehide', () => clearTimeout(fallback), {once: true});"
+            "window.location.replace(nativeUrl);"
+            "</script>"
+            "</body>"
+            "</html>"
+        )
+        return html_response(html)
 
     @flask_app.get("/")
     @flask_app.get("/app")

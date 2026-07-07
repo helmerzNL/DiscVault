@@ -125,6 +125,13 @@ descriptions, and merge commit messages must be written in English.** This keeps
 and GitHub consistent and reviewable. (Chat replies to the user stay in the conversation
 language — only the Git/GitHub artifacts are English.)
 
+**Formatting: use clean, readable Markdown — no literal escape sequences**
+
+In every commit message, PR title, PR description, and merge message, write **real line breaks
+and real Markdown**. Never emit literal escape sequences such as `\n`, `\t`, or `\"` as text —
+use an actual newline for a new line, real `-`/`*` bullet lists, real ``code`` backticks, and
+proper headings. The description must render cleanly on GitHub, not show raw `\n` characters.
+
 **At the start of every new piece of work — classify it first**
 
 Before creating a branch or writing any code, **ask the user what kind of work this is**:
@@ -147,6 +154,13 @@ inferred). Carry the chosen type through the whole flow:
 - In an existing worktree session whose branch is already fixed, keep the existing branch but
   still apply the type prefix to commits and the PR title.
 
+**Translations are part of done (feature + bug fix)**
+
+- Every feature and bug fix must include complete i18n updates for all supported locales.
+- Do not open or merge a PR while translations are incomplete.
+- Before PR creation, run an i18n completeness pass (no missing keys, and no newly introduced
+  hardcoded UI text without i18n keys).
+
 **When the user starts a new feature (or bug/other work)**
 
 1. Base the work on `release/v26-beta`, **never** on `main` or `legacy`. In a worktree session
@@ -165,8 +179,10 @@ inferred). Carry the chosen type through the whole flow:
    unless the user opts out.
 4. Push and open the PR **into `release/v26-beta`**, giving the PR the same type prefix in its
    title (feature PRs into beta may be squashed).
-5. Let it build/test on the beta channel before considering promotion.
-6. **After the PR merges, delete the feature branch** (`git push origin --delete <branch>`) —
+5. Confirm translations are complete across all locales (no missing i18n keys and no new
+   untranslated UI strings).
+6. Let it build/test on the beta channel before considering promotion.
+7. **After the PR merges, delete the feature branch** (`git push origin --delete <branch>`) —
    unless it is the active Copilot session/worktree branch (reused across PRs) or a
    permanent branch (`main`, `release/v26-beta`, `legacy`). If unsure, ask before deleting.
 
