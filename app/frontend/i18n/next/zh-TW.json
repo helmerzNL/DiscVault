@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "新增標籤",
   "lists.tagCreateSubmit": "建立",
   "lists.tagCreateTitle": "新增標籤",
+  "lists.tagDeleteLocked": "刪除此標籤前，請先從所有媒體中移除它。",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

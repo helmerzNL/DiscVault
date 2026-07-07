@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "Jauna birka",
   "lists.tagCreateSubmit": "Izveidot",
   "lists.tagCreateTitle": "Jauna birka",
+  "lists.tagDeleteLocked": "Pirms dzēšanas noņemiet šo tagu no visiem medijiem.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

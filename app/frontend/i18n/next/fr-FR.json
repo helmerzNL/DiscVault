@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "Nouvelle étiquette",
   "lists.tagCreateSubmit": "Créer",
   "lists.tagCreateTitle": "Nouvelle étiquette",
+  "lists.tagDeleteLocked": "Retirez cette étiquette de tous les médias avant de pouvoir la supprimer.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

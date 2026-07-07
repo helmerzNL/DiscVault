@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "Neuer Tag",
   "lists.tagCreateSubmit": "Erstellen",
   "lists.tagCreateTitle": "Neuer Tag",
+  "lists.tagDeleteLocked": "Entferne dieses Tag von allen Medien, bevor du es löschen kannst.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

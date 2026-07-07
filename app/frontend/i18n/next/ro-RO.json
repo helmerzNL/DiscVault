@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "Etichetă nouă",
   "lists.tagCreateSubmit": "Creează",
   "lists.tagCreateTitle": "Etichetă nouă",
+  "lists.tagDeleteLocked": "Elimină această etichetă de pe toate materialele înainte de a o putea șterge.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",
