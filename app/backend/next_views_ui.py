@@ -28754,7 +28754,6 @@ def ui_preview_html(
       const node = locationById(locationId);
       if (!node) return;
       const url = locationQrPngUrl(node);
-      const url = locationQrPngUrl(node);
       const title = node.path_label || node.pathLabel || node.name || tNext("locations.qr", "QR");
       const publicId = String(node.public_id || node.publicId || node.id || locationId || "");
       const deepLink = publicId ? new URL(`/app/locations/${encodeURIComponent(publicId)}`, window.location.origin).toString() : "";
