@@ -1402,6 +1402,14 @@ def ui_preview_html(
       letter-spacing: .04em;
       text-transform: uppercase;
     }
+    .location-route-qr {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      background: #fff;
+      padding: 12px;
+    }
     .preview-stat, .preview-panel {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -1435,6 +1443,11 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
+    }
+    .location-route-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
     }
     .filter-row select {
       min-width: 190px;
@@ -9254,6 +9267,15 @@ def ui_preview_html(
         <div class="filter-row">
           <select id="groupFilter" aria-label="Group filter" data-next-i18n-aria="groups.filterLabel"></select>
           <span class="group-scope-pill" id="groupFilterStatus"></span>
+          <div class="location-route-controls hidden" id="locationRouteCollectionControls">
+            <button type="button" class="icon-button" id="locationRouteSortTrigger" aria-label="Sort collection" data-next-i18n-aria="collection.sort" title="Sort" data-next-i18n-title="collection.sort">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9,3L5,6.99H8V14H10V6.99H13M16,17.01V10H14V17.01H11L15,21L19,17.01H16Z"/></svg>
+            </button>
+            <button type="button" class="icon-button" id="locationRouteFilterTrigger" aria-label="Filter collection" data-next-i18n-aria="collection.filter" title="Filter" data-next-i18n-title="collection.filter">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 13H18V11H6M3 6V8H21V6M10 18H14V16H10V18Z"/></svg>
+              <span class="metadata-job-badge hidden" id="locationRouteFilterBadge">0</span>
+            </button>
+          </div>
           <button type="button" class="icon-button metadata-job-toggle hidden" id="libraryMetadataJobsToggleButton">
             <span data-next-i18n="metadataJobs.toggle">Metadata jobs</span>
             <span class="metadata-job-badge" id="libraryMetadataJobBadge">0</span>
@@ -16364,10 +16386,15 @@ def ui_preview_html(
       const containersSwitch = document.getElementById("collectionContainersSwitch");
       if (containersSwitch) containersSwitch.checked = collectorMode && collectionItemFilter === "containers";
       const badge = document.getElementById("collectionFilterBadge");
+      const locationRouteBadge = document.getElementById("locationRouteFilterBadge");
+      const count = collectionFilterActiveCount();
       if (badge) {
-        const count = collectionFilterActiveCount();
         badge.textContent = String(count);
         badge.classList.toggle("hidden", count === 0);
+      }
+      if (locationRouteBadge) {
+        locationRouteBadge.textContent = String(count);
+        locationRouteBadge.classList.toggle("hidden", count === 0);
       }
     }
     function formatFilterLabel(value) {
@@ -27410,6 +27437,12 @@ def ui_preview_html(
       const visibleMovieCount = libraryDisplayMovieCount(displayItems);
       const locationRouteActive = Boolean(activeLocationRoutePublicId);
       const locationNode = locationRouteActive ? activeLocationRouteNode() : null;
+      const groupFilter = document.getElementById("groupFilter");
+      const groupScope = document.getElementById("groupFilterStatus");
+      const locationControls = document.getElementById("locationRouteCollectionControls");
+      if (groupFilter) groupFilter.classList.toggle("hidden", locationRouteActive);
+      if (groupScope) groupScope.classList.toggle("hidden", locationRouteActive);
+      if (locationControls) locationControls.classList.toggle("hidden", !locationRouteActive);
       const hero = document.getElementById("previewHero");
       if (hero) {
         hero.classList.toggle(
@@ -27422,6 +27455,7 @@ def ui_preview_html(
       if (locationRouteActive && hero) {
         const routeLabel = locationNode?.path_label || locationNode?.pathLabel || locationNode?.name || activeLocationRoutePublicId;
         const routeBackdrop = locationNode ? locationBackdropValue(locationNode) : "";
+        const routeQrUrl = locationNode ? locationQrSvgUrl(locationNode) : "";
         const routeMovieCount = Number(locationNode?.movie_count || 0);
         const routeContainerCount = Number(locationNode?.container_count || 0);
         const titleNode = document.getElementById("heroTitle");
@@ -27458,7 +27492,9 @@ def ui_preview_html(
           backdropNode.src = routeBackdrop || "";
         }
         if (posterNode) {
-          posterNode.innerHTML = `<span class="location-route-poster">${escapeHtml(tNext("locations.heroMarker", "LOC"))}</span>`;
+          posterNode.innerHTML = routeQrUrl
+            ? `<img class="location-route-qr" src="${escapeHtml(routeQrUrl)}" alt="${escapeHtml(tNext("locations.qr", "QR"))}">`
+            : `<span class="location-route-poster">${escapeHtml(tNext("locations.heroMarker", "LOC"))}</span>`;
         }
         document.querySelectorAll("[data-preview-movie]").forEach((node) => node.classList.toggle("selected", false));
         document.querySelectorAll("[data-preview-container]").forEach((node) => node.classList.toggle("selected", false));
@@ -28475,6 +28511,11 @@ def ui_preview_html(
         || location?.metadata?.backdrop
       );
     }
+    function locationQrSvgUrl(location) {
+      const locationId = String(location?.id || "").trim();
+      if (!locationId) return "";
+      return `/api/next/locations/${encodeURIComponent(locationId)}/qr.svg`;
+    }
     function activeLocationRouteNode() {
       if (!activeLocationRoutePublicId) return null;
       return locationByPublicId(activeLocationRoutePublicId) || locationById(activeLocationRouteId);
@@ -28720,7 +28761,7 @@ def ui_preview_html(
     function openLocationQr(locationId) {
       const node = locationById(locationId);
       if (!node) return;
-      const url = `/api/next/locations/${encodeURIComponent(locationId)}/qr.svg`;
+      const url = locationQrSvgUrl(node);
       const title = node.path_label || node.pathLabel || node.name || tNext("locations.qr", "QR");
       const publicId = String(node.public_id || node.publicId || node.id || locationId || "");
       const deepLink = publicId ? new URL(`/app/locations/${encodeURIComponent(publicId)}`, window.location.origin).toString() : "";
@@ -30003,6 +30044,14 @@ def ui_preview_html(
         localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
         renderLibrary();
+      });
+      document.getElementById("locationRouteSortTrigger")?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleCollectionMenu("collectionSortMenu");
+      });
+      document.getElementById("locationRouteFilterTrigger")?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleCollectionMenu("collectionFilterMenu");
       });
       document.getElementById("groupFilter")?.addEventListener("change", (event) => {
         activeCollectionGroupFilter = validCollectionGroupFilter(event.target.value || "");
