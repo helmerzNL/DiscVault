@@ -125,11 +125,12 @@ descriptions, and merge commit messages must be written in English.** This keeps
 and GitHub consistent and reviewable. (Chat replies to the user stay in the conversation
 language — only the Git/GitHub artifacts are English.)
 
-**PR body formatting: never post escaped newlines**
+**Formatting: use clean, readable Markdown — no literal escape sequences**
 
-When creating or updating PR descriptions, always send the body as real multiline Markdown.
-**Never** send JSON-escaped newline text (for example `\\n` appearing literally in the PR body).
-If a PR body is posted with escaped newlines, immediately update it to readable Markdown.
+In every commit message, PR title, PR description, and merge message, write **real line breaks
+and real Markdown**. Never emit literal escape sequences such as `\n`, `\t`, or `\"` as text —
+use an actual newline for a new line, real `-`/`*` bullet lists, real ``code`` backticks, and
+proper headings. The description must render cleanly on GitHub, not show raw `\n` characters.
 
 **At the start of every new piece of work — classify it first**
 
