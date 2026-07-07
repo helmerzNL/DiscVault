@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Arayüz önizlemesi",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Son eklenenler",
-  "uiPreview.shuffle": "Karıştır"
+  "uiPreview.shuffle": "Karıştır",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

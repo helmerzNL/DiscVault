@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "UI-esikatselu",
   "uiPreview.profile": "Profiili",
   "uiPreview.recentlyAdded": "Viimeksi lisatyt",
-  "uiPreview.shuffle": "Sekoita"
+  "uiPreview.shuffle": "Sekoita",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

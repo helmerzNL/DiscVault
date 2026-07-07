@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Previzualizare UI",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Adăugate recent",
-  "uiPreview.shuffle": "Aleator"
+  "uiPreview.shuffle": "Aleator",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

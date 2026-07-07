@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "UI-Vorschau",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Kuerzlich hinzugefuegt",
-  "uiPreview.shuffle": "Zufaellig"
+  "uiPreview.shuffle": "Zufaellig",
+  "notifications": {
+    "priceCheck": "Preischeck",
+    "priceCheckRunning": "Preischeck wird ausgeführt...",
+    "priceCheckDone": "Preischeck abgeschlossen."
+  }
 }

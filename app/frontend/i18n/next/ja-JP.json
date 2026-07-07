@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "UIプレビュー",
   "uiPreview.profile": "プロフィール",
   "uiPreview.recentlyAdded": "最近追加",
-  "uiPreview.shuffle": "シャッフル"
+  "uiPreview.shuffle": "シャッフル",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

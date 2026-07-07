@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "介面預覽",
   "uiPreview.profile": "個人資料",
   "uiPreview.recentlyAdded": "最近加入",
-  "uiPreview.shuffle": "隨機"
+  "uiPreview.shuffle": "隨機",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }
