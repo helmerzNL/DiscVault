@@ -2107,7 +2107,7 @@
   "locations.nameRequired": "Voer eerst een naam in.",
   "locations.qr": "QR",
   "locations.qrPrint": "QR printen",
-  "locations.qrDownload": "SVG downloaden",
+  "locations.qrDownload": "PNG downloaden",
   "locations.assign": "Opslaglocatie",
   "locations.none": "Geen locatie",
   "locations.backdropField": "Backdrop",

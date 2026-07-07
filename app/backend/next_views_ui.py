@@ -1390,6 +1390,10 @@ def ui_preview_html(
       object-fit: cover;
       display: block;
     }
+    .hero-poster.location-route-qr-poster {
+      aspect-ratio: 1 / 1;
+      background: #fff;
+    }
     .location-route-poster {
       width: 100%;
       height: 100%;
@@ -1408,7 +1412,6 @@ def ui_preview_html(
       object-fit: contain;
       display: block;
       background: #fff;
-      padding: 12px;
     }
     .preview-stat, .preview-panel {
       border: 1px solid var(--line);
@@ -7944,15 +7947,6 @@ def ui_preview_html(
       width: min(100%, 320px);
       height: auto;
     }
-    .location-qr-logo {
-      position: absolute;
-      width: 64px;
-      height: 64px;
-      padding: 8px;
-      border-radius: 18px;
-      background: #fff;
-      box-shadow: 0 8px 24px rgba(15, 23, 42, .16);
-    }
     .location-qr-actions {
       display: flex;
       flex-wrap: wrap;
@@ -11403,11 +11397,10 @@ def ui_preview_html(
       <div class="location-qr-preview">
         <div class="location-qr-frame">
           <img id="locationQrImage" alt="QR">
-          <img class="location-qr-logo" src="/pwa-icon-192.png" alt="">
         </div>
       </div>
       <div class="location-qr-actions">
-        <a class="secondary-button location-qr-download" id="locationQrDownloadLink" href="#" download data-next-i18n="locations.qrDownload">Download SVG</a>
+        <a class="secondary-button location-qr-download" id="locationQrDownloadLink" href="#" download data-next-i18n="locations.qrDownload">Download PNG</a>
         <button type="button" class="secondary-button" id="locationQrPrintButton" data-next-i18n="locations.qrPrint">Print QR</button>
       </div>
     </div>
@@ -27451,11 +27444,13 @@ def ui_preview_html(
       if (locationRouteActive && hero) {
         const routeLabel = locationNode?.path_label || locationNode?.pathLabel || locationNode?.name || activeLocationRoutePublicId;
         const routeBackdrop = locationNode ? locationBackdropValue(locationNode) : "";
-        const routeQrUrl = locationNode ? locationQrSvgUrl(locationNode) : "";
+        const routeQrUrl = locationNode ? locationQrPngUrl(locationNode) : "";
         const routeMovieCount = Number(locationNode?.movie_count || 0);
         const routeContainerCount = Number(locationNode?.container_count || 0);
         const titleNode = document.getElementById("heroTitle");
         const metaNode = document.getElementById("heroMeta");
+        const posterNode = document.getElementById("heroPoster");
+        if (posterNode) posterNode.classList.remove("location-route-qr-poster");
         const detailLink = document.getElementById("heroDetailLink");
         const shuffleButton = document.getElementById("shuffleButton");
         const backdropNode = document.getElementById("heroBackdrop");
@@ -27488,6 +27483,7 @@ def ui_preview_html(
           backdropNode.src = routeBackdrop || "";
         }
         if (posterNode) {
+          posterNode.classList.toggle("location-route-qr-poster", Boolean(routeQrUrl));
           posterNode.innerHTML = routeQrUrl
             ? `<img class="location-route-qr" src="${escapeHtml(routeQrUrl)}" alt="${escapeHtml(tNext("locations.qr", "QR"))}">`
             : `<span class="location-route-poster">${escapeHtml(tNext("locations.heroMarker", "LOC"))}</span>`;
@@ -28507,10 +28503,10 @@ def ui_preview_html(
         || location?.metadata?.backdrop
       );
     }
-    function locationQrSvgUrl(location) {
+    function locationQrPngUrl(location) {
       const locationId = String(location?.id || "").trim();
       if (!locationId) return "";
-      return `/api/next/locations/${encodeURIComponent(locationId)}/qr.svg`;
+      return `/api/next/locations/${encodeURIComponent(locationId)}/qr.png`;
     }
     function activeLocationRouteNode() {
       if (!activeLocationRoutePublicId) return null;
@@ -28757,7 +28753,7 @@ def ui_preview_html(
     function openLocationQr(locationId) {
       const node = locationById(locationId);
       if (!node) return;
-      const url = locationQrSvgUrl(node);
+      const url = locationQrPngUrl(node);
       const title = node.path_label || node.pathLabel || node.name || tNext("locations.qr", "QR");
       const publicId = String(node.public_id || node.publicId || node.id || locationId || "");
       const deepLink = publicId ? new URL(`/app/locations/${encodeURIComponent(publicId)}`, window.location.origin).toString() : "";
@@ -28773,7 +28769,7 @@ def ui_preview_html(
       }
       if (downloadLink) {
         downloadLink.href = url;
-        downloadLink.setAttribute("download", `location-${publicId}.svg`);
+        downloadLink.setAttribute("download", `location-${publicId}.png`);
       }
       document.getElementById("locationQrBackdrop")?.classList.remove("hidden");
       document.body.classList.add("location-qr-print-open");
