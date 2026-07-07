@@ -9056,7 +9056,6 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
-        <button type="button" class="nav-item" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span><small id="navStatsState">-</small></button>
       </nav>
       <div class="sidebar-footer">
         <strong data-next-i18n="profile.appVersion">App version</strong><br>
@@ -11411,10 +11410,6 @@ def ui_preview_html(
     <button type="button" class="mobile-tab" data-app-route="profile">
       """ + nav_icon("profile") + """
       <span data-next-i18n="uiPreview.profile">Profile</span>
-    </button>
-    <button type="button" class="mobile-tab" data-app-route="statistics">
-      """ + nav_icon("statistics") + """
-      <span data-next-i18n="uiPreview.navStatistics">Statistics</span>
     </button>
   </nav>
   <script>
