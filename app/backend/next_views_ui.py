@@ -9661,6 +9661,10 @@ def ui_preview_html(
                     <span data-next-i18n="importCenter.manualYear">Year</span>
                     <input id="boxSetBuilderMemberYearInput" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
                   </label>
+                  <label>
+                    <span data-next-i18n="importCenter.manualFormat">Format</span>
+                    <select id="boxSetBuilderMemberFormatInput" autocomplete="off"></select>
+                  </label>
                   <button type="submit" class="primary-button" id="boxSetBuilderMemberButton" data-next-i18n="importCenter.boxSetBuilderAddMember">Scan / add member</button>
                 </form>
                 <div class="login-message" id="boxSetBuilderMemberMessage"></div>
@@ -20600,6 +20604,8 @@ def ui_preview_html(
         }
         const countNode = document.getElementById("boxSetBuilderMemberCount");
         if (countNode) countNode.textContent = `${state.members.length}`;
+        const formatSelect = document.getElementById("boxSetBuilderMemberFormatInput");
+        if (formatSelect && formatSelect.tagName === "SELECT") formatSelect.innerHTML = movieFormatOptionsHtml(formatSelect.value || "");
         renderBoxSetBuilderMembers();
       }
     }
@@ -20726,7 +20732,7 @@ def ui_preview_html(
           barcode: fields.barcode || "",
           title: fields.title || "",
           year: fields.year || "",
-          format: "",
+          format: fields.format || "",
           importMode: "movie",
           detectBoxSets: false,
           targetContainerId: state.target.id
@@ -20917,9 +20923,11 @@ def ui_preview_html(
       const barcodeInput = document.getElementById("boxSetBuilderMemberBarcodeInput");
       const titleInput = document.getElementById("boxSetBuilderMemberTitleInput");
       const yearInput = document.getElementById("boxSetBuilderMemberYearInput");
+      const formatInput = document.getElementById("boxSetBuilderMemberFormatInput");
       const barcode = normalizeImportBarcode(scannedCode || barcodeInput?.value || "");
       const title = String(titleInput?.value || "").trim();
       const year = String(yearInput?.value || "").trim();
+      const format = String(formatInput?.value || "").trim();
       if (!barcode && !title) {
         setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("importCenter.boxSetBuilderMemberNeedInput", "Scan a barcode or enter a title to add a member."), "bad");
         return;
@@ -20931,7 +20939,7 @@ def ui_preview_html(
       state.busy = true;
       setBoxSetBuilderMessage("boxSetBuilderMemberMessage", tNext("importCenter.boxSetBuilderAdding", "Adding member..."));
       try {
-        const payload = await postBoxSetBuilderMemberImport({barcode, title, year});
+        const payload = await postBoxSetBuilderMemberImport({barcode, title, year, format});
         applyBoxSetBuilderResult(payload);
         const movie = payload.movie || payload.detail?.movie || {};
         const movieTitle = String(movie.title || title || barcode || "").trim();
@@ -21001,7 +21009,7 @@ def ui_preview_html(
     }
     function resetBoxSetBuilder() {
       importCenter.boxSetBuilder = {target: null, members: [], captureToCamera: false, busy: false, batch: {rows: [], running: false}};
-      ["boxSetBuilderBarcodeInput", "boxSetBuilderTitleInput", "boxSetBuilderYearInput", "boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberTitleInput", "boxSetBuilderMemberYearInput", "boxSetBuilderBatchInput"].forEach((id) => {
+      ["boxSetBuilderBarcodeInput", "boxSetBuilderTitleInput", "boxSetBuilderYearInput", "boxSetBuilderMemberBarcodeInput", "boxSetBuilderMemberTitleInput", "boxSetBuilderMemberYearInput", "boxSetBuilderMemberFormatInput", "boxSetBuilderBatchInput"].forEach((id) => {
         const node = document.getElementById(id);
         if (node) node.value = "";
       });
