@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Vista previa UI",
   "uiPreview.profile": "Perfil",
   "uiPreview.recentlyAdded": "Anadidas recientemente",
-  "uiPreview.shuffle": "Aleatorio"
+  "uiPreview.shuffle": "Aleatorio",
+  "notifications": {
+    "priceCheck": "Verificar precios",
+    "priceCheckRunning": "Ejecutando comprobación de precios...",
+    "priceCheckDone": "Comprobación de precios completada."
+  }
 }

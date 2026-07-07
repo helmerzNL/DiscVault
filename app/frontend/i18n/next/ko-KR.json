@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "UI 미리보기",
   "uiPreview.profile": "프로필",
   "uiPreview.recentlyAdded": "최근 추가됨",
-  "uiPreview.shuffle": "무작위"
+  "uiPreview.shuffle": "무작위",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

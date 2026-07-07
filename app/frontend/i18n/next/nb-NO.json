@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "UI-forhåndsvisning",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Nylig lagt til",
-  "uiPreview.shuffle": "Tilfeldig"
+  "uiPreview.shuffle": "Tilfeldig",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

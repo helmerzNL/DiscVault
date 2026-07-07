@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Προεπισκόπηση UI",
   "uiPreview.profile": "Προφίλ",
   "uiPreview.recentlyAdded": "Προστέθηκαν πρόσφατα",
-  "uiPreview.shuffle": "Τυχαία σειρά"
+  "uiPreview.shuffle": "Τυχαία σειρά",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

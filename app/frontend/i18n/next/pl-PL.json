@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Podgląd UI",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Ostatnio dodane",
-  "uiPreview.shuffle": "Losuj"
+  "uiPreview.shuffle": "Losuj",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }
