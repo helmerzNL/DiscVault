@@ -5235,7 +5235,7 @@ def location_detail_entity(conn, location_id: UUID | str) -> dict[str, Any] | No
 def location_qr_svg(url: str) -> str:
     import segno
 
-    qr = segno.make(url, error="m")
+    qr = segno.make(url, error="h")
     buffer = io.BytesIO()
     qr.save(buffer, kind="svg", scale=6, border=2, dark="#0f172a", light=None)
     return buffer.getvalue().decode("utf-8")
@@ -6044,6 +6044,54 @@ def emit_container_membership_change(conn, container_id, *, operation: str = "up
         },
     )
     return revision
+
+
+def link_movie_into_container(conn, container_id, movie_id, *, actor) -> dict[str, Any]:
+    """Link an existing movie into a box_set/vault container (idempotent).
+
+    Mirrors the ``add_movie_to_container`` route so the import-with-target flow and
+    the manual add-member route share identical semantics: next sort order,
+    ``ON CONFLICT DO NOTHING``, audit trail and a container-membership sync delta.
+    Manages its own transaction, which is safe to nest inside an outer
+    transaction (psycopg emits a savepoint).
+    """
+    if not table_exists(conn, "container_movies"):
+        raise NextApiError("Container movie links are not available yet", 503)
+    container_type = container_type_for_id(conn, container_id)
+    if container_type not in {"box_set", "vault"}:
+        raise NextApiError("Target container must be a box-set or vault", 400)
+    changed = 0
+    sort_order = 0
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM container_movies WHERE container_id=%s",
+                (container_id,),
+            )
+            sort_order = int(cur.fetchone()["max_sort"]) + 1
+            cur.execute(
+                """
+                INSERT INTO container_movies (container_id, movie_id, sort_order, created_at)
+                VALUES (%s, %s, %s, now())
+                ON CONFLICT (container_id, movie_id) DO NOTHING
+                """,
+                (container_id, movie_id, sort_order),
+            )
+            changed = cur.rowcount
+            cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_id,))
+        audit_event(
+            conn,
+            event_type="container.movie_added",
+            category="import",
+            actor=actor,
+            target_type="container",
+            target_id=container_id,
+            summary="Linked imported movie to container",
+            metadata={"movieId": str(movie_id), "containerType": container_type, "changed": changed},
+        )
+        if changed:
+            emit_container_membership_change(conn, container_id)
+    return {"changed": changed, "containerType": container_type, "sortOrder": sort_order}
 
 
 def emit_movie_identifiers_change(conn, movie_id, *, operation: str = "upsert") -> int:
@@ -14200,6 +14248,9 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
     container = container_entity(conn, container_id)
     if not container:
         return None
+    if isinstance(container, dict):
+        primary_movie_id = container.get("primary_movie_id")
+        container["primaryMovieId"] = str(primary_movie_id) if primary_movie_id else None
     attach_location_summaries(conn, [container])
     aggregate_movies = container_aggregate_movie_entities(conn, container_id, actor=actor)
     aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
@@ -15008,6 +15059,10 @@ def apply_container_movie_delete(
         )
         changed = cur.rowcount
         if changed:
+            cur.execute(
+                "UPDATE containers SET primary_movie_id=NULL WHERE id=%s AND primary_movie_id=%s",
+                (container_id, movie_id),
+            )
             cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_id,))
     revision = emit_container_membership_change(conn, container_id) if changed else current_revision(conn)
     return {
@@ -17320,6 +17375,11 @@ def register_routes(flask_app: Flask) -> None:
                         (container_uuid, movie_uuid),
                     )
                     changed = cur.rowcount
+                    if changed:
+                        cur.execute(
+                            "UPDATE containers SET primary_movie_id=NULL WHERE id=%s AND primary_movie_id=%s",
+                            (container_uuid, movie_uuid),
+                        )
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
                 audit_event(
                     conn,
@@ -17343,6 +17403,177 @@ def register_routes(flask_app: Flask) -> None:
                     "containerType": container_type,
                     "detail": container_detail_entity(conn, container_uuid),
                     "actions": movie_library_action_targets(conn, movie_uuid, actor),
+                }
+            )
+
+    @flask_app.get("/api/next/containers/lookup")
+    def lookup_container_by_barcode():
+        barcode = clean_text(request.args.get("barcode")) or ""
+        requested_type = clean_text(request.args.get("type")) or ""
+        if not barcode:
+            raise NextApiError("barcode is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                (
+                    "containers.view",
+                    "containers.edit",
+                    "collection.view",
+                    "collection.import",
+                    "collection.edit_all",
+                ),
+            )
+            if not table_exists(conn, "containers"):
+                raise NextApiError("Container table is not available", 503)
+            type_clause = ""
+            params: list[Any] = [barcode]
+            if requested_type:
+                type_clause = " AND container_type=%s"
+                params.append(normalize_container_type(requested_type))
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT id, public_id, container_type, title, barcode, badge_label, year
+                    FROM containers
+                    WHERE barcode=%s{type_clause}
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """,
+                    tuple(params),
+                )
+                row = cur.fetchone()
+            if not row:
+                return response({"status": "ok", "found": False, "container": None})
+            member_count = 0
+            if table_exists(conn, "container_movies"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COUNT(*)::int AS n FROM container_movies WHERE container_id=%s",
+                        (row["id"],),
+                    )
+                    member_count = int(cur.fetchone()["n"])
+            can_edit = actor_has_any_permission(
+                actor,
+                ("containers.edit", "collection.edit_all", "collection.bulk_edit", "collection.import"),
+            )
+            return response(
+                {
+                    "status": "ok",
+                    "found": True,
+                    "canEdit": can_edit,
+                    "container": {
+                        "id": str(row["id"]),
+                        "publicId": row.get("public_id"),
+                        "containerType": row.get("container_type"),
+                        "title": row.get("title"),
+                        "barcode": row.get("barcode"),
+                        "badgeLabel": row.get("badge_label"),
+                        "year": row.get("year"),
+                        "memberCount": member_count,
+                    },
+                }
+            )
+
+    @flask_app.get("/api/next/import/movie/resolve")
+    def resolve_import_member_barcode():
+        # Read-only preview for the box-set builder / container scan: classify a
+        # scanned member barcode as an existing vault movie, metadata candidates,
+        # or nothing — WITHOUT importing. Metadata plugin lookups are only fired
+        # when includeCandidates is set, to keep live scan previews cheap.
+        barcode = clean_text(request.args.get("barcode")) or ""
+        title = clean_text(request.args.get("title") or request.args.get("query")) or ""
+        year = clean_text(request.args.get("year")) or ""
+        include_candidates = str(request.args.get("includeCandidates") or "").strip().lower() in {"1", "true", "yes"}
+        if not barcode and not title:
+            raise NextApiError("barcode or title is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                (
+                    "collection.add",
+                    "collection.add_own",
+                    "collection.import",
+                    "collection.edit_all",
+                    "metadata.search",
+                ),
+            )
+            if not table_exists(conn, "movies"):
+                raise NextApiError("Movie table is not available", 503)
+            if barcode:
+                visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""
+                        SELECT
+                            m.id,
+                            m.public_id,
+                            m.barcode,
+                            m.title,
+                            m.year,
+                            m.metadata->>'poster_url' AS poster_url
+                        FROM movies m
+                        WHERE m.barcode=%s
+                          AND {visibility_where}
+                        ORDER BY m.created_at ASC
+                        LIMIT 1
+                        """,
+                        (barcode, *visibility_params),
+                    )
+                    existing = cur.fetchone()
+                if existing:
+                    return response(
+                        {
+                            "status": "ok",
+                            "state": "existingMovie",
+                            "movie": {
+                                "id": str(existing["id"]),
+                                "publicId": existing.get("public_id"),
+                                "barcode": existing.get("barcode"),
+                                "title": existing.get("title"),
+                                "year": existing.get("year"),
+                                "posterUrl": existing.get("poster_url"),
+                            },
+                        }
+                    )
+            candidates: list[dict[str, Any]] = []
+            if include_candidates:
+                if not table_exists(conn, "plugins"):
+                    raise NextApiError("Plugin registry table is not available", 503)
+                lookup_payload = {
+                    "barcode": barcode,
+                    "title": title,
+                    "year": year,
+                    "detectBoxSets": False,
+                    "previewMode": True,
+                }
+                try:
+                    metadata_result = lookup_metadata_sources(conn, lookup_payload, actor)
+                except Exception:  # pragma: no cover - preview must never hard-fail
+                    metadata_result = {}
+                results = metadata_result.get("results") if isinstance(metadata_result.get("results"), list) else []
+                for item in results:
+                    if not isinstance(item, dict):
+                        continue
+                    summary = metadata_result_summary(item)
+                    candidate_title = clean_text(summary.get("title") or summary.get("name"))
+                    if not candidate_title:
+                        continue
+                    candidates.append(
+                        {
+                            "title": candidate_title,
+                            "year": summary.get("year"),
+                            "pluginId": summary.get("pluginId"),
+                        }
+                    )
+                    if len(candidates) >= 8:
+                        break
+            state = "candidates" if candidates else "none"
+            return response(
+                {
+                    "status": "ok",
+                    "state": state,
+                    "candidateCount": len(candidates),
+                    "candidates": candidates,
                 }
             )
 
@@ -17573,6 +17804,13 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute("SELECT id FROM containers WHERE public_id=%s", (public_id,))
                     if cur.fetchone():
                         raise NextApiError("A container with this public id already exists", 409)
+                    if container_type == "box_set" and payload["barcode"]:
+                        cur.execute(
+                            "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set' LIMIT 1",
+                            (payload["barcode"],),
+                        )
+                        if cur.fetchone():
+                            raise NextApiError("A box-set with this barcode already exists", 409)
                     cur.execute(
                         """
                         INSERT INTO containers (
@@ -17628,6 +17866,25 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Container not found", 404)
             payload = container_payload(body, existing=existing)
+            primary_provided = "primaryMovieId" in body or "primary_movie_id" in body
+            primary_movie_uuid = None
+            if primary_provided:
+                raw_primary = body.get("primaryMovieId", body.get("primary_movie_id"))
+                if raw_primary in (None, "", False):
+                    primary_movie_uuid = None
+                else:
+                    primary_movie_uuid = parse_uuid(raw_primary, "primaryMovieId")
+                    if not primary_movie_uuid:
+                        raise NextApiError("primaryMovieId must be a valid movie id", 400)
+                    if not table_exists(conn, "container_movies"):
+                        raise NextApiError("Container members are not available", 503)
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT 1 FROM container_movies WHERE container_id=%s AND movie_id=%s LIMIT 1",
+                            (container_uuid, primary_movie_uuid),
+                        )
+                        if not cur.fetchone():
+                            raise NextApiError("Cover movie must be a member of this box-set", 400)
             receiver_payload = container_receiver_payload(conn, existing, payload)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
             with conn.transaction():
@@ -17656,6 +17913,12 @@ def register_routes(flask_app: Flask) -> None:
                             container_uuid,
                         ),
                     )
+                if primary_provided:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE containers SET primary_movie_id=%s, updated_at=now() WHERE id=%s",
+                            (primary_movie_uuid, container_uuid),
+                        )
                 audit_event(
                     conn,
                     event_type="container.updated",
@@ -17993,6 +18256,11 @@ def register_routes(flask_app: Flask) -> None:
                             (container_uuid, movie_ids),
                         )
                         changed = cur.rowcount
+                        if changed:
+                            cur.execute(
+                                "UPDATE containers SET primary_movie_id=NULL WHERE id=%s AND primary_movie_id = ANY(%s)",
+                                (container_uuid, movie_ids),
+                            )
                     else:
                         cur.execute(
                             "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM container_movies WHERE container_id=%s",
@@ -18236,6 +18504,11 @@ def register_routes(flask_app: Flask) -> None:
                         (container_uuid, movie_uuid),
                     )
                     changed = cur.rowcount
+                    if changed:
+                        cur.execute(
+                            "UPDATE containers SET primary_movie_id=NULL WHERE id=%s AND primary_movie_id=%s",
+                            (container_uuid, movie_uuid),
+                        )
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
@@ -18768,6 +19041,13 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute("SELECT id FROM containers WHERE public_id=%s", (public_id,))
                     if cur.fetchone():
                         raise NextApiError("A container with this public id already exists", 409)
+                    if container_type == "box_set" and payload["barcode"]:
+                        cur.execute(
+                            "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set' LIMIT 1",
+                            (payload["barcode"],),
+                        )
+                        if cur.fetchone():
+                            raise NextApiError("A box-set with this barcode already exists", 409)
                     cur.execute(
                         """
                         INSERT INTO containers (
@@ -23316,6 +23596,8 @@ def register_routes(flask_app: Flask) -> None:
         title = clean_text(body.get("title") or body.get("query")) or ""
         if not barcode and not title:
             raise NextApiError("barcode or title is required", 400)
+        target_container_id_raw = clean_text(body.get("targetContainerId") or body.get("target_container_id"))
+        target_container_uuid = parse_uuid(target_container_id_raw, "targetContainerId") if target_container_id_raw else None
         import_mode = (clean_text(body.get("importMode") or body.get("import_mode")) or "").casefold().replace("_", "-")
         wants_movie_import = import_mode == "movie"
         wants_box_set_import = import_mode in {"box-set", "boxset"}
@@ -23363,6 +23645,15 @@ def register_routes(flask_app: Flask) -> None:
         if not wants_movie_import and not wants_box_set_import:
             wants_box_set_import = has_provided_box_set or bool(body.get("detectBoxSets") or body.get("detect_box_sets"))
 
+        # When a target box-set/vault is pinned, every scan is a member of that
+        # container: force a plain movie import and suppress box-set auto-detection.
+        if target_container_uuid:
+            wants_movie_import = True
+            wants_box_set_import = False
+            provided_box_set_body = None
+            has_provided_box_set = False
+            explicit_box_set_import = False
+
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
@@ -23372,6 +23663,19 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Movie table is not available", 503)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
+
+            target_container_type: str | None = None
+            if target_container_uuid:
+                if not table_exists(conn, "container_movies"):
+                    raise NextApiError("Container movie links are not available yet", 503)
+                target_container_type = container_type_for_id(conn, target_container_uuid)
+                if target_container_type not in {"box_set", "vault"}:
+                    raise NextApiError("Target container must be a box-set or vault", 400)
+                if not actor_has_any_permission(
+                    actor,
+                    ("containers.edit", "collection.edit_all", "collection.bulk_edit", "collection.import"),
+                ):
+                    raise NextApiError("You do not have permission to edit this container", 403)
 
             if wants_box_set_import and barcode and not has_provided_box_set:
                 with conn.cursor() as cur:
@@ -23406,6 +23710,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
                     existing = cur.fetchone()
                 if existing:
+                    link_result = None
+                    if target_container_uuid:
+                        link_result = link_movie_into_container(conn, target_container_uuid, existing["id"], actor=actor)
                     detail = movie_detail_entity(conn, existing["id"])
                     audit_event(
                         conn,
@@ -23415,16 +23722,24 @@ def register_routes(flask_app: Flask) -> None:
                         target_type="movie",
                         target_id=existing["id"],
                         summary="Import skipped because the movie already exists",
-                        metadata={"barcode": barcode, "title": title},
+                        metadata={
+                            "barcode": barcode,
+                            "title": title,
+                            "targetContainerId": str(target_container_uuid) if target_container_uuid else None,
+                        },
                     )
-                    return response(
-                        {
-                            "status": "ok",
-                            "state": "already_exists",
-                            "movie": detail.get("movie") if detail else None,
-                            "detail": detail,
-                        }
-                    )
+                    existing_payload: dict[str, Any] = {
+                        "status": "ok",
+                        "state": "already_exists",
+                        "movie": detail.get("movie") if detail else None,
+                        "detail": detail,
+                    }
+                    if target_container_uuid:
+                        existing_payload["linkedToContainer"] = str(target_container_uuid)
+                        existing_payload["containerType"] = target_container_type
+                        existing_payload["linkChanged"] = link_result["changed"] if link_result else 0
+                        existing_payload["container"] = container_detail_entity(conn, target_container_uuid)
+                    return response(existing_payload)
 
             with conn.transaction():
                 selected_box_set_key = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
@@ -23605,22 +23920,31 @@ def register_routes(flask_app: Flask) -> None:
                         "applied": applied,
                         "metadataRefreshQueued": bool(metadata_refresh_job),
                         "metadataJobId": str(metadata_refresh_job.get("id")) if metadata_refresh_job else None,
+                        "targetContainerId": str(target_container_uuid) if target_container_uuid else None,
                     },
                 )
+                target_link_result = None
+                target_container_detail = None
+                if target_container_uuid:
+                    target_link_result = link_movie_into_container(conn, target_container_uuid, movie_id, actor=actor)
+                    target_container_detail = container_detail_entity(conn, target_container_uuid)
 
-        return response(
-            {
-                "status": "ok",
-                "state": "created",
-                "movie": detail.get("movie") if detail else upsert.get("entity"),
-                "detail": detail,
-                "metadata": metadata_result,
-                "applied": applied,
-                "metadataRefreshQueued": bool(metadata_refresh_job),
-                "metadataJob": metadata_refresh_job,
-            },
-            201,
-        )
+        created_payload: dict[str, Any] = {
+            "status": "ok",
+            "state": "created",
+            "movie": detail.get("movie") if detail else upsert.get("entity"),
+            "detail": detail,
+            "metadata": metadata_result,
+            "applied": applied,
+            "metadataRefreshQueued": bool(metadata_refresh_job),
+            "metadataJob": metadata_refresh_job,
+        }
+        if target_container_uuid:
+            created_payload["linkedToContainer"] = str(target_container_uuid)
+            created_payload["containerType"] = target_container_type
+            created_payload["linkChanged"] = target_link_result["changed"] if target_link_result else 0
+            created_payload["container"] = target_container_detail
+        return response(created_payload, 201)
 
     @flask_app.post("/api/next/import/source/inspect")
     def inspect_import_source():
