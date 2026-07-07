@@ -9272,50 +9272,27 @@ def ui_preview_html(
             <button type="button" class="bulk-action" disabled data-bulk-action="group-add" data-next-i18n="bulk.addToGroup">Add</button>
             <button type="button" class="bulk-action" disabled data-bulk-action="group-remove" data-next-i18n="bulk.removeFromGroup">Remove</button>
           </div>
-          <div class="bulk-target">
-            <label>
-              <span data-next-i18n="bulk.boxSetTarget">Box-set</span>
-              <select id="bulkBoxSetTarget"></select>
-            </label>
-            <div class="bulk-inline-create hidden" id="bulkBoxSetCreateControls">
-              <form class="bulk-inline-create-form" id="bulkBoxSetCreateForm">
-                <label class="visually-hidden" for="bulkBoxSetCreateTitle" data-next-i18n="bulk.boxSetCreateTitleLabel">Box-set name</label>
-                <input id="bulkBoxSetCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.boxSetCreatePlaceholder" placeholder="New box-set name">
-                <button type="submit" class="bulk-action" id="bulkBoxSetCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
-              </form>
-              <p class="bulk-create-message" id="bulkBoxSetCreateMessage"></p>
-            </div>
-            <button type="button" class="bulk-action" disabled data-bulk-action="boxset" data-next-i18n="bulk.addToBoxSet">Add to box-set</button>
-          </div>
-          <div class="bulk-target">
-            <label>
-              <span data-next-i18n="bulk.vaultTarget">Vault</span>
-              <select id="bulkVaultTarget"></select>
-            </label>
-            <div class="bulk-inline-create hidden" id="bulkVaultCreateControls">
-              <form class="bulk-inline-create-form" id="bulkVaultCreateForm">
-                <label class="visually-hidden" for="bulkVaultCreateTitle" data-next-i18n="bulk.vaultCreateTitleLabel">Vault name</label>
-                <input id="bulkVaultCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.vaultCreatePlaceholder" placeholder="New vault name">
-                <button type="submit" class="bulk-action" id="bulkVaultCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
-              </form>
-              <p class="bulk-create-message" id="bulkVaultCreateMessage"></p>
-            </div>
-            <button type="button" class="bulk-action" disabled data-bulk-action="vault" data-next-i18n="bulk.addToVault">Add to Vault</button>
-          </div>
           <div class="bulk-target wide">
             <label>
-              <span data-next-i18n="bulk.collectionTarget">Collection</span>
-              <select id="bulkCollectionTarget"></select>
+              <span data-next-i18n="bulk.containerTarget">Container</span>
+              <select id="bulkContainerTarget"></select>
             </label>
-            <div class="bulk-inline-create hidden" id="bulkCollectionCreateControls">
-              <form class="bulk-inline-create-form" id="bulkCollectionCreateForm">
-                <label class="visually-hidden" for="bulkCollectionCreateTitle" data-next-i18n="bulk.collectionCreateTitleLabel">Collection name</label>
-                <input id="bulkCollectionCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.collectionCreatePlaceholder" placeholder="New collection name">
-                <button type="submit" class="bulk-action" id="bulkCollectionCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
+            <div class="bulk-inline-create hidden" id="bulkContainerCreateControls">
+              <form class="bulk-inline-create-form" id="bulkContainerCreateForm">
+                <label class="visually-hidden" for="bulkContainerCreateTitle" data-next-i18n="bulk.containerCreateTitleLabel">Container name</label>
+                <input id="bulkContainerCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.containerCreatePlaceholder" placeholder="New container name">
+                <button type="submit" class="bulk-action" id="bulkContainerCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
               </form>
-              <p class="bulk-create-message" id="bulkCollectionCreateMessage"></p>
+              <p class="bulk-create-message" id="bulkContainerCreateMessage"></p>
             </div>
-            <button type="button" class="bulk-action" disabled data-bulk-action="collection" data-next-i18n="bulk.addToCollection">Add to collection</button>
+            <button type="button" class="bulk-action" disabled data-bulk-action="container" id="bulkContainerActionButton" data-next-i18n="bulk.addToContainer">Add to container</button>
+          </div>
+          <div class="bulk-target">
+            <label>
+              <span data-next-i18n="locations.assign">Storage location</span>
+              <select id="bulkLocationTarget"></select>
+            </label>
+            <button type="button" class="bulk-action" disabled data-bulk-action="location" id="bulkLocationActionButton" data-next-i18n="bulk.setLocation">Set location</button>
           </div>
           <div class="bulk-target">
             <label>
@@ -12358,9 +12335,11 @@ def ui_preview_html(
       syncProfilePanelVisibility();
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="metadata"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkMetadata));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="group-add"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups));
-      setElementVisible(closestCard(document.querySelector('[data-bulk-action="boxset"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
-      setElementVisible(closestCard(document.querySelector('[data-bulk-action="vault"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers));
-      setElementVisible(closestCard(document.querySelector('[data-bulk-action="collection"]')), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="container"]')), collectorsEnabled && (hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers) || hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections)));
+      setElementVisible(
+        closestCard(document.querySelector('[data-bulk-action="location"]')),
+        hasPermission("collection.edit_all") || (collectorsEnabled && hasPermission("containers.edit"))
+      );
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="delete"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkDelete));
       setElementVisible(document.getElementById("libraryMetadataJobPanel"), canViewMetadataJobs());
       setElementVisible(document.getElementById("libraryMetadataJobsToggleButton"), canViewMetadataJobs() && (libraryMetadataJobs || []).length > 0);
@@ -16268,12 +16247,6 @@ def ui_preview_html(
         collectionItemFilter = "all";
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
       }
-      const createMenu = document.getElementById("collectionCreateMenu");
-      const canCreateContainers = collectorsModeEnabled() && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement);
-      if (createMenu) {
-        createMenu.classList.toggle("hidden", !canCreateContainers);
-        if (!canCreateContainers) closeCollectionMenu("collectionCreateMenu");
-      }
       advancedSearch = normalizeAdvancedSearch(advancedSearch);
       smartFilters = Array.isArray(smartFilters) ? smartFilters : [];
       libraryViewMode = normalizeLibraryViewMode(libraryViewMode);
@@ -16395,8 +16368,7 @@ def ui_preview_html(
     }
     const COLLECTION_MENUS = [
       {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
-      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"},
-      {menu: "collectionCreateMenu", trigger: "collectionCreateTrigger", panel: "collectionCreatePanel"}
+      {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"}
     ];
     let collectionMenusBound = false;
     function closeCollectionMenu(menuId) {
@@ -16432,7 +16404,7 @@ def ui_preview_html(
           trigger.addEventListener("click", (event) => { event.stopPropagation(); toggleCollectionMenu(def.menu); });
         }
         const panel = document.getElementById(def.panel);
-        if (panel && !panel.dataset.menuBound && (def.menu === "collectionFilterMenu" || def.menu === "collectionCreateMenu")) {
+        if (panel && !panel.dataset.menuBound && def.menu === "collectionFilterMenu") {
           panel.dataset.menuBound = "1";
           panel.addEventListener("click", (event) => event.stopPropagation());
         }
@@ -16606,25 +16578,37 @@ def ui_preview_html(
       persistAdvancedSearch();
       renderLibrary();
     }
-    const BULK_CREATE_SENTINEL = "__create__";
-    const BULK_CREATE_TARGETS = {
+    const BULK_CREATE_SENTINEL_PREFIX = "__create__:";
+    const BULK_CONTAINER_TARGETS = {
       box_set: {
-        selectId: "bulkBoxSetTarget",
-        controlsId: "bulkBoxSetCreateControls",
-        inputId: "bulkBoxSetCreateTitle",
-        messageId: "bulkBoxSetCreateMessage"
+       createLabelKey: "bulk.createNewBoxSet",
+       createLabelFallback: "+ New box-set",
+       nameLabelKey: "bulk.boxSetCreateTitleLabel",
+       nameLabelFallback: "Box-set name",
+       placeholderKey: "bulk.boxSetCreatePlaceholder",
+       placeholderFallback: "New box-set name",
+       addLabelKey: "bulk.addToBoxSet",
+       addLabelFallback: "Add to box-set"
       },
       vault: {
-        selectId: "bulkVaultTarget",
-        controlsId: "bulkVaultCreateControls",
-        inputId: "bulkVaultCreateTitle",
-        messageId: "bulkVaultCreateMessage"
+       createLabelKey: "bulk.createNewVault",
+       createLabelFallback: "+ New vault",
+       nameLabelKey: "bulk.vaultCreateTitleLabel",
+       nameLabelFallback: "Vault name",
+       placeholderKey: "bulk.vaultCreatePlaceholder",
+       placeholderFallback: "New vault name",
+       addLabelKey: "bulk.addToVault",
+       addLabelFallback: "Add to Vault"
       },
       collection: {
-        selectId: "bulkCollectionTarget",
-        controlsId: "bulkCollectionCreateControls",
-        inputId: "bulkCollectionCreateTitle",
-        messageId: "bulkCollectionCreateMessage"
+       createLabelKey: "bulk.createNewCollection",
+       createLabelFallback: "+ New collection",
+       nameLabelKey: "bulk.collectionCreateTitleLabel",
+       nameLabelFallback: "Collection name",
+       placeholderKey: "bulk.collectionCreatePlaceholder",
+       placeholderFallback: "New collection name",
+       addLabelKey: "bulk.addToCollection",
+       addLabelFallback: "Add to collection"
       }
     };
     function bulkCreatePermissionGroup(targetType) {
@@ -16632,13 +16616,39 @@ def ui_preview_html(
     }
     function canCreateFromBulkTarget(targetType) {
       return collectorsModeEnabled()
-        && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)
-        && hasAnyPermission(bulkCreatePermissionGroup(targetType));
+       && hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)
+       && hasAnyPermission(bulkCreatePermissionGroup(targetType));
+    }
+    function bulkCreateTargetConfig(targetType) {
+      return BULK_CONTAINER_TARGETS[targetType] || null;
+    }
+    function bulkCreateTargetValue(targetType) {
+      return `${BULK_CREATE_SENTINEL_PREFIX}${targetType}`;
+    }
+    function bulkContainerOptionValue(item) {
+      return `${String(item.container_type || "container")}:${String(item.id || "")}`;
+    }
+    function bulkContainerSelection(value) {
+      const raw = String(value || "");
+      if (!raw) return {targetType: "", containerId: "", createType: ""};
+      if (raw.startsWith(BULK_CREATE_SENTINEL_PREFIX)) {
+       const createType = raw.slice(BULK_CREATE_SENTINEL_PREFIX.length);
+       return {targetType: "", containerId: "", createType: BULK_CONTAINER_TARGETS[createType] ? createType : ""};
+      }
+      const [targetType, containerId] = raw.split(":", 2);
+      if (!BULK_CONTAINER_TARGETS[targetType] || !containerId) return {targetType: "", containerId: "", createType: ""};
+      return {targetType, containerId, createType: ""};
+    }
+    function bulkContainerActionLabel(targetType, createType = "") {
+      if (createType) return tNext("bulk.createAndAddSelected", "Create and add selected");
+      const config = bulkCreateTargetConfig(targetType);
+      if (config) return tNext(config.addLabelKey, config.addLabelFallback);
+      return tNext("bulk.addToContainer", "Add to container");
     }
     function targetOptionHtml(items, emptyKey, emptyText, createOption = null) {
       if (!items.length && !createOption) return `<option value="">${escapeHtml(tNext(emptyKey, emptyText))}</option>`;
       const options = [`<option value="">${escapeHtml(tNext("bulk.chooseTarget", "Choose target"))}</option>`];
-      if (createOption) options.push(`<option value="${BULK_CREATE_SENTINEL}">${escapeHtml(createOption)}</option>`);
+      if (createOption) options.push(`<option value="${BULK_CREATE_SENTINEL_PREFIX}${createOption}">${escapeHtml(createOption)}</option>`);
       options.push(...items.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || item.title || item.public_id || item.id)}</option>`));
       return options.join("");
     }
@@ -16649,146 +16659,110 @@ def ui_preview_html(
       const collections = collectorContainers.filter((item) => item.container_type === "collection");
       const vaults = collectorContainers.filter((item) => item.container_type === "vault");
       const groupSelect = document.getElementById("bulkGroupTarget");
-      const boxSetSelect = document.getElementById("bulkBoxSetTarget");
-      const collectionSelect = document.getElementById("bulkCollectionTarget");
-      const vaultSelect = document.getElementById("bulkVaultTarget");
+      const containerSelect = document.getElementById("bulkContainerTarget");
+      const locationSelect = document.getElementById("bulkLocationTarget");
       const currentGroupValue = groupSelect?.value || "";
-      const currentBoxSetValue = boxSetSelect?.value || "";
-      const currentCollectionValue = collectionSelect?.value || "";
-      const currentVaultValue = vaultSelect?.value || "";
+      const currentContainerValue = containerSelect?.value || "";
+      const currentLocationValue = locationSelect?.value || "";
       if (groupSelect) groupSelect.innerHTML = targetOptionHtml(groups, "bulk.noGroups", "No groups");
       if (groupSelect && Array.from(groupSelect.options).some((option) => option.value === currentGroupValue)) groupSelect.value = currentGroupValue;
-      if (boxSetSelect) {
-        boxSetSelect.innerHTML = targetOptionHtml(
-          boxSets,
-          "bulk.noBoxSets",
-          "No box-sets",
-          canCreateFromBulkTarget("box_set") ? tNext("bulk.createNewBoxSet", "+ New box-set") : null
-        );
-        if (Array.from(boxSetSelect.options).some((option) => option.value === currentBoxSetValue)) boxSetSelect.value = currentBoxSetValue;
+      if (containerSelect) {
+       const groupsHtml = [];
+       const appendGroup = (targetType, items) => {
+         const config = bulkCreateTargetConfig(targetType);
+         const options = items.map((item) => `<option value="${escapeHtml(bulkContainerOptionValue(item))}">${escapeHtml(item.title || item.name || item.public_id || item.id)}</option>`);
+         if (canCreateFromBulkTarget(targetType)) {
+           options.push(`<option value="${escapeHtml(bulkCreateTargetValue(targetType))}">${escapeHtml(tNext(config.createLabelKey, config.createLabelFallback))}</option>`);
+         }
+         if (!options.length) return;
+         groupsHtml.push(`<optgroup label="${escapeHtml(containerTypeLabel(targetType))}">${options.join("")}</optgroup>`);
+       };
+       appendGroup("box_set", boxSets);
+       appendGroup("vault", vaults);
+       appendGroup("collection", collections);
+       containerSelect.innerHTML = [`<option value="">${escapeHtml(tNext("bulk.chooseTarget", "Choose target"))}</option>`]
+         .concat(groupsHtml.length ? groupsHtml : [`<option value="">${escapeHtml(tNext("bulk.noContainers", "No containers"))}</option>`])
+         .join("");
+       if (Array.from(containerSelect.options).some((option) => option.value === currentContainerValue)) containerSelect.value = currentContainerValue;
       }
-      if (collectionSelect) {
-        collectionSelect.innerHTML = targetOptionHtml(
-          collections,
-          "bulk.noCollections",
-          "No collections",
-          canCreateFromBulkTarget("collection") ? tNext("bulk.createNewCollection", "+ New collection") : null
-        );
-        if (Array.from(collectionSelect.options).some((option) => option.value === currentCollectionValue)) collectionSelect.value = currentCollectionValue;
-      }
-      if (vaultSelect) {
-        vaultSelect.innerHTML = targetOptionHtml(
-          vaults,
-          "bulk.noVaults",
-          "No vaults",
-          canCreateFromBulkTarget("vault") ? tNext("bulk.createNewVault", "+ New vault") : null
-        );
-        if (Array.from(vaultSelect.options).some((option) => option.value === currentVaultValue)) vaultSelect.value = currentVaultValue;
+      if (locationSelect) {
+       populateLocationParentSelect(locationSelect, {selectedId: currentLocationValue, emptyLabel: tNext("bulk.chooseLocationFirst", "Choose location")});
+       if (Array.from(locationSelect.options).some((option) => option.value === currentLocationValue)) locationSelect.value = currentLocationValue;
       }
       syncBulkTargetCreateControls();
     }
-    function setBulkCreateMessage(targetType, message, tone) {
-      const config = BULK_CREATE_TARGETS[targetType];
-      if (!config) return;
-      const node = document.getElementById(config.messageId);
+    function syncBulkTargetCreateControls() {
+      const containerSelect = document.getElementById("bulkContainerTarget");
+      const controls = document.getElementById("bulkContainerCreateControls");
+      const input = document.getElementById("bulkContainerCreateTitle");
+      const message = document.getElementById("bulkContainerCreateMessage");
+      const submitButton = document.getElementById("bulkContainerCreateSubmit");
+      const actionButton = document.getElementById("bulkContainerActionButton");
+      const selection = bulkContainerSelection(containerSelect?.value || "");
+      const canCreate = selection.createType ? canCreateFromBulkTarget(selection.createType) : false;
+      if (!canCreate && selection.createType && containerSelect) {
+       containerSelect.value = "";
+      }
+      const activeSelection = bulkContainerSelection(containerSelect?.value || "");
+      const showInlineCreate = canCreate && !!activeSelection.createType;
+      if (controls) controls.classList.toggle("hidden", !showInlineCreate);
+      if (input && submitButton) {
+       if (showInlineCreate) {
+         const config = bulkCreateTargetConfig(activeSelection.createType);
+         input.placeholder = tNext(config.placeholderKey, config.placeholderFallback);
+         const label = document.querySelector('label[for="bulkContainerCreateTitle"]');
+         if (label) label.textContent = tNext(config.nameLabelKey, config.nameLabelFallback);
+         if (message) message.textContent = "";
+         if (message) message.className = "bulk-create-message";
+         submitButton.textContent = tNext("bulk.createAndAddSelected", "Create and add selected");
+       } else {
+         input.value = "";
+         input.placeholder = tNext("bulk.containerCreatePlaceholder", "New container name");
+         const label = document.querySelector('label[for="bulkContainerCreateTitle"]');
+         if (label) label.textContent = tNext("bulk.containerCreateTitleLabel", "Container name");
+         if (message) message.textContent = "";
+         if (message) message.className = "bulk-create-message";
+         submitButton.textContent = tNext("bulk.createAndAddSelected", "Create and add selected");
+       }
+      }
+      if (actionButton) actionButton.textContent = bulkContainerActionLabel(activeSelection.targetType, activeSelection.createType);
+      updateBulkBar();
+    }
+    function setContainerCreateMessage(message, tone) {
+      const node = document.getElementById("bulkContainerCreateMessage");
       if (!node) return;
       node.textContent = message || "";
       node.className = `bulk-create-message ${tone || ""}`.trim();
     }
-    function syncBulkTargetCreateControls() {
-      Object.entries(BULK_CREATE_TARGETS).forEach(([targetType, config]) => {
-        const select = document.getElementById(config.selectId);
-        const controls = document.getElementById(config.controlsId);
-        const input = document.getElementById(config.inputId);
-        const canCreate = canCreateFromBulkTarget(targetType);
-        if (!canCreate && select?.value === BULK_CREATE_SENTINEL) select.value = "";
-        const showInlineCreate = canCreate && (select?.value || "") === BULK_CREATE_SENTINEL;
-        if (controls) controls.classList.toggle("hidden", !showInlineCreate);
-        if (!showInlineCreate) {
-          if (input) input.value = "";
-          setBulkCreateMessage(targetType, "");
-        }
-      });
-    }
     async function createAndApplyBulkTarget(targetType) {
-      const config = BULK_CREATE_TARGETS[targetType];
+      const config = bulkCreateTargetConfig(targetType);
       if (!config || !canCreateFromBulkTarget(targetType)) return;
-      const titleInput = document.getElementById(config.inputId);
+      const titleInput = document.getElementById("bulkContainerCreateTitle");
       const title = String(titleInput?.value || "").trim();
       if (!title) {
-        setBulkCreateMessage(targetType, tNext("containerManage.titleRequired", "Enter a name first."), "bad");
-        titleInput?.focus();
-        return;
+       setContainerCreateMessage(tNext("containerManage.titleRequired", "Enter a name first."), "bad");
+       titleInput?.focus();
+       return;
       }
       const summary = document.getElementById("librarySummary");
-      setBulkCreateMessage(targetType, tNext("bulk.creatingContainer", "Creating container..."));
+      setContainerCreateMessage(tNext("bulk.creatingContainer", "Creating container..."));
       if (summary) summary.textContent = tNext("bulk.creatingContainer", "Creating container...");
       try {
-        const payload = await authApiJson("/api/next/containers", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({containerType: targetType, title})
-        });
-        const newContainerId = String(payload?.detail?.container?.id || payload?.detail?.id || payload?.container?.id || "");
-        if (!newContainerId) throw new Error(tNext("bulk.createContainerFailed", "Container was created, but no target id was returned."));
-        const targetSelect = document.getElementById(config.selectId);
-        if (targetSelect) targetSelect.value = newContainerId;
-        if (titleInput) titleInput.value = "";
-        setBulkCreateMessage(targetType, tNext("containerManage.created", "Created."), "good");
-        if (targetType === "collection") {
-          await applyBulkCollection(newContainerId);
-        } else {
-          await applyBulkContainer(targetType, config.selectId, newContainerId);
-        }
+       const payload = await authApiJson("/api/next/containers", {
+         method: "POST",
+         headers: {"Content-Type": "application/json"},
+         body: JSON.stringify({containerType: targetType, title})
+       });
+       const newContainerId = String(payload?.detail?.container?.id || payload?.detail?.id || payload?.container?.id || "");
+       if (!newContainerId) throw new Error(tNext("bulk.createContainerFailed", "Container was created, but no target id was returned."));
+       if (titleInput) titleInput.value = "";
+       setContainerCreateMessage(tNext("containerManage.created", "Created."), "good");
+       if (targetType === "collection") await applyBulkCollection(newContainerId);
+       else await applyBulkContainer(targetType, newContainerId);
       } catch (error) {
-        const message = error.message || String(error);
-        setBulkCreateMessage(targetType, message, "bad");
-        if (summary) summary.textContent = message;
-      }
-    }
-    function setCollectionCreateMessage(message, tone) {
-      const node = document.getElementById("collectionCreateMessage");
-      if (!node) return;
-      node.textContent = message || "";
-      node.className = `toolbar-menu-create-message ${tone || ""}`.trim();
-    }
-    function syncCollectionCreateControls() {
-      const typeSelect = document.getElementById("collectionCreateType");
-      const submitButton = document.getElementById("collectionCreateSubmitButton");
-      if (!typeSelect || !submitButton) return;
-      const containerType = ["box_set", "vault", "collection"].includes(typeSelect.value) ? typeSelect.value : "box_set";
-      submitButton.textContent = tNext(`containerManage.create.${containerType}`, tNext("containerManage.create", "Create"));
-    }
-    async function createContainerFromLibraryMenu(event) {
-      event?.preventDefault();
-      if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.containerManagement)) return;
-      const typeSelect = document.getElementById("collectionCreateType");
-      const titleInput = document.getElementById("collectionCreateTitle");
-      const title = String(titleInput?.value || "").trim();
-      if (!title) {
-        setCollectionCreateMessage(tNext("containerManage.titleRequired", "Enter a name first."), "bad");
-        titleInput?.focus();
-        return;
-      }
-      const containerType = ["box_set", "vault", "collection"].includes(typeSelect?.value || "") ? typeSelect.value : "box_set";
-      setCollectionCreateMessage(tNext("containerManage.saving", "Saving..."));
-      try {
-        const payload = await authApiJson("/api/next/containers", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({containerType, title})
-        });
-        if (titleInput) titleInput.value = "";
-        setCollectionCreateMessage(tNext("containerManage.created", "Created."), "good");
-        await loadAppSnapshot();
-        renderBulkTargets();
-        const newContainerId = String(payload?.detail?.container?.id || payload?.detail?.id || payload?.container?.id || "");
-        if (newContainerId) {
-          closeCollectionMenu("collectionCreateMenu");
-          openAppContainerDetail(newContainerId);
-        }
-      } catch (error) {
-        setCollectionCreateMessage(error.message || String(error), "bad");
+       const message = error.message || String(error);
+       setContainerCreateMessage(message, "bad");
+       if (summary) summary.textContent = message;
       }
     }
     function collectorsModeEnabled() {
@@ -27572,6 +27546,16 @@ def ui_preview_html(
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         const action = button.dataset.bulkAction || "";
         if (action === "collection") button.disabled = count === 0;
+        else if (action === "container") {
+          const selection = bulkContainerSelection(document.getElementById("bulkContainerTarget")?.value || "");
+          button.disabled = count === 0 || (!selection.targetType && !selection.createType)
+            || (selection.targetType === "collection" ? !hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections) : !hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers))
+            || (selection.createType ? !canCreateFromBulkTarget(selection.createType) : false);
+        }
+        else if (action === "location") {
+          const locationId = document.getElementById("bulkLocationTarget")?.value || "";
+          button.disabled = count === 0 || !locationId || !(hasPermission("collection.edit_all") || hasPermission("containers.edit"));
+        }
         else if (action === "delete") {
           const canDeleteMovieSelection = bulkSelectedDeletableMovieIds().length > 0;
           const canDeleteContainerSelection = containerCount > 0 && hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete);
@@ -27647,8 +27631,8 @@ def ui_preview_html(
     }
     function bulkTargetValue(selectId, emptyKey) {
       const target = document.getElementById(selectId)?.value || "";
-      if (!target || target === BULK_CREATE_SENTINEL) {
-        if (target === BULK_CREATE_SENTINEL) throw new Error(tNext("bulk.finishCreateFirst", "Create a new target or choose an existing one first."));
+      if (!target || target.startsWith(BULK_CREATE_SENTINEL_PREFIX)) {
+        if (target.startsWith(BULK_CREATE_SENTINEL_PREFIX)) throw new Error(tNext("bulk.finishCreateFirst", "Create a new target or choose an existing one first."));
         throw new Error(tNext(emptyKey, "Choose a target first."));
       }
       return target;
@@ -27694,7 +27678,7 @@ def ui_preview_html(
         if (summary) summary.textContent = error.message || String(error);
       }
     }
-    async function applyBulkContainer(targetType, selectId, explicitContainerId = "") {
+    async function applyBulkContainer(targetType, explicitContainerId = "") {
       if (!collectorsModeEnabled() || !hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers)) return;
       const movieIds = bulkSelectedMovieIds();
       const summary = document.getElementById("librarySummary");
@@ -27703,7 +27687,10 @@ def ui_preview_html(
         return;
       }
       try {
-        const containerId = explicitContainerId || bulkTargetValue(selectId, targetType === "vault" ? "bulk.chooseVaultFirst" : "bulk.chooseBoxSetFirst");
+        const containerId = explicitContainerId || bulkTargetValue("bulkContainerTarget", "bulk.chooseContainerFirst");
+        const selection = bulkContainerSelection(document.getElementById("bulkContainerTarget")?.value || "");
+        const selectedTargetType = selection.targetType || targetType;
+        if (selectedTargetType && selectedTargetType !== targetType) throw new Error(tNext("bulk.finishCreateFirst", "Create a new target or choose an existing one first."));
         if (summary) summary.textContent = tNext("bulk.savingContainerLinks", "Saving container links...");
         const payload = await authApiJson(`/api/next/bulk/containers/${encodeURIComponent(containerId)}/movies`, {
           method: "POST",
@@ -27722,7 +27709,9 @@ def ui_preview_html(
       const movieIds = bulkSelectedMovieIds();
       const summary = document.getElementById("librarySummary");
       try {
-        const collectionId = explicitCollectionId || bulkTargetValue("bulkCollectionTarget", "bulk.chooseCollectionFirst");
+        const collectionId = explicitCollectionId || bulkTargetValue("bulkContainerTarget", "bulk.chooseContainerFirst");
+        const selection = bulkContainerSelection(document.getElementById("bulkContainerTarget")?.value || "");
+        if (selection.targetType && selection.targetType !== "collection") throw new Error(tNext("bulk.finishCreateFirst", "Create a new target or choose an existing one first."));
         const containerIds = bulkSelectedContainerIds(collectionId);
         if (!movieIds.length && !containerIds.length) {
           if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
@@ -27736,6 +27725,55 @@ def ui_preview_html(
         });
         finishBulkAction(`${payload.changed || 0} ${tNext("bulk.addedToCollection", "items added to collection")}`, {
           title: tNext("bulk.addToCollection", "Add to collection")
+        });
+      } catch (error) {
+        if (summary) summary.textContent = error.message || String(error);
+      }
+    }
+    async function applyBulkContainerSelection() {
+      const selection = bulkContainerSelection(document.getElementById("bulkContainerTarget")?.value || "");
+      if (selection.createType) {
+        await createAndApplyBulkTarget(selection.createType);
+        return;
+      }
+      if (!selection.targetType) {
+        bulkTargetValue("bulkContainerTarget", "bulk.chooseContainerFirst");
+        return;
+      }
+      if (selection.targetType === "collection") {
+        await applyBulkCollection(selection.containerId);
+        return;
+      }
+      await applyBulkContainer(selection.targetType, selection.containerId);
+    }
+    async function applyBulkLocation() {
+      if (!(hasPermission("collection.edit_all") || hasPermission("containers.edit"))) return;
+      const movieIds = hasPermission("collection.edit_all") ? bulkSelectedMovieIds() : [];
+      const containerIds = hasPermission("containers.edit") ? bulkSelectedContainerIds() : [];
+      const summary = document.getElementById("librarySummary");
+      if (!movieIds.length && !containerIds.length) {
+        if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
+        return;
+      }
+      const locationId = bulkTargetValue("bulkLocationTarget", "bulk.chooseLocationFirst");
+      try {
+        if (summary) summary.textContent = tNext("bulk.savingLocationLinks", "Saving location links...");
+        for (const movieId of movieIds) {
+          await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`, {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({locationId})
+          });
+        }
+        for (const containerId of containerIds) {
+          await authApiJson(`/api/next/containers/${encodeURIComponent(containerId)}`, {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({locationId})
+          });
+        }
+        finishBulkAction(`${movieIds.length + containerIds.length} ${tNext("bulk.assignedLocation", "items assigned to location")}`, {
+          title: tNext("bulk.setLocation", "Set location")
         });
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
@@ -29751,20 +29789,13 @@ def ui_preview_html(
       document.getElementById("advancedSearchDeleteButton")?.addEventListener("click", deleteSmartFilter);
       document.getElementById("smartFilterSelect")?.addEventListener("change", (event) => applySmartFilter(event.target.value || ""));
       setupCollectionMenus();
-      document.getElementById("bulkBoxSetTarget")?.addEventListener("change", syncBulkTargetCreateControls);
-      document.getElementById("bulkVaultTarget")?.addEventListener("change", syncBulkTargetCreateControls);
-      document.getElementById("bulkCollectionTarget")?.addEventListener("change", syncBulkTargetCreateControls);
-      document.getElementById("bulkBoxSetCreateForm")?.addEventListener("submit", (event) => {
+      document.getElementById("bulkContainerTarget")?.addEventListener("change", syncBulkTargetCreateControls);
+      document.getElementById("bulkLocationTarget")?.addEventListener("change", syncBulkTargetCreateControls);
+      document.getElementById("bulkContainerCreateForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
-        createAndApplyBulkTarget("box_set");
-      });
-      document.getElementById("bulkVaultCreateForm")?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        createAndApplyBulkTarget("vault");
-      });
-      document.getElementById("bulkCollectionCreateForm")?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        createAndApplyBulkTarget("collection");
+        const selection = bulkContainerSelection(document.getElementById("bulkContainerTarget")?.value || "");
+        if (!selection.createType) return;
+        createAndApplyBulkTarget(selection.createType);
       });
       document.querySelectorAll("[data-sort-option]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -30524,16 +30555,12 @@ def ui_preview_html(
             applyBulkGroup("remove");
             return;
           }
-          if (button.dataset.bulkAction === "boxset") {
-            applyBulkContainer("box_set", "bulkBoxSetTarget");
+          if (button.dataset.bulkAction === "container") {
+            applyBulkContainerSelection();
             return;
           }
-          if (button.dataset.bulkAction === "vault") {
-            applyBulkContainer("vault", "bulkVaultTarget");
-            return;
-          }
-          if (button.dataset.bulkAction === "collection") {
-            applyBulkCollection();
+          if (button.dataset.bulkAction === "location") {
+            applyBulkLocation();
             return;
           }
           if (button.dataset.bulkAction === "delete") {
