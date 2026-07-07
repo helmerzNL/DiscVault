@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Saskarnes priekšskatījums",
   "uiPreview.profile": "Profils",
   "uiPreview.recentlyAdded": "Nesen pievienots",
-  "uiPreview.shuffle": "Jaukt"
+  "uiPreview.shuffle": "Jaukt",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

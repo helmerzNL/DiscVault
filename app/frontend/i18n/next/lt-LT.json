@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Sąsajos peržiūra",
   "uiPreview.profile": "Profilis",
   "uiPreview.recentlyAdded": "Neseniai pridėta",
-  "uiPreview.shuffle": "Maišyti"
+  "uiPreview.shuffle": "Maišyti",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

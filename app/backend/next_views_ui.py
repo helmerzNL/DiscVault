@@ -3331,6 +3331,7 @@ def ui_preview_html(
       padding: 10px 12px;
       background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
     }
+    body.debug-mode .debug-only { display: inline-flex !important; }
     .movie-detail-page {
       display: grid;
       gap: 16px;
@@ -10716,6 +10717,7 @@ def ui_preview_html(
                 <div class="profile-form-actions">
                   <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
                   <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
+                  <button type="button" class="secondary-button debug-only hidden" id="pushPriceCheckButton" data-next-i18n="notifications.priceCheck">Price Check</button>
                 </div>
               </div>
               <div class="profile-section-grid">
@@ -26777,7 +26779,8 @@ def ui_preview_html(
         ["imports", "notifications.prefImports", "notifications.prefImportsHelp"],
         ["metadata_jobs", "notifications.prefMetadataJobs", "notifications.prefMetadataJobsHelp"],
         ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"],
-        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"]
+        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"],
+        ["price_alerts", "notifications.pref.price_alerts", "notifications.prefPriceAlertsHelp"]
       ];
       return rows.map(([key, labelKey, helpKey]) => {
         const enabled = preferencesMap[key] !== false;
@@ -26945,6 +26948,20 @@ def ui_preview_html(
             ? tNext("notifications.testSent", "Test notification sent.")
             : tNext("notifications.testSavedOnly", "Notification saved. Push delivery needs attention."),
           payload.status === "ok" ? "good" : "bad"
+        );
+      } catch (error) {
+        setPushProfileMessage(error.message || String(error), "bad");
+      }
+    }
+    async function triggerDebugPriceSweep() {
+      setPushProfileMessage(tNext("notifications.priceCheckRunning", "Running price check sweep..."));
+      try {
+        const payload = await authApiJson("/api/next/admin/price-alerts/sweep", {method: "POST"});
+        notificationsState.loaded = false;
+        const r = payload.result || payload;
+        setPushProfileMessage(
+          `${tNext("notifications.priceCheckDone", "Price sweep done.")} checked=${r.checked ?? "?"} notified=${r.notified ?? "?"} skipped=${r.skipped ?? "?"} errors=${r.errors ?? "?"}`,
+          "good"
         );
       } catch (error) {
         setPushProfileMessage(error.message || String(error), "bad");
@@ -30515,6 +30532,7 @@ def ui_preview_html(
       document.getElementById("pushDisableButton")?.addEventListener("click", () => disablePushNotifications());
       document.getElementById("pushRefreshButton")?.addEventListener("click", () => loadPushProfile());
       document.getElementById("pushTestButton")?.addEventListener("click", () => sendTestPushNotification());
+      document.getElementById("pushPriceCheckButton")?.addEventListener("click", () => triggerDebugPriceSweep());
       document.getElementById("pushPreferenceList")?.addEventListener("click", (event) => {
         const prefButton = event.target.closest("[data-push-pref]");
         if (!prefButton) return;
