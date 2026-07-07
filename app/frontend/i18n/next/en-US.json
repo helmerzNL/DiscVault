@@ -2117,10 +2117,15 @@
   "locations.qrDownload": "Download SVG",
   "locations.assign": "Storage location",
   "locations.none": "No location",
+  "locations.backdropField": "Backdrop",
   "locations.movieCount": "{count} films",
   "locations.containerCount": "{count} containers",
+  "locations.levelCount": "Level {count}",
   "locations.routeContext": "Location: {path}",
   "locations.routeNotFound": "Location not found.",
+  "locations.emptyRoute": "No media is stored at this location yet.",
+  "locations.mediaOnLocation": "Media on this location",
+  "locations.heroMarker": "LOC",
   "collection.locationFilter": "Location",
   "collection.locationFilterAny": "Any location"
 }
