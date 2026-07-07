@@ -8452,7 +8452,8 @@ def ui_preview_html(
       }
       #movieDetailPage .movie-detail-summary,
       #containerDetailPage .movie-detail-summary,
-      #personDetailPage .movie-detail-summary {
+      #personDetailPage .movie-detail-summary,
+      #locationDetailPage .movie-detail-summary {
         grid-template-columns: minmax(118px, min(42vw, 168px)) minmax(0, 1fr);
         align-items: start;
         gap: 12px 14px;
@@ -8464,7 +8465,8 @@ def ui_preview_html(
       }
       #movieDetailPage .movie-detail-poster,
       #containerDetailPage .movie-detail-poster,
-      #personDetailPage .person-detail-portrait {
+      #personDetailPage .person-detail-portrait,
+      #locationDetailPage .movie-detail-poster {
         grid-row: 1 / span 3;
         width: 100%;
         max-width: none;
@@ -8478,12 +8480,16 @@ def ui_preview_html(
       #containerDetailPage .hero-meta,
       #personDetailPage .movie-detail-summary .eyebrow,
       #personDetailPage .movie-detail-title,
-      #personDetailPage .hero-meta {
+      #personDetailPage .hero-meta,
+      #locationDetailPage .movie-detail-summary .eyebrow,
+      #locationDetailPage .movie-detail-title,
+      #locationDetailPage .hero-meta {
         grid-column: 2;
       }
       #movieDetailPage .movie-detail-overview,
       #containerDetailPage .movie-detail-overview,
-      #personDetailPage .movie-detail-overview {
+      #personDetailPage .movie-detail-overview,
+      #locationDetailPage .movie-detail-overview {
         grid-column: 1 / -1;
         max-width: none;
         max-height: min(34vh, 16rem);
@@ -9261,15 +9267,6 @@ def ui_preview_html(
         <div class="filter-row">
           <select id="groupFilter" aria-label="Group filter" data-next-i18n-aria="groups.filterLabel"></select>
           <span class="group-scope-pill" id="groupFilterStatus"></span>
-          <div class="location-route-controls hidden" id="locationRouteCollectionControls">
-            <button type="button" class="icon-button" id="locationRouteSortTrigger" aria-label="Sort collection" data-next-i18n-aria="collection.sort" title="Sort" data-next-i18n-title="collection.sort">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9,3L5,6.99H8V14H10V6.99H13M16,17.01V10H14V17.01H11L15,21L19,17.01H16Z"/></svg>
-            </button>
-            <button type="button" class="icon-button" id="locationRouteFilterTrigger" aria-label="Filter collection" data-next-i18n-aria="collection.filter" title="Filter" data-next-i18n-title="collection.filter">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 13H18V11H6M3 6V8H21V6M10 18H14V16H10V18Z"/></svg>
-              <span class="metadata-job-badge hidden" id="locationRouteFilterBadge">0</span>
-            </button>
-          </div>
           <button type="button" class="icon-button metadata-job-toggle hidden" id="libraryMetadataJobsToggleButton">
             <span data-next-i18n="metadataJobs.toggle">Metadata jobs</span>
             <span class="metadata-job-badge" id="libraryMetadataJobBadge">0</span>
@@ -10430,6 +10427,61 @@ def ui_preview_html(
             <div class="detail-subpanel hidden" data-detail-panel-group="personCreditScope" id="personScopeFilmography">
               <div class="detail-grid" id="personDetailFilmography"></div>
             </div>
+          </div>
+        </section>
+      </section>
+      <section class="movie-detail-page location-detail-page hidden" id="locationDetailPage" aria-labelledby="locationDetailTitle">
+        <section class="movie-detail-hero" id="locationDetailHero">
+          <img id="locationDetailBackdrop" alt="">
+          <button type="button" class="movie-detail-back" id="locationDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
+          <div class="movie-detail-summary">
+            <div class="movie-detail-poster" id="locationDetailQr"><span data-next-i18n="collection.loading">Loading...</span></div>
+            <div>
+              <span class="eyebrow" data-next-i18n="locations.navLabel">Locations</span>
+              <h2 class="movie-detail-title" id="locationDetailTitle">-</h2>
+              <div class="hero-meta" id="locationDetailTags"></div>
+              <p class="movie-detail-overview" id="locationDetailDescription"></p>
+            </div>
+          </div>
+        </section>
+        <section class="collection-toolbar" id="locationDetailToolbar" aria-label="Location collection controls">
+          <div class="collection-toolbar-row">
+            <label class="searchbox">
+              <span aria-hidden="true">/</span>
+              <input id="locationDetailSearch" type="search" placeholder="Search title, barcode, format..." data-next-i18n-placeholder="collection.searchPlaceholder">
+            </label>
+            <div class="collection-controls">
+              <button type="button" class="icon-button" id="locationDetailSortTrigger" aria-label="Sort collection" data-next-i18n-aria="collection.sort" title="Sort" data-next-i18n-title="collection.sort">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9,3L5,6.99H8V14H10V6.99H13M16,17.01V10H14V17.01H11L15,21L19,17.01H16Z"/></svg>
+              </button>
+              <button type="button" class="icon-button" id="locationDetailFilterTrigger" aria-label="Filter collection" data-next-i18n-aria="collection.filter" title="Filter" data-next-i18n-title="collection.filter">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 13H18V11H6M3 6V8H21V6M10 18H14V16H10V18Z"/></svg>
+                <span class="metadata-job-badge hidden" id="locationDetailFilterBadge">0</span>
+              </button>
+              <span class="collection-controls-spacer" aria-hidden="true"></span>
+              <div class="view-mode-control" id="locationDetailViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+                <button type="button" class="icon-button view-mode-button" data-library-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg>
+                </button>
+                <button type="button" class="icon-button view-mode-button active" data-library-view-mode="poster" aria-label="Poster view" data-next-i18n-aria="collection.viewPoster" title="Posters" data-next-i18n-title="collection.viewPoster">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3H11V11H3V3M13 3H21V11H13V3M3 13H11V21H3V13M13 13H21V21H13V13Z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="library-tools">
+          <div class="filter-row">
+            <span class="bulk-count" id="locationDetailSummary">0</span>
+          </div>
+        </section>
+        <section class="preview-layout">
+          <div class="preview-panel">
+            <div class="panel-head">
+              <h2 id="locationDetailPanelTitle" data-next-i18n="locations.mediaOnLocation">Media on this location</h2>
+              <span id="locationDetailShownCount">0</span>
+            </div>
+            <div class="poster-rail" id="locationDetailRail"></div>
           </div>
         </section>
       </section>
@@ -12022,7 +12074,7 @@ def ui_preview_html(
       appDebugMode = !!enabled;
       localStorage.setItem("dv_next_debug_mode", appDebugMode ? "true" : "false");
       renderAppDebugButton();
-      renderLibrary();
+      renderCollectionSurface();
       renderPeopleView();
       if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
       if (activeContainerPayload) renderContainerDetail(activeContainerPayload);
@@ -14238,7 +14290,7 @@ def ui_preview_html(
     }
     function refreshAppPermissionSurface() {
       applyAppPermissionVisibility();
-      if (!document.getElementById("libraryView")?.classList.contains("hidden")) renderLibrary();
+      if (!document.getElementById("libraryView")?.classList.contains("hidden") || locationDetailPageVisible()) renderCollectionSurface();
       if (!document.getElementById("importView")?.classList.contains("hidden")) renderImportCenter();
       renderAppRoleSimulationBanner();
     }
@@ -16157,7 +16209,7 @@ def ui_preview_html(
       renderLanguageSelect();
       renderPreferences();
       renderProfile();
-      renderLibrary();
+      renderCollectionSurface();
       if (currentStartup && Object.keys(currentStartup).length && !currentStartup.ready) {
         renderStartup(currentStartup);
       }
@@ -16376,15 +16428,15 @@ def ui_preview_html(
       const containersSwitch = document.getElementById("collectionContainersSwitch");
       if (containersSwitch) containersSwitch.checked = collectorMode && collectionItemFilter === "containers";
       const badge = document.getElementById("collectionFilterBadge");
-      const locationRouteBadge = document.getElementById("locationRouteFilterBadge");
+      const locationDetailBadge = document.getElementById("locationDetailFilterBadge");
       const count = collectionFilterActiveCount();
       if (badge) {
         badge.textContent = String(count);
         badge.classList.toggle("hidden", count === 0);
       }
-      if (locationRouteBadge) {
-        locationRouteBadge.textContent = String(count);
-        locationRouteBadge.classList.toggle("hidden", count === 0);
+      if (locationDetailBadge) {
+        locationDetailBadge.textContent = String(count);
+        locationDetailBadge.classList.toggle("hidden", count === 0);
       }
     }
     function formatFilterLabel(value) {
@@ -16474,12 +16526,11 @@ def ui_preview_html(
         location: String(source.location || "any").trim() || "any"
       };
     }
-    function effectiveAdvancedSearchFilters() {
+    function effectiveAdvancedSearchFilters(options = {}) {
       const filters = normalizeAdvancedSearch(advancedSearch);
-      if (activeLocationRouteId) {
-        filters.location = String(activeLocationRouteId);
-      } else if (activeLocationRoutePublicId && activeLocationRouteMissing) {
-        filters.location = "__missing_location__";
+      if (options.locationOverride !== undefined) {
+        const override = String(options.locationOverride || "").trim();
+        filters.location = override || "any";
       }
       return filters;
     }
@@ -16572,13 +16623,13 @@ def ui_preview_html(
       advancedSearch = readAdvancedSearchControls();
       activeSmartFilterId = "";
       persistAdvancedSearch();
-      renderLibrary();
+      renderCollectionSurface();
     }
     function resetAdvancedSearch() {
       advancedSearch = advancedSearchDefaults();
       activeSmartFilterId = "";
       persistAdvancedSearch();
-      renderLibrary();
+      renderCollectionSurface();
     }
     function saveSmartFilter() {
       const filters = Array.isArray(smartFilters) ? smartFilters : [];
@@ -16591,7 +16642,7 @@ def ui_preview_html(
       advancedSearch = nextFilters;
       activeSmartFilterId = id;
       persistAdvancedSearch();
-      renderLibrary();
+      renderCollectionSurface();
     }
     function applySmartFilter(id) {
       const found = (Array.isArray(smartFilters) ? smartFilters : []).find((filter) => String(filter.id || "") === String(id || ""));
@@ -16604,14 +16655,14 @@ def ui_preview_html(
       activeSmartFilterId = String(found.id || "");
       advancedSearch = normalizeAdvancedSearch(found.filters || {});
       persistAdvancedSearch();
-      renderLibrary();
+      renderCollectionSurface();
     }
     function deleteSmartFilter() {
       if (!activeSmartFilterId) return;
       smartFilters = (Array.isArray(smartFilters) ? smartFilters : []).filter((filter) => String(filter.id || "") !== String(activeSmartFilterId));
       activeSmartFilterId = "";
       persistAdvancedSearch();
-      renderLibrary();
+      renderCollectionSurface();
     }
     const BULK_CREATE_SENTINEL_PREFIX = "__create__:";
     const BULK_CONTAINER_TARGETS = {
@@ -16840,8 +16891,25 @@ def ui_preview_html(
       if (selected === "__ungrouped") return groups.length === 0;
       return groups.some((group) => String(group.id) === String(selected) || String(group.publicId) === String(selected));
     }
+    function locationDetailPageVisible() {
+      const page = document.getElementById("locationDetailPage");
+      return !!page && !page.classList.contains("hidden");
+    }
+    function activeCollectionSearchInput() {
+      if (locationDetailPageVisible()) {
+        return document.getElementById("locationDetailSearch") || document.getElementById("previewSearch");
+      }
+      return document.getElementById("previewSearch") || document.getElementById("locationDetailSearch");
+    }
+    function syncCollectionSearchInputs(value, sourceId = "") {
+      const normalized = String(value || "");
+      const previewInput = document.getElementById("previewSearch");
+      const locationInput = document.getElementById("locationDetailSearch");
+      if (previewInput && sourceId !== "previewSearch" && previewInput.value !== normalized) previewInput.value = normalized;
+      if (locationInput && sourceId !== "locationDetailSearch" && locationInput.value !== normalized) locationInput.value = normalized;
+    }
     function activeSearchQuery() {
-      const search = document.getElementById("previewSearch");
+      const search = activeCollectionSearchInput();
       return search ? search.value.trim().toLowerCase() : "";
     }
     function movieMatchesSearch(movie) {
@@ -16910,8 +16978,7 @@ def ui_preview_html(
     function movieIsWatched(movie) {
       return !!(movie?.watched || movie?.is_watched || movie?.watched_count || movie?.last_watched_at || movie?.user_state?.watched);
     }
-    function movieMatchesAdvancedSearch(movie) {
-      const filters = effectiveAdvancedSearchFilters();
+    function movieMatchesAdvancedSearch(movie, filters = effectiveAdvancedSearchFilters()) {
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
       const yearTo = Number.parseInt(filters.yearTo || "0", 10) || 0;
@@ -16973,15 +17040,14 @@ def ui_preview_html(
     function containerBackdropValue(container) {
       return container?.backdrop_url || container?.metadata?.backdrop_url || container?.metadata?.backdrop || container?.backdrop || "";
     }
-    function containerMatchesAdvancedSearch(container) {
+    function containerMatchesAdvancedSearch(container, filters = effectiveAdvancedSearchFilters()) {
       if (!collectorsModeEnabled()) return false;
-      const filters = effectiveAdvancedSearchFilters();
       const type = String(container?.container_type || "");
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
       if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged"].includes(filters.personal)) {
-        if (!members.some((movie) => movieMatchesAdvancedSearch(movie))) return false;
+        if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
       if (filters.artwork === "missingBackdrop" && containerBackdropValue(container)) return false;
@@ -17087,10 +17153,10 @@ def ui_preview_html(
         return mode === "title_desc" ? -diff : diff;
       });
     }
-    function visibleContainerItems(visibleMovieIds = null) {
+    function visibleContainerItems(visibleMovieIds = null, filters = effectiveAdvancedSearchFilters()) {
       if (!collectorsModeEnabled()) return [];
       const visibleItems = (containers || [])
-        .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container))
+        .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters))
         .filter((container) => {
           if (!visibleMovieIds) return true;
           const memberIds = movieIdSetForContainer(container.id);
@@ -17101,8 +17167,7 @@ def ui_preview_html(
       const visibleContainerIds = new Set(visibleItems.map((item) => String(item.container?.id || "")).filter(Boolean));
       return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
-    function libraryDisplayItems() {
-      const filters = effectiveAdvancedSearchFilters();
+    function libraryDisplayItems(filters = effectiveAdvancedSearchFilters()) {
       const visibleMovies = (movies || []).filter((movie) => (
         movieMatchesGroup(movie)
         && movieMatchesSearch(movie)
@@ -17110,11 +17175,11 @@ def ui_preview_html(
         && movieMatchesType(movie)
         && movieMatchesGenre(movie)
         && movieMatchesLocation(movie)
-        && movieMatchesAdvancedSearch(movie)
+        && movieMatchesAdvancedSearch(movie, filters)
         && !["container", "box_set", "collection", "vault"].includes(filters.itemType)
       ));
       if (collectionItemFilter === "containers") {
-        return sortLibraryItems(visibleContainerItems());
+        return sortLibraryItems(visibleContainerItems(null, filters));
       }
       if (!mergeEditionsAsTitleEnabled()) {
         return sortLibraryItems(visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""})));
@@ -17129,7 +17194,7 @@ def ui_preview_html(
       (containers || []).forEach((container) => {
         const memberIds = movieIdSetForContainer(container.id);
         if (!memberIds.size && !activeSearchQuery()) return;
-        if (containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container)) {
+        if (containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters)) {
           visibleContainerIds.add(String(container.id || ""));
         }
       });
@@ -17139,7 +17204,7 @@ def ui_preview_html(
       const representedMovieIds = new Set();
       const containerItems = (containers || [])
         .filter((container) => visibleContainerIds.has(String(container.id || "")))
-        .filter((container) => containerMatchesGroup(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container) && (containerMatchesSearch(container) || containerMemberMovies(container.id).some((movie) => visibleMovieIds.has(String(movie.id || "")))))
+        .filter((container) => containerMatchesGroup(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters) && (containerMatchesSearch(container) || containerMemberMovies(container.id).some((movie) => visibleMovieIds.has(String(movie.id || "")))))
         .map((container) => {
           movieIdSetForContainer(container.id).forEach((movieId) => representedMovieIds.add(movieId));
           return {kind: "container", container, title: container.title || ""};
@@ -17380,7 +17445,7 @@ def ui_preview_html(
           } else {
             libraryDetailSort = next;
             localStorage.setItem("dv_next_library_detail_sort", JSON.stringify(next));
-            renderLibrary();
+            renderCollectionSurface();
           }
         });
       });
@@ -17741,6 +17806,20 @@ def ui_preview_html(
         .map((container) => `<a href="/api/next/app/containers/${encodeURIComponent(container.id || "")}" data-app-container-link="${escapeHtml(String(container.id || ""))}">${escapeHtml(container.title)}</a>`)
         .join(", ");
     }
+    function locationPublicRouteId(location) {
+      if (!location || typeof location !== "object") return "";
+      const publicId = String(location.public_id || location.publicId || "").trim();
+      if (publicId) return publicId;
+      const id = String(location.id || "").trim();
+      return id;
+    }
+    function locationRouteLinkHtml(location, fallbackText = "") {
+      const text = String(fallbackText || location?.path_label || location?.pathLabel || location?.name || "").trim();
+      if (!text) return "";
+      const routeId = locationPublicRouteId(location);
+      if (!routeId) return escapeHtml(text);
+      return `<a href="/app/locations/${encodeURIComponent(routeId)}" data-app-location-link="${escapeHtml(routeId)}">${escapeHtml(text)}</a>`;
+    }
     function bindContainerDetailLinks(elementId) {
       const root = document.getElementById(elementId);
       if (!root) return;
@@ -17749,6 +17828,13 @@ def ui_preview_html(
           event.preventDefault();
           const id = event.currentTarget.getAttribute("data-app-container-link") || "";
           if (id) openAppContainerDetail(id);
+        });
+      });
+      root.querySelectorAll("a[data-app-location-link]").forEach((anchor) => {
+        anchor.addEventListener("click", (event) => {
+          event.preventDefault();
+          const publicId = event.currentTarget.getAttribute("data-app-location-link") || "";
+          if (publicId) openAppLocationRoute(publicId);
         });
       });
     }
@@ -19261,7 +19347,7 @@ def ui_preview_html(
         });
       });
       listsState.loaded = false;
-      renderLibrary();
+      renderCollectionSurface();
       updateListsCounts({
         watchlist: (movies || []).filter((movie) => movie.on_watchlist).length,
         watchedMovies: (movies || []).filter((movie) => movie.last_watched).length
@@ -19407,11 +19493,12 @@ def ui_preview_html(
       const storageLocationLabel = movie.location && typeof movie.location === "object"
         ? movie.location.pathLabel || movie.location.name || ""
         : "";
+      const storageLocationHtml = storageLocationLabel ? locationRouteLinkHtml(movie.location, storageLocationLabel) : "";
       const collectorsSubsection = detailFieldSubsection(tNext("movieDetail.collectors", "Collectors"), [
         [tNext("movieDetail.edition", "Edition"), movie.edition],
         [tNext("movieDetail.packaging", "Packaging"), releasePackaging],
         [tNext("movieDetail.location", "Location"), releaseLocationText],
-        [tNext("locations.assign", "Storage location"), storageLocationLabel],
+        [tNext("locations.assign", "Storage location"), storageLocationHtml ? {text: storageLocationLabel, html: storageLocationHtml} : storageLocationLabel],
         [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
         [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
         ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
@@ -19784,6 +19871,10 @@ def ui_preview_html(
       const summary = detail.aggregateSummary || {};
       const directMovieCount = (detail.memberMovies || []).length;
       const collectionItemCount = (detail.collectionItems || []).length;
+      const containerLocationLabel = container.location && typeof container.location === "object"
+        ? container.location.pathLabel || container.location.name || ""
+        : "";
+      const containerLocationHtml = containerLocationLabel ? locationRouteLinkHtml(container.location, containerLocationLabel) : "";
       document.getElementById("containerDetailType").textContent = typeLabel;
       document.getElementById("containerDetailTitle").textContent = title;
       document.getElementById("containerDetailDescription").textContent = container.description || metadata.description || tNext("containerDetail.noDescription", "No description imported yet.");
@@ -19807,12 +19898,14 @@ def ui_preview_html(
       document.getElementById("containerDetailOverviewFields").innerHTML = detailFieldRows([
         [tNext("containerDetail.fieldType", "Type"), typeLabel],
         [tNext("containerDetail.fieldYear", "Year"), container.year || summary.yearRange],
+        [tNext("locations.assign", "Storage location"), containerLocationHtml ? {text: containerLocationLabel, html: containerLocationHtml} : containerLocationLabel],
         [tNext("containerDetail.aggregateFormats", "Formats"), summary.formats],
         [tNext("containerDetail.aggregateMovieCount", "Movies in scope"), summary.movieCount || directMovieCount],
         [tNext("containerDetail.items", "items"), collectionItemCount || directMovieCount],
         [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork],
         [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
       ]);
+      bindContainerDetailLinks("containerDetailOverviewFields");
       renderContainerEditSummary(detail);
       fillContainerEditForm(detail);
       renderContainerAddForms(detail);
@@ -26712,6 +26805,7 @@ def ui_preview_html(
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.remove("hidden");
@@ -26726,6 +26820,7 @@ def ui_preview_html(
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.remove("hidden");
@@ -26740,6 +26835,7 @@ def ui_preview_html(
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.remove("hidden");
@@ -26751,14 +26847,27 @@ def ui_preview_html(
       activeLocationRouteId = "";
       activeLocationRouteMissing = false;
     }
-    function showLibraryPage(pushUrl = false, activeRoute = "library", options = {}) {
-      const preserveLocationContext = !!options.preserveLocationContext;
-      if (!preserveLocationContext) {
-        clearLocationRouteContext();
-      }
+    function showLocationDetailPage() {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.remove("hidden");
+      setActiveAppRoute("library");
+      scrollPreviewTop();
+    }
+    function showLibraryPage(pushUrl = false, activeRoute = "library") {
+      clearLocationRouteContext();
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
@@ -26766,7 +26875,7 @@ def ui_preview_html(
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("libraryView")?.classList.remove("hidden");
-      setActiveAppRoute(activeRoute === "location" ? "library" : activeRoute);
+      setActiveAppRoute(activeRoute);
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
@@ -26808,6 +26917,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
@@ -26838,6 +26948,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
@@ -26863,6 +26974,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
@@ -26890,6 +27002,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.remove("hidden");
       activeDetailMovieId = "";
@@ -26920,6 +27033,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.remove("hidden");
       activeDetailMovieId = "";
@@ -26948,6 +27062,7 @@ def ui_preview_html(
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("profileView")?.classList.add("hidden");
       document.getElementById("adminView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.remove("hidden");
@@ -27015,8 +27130,8 @@ def ui_preview_html(
       activeLocationRoutePublicId = publicId;
       activeLocationRouteId = node ? String(node.id || "") : "";
       activeLocationRouteMissing = !node;
-      showLibraryPage(pushUrl, "location", {preserveLocationContext: true});
-      renderLibrary();
+      showLocationDetailPage();
+      renderLocationDetailPage();
       if (pushUrl && appMode) {
         const nextPath = `/app/locations/${encodeURIComponent(publicId)}`;
         if (window.location.pathname !== nextPath) {
@@ -27413,6 +27528,130 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    function bindCollectionCardInteractions(root = document) {
+      root.querySelectorAll("[data-preview-movie]").forEach((button) => {
+        button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
+        button.addEventListener("click", (event) => {
+          if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+          if (selectionMode) {
+            toggleMovieSelection(button.dataset.previewMovie);
+            return;
+          }
+          selectMovie(button.dataset.previewMovie);
+          openAppMovieDetail(button.dataset.previewMovie);
+        });
+      });
+      root.querySelectorAll("[data-preview-container]").forEach((button) => {
+        button.classList.toggle("bulk-selected", selectedContainerIds.has(button.dataset.previewContainer));
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+          if (selectionMode) {
+            toggleContainerSelection(button.dataset.previewContainer);
+            return;
+          }
+          openAppContainerDetail(button.dataset.previewContainer);
+        });
+      });
+    }
+    function renderLocationDetailPage() {
+      if (!activeLocationRoutePublicId) return;
+      if (!collectorsModeEnabled()) selectedContainerIds.clear();
+      const locationNode = activeLocationRouteNode();
+      activeLocationRouteId = locationNode ? String(locationNode.id || "") : "";
+      activeLocationRouteMissing = !locationNode;
+      const locationFilterValue = activeLocationRouteMissing ? "__missing_location__" : String(activeLocationRouteId || "");
+      const displayItems = libraryDisplayItems(effectiveAdvancedSearchFilters({locationOverride: locationFilterValue}));
+      const visibleMovieCount = libraryDisplayMovieCount(displayItems);
+      renderCollectionToolbar();
+      renderGroupFilter();
+      renderMemberGroupScopeSummary();
+      renderBulkTargets();
+      const search = document.getElementById("locationDetailSearch");
+      if (search) {
+        search.closest(".searchbox")?.classList.toggle("hidden", preferences.show_collection_search === false);
+      }
+      const routeLabel = locationNode?.path_label || locationNode?.pathLabel || locationNode?.name || activeLocationRoutePublicId;
+      const routeBackdrop = locationNode ? locationBackdropValue(locationNode) : "";
+      const routeQrUrl = locationNode ? locationQrPngUrl(locationNode) : "";
+      const routeMovieCount = Number(locationNode?.movie_count || 0);
+      const routeContainerCount = Number(locationNode?.container_count || 0);
+      const routeDepth = Number(locationNode?.depth || 0);
+      const titleNode = document.getElementById("locationDetailTitle");
+      if (titleNode) {
+        titleNode.textContent = activeLocationRouteMissing
+          ? tNext("locations.routeNotFound", "Location not found.")
+          : routeLabel;
+      }
+      const tagsNode = document.getElementById("locationDetailTags");
+      if (tagsNode) {
+        const pills = [];
+        if (!activeLocationRouteMissing && routeMovieCount) pills.push(tNext("locations.movieCount", "{count} films").replace("{count}", String(routeMovieCount)));
+        if (!activeLocationRouteMissing && routeContainerCount) pills.push(tNext("locations.containerCount", "{count} containers").replace("{count}", String(routeContainerCount)));
+        if (!activeLocationRouteMissing && routeDepth) pills.push(tNext("locations.levelCount", "Level {count}").replace("{count}", String(routeDepth)));
+        tagsNode.innerHTML = pills.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
+      }
+      const descriptionNode = document.getElementById("locationDetailDescription");
+      if (descriptionNode) {
+        descriptionNode.textContent = activeLocationRouteMissing
+          ? tNext("locations.routeNotFound", "Location not found.")
+          : `${visibleMovieCount} ${tNext("collection.movies", "Movies").toLowerCase()} · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", routeLabel)}`;
+      }
+      const backdropNode = document.getElementById("locationDetailBackdrop");
+      if (backdropNode && backdropNode.tagName === "IMG") {
+        backdropNode.src = routeBackdrop || "";
+      }
+      const qrNode = document.getElementById("locationDetailQr");
+      if (qrNode) {
+        qrNode.innerHTML = routeQrUrl
+          ? `<img class="location-route-qr" src="${escapeHtml(routeQrUrl)}" alt="${escapeHtml(tNext("locations.qr", "QR"))}">`
+          : `<span class="location-route-poster">${escapeHtml(tNext("locations.heroMarker", "LOC"))}</span>`;
+      }
+      const summaryNode = document.getElementById("locationDetailSummary");
+      if (summaryNode) {
+        const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
+        let summaryText = `${visibleMovieCount} ${movieLabel}`;
+        if (activeLocationRouteMissing) {
+          summaryText += ` · ${tNext("locations.routeNotFound", "Location not found.")}`;
+        } else {
+          summaryText += ` · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", routeLabel)}`;
+        }
+        summaryNode.textContent = summaryText;
+      }
+      const shownCount = document.getElementById("locationDetailShownCount");
+      if (shownCount) shownCount.textContent = String(displayItems.length);
+      const rail = document.getElementById("locationDetailRail");
+      if (rail) {
+        rail.classList.toggle("mode-list-grid", libraryViewMode === "list");
+        rail.classList.remove("mode-detail-grid");
+        rail.classList.toggle("poster-rail", libraryViewMode === "poster");
+        rail.innerHTML = displayItems.length
+          ? displayItems.slice(0, 80).map((item, index) => (
+              libraryViewMode === "list"
+                ? libraryListItemHtml(item)
+                : (
+                    item.kind === "container"
+                      ? containerPosterCardHtml(item.container, index)
+                      : posterCardHtml(item.movie, index)
+                  )
+            )).join("")
+          : `<div class="preview-empty">${escapeHtml(
+              activeLocationRouteMissing
+                ? tNext("locations.routeNotFound", "Location not found.")
+                : tNext("locations.emptyRoute", "No media is stored at this location yet.")
+            )}</div>`;
+      }
+      bindCollectionCardInteractions(document.getElementById("locationDetailPage") || document);
+      bindViewModeInteractions(document.getElementById("locationDetailPage") || document);
+      updateBulkBar();
+    }
+    function renderCollectionSurface() {
+      if (locationDetailPageVisible() && activeLocationRoutePublicId) {
+        renderLocationDetailPage();
+        return;
+      }
+      renderLibrary();
+    }
     function renderLibrary() {
       if (!collectorsModeEnabled()) selectedContainerIds.clear();
       renderGroupFilter();
@@ -27425,79 +27664,16 @@ def ui_preview_html(
       }
       const displayItems = libraryDisplayItems();
       const visibleMovieCount = libraryDisplayMovieCount(displayItems);
-      const locationRouteActive = Boolean(activeLocationRoutePublicId);
-      const locationNode = locationRouteActive ? activeLocationRouteNode() : null;
-      const groupFilter = document.getElementById("groupFilter");
-      const groupScope = document.getElementById("groupFilterStatus");
-      const locationControls = document.getElementById("locationRouteCollectionControls");
-      if (groupFilter) groupFilter.classList.toggle("hidden", locationRouteActive);
-      if (groupScope) groupScope.classList.toggle("hidden", locationRouteActive);
-      if (locationControls) locationControls.classList.toggle("hidden", !locationRouteActive);
       const hero = document.getElementById("previewHero");
       if (hero) {
-        hero.classList.toggle(
-          "hidden",
-          locationRouteActive
-            ? false
-            : (preferences.show_featured_hero === false || displayItems.length === 0)
-        );
+        hero.classList.toggle("hidden", preferences.show_featured_hero === false || displayItems.length === 0);
       }
-      if (locationRouteActive && hero) {
-        const routeLabel = locationNode?.path_label || locationNode?.pathLabel || locationNode?.name || activeLocationRoutePublicId;
-        const routeBackdrop = locationNode ? locationBackdropValue(locationNode) : "";
-        const routeQrUrl = locationNode ? locationQrPngUrl(locationNode) : "";
-        const routeMovieCount = Number(locationNode?.movie_count || 0);
-        const routeContainerCount = Number(locationNode?.container_count || 0);
-        const titleNode = document.getElementById("heroTitle");
-        const metaNode = document.getElementById("heroMeta");
-        const posterNode = document.getElementById("heroPoster");
-        if (posterNode) posterNode.classList.remove("location-route-qr-poster");
-        const detailLink = document.getElementById("heroDetailLink");
-        const shuffleButton = document.getElementById("shuffleButton");
-        const backdropNode = document.getElementById("heroBackdrop");
-        const eyebrowNode = hero.querySelector(".eyebrow");
-        if (eyebrowNode) {
-          eyebrowNode.textContent = tNext("locations.navLabel", "Locations");
-        }
-        if (titleNode) {
-          titleNode.textContent = activeLocationRouteMissing
-            ? tNext("locations.routeNotFound", "Location not found.")
-            : routeLabel;
-        }
-        if (metaNode) {
-          const routePills = [];
-          if (!activeLocationRouteMissing && routeMovieCount) {
-            routePills.push(tNext("locations.movieCount", "{count} films").replace("{count}", String(routeMovieCount)));
-          }
-          if (!activeLocationRouteMissing && routeContainerCount) {
-            routePills.push(tNext("locations.containerCount", "{count} containers").replace("{count}", String(routeContainerCount)));
-          }
-          if (!activeLocationRouteMissing && locationNode?.depth) {
-            routePills.push(tNext("locations.levelCount", "Level {count}").replace("{count}", String(locationNode.depth)));
-          }
-          metaNode.innerHTML = routePills.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
-        }
-        if (detailLink) detailLink.classList.add("hidden");
-        if (shuffleButton) shuffleButton.classList.add("hidden");
-        if (backdropNode && backdropNode.tagName === "IMG") {
-          backdropNode.src = routeBackdrop || "";
-        }
-        if (posterNode) {
-          posterNode.classList.toggle("location-route-qr-poster", Boolean(routeQrUrl));
-          posterNode.innerHTML = routeQrUrl
-            ? `<img class="location-route-qr" src="${escapeHtml(routeQrUrl)}" alt="${escapeHtml(tNext("locations.qr", "QR"))}">`
-            : `<span class="location-route-poster">${escapeHtml(tNext("locations.heroMarker", "LOC"))}</span>`;
-        }
-        document.querySelectorAll("[data-preview-movie]").forEach((node) => node.classList.toggle("selected", false));
-        document.querySelectorAll("[data-preview-container]").forEach((node) => node.classList.toggle("selected", false));
-      } else {
-        const detailLink = document.getElementById("heroDetailLink");
-        const shuffleButton = document.getElementById("shuffleButton");
-        const eyebrowNode = document.getElementById("previewHero")?.querySelector(".eyebrow");
-        if (eyebrowNode) eyebrowNode.textContent = tNext("uiPreview.featured", "Featured");
-        if (detailLink) detailLink.classList.remove("hidden");
-        if (shuffleButton) shuffleButton.classList.remove("hidden");
-      }
+      const detailLink = document.getElementById("heroDetailLink");
+      const shuffleButton = document.getElementById("shuffleButton");
+      const eyebrowNode = document.getElementById("previewHero")?.querySelector(".eyebrow");
+      if (eyebrowNode) eyebrowNode.textContent = tNext("uiPreview.featured", "Featured");
+      if (detailLink) detailLink.classList.remove("hidden");
+      if (shuffleButton) shuffleButton.classList.remove("hidden");
       const rail = document.getElementById("posterRail");
       if (rail) {
         rail.classList.toggle("mode-list-grid", libraryViewMode === "list");
@@ -27513,67 +27689,23 @@ def ui_preview_html(
                 : posterCardHtml(item.movie, index)
                 )
             )).join("")
-          : `<div class="preview-empty">${escapeHtml(
-              locationRouteActive
-                ? (activeLocationRouteMissing
-                    ? tNext("locations.routeNotFound", "Location not found.")
-                    : tNext("locations.emptyRoute", "No media is stored at this location yet."))
-                : tNext("collection.emptyMovies", "No movies match the current filter.")
-            )}</div>`;
+          : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
       }
-      document.querySelectorAll("[data-preview-movie]").forEach((button) => {
-        button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
-        button.addEventListener("click", (event) => {
-          if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
-          if (selectionMode) {
-            toggleMovieSelection(button.dataset.previewMovie);
-            return;
-          }
-          selectMovie(button.dataset.previewMovie);
-          openAppMovieDetail(button.dataset.previewMovie);
-        });
-      });
-      document.querySelectorAll("[data-preview-container]").forEach((button) => {
-        button.classList.toggle("bulk-selected", selectedContainerIds.has(button.dataset.previewContainer));
-        button.addEventListener("click", (event) => {
-          event.preventDefault();
-          if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
-          if (selectionMode) {
-            toggleContainerSelection(button.dataset.previewContainer);
-            return;
-          }
-          openAppContainerDetail(button.dataset.previewContainer);
-        });
-      });
+      bindCollectionCardInteractions(document.getElementById("libraryView") || document);
       bindViewModeInteractions(document.getElementById("libraryView") || document);
       const shownCount = document.getElementById("shownCount");
       if (shownCount) shownCount.textContent = String(displayItems.length);
       const panelTitle = document.getElementById("libraryPanelTitle");
       if (panelTitle) {
-        panelTitle.textContent = locationRouteActive
-          ? tNext("locations.mediaOnLocation", "Media on this location")
-          : tNext("uiPreview.recentlyAdded", "Recently added");
+        panelTitle.textContent = tNext("uiPreview.recentlyAdded", "Recently added");
       }
       const summary = document.getElementById("librarySummary");
       if (summary) {
         const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
         const tileLabel = tNext("collection.tiles", "tiles");
-        let summaryText = "";
-        if (locationRouteActive) {
-          summaryText = mergeEditionsAsTitleEnabled()
-            ? `${visibleMovieCount} ${movieLabel} · ${displayItems.length} ${tileLabel}`
-            : `${visibleMovieCount} ${movieLabel}`;
-          if (activeLocationRouteMissing) {
-            summaryText += ` · ${tNext("locations.routeNotFound", "Location not found.")}`;
-          } else {
-            const label = locationNode?.path_label || locationNode?.pathLabel || locationNode?.name || activeLocationRoutePublicId;
-            summaryText += ` · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", label)}`;
-          }
-        } else {
-          summaryText = mergeEditionsAsTitleEnabled()
-            ? `${visibleMovieCount} / ${movies.length} ${movieLabel} · ${displayItems.length} ${tileLabel}`
-            : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
-        }
+        const summaryText = mergeEditionsAsTitleEnabled()
+          ? `${visibleMovieCount} / ${movies.length} ${movieLabel} · ${displayItems.length} ${tileLabel}`
+          : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
         summary.textContent = summaryText;
       }
       const navMovieCount = document.getElementById("navMovieCount");
@@ -27583,10 +27715,8 @@ def ui_preview_html(
       if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
       const firstItem = displayItems[0];
-      if (!locationRouteActive) {
-        if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
-        if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
-      }
+      if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
+      if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
       updateBulkBar();
       renderLibraryMetadataJobs();
     }
@@ -27596,7 +27726,7 @@ def ui_preview_html(
       if (!selectionMode) selectedMovieIds.clear();
       if (!selectionMode) selectedContainerIds.clear();
       syncSelectModeButton();
-      renderLibrary();
+      renderCollectionSurface();
     }
     function toggleMovieSelection(movieId) {
       if (!movieId) return;
@@ -28271,7 +28401,7 @@ def ui_preview_html(
       localStorage.setItem("dv_next_collection_group_filter", activeCollectionGroupFilter);
       renderGroupFilter();
       showLibraryPage(true);
-      renderLibrary();
+      renderCollectionSurface();
     }
     async function inviteMemberGroupUser(groupId) {
       if (!groupId || !hasActualPermission("groups.invite")) return;
@@ -28322,7 +28452,7 @@ def ui_preview_html(
         preferences.show_container_member_badges = false;
       }
       renderPreferences();
-      renderLibrary();
+      renderCollectionSurface();
       if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
       const message = document.getElementById("preferencesMessage");
       if (message) message.textContent = tNext("preferences.saving", "Saving...");
@@ -28340,7 +28470,7 @@ def ui_preview_html(
         });
         preferences = Object.assign({}, preferences, payload.preferences || {});
         renderPreferences();
-        renderLibrary();
+        renderCollectionSurface();
         if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
         if (message) message.textContent = tNext("preferences.saved", "Saved.");
       } catch (error) {
@@ -28641,7 +28771,7 @@ def ui_preview_html(
         /* keep existing snapshot on failure */
       }
       renderLocationsPanel();
-      if (activeLocationRoutePublicId) renderLibrary();
+      if (activeLocationRoutePublicId && locationDetailPageVisible()) renderLocationDetailPage();
     }
     async function uploadLocationBackdrop(locationId, file) {
       const targetId = String(locationId || "").trim();
@@ -28871,7 +29001,7 @@ def ui_preview_html(
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
       renderPreferences();
       renderProfile();
-      renderLibrary();
+      renderCollectionSurface();
       if (canViewMetadataJobs()) {
         refreshLibraryMetadataJobs();
       }
@@ -29827,7 +29957,7 @@ def ui_preview_html(
       if (!appMode) {
         setGate("library");
         renderPreferences();
-        renderLibrary();
+        renderCollectionSurface();
         return;
       }
       setGate("auth");
@@ -29917,8 +30047,12 @@ def ui_preview_html(
         node.classList.toggle("selected", String(node.dataset.previewContainer) === String(container.id));
       });
     }
-    function filterMovies() {
-      renderLibrary();
+    function filterMovies(event) {
+      const currentValue = typeof event?.target?.value === "string"
+        ? event.target.value
+        : (activeCollectionSearchInput()?.value || "");
+      syncCollectionSearchInputs(currentValue, event?.target?.id || "");
+      renderCollectionSurface();
     }
     document.addEventListener("DOMContentLoaded", () => {
       renderLanguageSelect();
@@ -29943,6 +30077,7 @@ def ui_preview_html(
         });
       });
       document.getElementById("previewSearch")?.addEventListener("input", filterMovies);
+      document.getElementById("locationDetailSearch")?.addEventListener("input", filterMovies);
       document.getElementById("advancedSearchToggleButton")?.addEventListener("click", () => {
         advancedSearchOpen = !advancedSearchOpen;
         localStorage.setItem("dv_next_advanced_search_open", advancedSearchOpen ? "true" : "false");
@@ -29967,14 +30102,14 @@ def ui_preview_html(
           collectionSortMode = button.dataset.sortOption || "title_asc";
           localStorage.setItem("dv_next_collection_sort", collectionSortMode);
           closeCollectionMenu("collectionSortMenu");
-          renderLibrary();
+          renderCollectionSurface();
         });
       });
       document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           libraryViewMode = normalizeLibraryViewMode(button.dataset.libraryViewMode);
           localStorage.setItem("dv_next_library_view_mode", libraryViewMode);
-          renderLibrary();
+          renderCollectionSurface();
         });
       });
       document.querySelectorAll("[data-container-view-mode]").forEach((button) => {
@@ -29999,30 +30134,30 @@ def ui_preview_html(
         if (input.checked) collectionFormatFilters.add(value);
         else collectionFormatFilters.delete(value);
         persistCollectionFormatFilters();
-        renderLibrary();
+        renderCollectionSurface();
       });
       document.querySelectorAll("[data-type-filter]").forEach((button) => {
         button.addEventListener("click", () => {
           if (button.disabled) return;
           collectionTypeFilter = button.dataset.typeFilter || "all";
           localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
-          renderLibrary();
+          renderCollectionSurface();
         });
       });
       document.getElementById("collectionGenreSelect")?.addEventListener("change", (event) => {
         collectionGenreFilter = event.target.value || "";
         localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
-        renderLibrary();
+        renderCollectionSurface();
       });
       document.getElementById("collectionLocationSelect")?.addEventListener("change", (event) => {
         collectionLocationFilter = event.target.value || "";
         localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
-        renderLibrary();
+        renderCollectionSurface();
       });
       document.getElementById("collectionContainersSwitch")?.addEventListener("change", (event) => {
         collectionItemFilter = event.target.checked ? "containers" : "all";
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
-        renderLibrary();
+        renderCollectionSurface();
       });
       document.getElementById("collectionFilterResetButton")?.addEventListener("click", () => {
         collectionFormatFilters.clear();
@@ -30035,20 +30170,38 @@ def ui_preview_html(
         localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
         localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
-        renderLibrary();
+        renderCollectionSurface();
       });
-      document.getElementById("locationRouteSortTrigger")?.addEventListener("click", (event) => {
+      document.getElementById("locationDetailSortTrigger")?.addEventListener("click", (event) => {
         event.stopPropagation();
-        toggleCollectionMenu("collectionSortMenu");
+        const sortCycle = ["added_desc", "title_asc", "title_desc", "year_desc", "year_asc", "added_asc"];
+        const currentIndex = Math.max(0, sortCycle.indexOf(collectionSortMode));
+        collectionSortMode = sortCycle[(currentIndex + 1) % sortCycle.length];
+        localStorage.setItem("dv_next_collection_sort", collectionSortMode);
+        renderCollectionSurface();
       });
-      document.getElementById("locationRouteFilterTrigger")?.addEventListener("click", (event) => {
+      document.getElementById("locationDetailFilterTrigger")?.addEventListener("click", (event) => {
         event.stopPropagation();
-        toggleCollectionMenu("collectionFilterMenu");
+        if (collectionFilterActiveCount() > 0) {
+          collectionFormatFilters.clear();
+          persistCollectionFormatFilters();
+          collectionTypeFilter = "all";
+          collectionGenreFilter = "";
+          collectionLocationFilter = "";
+          if (collectionItemFilter === "containers") collectionItemFilter = "all";
+        } else {
+          collectionTypeFilter = "movie";
+        }
+        localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
+        localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
+        localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
+        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+        renderCollectionSurface();
       });
       document.getElementById("groupFilter")?.addEventListener("change", (event) => {
         activeCollectionGroupFilter = validCollectionGroupFilter(event.target.value || "");
         localStorage.setItem("dv_next_collection_group_filter", activeCollectionGroupFilter);
-        renderLibrary();
+        renderCollectionSurface();
       });
       document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
       document.getElementById("libraryMetadataJobsToggleButton")?.addEventListener("click", () => toggleLibraryMetadataJobs());
@@ -30761,6 +30914,7 @@ def ui_preview_html(
       document.getElementById("createContainerForm")?.addEventListener("submit", (event) => createContainer(event));
       document.getElementById("movieDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppMovieDetail()));
       document.getElementById("containerDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppContainerDetail()));
+      document.getElementById("locationDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => showLibraryPage(true)));
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
       document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
@@ -30947,7 +31101,7 @@ def ui_preview_html(
           setLoginMessage(error.message || String(error), "bad");
         } else {
           setGate("library");
-          renderLibrary();
+          renderCollectionSurface();
         }
       });
       window.addEventListener("popstate", () => {
