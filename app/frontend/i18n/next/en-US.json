@@ -2114,7 +2114,7 @@
   "locations.nameRequired": "Enter a name first.",
   "locations.qr": "QR",
   "locations.qrPrint": "Print QR",
-  "locations.qrDownload": "Download SVG",
+  "locations.qrDownload": "Download PNG",
   "locations.assign": "Storage location",
   "locations.none": "No location",
   "locations.backdropField": "Backdrop",
