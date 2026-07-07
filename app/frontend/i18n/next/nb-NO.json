@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "Ny tagg",
   "lists.tagCreateSubmit": "Opprett",
   "lists.tagCreateTitle": "Ny tagg",
+  "lists.tagDeleteLocked": "Fjern denne taggen fra alle medier før du kan slette den.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "Nova oznaka",
   "lists.tagCreateSubmit": "Ustvari",
   "lists.tagCreateTitle": "Nova oznaka",
+  "lists.tagDeleteLocked": "Pred brisanjem odstranite to oznako z vseh medijev.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

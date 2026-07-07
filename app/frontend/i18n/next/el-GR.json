@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "Νέα ετικέτα",
   "lists.tagCreateSubmit": "Δημιουργία",
   "lists.tagCreateTitle": "Νέα ετικέτα",
+  "lists.tagDeleteLocked": "Αφαιρέστε αυτήν την ετικέτα από όλα τα μέσα πριν τη διαγράψετε.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

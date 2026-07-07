@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "Nyt tag",
   "lists.tagCreateSubmit": "Opret",
   "lists.tagCreateTitle": "Nyt tag",
+  "lists.tagDeleteLocked": "Fjern dette tag fra alle medier, før du kan slette det.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

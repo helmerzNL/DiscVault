@@ -1366,6 +1366,7 @@
   "lists.tagCreateButton": "New tag",
   "lists.tagCreateSubmit": "Create",
   "lists.tagCreateTitle": "New tag",
+  "lists.tagDeleteLocked": "Remove this tag from all media before you can delete it.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

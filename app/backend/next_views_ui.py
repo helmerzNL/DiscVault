@@ -2108,6 +2108,64 @@ def ui_preview_html(
       background: var(--accent);
       flex: 0 0 auto;
     }
+    .tags-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      border: 1px solid color-mix(in srgb, var(--tag-color, var(--line)) 55%, var(--line));
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--tag-color, var(--bg-solid)) 12%, var(--bg-solid));
+      color: var(--text);
+      padding: 0 6px 0 12px;
+      font-size: .85rem;
+      font-weight: 700;
+    }
+    .tag-chip .tag-chip-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--tag-color, var(--accent));
+      flex: 0 0 auto;
+    }
+    .tag-chip .tag-chip-count {
+      font-weight: 600;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .tag-chip-remove {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border: 0;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--red) 16%, transparent);
+      color: var(--red);
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    .tag-chip-remove svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+    .tag-chip-remove:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--red) 26%, transparent);
+    }
+    .tag-chip-remove:disabled {
+      background: color-mix(in srgb, var(--muted) 14%, transparent);
+      color: var(--muted);
+      cursor: not-allowed;
+    }
     .loan-overdue {
       color: var(--red);
       font-weight: 600;
@@ -2647,17 +2705,6 @@ def ui_preview_html(
       gap: 12px;
       margin-bottom: 14px;
     }
-    .tag-poster-art {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .tag-poster-initial {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #fff;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, .4);
-    }
     .stats-cards {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -2745,6 +2792,25 @@ def ui_preview_html(
     }
     .view-mode-control {
       flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-mode-control.is-disabled {
+      opacity: .4;
+      pointer-events: none;
+    }
+    .view-mode-button svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      display: block;
+    }
+    .view-mode-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 10px;
     }
     .mode-list-grid {
       display: grid;
@@ -9438,10 +9504,13 @@ def ui_preview_html(
                 <button type="button" class="lists-seg" data-lists-tab="tags" data-next-i18n-aria="lists.tags" aria-label="Tags"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41,11.58L12.41,2.58C12.04,2.21 11.53,2 11,2H4A2,2 0 0,0 2,4V11C2,11.53 2.21,12.04 2.59,12.42L11.59,21.42C11.96,21.79 12.47,22 13,22C13.53,22 14.04,21.79 14.41,21.41L21.41,14.41C21.79,14.04 22,13.53 22,13C22,12.47 21.79,11.96 21.41,11.58M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.tags">Tags</span></button>
                 <button type="button" class="lists-seg" data-lists-tab="loans" data-next-i18n-aria="lists.loans" aria-label="On loan"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16,17V19H2V17S2,13 9,13 16,17 16,17M12.5,7.5A3.5,3.5 0 1,0 9,11A3.5,3.5 0 0,0 12.5,7.5M15.94,13A5.32,5.32 0 0,1 18,17V19H22V17S22,13.37 15.94,13M15,4A3.39,3.39 0 0,0 13.07,4.59A5,5 0 0,1 13.07,10.41A3.39,3.39 0 0,0 15,11A3.5,3.5 0 0,0 15,4Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.loans">On loan</span></button>
               </div>
-              <div class="segmented compact view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
-                <button type="button" class="active" data-lists-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
-                <button type="button" data-lists-view-mode="list" data-next-i18n="collection.viewList">List</button>
-                <button type="button" data-lists-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+              <div class="view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+                <button type="button" class="icon-button view-mode-button" data-lists-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg>
+                </button>
+                <button type="button" class="icon-button view-mode-button active" data-lists-view-mode="poster" aria-label="Poster view" data-next-i18n-aria="collection.viewPoster" title="Posters" data-next-i18n-title="collection.viewPoster">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3H11V11H3V3M13 3H21V11H13V3M3 13H11V21H3V13M13 13H21V21H13V13Z"/></svg>
+                </button>
               </div>
             </div>
           </div>
@@ -17348,7 +17417,7 @@ def ui_preview_html(
       });
     }
     function normalizeViewMode(value) {
-      return ["poster", "list", "detail"].includes(value) ? value : "poster";
+      return ["poster", "list"].includes(value) ? value : "poster";
     }
     function normalizeLibraryViewMode(value) {
       return value === "list" ? "list" : "poster";
@@ -24954,22 +25023,6 @@ def ui_preview_html(
         </div>
       `;
     }
-    function tagRowHtml(tag) {
-      const count = tag.movieCount || 0;
-      const color = tag.color || "";
-      return `
-        <div class="list-simple-card">
-          <span class="tag-swatch"${color ? ` style="background:${escapeHtml(color)}"` : ""}></span>
-          <div class="list-simple-body">
-            <span class="list-simple-title">${escapeHtml(tag.name || "")}</span>
-            <span class="list-simple-meta">${escapeHtml(count)} ${escapeHtml(tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies"))}</span>
-          </div>
-          <div class="list-simple-actions">
-            <button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>
-          </div>
-        </div>
-      `;
-    }
     function loanRowHtml(loan) {
       const snapshot = loan.snapshot || {};
       const title = snapshot.title || loan.title || tNext("common.untitled", "Untitled");
@@ -25212,47 +25265,27 @@ def ui_preview_html(
       return section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
         + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
-    function tagPosterCardHtml(tag) {
+    function tagChipHtml(tag) {
       const count = tag.movieCount || 0;
       const color = tag.color || "";
-      const initial = (String(tag.name || "#").trim().slice(0, 1) || "#").toUpperCase();
+      const locked = count > 0;
+      const countLabel = count + " " + tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies");
+      const removeTitle = locked
+        ? tNext("lists.tagDeleteLocked", "Remove this tag from all media before you can delete it.")
+        : tNext("common.delete", "Delete");
       return `
-        <div class="preview-poster lists-static-poster tag-poster-card">
-          <span class="preview-poster-art tag-poster-art"${color ? ` style="background:${escapeHtml(color)}"` : ""}><span class="tag-poster-initial">${escapeHtml(initial)}</span></span>
-          <span class="preview-poster-title">${escapeHtml(tag.name || "")}</span>
-          <span class="preview-poster-meta">${escapeHtml(count)} ${escapeHtml(tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies"))}</span>
-          <span class="lists-poster-actions">
-            <button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>
-          </span>
-        </div>
+        <span class="tag-chip"${color ? ` style="--tag-color:${escapeHtml(color)}"` : ""}>
+          <span class="tag-chip-swatch" aria-hidden="true"></span>
+          <span class="tag-chip-name">${escapeHtml(tag.name || "")}</span>
+          <span class="tag-chip-count">${escapeHtml(countLabel)}</span>
+          <button type="button" class="tag-chip-remove" data-tag-remove="${escapeHtml(tag.id)}"${locked ? " disabled" : ""} title="${escapeHtml(removeTitle)}" aria-label="${escapeHtml(removeTitle)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>
+          </button>
+        </span>
       `;
     }
-    function tagDetailTableHtml(tags) {
-      return `
-        <div class="watched-detail-table" role="table">
-          <div class="watched-detail-row head" role="row">
-            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.tagName", "Tag"))}</span>
-            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.tagMoviesColumn", "Movies"))}</span>
-            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("common.actions", "Actions"))}</span>
-          </div>
-          ${(tags || []).map((tag) => {
-            const count = tag.movieCount || 0;
-            const color = tag.color || "";
-            return `
-              <div class="watched-detail-row" role="row">
-                <span role="cell"><span class="tag-swatch"${color ? ` style="background:${escapeHtml(color)}"` : ""}></span> <strong>${escapeHtml(tag.name || "")}</strong></span>
-                <span role="cell">${escapeHtml(count)}</span>
-                <span role="cell" class="list-simple-actions"><button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button></span>
-              </div>
-            `;
-          }).join("")}
-        </div>
-      `;
-    }
-    function tagRenderRows(rows, mode) {
-      if (mode === "detail") return tagDetailTableHtml(rows || []);
-      if (mode === "list") return (rows || []).map(tagRowHtml).join("");
-      return (rows || []).map(tagPosterCardHtml).join("");
+    function tagRenderRows(rows) {
+      return (rows || []).map(tagChipHtml).join("");
     }
     function loanPosterUrl(loan) {
       const snapshot = loan.snapshot || {};
@@ -25722,7 +25755,15 @@ def ui_preview_html(
       const empty = document.getElementById("listsEmptyMessage");
       const active = listsState.active;
       const viewModeControl = document.getElementById("listsViewModeControl");
-      if (viewModeControl) viewModeControl.classList.remove("hidden");
+      if (viewModeControl) {
+        viewModeControl.classList.remove("hidden");
+        const tagsActive = active === "tags";
+        viewModeControl.classList.toggle("is-disabled", tagsActive);
+        viewModeControl.setAttribute("aria-hidden", tagsActive ? "true" : "false");
+        viewModeControl.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
+          button.disabled = tagsActive;
+        });
+      }
       if (watchlistGrid) watchlistGrid.classList.toggle("hidden", active !== "watchlist");
       if (watchedList) watchedList.classList.toggle("hidden", active !== "watched");
       if (wishlistPanel) wishlistPanel.classList.toggle("hidden", active !== "wishlist");
@@ -25783,8 +25824,8 @@ def ui_preview_html(
       } else if (active === "tags") {
         const list = document.getElementById("listsTagsList");
         if (list) {
-          configureSimpleListNode(list, {tags: true});
-          list.innerHTML = tagRenderRows(listsState.tags || [], listsViewMode);
+          list.className = "tags-chip-list";
+          list.innerHTML = tagRenderRows(listsState.tags || []);
         }
         if (empty) {
           empty.textContent = tNext("lists.emptyTags", "You have no tags yet.");
@@ -27271,6 +27312,7 @@ def ui_preview_html(
         return;
       }
       if (route === "lists") {
+        listsState.loaded = false;
         showListsPage();
         return;
       }
@@ -27279,6 +27321,7 @@ def ui_preview_html(
         return;
       }
       if (route === "people") {
+        refreshAppSnapshotSilently();
         showLibraryPage(true);
         return;
       }
@@ -27286,7 +27329,11 @@ def ui_preview_html(
         showNotificationsPage();
         return;
       }
+      refreshAppSnapshotSilently();
       showLibraryPage(true, route || "library");
+    }
+    function refreshAppSnapshotSilently() {
+      loadAppSnapshot().catch(() => {});
     }
     async function saveMovieDetails(event) {
       event.preventDefault();
@@ -30406,6 +30453,7 @@ def ui_preview_html(
         button.addEventListener("click", () => {
           listsState.active = button.dataset.listsTab || "watchlist";
           renderListsView();
+          loadListsView(true);
         });
       });
       document.querySelectorAll("[data-loan-requests-tab]").forEach((button) => {

@@ -1357,6 +1357,7 @@
   "lists.tagCreateButton": "새 태그",
   "lists.tagCreateSubmit": "만들기",
   "lists.tagCreateTitle": "새 태그",
+  "lists.tagDeleteLocked": "삭제하려면 먼저 이 태그를 모든 미디어에서 제거하세요.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",
