@@ -12336,7 +12336,10 @@ def ui_preview_html(
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="metadata"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkMetadata));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="group-add"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="container"]')), collectorsEnabled && (hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers) || hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections)));
-      setElementVisible(closestCard(document.querySelector('[data-bulk-action="location"]')), collectorsEnabled && (hasPermission("collection.edit_all") || hasPermission("containers.edit")));
+      setElementVisible(
+        closestCard(document.querySelector('[data-bulk-action="location"]')),
+        hasPermission("collection.edit_all") || (collectorsEnabled && hasPermission("containers.edit"))
+      );
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="delete"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkDelete));
       setElementVisible(document.getElementById("libraryMetadataJobPanel"), canViewMetadataJobs());
       setElementVisible(document.getElementById("libraryMetadataJobsToggleButton"), canViewMetadataJobs() && (libraryMetadataJobs || []).length > 0);
