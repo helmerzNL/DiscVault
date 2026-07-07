@@ -39,6 +39,8 @@ try:
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import restore_functional_backup
+    from .next_price_alerts import PRICE_ALERT_JOB_TYPE
+    from .next_price_alerts import run_price_alert_sweep
 except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
@@ -53,6 +55,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import restore_functional_backup
+    from next_price_alerts import PRICE_ALERT_JOB_TYPE
+    from next_price_alerts import run_price_alert_sweep
 
 
 STOP = False
@@ -398,6 +402,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
+    if job_type == PRICE_ALERT_JOB_TYPE:
+        return process_price_alert_sweep(payload, worker_id)
+
     raise RuntimeError(f"Unsupported job type: {job_type}")
 
 
@@ -470,6 +477,18 @@ def process_functional_restore(payload: dict[str, Any], worker_id: str) -> dict[
             "dataDir": str(data_dir),
         },
         "summary": summary,
+    }
+
+
+def process_price_alert_sweep(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    limit = int(payload.get("limit") or 50)
+    with connect() as conn:
+        summary = run_price_alert_sweep(conn, limit=limit)
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": PRICE_ALERT_JOB_TYPE,
+        **summary,
     }
 
 
