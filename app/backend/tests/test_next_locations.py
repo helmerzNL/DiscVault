@@ -1,6 +1,8 @@
 import os
 import sys
+import io
 import unittest
+from PIL import Image
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -16,6 +18,7 @@ try:
     from app.backend.next_app import location_public_id
     from app.backend.next_app import location_qr_token
     from app.backend.next_app import location_qr_svg
+    from app.backend.next_app import location_qr_png
     from app.backend.next_app import location_deep_link
     from app.backend.next_app import location_summary_object
     from app.backend.next_app import _location_path_names
@@ -34,6 +37,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     location_public_id = None
     location_qr_token = None
     location_qr_svg = None
+    location_qr_png = None
     location_deep_link = None
     location_summary_object = None
     _location_path_names = None
@@ -146,6 +150,12 @@ class LocationQrTests(unittest.TestCase):
         svg = location_qr_svg("https://discvault.example/app/locations/next-location-abc")
         self.assertIn("<svg", svg)
         self.assertIn("</svg>", svg)
+
+    def test_qr_png_is_square(self):
+        png = location_qr_png("https://discvault.example/app/locations/next-location-abc")
+        self.assertTrue(png.startswith(b"\x89PNG\r\n\x1a\n"))
+        with Image.open(io.BytesIO(png)) as qr_image:
+            self.assertEqual(qr_image.width, qr_image.height)
 
 
 if __name__ == "__main__":
