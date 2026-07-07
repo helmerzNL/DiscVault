@@ -1,5 +1,38 @@
 # DiscVault Release Notes
 
+## 26.3.0 — Location deep links, QR flow upgrades, and navigation cleanup
+
+This release promotes a full set of DiscVault Next UX improvements around
+locations and sharing. It introduces dedicated location detail navigation,
+improves QR workflows for deep links, and tightens profile action structure.
+
+### What's new
+
+- **Dedicated location detail page flow.**
+  Navigation now supports a clearer location detail experience, making it
+  easier to move from collection context into location-specific views.
+
+- **Location QR deep-link bridge.**
+  Location QR generation now maps directly to deep-link targets so shared QR
+  scans open the intended destination in the Next app flow.
+
+- **QR rendering and interaction polish.**
+  QR output was improved to square PNG rendering and related controls were
+  refined for better reliability and consistency across the location pages.
+
+- **Profile action menu cleanup.**
+  Statistics actions are now kept in the Profile action scope to keep top-level
+  navigation cleaner and more predictable.
+
+- **Expanded localization coverage.**
+  Translation coverage was extended and aligned across all supported locales
+  for the new location and QR user flows.
+
+### Notable stability fixes included in this train
+
+- Removed a duplicate QR URL declaration that could cause a blank page.
+- Added a regression guard for an app shell JavaScript syntax issue.
+
 ## 26.2.9 — Passkey onboarding error handling
 
 This release makes passkey setup on DiscVault Next much clearer when a server
