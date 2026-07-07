@@ -24,6 +24,7 @@ try:
     from app.backend.next_app import location_qr_svg
     from app.backend.next_app import location_qr_png
     from app.backend.next_app import location_deep_link
+    from app.backend.next_app import PUBLIC_NEXT_PREFIXES
     from app.backend.next_app import location_summary_object
     from app.backend.next_app import collection_dashboard_html
     from app.backend.next_app import _location_path_names
@@ -44,6 +45,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     location_qr_svg = None
     location_qr_png = None
     location_deep_link = None
+    PUBLIC_NEXT_PREFIXES = ()
     location_summary_object = None
     collection_dashboard_html = None
     _location_path_names = None
@@ -150,7 +152,10 @@ class LocationQrTests(unittest.TestCase):
         self.assertNotEqual(location_qr_token(), location_qr_token())
 
     def test_deep_link_without_request_context(self):
-        self.assertEqual(location_deep_link("next-location-abc"), "/app/locations/next-location-abc")
+        self.assertEqual(location_deep_link("next-location-abc"), "/open/locations/next-location-abc")
+
+    def test_public_prefixes_allow_app_location_routes(self):
+        self.assertIn("/app/locations/", PUBLIC_NEXT_PREFIXES)
 
     def test_qr_svg_encodes_link(self):
         svg = location_qr_svg("https://discvault.example/app/locations/next-location-abc")
