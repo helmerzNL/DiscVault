@@ -1814,7 +1814,7 @@
   "notifications.prefSecurity": "Sakerhet",
   "notifications.prefSecurityHelp": "Passkey-, aterstallnings- och kontosakerhetsmeddelanden.",
   "notifications.pref.price_alerts": "Prisaviseringar",
-  "notifications.prefPriceAlerts": "Pris- och erbjudandeavizeringar",
+  "notifications.prefPriceAlerts": "Pris- och erbjudandeaviseringar",
   "notifications.prefPriceAlertsHelp": "Meddela mig när en önskelisteartikel når mitt målpris.",
   "notifications.priceAlertBody": "{title} kostar nu {price} {currency} — på eller under ditt mål på {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Notisinstallningar sparade.",
