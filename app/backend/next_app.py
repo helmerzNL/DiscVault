@@ -5287,12 +5287,15 @@ def location_qr_png(url: str) -> bytes:
 
 
 def location_deep_link(public_id: str) -> str:
+    target = quote(str(public_id or "").strip(), safe="")
+    if not target:
+        return "/open/locations"
     root = ""
     try:
         root = (request.url_root or "").rstrip("/")
     except Exception:
         root = ""
-    return f"{root}/app/locations/{public_id}" if root else f"/app/locations/{public_id}"
+    return f"{root}/open/locations/{target}" if root else f"/open/locations/{target}"
 
 
 def container_receiver_member_payload(conn, container_id: UUID | str | None) -> list[dict[str, Any]]:
@@ -16577,6 +16580,7 @@ PUBLIC_NEXT_PREFIXES = (
     "/app/movies/",
     "/app/containers/",
     "/app/people/",
+    "/app/locations/",
 )
 
 
@@ -25083,6 +25087,37 @@ def register_routes(flask_app: Flask) -> None:
             else:
                 snapshot = collection_dashboard_snapshot(conn)
         return html_response(collection_dashboard_html(snapshot))
+
+    @flask_app.get("/open/locations/<location_id>")
+    def open_location_deep_link(location_id: str):
+        target = quote(str(location_id or "").strip(), safe="")
+        if not target:
+            raise NextApiError("Location ID is required", 400)
+        web_url = f"/locations/{target}"
+        native_url = f"discvault://locations/{target}"
+        html = (
+            "<!doctype html>"
+            "<html lang='en'>"
+            "<head>"
+            "<meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+            "<title>Open DiscVault</title>"
+            f"<meta http-equiv='refresh' content='2;url={html_lib.escape(web_url, quote=True)}'>"
+            "</head>"
+            "<body>"
+            "<p>Opening DiscVault…</p>"
+            f"<p><a href='{html_lib.escape(web_url, quote=True)}'>Continue in browser</a></p>"
+            "<script>"
+            f"const nativeUrl = {json_lib.dumps(native_url)};"
+            f"const webUrl = {json_lib.dumps(web_url)};"
+            "const fallback = setTimeout(() => { window.location.replace(webUrl); }, 1200);"
+            "window.addEventListener('pagehide', () => clearTimeout(fallback), {once: true});"
+            "window.location.replace(nativeUrl);"
+            "</script>"
+            "</body>"
+            "</html>"
+        )
+        return html_response(html)
 
     @flask_app.get("/")
     @flask_app.get("/app")
