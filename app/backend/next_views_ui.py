@@ -1412,6 +1412,7 @@ def ui_preview_html(
       object-fit: contain;
       display: block;
       background: #fff;
+      padding: 12px;
     }
     .preview-stat, .preview-panel {
       border: 1px solid var(--line);
@@ -27454,7 +27455,6 @@ def ui_preview_html(
         const detailLink = document.getElementById("heroDetailLink");
         const shuffleButton = document.getElementById("shuffleButton");
         const backdropNode = document.getElementById("heroBackdrop");
-        const posterNode = document.getElementById("heroPoster");
         const eyebrowNode = hero.querySelector(".eyebrow");
         if (eyebrowNode) {
           eyebrowNode.textContent = tNext("locations.navLabel", "Locations");
@@ -28753,6 +28753,7 @@ def ui_preview_html(
     function openLocationQr(locationId) {
       const node = locationById(locationId);
       if (!node) return;
+      const url = locationQrPngUrl(node);
       const url = locationQrPngUrl(node);
       const title = node.path_label || node.pathLabel || node.name || tNext("locations.qr", "QR");
       const publicId = String(node.public_id || node.publicId || node.id || locationId || "");
