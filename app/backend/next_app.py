@@ -9757,6 +9757,14 @@ def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
         "acquiredAt": row.get("acquired_at"),
         "acquiredMovieId": str(acquired_movie) if acquired_movie else None,
         "createdByUserId": str(created_by) if created_by else None,
+        # Price alert fields
+        "alertEnabled": bool(row.get("alert_enabled")),
+        "targetPrice": float(row["target_price"]) if row.get("target_price") is not None else None,
+        "priceUrl": row.get("price_url"),
+        "lastSeenPrice": float(row["last_seen_price"]) if row.get("last_seen_price") is not None else None,
+        "priceCurrency": row.get("price_currency") or "EUR",
+        "lastPriceCheckedAt": row.get("last_price_checked_at"),
+        "lastAlertedAt": row.get("last_alerted_at"),
     }
 
 
@@ -9768,7 +9776,9 @@ def wishlist_sync_entity(conn, user_id, item_id) -> dict[str, Any] | None:
             """
             SELECT id, title, year, barcode, format, movievault_id, poster_url,
                    note, snapshot, added_at, acquired_at, acquired_movie_id,
-                   created_by_user_id
+                   created_by_user_id,
+                   alert_enabled, target_price, price_url, last_seen_price,
+                   price_currency, last_price_checked_at, last_alerted_at
             FROM wishlist_items
             WHERE user_id=%s AND id=%s
             """,
@@ -9786,7 +9796,9 @@ def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
             """
             SELECT id, title, year, barcode, format, movievault_id, poster_url,
                    note, snapshot, added_at, acquired_at, acquired_movie_id,
-                   created_by_user_id
+                   created_by_user_id,
+                   alert_enabled, target_price, price_url, last_seen_price,
+                   price_currency, last_price_checked_at, last_alerted_at
             FROM wishlist_items
             WHERE user_id=%s
             ORDER BY added_at
@@ -16268,6 +16280,7 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         {"key": "watchlist_watched_sync_center", "group": "lists", "status": watch_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": watch_summary.get("counts", {})},
         {"key": "lending_center", "group": "lists", "status": lending_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": lending_summary.get("counts", {}) or {"planned": True}},
         {"key": "wishlist_center", "group": "lists", "status": wishlist_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": wishlist_summary.get("counts", {}) or {"planned": True}},
+        {"key": "price_alerts", "group": "lists", "status": wishlist_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": {"urlPricing": True, "pluginCapability": "price_check"}},
         {"key": "statistics_dashboard", "group": "operations", "status": statistics_summary["status"], "permissionKeys": ["watchlist.manage", "collection.view"], "signals": statistics_summary["capabilities"]},
         {"key": "personal_source_dedupe", "group": "lists", "status": "ready", "permissionKeys": ["watchlist.manage", "digital_sources.view"], "signals": {"traktPlexJellyfinDedupe": True}},
         {"key": "offline_queue_ui", "group": "lists", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"clientSideQueue": True}},
@@ -21025,7 +21038,8 @@ def register_routes(flask_app: Flask) -> None:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT title, year, barcode, format, movievault_id, poster_url, note
+                    SELECT title, year, barcode, format, movievault_id, poster_url, note,
+                           alert_enabled, target_price, price_url, price_currency
                     FROM wishlist_items
                     WHERE user_id=%s AND id=%s
                     """,
@@ -21068,6 +21082,41 @@ def register_routes(flask_app: Flask) -> None:
             if "note" in body:
                 fields["note"] = clean_text(body.get("note"))
 
+            # Price alert fields
+            alert_fields: dict[str, Any] = {
+                "alert_enabled": bool(current.get("alert_enabled")),
+                "target_price": current.get("target_price"),
+                "price_url": current.get("price_url"),
+                "price_currency": current.get("price_currency") or "EUR",
+            }
+            if "alertEnabled" in body or "alert_enabled" in body:
+                alert_fields["alert_enabled"] = parse_bool_value(
+                    body.get("alertEnabled", body.get("alert_enabled")), default=False
+                )
+            if "targetPrice" in body or "target_price" in body:
+                raw_tp = body.get("targetPrice", body.get("target_price"))
+                if raw_tp is None or raw_tp == "":
+                    alert_fields["target_price"] = None
+                else:
+                    try:
+                        tp_val = float(raw_tp)
+                        if tp_val < 0:
+                            raise NextApiError("Target price must be non-negative", 400)
+                        alert_fields["target_price"] = tp_val
+                    except (ValueError, TypeError) as exc:
+                        raise NextApiError("Target price must be a number", 400) from exc
+            if "priceUrl" in body or "price_url" in body:
+                raw_url = clean_text(body.get("priceUrl") or body.get("price_url"))
+                if raw_url:
+                    from urllib.parse import urlparse as _urlparse
+                    parsed = _urlparse(raw_url)
+                    if parsed.scheme not in ("http", "https"):
+                        raise NextApiError("Price URL must be an http or https URL", 400)
+                alert_fields["price_url"] = raw_url or None
+            if "priceCurrency" in body or "price_currency" in body:
+                raw_currency = clean_text(body.get("priceCurrency") or body.get("price_currency"))
+                alert_fields["price_currency"] = (raw_currency or "EUR").upper()[:3]
+
             snapshot = _wishlist_snapshot(fields)
             with conn.transaction():
                 with conn.cursor() as cur:
@@ -21075,7 +21124,8 @@ def register_routes(flask_app: Flask) -> None:
                         """
                         UPDATE wishlist_items
                         SET title=%s, year=%s, barcode=%s, format=%s,
-                            movievault_id=%s, poster_url=%s, note=%s, snapshot=%s
+                            movievault_id=%s, poster_url=%s, note=%s, snapshot=%s,
+                            alert_enabled=%s, target_price=%s, price_url=%s, price_currency=%s
                         WHERE user_id=%s AND id=%s
                         """,
                         (
@@ -21087,6 +21137,10 @@ def register_routes(flask_app: Flask) -> None:
                             fields["poster_url"],
                             fields["note"],
                             Jsonb(snapshot),
+                            alert_fields["alert_enabled"],
+                            alert_fields["target_price"],
+                            alert_fields["price_url"],
+                            alert_fields["price_currency"],
                             user_id,
                             item_uuid,
                         ),
@@ -22085,6 +22139,24 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={"enabled": enabled},
                 )
             return response({"status": "ok", "loansSystemEnabled": enabled})
+
+    @flask_app.post("/api/next/admin/price-alerts/sweep")
+    def trigger_price_alert_sweep():
+        with connect() as conn:
+            actor = require_next_permission(conn, "admin.view_jobs")
+            from next_price_alerts import PRICE_ALERT_JOB_TYPE
+            job_id = create_background_job(conn, job_type=PRICE_ALERT_JOB_TYPE, payload={})
+            audit_event(
+                conn,
+                event_type="price_alert.sweep_triggered",
+                category="admin",
+                actor=actor,
+                target_type="background_job",
+                target_id=job_id,
+                summary="Triggered price alert sweep",
+                metadata={},
+            )
+        return response({"status": "ok", "jobId": str(job_id)})
 
     @flask_app.post("/api/next/preferences/locale")
     def set_preferences_locale():
