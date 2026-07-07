@@ -2817,7 +2817,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const list = document.getElementById("adminPluginsList");
       if (!list) return;
       if (!plugins.length) {
-        list.innerHTML = `<div class="empty">No plugins found.</div>`;
+        list.innerHTML = `<div class="empty">${escapeHtml(tNext("appAdmin.noPluginsFound", "No plugins found."))}</div>`;
         return;
       }
       const metadataPlugins = plugins.filter((plugin) => pluginHasCategory(plugin, "metadata_source") || pluginHasCategory(plugin, "metadata_receiver"));
@@ -2970,7 +2970,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const node = document.getElementById("adminMetadataProposal");
       if (!node) return;
       if (!preview) {
-        node.innerHTML = `<div class="empty">No proposal yet.</div>`;
+        node.innerHTML = `<div class="empty">${escapeHtml(tNext("appAdmin.noProposalYet", "No proposal yet."))}</div>`;
         return;
       }
       const proposal = preview.proposal || {};
@@ -3044,7 +3044,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           <div class="muted">created ${escapeHtml((job.createdAt || "").slice(0, 19))} &middot; finished ${escapeHtml((job.finishedAt || "-").slice(0, 19))}</div>
           ${job.error ? `<div class="auth-status bad">${escapeHtml(job.error)}</div>` : ""}
         </div>
-      `).join("") : `<div class="empty">No metadata jobs yet.</div>`;
+      `).join("") : `<div class="empty">${escapeHtml(tNext("appAdmin.metadataNoJobsYet", "No metadata jobs yet."))}</div>`;
     }
     function renderAdminMetadata() {
       const input = document.getElementById("adminMetadataMovieId");
@@ -3061,7 +3061,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           const mode = applied && applied.changed !== undefined ? (applied.changed ? "applied" : "no changes") : "preview ready";
           state.textContent = `${title}: ${mode}; ${number(stats.updateFields || 0)} update fields, ${number(stats.skippedFields || 0)} skipped.`;
         } else {
-          state.textContent = "No metadata refresh run yet.";
+          state.textContent = tNext("appAdmin.metadataNoRunYet", "No metadata refresh run yet.");
         }
       }
       renderMetadataSources(preview);
@@ -3152,7 +3152,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const node = document.getElementById("adminBackupReport");
       if (!node) return;
       if (!report) {
-        node.innerHTML = `<div class="empty">No backup report yet.</div>`;
+        node.innerHTML = `<div class="empty">${escapeHtml(tNext("appAdmin.noBackupReportYet", "No backup report yet."))}</div>`;
         return;
       }
       const tables = report.tables || {};
@@ -3965,15 +3965,15 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <span>${escapeHtml(credit.character || credit.job || credit.credit_type || "credit")}</span>
           </div>
         `).join("")
-        : `<div class="empty">No credits imported for this movie.</div>`;
+        : `<div class="empty">${escapeHtml(tNext("movieDetail.noCreditsImported", "No credits imported for this movie."))}</div>`;
     }
     function renderMovieDetailError(error) {
       const message = error.message || String(error);
       document.getElementById("detailHero").style.backgroundImage = "";
-      document.getElementById("detailPoster").textContent = "Error";
-      document.getElementById("detailTitle").textContent = "Could not load movie details";
+      document.getElementById("detailPoster").textContent = tNext("movieDetail.errorLabel", "Error");
+      document.getElementById("detailTitle").textContent = tNext("movieDetail.loadErrorTitle", "Could not load movie details");
       document.getElementById("detailTags").innerHTML = `<span class="tag">${escapeHtml(message)}</span>`;
-      document.getElementById("detailOverview").textContent = "The movie detail request failed. Check the Next API logs for the backend error.";
+      document.getElementById("detailOverview").textContent = tNext("movieDetail.loadErrorDescription", "The movie detail request failed. Check the Next API logs for the backend error.");
       document.getElementById("detailRelease").innerHTML = [
         field("Error", message),
         field("URL", error.url || "-"),
@@ -3985,14 +3985,14 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("detailGroups").innerHTML = field("None", "-");
       document.getElementById("detailDigital").innerHTML = field("None", "-");
       document.getElementById("detailVideos").innerHTML = `<div class="empty small">${escapeHtml(tNext("movieDetail.noVideos", "No videos imported yet."))}</div>`;
-      document.getElementById("detailCredits").innerHTML = `<div class="empty">No credits loaded.</div>`;
+      document.getElementById("detailCredits").innerHTML = `<div class="empty">${escapeHtml(tNext("movieDetail.noCreditsLoaded", "No credits loaded."))}</div>`;
     }
     async function openMovieDetail(movieId) {
       const overlay = document.getElementById("movieDetailOverlay");
       overlay.classList.add("open");
-      document.getElementById("detailTitle").textContent = "Loading...";
+      document.getElementById("detailTitle").textContent = tNext("movieDetail.loadingTitle", "Loading...");
       document.getElementById("detailOverview").textContent = "";
-      document.getElementById("detailPoster").textContent = "Loading";
+      document.getElementById("detailPoster").textContent = tNext("movieDetail.loadingPoster", "Loading");
       document.getElementById("detailTags").innerHTML = "";
       document.getElementById("detailGroups").innerHTML = "";
       document.getElementById("detailVideos").innerHTML = "";

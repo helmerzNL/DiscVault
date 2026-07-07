@@ -48,7 +48,9 @@ treated as `stable` (`main` == the old v26 line).
 1. Branch a feature branch **from `main`**.
 2. Open a PR to **`release/v26-beta`**. CI builds the `:v26-beta`/`:beta`
    image for integration testing.
-3. Merge the PR into `release/v26-beta` once it is green and reviewed.
+3. Complete translations for all supported locales (no missing i18n keys and no newly introduced
+   hardcoded UI text) **before** the PR is merged.
+4. Merge the PR into `release/v26-beta` once it is green and reviewed.
 
 Because each feature branch is branched from `main`, you can later **individually**
 promote it without pulling in the rest of beta.
