@@ -938,6 +938,7 @@ def ui_preview_html(
       right: 0;
       z-index: 40;
       min-width: 220px;
+      max-width: min(320px, calc(100vw - 16px));
       display: flex;
       flex-direction: column;
       gap: 2px;
@@ -16556,9 +16557,31 @@ def ui_preview_html(
       closeAllCollectionMenus(menuId);
       const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
       if (!def) return;
-      document.getElementById(def.panel)?.classList.remove("hidden");
+      const menu = document.getElementById(def.menu);
+      const panel = document.getElementById(def.panel);
+      panel?.classList.remove("hidden");
       document.getElementById(def.trigger)?.setAttribute("aria-expanded", "true");
-      document.getElementById(def.menu)?.classList.add("open");
+      menu?.classList.add("open");
+      if (menu && panel) {
+        positionCollectionMenuPanel(menu, panel);
+      }
+    }
+    function positionCollectionMenuPanel(menu, panel) {
+      panel.style.removeProperty("left");
+      panel.style.right = "0";
+      const viewportWidth = window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth;
+      if (!viewportWidth) return;
+      const menuRect = menu.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const gutter = 8;
+      const desiredLeft = menuRect.width - panelRect.width;
+      const minLeft = gutter - menuRect.left;
+      const maxLeft = viewportWidth - gutter - menuRect.left - panelRect.width;
+      const clampedLeft = Math.min(Math.max(desiredLeft, minLeft), maxLeft);
+      if (Number.isFinite(clampedLeft)) {
+        panel.style.right = "auto";
+        panel.style.left = `${Math.round(clampedLeft)}px`;
+      }
     }
     function toggleCollectionMenu(menuId) {
       const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
@@ -16584,6 +16607,15 @@ def ui_preview_html(
         collectionMenusBound = true;
         document.addEventListener("click", () => closeAllCollectionMenus());
         document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeAllCollectionMenus(); });
+        window.addEventListener("resize", () => {
+          COLLECTION_MENUS.forEach((def) => {
+            const menu = document.getElementById(def.menu);
+            const panel = document.getElementById(def.panel);
+            if (menu && panel && !panel.classList.contains("hidden")) {
+              positionCollectionMenuPanel(menu, panel);
+            }
+          });
+        });
       }
     }
     function advancedSearchDefaults() {
