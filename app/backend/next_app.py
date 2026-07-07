@@ -5038,6 +5038,17 @@ def location_entity_by_public_id(conn, public_id: str) -> dict[str, Any] | None:
         return cur.fetchone()
 
 
+def location_backdrop_url_value(entity: dict[str, Any] | None) -> str:
+    if not isinstance(entity, dict):
+        return ""
+    metadata = entity.get("metadata") if isinstance(entity.get("metadata"), dict) else {}
+    return first_usable_image(
+        metadata.get("backdrop_url"),
+        metadata.get("backdropUrl"),
+        metadata.get("backdrop"),
+    )
+
+
 def location_list_entities(conn) -> list[dict[str, Any]]:
     """Flat, pre-ordered list of every location with direct movie/container counts."""
     if not table_exists(conn, "locations"):
@@ -5048,7 +5059,7 @@ def location_list_entities(conn) -> list[dict[str, Any]]:
             WITH RECURSIVE tree AS (
                 SELECT
                     l.id, l.public_id, l.parent_id, l.name, l.description,
-                    l.qr_token, l.sort_order, l.created_at, l.updated_at,
+                    l.qr_token, l.sort_order, l.metadata, l.created_at, l.updated_at,
                     1 AS depth,
                     ARRAY[lpad(l.sort_order::text, 12, '0') || ':' || lower(l.name)] AS sort_path,
                     ARRAY[l.name]::text[] AS name_path
@@ -5057,7 +5068,7 @@ def location_list_entities(conn) -> list[dict[str, Any]]:
                 UNION ALL
                 SELECT
                     c.id, c.public_id, c.parent_id, c.name, c.description,
-                    c.qr_token, c.sort_order, c.created_at, c.updated_at,
+                    c.qr_token, c.sort_order, c.metadata, c.created_at, c.updated_at,
                     t.depth + 1,
                     t.sort_path || (lpad(c.sort_order::text, 12, '0') || ':' || lower(c.name)),
                     t.name_path || c.name
@@ -5065,7 +5076,7 @@ def location_list_entities(conn) -> list[dict[str, Any]]:
                 JOIN tree t ON c.parent_id = t.id
             )
             SELECT id, public_id, parent_id, name, description, qr_token,
-                   sort_order, created_at, updated_at, depth, name_path
+                   sort_order, metadata, created_at, updated_at, depth, name_path
             FROM tree
             ORDER BY sort_path
             """
@@ -5094,6 +5105,7 @@ def location_list_entities(conn) -> list[dict[str, Any]]:
         row["path_label"] = " / ".join(path)
         row["movie_count"] = movie_counts.get(key, 0)
         row["container_count"] = container_counts.get(key, 0)
+        row["backdrop_url"] = location_backdrop_url_value(row)
     return rows
 
 
@@ -5229,6 +5241,7 @@ def location_detail_entity(conn, location_id: UUID | str) -> dict[str, Any] | No
     entity["path"] = _location_path_names(index, entity.get("id"))
     entity["path_label"] = " / ".join(entity["path"])
     entity["parent"] = location_summary_object(index, entity.get("parent_id")) if entity.get("parent_id") else None
+    entity["backdrop_url"] = location_backdrop_url_value(entity)
     return entity
 
 
@@ -12334,22 +12347,21 @@ def create_uploaded_profile_avatar_asset(
         return cur.fetchone()
 
 
-def store_uploaded_poster_asset(
+def store_uploaded_artwork_asset(
     conn,
     *,
     upload_info: dict[str, Any],
+    kind: str,
+    source: str = "upload",
     actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Persist an uploaded poster image as a shared media asset and return the row.
-
-    Used by lightweight entities (e.g. wishlist items) that keep a poster URL
-    string rather than an entity_media relation. Serve via media_asset_public_url.
-    """
+    if kind not in MOVIE_ARTWORK_KINDS:
+        raise NextApiError("kind must be poster or backdrop", 400)
     if not table_exists(conn, "media_assets"):
         raise NextApiError("Media asset table is not available", 503)
     storage_key = clean_text(upload_info.get("storageKey")) or ""
     if not storage_key:
-        raise NextApiError("Uploaded poster did not produce a storage key", 500)
+        raise NextApiError("Uploaded artwork did not produce a storage key", 500)
     media_id = media_asset_uuid(storage_key)
     with conn.cursor() as cur:
         cur.execute(
@@ -12369,8 +12381,9 @@ def store_uploaded_poster_asset(
                 sha256,
                 metadata
             )
-            VALUES (%s, 'poster', 'original', 'local', %s, NULL, 'upload', %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, 'original', 'local', %s, NULL, 'upload', %s, %s, %s, %s, %s, %s)
             ON CONFLICT (kind, variant, sha256) DO UPDATE SET
+                kind=EXCLUDED.kind,
                 storage_backend=EXCLUDED.storage_backend,
                 storage_key=EXCLUDED.storage_key,
                 provider_id=EXCLUDED.provider_id,
@@ -12397,6 +12410,7 @@ def store_uploaded_poster_asset(
             """,
             (
                 media_id,
+                kind,
                 storage_key,
                 upload_info.get("contentType"),
                 upload_info.get("width"),
@@ -12405,7 +12419,7 @@ def store_uploaded_poster_asset(
                 upload_info.get("sha256"),
                 Jsonb(
                     {
-                        "source": "wishlist_upload",
+                        "source": source,
                         "originalFilename": upload_info.get("originalFilename"),
                         "uploadedBy": actor_job_payload(actor or {}) if actor else None,
                     }
@@ -12413,6 +12427,26 @@ def store_uploaded_poster_asset(
             ),
         )
         return cur.fetchone()
+
+
+def store_uploaded_poster_asset(
+    conn,
+    *,
+    upload_info: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Persist an uploaded poster image as a shared media asset and return the row.
+
+    Used by lightweight entities (e.g. wishlist items) that keep a poster URL
+    string rather than an entity_media relation. Serve via media_asset_public_url.
+    """
+    return store_uploaded_artwork_asset(
+        conn,
+        upload_info=upload_info,
+        kind="poster",
+        source="wishlist_upload",
+        actor=actor,
+    )
 
 
 def create_uploaded_movie_media_asset(
@@ -18219,6 +18253,62 @@ def register_routes(flask_app: Flask) -> None:
             public_id = entity.get("public_id")
         svg = location_qr_svg(location_deep_link(public_id))
         return Response(svg, mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+    @flask_app.post("/api/next/locations/<location_id>/backdrop/upload")
+    def location_backdrop_upload(location_id: str):
+        location_uuid = parse_uuid(location_id, "locationId")
+        if not location_uuid:
+            raise NextApiError("locationId is required", 400)
+        if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
+            raise NextApiError("Artwork upload may not exceed 20 MB", 413)
+        upload, _inferred = uploaded_artwork_file()
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            existing = location_entity(conn, location_uuid)
+            if not existing:
+                raise NextApiError("Location not found", 404)
+            upload_info = save_uploaded_artwork_file(upload, kind="backdrop")
+            with conn.transaction():
+                asset = store_uploaded_artwork_asset(
+                    conn,
+                    upload_info=upload_info,
+                    kind="backdrop",
+                    source="location_upload",
+                    actor=actor,
+                )
+                backdrop_url = media_asset_public_url(asset)
+                metadata = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
+                metadata = dict(metadata)
+                metadata["backdrop_url"] = backdrop_url
+                metadata["backdrop_asset_id"] = str(asset.get("id")) if asset.get("id") else None
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE locations SET metadata=%s, updated_at=now() WHERE id=%s",
+                        (Jsonb(json_ready(metadata)), location_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="location.backdrop_uploaded",
+                    category="admin",
+                    actor=actor,
+                    target_type="location",
+                    target_id=location_uuid,
+                    summary=f"Uploaded location backdrop for {existing.get('name') or 'location'}",
+                    metadata={
+                        "publicId": existing.get("public_id"),
+                        "locationName": existing.get("name"),
+                        "mediaId": str(asset.get("id")) if asset.get("id") else None,
+                        "backdropUrl": backdrop_url,
+                    },
+                )
+            detail = location_detail_entity(conn, location_uuid)
+        return response(
+            {
+                "status": "ok",
+                "detail": detail,
+                "backdropUrl": (detail or {}).get("backdrop_url"),
+            }
+        )
 
     @flask_app.post("/api/next/bulk/containers/<container_id>/movies")
     def bulk_container_movies(container_id: str):

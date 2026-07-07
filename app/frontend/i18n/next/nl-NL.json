@@ -2101,10 +2101,15 @@
   "locations.qrDownload": "SVG downloaden",
   "locations.assign": "Opslaglocatie",
   "locations.none": "Geen locatie",
+  "locations.backdropField": "Backdrop",
   "locations.movieCount": "{count} films",
   "locations.containerCount": "{count} containers",
+  "locations.levelCount": "Niveau {count}",
   "locations.routeContext": "Locatie: {path}",
   "locations.routeNotFound": "Locatie niet gevonden.",
+  "locations.emptyRoute": "Er staat nog geen media op deze locatie.",
+  "locations.mediaOnLocation": "Media op deze locatie",
+  "locations.heroMarker": "LOC",
   "collection.locationFilter": "Locatie",
   "collection.locationFilterAny": "Elke locatie"
 }
