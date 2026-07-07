@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Перегляд інтерфейсу",
   "uiPreview.profile": "Профіль",
   "uiPreview.recentlyAdded": "Нещодавно додано",
-  "uiPreview.shuffle": "Перемішати"
+  "uiPreview.shuffle": "Перемішати",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Apercu UI",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Ajoutes recemment",
-  "uiPreview.shuffle": "Aleatoire"
+  "uiPreview.shuffle": "Aleatoire",
+  "notifications": {
+    "priceCheck": "Vérification des prix",
+    "priceCheckRunning": "Vérification des prix en cours...",
+    "priceCheckDone": "Vérification des prix terminée."
+  }
 }

@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Predogled vmesnika",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Nedavno dodano",
-  "uiPreview.shuffle": "Naključno"
+  "uiPreview.shuffle": "Naključno",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

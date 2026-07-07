@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Liidese eelvaade",
   "uiPreview.profile": "Profiil",
   "uiPreview.recentlyAdded": "Hiljuti lisatud",
-  "uiPreview.shuffle": "Juhuesitus"
+  "uiPreview.shuffle": "Juhuesitus",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

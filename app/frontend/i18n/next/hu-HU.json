@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "UI előnézet",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Nemrég hozzáadva",
-  "uiPreview.shuffle": "Véletlen"
+  "uiPreview.shuffle": "Véletlen",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

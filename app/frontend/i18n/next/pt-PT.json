@@ -2149,5 +2149,10 @@
   "uiPreview.preview": "Pre-visualizacao UI",
   "uiPreview.profile": "Perfil",
   "uiPreview.recentlyAdded": "Adicionados recentemente",
-  "uiPreview.shuffle": "Aleatorio"
+  "uiPreview.shuffle": "Aleatorio",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }
