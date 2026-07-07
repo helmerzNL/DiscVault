@@ -1390,6 +1390,18 @@ def ui_preview_html(
       object-fit: cover;
       display: block;
     }
+    .location-route-poster {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.94);
+      font-size: clamp(38px, 4vw, 56px);
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
     .preview-stat, .preview-panel {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -9044,6 +9056,7 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
+        <button type="button" class="nav-item" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span><small id="navStatsState">-</small></button>
       </nav>
       <div class="sidebar-footer">
         <strong data-next-i18n="profile.appVersion">App version</strong><br>
@@ -9314,7 +9327,7 @@ def ui_preview_html(
       <section class="preview-layout">
         <div class="preview-panel">
           <div class="panel-head">
-            <h2 data-next-i18n="uiPreview.recentlyAdded">Recently added</h2>
+            <h2 id="libraryPanelTitle" data-next-i18n="uiPreview.recentlyAdded">Recently added</h2>
             <span id="shownCount">""" + h(min(len(movies), 24)) + """</span>
           </div>
           <div class="poster-rail" id="posterRail">""" + movie_cards + """</div>
@@ -10635,6 +10648,10 @@ def ui_preview_html(
                     <span data-next-i18n="locations.descriptionField">Description</span>
                     <input id="locationCreateDescription" maxlength="2000" autocomplete="off" data-next-i18n-placeholder="locations.descriptionPlaceholder" placeholder="Optional description">
                   </label>
+                  <label for="locationCreateBackdrop">
+                    <span data-next-i18n="locations.backdropField">Backdrop</span>
+                    <input id="locationCreateBackdrop" type="file" accept="image/*">
+                  </label>
                   <div class="profile-form-actions">
                     <button type="submit" class="secondary-button" id="locationCreateButton" data-next-i18n="locations.create">Create location</button>
                     <span class="login-message" id="locationManagerMessage"></span>
@@ -11394,6 +11411,10 @@ def ui_preview_html(
     <button type="button" class="mobile-tab" data-app-route="profile">
       """ + nav_icon("profile") + """
       <span data-next-i18n="uiPreview.profile">Profile</span>
+    </button>
+    <button type="button" class="mobile-tab" data-app-route="statistics">
+      """ + nav_icon("statistics") + """
+      <span data-next-i18n="uiPreview.navStatistics">Statistics</span>
     </button>
   </nav>
   <script>
@@ -16441,6 +16462,8 @@ def ui_preview_html(
       const filters = normalizeAdvancedSearch(advancedSearch);
       if (activeLocationRouteId) {
         filters.location = String(activeLocationRouteId);
+      } else if (activeLocationRoutePublicId && activeLocationRouteMissing) {
+        filters.location = "__missing_location__";
       }
       return filters;
     }
@@ -26979,7 +27002,7 @@ def ui_preview_html(
       showLibraryPage(pushUrl, "location", {preserveLocationContext: true});
       renderLibrary();
       if (pushUrl && appMode) {
-        const nextPath = `/locations/${encodeURIComponent(publicId)}`;
+        const nextPath = `/app/locations/${encodeURIComponent(publicId)}`;
         if (window.location.pathname !== nextPath) {
           history.pushState({locationPublicId: publicId}, "", nextPath);
         }
@@ -27386,8 +27409,68 @@ def ui_preview_html(
       }
       const displayItems = libraryDisplayItems();
       const visibleMovieCount = libraryDisplayMovieCount(displayItems);
+      const locationRouteActive = Boolean(activeLocationRoutePublicId);
+      const locationNode = locationRouteActive ? activeLocationRouteNode() : null;
       const hero = document.getElementById("previewHero");
-      if (hero) hero.classList.toggle("hidden", preferences.show_featured_hero === false || displayItems.length === 0);
+      if (hero) {
+        hero.classList.toggle(
+          "hidden",
+          locationRouteActive
+            ? false
+            : (preferences.show_featured_hero === false || displayItems.length === 0)
+        );
+      }
+      if (locationRouteActive && hero) {
+        const routeLabel = locationNode?.path_label || locationNode?.pathLabel || locationNode?.name || activeLocationRoutePublicId;
+        const routeBackdrop = locationNode ? locationBackdropValue(locationNode) : "";
+        const routeMovieCount = Number(locationNode?.movie_count || 0);
+        const routeContainerCount = Number(locationNode?.container_count || 0);
+        const titleNode = document.getElementById("heroTitle");
+        const metaNode = document.getElementById("heroMeta");
+        const detailLink = document.getElementById("heroDetailLink");
+        const shuffleButton = document.getElementById("shuffleButton");
+        const backdropNode = document.getElementById("heroBackdrop");
+        const posterNode = document.getElementById("heroPoster");
+        const eyebrowNode = hero.querySelector(".eyebrow");
+        if (eyebrowNode) {
+          eyebrowNode.textContent = tNext("locations.navLabel", "Locations");
+        }
+        if (titleNode) {
+          titleNode.textContent = activeLocationRouteMissing
+            ? tNext("locations.routeNotFound", "Location not found.")
+            : routeLabel;
+        }
+        if (metaNode) {
+          const routePills = [];
+          if (!activeLocationRouteMissing && routeMovieCount) {
+            routePills.push(tNext("locations.movieCount", "{count} films").replace("{count}", String(routeMovieCount)));
+          }
+          if (!activeLocationRouteMissing && routeContainerCount) {
+            routePills.push(tNext("locations.containerCount", "{count} containers").replace("{count}", String(routeContainerCount)));
+          }
+          if (!activeLocationRouteMissing && locationNode?.depth) {
+            routePills.push(tNext("locations.levelCount", "Level {count}").replace("{count}", String(locationNode.depth)));
+          }
+          metaNode.innerHTML = routePills.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
+        }
+        if (detailLink) detailLink.classList.add("hidden");
+        if (shuffleButton) shuffleButton.classList.add("hidden");
+        if (backdropNode && backdropNode.tagName === "IMG") {
+          backdropNode.src = routeBackdrop || "";
+        }
+        if (posterNode) {
+          posterNode.innerHTML = `<span class="location-route-poster">${escapeHtml(tNext("locations.heroMarker", "LOC"))}</span>`;
+        }
+        document.querySelectorAll("[data-preview-movie]").forEach((node) => node.classList.toggle("selected", false));
+        document.querySelectorAll("[data-preview-container]").forEach((node) => node.classList.toggle("selected", false));
+      } else {
+        const detailLink = document.getElementById("heroDetailLink");
+        const shuffleButton = document.getElementById("shuffleButton");
+        const eyebrowNode = document.getElementById("previewHero")?.querySelector(".eyebrow");
+        if (eyebrowNode) eyebrowNode.textContent = tNext("uiPreview.featured", "Featured");
+        if (detailLink) detailLink.classList.remove("hidden");
+        if (shuffleButton) shuffleButton.classList.remove("hidden");
+      }
       const rail = document.getElementById("posterRail");
       if (rail) {
         rail.classList.toggle("mode-list-grid", libraryViewMode === "list");
@@ -27403,7 +27486,13 @@ def ui_preview_html(
                 : posterCardHtml(item.movie, index)
                 )
             )).join("")
-          : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
+          : `<div class="preview-empty">${escapeHtml(
+              locationRouteActive
+                ? (activeLocationRouteMissing
+                    ? tNext("locations.routeNotFound", "Location not found.")
+                    : tNext("locations.emptyRoute", "No media is stored at this location yet."))
+                : tNext("collection.emptyMovies", "No movies match the current filter.")
+            )}</div>`;
       }
       document.querySelectorAll("[data-preview-movie]").forEach((button) => {
         button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
@@ -27432,21 +27521,31 @@ def ui_preview_html(
       bindViewModeInteractions(document.getElementById("libraryView") || document);
       const shownCount = document.getElementById("shownCount");
       if (shownCount) shownCount.textContent = String(displayItems.length);
+      const panelTitle = document.getElementById("libraryPanelTitle");
+      if (panelTitle) {
+        panelTitle.textContent = locationRouteActive
+          ? tNext("locations.mediaOnLocation", "Media on this location")
+          : tNext("uiPreview.recentlyAdded", "Recently added");
+      }
       const summary = document.getElementById("librarySummary");
       if (summary) {
         const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
         const tileLabel = tNext("collection.tiles", "tiles");
-        let summaryText = mergeEditionsAsTitleEnabled()
-          ? `${visibleMovieCount} / ${movies.length} ${movieLabel} · ${displayItems.length} ${tileLabel}`
-          : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
-        if (activeLocationRoutePublicId) {
+        let summaryText = "";
+        if (locationRouteActive) {
+          summaryText = mergeEditionsAsTitleEnabled()
+            ? `${visibleMovieCount} ${movieLabel} · ${displayItems.length} ${tileLabel}`
+            : `${visibleMovieCount} ${movieLabel}`;
           if (activeLocationRouteMissing) {
             summaryText += ` · ${tNext("locations.routeNotFound", "Location not found.")}`;
           } else {
-            const node = locationById(activeLocationRouteId);
-            const label = node?.path_label || node?.pathLabel || node?.name || activeLocationRoutePublicId;
+            const label = locationNode?.path_label || locationNode?.pathLabel || locationNode?.name || activeLocationRoutePublicId;
             summaryText += ` · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", label)}`;
           }
+        } else {
+          summaryText = mergeEditionsAsTitleEnabled()
+            ? `${visibleMovieCount} / ${movies.length} ${movieLabel} · ${displayItems.length} ${tileLabel}`
+            : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
         }
         summary.textContent = summaryText;
       }
@@ -27457,8 +27556,10 @@ def ui_preview_html(
       if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
       const firstItem = displayItems[0];
-      if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
-      if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
+      if (!locationRouteActive) {
+        if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
+        if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
+      }
       updateBulkBar();
       renderLibraryMetadataJobs();
     }
@@ -28367,6 +28468,18 @@ def ui_preview_html(
         return routeKeys.includes(key);
       }) || null;
     }
+    function locationBackdropValue(location) {
+      return usableImage(
+        location?.backdrop_url
+        || location?.metadata?.backdrop_url
+        || location?.metadata?.backdropUrl
+        || location?.metadata?.backdrop
+      );
+    }
+    function activeLocationRouteNode() {
+      if (!activeLocationRoutePublicId) return null;
+      return locationByPublicId(activeLocationRoutePublicId) || locationById(activeLocationRouteId);
+    }
     function locationChildren(parentId) {
       const key = parentId ? String(parentId) : "";
       return locations
@@ -28487,10 +28600,26 @@ def ui_preview_html(
         const payload = await authApiJson("/api/next/locations", {headers: authHeaders()});
         locations = payload.locations || payload.items || [];
         if (state) state.locations = locations;
+        if (activeLocationRoutePublicId) {
+          const routeNode = locationByPublicId(activeLocationRoutePublicId);
+          activeLocationRouteId = routeNode ? String(routeNode.id || "") : "";
+          activeLocationRouteMissing = !routeNode;
+        }
       } catch (error) {
         /* keep existing snapshot on failure */
       }
       renderLocationsPanel();
+      if (activeLocationRoutePublicId) renderLibrary();
+    }
+    async function uploadLocationBackdrop(locationId, file) {
+      const targetId = String(locationId || "").trim();
+      if (!targetId || !file) return;
+      const formData = new FormData();
+      formData.append("backdrop", file);
+      await authApiJson(`/api/next/locations/${encodeURIComponent(targetId)}/backdrop/upload`, {
+        method: "POST",
+        body: formData,
+      });
     }
     async function createLocation(event) {
       event?.preventDefault();
@@ -28498,6 +28627,7 @@ def ui_preview_html(
       const nameInput = document.getElementById("locationCreateName");
       const parentSelect = document.getElementById("locationCreateParent");
       const descInput = document.getElementById("locationCreateDescription");
+      const backdropInput = document.getElementById("locationCreateBackdrop");
       const name = String(nameInput?.value || "").trim();
       if (!name) {
         setLocationMessage(tNext("locations.nameRequired", "Enter a name first."), "bad");
@@ -28510,13 +28640,19 @@ def ui_preview_html(
       }
       setLocationMessage(tNext("locations.saving", "Saving..."));
       try {
-        await authApiJson("/api/next/locations", {
+        const createdPayload = await authApiJson("/api/next/locations", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({name, parentId: parentId || null, description: String(descInput?.value || "").trim() || null})
         });
+        const createdId = String(createdPayload?.detail?.id || "");
+        const backdropFile = backdropInput?.files?.[0] || null;
+        if (createdId && backdropFile) {
+          await uploadLocationBackdrop(createdId, backdropFile);
+        }
         if (nameInput) nameInput.value = "";
         if (descInput) descInput.value = "";
+        if (backdropInput) backdropInput.value = "";
         await reloadLocations();
         setLocationMessage(tNext("locations.created", "Location created."), "good");
       } catch (error) {
@@ -28696,6 +28832,7 @@ def ui_preview_html(
       state = payload.snapshot || {};
       movies = state.movies || [];
       containers = state.containers || [];
+      locations = state.locations || locations || [];
       containerMembership = state.containerMembership || [];
       mediaGroups = state.mediaGroups || [];
       preferences = Object.assign({}, preferences, state.preferences || {});
