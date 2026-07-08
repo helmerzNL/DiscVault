@@ -2179,7 +2179,12 @@
   "notifications": {
     "priceCheck": "Prijscheck",
     "priceCheckRunning": "Prijscheck uitvoeren...",
-    "priceCheckDone": "Prijscheck klaar."
+    "priceCheckDone": "Prijscheck klaar.",
+    "priceCheckQueued": "Price sweep ingepland.",
+    "priceCheckQueuedJob": "Price sweep ingepland (job {jobId}).",
+    "priceCheckDoneCounts": "Price sweep klaar. checked={checked} notified={notified} skipped={skipped} errors={errors}",
+    "priceCheckFailed": "Price sweep mislukt.",
+    "priceCheckTimeout": "Price sweep draait nog; probeer het zo opnieuw."
   },
   "lists.wishlistShopsTitle": "Shops",
   "lists.wishlistShopAdd": "Add shop",
