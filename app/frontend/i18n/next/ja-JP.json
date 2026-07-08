@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "書き込み済み",
+  "appAdmin.priceAlertSweep": "価格アラートのスキャンを開始",
+  "appAdmin.priceAlertSweepDone": "価格アラートのスキャンをキューに追加しました。",
   "appearance.dark": "ダーク",
   "appearance.label": "外観",
   "appearance.light": "ライト",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "閉じる",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "価格アラート",
+  "lists.wishlistAlertEnabledHelp": "価格が目標価格以下になったら通知します。",
+  "lists.wishlistTargetPrice": "目標価格",
+  "lists.wishlistPriceUrl": "ショップURL",
+  "lists.wishlistPriceUrlPlaceholder": "商品ページのURLを貼り付けてください",
+  "lists.wishlistPriceUrlInvalid": "有効なhttpまたはhttps URLを入力してください。",
+  "lists.wishlistPriceCurrency": "通貨",
+  "lists.wishlistLastSeenPrice": "最終確認価格",
+  "lists.wishlistPriceDropAlert": "価格下落",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "メモ（任意）",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "メタデータ更新ジョブと一括エンリッチメント結果。",
   "notifications.prefSecurity": "セキュリティ",
   "notifications.prefSecurityHelp": "パスキー、復旧、アカウントセキュリティに関するメッセージ。",
+  "notifications.pref.price_alerts": "価格アラート",
+  "notifications.prefPriceAlerts": "価格・セールアラート",
+  "notifications.prefPriceAlertsHelp": "ウィッシュリストのアイテムが目標価格に達したら通知します。",
+  "notifications.priceAlertBody": "{title} が {price} {currency} になりました — 目標価格 {targetPrice} {currency} 以下です。",
   "notifications.preferencesSaved": "通知設定を保存しました。",
   "notifications.primaryDevice": "プライマリ",
   "notifications.pushHelp": "このデバイスでネイティブPWA通知を有効にし、受信したいメッセージを選択します。",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "UIプレビュー",
   "uiPreview.profile": "プロフィール",
   "uiPreview.recentlyAdded": "最近追加",
-  "uiPreview.shuffle": "シャッフル"
+  "uiPreview.shuffle": "シャッフル",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

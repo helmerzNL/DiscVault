@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "기록됨",
+  "appAdmin.priceAlertSweep": "가격 알림 스캔 트리거",
+  "appAdmin.priceAlertSweepDone": "가격 알림 스캔이 대기열에 추가되었습니다.",
   "appearance.dark": "어두움",
   "appearance.label": "모양",
   "appearance.light": "밝음",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "닫기",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "가격 알림",
+  "lists.wishlistAlertEnabledHelp": "가격이 목표 가격 이하로 떨어지면 알려드립니다.",
+  "lists.wishlistTargetPrice": "목표 가격",
+  "lists.wishlistPriceUrl": "쇼핑맰 URL",
+  "lists.wishlistPriceUrlPlaceholder": "상품 페이지 URL을 붙여넣으세요",
+  "lists.wishlistPriceUrlInvalid": "유효한 http 또는 https URL을 입력하세요.",
+  "lists.wishlistPriceCurrency": "통화",
+  "lists.wishlistLastSeenPrice": "마지막으로 확인한 가격",
+  "lists.wishlistPriceDropAlert": "가격 하락",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "메모(선택 사항)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "메타데이터 새로 고침 작업 및 일괄 보강 결과.",
   "notifications.prefSecurity": "보안",
   "notifications.prefSecurityHelp": "패스키, 복구, 계정 보안 메시지.",
+  "notifications.pref.price_alerts": "가격 알림",
+  "notifications.prefPriceAlerts": "가격 및 할인 알림",
+  "notifications.prefPriceAlertsHelp": "위시리스트 항목이 목표 가격에 도달하면 알려드립니다.",
+  "notifications.priceAlertBody": "{title}의 가격이 {price} {currency}가 되었습니다 — 목표 가격 {targetPrice} {currency} 이하입니다.",
   "notifications.preferencesSaved": "알림 환경설정이 저장되었습니다.",
   "notifications.primaryDevice": "기본",
   "notifications.pushHelp": "이 기기에서 기본 PWA 알림을 켜고 받을 메시지를 선택하세요.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "UI 미리보기",
   "uiPreview.profile": "프로필",
   "uiPreview.recentlyAdded": "최근 추가됨",
-  "uiPreview.shuffle": "무작위"
+  "uiPreview.shuffle": "무작위",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Yazıldı",
+  "appAdmin.priceAlertSweep": "Fiyat uyardısı tarámasını başlat",
+  "appAdmin.priceAlertSweepDone": "Fiyat uyardısı taráması sıraya alındı.",
   "appearance.dark": "Koyu",
   "appearance.label": "Görünüm",
   "appearance.light": "Açık",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Kapat",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Fiyat uyardısı",
+  "lists.wishlistAlertEnabledHelp": "Fiyat hedefime veya altına düştüğünde beni bildir.",
+  "lists.wishlistTargetPrice": "Hedef fiyat",
+  "lists.wishlistPriceUrl": "Mağaza URL'si",
+  "lists.wishlistPriceUrlPlaceholder": "Ürün sayfası URL'sini yapıştırın",
+  "lists.wishlistPriceUrlInvalid": "Geçerli bir http veya https URL'si girin.",
+  "lists.wishlistPriceCurrency": "Para birimi",
+  "lists.wishlistLastSeenPrice": "Son görülen fiyat",
+  "lists.wishlistPriceDropAlert": "Fiyat düşüşü",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Not (isteğe bağlı)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Meta veri yenileme işleri ve toplu zenginleştirme sonuçları.",
   "notifications.prefSecurity": "Güvenlik",
   "notifications.prefSecurityHelp": "Geçiş anahtarı, kurtarma ve hesap güvenliği mesajları.",
+  "notifications.pref.price_alerts": "Fiyat uyarıları",
+  "notifications.prefPriceAlerts": "Fiyat ve fırsat uyarıları",
+  "notifications.prefPriceAlertsHelp": "İstek listesindeki bir öğe hedef fiyatıma ulaştığında beni bildir.",
+  "notifications.priceAlertBody": "{title} şimdi {price} {currency} — {targetPrice} {currency} hedefinizde veya altında.",
   "notifications.preferencesSaved": "Bildirim tercihleri kaydedildi.",
   "notifications.primaryDevice": "Birincil",
   "notifications.pushHelp": "Bu cihazda yerel PWA bildirimlerini etkinleştirin ve hangi mesajları almak istediğinizi seçin.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "Arayüz önizlemesi",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Son eklenenler",
-  "uiPreview.shuffle": "Karıştır"
+  "uiPreview.shuffle": "Karıştır",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

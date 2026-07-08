@@ -2509,6 +2509,26 @@ def ui_preview_html(
     .lists-modal-message.bad {
       color: var(--red);
     }
+    .lists-modal-section-divider {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 10px 0 4px;
+      border-top: 1px solid var(--line);
+      margin-top: 4px;
+    }
+    .lists-modal-field-check [data-edit] {
+      width: auto;
+      align-self: center;
+    }
+    .lists-modal-field [data-static] {
+      display: block;
+      font-size: .82rem;
+      color: var(--muted);
+      padding: 4px 0;
+    }
     .lists-modal.lists-history {
       max-width: 720px;
       width: min(92vw, 720px);
@@ -3377,6 +3397,7 @@ def ui_preview_html(
       padding: 10px 12px;
       background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
     }
+    body.debug-mode .debug-only { display: inline-flex !important; }
     .movie-detail-page {
       display: grid;
       gap: 16px;
@@ -10765,6 +10786,7 @@ def ui_preview_html(
                 <div class="profile-form-actions">
                   <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
                   <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
+                  <button type="button" class="secondary-button debug-only hidden" id="pushPriceCheckButton" data-next-i18n="notifications.priceCheck">Price Check</button>
                 </div>
               </div>
               <div class="profile-section-grid">
@@ -26045,6 +26067,28 @@ def ui_preview_html(
               <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
                 <span data-read>${escapeHtml(item.note || "")}</span>
                 <textarea data-edit data-field="note" rows="2">${escapeHtml(item.note || "")}</textarea></label>
+              <div class="lists-modal-section-divider">${escapeHtml(tNext("lists.wishlistPriceDropAlert", "Price drop alert"))}</div>
+              <label class="lists-modal-field lists-modal-field-check">
+                <span>${escapeHtml(tNext("lists.wishlistAlertEnabled", "Alert on price drop"))}</span>
+                <span data-read>${item.alertEnabled ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}</span>
+                <input data-edit data-field="alertEnabled" type="checkbox"${item.alertEnabled ? " checked" : ""}>
+              </label>
+              <label class="lists-modal-field">
+                <span>${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}</span>
+                <span data-read>${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : "—"}</span>
+                <input data-edit data-field="targetPrice" type="number" min="0" step="0.01" value="${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : ""}">
+              </label>
+              <label class="lists-modal-field">
+                <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
+                <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
+              </label>
+              <label class="lists-modal-field">
+                <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
+                <span data-read>${item.priceUrl ? `<a href="${escapeHtml(item.priceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.priceUrl)}</a>` : "—"}</span>
+                <input data-edit data-field="priceUrl" type="url" value="${escapeHtml(item.priceUrl || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
+              </label>
+              ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(String(item.lastSeenPrice))} ${escapeHtml(item.priceCurrency || "EUR")}</span></div>` : ""}
             </div>
           </div>
           <p class="lists-modal-message" data-message></p>
@@ -26061,11 +26105,22 @@ def ui_preview_html(
         });
         panel.querySelector("[data-primary]").addEventListener("click", async () => {
           if (!editing) { editing = true; render(); return; }
+          const priceUrlRaw = (panel.querySelector('[data-field="priceUrl"]').value || "").trim();
+          if (priceUrlRaw && !/^https?:\/\//i.test(priceUrlRaw)) {
+            setMessage(tNext("lists.wishlistPriceUrlInvalid", "Shop URL must start with http:// or https://"), "bad");
+            return;
+          }
+          const targetPriceRaw = (panel.querySelector('[data-field="targetPrice"]').value || "").trim();
+          const targetPriceNum = targetPriceRaw ? parseFloat(targetPriceRaw) : null;
           const body = {
             title: (panel.querySelector('[data-field="title"]').value || "").trim(),
             format: (panel.querySelector('[data-field="format"]').value || "").trim() || null,
             barcode: (panel.querySelector('[data-field="barcode"]').value || "").trim() || null,
-            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null
+            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null,
+            alertEnabled: panel.querySelector('[data-field="alertEnabled"]').checked,
+            targetPrice: (targetPriceNum != null && !Number.isNaN(targetPriceNum)) ? targetPriceNum : null,
+            priceCurrency: (panel.querySelector('[data-field="priceCurrency"]').value || "").trim().toUpperCase() || "EUR",
+            priceUrl: priceUrlRaw || null
           };
           const yearRaw = (panel.querySelector('[data-field="year"]').value || "").trim();
           const yearNum = parseInt(yearRaw, 10);
@@ -26765,7 +26820,8 @@ def ui_preview_html(
         ["imports", "notifications.prefImports", "notifications.prefImportsHelp"],
         ["metadata_jobs", "notifications.prefMetadataJobs", "notifications.prefMetadataJobsHelp"],
         ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"],
-        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"]
+        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"],
+        ["price_alerts", "notifications.pref.price_alerts", "notifications.prefPriceAlertsHelp"]
       ];
       return rows.map(([key, labelKey, helpKey]) => {
         const enabled = preferencesMap[key] !== false;
@@ -26933,6 +26989,20 @@ def ui_preview_html(
             ? tNext("notifications.testSent", "Test notification sent.")
             : tNext("notifications.testSavedOnly", "Notification saved. Push delivery needs attention."),
           payload.status === "ok" ? "good" : "bad"
+        );
+      } catch (error) {
+        setPushProfileMessage(error.message || String(error), "bad");
+      }
+    }
+    async function triggerDebugPriceSweep() {
+      setPushProfileMessage(tNext("notifications.priceCheckRunning", "Running price check sweep..."));
+      try {
+        const payload = await authApiJson("/api/next/admin/price-alerts/sweep", {method: "POST"});
+        notificationsState.loaded = false;
+        const r = payload.result || payload;
+        setPushProfileMessage(
+          `${tNext("notifications.priceCheckDone", "Price sweep done.")} checked=${r.checked ?? "?"} notified=${r.notified ?? "?"} skipped=${r.skipped ?? "?"} errors=${r.errors ?? "?"}`,
+          "good"
         );
       } catch (error) {
         setPushProfileMessage(error.message || String(error), "bad");
@@ -30510,6 +30580,7 @@ def ui_preview_html(
       document.getElementById("pushDisableButton")?.addEventListener("click", () => disablePushNotifications());
       document.getElementById("pushRefreshButton")?.addEventListener("click", () => loadPushProfile());
       document.getElementById("pushTestButton")?.addEventListener("click", () => sendTestPushNotification());
+      document.getElementById("pushPriceCheckButton")?.addEventListener("click", () => triggerDebugPriceSweep());
       document.getElementById("pushPreferenceList")?.addEventListener("click", (event) => {
         const prefButton = event.target.closest("[data-push-pref]");
         if (!prefButton) return;

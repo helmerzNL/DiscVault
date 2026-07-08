@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Geschrieben",
+  "appAdmin.priceAlertSweep": "Preisalarm-Sweep auslösen",
+  "appAdmin.priceAlertSweepDone": "Preisalarm-Sweep in die Warteschlange gestellt.",
   "appearance.dark": "Dunkel",
   "appearance.label": "Darstellung",
   "appearance.light": "Hell",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Schließen",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Preisalarm",
+  "lists.wishlistAlertEnabledHelp": "Benachrichtige mich, wenn der Preis auf oder unter mein Ziel fällt.",
+  "lists.wishlistTargetPrice": "Zielpreis",
+  "lists.wishlistPriceUrl": "Shop-URL",
+  "lists.wishlistPriceUrlPlaceholder": "Produktseiten-URL einfügen",
+  "lists.wishlistPriceUrlInvalid": "Gib eine gültige http- oder https-URL ein.",
+  "lists.wishlistPriceCurrency": "Währung",
+  "lists.wishlistLastSeenPrice": "Zuletzt gesehener Preis",
+  "lists.wishlistPriceDropAlert": "Preissenkung",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Notiz (optional)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Metadaten-Aktualisierungen und Bulk-Anreicherung.",
   "notifications.prefSecurity": "Sicherheit",
   "notifications.prefSecurityHelp": "Passkey-, Wiederherstellungs- und Kontosicherheitsnachrichten.",
+  "notifications.pref.price_alerts": "Preisalarme",
+  "notifications.prefPriceAlerts": "Preis- & Angebotsalarme",
+  "notifications.prefPriceAlertsHelp": "Benachrichtige mich, wenn ein Wunschartikel meinen Zielpreis erreicht.",
+  "notifications.priceAlertBody": "{title} ist jetzt {price} {currency} — auf oder unter deinem Ziel von {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Benachrichtigungseinstellungen gespeichert.",
   "notifications.primaryDevice": "Primaer",
   "notifications.pushHelp": "Aktiviere native PWA-Mitteilungen auf diesem Geraet und waehle aus, welche Nachrichten du erhalten moechtest.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "UI-Vorschau",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Kuerzlich hinzugefuegt",
-  "uiPreview.shuffle": "Zufaellig"
+  "uiPreview.shuffle": "Zufaellig",
+  "notifications": {
+    "priceCheck": "Preischeck",
+    "priceCheckRunning": "Preischeck wird ausgeführt...",
+    "priceCheckDone": "Preischeck abgeschlossen."
+  }
 }

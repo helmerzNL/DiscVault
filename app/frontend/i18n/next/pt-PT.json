@@ -556,6 +556,8 @@
   "appAdmin.version": "Versao",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Escrito",
+  "appAdmin.priceAlertSweep": "Acionar varrimento de alertas de preço",
+  "appAdmin.priceAlertSweepDone": "Varrimento de alertas de preço em fila.",
   "appearance.dark": "Escuro",
   "appearance.label": "Aparência",
   "appearance.light": "Claro",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Fechar",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Alerta de preço",
+  "lists.wishlistAlertEnabledHelp": "Notifique-me quando o preço descer até ou abaixo do meu objetivo.",
+  "lists.wishlistTargetPrice": "Preço alvo",
+  "lists.wishlistPriceUrl": "URL da loja",
+  "lists.wishlistPriceUrlPlaceholder": "Cole o URL de uma página de produto",
+  "lists.wishlistPriceUrlInvalid": "Introduza um URL http ou https válido.",
+  "lists.wishlistPriceCurrency": "Moeda",
+  "lists.wishlistLastSeenPrice": "Último preço visto",
+  "lists.wishlistPriceDropAlert": "Queda de preço",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Nota (opcional)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Atualizacoes de metadados e enriquecimento em massa.",
   "notifications.prefSecurity": "Seguranca",
   "notifications.prefSecurityHelp": "Mensagens de passkey, recuperacao e seguranca da conta.",
+  "notifications.pref.price_alerts": "Alertas de preço",
+  "notifications.prefPriceAlerts": "Alertas de preço e ofertas",
+  "notifications.prefPriceAlertsHelp": "Notifique-me quando um item da minha lista de desejos atingir o meu preço alvo.",
+  "notifications.priceAlertBody": "{title} está agora a {price} {currency} — igual ou abaixo do seu objetivo de {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Preferencias de notificacoes guardadas.",
   "notifications.primaryDevice": "Principal",
   "notifications.pushHelp": "Ative notificacoes PWA nativas neste dispositivo e escolha que mensagens pretende receber.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "Pre-visualizacao UI",
   "uiPreview.profile": "Perfil",
   "uiPreview.recentlyAdded": "Adicionados recentemente",
-  "uiPreview.shuffle": "Aleatorio"
+  "uiPreview.shuffle": "Aleatorio",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

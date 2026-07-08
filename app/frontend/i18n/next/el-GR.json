@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Γράφτηκε",
+  "appAdmin.priceAlertSweep": "Εκκίνηση σάρωσης ειδοποιήσεων τιμών",
+  "appAdmin.priceAlertSweepDone": "Η σάρωση ειδοποιήσεων τιμών προστέθηκε στην ουρά.",
   "appearance.dark": "Σκούρο",
   "appearance.label": "Εμφάνιση",
   "appearance.light": "Φωτεινό",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Κλείσιμο",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Ειδοποίηση τιμής",
+  "lists.wishlistAlertEnabledHelp": "Ειδοποίησέ με όταν η τιμή πέσει στον στόχο μου ή χαμηλότερα.",
+  "lists.wishlistTargetPrice": "Τιμή στόχος",
+  "lists.wishlistPriceUrl": "URL καταστήματος",
+  "lists.wishlistPriceUrlPlaceholder": "Επικολλήστε το URL σελίδας προϊόντος",
+  "lists.wishlistPriceUrlInvalid": "Εισάγετε έγκυρο URL http ή https.",
+  "lists.wishlistPriceCurrency": "Νόμισμα",
+  "lists.wishlistLastSeenPrice": "Τελευταία τιμή",
+  "lists.wishlistPriceDropAlert": "Πτώση τιμής",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Σημείωση (προαιρετικά)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Εργασίες ανανέωσης μεταδεδομένων και αποτελέσματα μαζικού εμπλουτισμού.",
   "notifications.prefSecurity": "Ασφάλεια",
   "notifications.prefSecurityHelp": "Μηνύματα για κλειδιά πρόσβασης, ανάκτηση και ασφάλεια λογαριασμού.",
+  "notifications.pref.price_alerts": "Ειδοποιήσεις τιμών",
+  "notifications.prefPriceAlerts": "Ειδοποιήσεις τιμών και προσφορών",
+  "notifications.prefPriceAlertsHelp": "Ειδοποίησέ με όταν ένα αντικείμενο στη λίστα επιθυμιών φτάσει στην τιμή στόχο μου.",
+  "notifications.priceAlertBody": "{title} τώρα κοστίζει {price} {currency} — ίσο ή κάτω από τον στόχο σας {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Οι προτιμήσεις ειδοποιήσεων αποθηκεύτηκαν.",
   "notifications.primaryDevice": "Κύρια",
   "notifications.pushHelp": "Ενεργοποιήστε εγγενείς ειδοποιήσεις PWA σε αυτήν τη συσκευή και επιλέξτε ποια μηνύματα θέλετε να λαμβάνετε.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "Προεπισκόπηση UI",
   "uiPreview.profile": "Προφίλ",
   "uiPreview.recentlyAdded": "Προστέθηκαν πρόσφατα",
-  "uiPreview.shuffle": "Τυχαία σειρά"
+  "uiPreview.shuffle": "Τυχαία σειρά",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

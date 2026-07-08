@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "已写入",
+  "appAdmin.priceAlertSweep": "触发价格提醒扫描",
+  "appAdmin.priceAlertSweepDone": "价格提醒扫描已加入队列。",
   "appearance.dark": "深色",
   "appearance.label": "外观",
   "appearance.light": "浅色",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "关闭",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "价格提醒",
+  "lists.wishlistAlertEnabledHelp": "当价格降至我的目标价格或以下时通知我。",
+  "lists.wishlistTargetPrice": "目标价格",
+  "lists.wishlistPriceUrl": "商店链接",
+  "lists.wishlistPriceUrlPlaceholder": "粘贴商品页面链接",
+  "lists.wishlistPriceUrlInvalid": "请输入有效的 http 或 https 链接。",
+  "lists.wishlistPriceCurrency": "货币",
+  "lists.wishlistLastSeenPrice": "上次查看价格",
+  "lists.wishlistPriceDropAlert": "价格下降",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "备注（可选）",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "元数据刷新任务和批量增强结果。",
   "notifications.prefSecurity": "安全",
   "notifications.prefSecurityHelp": "通行密钥、恢复和帐户安全消息。",
+  "notifications.pref.price_alerts": "价格提醒",
+  "notifications.prefPriceAlerts": "价格与优惠提醒",
+  "notifications.prefPriceAlertsHelp": "当心愿清单中的商品达到目标价格时通知我。",
+  "notifications.priceAlertBody": "{title} 现在售价 {price} {currency}——等于或低于您的目标价格 {targetPrice} {currency}。",
   "notifications.preferencesSaved": "通知偏好已保存。",
   "notifications.primaryDevice": "主要",
   "notifications.pushHelp": "在此设备上启用原生 PWA 通知，并选择你想接收的消息。",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "界面预览",
   "uiPreview.profile": "个人资料",
   "uiPreview.recentlyAdded": "最近添加",
-  "uiPreview.shuffle": "随机"
+  "uiPreview.shuffle": "随机",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

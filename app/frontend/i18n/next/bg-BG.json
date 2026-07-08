@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Записано",
+  "appAdmin.priceAlertSweep": "Стартиране на проверка на ценови известия",
+  "appAdmin.priceAlertSweepDone": "Проверката на ценови известия е добавена на опашката.",
   "appearance.dark": "Тъмен",
   "appearance.label": "Изглед",
   "appearance.light": "Светъл",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Затвори",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Ценово известие",
+  "lists.wishlistAlertEnabledHelp": "Уведоми ме, когато цената падне до моята цел или по-ниско.",
+  "lists.wishlistTargetPrice": "Целева цена",
+  "lists.wishlistPriceUrl": "URL на магазина",
+  "lists.wishlistPriceUrlPlaceholder": "Поставете URL на продуктова страница",
+  "lists.wishlistPriceUrlInvalid": "Въведете валиден http или https URL.",
+  "lists.wishlistPriceCurrency": "Валута",
+  "lists.wishlistLastSeenPrice": "Последно видяна цена",
+  "lists.wishlistPriceDropAlert": "Спад на цената",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Бележка (по избор)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Задачи за обновяване на метаданни и резултати от масово обогатяване.",
   "notifications.prefSecurity": "Сигурност",
   "notifications.prefSecurityHelp": "Съобщения за ключове за достъп, възстановяване и сигурност на акаунта.",
+  "notifications.pref.price_alerts": "Ценови известия",
+  "notifications.prefPriceAlerts": "Известия за цени и оферти",
+  "notifications.prefPriceAlertsHelp": "Уведоми ме, когато артикул от списъка с желания достигне целевата ми цена.",
+  "notifications.priceAlertBody": "{title} сега струва {price} {currency} — равно или под вашата цел {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Предпочитанията за известия са запазени.",
   "notifications.primaryDevice": "Основно",
   "notifications.pushHelp": "Активирайте нативни PWA известия на това устройство и изберете кои съобщения искате да получавате.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "Преглед на интерфейса",
   "uiPreview.profile": "Профил",
   "uiPreview.recentlyAdded": "Наскоро добавени",
-  "uiPreview.shuffle": "Разбъркай"
+  "uiPreview.shuffle": "Разбъркай",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

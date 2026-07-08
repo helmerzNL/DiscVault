@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Kirjutatud",
+  "appAdmin.priceAlertSweep": "Käivita hinnateatiste kontroll",
+  "appAdmin.priceAlertSweepDone": "Hinnateatiste kontroll on järjekorda lisatud.",
   "appearance.dark": "Tume",
   "appearance.label": "Välimus",
   "appearance.light": "Hele",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Sulge",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Hinnateatis",
+  "lists.wishlistAlertEnabledHelp": "Teavita mind, kui hind langeb minu eesmärgini või alla selle.",
+  "lists.wishlistTargetPrice": "Sihthind",
+  "lists.wishlistPriceUrl": "Poe URL",
+  "lists.wishlistPriceUrlPlaceholder": "Kleebi tootelehe URL",
+  "lists.wishlistPriceUrlInvalid": "Sisesta kehtiv http või https URL.",
+  "lists.wishlistPriceCurrency": "Valuuta",
+  "lists.wishlistLastSeenPrice": "Viimati nähtud hind",
+  "lists.wishlistPriceDropAlert": "Hinnalangus",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Märkus (valikuline)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Metaandmete värskendustööd ja hulgirikastamise tulemused.",
   "notifications.prefSecurity": "Turvalisus",
   "notifications.prefSecurityHelp": "Pääsuvõtme, taastamise ja konto turvalisuse sõnumid.",
+  "notifications.pref.price_alerts": "Hinnateatised",
+  "notifications.prefPriceAlerts": "Hinna- ja pakkumisteatised",
+  "notifications.prefPriceAlertsHelp": "Teavita mind, kui soovinimekirja ese jõuab minu sihthinnani.",
+  "notifications.priceAlertBody": "{title} maksab nüüd {price} {currency} — võrdne teie eesmärgiga {targetPrice} {currency} või alla selle.",
   "notifications.preferencesSaved": "Teavituste eelistused salvestatud.",
   "notifications.primaryDevice": "Peamine",
   "notifications.pushHelp": "Luba selles seadmes natiivsed PWA teavitused ja vali, milliseid sõnumeid soovid saada.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "Liidese eelvaade",
   "uiPreview.profile": "Profiil",
   "uiPreview.recentlyAdded": "Hiljuti lisatud",
-  "uiPreview.shuffle": "Juhuesitus"
+  "uiPreview.shuffle": "Juhuesitus",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }
