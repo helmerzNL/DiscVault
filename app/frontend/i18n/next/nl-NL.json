@@ -2179,5 +2179,7 @@
   "lists.wishlistShopAdvancedSelector": "Advanced price selector",
   "lists.wishlistShopSelectorType": "Selector type",
   "lists.wishlistShopSelectorValue": "Selector value",
-  "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set."
+  "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
+  "lists.wishlistShopSavedWithPrice": "Shop opgeslagen. Huidige prijs: {price} {currency}.",
+  "lists.wishlistShopSavedNoPrice": "Shop opgeslagen, maar er kon geen actuele prijs worden opgehaald."
 }
