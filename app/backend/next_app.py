@@ -28,7 +28,7 @@ import zipfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from uuid import UUID
 
 from flask import Flask, Response, current_app, jsonify, request, send_file
@@ -9768,6 +9768,53 @@ def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _wishlist_shop_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(row.get("id")),
+        "wishlistItemId": str(row.get("wishlist_item_id")),
+        "shopName": row.get("shop_name"),
+        "priceUrl": row.get("price_url"),
+        "priceCurrency": row.get("price_currency") or "EUR",
+        "lastSeenPrice": float(row["last_seen_price"]) if row.get("last_seen_price") is not None else None,
+        "lastPriceCheckedAt": row.get("last_price_checked_at"),
+        "createdAt": row.get("created_at"),
+        "updatedAt": row.get("updated_at"),
+    }
+
+
+def _wishlist_shops_by_item(conn, user_id, item_ids: list[Any]) -> dict[str, list[dict[str, Any]]]:
+    if not user_id or not item_ids or not table_exists(conn, "wishlist_item_shops"):
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, wishlist_item_id, shop_name, price_url, price_currency,
+                   last_seen_price, last_price_checked_at, created_at, updated_at
+            FROM wishlist_item_shops
+            WHERE user_id=%s
+              AND wishlist_item_id = ANY(%s)
+            ORDER BY created_at ASC
+            """,
+            (user_id, item_ids),
+        )
+        rows = cur.fetchall()
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        key = str(row.get("wishlist_item_id"))
+        out.setdefault(key, []).append(_wishlist_shop_row_entity(row))
+    return out
+
+
+def _attach_wishlist_shops(conn, user_id, entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not entities:
+        return entities
+    item_ids = [entity.get("id") for entity in entities if entity.get("id")]
+    shops_map = _wishlist_shops_by_item(conn, user_id, item_ids)
+    for entity in entities:
+        entity["shops"] = shops_map.get(str(entity.get("id")), [])
+    return entities
+
+
 def wishlist_sync_entity(conn, user_id, item_id) -> dict[str, Any] | None:
     if not table_exists(conn, "wishlist_items"):
         return None
@@ -9785,7 +9832,11 @@ def wishlist_sync_entity(conn, user_id, item_id) -> dict[str, Any] | None:
             (user_id, item_id),
         )
         row = cur.fetchone()
-    return _wishlist_row_entity(row) if row else None
+    if not row:
+        return None
+    entity = _wishlist_row_entity(row)
+    entity["shops"] = _wishlist_shops_by_item(conn, user_id, [item_id]).get(str(item_id), [])
+    return entity
 
 
 def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
@@ -9806,7 +9857,8 @@ def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
             (user_id,),
         )
         rows = cur.fetchall()
-    return [_wishlist_row_entity(row) for row in rows]
+    entities = [_wishlist_row_entity(row) for row in rows]
+    return _attach_wishlist_shops(conn, user_id, entities)
 
 
 def emit_wishlist_change(conn, user_id, item_id, *, operation: str) -> int:
@@ -20851,6 +20903,24 @@ def register_routes(flask_app: Flask) -> None:
     # ------------------------------------------------------------------
     # Wishlist: metadata-only "want to acquire" entries.
     # ------------------------------------------------------------------
+    _WISHLIST_MAX_SHOPS = 10
+
+    def _normalise_shop_currency(raw: Any) -> str:
+        value = clean_text(raw)
+        return (value or "EUR").upper()[:3]
+
+    def _validated_shop_payload(body: dict[str, Any]) -> tuple[str, str, str]:
+        name = clean_text(body.get("shopName") or body.get("shop_name"))
+        if not name:
+            raise NextApiError("Shop name is required", 400)
+        raw_url = clean_text(body.get("priceUrl") or body.get("price_url"))
+        if not raw_url:
+            raise NextApiError("Shop URL is required", 400)
+        parsed = urlparse(raw_url)
+        if parsed.scheme not in ("http", "https"):
+            raise NextApiError("Price URL must be an http or https URL", 400)
+        return name, raw_url, _normalise_shop_currency(body.get("priceCurrency") or body.get("price_currency"))
+
     def _wishlist_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         return json_ready(
             {
@@ -21161,6 +21231,174 @@ def register_routes(flask_app: Flask) -> None:
                     "status": "ok",
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "counts": personal_list_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.post("/api/next/lists/wishlist/<item_id>/shops")
+    def add_wishlist_item_shop(item_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Shop request body must be an object", 400)
+        shop_name, price_url, price_currency = _validated_shop_payload(body)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            if not table_exists(conn, "wishlist_item_shops"):
+                raise NextApiError("Wishlist shop table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM wishlist_items WHERE user_id=%s AND id=%s",
+                    (user_id, item_uuid),
+                )
+                if not cur.fetchone():
+                    raise NextApiError("Wishlist entry not found", 404)
+                cur.execute(
+                    "SELECT count(*)::int AS total FROM wishlist_item_shops WHERE user_id=%s AND wishlist_item_id=%s",
+                    (user_id, item_uuid),
+                )
+                total = int((cur.fetchone() or {}).get("total") or 0)
+            if total >= _WISHLIST_MAX_SHOPS:
+                raise NextApiError("A wishlist item can have at most 10 shops", 400)
+
+            from next_price_alerts import extract_price_from_url
+
+            current_price, detected_currency = extract_price_from_url(price_url)
+            effective_currency = _normalise_shop_currency(detected_currency or price_currency)
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO wishlist_item_shops
+                            (user_id, wishlist_item_id, shop_name, price_url, price_currency,
+                             last_seen_price, last_price_checked_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, now(), now())
+                        RETURNING id
+                        """,
+                        (
+                            user_id,
+                            item_uuid,
+                            shop_name,
+                            price_url,
+                            effective_currency,
+                            current_price,
+                        ),
+                    )
+                    shop_id = (cur.fetchone() or {}).get("id")
+                    if shop_id and current_price is not None and table_exists(conn, "wishlist_item_shop_prices"):
+                        cur.execute(
+                            """
+                            INSERT INTO wishlist_item_shop_prices
+                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency)
+                            VALUES (%s, %s, %s, %s, %s)
+                            """,
+                            (user_id, item_uuid, shop_id, current_price, effective_currency),
+                        )
+                emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.shop_added",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_uuid,
+                    summary="Added wishlist shop",
+                    metadata={"shopName": shop_name, "priceUrl": price_url},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "entry": wishlist_sync_entity(conn, user_id, item_uuid),
+                    "fetchedPrice": float(current_price) if current_price is not None else None,
+                    "fetchedCurrency": effective_currency,
+                },
+                201,
+            )
+
+    @flask_app.patch("/api/next/lists/wishlist/<item_id>/shops/<shop_id>")
+    def update_wishlist_item_shop(item_id: str, shop_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        shop_uuid = parse_uuid(shop_id, "shopId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Shop request body must be an object", 400)
+        shop_name, price_url, price_currency = _validated_shop_payload(body)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            if not table_exists(conn, "wishlist_item_shops"):
+                raise NextApiError("Wishlist shop table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM wishlist_item_shops
+                    WHERE id=%s AND user_id=%s AND wishlist_item_id=%s
+                    """,
+                    (shop_uuid, user_id, item_uuid),
+                )
+                if not cur.fetchone():
+                    raise NextApiError("Wishlist shop not found", 404)
+
+            from next_price_alerts import extract_price_from_url
+
+            current_price, detected_currency = extract_price_from_url(price_url)
+            effective_currency = _normalise_shop_currency(detected_currency or price_currency)
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE wishlist_item_shops
+                        SET shop_name=%s,
+                            price_url=%s,
+                            price_currency=%s,
+                            last_seen_price=%s,
+                            last_price_checked_at=now(),
+                            updated_at=now()
+                        WHERE id=%s AND user_id=%s AND wishlist_item_id=%s
+                        """,
+                        (
+                            shop_name,
+                            price_url,
+                            effective_currency,
+                            current_price,
+                            shop_uuid,
+                            user_id,
+                            item_uuid,
+                        ),
+                    )
+                    if current_price is not None and table_exists(conn, "wishlist_item_shop_prices"):
+                        cur.execute(
+                            """
+                            INSERT INTO wishlist_item_shop_prices
+                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency)
+                            VALUES (%s, %s, %s, %s, %s)
+                            """,
+                            (user_id, item_uuid, shop_uuid, current_price, effective_currency),
+                        )
+                emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.shop_updated",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_uuid,
+                    summary="Updated wishlist shop",
+                    metadata={"shopId": str(shop_uuid), "shopName": shop_name},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "entry": wishlist_sync_entity(conn, user_id, item_uuid),
+                    "fetchedPrice": float(current_price) if current_price is not None else None,
+                    "fetchedCurrency": effective_currency,
                 }
             )
 
