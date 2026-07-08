@@ -62,6 +62,11 @@ _SWEEP_BATCH_LIMIT = 50
 # Timeout for HTTP price-fetch requests (seconds).
 _FETCH_TIMEOUT = 10
 
+_PRESET_DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "amazon": ("amazon.",),
+    "bol_com": ("bol.com",),
+}
+
 
 # ---------------------------------------------------------------------------
 # Price extraction from a URL
@@ -197,7 +202,108 @@ def _coerce_price(value: Any) -> float | None:
         return None
 
 
-def extract_price_from_url(url: str, *, session: Any = None) -> tuple[float | None, str | None]:
+def _extract_text_by_css_selector(html: str, selector_value: str) -> str | None:
+    selector = (selector_value or "").strip()
+    if not selector:
+        return None
+
+    if selector.startswith("#"):
+        token = re.escape(selector[1:])
+        pattern = rf'<(?P<tag>\w+)[^>]*id=["\']{token}["\'][^>]*>(?P<text>.*?)</(?P=tag)>'
+    elif selector.startswith("."):
+        token = re.escape(selector[1:])
+        pattern = (
+            rf'<(?P<tag>\w+)[^>]*class=["\'][^"\']*{token}[^"\']*["\'][^>]*>'
+            rf'(?P<text>.*?)</(?P=tag)>'
+        )
+    else:
+        tag = re.escape(selector.lower())
+        pattern = rf"<(?P<tag>{tag})[^>]*>(?P<text>.*?)</(?P=tag)>"
+
+    match = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
+    if not match:
+        return None
+    raw = re.sub(r"<[^>]+>", " ", match.group("text"))
+    return re.sub(r"\s+", " ", raw).strip() or None
+
+
+def _extract_text_by_regex_capture(html: str, selector_value: str) -> str | None:
+    try:
+        match = re.search(selector_value, html, re.IGNORECASE | re.DOTALL)
+    except re.error:
+        return None
+    if not match:
+        return None
+    groups = [group for group in match.groups() if group]
+    if groups:
+        return str(groups[0]).strip() or None
+    return str(match.group(0)).strip() or None
+
+
+def _currency_from_text(text: str | None, fallback: str = "EUR") -> str:
+    raw = str(text or "")
+    if "$" in raw:
+        return "USD"
+    if "£" in raw:
+        return "GBP"
+    if "¥" in raw:
+        return "JPY"
+    if "€" in raw:
+        return "EUR"
+    return fallback
+
+
+def _extract_price_from_profile(
+    html: str,
+    *,
+    selector_type: str | None,
+    selector_value: str | None,
+    fallback_currency: str | None = None,
+) -> tuple[float | None, str | None]:
+    stype = (selector_type or "").strip().lower()
+    svalue = (selector_value or "").strip()
+    if not stype or not svalue:
+        return None, None
+    if stype == "css_text":
+        text = _extract_text_by_css_selector(html, svalue)
+    elif stype == "regex_capture":
+        text = _extract_text_by_regex_capture(html, svalue)
+    else:
+        return None, None
+    if not text:
+        return None, None
+    return _coerce_price(text), _currency_from_text(text, (fallback_currency or "EUR").upper())
+
+
+def _extract_price_from_domain_preset(url: str, html: str) -> tuple[float | None, str | None, str | None]:
+    host = (urlparse(url).netloc or "").casefold()
+    if any(keyword in host for keyword in _PRESET_DOMAIN_KEYWORDS["amazon"]):
+        text = _extract_text_by_regex_capture(
+            html,
+            r'class=["\'][^"\']*a-offscreen[^"\']*["\'][^>]*>\s*([^<]+)\s*<',
+        )
+        if text:
+            return _coerce_price(text), _currency_from_text(text, "EUR"), "preset"
+
+    if any(keyword in host for keyword in _PRESET_DOMAIN_KEYWORDS["bol_com"]):
+        text = _extract_text_by_regex_capture(
+            html,
+            r'(?:data-test=["\']price["\'][^>]*>\s*([^<]+)\s*<|class=["\'][^"\']*promo-price[^"\']*["\'][^>]*>\s*([^<]+)\s*<)',
+        )
+        if text:
+            return _coerce_price(text), _currency_from_text(text, "EUR"), "preset"
+
+    return None, None, None
+
+
+def extract_price_from_url_with_source(
+    url: str,
+    *,
+    session: Any = None,
+    selector_type: str | None = None,
+    selector_value: str | None = None,
+    selector_options: dict[str, Any] | None = None,
+) -> tuple[float | None, str | None, str | None]:
     """Fetch *url* and extract the current price.
 
     Returns ``(price_float, currency_code)`` where both may be ``None`` if no
@@ -212,17 +318,141 @@ def extract_price_from_url(url: str, *, session: Any = None) -> tuple[float | No
     try:
         html = _fetch_html(url, session=session)
     except ValueError:
-        return None, None
+        return None, None, None
+
+    fallback_currency = str((selector_options or {}).get("currency") or "EUR").strip().upper() or "EUR"
+
+    price, currency, source = _extract_price_from_domain_preset(url, html)
+    if price is not None:
+        return price, (currency or fallback_currency), (source or "preset")
+
+    price, currency = _extract_price_from_profile(
+        html,
+        selector_type=selector_type,
+        selector_value=selector_value,
+        fallback_currency=fallback_currency,
+    )
+    if price is not None:
+        return price, currency or fallback_currency, "profile"
 
     price, currency = _extract_from_schema_org(html)
     if price is not None:
-        return price, currency
+        return price, currency, "schema_org"
 
     price, currency = _extract_from_og_meta(html)
     if price is not None:
-        return price, currency
+        return price, currency, "og"
 
-    return _extract_via_regex(html)
+    price, currency = _extract_via_regex(html)
+    if price is not None:
+        return price, currency, "regex"
+    return None, None, None
+
+
+def extract_price_from_url(url: str, *, session: Any = None) -> tuple[float | None, str | None]:
+    price, currency, _source = extract_price_from_url_with_source(url, session=session)
+    return price, currency
+
+
+def _record_shop_price(
+    conn,
+    *,
+    shop_id: Any,
+    item_id: Any,
+    user_id: Any,
+    price: float | None,
+    currency: str | None,
+    extraction_source: str | None = None,
+) -> None:
+    if not table_exists(conn, "wishlist_item_shops"):
+        return
+    currency_value = str(currency or "EUR").strip().upper() or "EUR"
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE wishlist_item_shops
+                SET last_seen_price = %s,
+                    price_currency = %s,
+                    last_price_checked_at = now(),
+                    updated_at = now()
+                WHERE id = %s AND wishlist_item_id = %s AND user_id = %s
+                """,
+                (price, currency_value, shop_id, item_id, user_id),
+            )
+            if price is not None and table_exists(conn, "wishlist_item_shop_prices"):
+                cur.execute(
+                    """
+                    INSERT INTO wishlist_item_shop_prices
+                        (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    """,
+                    (user_id, item_id, shop_id, price, currency_value, extraction_source or "unknown"),
+                )
+
+
+def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | None, str | None]:
+    if not table_exists(conn, "wishlist_item_shops"):
+        return None, None
+    item_id = item.get("id")
+    user_id = item.get("user_id")
+    if not item_id or not user_id:
+        return None, None
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, price_url, price_currency, selector_type, selector_value, selector_options
+            FROM wishlist_item_shops
+            WHERE wishlist_item_id = %s AND user_id = %s
+            ORDER BY created_at ASC
+            LIMIT 10
+            """,
+            (item_id, user_id),
+        )
+        shops = cur.fetchall()
+
+    best_price: float | None = None
+    best_currency: str | None = None
+    for shop in shops:
+        raw_url = (shop.get("price_url") or "").strip()
+        if not raw_url:
+            continue
+        try:
+            shop_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                raw_url,
+                selector_type=shop.get("selector_type"),
+                selector_value=shop.get("selector_value"),
+                selector_options=shop.get("selector_options") if isinstance(shop.get("selector_options"), dict) else {},
+            )
+        except Exception:  # noqa: BLE001
+            _record_shop_price(
+                conn,
+                shop_id=shop.get("id"),
+                item_id=item_id,
+                user_id=user_id,
+                price=None,
+                currency=shop.get("price_currency"),
+                extraction_source="failed",
+            )
+            continue
+        effective_currency = str(detected_currency or shop.get("price_currency") or "EUR").strip().upper() or "EUR"
+        _record_shop_price(
+            conn,
+            shop_id=shop.get("id"),
+            item_id=item_id,
+            user_id=user_id,
+            price=shop_price,
+            currency=effective_currency,
+            extraction_source=extraction_source,
+        )
+        if shop_price is None:
+            continue
+        if best_price is None or shop_price < best_price:
+            best_price = shop_price
+            best_currency = effective_currency
+
+    return best_price, best_currency
 
 
 # ---------------------------------------------------------------------------
@@ -382,12 +612,20 @@ def run_price_alert_sweep(conn, *, limit: int = _SWEEP_BATCH_LIMIT) -> dict[str,
     for item in items:
         price_url = item.get("price_url")
         movievault_id = item.get("movievault_id")
+        item_id = item.get("id")
 
         new_price: float | None = None
         currency: str | None = None
 
-        # --- URL-based extraction ---
-        if price_url:
+        # --- Multi-shop extraction ---
+        try:
+            new_price, currency = _fetch_item_prices_from_shops(conn, item)
+        except Exception:  # noqa: BLE001
+            errors += 1
+            continue
+
+        # --- URL-based extraction (legacy fallback when no shop price is available) ---
+        if new_price is None and price_url:
             try:
                 new_price, currency = extract_price_from_url(price_url)
             except Exception:  # noqa: BLE001
@@ -426,7 +664,7 @@ def run_price_alert_sweep(conn, *, limit: int = _SWEEP_BATCH_LIMIT) -> dict[str,
                 with conn.cursor() as cur2:
                     cur2.execute(
                         "UPDATE wishlist_items SET last_price_checked_at = now() WHERE id = %s",
-                        (item.get("id"),),
+                        (item_id,),
                     )
             continue
 
