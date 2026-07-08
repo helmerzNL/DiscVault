@@ -2529,6 +2529,82 @@ def ui_preview_html(
       color: var(--muted);
       padding: 4px 0;
     }
+    .lists-modal-shop-list-wrap {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 2px;
+    }
+    .lists-modal-shop-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: .82rem;
+      font-weight: 700;
+    }
+    .lists-modal-shop-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .lists-modal-shop-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .lists-modal-shop-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .lists-modal-shop-main strong {
+      font-size: .86rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .lists-modal-shop-main span {
+      font-size: .8rem;
+      color: var(--muted);
+    }
+    .lists-modal-shop-empty {
+      margin: 0;
+      font-size: .82rem;
+      color: var(--muted);
+    }
+    .lists-modal-shop-editor {
+      border-top: 1px dashed var(--line);
+      padding-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .lists-modal-shop-editor-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .lists-modal-shop-editor-actions button {
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .lists-modal-shop-editor-actions button.ghost {
+      background: transparent;
+      color: var(--text);
+    }
     .lists-modal.lists-history {
       max-width: 720px;
       width: min(92vw, 720px);
@@ -26037,6 +26113,14 @@ def ui_preview_html(
       let editing = false;
       let posterUrl = usableImage(item.posterUrl || item.poster_url) || "";
       let pendingPosterFile = null;
+      const normalizeShops = (list) => Array.isArray(list) ? list.map((shop) => ({...shop})) : [];
+      let shops = normalizeShops(item.shops);
+      let shopEditor = null;
+      const formatShopPrice = (shop) => {
+        const value = shop && shop.lastSeenPrice;
+        if (value == null) return "—";
+        return `${escapeHtml(String(value))} ${escapeHtml((shop && shop.priceCurrency) || "EUR")}`;
+      };
       const render = () => {
         const posterPreview = posterUrl
           ? `<img src="${escapeHtml(posterUrl)}" alt="">`
@@ -26083,11 +26167,46 @@ def ui_preview_html(
                 <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
                 <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
               </label>
-              <label class="lists-modal-field">
-                <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
-                <span data-read>${item.priceUrl ? `<a href="${escapeHtml(item.priceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.priceUrl)}</a>` : "—"}</span>
-                <input data-edit data-field="priceUrl" type="url" value="${escapeHtml(item.priceUrl || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
-              </label>
+              <div class="lists-modal-shop-list-wrap">
+                <div class="lists-modal-shop-head">
+                  <span>${escapeHtml(tNext("lists.wishlistShopsTitle", "Shops"))}</span>
+                  ${shops.length < 10 ? `<button type="button" class="ghost" data-shop-add>${escapeHtml(tNext("lists.wishlistShopAdd", "Add shop"))}</button>` : ""}
+                </div>
+                ${shops.length
+                  ? `<div class="lists-modal-shop-list">${
+                      shops.map((shop) => `
+                        <div class="lists-modal-shop-row">
+                          <div class="lists-modal-shop-main">
+                            <strong>${escapeHtml(shop.shopName || "")}</strong>
+                            <span>${formatShopPrice(shop)}</span>
+                          </div>
+                          <button type="button" class="ghost" data-shop-edit="${escapeHtml(String(shop.id || ""))}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+                        </div>
+                      `).join("")
+                    }</div>`
+                  : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistNoShops", "No shops added yet."))}</p>`
+                }
+                ${shopEditor ? `
+                  <div class="lists-modal-shop-editor">
+                    <label class="lists-modal-field">
+                      <span>${escapeHtml(tNext("lists.wishlistShopName", "Shop name"))}</span>
+                      <input data-shop-field="name" type="text" value="${escapeHtml(shopEditor.name || "")}" maxlength="80">
+                    </label>
+                    <label class="lists-modal-field">
+                      <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
+                      <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
+                    </label>
+                    <label class="lists-modal-field">
+                      <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                      <input data-shop-field="currency" type="text" maxlength="3" value="${escapeHtml(shopEditor.currency || "EUR")}">
+                    </label>
+                    <div class="lists-modal-shop-editor-actions">
+                      <button type="button" data-shop-save>${escapeHtml(tNext("common.save", "Save"))}</button>
+                      <button type="button" class="ghost" data-shop-cancel>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+                    </div>
+                  </div>
+                ` : ""}
+              </div>
               ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(String(item.lastSeenPrice))} ${escapeHtml(item.priceCurrency || "EUR")}</span></div>` : ""}
             </div>
           </div>
@@ -26105,11 +26224,6 @@ def ui_preview_html(
         });
         panel.querySelector("[data-primary]").addEventListener("click", async () => {
           if (!editing) { editing = true; render(); return; }
-          const priceUrlRaw = (panel.querySelector('[data-field="priceUrl"]').value || "").trim();
-          if (priceUrlRaw && !/^https?:\/\//i.test(priceUrlRaw)) {
-            setMessage(tNext("lists.wishlistPriceUrlInvalid", "Shop URL must start with http:// or https://"), "bad");
-            return;
-          }
           const targetPriceRaw = (panel.querySelector('[data-field="targetPrice"]').value || "").trim();
           const targetPriceNum = targetPriceRaw ? parseFloat(targetPriceRaw) : null;
           const body = {
@@ -26119,8 +26233,7 @@ def ui_preview_html(
             note: (panel.querySelector('[data-field="note"]').value || "").trim() || null,
             alertEnabled: panel.querySelector('[data-field="alertEnabled"]').checked,
             targetPrice: (targetPriceNum != null && !Number.isNaN(targetPriceNum)) ? targetPriceNum : null,
-            priceCurrency: (panel.querySelector('[data-field="priceCurrency"]').value || "").trim().toUpperCase() || "EUR",
-            priceUrl: priceUrlRaw || null
+            priceCurrency: (panel.querySelector('[data-field="priceCurrency"]').value || "").trim().toUpperCase() || "EUR"
           };
           const yearRaw = (panel.querySelector('[data-field="year"]').value || "").trim();
           const yearNum = parseInt(yearRaw, 10);
@@ -26137,6 +26250,73 @@ def ui_preview_html(
             await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
             listsCloseOverlay(overlay);
             await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+        panel.querySelectorAll("[data-shop-edit]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const shopId = btn.getAttribute("data-shop-edit");
+            const current = shops.find((shop) => String(shop.id) === String(shopId));
+            if (!current) return;
+            shopEditor = {
+              id: current.id,
+              name: current.shopName || "",
+              url: current.priceUrl || "",
+              currency: (current.priceCurrency || item.priceCurrency || "EUR").toUpperCase(),
+            };
+            render();
+          });
+        });
+        panel.querySelector("[data-shop-add]")?.addEventListener("click", () => {
+          if (shops.length >= 10) {
+            setMessage(tNext("lists.wishlistShopLimitReached", "You can add up to 10 shops per item."), "bad");
+            return;
+          }
+          shopEditor = {
+            id: null,
+            name: "",
+            url: "",
+            currency: (item.priceCurrency || "EUR").toUpperCase(),
+          };
+          render();
+        });
+        panel.querySelector("[data-shop-cancel]")?.addEventListener("click", () => {
+          shopEditor = null;
+          render();
+        });
+        panel.querySelector("[data-shop-save]")?.addEventListener("click", async () => {
+          if (!shopEditor) return;
+          const name = (panel.querySelector('[data-shop-field="name"]').value || "").trim();
+          const url = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
+          const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";
+          if (!name) {
+            setMessage(tNext("lists.wishlistShopNameRequired", "Shop name is required."), "bad");
+            return;
+          }
+          if (!/^https?:\\/\\//i.test(url)) {
+            setMessage(tNext("lists.wishlistPriceUrlInvalid", "Shop URL must start with http:// or https://"), "bad");
+            return;
+          }
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            const payload = await authApiJson(
+              shopEditor.id
+                ? `/api/next/lists/wishlist/${encodeURIComponent(id)}/shops/${encodeURIComponent(shopEditor.id)}`
+                : `/api/next/lists/wishlist/${encodeURIComponent(id)}/shops`,
+              {
+                method: shopEditor.id ? "PATCH" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ shopName: name, priceUrl: url, priceCurrency: currency }),
+              }
+            );
+            if (payload && payload.entry) {
+              Object.assign(item, payload.entry);
+              shops = normalizeShops(payload.entry.shops);
+            }
+            shopEditor = null;
+            setMessage(tNext("lists.wishlistShopSaved", "Shop saved."), "good");
+            render();
           } catch (error) {
             setMessage((error && error.message) || String(error), "bad");
           }

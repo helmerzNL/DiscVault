@@ -2155,5 +2155,12 @@
     "priceCheck": "Price Check",
     "priceCheckRunning": "Running price check sweep...",
     "priceCheckDone": "Price sweep done."
-  }
+  },
+  "lists.wishlistShopsTitle": "Shops",
+  "lists.wishlistShopAdd": "Add shop",
+  "lists.wishlistNoShops": "No shops added yet.",
+  "lists.wishlistShopName": "Shop name",
+  "lists.wishlistShopLimitReached": "You can add up to 10 shops per item.",
+  "lists.wishlistShopNameRequired": "Shop name is required.",
+  "lists.wishlistShopSaved": "Shop saved."
 }
