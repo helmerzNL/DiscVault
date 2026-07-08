@@ -2528,6 +2528,18 @@ def ui_preview_html(
       flex-direction: column;
       gap: 8px;
     }
+    .lists-modal-shop-advanced {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--surface) 92%, #000 8%);
+    }
+    .lists-modal-shop-advanced summary {
+      cursor: pointer;
+      font-size: .8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
     .lists-modal-shop-editor-actions {
       display: flex;
       gap: 8px;
@@ -26127,6 +26139,21 @@ def ui_preview_html(
                       <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
                       <input data-shop-field="currency" type="text" maxlength="3" value="${escapeHtml(shopEditor.currency || "EUR")}">
                     </label>
+                    <details class="lists-modal-shop-advanced">
+                      <summary>${escapeHtml(tNext("lists.wishlistShopAdvancedSelector", "Advanced price selector"))}</summary>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorType", "Selector type"))}</span>
+                        <select data-shop-field="selectorType">
+                          <option value="">${escapeHtml(tNext("common.none", "None"))}</option>
+                          <option value="css_text"${shopEditor.selectorType === "css_text" ? " selected" : ""}>css_text</option>
+                          <option value="regex_capture"${shopEditor.selectorType === "regex_capture" ? " selected" : ""}>regex_capture</option>
+                        </select>
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorValue", "Selector value"))}</span>
+                        <input data-shop-field="selectorValue" type="text" value="${escapeHtml(shopEditor.selectorValue || "")}" placeholder=".price, #our-price, regex...">
+                      </label>
+                    </details>
                     <div class="lists-modal-shop-editor-actions">
                       <button type="button" data-shop-save>${escapeHtml(tNext("common.save", "Save"))}</button>
                       <button type="button" class="ghost" data-shop-cancel>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
@@ -26191,6 +26218,8 @@ def ui_preview_html(
               name: current.shopName || "",
               url: current.priceUrl || "",
               currency: (current.priceCurrency || item.priceCurrency || "EUR").toUpperCase(),
+              selectorType: (current.priceSelector && current.priceSelector.type) || "",
+              selectorValue: (current.priceSelector && current.priceSelector.value) || "",
             };
             render();
           });
@@ -26205,6 +26234,8 @@ def ui_preview_html(
             name: "",
             url: "",
             currency: (item.priceCurrency || "EUR").toUpperCase(),
+            selectorType: "",
+            selectorValue: "",
           };
           render();
         });
@@ -26217,12 +26248,18 @@ def ui_preview_html(
           const name = (panel.querySelector('[data-shop-field="name"]').value || "").trim();
           const url = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
           const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";
+          const selectorType = (panel.querySelector('[data-shop-field="selectorType"]')?.value || "").trim();
+          const selectorValue = (panel.querySelector('[data-shop-field="selectorValue"]')?.value || "").trim();
           if (!name) {
             setMessage(tNext("lists.wishlistShopNameRequired", "Shop name is required."), "bad");
             return;
           }
           if (!/^https?:\\/\\//i.test(url)) {
             setMessage(tNext("lists.wishlistPriceUrlInvalid", "Shop URL must start with http:// or https://"), "bad");
+            return;
+          }
+          if (selectorType && !selectorValue) {
+            setMessage(tNext("lists.wishlistShopSelectorValueRequired", "Selector value is required when selector type is set."), "bad");
             return;
           }
           setMessage(tNext("common.saving", "Saving..."));
@@ -26234,7 +26271,12 @@ def ui_preview_html(
               {
                 method: shopEditor.id ? "PATCH" : "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ shopName: name, priceUrl: url, priceCurrency: currency }),
+                body: JSON.stringify({
+                  shopName: name,
+                  priceUrl: url,
+                  priceCurrency: currency,
+                  priceSelector: selectorType ? { type: selectorType, value: selectorValue } : null
+                }),
               }
             );
             if (payload && payload.entry) {
