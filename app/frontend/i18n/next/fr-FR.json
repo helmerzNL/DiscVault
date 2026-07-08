@@ -2179,7 +2179,12 @@
   "notifications": {
     "priceCheck": "Vérification des prix",
     "priceCheckRunning": "Vérification des prix en cours...",
-    "priceCheckDone": "Vérification des prix terminée."
+    "priceCheckDone": "Vérification des prix terminée.",
+    "priceCheckQueued": "Price sweep queued.",
+    "priceCheckQueuedJob": "Price sweep queued (job {jobId}).",
+    "priceCheckDoneCounts": "Price sweep done. checked={checked} notified={notified} skipped={skipped} errors={errors}",
+    "priceCheckFailed": "Price sweep failed.",
+    "priceCheckTimeout": "Price sweep is still running; check again shortly."
   },
   "lists.wishlistShopsTitle": "Shops",
   "lists.wishlistShopAdd": "Add shop",
