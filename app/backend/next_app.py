@@ -491,6 +491,11 @@ TEST_DATABASE_RESET_TABLES = (
 MEDIA_GROUP_MEMBER_ROLES = {"owner", "manager", "member", "viewer"}
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
+# Cap the longest edge before re-encoding artwork. Full-resolution phone photos
+# (multiple thousands of pixels) are needlessly expensive to JPEG-encode and can
+# stall a gunicorn worker long enough for the proxy to return a 502. Posters and
+# backdrops never need more than this on screen.
+MAX_ARTWORK_DIMENSION = 2000
 MAX_IMPORT_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_IMPORT_ARCHIVE_BYTES = 100 * 1024 * 1024
 IMPORT_UPLOAD_EXTENSIONS = {".csv", ".tsv", ".json", ".xml", ".zip"}
@@ -12301,9 +12306,10 @@ def save_uploaded_artwork_file(upload: Any, *, kind: str) -> dict[str, Any]:
             image = image.convert("RGB")
         elif image.mode == "L":
             image = image.convert("RGB")
+        image.thumbnail((MAX_ARTWORK_DIMENSION, MAX_ARTWORK_DIMENSION), Image.Resampling.LANCZOS)
         width, height = image.size
         buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", quality=90, optimize=True)
+        image.save(buffer, format="JPEG", quality=90)
         data = buffer.getvalue()
     except UnidentifiedImageError as exc:
         raise NextApiError("Uploaded file is not a valid image", 400) from exc
