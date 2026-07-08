@@ -1697,6 +1697,55 @@ def ui_preview_html(
       color: var(--accent);
       transform: translateY(-1px);
     }
+    .bulk-tag-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-height: 132px;
+      overflow-y: auto;
+      padding: 2px;
+    }
+    .bulk-tag-picker .bulk-tag-empty {
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 620;
+    }
+    .bulk-tag-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 3px 10px;
+      cursor: pointer;
+      font-size: .74rem;
+      font-weight: 680;
+    }
+    .bulk-tag-option .bulk-tag-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--tag-color, var(--muted));
+      flex: none;
+    }
+    .bulk-tag-option .bulk-tag-count {
+      color: var(--muted);
+      font-size: .68rem;
+      font-weight: 720;
+    }
+    .bulk-tag-option[aria-pressed="true"] {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      color: var(--accent);
+    }
+    .bulk-tag-option[aria-pressed="true"] .bulk-tag-count {
+      color: inherit;
+    }
+    .bulk-tag-option:not(:disabled):hover {
+      border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+    }
     .preview-layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
@@ -9393,6 +9442,7 @@ def ui_preview_html(
         <div class="button-row compact bulk-selection-actions">
           <button type="button" class="secondary-button compact-button" data-bulk-select="all" data-next-i18n="bulk.selectAll">Select all</button>
           <button type="button" class="secondary-button compact-button" data-bulk-select="none" data-next-i18n="bulk.deselectAll">Deselect all</button>
+          <button type="button" class="secondary-button compact-button hidden" data-bulk-select="clear" id="bulkClearSelection" data-next-i18n="bulk.clearSelection">Clear selection</button>
         </div>
         <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
         <div class="bulk-targets">
@@ -9409,6 +9459,16 @@ def ui_preview_html(
             </label>
             <button type="button" class="bulk-action" disabled data-bulk-action="group-add" data-next-i18n="bulk.addToGroup">Add</button>
             <button type="button" class="bulk-action" disabled data-bulk-action="group-remove" data-next-i18n="bulk.removeFromGroup">Remove</button>
+          </div>
+          <div class="bulk-target wide">
+            <label>
+              <span data-next-i18n="bulk.tagsTarget">Tags</span>
+            </label>
+            <div class="bulk-tag-picker" id="bulkTagPicker" role="group" aria-label="Tags"></div>
+            <div class="button-row compact">
+              <button type="button" class="bulk-action" disabled data-bulk-action="tags-add" data-next-i18n="bulk.addTags">Assign tags</button>
+              <button type="button" class="bulk-action" disabled data-bulk-action="tags-remove" data-next-i18n="bulk.removeTags">Remove tags</button>
+            </div>
           </div>
           <div class="bulk-target wide">
             <label>
@@ -11772,6 +11832,9 @@ def ui_preview_html(
     };
     const selectedMovieIds = new Set();
     const selectedContainerIds = new Set();
+    const bulkSelectedTagIds = new Set();
+    let libraryTags = [];
+    let libraryTagsLoaded = false;
     let libraryMetadataJobs = [];
     let libraryMetadataJobVisible = false;
     let libraryMetadataJobPollTimer = null;
@@ -12582,6 +12645,7 @@ def ui_preview_html(
       syncProfilePanelVisibility();
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="metadata"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkMetadata));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="group-add"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="tags-add"]')), hasPermission("watchlist.manage"));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="container"]')), collectorsEnabled && (hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers) || hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections)));
       setElementVisible(
         closestCard(document.querySelector('[data-bulk-action="location"]')),
@@ -16984,7 +17048,56 @@ def ui_preview_html(
        populateLocationParentSelect(locationSelect, {selectedId: currentLocationValue, emptyLabel: tNext("bulk.chooseLocationFirst", "Choose location")});
        if (Array.from(locationSelect.options).some((option) => option.value === currentLocationValue)) locationSelect.value = currentLocationValue;
       }
+      renderBulkTagPicker();
       syncBulkTargetCreateControls();
+    }
+    function renderBulkTagPicker() {
+      const picker = document.getElementById("bulkTagPicker");
+      if (!picker) return;
+      const tags = Array.isArray(libraryTags) ? libraryTags : [];
+      const validIds = new Set(tags.map((tag) => String(tag.id)));
+      Array.from(bulkSelectedTagIds).forEach((id) => { if (!validIds.has(id)) bulkSelectedTagIds.delete(id); });
+      if (!tags.length) {
+        const emptyLabel = libraryTagsLoaded
+          ? tNext("bulk.tagsEmpty", "No tags yet. Create tags from the Lists screen.")
+          : tNext("bulk.tagsLoading", "Loading tags...");
+        picker.innerHTML = `<span class="bulk-tag-empty">${escapeHtml(emptyLabel)}</span>`;
+        return;
+      }
+      picker.innerHTML = tags.map((tag) => {
+        const id = String(tag.id);
+        const selected = bulkSelectedTagIds.has(id);
+        const count = Number(tag.movieCount || 0);
+        const name = tag.name || tag.slug || "";
+        const style = tag.color ? ` style="--tag-color:${escapeHtml(tag.color)}"` : "";
+        const ariaLabel = tNext("bulk.tagOptionLabel", "{name} ({count})").replace("{name}", name).replace("{count}", String(count));
+        return `<button type="button" class="bulk-tag-option" data-bulk-tag="${escapeHtml(id)}" aria-pressed="${selected ? "true" : "false"}" aria-label="${escapeHtml(ariaLabel)}"${style}>`
+          + `<span class="bulk-tag-swatch" aria-hidden="true"></span>`
+          + `<span class="bulk-tag-name">${escapeHtml(name)}</span>`
+          + `<span class="bulk-tag-count">${escapeHtml(String(count))}</span>`
+          + `</button>`;
+      }).join("");
+    }
+    async function loadLibraryTags(force = false) {
+      if (!hasPermission("watchlist.manage")) {
+        libraryTags = [];
+        libraryTagsLoaded = true;
+        renderBulkTagPicker();
+        return;
+      }
+      if (libraryTagsLoaded && !force) {
+        renderBulkTagPicker();
+        return;
+      }
+      try {
+        const payload = await authApiJson("/api/next/tags");
+        libraryTags = Array.isArray(payload.tags) ? payload.tags : [];
+        libraryTagsLoaded = true;
+      } catch (error) {
+        libraryTags = [];
+      }
+      renderBulkTagPicker();
+      updateBulkBar();
     }
     function syncBulkTargetCreateControls() {
       const containerSelect = document.getElementById("bulkContainerTarget");
@@ -25908,6 +26021,9 @@ def ui_preview_html(
         listsState.watched = payload.watched || [];
         listsState.wishlist = wishlistPayload.items || [];
         listsState.tags = tagsPayload.tags || [];
+        libraryTags = listsState.tags;
+        libraryTagsLoaded = true;
+        renderBulkTagPicker();
         const lentLoans = (loansPayload.loans || []).map((loan) => { loan.direction = "out"; return loan; });
         const borrowedLoans = (borrowedPayload.loans || []).map((loan) => { loan.direction = "in"; return loan; });
         listsState.loans = lentLoans.concat(borrowedLoans);
@@ -27962,8 +28078,21 @@ def ui_preview_html(
       document.body.classList.toggle("select-mode", selectionMode);
       if (!selectionMode) selectedMovieIds.clear();
       if (!selectionMode) selectedContainerIds.clear();
+      if (!selectionMode) bulkSelectedTagIds.clear();
+      if (selectionMode) loadLibraryTags();
       syncSelectModeButton();
       renderCollectionSurface();
+    }
+    function clearBulkSelection() {
+      selectedMovieIds.clear();
+      selectedContainerIds.clear();
+      bulkSelectedTagIds.clear();
+      bulkLastResult = null;
+      document.querySelectorAll("[data-preview-movie].bulk-selected, [data-preview-container].bulk-selected").forEach((node) => {
+        node.classList.remove("bulk-selected");
+      });
+      renderBulkTagPicker();
+      updateBulkBar();
     }
     function toggleMovieSelection(movieId) {
       if (!movieId) return;
@@ -28033,10 +28162,12 @@ def ui_preview_html(
       document.querySelectorAll("[data-bulk-select]").forEach((button) => {
         if (button.dataset.bulkSelect === "all") button.disabled = selectableCount === 0 || selectedSelectableCount === selectableCount;
         if (button.dataset.bulkSelect === "none") button.disabled = count === 0;
+        if (button.dataset.bulkSelect === "clear") button.classList.toggle("hidden", count === 0);
       });
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         const action = button.dataset.bulkAction || "";
         if (action === "collection") button.disabled = count === 0;
+        else if (action === "tags-add" || action === "tags-remove") button.disabled = movieCount === 0 || bulkSelectedTagIds.size === 0;
         else if (action === "container") {
           const selection = bulkContainerSelection(document.getElementById("bulkContainerTarget")?.value || "");
           button.disabled = count === 0 || (!selection.targetType && !selection.createType)
@@ -28129,22 +28260,60 @@ def ui_preview_html(
       return target;
     }
     function finishBulkAction(message, details = {}) {
+      const keepSelection = details.keepSelection !== false;
       const summary = document.getElementById("librarySummary");
       bulkLastResult = {
         title: details.title || tNext("bulk.lastAction", "Last bulk action"),
         message,
         meta: details.meta || ""
       };
-      selectedMovieIds.clear();
-      selectedContainerIds.clear();
-      toggleSelectMode(false);
+      if (keepSelection) {
+        if (!selectionMode) {
+          selectionMode = true;
+          document.body.classList.add("select-mode");
+        }
+        syncSelectModeButton();
+      } else {
+        selectedMovieIds.clear();
+        selectedContainerIds.clear();
+        toggleSelectMode(false);
+      }
       if (summary) summary.textContent = message;
       loadAppSnapshot().then(() => {
         const refreshedSummary = document.getElementById("librarySummary");
         if (refreshedSummary) refreshedSummary.textContent = message;
+        if (keepSelection) updateBulkBar();
       }).catch((error) => {
         if (summary) summary.textContent = error.message || String(error);
       });
+    }
+    async function applyBulkTags(operation) {
+      if (!hasPermission("watchlist.manage")) return;
+      const movieIds = bulkSelectedMovieIds();
+      const tagIds = Array.from(bulkSelectedTagIds);
+      const summary = document.getElementById("librarySummary");
+      if (!movieIds.length) {
+        if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
+        return;
+      }
+      if (!tagIds.length) {
+        if (summary) summary.textContent = tNext("bulk.chooseTagsFirst", "Choose one or more tags first.");
+        return;
+      }
+      try {
+        if (summary) summary.textContent = tNext("bulk.savingTagLinks", "Saving tags...");
+        const payload = await authApiJson("/api/next/bulk/tags", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds, tagIds, operation})
+        });
+        await loadLibraryTags(true);
+        finishBulkAction(`${payload.changed || 0} ${tNext(operation === "remove" ? "bulk.tagsRemovedLinks" : "bulk.tagsAddedLinks", operation === "remove" ? "tag links removed" : "tag links added")}`, {
+          title: operation === "remove" ? tNext("bulk.removeTags", "Remove tags") : tNext("bulk.addTags", "Assign tags")
+        });
+      } catch (error) {
+        if (summary) summary.textContent = error.message || String(error);
+      }
     }
     async function applyBulkGroup(operation) {
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups)) return;
@@ -28291,7 +28460,8 @@ def ui_preview_html(
           body: JSON.stringify({movieIds, containerIds, confirm: "delete-selected"})
         });
         finishBulkAction(`${payload.requested || (movieIds.length + containerIds.length)} ${tNext("bulk.deletedSelected", "items deleted")}`, {
-          title: tNext("bulk.deleteSelected", "Delete selected")
+          title: tNext("bulk.deleteSelected", "Delete selected"),
+          keepSelection: false
         });
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
@@ -31183,6 +31353,14 @@ def ui_preview_html(
             applyBulkLocation();
             return;
           }
+          if (button.dataset.bulkAction === "tags-add") {
+            applyBulkTags("add");
+            return;
+          }
+          if (button.dataset.bulkAction === "tags-remove") {
+            applyBulkTags("remove");
+            return;
+          }
           if (button.dataset.bulkAction === "delete") {
             applyBulkDelete();
             return;
@@ -31193,7 +31371,23 @@ def ui_preview_html(
         });
       });
       document.querySelectorAll("[data-bulk-select]").forEach((button) => {
-        button.addEventListener("click", () => setBulkLibrarySelection(button.dataset.bulkSelect || "none"));
+        button.addEventListener("click", () => {
+          if (button.dataset.bulkSelect === "clear") {
+            clearBulkSelection();
+            return;
+          }
+          setBulkLibrarySelection(button.dataset.bulkSelect || "none");
+        });
+      });
+      document.getElementById("bulkTagPicker")?.addEventListener("click", (event) => {
+        const option = event.target.closest("[data-bulk-tag]");
+        if (!option) return;
+        const tagId = String(option.dataset.bulkTag || "");
+        if (!tagId) return;
+        if (bulkSelectedTagIds.has(tagId)) bulkSelectedTagIds.delete(tagId);
+        else bulkSelectedTagIds.add(tagId);
+        option.setAttribute("aria-pressed", bulkSelectedTagIds.has(tagId) ? "true" : "false");
+        updateBulkBar();
       });
       document.getElementById("heroDetailLink")?.addEventListener("click", (event) => {
         const href = event.currentTarget.getAttribute("href") || "";
