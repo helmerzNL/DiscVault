@@ -21786,6 +21786,110 @@ def register_routes(flask_app: Flask) -> None:
                     )
             return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
 
+    @flask_app.post("/api/next/bulk/tags")
+    def bulk_tags():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Bulk tag request body must be an object", 400)
+        movie_ids = parse_uuid_list(body.get("movieIds") or body.get("movie_ids"), "movieIds")
+        if not movie_ids:
+            raise NextApiError("movieIds must be a non-empty array", 400)
+        tag_ids = parse_uuid_list(body.get("tagIds") or body.get("tag_ids"), "tagIds")
+        if not tag_ids:
+            raise NextApiError("tagIds must be a non-empty array", 400)
+        operation = str(body.get("operation") or "add").strip().lower()
+        if operation not in {"add", "remove"}:
+            raise NextApiError("operation must be add or remove", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "tags") or not table_exists(conn, "movie_tags"):
+                raise NextApiError("Tags table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM tags WHERE user_id=%s AND id = ANY(%s)",
+                    (user_id, tag_ids),
+                )
+                owned_tag_ids = [r.get("id") for r in cur.fetchall()]
+            if not owned_tag_ids:
+                raise NextApiError("No matching tags found", 404)
+            visible_movie_ids = [
+                movie_id for movie_id in movie_ids if actor_can_view_movie(conn, actor, movie_id)
+            ]
+            if not visible_movie_ids:
+                raise NextApiError("No matching movies found", 404)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    for tag_uuid in owned_tag_ids:
+                        for movie_uuid in visible_movie_ids:
+                            if operation == "remove":
+                                cur.execute(
+                                    """
+                                    DELETE FROM movie_tags
+                                    WHERE user_id=%s AND tag_id=%s AND movie_id=%s
+                                    RETURNING id
+                                    """,
+                                    (user_id, tag_uuid, movie_uuid),
+                                )
+                                row = cur.fetchone()
+                                if row:
+                                    changed += 1
+                                    emit_movie_tag_change(
+                                        conn,
+                                        user_id,
+                                        row.get("id"),
+                                        operation="delete",
+                                        tag_id=tag_uuid,
+                                        movie_id=movie_uuid,
+                                    )
+                            else:
+                                cur.execute(
+                                    """
+                                    INSERT INTO movie_tags (user_id, tag_id, movie_id)
+                                    VALUES (%s, %s, %s)
+                                    ON CONFLICT (user_id, tag_id, movie_id) DO NOTHING
+                                    RETURNING id
+                                    """,
+                                    (user_id, tag_uuid, movie_uuid),
+                                )
+                                row = cur.fetchone()
+                                if row:
+                                    changed += 1
+                                    emit_movie_tag_change(
+                                        conn,
+                                        user_id,
+                                        row.get("id"),
+                                        operation="upsert",
+                                        tag_id=tag_uuid,
+                                        movie_id=movie_uuid,
+                                    )
+                audit_event(
+                    conn,
+                    event_type="tag.bulk",
+                    category="personal",
+                    actor=actor,
+                    target_type="tag",
+                    target_id=None,
+                    summary="Bulk tag update",
+                    metadata={
+                        "operation": operation,
+                        "tagIds": [str(tag_uuid) for tag_uuid in owned_tag_ids],
+                        "movieCount": len(visible_movie_ids),
+                        "changed": changed,
+                    },
+                )
+        return response(
+            {
+                "status": "ok",
+                "operation": operation,
+                "changed": changed,
+                "requested": len(visible_movie_ids) * len(owned_tag_ids),
+                "movieCount": len(visible_movie_ids),
+                "tagCount": len(owned_tag_ids),
+            }
+        )
+
     # ------------------------------------------------------------------
     # Loan tracker: outbound lending of an owned disc.
     # ------------------------------------------------------------------
