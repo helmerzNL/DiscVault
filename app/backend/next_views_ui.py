@@ -27371,11 +27371,42 @@ def ui_preview_html(
       try {
         const payload = await authApiJson("/api/next/admin/price-alerts/sweep", {method: "POST"});
         notificationsState.loaded = false;
-        const r = payload.result || payload;
+        const jobId = payload.jobId || (payload.job && payload.job.id);
+        if (!jobId) {
+          setPushProfileMessage(tNext("notifications.priceCheckQueued", "Price sweep queued."), "good");
+          return;
+        }
         setPushProfileMessage(
-          `${tNext("notifications.priceCheckDone", "Price sweep done.")} checked=${r.checked ?? "?"} notified=${r.notified ?? "?"} skipped=${r.skipped ?? "?"} errors=${r.errors ?? "?"}`,
+          tNext("notifications.priceCheckQueuedJob", "Price sweep queued (job {jobId}).")
+            .replace("{jobId}", String(jobId)),
           "good"
         );
+        for (let attempt = 0; attempt < 45; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, attempt < 8 ? 1000 : 2000));
+          const jobPayload = await authApiJson(`/api/next/jobs/${encodeURIComponent(jobId)}`);
+          const job = (jobPayload && jobPayload.job) || {};
+          const status = String(job.status || "");
+          if (status === "completed") {
+            const result = (job.result && typeof job.result === "object") ? job.result : {};
+            setPushProfileMessage(
+              tNext(
+                "notifications.priceCheckDoneCounts",
+                "Price sweep done. checked={checked} notified={notified} skipped={skipped} errors={errors}"
+              )
+                .replace("{checked}", String(result.checked ?? 0))
+                .replace("{notified}", String(result.notified ?? 0))
+                .replace("{skipped}", String(result.skipped ?? 0))
+                .replace("{errors}", String(result.errors ?? 0)),
+              "good"
+            );
+            return;
+          }
+          if (status === "failed") {
+            setPushProfileMessage(job.error || tNext("notifications.priceCheckFailed", "Price sweep failed."), "bad");
+            return;
+          }
+        }
+        setPushProfileMessage(tNext("notifications.priceCheckTimeout", "Price sweep is still running; check again shortly."), "bad");
       } catch (error) {
         setPushProfileMessage(error.message || String(error), "bad");
       }
