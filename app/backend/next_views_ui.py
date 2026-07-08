@@ -16607,11 +16607,18 @@ def ui_preview_html(
       if (button) button.disabled = true;
       setLoginMessage(tNext("auth.recoveryChecking", "Checking recovery code..."));
       try {
+        const recoveryBody = {username, recovery_code: recoveryCode};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) recoveryBody.mobile_flow = mobileFlow;
         const payload = await apiJson("/api/next/auth/recovery", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({username, recovery_code: recoveryCode})
+          body: JSON.stringify(recoveryBody)
         });
+        if (payload.callback_url || payload.callbackUrl) {
+          window.location.href = payload.callback_url || payload.callbackUrl;
+          return;
+        }
         if (payload.token) localStorage.setItem("dv_next_token", payload.token);
         const codeInput = document.getElementById("appRecoveryCode");
         if (codeInput) codeInput.value = "";
