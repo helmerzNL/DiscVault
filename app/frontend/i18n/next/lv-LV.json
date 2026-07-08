@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Ierakstīts",
+  "appAdmin.priceAlertSweep": "Sākt cenu brīdinājumu pārbaudi",
+  "appAdmin.priceAlertSweepDone": "Cenu brīdinājumu pārbaude ir rindā.",
   "appearance.dark": "Tumšs",
   "appearance.label": "Izskats",
   "appearance.light": "Gaišs",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Aizvērt",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Cenas brīdinājums",
+  "lists.wishlistAlertEnabledHelp": "Paziņo man, kad cena nokrīt līdz manam mērķim vai zemāk.",
+  "lists.wishlistTargetPrice": "Mērķa cena",
+  "lists.wishlistPriceUrl": "Veikala URL",
+  "lists.wishlistPriceUrlPlaceholder": "Ielīmēt produkta lapas URL",
+  "lists.wishlistPriceUrlInvalid": "Ievadi derīgu http vai https URL.",
+  "lists.wishlistPriceCurrency": "Valūta",
+  "lists.wishlistLastSeenPrice": "Pēdējā redzētā cena",
+  "lists.wishlistPriceDropAlert": "Cenas kritums",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Piezīme (neobligāti)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Metadatu atsvaidzināšanas uzdevumi un masveida bagātināšanas rezultāti.",
   "notifications.prefSecurity": "Drošība",
   "notifications.prefSecurityHelp": "Ziņojumi par piekļuves atslēgām, atkopšanu un konta drošību.",
+  "notifications.pref.price_alerts": "Cenu brīdinājumi",
+  "notifications.prefPriceAlerts": "Cenu un piedāvājumu brīdinājumi",
+  "notifications.prefPriceAlertsHelp": "Paziņo man, kad vēlmju saraksta prece sasniedz manu mērķa cenu.",
+  "notifications.priceAlertBody": "{title} tagad ir {price} {currency} — vienāds vai zemāks par jūsu mērķi {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Paziņojumu preferences saglabātas.",
   "notifications.primaryDevice": "Primārā",
   "notifications.pushHelp": "Iespējojiet vietējos PWA paziņojumus šajā ierīcē un izvēlieties, kurus ziņojumus vēlaties saņemt.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "Saskarnes priekšskatījums",
   "uiPreview.profile": "Profils",
   "uiPreview.recentlyAdded": "Nesen pievienots",
-  "uiPreview.shuffle": "Jaukt"
+  "uiPreview.shuffle": "Jaukt",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

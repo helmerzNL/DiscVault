@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Skrevet",
+  "appAdmin.priceAlertSweep": "Udløs prisvarsel-kørsel",
+  "appAdmin.priceAlertSweepDone": "Prisvarsel-kørsel sat i kø.",
   "appearance.dark": "Mørk",
   "appearance.label": "Udseende",
   "appearance.light": "Lys",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Luk",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Prisvarsel",
+  "lists.wishlistAlertEnabledHelp": "Giv mig besked, når prisen falder til eller under mit mål.",
+  "lists.wishlistTargetPrice": "Målpris",
+  "lists.wishlistPriceUrl": "Butiks-URL",
+  "lists.wishlistPriceUrlPlaceholder": "Indsæt en produktsides URL",
+  "lists.wishlistPriceUrlInvalid": "Indtast en gyldig http- eller https-URL.",
+  "lists.wishlistPriceCurrency": "Valuta",
+  "lists.wishlistLastSeenPrice": "Sidst set pris",
+  "lists.wishlistPriceDropAlert": "Prisfald",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Note (valgfri)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Metadataopdateringer og masseberigelse.",
   "notifications.prefSecurity": "Sikkerhed",
   "notifications.prefSecurityHelp": "Passkey-, gendannelses- og kontosikkerhedsbeskeder.",
+  "notifications.pref.price_alerts": "Prisvarsler",
+  "notifications.prefPriceAlerts": "Pris- og tilbudsvarsler",
+  "notifications.prefPriceAlertsHelp": "Giv mig besked, når en ønskelistevare når min målpris.",
+  "notifications.priceAlertBody": "{title} koster nu {price} {currency} — på eller under dit mål på {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Notifikationsindstillinger gemt.",
   "notifications.primaryDevice": "Primaer",
   "notifications.pushHelp": "Aktiver native PWA-notifikationer paa denne enhed og vaelg, hvilke beskeder du vil modtage.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "UI-forhåndsvisning",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Nyligt tilfojet",
-  "uiPreview.shuffle": "Bland"
+  "uiPreview.shuffle": "Bland",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

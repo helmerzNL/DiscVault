@@ -39,6 +39,8 @@ try:
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import restore_functional_backup
+    from .next_price_alerts import PRICE_ALERT_JOB_TYPE
+    from .next_price_alerts import run_price_alert_sweep
 except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
@@ -53,6 +55,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import restore_functional_backup
+    from next_price_alerts import PRICE_ALERT_JOB_TYPE
+    from next_price_alerts import run_price_alert_sweep
 
 
 STOP = False
@@ -398,6 +402,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
+    if job_type == PRICE_ALERT_JOB_TYPE:
+        return process_price_alert_sweep(payload, worker_id)
+
     raise RuntimeError(f"Unsupported job type: {job_type}")
 
 
@@ -470,6 +477,18 @@ def process_functional_restore(payload: dict[str, Any], worker_id: str) -> dict[
             "dataDir": str(data_dir),
         },
         "summary": summary,
+    }
+
+
+def process_price_alert_sweep(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    limit = int(payload.get("limit") or 50)
+    with connect() as conn:
+        summary = run_price_alert_sweep(conn, limit=limit)
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": PRICE_ALERT_JOB_TYPE,
+        **summary,
     }
 
 
@@ -2276,8 +2295,55 @@ def run_once(worker_id: str, *, quiet_idle: bool = False) -> int:
             return 1
 
 
+def _maybe_enqueue_price_sweep(worker_id: str) -> None:
+    """Auto-enqueue a price-alert sweep job if none is pending/running.
+
+    The interval is controlled by the ``DISCVAULT_PRICE_SWEEP_INTERVAL_HOURS``
+    environment variable (default: 6 hours).
+    """
+    try:
+        interval_hours = float(os.environ.get("DISCVAULT_PRICE_SWEEP_INTERVAL_HOURS", "6"))
+    except ValueError:
+        interval_hours = 6.0
+    try:
+        with connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1 FROM background_jobs
+                    WHERE job_type = %s
+                      AND status IN ('pending', 'running')
+                    LIMIT 1
+                    """,
+                    (PRICE_ALERT_JOB_TYPE,),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    """
+                    SELECT 1 FROM background_jobs
+                    WHERE job_type = %s
+                      AND created_at >= now() - (%s * interval '1 hour')
+                    LIMIT 1
+                    """,
+                    (PRICE_ALERT_JOB_TYPE, interval_hours),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    """
+                    INSERT INTO background_jobs (job_type, payload)
+                    VALUES (%s, %s)
+                    """,
+                    (PRICE_ALERT_JOB_TYPE, Jsonb(json_ready({"source": "scheduler", "workerId": worker_id}))),
+                )
+    except Exception:  # noqa: BLE001 - never crash the poll loop
+        pass
+
+
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
+        _maybe_enqueue_price_sweep(worker_id)
         run_once(worker_id, quiet_idle=True)
         if STOP:
             break

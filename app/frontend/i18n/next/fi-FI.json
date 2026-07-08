@@ -556,6 +556,8 @@
   "appAdmin.version": "Versio",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Kirjoitettu",
+  "appAdmin.priceAlertSweep": "Käynnistä hintahälytyssweep",
+  "appAdmin.priceAlertSweepDone": "Hintahälytyssweep jonossa.",
   "appearance.dark": "Tumma",
   "appearance.label": "Ulkoasu",
   "appearance.light": "Vaalea",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Sulje",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Hintahälytys",
+  "lists.wishlistAlertEnabledHelp": "Ilmoita minulle, kun hinta laskee tavoitteeni tasolle tai alle.",
+  "lists.wishlistTargetPrice": "Tavoitehinta",
+  "lists.wishlistPriceUrl": "Kaupan URL",
+  "lists.wishlistPriceUrlPlaceholder": "Liitä tuotesivun URL",
+  "lists.wishlistPriceUrlInvalid": "Syötä kelvollinen http- tai https-URL.",
+  "lists.wishlistPriceCurrency": "Valuutta",
+  "lists.wishlistLastSeenPrice": "Viimeksi nähty hinta",
+  "lists.wishlistPriceDropAlert": "Hinnan lasku",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Muistiinpano (valinnainen)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Metatietojen paivitykset ja massarikastus.",
   "notifications.prefSecurity": "Turvallisuus",
   "notifications.prefSecurityHelp": "Passkey-, palautus- ja tiliturvaviestit.",
+  "notifications.pref.price_alerts": "Hintahälytykset",
+  "notifications.prefPriceAlerts": "Hinta- ja tarjoushälytykset",
+  "notifications.prefPriceAlertsHelp": "Ilmoita minulle, kun toivelistakohde saavuttaa tavoitehintani.",
+  "notifications.priceAlertBody": "{title} maksaa nyt {price} {currency} — tavoitteesi {targetPrice} {currency} tasolla tai alle.",
   "notifications.preferencesSaved": "Ilmoitusasetukset tallennettu.",
   "notifications.primaryDevice": "Ensisijainen",
   "notifications.pushHelp": "Ota natiivit PWA-ilmoitukset kayttoon talla laitteella ja valitse vastaanotettavat viestit.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "UI-esikatselu",
   "uiPreview.profile": "Profiili",
   "uiPreview.recentlyAdded": "Viimeksi lisatyt",
-  "uiPreview.shuffle": "Sekoita"
+  "uiPreview.shuffle": "Sekoita",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Записано",
+  "appAdmin.priceAlertSweep": "Запустити перевірку цінових сповіщень",
+  "appAdmin.priceAlertSweepDone": "Перевірку цінових сповіщень поставлено в чергу.",
   "appearance.dark": "Темний",
   "appearance.label": "Вигляд",
   "appearance.light": "Світлий",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Закрити",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Сповіщення про ціну",
+  "lists.wishlistAlertEnabledHelp": "Повідомляй мене, коли ціна впаде до моєї цільової або нижче.",
+  "lists.wishlistTargetPrice": "Цільова ціна",
+  "lists.wishlistPriceUrl": "URL магазину",
+  "lists.wishlistPriceUrlPlaceholder": "Вставте URL сторінки товару",
+  "lists.wishlistPriceUrlInvalid": "Введіть дійсну http або https URL-адресу.",
+  "lists.wishlistPriceCurrency": "Валюта",
+  "lists.wishlistLastSeenPrice": "Остання відома ціна",
+  "lists.wishlistPriceDropAlert": "Зниження ціни",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Примітка (необов’язково)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Завдання оновлення метаданих і результати масового збагачення.",
   "notifications.prefSecurity": "Безпека",
   "notifications.prefSecurityHelp": "Повідомлення про ключі доступу, відновлення та безпеку облікового запису.",
+  "notifications.pref.price_alerts": "Сповіщення про ціни",
+  "notifications.prefPriceAlerts": "Сповіщення про ціни та акції",
+  "notifications.prefPriceAlertsHelp": "Повідомляй мене, коли товар зі списку бажань досягне моєї цільової ціни.",
+  "notifications.priceAlertBody": "{title} зараз коштує {price} {currency} — рівно або нижче вашої цілі {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Налаштування сповіщень збережено.",
   "notifications.primaryDevice": "Основний",
   "notifications.pushHelp": "Увімкніть нативні PWA-сповіщення на цьому пристрої та виберіть, які повідомлення хочете отримувати.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "Перегляд інтерфейсу",
   "uiPreview.profile": "Профіль",
   "uiPreview.recentlyAdded": "Нещодавно додано",
-  "uiPreview.shuffle": "Перемішати"
+  "uiPreview.shuffle": "Перемішати",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

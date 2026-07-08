@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Zapisano",
+  "appAdmin.priceAlertSweep": "Sproži pregled opozoril o ceni",
+  "appAdmin.priceAlertSweepDone": "Pregled opozoril o ceni v čakalni vrsti.",
   "appearance.dark": "Temno",
   "appearance.label": "Videz",
   "appearance.light": "Svetlo",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Zapri",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Opozorilo o ceni",
+  "lists.wishlistAlertEnabledHelp": "Obvesti me, ko cena pade na ali pod moj cilj.",
+  "lists.wishlistTargetPrice": "Ciljna cena",
+  "lists.wishlistPriceUrl": "URL trgovine",
+  "lists.wishlistPriceUrlPlaceholder": "Prilepite URL strani izdelka",
+  "lists.wishlistPriceUrlInvalid": "Vnesite veljaven http ali https URL.",
+  "lists.wishlistPriceCurrency": "Valuta",
+  "lists.wishlistLastSeenPrice": "Nazadnje videna cena",
+  "lists.wishlistPriceDropAlert": "Padec cene",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Opomba (neobvezno)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Opravila osveževanja metapodatkov in rezultati množične obogatitve.",
   "notifications.prefSecurity": "Varnost",
   "notifications.prefSecurityHelp": "Sporočila o dostopnih ključih, obnovitvi in varnosti računa.",
+  "notifications.pref.price_alerts": "Opozorila o ceni",
+  "notifications.prefPriceAlerts": "Opozorila o cenah in ponudbah",
+  "notifications.prefPriceAlertsHelp": "Obvesti me, ko artikel na seznamu želja doseže mojo ciljno ceno.",
+  "notifications.priceAlertBody": "{title} zdaj stane {price} {currency} — enako ali pod vašim ciljem {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Nastavitve obvestil shranjene.",
   "notifications.primaryDevice": "Primarna",
   "notifications.pushHelp": "Omogočite izvorna PWA obvestila na tej napravi in izberite, katera sporočila želite prejemati.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "Predogled vmesnika",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Nedavno dodano",
-  "uiPreview.shuffle": "Naključno"
+  "uiPreview.shuffle": "Naključno",
+  "notifications": {
+    "priceCheck": "Price Check",
+    "priceCheckRunning": "Running price check sweep...",
+    "priceCheckDone": "Price sweep done."
+  }
 }

@@ -556,6 +556,8 @@
   "appAdmin.version": "Version",
   "appAdmin.watchSync": "Watch sync",
   "appAdmin.written": "Écrit",
+  "appAdmin.priceAlertSweep": "Déclencher le balayage des alertes prix",
+  "appAdmin.priceAlertSweepDone": "Balayage des alertes prix en file d’attente.",
   "appearance.dark": "Sombre",
   "appearance.label": "Apparence",
   "appearance.light": "Clair",
@@ -1390,6 +1392,15 @@
   "lists.wishlistCloseResults": "Fermer",
   "lists.wishlistFormatPlaceholder": "Format",
   "lists.wishlistManualToggle": "Add manually",
+  "lists.wishlistAlertEnabled": "Alerte prix",
+  "lists.wishlistAlertEnabledHelp": "Avertissez-moi quand le prix atteint ou descend sous mon objectif.",
+  "lists.wishlistTargetPrice": "Prix cible",
+  "lists.wishlistPriceUrl": "URL boutique",
+  "lists.wishlistPriceUrlPlaceholder": "Collez l’URL d’une page produit",
+  "lists.wishlistPriceUrlInvalid": "Entrez une URL http ou https valide.",
+  "lists.wishlistPriceCurrency": "Devise",
+  "lists.wishlistLastSeenPrice": "Dernier prix observé",
+  "lists.wishlistPriceDropAlert": "Baisse de prix",
   "lists.wishlistMarkAcquired": "Mark acquired",
   "lists.wishlistNoResults": "No editions found.",
   "lists.wishlistNotePlaceholder": "Note (facultatif)",
@@ -1803,6 +1814,10 @@
   "notifications.prefMetadataJobsHelp": "Actualisations de metadonnees et enrichissements en masse.",
   "notifications.prefSecurity": "Securite",
   "notifications.prefSecurityHelp": "Messages passkey, recuperation et securite du compte.",
+  "notifications.pref.price_alerts": "Alertes prix",
+  "notifications.prefPriceAlerts": "Alertes prix & promotions",
+  "notifications.prefPriceAlertsHelp": "Avertissez-moi quand un article de ma liste de souhaits atteint mon prix cible.",
+  "notifications.priceAlertBody": "{title} est maintenant à {price} {currency} — égal ou inférieur à votre objectif de {targetPrice} {currency}.",
   "notifications.preferencesSaved": "Preferences de notification enregistrees.",
   "notifications.primaryDevice": "Principal",
   "notifications.pushHelp": "Activez les notifications PWA natives sur cet appareil et choisissez les messages a recevoir.",
@@ -2135,5 +2150,10 @@
   "uiPreview.preview": "Apercu UI",
   "uiPreview.profile": "Profil",
   "uiPreview.recentlyAdded": "Ajoutes recemment",
-  "uiPreview.shuffle": "Aleatoire"
+  "uiPreview.shuffle": "Aleatoire",
+  "notifications": {
+    "priceCheck": "Vérification des prix",
+    "priceCheckRunning": "Vérification des prix en cours...",
+    "priceCheckDone": "Vérification des prix terminée."
+  }
 }
