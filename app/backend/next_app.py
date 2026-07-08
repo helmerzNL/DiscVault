@@ -22639,6 +22639,86 @@ def register_routes(flask_app: Flask) -> None:
                         "returned": int(row.get("returned") or 0),
                     }
 
+            wishlist_price_trend = {
+                "enabled": bool(loans_stats.get("active", 0) > 0),
+                "activeLoans": int(loans_stats.get("active") or 0),
+                "movies": [],
+            }
+            if table_exists(conn, "wishlist_items") and table_exists(conn, "wishlist_item_shop_prices"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            wi.id::text AS wishlist_item_id,
+                            COALESCE(NULLIF(TRIM(wi.title), ''), 'Unknown') AS title,
+                            wi.year AS year,
+                            date_trunc('day', p.observed_at) AS observed_day,
+                            MIN(p.observed_price)::float8 AS observed_price,
+                            COALESCE(NULLIF(TRIM(MAX(p.price_currency)), ''), 'EUR') AS price_currency
+                        FROM wishlist_items wi
+                        JOIN wishlist_item_shop_prices p ON p.wishlist_item_id = wi.id
+                        WHERE wi.user_id=%s
+                          AND wi.acquired_at IS NULL
+                          AND wi.acquired_movie_id IS NULL
+                        GROUP BY wi.id, COALESCE(NULLIF(TRIM(wi.title), ''), 'Unknown'), wi.year, date_trunc('day', p.observed_at)
+                        ORDER BY title, wi.year NULLS LAST, observed_day ASC
+                        """,
+                        (user_id,),
+                    )
+                    trend_rows = cur.fetchall()
+                movie_trends: dict[str, dict[str, Any]] = {}
+                for row in trend_rows:
+                    item_id = str(row.get("wishlist_item_id") or "").strip()
+                    if not item_id:
+                        continue
+                    observed_price = row.get("observed_price")
+                    if observed_price is None:
+                        continue
+                    try:
+                        price_value = float(observed_price)
+                    except (TypeError, ValueError):
+                        continue
+                    if price_value < 0:
+                        continue
+                    observed_day = row.get("observed_day")
+                    observed_at = (
+                        observed_day.isoformat()
+                        if isinstance(observed_day, datetime)
+                        else str(observed_day or "")
+                    )
+                    if not observed_at:
+                        continue
+                    currency = clean_text(row.get("price_currency")) or "EUR"
+                    movie = movie_trends.setdefault(
+                        item_id,
+                        {
+                            "wishlistItemId": item_id,
+                            "title": clean_text(row.get("title")) or "Unknown",
+                            "year": row.get("year"),
+                            "currency": currency.upper(),
+                            "points": [],
+                        },
+                    )
+                    movie["points"].append({"at": observed_at, "price": round(price_value, 2)})
+                movies: list[dict[str, Any]] = []
+                for movie in movie_trends.values():
+                    points = movie.get("points") or []
+                    if not points:
+                        continue
+                    first_price = float(points[0]["price"])
+                    current_price = float(points[-1]["price"])
+                    min_price = min(float(point["price"]) for point in points)
+                    max_price = max(float(point["price"]) for point in points)
+                    movie["currentPrice"] = round(current_price, 2)
+                    movie["minPrice"] = round(min_price, 2)
+                    movie["maxPrice"] = round(max_price, 2)
+                    movie["changeFromStart"] = round(current_price - first_price, 2)
+                    movie["sampleCount"] = len(points)
+                    movie["lastObservedAt"] = points[-1]["at"]
+                    movies.append(movie)
+                movies.sort(key=lambda item: (str(item.get("title") or "").lower(), str(item.get("year") or "")))
+                wishlist_price_trend["movies"] = movies
+
             return response(
                 {
                     "status": "ok",
@@ -22650,6 +22730,7 @@ def register_routes(flask_app: Flask) -> None:
                     "watch": watch,
                     "wishlistCount": wishlist_count,
                     "loans": loans_stats,
+                    "wishlistPriceTrend": wishlist_price_trend,
                 }
             )
 
