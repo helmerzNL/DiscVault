@@ -20,6 +20,7 @@ NOTIFICATION_PREF_DEFAULTS: dict[str, bool] = {
     "metadata_jobs": True,
     "group_invites": True,
     "security": True,
+    "price_alerts": True,
 }
 
 
