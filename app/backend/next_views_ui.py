@@ -2450,6 +2450,9 @@ def ui_preview_html(
     .lists-modal-message.bad {
       color: var(--red);
     }
+    .lists-modal-message.good {
+      color: var(--green);
+    }
     .lists-modal-section-divider {
       font-size: .75rem;
       font-weight: 700;
@@ -26052,6 +26055,8 @@ def ui_preview_html(
       let editing = false;
       let posterUrl = usableImage(item.posterUrl || item.poster_url) || "";
       let pendingPosterFile = null;
+      let modalMessageText = "";
+      let modalMessageTone = "";
       const normalizeShops = (list) => Array.isArray(list) ? list.map((shop) => ({...shop})) : [];
       let shops = normalizeShops(item.shops);
       let shopEditor = null;
@@ -26171,7 +26176,17 @@ def ui_preview_html(
           </footer>
         `;
         const messageNode = panel.querySelector("[data-message]");
-        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        const setMessage = (text, tone) => {
+          modalMessageText = text || "";
+          modalMessageTone = tone || "";
+          if (messageNode) {
+            messageNode.textContent = modalMessageText;
+            messageNode.className = "lists-modal-message " + modalMessageTone;
+          }
+        };
+        if (modalMessageText || modalMessageTone) {
+          setMessage(modalMessageText, modalMessageTone);
+        }
         panel.querySelector("[data-secondary]").addEventListener("click", () => {
           if (editing) { editing = false; pendingPosterFile = null; posterUrl = usableImage(item.posterUrl || item.poster_url) || ""; render(); }
           else listsCloseOverlay(overlay);
@@ -26283,8 +26298,27 @@ def ui_preview_html(
               Object.assign(item, payload.entry);
               shops = normalizeShops(payload.entry.shops);
             }
+            const fetchedPrice = payload && typeof payload.fetchedPrice === "number" ? payload.fetchedPrice : null;
+            const fetchedCurrency = String((payload && payload.fetchedCurrency) || currency || "EUR").toUpperCase();
             shopEditor = null;
-            setMessage(tNext("lists.wishlistShopSaved", "Shop saved."), "good");
+            if (fetchedPrice != null) {
+              const messageTemplate = tNext(
+                "lists.wishlistShopSavedWithPrice",
+                "Shop saved. Current price: {price} {currency}."
+              );
+              const priceMessage = messageTemplate
+                .replace("{price}", String(fetchedPrice))
+                .replace("{currency}", fetchedCurrency);
+              setMessage(priceMessage, "good");
+            } else {
+              setMessage(
+                tNext(
+                  "lists.wishlistShopSavedNoPrice",
+                  "Shop saved, but no current price could be extracted."
+                ),
+                "bad"
+              );
+            }
             render();
           } catch (error) {
             setMessage((error && error.message) || String(error), "bad");
