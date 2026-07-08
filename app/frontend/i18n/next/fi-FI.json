@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Uusi tunniste",
   "lists.tagCreateSubmit": "Luo",
   "lists.tagCreateTitle": "Uusi tunniste",
+  "lists.tagDeleteLocked": "Poista tämä tunniste kaikista medioista, ennen kuin voit poistaa sen.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Nuova etichetta",
   "lists.tagCreateSubmit": "Crea",
   "lists.tagCreateTitle": "Nuova etichetta",
+  "lists.tagDeleteLocked": "Rimuovi questo tag da tutti i contenuti prima di poterlo eliminare.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

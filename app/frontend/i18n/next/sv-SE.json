@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Ny tagg",
   "lists.tagCreateSubmit": "Skapa",
   "lists.tagCreateTitle": "Ny tagg",
+  "lists.tagDeleteLocked": "Ta bort den här taggen från alla medier innan du kan radera den.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

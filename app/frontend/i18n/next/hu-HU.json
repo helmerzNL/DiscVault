@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Új címke",
   "lists.tagCreateSubmit": "Létrehozás",
   "lists.tagCreateTitle": "Új címke",
+  "lists.tagDeleteLocked": "Törlés előtt távolítsd el ezt a címkét minden médiumról.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Nauja žymė",
   "lists.tagCreateSubmit": "Sukurti",
   "lists.tagCreateTitle": "Nauja žymė",
+  "lists.tagDeleteLocked": "Prieš ištrindami pašalinkite šią žymą iš visų medijos įrašų.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

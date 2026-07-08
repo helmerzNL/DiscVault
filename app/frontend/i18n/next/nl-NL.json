@@ -1366,6 +1366,7 @@
   "lists.tagCreateButton": "Nieuwe tag",
   "lists.tagCreateSubmit": "Aanmaken",
   "lists.tagCreateTitle": "Nieuwe tag",
+  "lists.tagDeleteLocked": "Verwijder deze tag van alle media voordat je hem kunt verwijderen.",
   "lists.tagMovie": "film",
   "lists.tagMovies": "films",
   "lists.tagMoviesColumn": "Films",
