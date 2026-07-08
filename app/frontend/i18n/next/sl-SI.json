@@ -2161,5 +2161,9 @@
   "lists.wishlistShopName": "Shop name",
   "lists.wishlistShopLimitReached": "You can add up to 10 shops per item.",
   "lists.wishlistShopNameRequired": "Shop name is required.",
-  "lists.wishlistShopSaved": "Shop saved."
+  "lists.wishlistShopSaved": "Shop saved.",
+  "lists.wishlistShopAdvancedSelector": "Advanced price selector",
+  "lists.wishlistShopSelectorType": "Selector type",
+  "lists.wishlistShopSelectorValue": "Selector value",
+  "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set."
 }
