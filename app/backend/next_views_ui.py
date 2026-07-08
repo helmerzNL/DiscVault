@@ -2846,6 +2846,114 @@ def ui_preview_html(
       font-size: .82rem;
       margin: 0;
     }
+    .stats-price-trend {
+      grid-column: 1 / -1;
+    }
+    .stats-price-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .stats-price-toolbar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .stats-price-toolbar select {
+      min-width: 220px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: .85rem;
+    }
+    .stats-price-figure-toggle input {
+      accent-color: var(--accent);
+    }
+    .stats-price-chart {
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 12px;
+      padding: 10px;
+      background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+      margin-bottom: 10px;
+    }
+    .stats-price-chart svg {
+      display: block;
+      width: 100%;
+      height: 220px;
+    }
+    .stats-price-axis {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: .75rem;
+      margin-top: 6px;
+    }
+    .stats-price-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stats-price-pill {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--bg) 90%, transparent);
+      display: grid;
+      gap: 2px;
+    }
+    .stats-price-pill strong {
+      font-size: .95rem;
+      line-height: 1.2;
+    }
+    .stats-price-pill span {
+      color: var(--muted);
+      font-size: .75rem;
+    }
+    .stats-price-table-wrap {
+      overflow-x: auto;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+    }
+    .stats-price-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+    }
+    .stats-price-table th,
+    .stats-price-table td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+      white-space: nowrap;
+    }
+    .stats-price-table th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: .76rem;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+    }
+    .stats-price-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .stats-price-change.down {
+      color: #10b981;
+    }
+    .stats-price-change.up {
+      color: #f87171;
+    }
+    .stats-price-change.flat {
+      color: var(--muted);
+    }
     .detail-card-actions {
       display: flex;
       flex-wrap: wrap;
@@ -9639,6 +9747,43 @@ def ui_preview_html(
           <div class="stats-block">
             <h2 data-next-i18n="stats.byRating">By rating</h2>
             <div class="stats-bars" id="statsByRating"></div>
+          </div>
+          <div class="stats-block stats-price-trend hidden" id="statsPriceTrendSection">
+            <div class="stats-price-toolbar">
+              <h2 data-next-i18n="stats.priceTrendTitle">Wishlist price trend</h2>
+              <label>
+                <span data-next-i18n="stats.priceTrendMovie">Movie</span>
+                <select id="statsPriceTrendSelect" aria-label="Movie" data-next-i18n-aria="stats.priceTrendMovie"></select>
+              </label>
+              <label class="stats-price-figure-toggle">
+                <input type="checkbox" id="statsPriceTrendShowFigures">
+                <span data-next-i18n="stats.priceTrendShowFigures">Show figures for more films</span>
+              </label>
+            </div>
+            <p class="stats-empty hidden" id="statsPriceTrendGateMessage"></p>
+            <div class="stats-price-chart" id="statsPriceTrendChartWrap">
+              <svg viewBox="0 0 640 220" preserveAspectRatio="none" id="statsPriceTrendChart" aria-hidden="true"></svg>
+              <div class="stats-price-axis">
+                <span id="statsPriceTrendRangeStart"></span>
+                <span id="statsPriceTrendRangeEnd"></span>
+              </div>
+            </div>
+            <div class="stats-price-summary" id="statsPriceTrendSummary"></div>
+            <div class="stats-price-table-wrap hidden" id="statsPriceTrendTableWrap">
+              <table class="stats-price-table">
+                <thead>
+                  <tr>
+                    <th data-next-i18n="stats.priceTrendTableMovie">Movie</th>
+                    <th data-next-i18n="stats.priceTrendTableCurrent">Current</th>
+                    <th data-next-i18n="stats.priceTrendTableMin">Min</th>
+                    <th data-next-i18n="stats.priceTrendTableMax">Max</th>
+                    <th data-next-i18n="stats.priceTrendTableChange">Change</th>
+                    <th data-next-i18n="stats.priceTrendTableUpdated">Updated</th>
+                  </tr>
+                </thead>
+                <tbody id="statsPriceTrendTableBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
         <div class="preview-empty hidden" id="statsEmptyMessage"></div>
@@ -26696,7 +26841,7 @@ def ui_preview_html(
       };
       render();
     }
-    const statsState = {loaded: false, data: null};
+    const statsState = {loaded: false, data: null, selectedPriceTrendMovieId: null, showPriceTrendFigures: false};
     function statsBarsHtml(rows) {
       const items = (rows || []).filter((row) => (row.count || 0) > 0);
       if (!items.length) {
@@ -26717,6 +26862,204 @@ def ui_preview_html(
           `;
         })
         .join("");
+    }
+    function formatStatsPrice(value, currency = "EUR") {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return "—";
+      const code = String(currency || "EUR").trim().toUpperCase() || "EUR";
+      try {
+        return new Intl.NumberFormat(undefined, { style: "currency", currency: code, maximumFractionDigits: 2 }).format(numeric);
+      } catch (error) {
+        return `${numeric.toFixed(2)} ${code}`;
+      }
+    }
+    function statsPriceChangeClass(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || Math.abs(numeric) < 0.005) return "flat";
+      return numeric < 0 ? "down" : "up";
+    }
+    function renderStatsPriceTrend(data) {
+      const section = document.getElementById("statsPriceTrendSection");
+      const gateMessage = document.getElementById("statsPriceTrendGateMessage");
+      const selectNode = document.getElementById("statsPriceTrendSelect");
+      const chartWrap = document.getElementById("statsPriceTrendChartWrap");
+      const chartNode = document.getElementById("statsPriceTrendChart");
+      const rangeStartNode = document.getElementById("statsPriceTrendRangeStart");
+      const rangeEndNode = document.getElementById("statsPriceTrendRangeEnd");
+      const summaryNode = document.getElementById("statsPriceTrendSummary");
+      const figuresToggleNode = document.getElementById("statsPriceTrendShowFigures");
+      const tableWrap = document.getElementById("statsPriceTrendTableWrap");
+      const tableBody = document.getElementById("statsPriceTrendTableBody");
+      if (!section) return;
+      section.classList.remove("hidden");
+
+      const trend = data && data.wishlistPriceTrend ? data.wishlistPriceTrend : {};
+      const activeLoans = Number(trend.activeLoans ?? (data.loans && data.loans.active) ?? 0);
+      const movies = Array.isArray(trend.movies) ? trend.movies.filter((movie) => Array.isArray(movie.points) && movie.points.length) : [];
+
+      if (figuresToggleNode) {
+        figuresToggleNode.checked = !!statsState.showPriceTrendFigures;
+        figuresToggleNode.onchange = () => {
+          statsState.showPriceTrendFigures = !!figuresToggleNode.checked;
+          renderStatisticsView();
+        };
+      }
+
+      if (activeLoans <= 0) {
+        if (gateMessage) {
+          gateMessage.textContent = tNext("stats.priceTrendNoLoan", "Price trends appear when at least one movie is currently on loan.");
+          gateMessage.classList.remove("hidden");
+        }
+        if (chartWrap) chartWrap.classList.add("hidden");
+        if (summaryNode) summaryNode.innerHTML = "";
+        if (tableWrap) tableWrap.classList.add("hidden");
+        if (selectNode) {
+          selectNode.innerHTML = "";
+          selectNode.disabled = true;
+        }
+        return;
+      }
+
+      if (!movies.length) {
+        if (gateMessage) {
+          gateMessage.textContent = tNext("stats.priceTrendNoData", "No wishlist price history is available yet.");
+          gateMessage.classList.remove("hidden");
+        }
+        if (chartWrap) chartWrap.classList.add("hidden");
+        if (summaryNode) summaryNode.innerHTML = "";
+        if (tableWrap) tableWrap.classList.add("hidden");
+        if (selectNode) {
+          selectNode.innerHTML = "";
+          selectNode.disabled = true;
+        }
+        return;
+      }
+
+      if (gateMessage) gateMessage.classList.add("hidden");
+      if (chartWrap) chartWrap.classList.remove("hidden");
+      if (selectNode) {
+        const options = movies
+          .map((movie) => {
+            const movieId = String(movie.wishlistItemId || "");
+            const movieLabel = movie.year ? `${movie.title || tNext("common.untitled", "Unknown")} (${movie.year})` : (movie.title || tNext("common.untitled", "Unknown"));
+            return `<option value="${escapeHtml(movieId)}">${escapeHtml(movieLabel)}</option>`;
+          })
+          .join("");
+        if (selectNode.innerHTML !== options) selectNode.innerHTML = options;
+        selectNode.disabled = false;
+      }
+
+      const selectedId = String(statsState.selectedPriceTrendMovieId || "");
+      let selectedMovie = movies.find((movie) => String(movie.wishlistItemId || "") === selectedId);
+      if (!selectedMovie) {
+        selectedMovie = movies[0];
+        statsState.selectedPriceTrendMovieId = String(selectedMovie.wishlistItemId || "");
+      }
+      if (selectNode) {
+        selectNode.value = String(selectedMovie.wishlistItemId || "");
+        selectNode.onchange = () => {
+          statsState.selectedPriceTrendMovieId = String(selectNode.value || "");
+          renderStatisticsView();
+        };
+      }
+
+      const points = (selectedMovie.points || [])
+        .map((point, index) => {
+          const value = Number(point && point.price);
+          const timeValue = Date.parse(String(point && point.at ? point.at : ""));
+          return {
+            idx: index,
+            value,
+            at: String(point && point.at ? point.at : ""),
+            time: Number.isFinite(timeValue) ? timeValue : index,
+          };
+        })
+        .filter((point) => Number.isFinite(point.value));
+      const currency = String(selectedMovie.currency || "EUR").toUpperCase();
+      if (!points.length) {
+        if (chartNode) chartNode.innerHTML = "";
+        if (rangeStartNode) rangeStartNode.textContent = "";
+        if (rangeEndNode) rangeEndNode.textContent = "";
+      } else {
+        const width = 640;
+        const height = 220;
+        const padding = { left: 40, right: 12, top: 10, bottom: 26 };
+        const minX = Math.min(...points.map((point) => point.time));
+        const maxXRaw = Math.max(...points.map((point) => point.time));
+        const maxX = maxXRaw === minX ? minX + 1 : maxXRaw;
+        const minYRaw = Math.min(...points.map((point) => point.value));
+        const maxYRaw = Math.max(...points.map((point) => point.value));
+        const yPad = Math.max((maxYRaw - minYRaw) * 0.12, 0.5);
+        const minY = minYRaw - yPad;
+        const maxY = maxYRaw + yPad;
+        const xScale = (point) => padding.left + ((point.time - minX) / (maxX - minX)) * (width - padding.left - padding.right);
+        const yScale = (point) => height - padding.bottom - ((point.value - minY) / Math.max(maxY - minY, 0.0001)) * (height - padding.top - padding.bottom);
+        const coords = points.map((point) => ({ x: xScale(point), y: yScale(point), value: point.value }));
+        const pathData = coords.map((coord, index) => `${index ? "L" : "M"}${coord.x.toFixed(2)} ${coord.y.toFixed(2)}`).join(" ");
+        const gridLines = [0, 1, 2, 3, 4].map((idx) => {
+          const y = padding.top + ((height - padding.top - padding.bottom) / 4) * idx;
+          return `<line x1="${padding.left}" y1="${y.toFixed(2)}" x2="${width - padding.right}" y2="${y.toFixed(2)}" stroke="var(--line)" stroke-width="1" opacity="0.45" />`;
+        }).join("");
+        const circles = coords.map((coord) => (
+          `<circle cx="${coord.x.toFixed(2)}" cy="${coord.y.toFixed(2)}" r="2.8" fill="var(--accent)" />`
+        )).join("");
+        if (chartNode) {
+          chartNode.innerHTML = `
+            <rect x="0" y="0" width="${width}" height="${height}" fill="transparent"></rect>
+            ${gridLines}
+            <path d="${pathData}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            ${circles}
+          `;
+        }
+        if (rangeStartNode) rangeStartNode.textContent = formatAppDate(points[0].at);
+        if (rangeEndNode) rangeEndNode.textContent = formatAppDate(points[points.length - 1].at);
+      }
+
+      if (summaryNode) {
+        const summaryCards = [
+          { label: tNext("stats.priceTrendCurrent", "Current"), value: formatStatsPrice(selectedMovie.currentPrice, currency) },
+          { label: tNext("stats.priceTrendMinimum", "Minimum"), value: formatStatsPrice(selectedMovie.minPrice, currency) },
+          { label: tNext("stats.priceTrendMaximum", "Maximum"), value: formatStatsPrice(selectedMovie.maxPrice, currency) },
+          {
+            label: tNext("stats.priceTrendChange", "Change"),
+            value: (() => {
+              const delta = Number(selectedMovie.changeFromStart);
+              const sign = Number.isFinite(delta) && delta > 0 ? "+" : "";
+              return `${sign}${formatStatsPrice(delta, currency)}`;
+            })(),
+            tone: statsPriceChangeClass(selectedMovie.changeFromStart),
+          },
+          { label: tNext("stats.priceTrendSamples", "Samples"), value: String(selectedMovie.sampleCount || 0) },
+          { label: tNext("stats.priceTrendLastUpdated", "Last updated"), value: selectedMovie.lastObservedAt ? formatAppDate(selectedMovie.lastObservedAt) : "—" },
+        ];
+        summaryNode.innerHTML = summaryCards.map((card) => `
+          <div class="stats-price-pill">
+            <strong class="${card.tone ? `stats-price-change ${card.tone}` : ""}">${escapeHtml(card.value)}</strong>
+            <span>${escapeHtml(card.label)}</span>
+          </div>
+        `).join("");
+      }
+
+      if (tableWrap && tableBody) {
+        tableWrap.classList.toggle("hidden", !statsState.showPriceTrendFigures);
+        tableBody.innerHTML = movies.map((movie) => {
+          const movieCurrency = String(movie.currency || "EUR").toUpperCase();
+          const movieLabel = movie.year ? `${movie.title || tNext("common.untitled", "Unknown")} (${movie.year})` : (movie.title || tNext("common.untitled", "Unknown"));
+          const delta = Number(movie.changeFromStart);
+          const sign = Number.isFinite(delta) && delta > 0 ? "+" : "";
+          const changeClass = statsPriceChangeClass(delta);
+          return `
+            <tr>
+              <td>${escapeHtml(movieLabel)}</td>
+              <td>${escapeHtml(formatStatsPrice(movie.currentPrice, movieCurrency))}</td>
+              <td>${escapeHtml(formatStatsPrice(movie.minPrice, movieCurrency))}</td>
+              <td>${escapeHtml(formatStatsPrice(movie.maxPrice, movieCurrency))}</td>
+              <td><span class="stats-price-change ${changeClass}">${escapeHtml(`${sign}${formatStatsPrice(delta, movieCurrency)}`)}</span></td>
+              <td>${escapeHtml(movie.lastObservedAt ? formatAppDate(movie.lastObservedAt) : "—")}</td>
+            </tr>
+          `;
+        }).join("");
+      }
     }
     function renderStatisticsView() {
       const data = statsState.data;
@@ -26754,6 +27097,7 @@ def ui_preview_html(
       if (byDecade) byDecade.innerHTML = statsBarsHtml(data.byDecade);
       const byRating = document.getElementById("statsByRating");
       if (byRating) byRating.innerHTML = statsBarsHtml(data.byRating);
+      renderStatsPriceTrend(data);
       if (empty) empty.classList.add("hidden");
     }
     async function loadStatisticsView(force = false) {

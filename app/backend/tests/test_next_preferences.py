@@ -39,6 +39,21 @@ class NextPreferencesModuleTests(unittest.TestCase):
     def test_normalized_app_preference_key_uses_alias(self):
         self.assertEqual(next_preferences.normalized_app_preference_key("show_search_button"), "show_collection_search")
 
+    def test_mobile_endpoint_contract_includes_stats_endpoint(self):
+        contract = next_preferences.mobile_endpoint_contract_payload()
+        self.assertIn("stats", contract)
+        self.assertEqual(contract["stats"]["personal"], "/api/next/stats/personal")
+        self.assertEqual(contract["stats"]["wishlistPriceTrendField"], "wishlistPriceTrend")
+
+    def test_mobile_capabilities_expose_statistics_flags(self):
+        class _Conn:
+            pass
+
+        actor = {"permissions": ["watchlist.manage"], "role": "member"}
+        capabilities = next_preferences.mobile_feature_capabilities(_Conn(), actor)
+        self.assertTrue(capabilities["personal"]["statistics"])
+        self.assertTrue(capabilities["personal"]["wishlistPriceTrendStats"])
+
 
 if __name__ == "__main__":
     unittest.main()
