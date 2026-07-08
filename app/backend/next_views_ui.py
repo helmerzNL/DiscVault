@@ -25406,11 +25406,6 @@ def ui_preview_html(
           <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
           <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
-          <span class="lists-poster-actions">
-            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
-            <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
-            <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
-          </span>
         </div>
       `;
     }
@@ -26168,10 +26163,38 @@ def ui_preview_html(
     function bindWishlistCardInteractions() {
       document.querySelectorAll("#listsWishlistList [data-wishlist-poster]").forEach((poster) => {
         const id = poster.dataset.wishlistPoster;
-        const card = poster.closest("[data-wishlist-card]");
         bindLongPress(poster, {
           onClick: () => openWishlistMeerInfo(id),
-          onLongPress: () => { if (card) card.classList.toggle("actions-visible"); }
+          onLongPress: () => openWishlistActionsMenu(id)
+        });
+      });
+    }
+    function openWishlistActionsMenu(id) {
+      const item = listsFindWishlist(id);
+      if (!item) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      const actions = [];
+      if (!item.acquiredAt) {
+        actions.push({ key: "acquire", label: tNext("lists.wishlistMarkAcquired", "Mark as acquired"), run: () => acquireWishlistItem(id) });
+      }
+      actions.push({ key: "meerinfo", label: tNext("lists.moreInfo", "More info"), run: () => openWishlistMeerInfo(id) });
+      actions.push({ key: "remove", label: tNext("common.remove", "Remove"), tone: "danger", run: () => removeWishlistItem(id) });
+      const buttonsHtml = actions.map((action, index) =>
+        `<button type="button" class="lists-actionsheet-btn${action.tone === "danger" ? " danger" : ""}" data-action-index="${index}">${escapeHtml(action.label)}</button>`
+      ).join("");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</h3></header>
+        <div class="lists-actionsheet-list">${buttonsHtml}</div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-action-index]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const action = actions[Number(btn.dataset.actionIndex)];
+          listsCloseOverlay(overlay);
+          if (action && typeof action.run === "function") action.run();
         });
       });
     }
