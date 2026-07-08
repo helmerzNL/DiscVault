@@ -2153,6 +2153,10 @@ def register_next_auth_routes(
         recovery_code = next_normalize_recovery_code(body.get("recovery_code") or body.get("recoveryCode"))
         if not username or not recovery_code:
             raise next_api_error("Username and recovery code are required", 400)
+        mobile_flow_raw = body.get("mobile_flow") or body.get("mobileFlow")
+        mobile_flow = _parse_uuid(mobile_flow_raw)
+        if mobile_flow_raw and not mobile_flow:
+            raise next_api_error("mobile_flow is invalid", 400)
         code_hash = next_recovery_code_hash(recovery_code)
 
         with connect() as conn:
@@ -2208,8 +2212,38 @@ def register_next_auth_routes(
                     target_type="user",
                     target_id=row["user_id"],
                     summary=f"{row['username']} logged in with a recovery code",
-                    metadata={"remainingRecoveryCodes": remaining},
+                    metadata={"remainingRecoveryCodes": remaining, "mobileFlow": bool(mobile_flow)},
                 )
+                if mobile_flow:
+                    mobile_code = create_mobile_auth_code(
+                        conn,
+                        mobile_flow_id=mobile_flow,
+                        user_id=row["user_id"],
+                    )
+                    audit_event(
+                        conn,
+                        event_type="auth.mobile_code_issued",
+                        category="security",
+                        actor={
+                            "id": row["user_id"],
+                            "username": row["username"],
+                            "role": primary_role(conn, row["user_id"]),
+                        },
+                        target_type="user",
+                        target_id=row["user_id"],
+                        summary=f"Issued mobile one-time code for {row['username']} via recovery code",
+                        metadata={"mobileFlowId": str(mobile_flow), "recovery": True},
+                    )
+                    return response(
+                        {
+                            "status": "ok",
+                            "recovery": True,
+                            "remainingRecoveryCodes": remaining,
+                            "callback_url": mobile_code["callbackUrl"],
+                            "callbackUrl": mobile_code["callbackUrl"],
+                            "state": mobile_code.get("state"),
+                        }
+                    )
 
         token = _create_token(str(row["user_id"]), row["username"])
         return cookie_response(
