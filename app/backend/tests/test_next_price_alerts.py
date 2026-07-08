@@ -15,10 +15,12 @@ try:
         PRICE_ALERT_JOB_TYPE,
         _coerce_price,
         _extract_from_og_meta,
+        _extract_price_from_profile,
         _extract_from_schema_org,
         _extract_via_regex,
         evaluate_price_alert,
         extract_price_from_url,
+        extract_price_from_url_with_source,
     )
     _MODULE_AVAILABLE = True
 except ModuleNotFoundError:
@@ -116,6 +118,31 @@ class TestRegexExtraction(unittest.TestCase):
 
 
 @unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestSelectorExtraction(unittest.TestCase):
+    def test_css_text_selector_extracts_price(self):
+        html = '<div id="price-now">€ 12,99</div>'
+        price, currency = _extract_price_from_profile(
+            html,
+            selector_type="css_text",
+            selector_value="#price-now",
+            fallback_currency="EUR",
+        )
+        self.assertAlmostEqual(price, 12.99)
+        self.assertEqual(currency, "EUR")
+
+    def test_regex_capture_selector_extracts_price(self):
+        html = '<span data-price="29.50 USD">Now</span>'
+        price, currency = _extract_price_from_profile(
+            html,
+            selector_type="regex_capture",
+            selector_value=r'data-price="([0-9.,]+)\s*USD"',
+            fallback_currency="USD",
+        )
+        self.assertAlmostEqual(price, 29.50)
+        self.assertEqual(currency, "USD")
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
 class TestExtractPriceFromUrl(unittest.TestCase):
     def test_uses_schema_org_first(self):
         schema_html = (
@@ -143,6 +170,31 @@ class TestExtractPriceFromUrl(unittest.TestCase):
             price, currency = extract_price_from_url("https://example.com/product")
         self.assertIsNone(price)
         self.assertIsNone(currency)
+
+    def test_uses_amazon_preset_before_generic_extractors(self):
+        html = '<span class="a-offscreen">€ 18,49</span>'
+        with patch("app.backend.next_price_alerts._fetch_html", return_value=html):
+            price, currency, source = extract_price_from_url_with_source("https://www.amazon.de/dp/abc")
+        self.assertAlmostEqual(price, 18.49)
+        self.assertEqual(source, "preset")
+
+    def test_uses_selector_profile_before_schema_org(self):
+        html = (
+            '<div class="price-now">€ 11,11</div>'
+            '<script type="application/ld+json">'
+            '{"@type":"Product","offers":{"price":"44.00","priceCurrency":"EUR"}}'
+            "</script>"
+        )
+        with patch("app.backend.next_price_alerts._fetch_html", return_value=html):
+            price, currency, source = extract_price_from_url_with_source(
+                "https://shop.example.com/product",
+                selector_type="css_text",
+                selector_value=".price-now",
+                selector_options={"currency": "EUR"},
+            )
+        self.assertAlmostEqual(price, 11.11)
+        self.assertEqual(currency, "EUR")
+        self.assertEqual(source, "profile")
 
 
 @unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")

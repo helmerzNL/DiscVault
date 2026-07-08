@@ -9769,12 +9769,20 @@ def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _wishlist_shop_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    selector_options = row.get("selector_options")
+    if not isinstance(selector_options, dict):
+        selector_options = {}
     return {
         "id": str(row.get("id")),
         "wishlistItemId": str(row.get("wishlist_item_id")),
         "shopName": row.get("shop_name"),
         "priceUrl": row.get("price_url"),
         "priceCurrency": row.get("price_currency") or "EUR",
+        "priceSelector": {
+            "type": row.get("selector_type"),
+            "value": row.get("selector_value"),
+            "options": selector_options,
+        },
         "lastSeenPrice": float(row["last_seen_price"]) if row.get("last_seen_price") is not None else None,
         "lastPriceCheckedAt": row.get("last_price_checked_at"),
         "createdAt": row.get("created_at"),
@@ -9789,6 +9797,7 @@ def _wishlist_shops_by_item(conn, user_id, item_ids: list[Any]) -> dict[str, lis
         cur.execute(
             """
             SELECT id, wishlist_item_id, shop_name, price_url, price_currency,
+                   selector_type, selector_value, selector_options,
                    last_seen_price, last_price_checked_at, created_at, updated_at
             FROM wishlist_item_shops
             WHERE user_id=%s
@@ -20909,7 +20918,26 @@ def register_routes(flask_app: Flask) -> None:
         value = clean_text(raw)
         return (value or "EUR").upper()[:3]
 
-    def _validated_shop_payload(body: dict[str, Any]) -> tuple[str, str, str]:
+    def _validated_shop_selector_payload(body: dict[str, Any]) -> tuple[str | None, str | None, dict[str, Any]]:
+        selector = body.get("priceSelector")
+        selector_type = clean_text(body.get("selectorType") or body.get("selector_type"))
+        selector_value = clean_text(body.get("selectorValue") or body.get("selector_value"))
+        selector_options: dict[str, Any] = {}
+        if isinstance(selector, dict):
+            selector_type = clean_text(selector.get("type") or selector_type)
+            selector_value = clean_text(selector.get("value") or selector_value)
+            if isinstance(selector.get("options"), dict):
+                selector_options = json_ready(selector.get("options")) or {}
+        if selector_type or selector_value:
+            allowed_types = {"css_text", "regex_capture"}
+            if selector_type not in allowed_types:
+                raise NextApiError("Selector type must be css_text or regex_capture", 400)
+            if not selector_value:
+                raise NextApiError("Selector value is required when selector type is set", 400)
+            return selector_type, selector_value, selector_options
+        return None, None, {}
+
+    def _validated_shop_payload(body: dict[str, Any]) -> tuple[str, str, str, str | None, str | None, dict[str, Any]]:
         name = clean_text(body.get("shopName") or body.get("shop_name"))
         if not name:
             raise NextApiError("Shop name is required", 400)
@@ -20919,7 +20947,15 @@ def register_routes(flask_app: Flask) -> None:
         parsed = urlparse(raw_url)
         if parsed.scheme not in ("http", "https"):
             raise NextApiError("Price URL must be an http or https URL", 400)
-        return name, raw_url, _normalise_shop_currency(body.get("priceCurrency") or body.get("price_currency"))
+        selector_type, selector_value, selector_options = _validated_shop_selector_payload(body)
+        return (
+            name,
+            raw_url,
+            _normalise_shop_currency(body.get("priceCurrency") or body.get("price_currency")),
+            selector_type,
+            selector_value,
+            selector_options,
+        )
 
     def _wishlist_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         return json_ready(
@@ -21240,7 +21276,14 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Shop request body must be an object", 400)
-        shop_name, price_url, price_currency = _validated_shop_payload(body)
+        (
+            shop_name,
+            price_url,
+            price_currency,
+            selector_type,
+            selector_value,
+            selector_options,
+        ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             if not table_exists(conn, "wishlist_items"):
@@ -21263,9 +21306,14 @@ def register_routes(flask_app: Flask) -> None:
             if total >= _WISHLIST_MAX_SHOPS:
                 raise NextApiError("A wishlist item can have at most 10 shops", 400)
 
-            from next_price_alerts import extract_price_from_url
+            from next_price_alerts import extract_price_from_url_with_source
 
-            current_price, detected_currency = extract_price_from_url(price_url)
+            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                price_url,
+                selector_type=selector_type,
+                selector_value=selector_value,
+                selector_options=selector_options,
+            )
             effective_currency = _normalise_shop_currency(detected_currency or price_currency)
 
             with conn.transaction():
@@ -21274,8 +21322,9 @@ def register_routes(flask_app: Flask) -> None:
                         """
                         INSERT INTO wishlist_item_shops
                             (user_id, wishlist_item_id, shop_name, price_url, price_currency,
+                             selector_type, selector_value, selector_options,
                              last_seen_price, last_price_checked_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         RETURNING id
                         """,
                         (
@@ -21284,6 +21333,9 @@ def register_routes(flask_app: Flask) -> None:
                             shop_name,
                             price_url,
                             effective_currency,
+                            selector_type,
+                            selector_value,
+                            Jsonb(selector_options),
                             current_price,
                         ),
                     )
@@ -21292,10 +21344,17 @@ def register_routes(flask_app: Flask) -> None:
                         cur.execute(
                             """
                             INSERT INTO wishlist_item_shop_prices
-                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency)
-                            VALUES (%s, %s, %s, %s, %s)
+                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source)
+                            VALUES (%s, %s, %s, %s, %s, %s)
                             """,
-                            (user_id, item_uuid, shop_id, current_price, effective_currency),
+                            (
+                                user_id,
+                                item_uuid,
+                                shop_id,
+                                current_price,
+                                effective_currency,
+                                extraction_source or "unknown",
+                            ),
                         )
                 emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
                 audit_event(
@@ -21325,7 +21384,14 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Shop request body must be an object", 400)
-        shop_name, price_url, price_currency = _validated_shop_payload(body)
+        (
+            shop_name,
+            price_url,
+            price_currency,
+            selector_type,
+            selector_value,
+            selector_options,
+        ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             if not table_exists(conn, "wishlist_items"):
@@ -21345,9 +21411,14 @@ def register_routes(flask_app: Flask) -> None:
                 if not cur.fetchone():
                     raise NextApiError("Wishlist shop not found", 404)
 
-            from next_price_alerts import extract_price_from_url
+            from next_price_alerts import extract_price_from_url_with_source
 
-            current_price, detected_currency = extract_price_from_url(price_url)
+            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                price_url,
+                selector_type=selector_type,
+                selector_value=selector_value,
+                selector_options=selector_options,
+            )
             effective_currency = _normalise_shop_currency(detected_currency or price_currency)
 
             with conn.transaction():
@@ -21358,6 +21429,9 @@ def register_routes(flask_app: Flask) -> None:
                         SET shop_name=%s,
                             price_url=%s,
                             price_currency=%s,
+                            selector_type=%s,
+                            selector_value=%s,
+                            selector_options=%s,
                             last_seen_price=%s,
                             last_price_checked_at=now(),
                             updated_at=now()
@@ -21367,6 +21441,9 @@ def register_routes(flask_app: Flask) -> None:
                             shop_name,
                             price_url,
                             effective_currency,
+                            selector_type,
+                            selector_value,
+                            Jsonb(selector_options),
                             current_price,
                             shop_uuid,
                             user_id,
@@ -21377,10 +21454,17 @@ def register_routes(flask_app: Flask) -> None:
                         cur.execute(
                             """
                             INSERT INTO wishlist_item_shop_prices
-                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency)
-                            VALUES (%s, %s, %s, %s, %s)
+                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source)
+                            VALUES (%s, %s, %s, %s, %s, %s)
                             """,
-                            (user_id, item_uuid, shop_uuid, current_price, effective_currency),
+                            (
+                                user_id,
+                                item_uuid,
+                                shop_uuid,
+                                current_price,
+                                effective_currency,
+                                extraction_source or "unknown",
+                            ),
                         )
                 emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
                 audit_event(

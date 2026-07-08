@@ -96,6 +96,26 @@ class WishlistShopPricesMigrationContractTests(unittest.TestCase):
         self.assertIn("wishlist_item_shop_id", sql)
 
 
+class WishlistShopSelectorsMigrationContractTests(unittest.TestCase):
+    """Migration 033 extends shop sources with deterministic selector metadata."""
+
+    def setUp(self):
+        self.migrations = {m.version: m for m in discover_migrations()}
+
+    def test_wishlist_shop_selectors_migration_is_present(self):
+        self.assertIn("033", self.migrations)
+        self.assertEqual(self.migrations["033"].name, "wishlist_shop_selectors")
+
+    def test_migration_adds_selector_and_source_columns(self):
+        sql = self.migrations["033"].sql
+        self.assertIn("ALTER TABLE wishlist_item_shops", sql)
+        self.assertIn("selector_type", sql)
+        self.assertIn("selector_value", sql)
+        self.assertIn("selector_options", sql)
+        self.assertIn("ALTER TABLE wishlist_item_shop_prices", sql)
+        self.assertIn("extraction_source", sql)
+
+
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class ListsRouteRegistrationTests(unittest.TestCase):
     """The personal-list write/read surface must be wired into the Flask app."""
