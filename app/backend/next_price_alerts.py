@@ -225,6 +225,99 @@ def extract_price_from_url(url: str, *, session: Any = None) -> tuple[float | No
     return _extract_via_regex(html)
 
 
+def _record_shop_price(
+    conn,
+    *,
+    shop_id: Any,
+    item_id: Any,
+    user_id: Any,
+    price: float | None,
+    currency: str | None,
+) -> None:
+    if not table_exists(conn, "wishlist_item_shops"):
+        return
+    currency_value = str(currency or "EUR").strip().upper() or "EUR"
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE wishlist_item_shops
+                SET last_seen_price = %s,
+                    price_currency = %s,
+                    last_price_checked_at = now(),
+                    updated_at = now()
+                WHERE id = %s AND wishlist_item_id = %s AND user_id = %s
+                """,
+                (price, currency_value, shop_id, item_id, user_id),
+            )
+            if price is not None and table_exists(conn, "wishlist_item_shop_prices"):
+                cur.execute(
+                    """
+                    INSERT INTO wishlist_item_shop_prices
+                        (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (user_id, item_id, shop_id, price, currency_value),
+                )
+
+
+def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | None, str | None]:
+    if not table_exists(conn, "wishlist_item_shops"):
+        return None, None
+    item_id = item.get("id")
+    user_id = item.get("user_id")
+    if not item_id or not user_id:
+        return None, None
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, price_url, price_currency
+            FROM wishlist_item_shops
+            WHERE wishlist_item_id = %s AND user_id = %s
+            ORDER BY created_at ASC
+            LIMIT 10
+            """,
+            (item_id, user_id),
+        )
+        shops = cur.fetchall()
+
+    best_price: float | None = None
+    best_currency: str | None = None
+    for shop in shops:
+        raw_url = (shop.get("price_url") or "").strip()
+        if not raw_url:
+            continue
+        try:
+            shop_price, detected_currency = extract_price_from_url(raw_url)
+        except Exception:  # noqa: BLE001
+            _record_shop_price(
+                conn,
+                shop_id=shop.get("id"),
+                item_id=item_id,
+                user_id=user_id,
+                price=None,
+                currency=shop.get("price_currency"),
+            )
+            continue
+        effective_currency = str(detected_currency or shop.get("price_currency") or "EUR").strip().upper() or "EUR"
+        _record_shop_price(
+            conn,
+            shop_id=shop.get("id"),
+            item_id=item_id,
+            user_id=user_id,
+            price=shop_price,
+            currency=effective_currency,
+        )
+        if shop_price is None:
+            continue
+        if best_price is None or shop_price < best_price:
+            best_price = shop_price
+            best_currency = effective_currency
+
+    return best_price, best_currency
+
+
 # ---------------------------------------------------------------------------
 # Alert evaluation
 # ---------------------------------------------------------------------------
@@ -382,12 +475,20 @@ def run_price_alert_sweep(conn, *, limit: int = _SWEEP_BATCH_LIMIT) -> dict[str,
     for item in items:
         price_url = item.get("price_url")
         movievault_id = item.get("movievault_id")
+        item_id = item.get("id")
 
         new_price: float | None = None
         currency: str | None = None
 
-        # --- URL-based extraction ---
-        if price_url:
+        # --- Multi-shop extraction ---
+        try:
+            new_price, currency = _fetch_item_prices_from_shops(conn, item)
+        except Exception:  # noqa: BLE001
+            errors += 1
+            continue
+
+        # --- URL-based extraction (legacy fallback when no shop price is available) ---
+        if new_price is None and price_url:
             try:
                 new_price, currency = extract_price_from_url(price_url)
             except Exception:  # noqa: BLE001
@@ -426,7 +527,7 @@ def run_price_alert_sweep(conn, *, limit: int = _SWEEP_BATCH_LIMIT) -> dict[str,
                 with conn.cursor() as cur2:
                     cur2.execute(
                         "UPDATE wishlist_items SET last_price_checked_at = now() WHERE id = %s",
-                        (item.get("id"),),
+                        (item_id,),
                     )
             continue
 
