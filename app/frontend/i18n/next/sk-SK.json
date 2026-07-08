@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Nový štítok",
   "lists.tagCreateSubmit": "Vytvoriť",
   "lists.tagCreateTitle": "Nový štítok",
+  "lists.tagDeleteLocked": "Pred odstránením odstráňte tento štítok zo všetkých médií.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Нов етикет",
   "lists.tagCreateSubmit": "Създай",
   "lists.tagCreateTitle": "Нов етикет",
+  "lists.tagDeleteLocked": "Премахнете този таг от всички медии, преди да можете да го изтриете.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

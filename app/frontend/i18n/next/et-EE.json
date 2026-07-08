@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Uus silt",
   "lists.tagCreateSubmit": "Loo",
   "lists.tagCreateTitle": "Uus silt",
+  "lists.tagDeleteLocked": "Eemalda see silt kõigist meediumitest, enne kui saad selle kustutada.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "新しいタグ",
   "lists.tagCreateSubmit": "作成",
   "lists.tagCreateTitle": "新しいタグ",
+  "lists.tagDeleteLocked": "削除する前に、このタグをすべてのメディアから外してください。",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

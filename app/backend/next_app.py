@@ -21338,6 +21338,11 @@ def register_routes(flask_app: Flask) -> None:
                         (user_id, tag_uuid),
                     )
                     assignment_ids = [r.get("id") for r in cur.fetchall()]
+            if assignment_ids:
+                raise NextApiError(
+                    "This tag is still linked to media. Remove it from all items before deleting it.",
+                    409,
+                )
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(

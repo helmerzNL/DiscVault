@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Новий тег",
   "lists.tagCreateSubmit": "Створити",
   "lists.tagCreateTitle": "Новий тег",
+  "lists.tagDeleteLocked": "Приберіть цей тег з усіх медіа, перш ніж видаляти його.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",

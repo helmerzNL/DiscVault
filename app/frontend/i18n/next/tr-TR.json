@@ -1359,6 +1359,7 @@
   "lists.tagCreateButton": "Yeni etiket",
   "lists.tagCreateSubmit": "Oluştur",
   "lists.tagCreateTitle": "Yeni etiket",
+  "lists.tagDeleteLocked": "Silmeden önce bu etiketi tüm ortamlardan kaldırın.",
   "lists.tagMovie": "movie",
   "lists.tagMovies": "movies",
   "lists.tagMoviesColumn": "Movies",
