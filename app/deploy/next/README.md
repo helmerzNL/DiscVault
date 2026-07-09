@@ -64,9 +64,9 @@ Passkeys require a stable relying party configuration. Set these values in
 
 ```text
 JWT_SECRET=<long stable random secret>
-RP_ID=appdev.discvault.eu
+RP_ID=discvault.example.com
 RP_NAME=DiscVault
-RP_ORIGINS=https://appdev.discvault.eu
+RP_ORIGINS=https://discvault.example.com
 ```
 
 `RP_ID` is the browser hostname without scheme or port. `RP_ORIGINS` is a
@@ -297,6 +297,10 @@ deployment command.
 
 - `next-api` exposes the Next API on `${DISCVAULT_NEXT_API_PORT:-6180}`.
 - `next-worker` processes pending `background_jobs`.
-- PostgreSQL data is stored in the Compose named Docker volume
-  `discvault_next_deploy_postgres-data` when using the recommended project name.
+- PostgreSQL data is stored on a host bind mount at `DISCVAULT_NEXT_POSTGRES_DATA`
+  (default `./postgres-data`, relative to this compose file). Point it at an
+  absolute path on the same storage as your other data/backups so the database is
+  backed up alongside the media. The postgres container runs as uid 70 and creates
+  the directory on first start when it is empty; an existing non-empty directory
+  owned by another user can fail to start.
 - This stack is separate from the current production DiscVault container.
