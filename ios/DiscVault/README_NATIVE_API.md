@@ -45,6 +45,12 @@ The token response may include token-specific `permissionKeys`, but the backend
 authorizes requests against effective permissions: API token scopes OR the
 linked user's role permissions.
 
+If the user lost their passkey, the recovery-code sign-in on the web login page
+completes the same mobile flow: `POST /api/next/auth/recovery` accepts the
+`mobile_flow` id and, on success, returns the one-time `callback_url`
+(`callbackUrl`/`state`) just like the passkey verify response, so the app finishes
+linking and can then prompt the user to add a new passkey.
+
 ## Bootstrap
 
 `/api/next/mobile/bootstrap` returns:

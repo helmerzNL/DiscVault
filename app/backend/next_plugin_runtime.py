@@ -76,6 +76,7 @@ PLUGIN_ENTRYPOINTS = (
     "inspect_source",
     "plan_import",
     "import_source",
+    "price_check",
 )
 
 
