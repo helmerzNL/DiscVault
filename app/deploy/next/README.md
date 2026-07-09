@@ -300,7 +300,11 @@ deployment command.
 - PostgreSQL data is stored on a host bind mount at `DISCVAULT_NEXT_POSTGRES_DATA`
   (default `./postgres-data`, relative to this compose file). Point it at an
   absolute path on the same storage as your other data/backups so the database is
-  backed up alongside the media. The postgres container runs as uid 70 and creates
-  the directory on first start when it is empty; an existing non-empty directory
-  owned by another user can fail to start.
+  backed up alongside the media.
+  If you previously deployed with the named `postgres-data` volume, migrate its
+  contents once (e.g. `pg_dump`/restore or copying the volume contents) before
+  switching, otherwise PostgreSQL will initialize an empty database.
+  Docker creates the bind-mount directory if it does not exist. The postgres
+  container runs as uid 70; an existing non-empty directory owned by another user
+  can fail to start.
 - This stack is separate from the current production DiscVault container.
