@@ -594,6 +594,7 @@
   "auth.signOut": "Odhlásit se",
   "auth.signedIn": "Přihlášeno.",
   "auth.username": "Uživatelské jméno",
+  "auth.ownerUsernamePlaceholder": "Zvolte uživatelské jméno",
   "auth.usernameRequired": "Je vyžadováno uživatelské jméno.",
   "auth.waitingPasskey": "Čekání na váš přístupový klíč...",
   "bulk.addToBoxSet": "Přidat do box setu",

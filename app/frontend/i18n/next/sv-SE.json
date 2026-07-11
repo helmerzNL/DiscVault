@@ -594,6 +594,7 @@
   "auth.signOut": "Logga ut",
   "auth.signedIn": "Inloggad.",
   "auth.username": "Användarnamn",
+  "auth.ownerUsernamePlaceholder": "Välj ditt användarnamn",
   "auth.usernameRequired": "Anv?ndarnamn kr?vs.",
   "auth.waitingPasskey": "Vantar pa passkey...",
   "bulk.addToBoxSet": "Lagg till i box-set",
