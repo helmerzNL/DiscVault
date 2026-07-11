@@ -1697,6 +1697,55 @@ def ui_preview_html(
       color: var(--accent);
       transform: translateY(-1px);
     }
+    .bulk-tag-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-height: 132px;
+      overflow-y: auto;
+      padding: 2px;
+    }
+    .bulk-tag-picker .bulk-tag-empty {
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 620;
+    }
+    .bulk-tag-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 3px 10px;
+      cursor: pointer;
+      font-size: .74rem;
+      font-weight: 680;
+    }
+    .bulk-tag-option .bulk-tag-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--tag-color, var(--muted));
+      flex: none;
+    }
+    .bulk-tag-option .bulk-tag-count {
+      color: var(--muted);
+      font-size: .68rem;
+      font-weight: 720;
+    }
+    .bulk-tag-option[aria-pressed="true"] {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      color: var(--accent);
+    }
+    .bulk-tag-option[aria-pressed="true"] .bulk-tag-count {
+      color: inherit;
+    }
+    .bulk-tag-option:not(:disabled):hover {
+      border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+    }
     .preview-layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
@@ -2108,6 +2157,64 @@ def ui_preview_html(
       background: var(--accent);
       flex: 0 0 auto;
     }
+    .tags-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      border: 1px solid color-mix(in srgb, var(--tag-color, var(--line)) 55%, var(--line));
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--tag-color, var(--bg-solid)) 12%, var(--bg-solid));
+      color: var(--text);
+      padding: 0 6px 0 12px;
+      font-size: .85rem;
+      font-weight: 700;
+    }
+    .tag-chip .tag-chip-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--tag-color, var(--accent));
+      flex: 0 0 auto;
+    }
+    .tag-chip .tag-chip-count {
+      font-weight: 600;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .tag-chip-remove {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border: 0;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--red) 16%, transparent);
+      color: var(--red);
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    .tag-chip-remove svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+    .tag-chip-remove:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--red) 26%, transparent);
+    }
+    .tag-chip-remove:disabled {
+      background: color-mix(in srgb, var(--muted) 14%, transparent);
+      color: var(--muted);
+      cursor: not-allowed;
+    }
     .loan-overdue {
       color: var(--red);
       font-weight: 600;
@@ -2451,6 +2558,117 @@ def ui_preview_html(
     .lists-modal-message.bad {
       color: var(--red);
     }
+    .lists-modal-message.good {
+      color: var(--green);
+    }
+    .lists-modal-section-divider {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 10px 0 4px;
+      border-top: 1px solid var(--line);
+      margin-top: 4px;
+    }
+    .lists-modal-field-check [data-edit] {
+      width: auto;
+      align-self: center;
+    }
+    .lists-modal-field [data-static] {
+      display: block;
+      font-size: .82rem;
+      color: var(--muted);
+      padding: 4px 0;
+    }
+    .lists-modal-shop-list-wrap {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 2px;
+    }
+    .lists-modal-shop-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: .82rem;
+      font-weight: 700;
+    }
+    .lists-modal-shop-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .lists-modal-shop-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .lists-modal-shop-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .lists-modal-shop-main strong {
+      font-size: .86rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .lists-modal-shop-main span {
+      font-size: .8rem;
+      color: var(--muted);
+    }
+    .lists-modal-shop-empty {
+      margin: 0;
+      font-size: .82rem;
+      color: var(--muted);
+    }
+    .lists-modal-shop-editor {
+      border-top: 1px dashed var(--line);
+      padding-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .lists-modal-shop-advanced {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--surface) 92%, #000 8%);
+    }
+    .lists-modal-shop-advanced summary {
+      cursor: pointer;
+      font-size: .8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .lists-modal-shop-editor-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .lists-modal-shop-editor-actions button {
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .lists-modal-shop-editor-actions button.ghost {
+      background: transparent;
+      color: var(--text);
+    }
     .lists-modal.lists-history {
       max-width: 720px;
       width: min(92vw, 720px);
@@ -2647,17 +2865,6 @@ def ui_preview_html(
       gap: 12px;
       margin-bottom: 14px;
     }
-    .tag-poster-art {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .tag-poster-initial {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #fff;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, .4);
-    }
     .stats-cards {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -2736,6 +2943,114 @@ def ui_preview_html(
       font-size: .82rem;
       margin: 0;
     }
+    .stats-price-trend {
+      grid-column: 1 / -1;
+    }
+    .stats-price-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .stats-price-toolbar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: .82rem;
+    }
+    .stats-price-toolbar select {
+      min-width: 220px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: .85rem;
+    }
+    .stats-price-figure-toggle input {
+      accent-color: var(--accent);
+    }
+    .stats-price-chart {
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 12px;
+      padding: 10px;
+      background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+      margin-bottom: 10px;
+    }
+    .stats-price-chart svg {
+      display: block;
+      width: 100%;
+      height: 220px;
+    }
+    .stats-price-axis {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: .75rem;
+      margin-top: 6px;
+    }
+    .stats-price-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stats-price-pill {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--bg) 90%, transparent);
+      display: grid;
+      gap: 2px;
+    }
+    .stats-price-pill strong {
+      font-size: .95rem;
+      line-height: 1.2;
+    }
+    .stats-price-pill span {
+      color: var(--muted);
+      font-size: .75rem;
+    }
+    .stats-price-table-wrap {
+      overflow-x: auto;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+    }
+    .stats-price-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+    }
+    .stats-price-table th,
+    .stats-price-table td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+      white-space: nowrap;
+    }
+    .stats-price-table th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: .76rem;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+    }
+    .stats-price-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+    .stats-price-change.down {
+      color: #10b981;
+    }
+    .stats-price-change.up {
+      color: #f87171;
+    }
+    .stats-price-change.flat {
+      color: var(--muted);
+    }
     .detail-card-actions {
       display: flex;
       flex-wrap: wrap;
@@ -2745,6 +3060,25 @@ def ui_preview_html(
     }
     .view-mode-control {
       flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-mode-control.is-disabled {
+      opacity: .4;
+      pointer-events: none;
+    }
+    .view-mode-button svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      display: block;
+    }
+    .view-mode-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 10px;
     }
     .mode-list-grid {
       display: grid;
@@ -3311,6 +3645,7 @@ def ui_preview_html(
       padding: 10px 12px;
       background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
     }
+    body.debug-mode .debug-only { display: inline-flex !important; }
     .movie-detail-page {
       display: grid;
       gap: 16px;
@@ -9306,6 +9641,7 @@ def ui_preview_html(
         <div class="button-row compact bulk-selection-actions">
           <button type="button" class="secondary-button compact-button" data-bulk-select="all" data-next-i18n="bulk.selectAll">Select all</button>
           <button type="button" class="secondary-button compact-button" data-bulk-select="none" data-next-i18n="bulk.deselectAll">Deselect all</button>
+          <button type="button" class="secondary-button compact-button hidden" data-bulk-select="clear" id="bulkClearSelection" data-next-i18n="bulk.clearSelection">Clear selection</button>
         </div>
         <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
         <div class="bulk-targets">
@@ -9322,6 +9658,16 @@ def ui_preview_html(
             </label>
             <button type="button" class="bulk-action" disabled data-bulk-action="group-add" data-next-i18n="bulk.addToGroup">Add</button>
             <button type="button" class="bulk-action" disabled data-bulk-action="group-remove" data-next-i18n="bulk.removeFromGroup">Remove</button>
+          </div>
+          <div class="bulk-target wide">
+            <label>
+              <span data-next-i18n="bulk.tagsTarget">Tags</span>
+            </label>
+            <div class="bulk-tag-picker" id="bulkTagPicker" role="group" aria-label="Tags"></div>
+            <div class="button-row compact">
+              <button type="button" class="bulk-action" disabled data-bulk-action="tags-add" data-next-i18n="bulk.addTags">Assign tags</button>
+              <button type="button" class="bulk-action" disabled data-bulk-action="tags-remove" data-next-i18n="bulk.removeTags">Remove tags</button>
+            </div>
           </div>
           <div class="bulk-target wide">
             <label>
@@ -9438,10 +9784,13 @@ def ui_preview_html(
                 <button type="button" class="lists-seg" data-lists-tab="tags" data-next-i18n-aria="lists.tags" aria-label="Tags"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41,11.58L12.41,2.58C12.04,2.21 11.53,2 11,2H4A2,2 0 0,0 2,4V11C2,11.53 2.21,12.04 2.59,12.42L11.59,21.42C11.96,21.79 12.47,22 13,22C13.53,22 14.04,21.79 14.41,21.41L21.41,14.41C21.79,14.04 22,13.53 22,13C22,12.47 21.79,11.96 21.41,11.58M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.tags">Tags</span></button>
                 <button type="button" class="lists-seg" data-lists-tab="loans" data-next-i18n-aria="lists.loans" aria-label="On loan"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16,17V19H2V17S2,13 9,13 16,17 16,17M12.5,7.5A3.5,3.5 0 1,0 9,11A3.5,3.5 0 0,0 12.5,7.5M15.94,13A5.32,5.32 0 0,1 18,17V19H22V17S22,13.37 15.94,13M15,4A3.39,3.39 0 0,0 13.07,4.59A5,5 0 0,1 13.07,10.41A3.39,3.39 0 0,0 15,11A3.5,3.5 0 0,0 15,4Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.loans">On loan</span></button>
               </div>
-              <div class="segmented compact view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
-                <button type="button" class="active" data-lists-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
-                <button type="button" data-lists-view-mode="list" data-next-i18n="collection.viewList">List</button>
-                <button type="button" data-lists-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+              <div class="view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+                <button type="button" class="icon-button view-mode-button" data-lists-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg>
+                </button>
+                <button type="button" class="icon-button view-mode-button active" data-lists-view-mode="poster" aria-label="Poster view" data-next-i18n-aria="collection.viewPoster" title="Posters" data-next-i18n-title="collection.viewPoster">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3H11V11H3V3M13 3H21V11H13V3M3 13H11V21H3V13M13 13H21V21H13V13Z"/></svg>
+                </button>
               </div>
             </div>
           </div>
@@ -9528,6 +9877,43 @@ def ui_preview_html(
           <div class="stats-block">
             <h2 data-next-i18n="stats.byRating">By rating</h2>
             <div class="stats-bars" id="statsByRating"></div>
+          </div>
+          <div class="stats-block stats-price-trend hidden" id="statsPriceTrendSection">
+            <div class="stats-price-toolbar">
+              <h2 data-next-i18n="stats.priceTrendTitle">Wishlist price trend</h2>
+              <label>
+                <span data-next-i18n="stats.priceTrendMovie">Movie</span>
+                <select id="statsPriceTrendSelect" aria-label="Movie" data-next-i18n-aria="stats.priceTrendMovie"></select>
+              </label>
+              <label class="stats-price-figure-toggle">
+                <input type="checkbox" id="statsPriceTrendShowFigures">
+                <span data-next-i18n="stats.priceTrendShowFigures">Show figures for more films</span>
+              </label>
+            </div>
+            <p class="stats-empty hidden" id="statsPriceTrendGateMessage"></p>
+            <div class="stats-price-chart" id="statsPriceTrendChartWrap">
+              <svg viewBox="0 0 640 220" preserveAspectRatio="none" id="statsPriceTrendChart" aria-hidden="true"></svg>
+              <div class="stats-price-axis">
+                <span id="statsPriceTrendRangeStart"></span>
+                <span id="statsPriceTrendRangeEnd"></span>
+              </div>
+            </div>
+            <div class="stats-price-summary" id="statsPriceTrendSummary"></div>
+            <div class="stats-price-table-wrap hidden" id="statsPriceTrendTableWrap">
+              <table class="stats-price-table">
+                <thead>
+                  <tr>
+                    <th data-next-i18n="stats.priceTrendTableMovie">Movie</th>
+                    <th data-next-i18n="stats.priceTrendTableCurrent">Current</th>
+                    <th data-next-i18n="stats.priceTrendTableMin">Min</th>
+                    <th data-next-i18n="stats.priceTrendTableMax">Max</th>
+                    <th data-next-i18n="stats.priceTrendTableChange">Change</th>
+                    <th data-next-i18n="stats.priceTrendTableUpdated">Updated</th>
+                  </tr>
+                </thead>
+                <tbody id="statsPriceTrendTableBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
         <div class="preview-empty hidden" id="statsEmptyMessage"></div>
@@ -10696,6 +11082,7 @@ def ui_preview_html(
                 <div class="profile-form-actions">
                   <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
                   <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
+                  <button type="button" class="secondary-button debug-only hidden" id="pushPriceCheckButton" data-next-i18n="notifications.priceCheck">Price Check</button>
                 </div>
               </div>
               <div class="profile-section-grid">
@@ -11682,6 +12069,9 @@ def ui_preview_html(
     };
     const selectedMovieIds = new Set();
     const selectedContainerIds = new Set();
+    const bulkSelectedTagIds = new Set();
+    let libraryTags = [];
+    let libraryTagsLoaded = false;
     let libraryMetadataJobs = [];
     let libraryMetadataJobVisible = false;
     let libraryMetadataJobPollTimer = null;
@@ -12492,6 +12882,7 @@ def ui_preview_html(
       syncProfilePanelVisibility();
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="metadata"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkMetadata));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="group-add"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="tags-add"]')), hasPermission("watchlist.manage"));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="container"]')), collectorsEnabled && (hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers) || hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections)));
       setElementVisible(
         closestCard(document.querySelector('[data-bulk-action="location"]')),
@@ -16217,11 +16608,18 @@ def ui_preview_html(
       if (button) button.disabled = true;
       setLoginMessage(tNext("auth.recoveryChecking", "Checking recovery code..."));
       try {
+        const recoveryBody = {username, recovery_code: recoveryCode};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) recoveryBody.mobile_flow = mobileFlow;
         const payload = await apiJson("/api/next/auth/recovery", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({username, recovery_code: recoveryCode})
+          body: JSON.stringify(recoveryBody)
         });
+        if (payload.callback_url || payload.callbackUrl) {
+          window.location.href = payload.callback_url || payload.callbackUrl;
+          return;
+        }
         if (payload.token) localStorage.setItem("dv_next_token", payload.token);
         const codeInput = document.getElementById("appRecoveryCode");
         if (codeInput) codeInput.value = "";
@@ -16894,7 +17292,56 @@ def ui_preview_html(
        populateLocationParentSelect(locationSelect, {selectedId: currentLocationValue, emptyLabel: tNext("bulk.chooseLocationFirst", "Choose location")});
        if (Array.from(locationSelect.options).some((option) => option.value === currentLocationValue)) locationSelect.value = currentLocationValue;
       }
+      renderBulkTagPicker();
       syncBulkTargetCreateControls();
+    }
+    function renderBulkTagPicker() {
+      const picker = document.getElementById("bulkTagPicker");
+      if (!picker) return;
+      const tags = Array.isArray(libraryTags) ? libraryTags : [];
+      const validIds = new Set(tags.map((tag) => String(tag.id)));
+      Array.from(bulkSelectedTagIds).forEach((id) => { if (!validIds.has(id)) bulkSelectedTagIds.delete(id); });
+      if (!tags.length) {
+        const emptyLabel = libraryTagsLoaded
+          ? tNext("bulk.tagsEmpty", "No tags yet. Create tags from the Lists screen.")
+          : tNext("bulk.tagsLoading", "Loading tags...");
+        picker.innerHTML = `<span class="bulk-tag-empty">${escapeHtml(emptyLabel)}</span>`;
+        return;
+      }
+      picker.innerHTML = tags.map((tag) => {
+        const id = String(tag.id);
+        const selected = bulkSelectedTagIds.has(id);
+        const count = Number(tag.movieCount || 0);
+        const name = tag.name || tag.slug || "";
+        const style = tag.color ? ` style="--tag-color:${escapeHtml(tag.color)}"` : "";
+        const ariaLabel = tNext("bulk.tagOptionLabel", "{name} ({count})").replace("{name}", name).replace("{count}", String(count));
+        return `<button type="button" class="bulk-tag-option" data-bulk-tag="${escapeHtml(id)}" aria-pressed="${selected ? "true" : "false"}" aria-label="${escapeHtml(ariaLabel)}"${style}>`
+          + `<span class="bulk-tag-swatch" aria-hidden="true"></span>`
+          + `<span class="bulk-tag-name">${escapeHtml(name)}</span>`
+          + `<span class="bulk-tag-count">${escapeHtml(String(count))}</span>`
+          + `</button>`;
+      }).join("");
+    }
+    async function loadLibraryTags(force = false) {
+      if (!hasPermission("watchlist.manage")) {
+        libraryTags = [];
+        libraryTagsLoaded = true;
+        renderBulkTagPicker();
+        return;
+      }
+      if (libraryTagsLoaded && !force) {
+        renderBulkTagPicker();
+        return;
+      }
+      try {
+        const payload = await authApiJson("/api/next/tags");
+        libraryTags = Array.isArray(payload.tags) ? payload.tags : [];
+        libraryTagsLoaded = true;
+      } catch (error) {
+        libraryTags = [];
+      }
+      renderBulkTagPicker();
+      updateBulkBar();
     }
     function syncBulkTargetCreateControls() {
       const containerSelect = document.getElementById("bulkContainerTarget");
@@ -17349,7 +17796,7 @@ def ui_preview_html(
       });
     }
     function normalizeViewMode(value) {
-      return ["poster", "list", "detail"].includes(value) ? value : "poster";
+      return ["poster", "list"].includes(value) ? value : "poster";
     }
     function normalizeLibraryViewMode(value) {
       return value === "list" ? "list" : "poster";
@@ -24955,22 +25402,6 @@ def ui_preview_html(
         </div>
       `;
     }
-    function tagRowHtml(tag) {
-      const count = tag.movieCount || 0;
-      const color = tag.color || "";
-      return `
-        <div class="list-simple-card">
-          <span class="tag-swatch"${color ? ` style="background:${escapeHtml(color)}"` : ""}></span>
-          <div class="list-simple-body">
-            <span class="list-simple-title">${escapeHtml(tag.name || "")}</span>
-            <span class="list-simple-meta">${escapeHtml(count)} ${escapeHtml(tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies"))}</span>
-          </div>
-          <div class="list-simple-actions">
-            <button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>
-          </div>
-        </div>
-      `;
-    }
     function loanRowHtml(loan) {
       const snapshot = loan.snapshot || {};
       const title = snapshot.title || loan.title || tNext("common.untitled", "Untitled");
@@ -25128,11 +25559,6 @@ def ui_preview_html(
           <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
           <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
-          <span class="lists-poster-actions">
-            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
-            <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
-            <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
-          </span>
         </div>
       `;
     }
@@ -25213,47 +25639,27 @@ def ui_preview_html(
       return section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
         + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
-    function tagPosterCardHtml(tag) {
+    function tagChipHtml(tag) {
       const count = tag.movieCount || 0;
       const color = tag.color || "";
-      const initial = (String(tag.name || "#").trim().slice(0, 1) || "#").toUpperCase();
+      const locked = count > 0;
+      const countLabel = count + " " + tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies");
+      const removeTitle = locked
+        ? tNext("lists.tagDeleteLocked", "Remove this tag from all media before you can delete it.")
+        : tNext("common.delete", "Delete");
       return `
-        <div class="preview-poster lists-static-poster tag-poster-card">
-          <span class="preview-poster-art tag-poster-art"${color ? ` style="background:${escapeHtml(color)}"` : ""}><span class="tag-poster-initial">${escapeHtml(initial)}</span></span>
-          <span class="preview-poster-title">${escapeHtml(tag.name || "")}</span>
-          <span class="preview-poster-meta">${escapeHtml(count)} ${escapeHtml(tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies"))}</span>
-          <span class="lists-poster-actions">
-            <button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>
-          </span>
-        </div>
+        <span class="tag-chip"${color ? ` style="--tag-color:${escapeHtml(color)}"` : ""}>
+          <span class="tag-chip-swatch" aria-hidden="true"></span>
+          <span class="tag-chip-name">${escapeHtml(tag.name || "")}</span>
+          <span class="tag-chip-count">${escapeHtml(countLabel)}</span>
+          <button type="button" class="tag-chip-remove" data-tag-remove="${escapeHtml(tag.id)}"${locked ? " disabled" : ""} title="${escapeHtml(removeTitle)}" aria-label="${escapeHtml(removeTitle)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>
+          </button>
+        </span>
       `;
     }
-    function tagDetailTableHtml(tags) {
-      return `
-        <div class="watched-detail-table" role="table">
-          <div class="watched-detail-row head" role="row">
-            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.tagName", "Tag"))}</span>
-            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.tagMoviesColumn", "Movies"))}</span>
-            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("common.actions", "Actions"))}</span>
-          </div>
-          ${(tags || []).map((tag) => {
-            const count = tag.movieCount || 0;
-            const color = tag.color || "";
-            return `
-              <div class="watched-detail-row" role="row">
-                <span role="cell"><span class="tag-swatch"${color ? ` style="background:${escapeHtml(color)}"` : ""}></span> <strong>${escapeHtml(tag.name || "")}</strong></span>
-                <span role="cell">${escapeHtml(count)}</span>
-                <span role="cell" class="list-simple-actions"><button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button></span>
-              </div>
-            `;
-          }).join("")}
-        </div>
-      `;
-    }
-    function tagRenderRows(rows, mode) {
-      if (mode === "detail") return tagDetailTableHtml(rows || []);
-      if (mode === "list") return (rows || []).map(tagRowHtml).join("");
-      return (rows || []).map(tagPosterCardHtml).join("");
+    function tagRenderRows(rows) {
+      return (rows || []).map(tagChipHtml).join("");
     }
     function loanPosterUrl(loan) {
       const snapshot = loan.snapshot || {};
@@ -25723,7 +26129,15 @@ def ui_preview_html(
       const empty = document.getElementById("listsEmptyMessage");
       const active = listsState.active;
       const viewModeControl = document.getElementById("listsViewModeControl");
-      if (viewModeControl) viewModeControl.classList.remove("hidden");
+      if (viewModeControl) {
+        viewModeControl.classList.remove("hidden");
+        const tagsActive = active === "tags";
+        viewModeControl.classList.toggle("is-disabled", tagsActive);
+        viewModeControl.setAttribute("aria-hidden", tagsActive ? "true" : "false");
+        viewModeControl.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
+          button.disabled = tagsActive;
+        });
+      }
       if (watchlistGrid) watchlistGrid.classList.toggle("hidden", active !== "watchlist");
       if (watchedList) watchedList.classList.toggle("hidden", active !== "watched");
       if (wishlistPanel) wishlistPanel.classList.toggle("hidden", active !== "wishlist");
@@ -25784,8 +26198,8 @@ def ui_preview_html(
       } else if (active === "tags") {
         const list = document.getElementById("listsTagsList");
         if (list) {
-          configureSimpleListNode(list, {tags: true});
-          list.innerHTML = tagRenderRows(listsState.tags || [], listsViewMode);
+          list.className = "tags-chip-list";
+          list.innerHTML = tagRenderRows(listsState.tags || []);
         }
         if (empty) {
           empty.textContent = tNext("lists.emptyTags", "You have no tags yet.");
@@ -25846,6 +26260,9 @@ def ui_preview_html(
         listsState.watched = payload.watched || [];
         listsState.wishlist = wishlistPayload.items || [];
         listsState.tags = tagsPayload.tags || [];
+        libraryTags = listsState.tags;
+        libraryTagsLoaded = true;
+        renderBulkTagPicker();
         const lentLoans = (loansPayload.loans || []).map((loan) => { loan.direction = "out"; return loan; });
         const borrowedLoans = (borrowedPayload.loans || []).map((loan) => { loan.direction = "in"; return loan; });
         listsState.loans = lentLoans.concat(borrowedLoans);
@@ -25899,10 +26316,38 @@ def ui_preview_html(
     function bindWishlistCardInteractions() {
       document.querySelectorAll("#listsWishlistList [data-wishlist-poster]").forEach((poster) => {
         const id = poster.dataset.wishlistPoster;
-        const card = poster.closest("[data-wishlist-card]");
         bindLongPress(poster, {
           onClick: () => openWishlistMeerInfo(id),
-          onLongPress: () => { if (card) card.classList.toggle("actions-visible"); }
+          onLongPress: () => openWishlistActionsMenu(id)
+        });
+      });
+    }
+    function openWishlistActionsMenu(id) {
+      const item = listsFindWishlist(id);
+      if (!item) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      const actions = [];
+      if (!item.acquiredAt) {
+        actions.push({ key: "acquire", label: tNext("lists.wishlistMarkAcquired", "Mark as acquired"), run: () => acquireWishlistItem(id) });
+      }
+      actions.push({ key: "meerinfo", label: tNext("lists.moreInfo", "More info"), run: () => openWishlistMeerInfo(id) });
+      actions.push({ key: "remove", label: tNext("common.remove", "Remove"), tone: "danger", run: () => removeWishlistItem(id) });
+      const buttonsHtml = actions.map((action, index) =>
+        `<button type="button" class="lists-actionsheet-btn${action.tone === "danger" ? " danger" : ""}" data-action-index="${index}">${escapeHtml(action.label)}</button>`
+      ).join("");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</h3></header>
+        <div class="lists-actionsheet-list">${buttonsHtml}</div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-action-index]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const action = actions[Number(btn.dataset.actionIndex)];
+          listsCloseOverlay(overlay);
+          if (action && typeof action.run === "function") action.run();
         });
       });
     }
@@ -25975,6 +26420,16 @@ def ui_preview_html(
       let editing = false;
       let posterUrl = usableImage(item.posterUrl || item.poster_url) || "";
       let pendingPosterFile = null;
+      let modalMessageText = "";
+      let modalMessageTone = "";
+      const normalizeShops = (list) => Array.isArray(list) ? list.map((shop) => ({...shop})) : [];
+      let shops = normalizeShops(item.shops);
+      let shopEditor = null;
+      const formatShopPrice = (shop) => {
+        const value = shop && shop.lastSeenPrice;
+        if (value == null) return "—";
+        return `${escapeHtml(String(value))} ${escapeHtml((shop && shop.priceCurrency) || "EUR")}`;
+      };
       const render = () => {
         const posterPreview = posterUrl
           ? `<img src="${escapeHtml(posterUrl)}" alt="">`
@@ -26005,6 +26460,78 @@ def ui_preview_html(
               <label class="lists-modal-field"><span>${escapeHtml(tNext("lists.noteLabel", "Note"))}</span>
                 <span data-read>${escapeHtml(item.note || "")}</span>
                 <textarea data-edit data-field="note" rows="2">${escapeHtml(item.note || "")}</textarea></label>
+              <div class="lists-modal-section-divider">${escapeHtml(tNext("lists.wishlistPriceDropAlert", "Price drop alert"))}</div>
+              <label class="lists-modal-field lists-modal-field-check">
+                <span>${escapeHtml(tNext("lists.wishlistAlertEnabled", "Alert on price drop"))}</span>
+                <span data-read>${item.alertEnabled ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}</span>
+                <input data-edit data-field="alertEnabled" type="checkbox"${item.alertEnabled ? " checked" : ""}>
+              </label>
+              <label class="lists-modal-field">
+                <span>${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}</span>
+                <span data-read>${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : "—"}</span>
+                <input data-edit data-field="targetPrice" type="number" min="0" step="0.01" value="${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : ""}">
+              </label>
+              <label class="lists-modal-field">
+                <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
+                <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
+              </label>
+              <div class="lists-modal-shop-list-wrap">
+                <div class="lists-modal-shop-head">
+                  <span>${escapeHtml(tNext("lists.wishlistShopsTitle", "Shops"))}</span>
+                  ${shops.length < 10 ? `<button type="button" class="ghost" data-shop-add>${escapeHtml(tNext("lists.wishlistShopAdd", "Add shop"))}</button>` : ""}
+                </div>
+                ${shops.length
+                  ? `<div class="lists-modal-shop-list">${
+                      shops.map((shop) => `
+                        <div class="lists-modal-shop-row">
+                          <div class="lists-modal-shop-main">
+                            <strong>${escapeHtml(shop.shopName || "")}</strong>
+                            <span>${formatShopPrice(shop)}</span>
+                          </div>
+                          <button type="button" class="ghost" data-shop-edit="${escapeHtml(String(shop.id || ""))}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+                        </div>
+                      `).join("")
+                    }</div>`
+                  : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistNoShops", "No shops added yet."))}</p>`
+                }
+                ${shopEditor ? `
+                  <div class="lists-modal-shop-editor">
+                    <label class="lists-modal-field">
+                      <span>${escapeHtml(tNext("lists.wishlistShopName", "Shop name"))}</span>
+                      <input data-shop-field="name" type="text" value="${escapeHtml(shopEditor.name || "")}" maxlength="80">
+                    </label>
+                    <label class="lists-modal-field">
+                      <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
+                      <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
+                    </label>
+                    <label class="lists-modal-field">
+                      <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                      <input data-shop-field="currency" type="text" maxlength="3" value="${escapeHtml(shopEditor.currency || "EUR")}">
+                    </label>
+                    <details class="lists-modal-shop-advanced">
+                      <summary>${escapeHtml(tNext("lists.wishlistShopAdvancedSelector", "Advanced price selector"))}</summary>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorType", "Selector type"))}</span>
+                        <select data-shop-field="selectorType">
+                          <option value="">${escapeHtml(tNext("common.none", "None"))}</option>
+                          <option value="css_text"${shopEditor.selectorType === "css_text" ? " selected" : ""}>css_text</option>
+                          <option value="regex_capture"${shopEditor.selectorType === "regex_capture" ? " selected" : ""}>regex_capture</option>
+                        </select>
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorValue", "Selector value"))}</span>
+                        <input data-shop-field="selectorValue" type="text" value="${escapeHtml(shopEditor.selectorValue || "")}" placeholder=".price, #our-price, regex...">
+                      </label>
+                    </details>
+                    <div class="lists-modal-shop-editor-actions">
+                      <button type="button" data-shop-save>${escapeHtml(tNext("common.save", "Save"))}</button>
+                      <button type="button" class="ghost" data-shop-cancel>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+                    </div>
+                  </div>
+                ` : ""}
+              </div>
+              ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(String(item.lastSeenPrice))} ${escapeHtml(item.priceCurrency || "EUR")}</span></div>` : ""}
             </div>
           </div>
           <p class="lists-modal-message" data-message></p>
@@ -26014,18 +26541,33 @@ def ui_preview_html(
           </footer>
         `;
         const messageNode = panel.querySelector("[data-message]");
-        const setMessage = (text, tone) => { if (messageNode) { messageNode.textContent = text || ""; messageNode.className = "lists-modal-message " + (tone || ""); } };
+        const setMessage = (text, tone) => {
+          modalMessageText = text || "";
+          modalMessageTone = tone || "";
+          if (messageNode) {
+            messageNode.textContent = modalMessageText;
+            messageNode.className = "lists-modal-message " + modalMessageTone;
+          }
+        };
+        if (modalMessageText || modalMessageTone) {
+          setMessage(modalMessageText, modalMessageTone);
+        }
         panel.querySelector("[data-secondary]").addEventListener("click", () => {
           if (editing) { editing = false; pendingPosterFile = null; posterUrl = usableImage(item.posterUrl || item.poster_url) || ""; render(); }
           else listsCloseOverlay(overlay);
         });
         panel.querySelector("[data-primary]").addEventListener("click", async () => {
           if (!editing) { editing = true; render(); return; }
+          const targetPriceRaw = (panel.querySelector('[data-field="targetPrice"]').value || "").trim();
+          const targetPriceNum = targetPriceRaw ? parseFloat(targetPriceRaw) : null;
           const body = {
             title: (panel.querySelector('[data-field="title"]').value || "").trim(),
             format: (panel.querySelector('[data-field="format"]').value || "").trim() || null,
             barcode: (panel.querySelector('[data-field="barcode"]').value || "").trim() || null,
-            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null
+            note: (panel.querySelector('[data-field="note"]').value || "").trim() || null,
+            alertEnabled: panel.querySelector('[data-field="alertEnabled"]').checked,
+            targetPrice: (targetPriceNum != null && !Number.isNaN(targetPriceNum)) ? targetPriceNum : null,
+            priceCurrency: (panel.querySelector('[data-field="priceCurrency"]').value || "").trim().toUpperCase() || "EUR"
           };
           const yearRaw = (panel.querySelector('[data-field="year"]').value || "").trim();
           const yearNum = parseInt(yearRaw, 10);
@@ -26042,6 +26584,107 @@ def ui_preview_html(
             await authApiJson("/api/next/lists/wishlist/" + encodeURIComponent(id), { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
             listsCloseOverlay(overlay);
             await loadListsView(true);
+          } catch (error) {
+            setMessage((error && error.message) || String(error), "bad");
+          }
+        });
+        panel.querySelectorAll("[data-shop-edit]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const shopId = btn.getAttribute("data-shop-edit");
+            const current = shops.find((shop) => String(shop.id) === String(shopId));
+            if (!current) return;
+            shopEditor = {
+              id: current.id,
+              name: current.shopName || "",
+              url: current.priceUrl || "",
+              currency: (current.priceCurrency || item.priceCurrency || "EUR").toUpperCase(),
+              selectorType: (current.priceSelector && current.priceSelector.type) || "",
+              selectorValue: (current.priceSelector && current.priceSelector.value) || "",
+            };
+            render();
+          });
+        });
+        panel.querySelector("[data-shop-add]")?.addEventListener("click", () => {
+          if (shops.length >= 10) {
+            setMessage(tNext("lists.wishlistShopLimitReached", "You can add up to 10 shops per item."), "bad");
+            return;
+          }
+          shopEditor = {
+            id: null,
+            name: "",
+            url: "",
+            currency: (item.priceCurrency || "EUR").toUpperCase(),
+            selectorType: "",
+            selectorValue: "",
+          };
+          render();
+        });
+        panel.querySelector("[data-shop-cancel]")?.addEventListener("click", () => {
+          shopEditor = null;
+          render();
+        });
+        panel.querySelector("[data-shop-save]")?.addEventListener("click", async () => {
+          if (!shopEditor) return;
+          const name = (panel.querySelector('[data-shop-field="name"]').value || "").trim();
+          const url = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
+          const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";
+          const selectorType = (panel.querySelector('[data-shop-field="selectorType"]')?.value || "").trim();
+          const selectorValue = (panel.querySelector('[data-shop-field="selectorValue"]')?.value || "").trim();
+          if (!name) {
+            setMessage(tNext("lists.wishlistShopNameRequired", "Shop name is required."), "bad");
+            return;
+          }
+          if (!/^https?:\\/\\//i.test(url)) {
+            setMessage(tNext("lists.wishlistPriceUrlInvalid", "Shop URL must start with http:// or https://"), "bad");
+            return;
+          }
+          if (selectorType && !selectorValue) {
+            setMessage(tNext("lists.wishlistShopSelectorValueRequired", "Selector value is required when selector type is set."), "bad");
+            return;
+          }
+          setMessage(tNext("common.saving", "Saving..."));
+          try {
+            const payload = await authApiJson(
+              shopEditor.id
+                ? `/api/next/lists/wishlist/${encodeURIComponent(id)}/shops/${encodeURIComponent(shopEditor.id)}`
+                : `/api/next/lists/wishlist/${encodeURIComponent(id)}/shops`,
+              {
+                method: shopEditor.id ? "PATCH" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  shopName: name,
+                  priceUrl: url,
+                  priceCurrency: currency,
+                  priceSelector: selectorType ? { type: selectorType, value: selectorValue } : null
+                }),
+              }
+            );
+            if (payload && payload.entry) {
+              Object.assign(item, payload.entry);
+              shops = normalizeShops(payload.entry.shops);
+            }
+            const fetchedPrice = payload && typeof payload.fetchedPrice === "number" ? payload.fetchedPrice : null;
+            const fetchedCurrency = String((payload && payload.fetchedCurrency) || currency || "EUR").toUpperCase();
+            shopEditor = null;
+            if (fetchedPrice != null) {
+              const messageTemplate = tNext(
+                "lists.wishlistShopSavedWithPrice",
+                "Shop saved. Current price: {price} {currency}."
+              );
+              const priceMessage = messageTemplate
+                .replace("{price}", String(fetchedPrice))
+                .replace("{currency}", fetchedCurrency);
+              setMessage(priceMessage, "good");
+            } else {
+              setMessage(
+                tNext(
+                  "lists.wishlistShopSavedNoPrice",
+                  "Shop saved, but no current price could be extracted."
+                ),
+                "bad"
+              );
+            }
+            render();
           } catch (error) {
             setMessage((error && error.message) || String(error), "bad");
           }
@@ -26418,7 +27061,7 @@ def ui_preview_html(
       };
       render();
     }
-    const statsState = {loaded: false, data: null};
+    const statsState = {loaded: false, data: null, selectedPriceTrendMovieId: null, showPriceTrendFigures: false};
     function statsBarsHtml(rows) {
       const items = (rows || []).filter((row) => (row.count || 0) > 0);
       if (!items.length) {
@@ -26439,6 +27082,204 @@ def ui_preview_html(
           `;
         })
         .join("");
+    }
+    function formatStatsPrice(value, currency = "EUR") {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return "—";
+      const code = String(currency || "EUR").trim().toUpperCase() || "EUR";
+      try {
+        return new Intl.NumberFormat(undefined, { style: "currency", currency: code, maximumFractionDigits: 2 }).format(numeric);
+      } catch (error) {
+        return `${numeric.toFixed(2)} ${code}`;
+      }
+    }
+    function statsPriceChangeClass(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || Math.abs(numeric) < 0.005) return "flat";
+      return numeric < 0 ? "down" : "up";
+    }
+    function renderStatsPriceTrend(data) {
+      const section = document.getElementById("statsPriceTrendSection");
+      const gateMessage = document.getElementById("statsPriceTrendGateMessage");
+      const selectNode = document.getElementById("statsPriceTrendSelect");
+      const chartWrap = document.getElementById("statsPriceTrendChartWrap");
+      const chartNode = document.getElementById("statsPriceTrendChart");
+      const rangeStartNode = document.getElementById("statsPriceTrendRangeStart");
+      const rangeEndNode = document.getElementById("statsPriceTrendRangeEnd");
+      const summaryNode = document.getElementById("statsPriceTrendSummary");
+      const figuresToggleNode = document.getElementById("statsPriceTrendShowFigures");
+      const tableWrap = document.getElementById("statsPriceTrendTableWrap");
+      const tableBody = document.getElementById("statsPriceTrendTableBody");
+      if (!section) return;
+      section.classList.remove("hidden");
+
+      const trend = data && data.wishlistPriceTrend ? data.wishlistPriceTrend : {};
+      const activeLoans = Number(trend.activeLoans ?? (data.loans && data.loans.active) ?? 0);
+      const movies = Array.isArray(trend.movies) ? trend.movies.filter((movie) => Array.isArray(movie.points) && movie.points.length) : [];
+
+      if (figuresToggleNode) {
+        figuresToggleNode.checked = !!statsState.showPriceTrendFigures;
+        figuresToggleNode.onchange = () => {
+          statsState.showPriceTrendFigures = !!figuresToggleNode.checked;
+          renderStatisticsView();
+        };
+      }
+
+      if (activeLoans <= 0) {
+        if (gateMessage) {
+          gateMessage.textContent = tNext("stats.priceTrendNoLoan", "Price trends appear when at least one movie is currently on loan.");
+          gateMessage.classList.remove("hidden");
+        }
+        if (chartWrap) chartWrap.classList.add("hidden");
+        if (summaryNode) summaryNode.innerHTML = "";
+        if (tableWrap) tableWrap.classList.add("hidden");
+        if (selectNode) {
+          selectNode.innerHTML = "";
+          selectNode.disabled = true;
+        }
+        return;
+      }
+
+      if (!movies.length) {
+        if (gateMessage) {
+          gateMessage.textContent = tNext("stats.priceTrendNoData", "No wishlist price history is available yet.");
+          gateMessage.classList.remove("hidden");
+        }
+        if (chartWrap) chartWrap.classList.add("hidden");
+        if (summaryNode) summaryNode.innerHTML = "";
+        if (tableWrap) tableWrap.classList.add("hidden");
+        if (selectNode) {
+          selectNode.innerHTML = "";
+          selectNode.disabled = true;
+        }
+        return;
+      }
+
+      if (gateMessage) gateMessage.classList.add("hidden");
+      if (chartWrap) chartWrap.classList.remove("hidden");
+      if (selectNode) {
+        const options = movies
+          .map((movie) => {
+            const movieId = String(movie.wishlistItemId || "");
+            const movieLabel = movie.year ? `${movie.title || tNext("common.untitled", "Unknown")} (${movie.year})` : (movie.title || tNext("common.untitled", "Unknown"));
+            return `<option value="${escapeHtml(movieId)}">${escapeHtml(movieLabel)}</option>`;
+          })
+          .join("");
+        if (selectNode.innerHTML !== options) selectNode.innerHTML = options;
+        selectNode.disabled = false;
+      }
+
+      const selectedId = String(statsState.selectedPriceTrendMovieId || "");
+      let selectedMovie = movies.find((movie) => String(movie.wishlistItemId || "") === selectedId);
+      if (!selectedMovie) {
+        selectedMovie = movies[0];
+        statsState.selectedPriceTrendMovieId = String(selectedMovie.wishlistItemId || "");
+      }
+      if (selectNode) {
+        selectNode.value = String(selectedMovie.wishlistItemId || "");
+        selectNode.onchange = () => {
+          statsState.selectedPriceTrendMovieId = String(selectNode.value || "");
+          renderStatisticsView();
+        };
+      }
+
+      const points = (selectedMovie.points || [])
+        .map((point, index) => {
+          const value = Number(point && point.price);
+          const timeValue = Date.parse(String(point && point.at ? point.at : ""));
+          return {
+            idx: index,
+            value,
+            at: String(point && point.at ? point.at : ""),
+            time: Number.isFinite(timeValue) ? timeValue : index,
+          };
+        })
+        .filter((point) => Number.isFinite(point.value));
+      const currency = String(selectedMovie.currency || "EUR").toUpperCase();
+      if (!points.length) {
+        if (chartNode) chartNode.innerHTML = "";
+        if (rangeStartNode) rangeStartNode.textContent = "";
+        if (rangeEndNode) rangeEndNode.textContent = "";
+      } else {
+        const width = 640;
+        const height = 220;
+        const padding = { left: 40, right: 12, top: 10, bottom: 26 };
+        const minX = Math.min(...points.map((point) => point.time));
+        const maxXRaw = Math.max(...points.map((point) => point.time));
+        const maxX = maxXRaw === minX ? minX + 1 : maxXRaw;
+        const minYRaw = Math.min(...points.map((point) => point.value));
+        const maxYRaw = Math.max(...points.map((point) => point.value));
+        const yPad = Math.max((maxYRaw - minYRaw) * 0.12, 0.5);
+        const minY = minYRaw - yPad;
+        const maxY = maxYRaw + yPad;
+        const xScale = (point) => padding.left + ((point.time - minX) / (maxX - minX)) * (width - padding.left - padding.right);
+        const yScale = (point) => height - padding.bottom - ((point.value - minY) / Math.max(maxY - minY, 0.0001)) * (height - padding.top - padding.bottom);
+        const coords = points.map((point) => ({ x: xScale(point), y: yScale(point), value: point.value }));
+        const pathData = coords.map((coord, index) => `${index ? "L" : "M"}${coord.x.toFixed(2)} ${coord.y.toFixed(2)}`).join(" ");
+        const gridLines = [0, 1, 2, 3, 4].map((idx) => {
+          const y = padding.top + ((height - padding.top - padding.bottom) / 4) * idx;
+          return `<line x1="${padding.left}" y1="${y.toFixed(2)}" x2="${width - padding.right}" y2="${y.toFixed(2)}" stroke="var(--line)" stroke-width="1" opacity="0.45" />`;
+        }).join("");
+        const circles = coords.map((coord) => (
+          `<circle cx="${coord.x.toFixed(2)}" cy="${coord.y.toFixed(2)}" r="2.8" fill="var(--accent)" />`
+        )).join("");
+        if (chartNode) {
+          chartNode.innerHTML = `
+            <rect x="0" y="0" width="${width}" height="${height}" fill="transparent"></rect>
+            ${gridLines}
+            <path d="${pathData}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            ${circles}
+          `;
+        }
+        if (rangeStartNode) rangeStartNode.textContent = formatAppDate(points[0].at);
+        if (rangeEndNode) rangeEndNode.textContent = formatAppDate(points[points.length - 1].at);
+      }
+
+      if (summaryNode) {
+        const summaryCards = [
+          { label: tNext("stats.priceTrendCurrent", "Current"), value: formatStatsPrice(selectedMovie.currentPrice, currency) },
+          { label: tNext("stats.priceTrendMinimum", "Minimum"), value: formatStatsPrice(selectedMovie.minPrice, currency) },
+          { label: tNext("stats.priceTrendMaximum", "Maximum"), value: formatStatsPrice(selectedMovie.maxPrice, currency) },
+          {
+            label: tNext("stats.priceTrendChange", "Change"),
+            value: (() => {
+              const delta = Number(selectedMovie.changeFromStart);
+              const sign = Number.isFinite(delta) && delta > 0 ? "+" : "";
+              return `${sign}${formatStatsPrice(delta, currency)}`;
+            })(),
+            tone: statsPriceChangeClass(selectedMovie.changeFromStart),
+          },
+          { label: tNext("stats.priceTrendSamples", "Samples"), value: String(selectedMovie.sampleCount || 0) },
+          { label: tNext("stats.priceTrendLastUpdated", "Last updated"), value: selectedMovie.lastObservedAt ? formatAppDate(selectedMovie.lastObservedAt) : "—" },
+        ];
+        summaryNode.innerHTML = summaryCards.map((card) => `
+          <div class="stats-price-pill">
+            <strong class="${card.tone ? `stats-price-change ${card.tone}` : ""}">${escapeHtml(card.value)}</strong>
+            <span>${escapeHtml(card.label)}</span>
+          </div>
+        `).join("");
+      }
+
+      if (tableWrap && tableBody) {
+        tableWrap.classList.toggle("hidden", !statsState.showPriceTrendFigures);
+        tableBody.innerHTML = movies.map((movie) => {
+          const movieCurrency = String(movie.currency || "EUR").toUpperCase();
+          const movieLabel = movie.year ? `${movie.title || tNext("common.untitled", "Unknown")} (${movie.year})` : (movie.title || tNext("common.untitled", "Unknown"));
+          const delta = Number(movie.changeFromStart);
+          const sign = Number.isFinite(delta) && delta > 0 ? "+" : "";
+          const changeClass = statsPriceChangeClass(delta);
+          return `
+            <tr>
+              <td>${escapeHtml(movieLabel)}</td>
+              <td>${escapeHtml(formatStatsPrice(movie.currentPrice, movieCurrency))}</td>
+              <td>${escapeHtml(formatStatsPrice(movie.minPrice, movieCurrency))}</td>
+              <td>${escapeHtml(formatStatsPrice(movie.maxPrice, movieCurrency))}</td>
+              <td><span class="stats-price-change ${changeClass}">${escapeHtml(`${sign}${formatStatsPrice(delta, movieCurrency)}`)}</span></td>
+              <td>${escapeHtml(movie.lastObservedAt ? formatAppDate(movie.lastObservedAt) : "—")}</td>
+            </tr>
+          `;
+        }).join("");
+      }
     }
     function renderStatisticsView() {
       const data = statsState.data;
@@ -26476,6 +27317,7 @@ def ui_preview_html(
       if (byDecade) byDecade.innerHTML = statsBarsHtml(data.byDecade);
       const byRating = document.getElementById("statsByRating");
       if (byRating) byRating.innerHTML = statsBarsHtml(data.byRating);
+      renderStatsPriceTrend(data);
       if (empty) empty.classList.add("hidden");
     }
     async function loadStatisticsView(force = false) {
@@ -26725,7 +27567,8 @@ def ui_preview_html(
         ["imports", "notifications.prefImports", "notifications.prefImportsHelp"],
         ["metadata_jobs", "notifications.prefMetadataJobs", "notifications.prefMetadataJobsHelp"],
         ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"],
-        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"]
+        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"],
+        ["price_alerts", "notifications.pref.price_alerts", "notifications.prefPriceAlertsHelp"]
       ];
       return rows.map(([key, labelKey, helpKey]) => {
         const enabled = preferencesMap[key] !== false;
@@ -26894,6 +27737,51 @@ def ui_preview_html(
             : tNext("notifications.testSavedOnly", "Notification saved. Push delivery needs attention."),
           payload.status === "ok" ? "good" : "bad"
         );
+      } catch (error) {
+        setPushProfileMessage(error.message || String(error), "bad");
+      }
+    }
+    async function triggerDebugPriceSweep() {
+      setPushProfileMessage(tNext("notifications.priceCheckRunning", "Running price check sweep..."));
+      try {
+        const payload = await authApiJson("/api/next/admin/price-alerts/sweep", {method: "POST"});
+        notificationsState.loaded = false;
+        const jobId = payload.jobId || (payload.job && payload.job.id);
+        if (!jobId) {
+          setPushProfileMessage(tNext("notifications.priceCheckQueued", "Price sweep queued."), "good");
+          return;
+        }
+        setPushProfileMessage(
+          tNext("notifications.priceCheckQueuedJob", "Price sweep queued (job {jobId}).")
+            .replace("{jobId}", String(jobId)),
+          "good"
+        );
+        for (let attempt = 0; attempt < 45; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, attempt < 8 ? 1000 : 2000));
+          const jobPayload = await authApiJson(`/api/next/jobs/${encodeURIComponent(jobId)}`);
+          const job = (jobPayload && jobPayload.job) || {};
+          const status = String(job.status || "");
+          if (status === "completed") {
+            const result = (job.result && typeof job.result === "object") ? job.result : {};
+            setPushProfileMessage(
+              tNext(
+                "notifications.priceCheckDoneCounts",
+                "Price sweep done. checked={checked} notified={notified} skipped={skipped} errors={errors}"
+              )
+                .replace("{checked}", String(result.checked ?? 0))
+                .replace("{notified}", String(result.notified ?? 0))
+                .replace("{skipped}", String(result.skipped ?? 0))
+                .replace("{errors}", String(result.errors ?? 0)),
+              "good"
+            );
+            return;
+          }
+          if (status === "failed") {
+            setPushProfileMessage(job.error || tNext("notifications.priceCheckFailed", "Price sweep failed."), "bad");
+            return;
+          }
+        }
+        setPushProfileMessage(tNext("notifications.priceCheckTimeout", "Price sweep is still running; check again shortly."), "bad");
       } catch (error) {
         setPushProfileMessage(error.message || String(error), "bad");
       }
@@ -27272,6 +28160,7 @@ def ui_preview_html(
         return;
       }
       if (route === "lists") {
+        listsState.loaded = false;
         showListsPage();
         return;
       }
@@ -27280,6 +28169,7 @@ def ui_preview_html(
         return;
       }
       if (route === "people") {
+        refreshAppSnapshotSilently();
         showLibraryPage(true);
         return;
       }
@@ -27287,7 +28177,11 @@ def ui_preview_html(
         showNotificationsPage();
         return;
       }
+      refreshAppSnapshotSilently();
       showLibraryPage(true, route || "library");
+    }
+    function refreshAppSnapshotSilently() {
+      loadAppSnapshot().catch(() => {});
     }
     async function saveMovieDetails(event) {
       event.preventDefault();
@@ -27909,9 +28803,22 @@ def ui_preview_html(
       if (!selectionMode) {
         selectedMovieIds.clear();
         selectedContainerIds.clear();
+        bulkSelectedTagIds.clear();
       }
+      if (selectionMode) loadLibraryTags();
       syncSelectModeButton();
       renderCollectionSurface();
+    }
+    function clearBulkSelection() {
+      selectedMovieIds.clear();
+      selectedContainerIds.clear();
+      bulkSelectedTagIds.clear();
+      bulkLastResult = null;
+      document.querySelectorAll("[data-preview-movie].bulk-selected, [data-preview-container].bulk-selected").forEach((node) => {
+        node.classList.remove("bulk-selected");
+      });
+      renderBulkTagPicker();
+      updateBulkBar();
     }
     function toggleMovieSelection(movieId) {
       if (!movieId) return;
@@ -27981,10 +28888,12 @@ def ui_preview_html(
       document.querySelectorAll("[data-bulk-select]").forEach((button) => {
         if (button.dataset.bulkSelect === "all") button.disabled = selectableCount === 0 || selectedSelectableCount === selectableCount;
         if (button.dataset.bulkSelect === "none") button.disabled = count === 0;
+        if (button.dataset.bulkSelect === "clear") button.classList.toggle("hidden", count === 0);
       });
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         const action = button.dataset.bulkAction || "";
         if (action === "collection") button.disabled = count === 0;
+        else if (action === "tags-add" || action === "tags-remove") button.disabled = movieCount === 0 || bulkSelectedTagIds.size === 0;
         else if (action === "container") {
           const selection = bulkContainerSelection(document.getElementById("bulkContainerTarget")?.value || "");
           button.disabled = count === 0 || (!selection.targetType && !selection.createType)
@@ -28077,22 +28986,60 @@ def ui_preview_html(
       return target;
     }
     function finishBulkAction(message, details = {}) {
+      const keepSelection = details.keepSelection !== false;
       const summary = document.getElementById("librarySummary");
       bulkLastResult = {
         title: details.title || tNext("bulk.lastAction", "Last bulk action"),
         message,
         meta: details.meta || ""
       };
-      selectedMovieIds.clear();
-      selectedContainerIds.clear();
-      toggleSelectMode(false);
+      if (keepSelection) {
+        if (!selectionMode) {
+          selectionMode = true;
+          document.body.classList.add("select-mode");
+        }
+        syncSelectModeButton();
+      } else {
+        selectedMovieIds.clear();
+        selectedContainerIds.clear();
+        toggleSelectMode(false);
+      }
       if (summary) summary.textContent = message;
       loadAppSnapshot().then(() => {
         const refreshedSummary = document.getElementById("librarySummary");
         if (refreshedSummary) refreshedSummary.textContent = message;
+        if (keepSelection) updateBulkBar();
       }).catch((error) => {
         if (summary) summary.textContent = error.message || String(error);
       });
+    }
+    async function applyBulkTags(operation) {
+      if (!hasPermission("watchlist.manage")) return;
+      const movieIds = bulkSelectedMovieIds();
+      const tagIds = Array.from(bulkSelectedTagIds);
+      const summary = document.getElementById("librarySummary");
+      if (!movieIds.length) {
+        if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
+        return;
+      }
+      if (!tagIds.length) {
+        if (summary) summary.textContent = tNext("bulk.chooseTagsFirst", "Choose one or more tags first.");
+        return;
+      }
+      try {
+        if (summary) summary.textContent = tNext("bulk.savingTagLinks", "Saving tags...");
+        const payload = await authApiJson("/api/next/bulk/tags", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds, tagIds, operation})
+        });
+        await loadLibraryTags(true);
+        finishBulkAction(`${payload.changed || 0} ${tNext(operation === "remove" ? "bulk.tagsRemovedLinks" : "bulk.tagsAddedLinks", operation === "remove" ? "tag links removed" : "tag links added")}`, {
+          title: operation === "remove" ? tNext("bulk.removeTags", "Remove tags") : tNext("bulk.addTags", "Assign tags")
+        });
+      } catch (error) {
+        if (summary) summary.textContent = error.message || String(error);
+      }
     }
     async function applyBulkGroup(operation) {
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups)) return;
@@ -28239,7 +29186,8 @@ def ui_preview_html(
           body: JSON.stringify({movieIds, containerIds, confirm: "delete-selected"})
         });
         finishBulkAction(`${payload.requested || (movieIds.length + containerIds.length)} ${tNext("bulk.deletedSelected", "items deleted")}`, {
-          title: tNext("bulk.deleteSelected", "Delete selected")
+          title: tNext("bulk.deleteSelected", "Delete selected"),
+          keepSelection: false
         });
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
@@ -30471,6 +31419,7 @@ def ui_preview_html(
         button.addEventListener("click", () => {
           listsState.active = button.dataset.listsTab || "watchlist";
           renderListsView();
+          loadListsView(true);
         });
       });
       document.querySelectorAll("[data-loan-requests-tab]").forEach((button) => {
@@ -30527,6 +31476,7 @@ def ui_preview_html(
       document.getElementById("pushDisableButton")?.addEventListener("click", () => disablePushNotifications());
       document.getElementById("pushRefreshButton")?.addEventListener("click", () => loadPushProfile());
       document.getElementById("pushTestButton")?.addEventListener("click", () => sendTestPushNotification());
+      document.getElementById("pushPriceCheckButton")?.addEventListener("click", () => triggerDebugPriceSweep());
       document.getElementById("pushPreferenceList")?.addEventListener("click", (event) => {
         const prefButton = event.target.closest("[data-push-pref]");
         if (!prefButton) return;
@@ -31129,6 +32079,14 @@ def ui_preview_html(
             applyBulkLocation();
             return;
           }
+          if (button.dataset.bulkAction === "tags-add") {
+            applyBulkTags("add");
+            return;
+          }
+          if (button.dataset.bulkAction === "tags-remove") {
+            applyBulkTags("remove");
+            return;
+          }
           if (button.dataset.bulkAction === "delete") {
             applyBulkDelete();
             return;
@@ -31139,7 +32097,23 @@ def ui_preview_html(
         });
       });
       document.querySelectorAll("[data-bulk-select]").forEach((button) => {
-        button.addEventListener("click", () => setBulkLibrarySelection(button.dataset.bulkSelect || "none"));
+        button.addEventListener("click", () => {
+          if (button.dataset.bulkSelect === "clear") {
+            clearBulkSelection();
+            return;
+          }
+          setBulkLibrarySelection(button.dataset.bulkSelect || "none");
+        });
+      });
+      document.getElementById("bulkTagPicker")?.addEventListener("click", (event) => {
+        const option = event.target.closest("[data-bulk-tag]");
+        if (!option) return;
+        const tagId = String(option.dataset.bulkTag || "");
+        if (!tagId) return;
+        if (bulkSelectedTagIds.has(tagId)) bulkSelectedTagIds.delete(tagId);
+        else bulkSelectedTagIds.add(tagId);
+        option.setAttribute("aria-pressed", bulkSelectedTagIds.has(tagId) ? "true" : "false");
+        updateBulkBar();
       });
       document.getElementById("heroDetailLink")?.addEventListener("click", (event) => {
         const href = event.currentTarget.getAttribute("href") || "";
