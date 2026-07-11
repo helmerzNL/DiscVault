@@ -27909,7 +27909,6 @@ def ui_preview_html(
       if (!selectionMode) {
         selectedMovieIds.clear();
         selectedContainerIds.clear();
-        bulkLastResult = null;
       }
       syncSelectModeButton();
       renderCollectionSurface();
