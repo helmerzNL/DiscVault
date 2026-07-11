@@ -306,6 +306,31 @@ def ui_preview_html(
       font-size: .86rem;
       font-weight: 700;
     }
+    .startup-owner-fields {
+      margin-top: 18px;
+      width: min(360px, 100%);
+    }
+    .startup-owner-fields label {
+      display: grid;
+      gap: 6px;
+    }
+    .startup-owner-fields span {
+      color: var(--muted);
+      font-size: .86rem;
+      font-weight: 700;
+    }
+    .startup-owner-fields input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+      font-size: .94rem;
+      font-weight: 700;
+    }
     .login-primary,
     .primary-button {
       min-height: 44px;
@@ -9407,6 +9432,12 @@ def ui_preview_html(
         <span data-next-i18n="language.label">Language</span>
         <select id="startupLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </label>
+      <div class="startup-owner-fields hidden" id="startupOwnerFields">
+        <label for="startupOwnerUsernameInput">
+          <span data-next-i18n="auth.username">Username</span>
+          <input id="startupOwnerUsernameInput" autocomplete="username" maxlength="80" data-next-i18n-placeholder="auth.ownerUsernamePlaceholder" placeholder="Choose your username">
+        </label>
+      </div>
       <div class="startup-actions">
         <button type="button" class="primary-button hidden" id="startupOwnerPasskeyButton" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
         <a class="primary-button" id="startupMigrationLink" href="/api/next/migration" data-next-i18n="startup.openMigrationGuide">Open migration guide</a>
@@ -16396,10 +16427,16 @@ def ui_preview_html(
         setStartupGateMessage(unavailable, "bad");
         return;
       }
+      const usernameInput = document.getElementById("startupOwnerUsernameInput");
+      const username = String(usernameInput?.value || "").trim();
+      if (!username) {
+        setStartupGateMessage(tNext("auth.usernameRequired", "Username is required."), "bad");
+        usernameInput?.focus();
+        return;
+      }
       const button = document.getElementById("startupOwnerPasskeyButton");
       if (button) button.disabled = true;
-      const username = "admin";
-      const displayName = tNext("auth.firstOwner", "First owner");
+      const displayName = username;
       const credentialName = tNext("auth.ownerPasskey", "Owner passkey");
       setStartupGateMessage(tNext("auth.waitingForPasskey", "Waiting for your passkey prompt..."), "info");
       try {
@@ -30150,6 +30187,8 @@ def ui_preview_html(
         ownerPasskeyButton.classList.toggle("hidden", !startup.canCreateOwner);
         ownerPasskeyButton.disabled = !!ownerPasskeyUnavailable;
       }
+      const ownerFields = document.getElementById("startupOwnerFields");
+      if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner);
       const message = document.getElementById("startupMessage");
       if (message) {
         message.textContent = ownerPasskeyUnavailable || startup.message || "";

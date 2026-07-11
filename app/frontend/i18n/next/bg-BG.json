@@ -594,6 +594,7 @@
   "auth.signOut": "Изход",
   "auth.signedIn": "Влязохте.",
   "auth.username": "Потребителско име",
+  "auth.ownerUsernamePlaceholder": "Изберете потребителско име",
   "auth.usernameRequired": "Потребителското име е задължително.",
   "auth.waitingPasskey": "Изчакване на ключа за достъп...",
   "bulk.addToBoxSet": "Добави към бокс сет",

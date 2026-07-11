@@ -594,6 +594,7 @@
   "auth.signOut": "Αποσύνδεση",
   "auth.signedIn": "Έγινε σύνδεση.",
   "auth.username": "Όνομα χρήστη",
+  "auth.ownerUsernamePlaceholder": "Επιλέξτε το όνομα χρήστη σας",
   "auth.usernameRequired": "Το όνομα χρήστη είναι υποχρεωτικό.",
   "auth.waitingPasskey": "Αναμονή για το κλειδί πρόσβασής σας...",
   "bulk.addToBoxSet": "Προσθήκη σε box set",

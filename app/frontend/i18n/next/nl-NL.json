@@ -592,6 +592,7 @@
   "auth.signOut": "Uitloggen",
   "auth.signedIn": "Ingelogd.",
   "auth.username": "Gebruikersnaam",
+  "auth.ownerUsernamePlaceholder": "Kies je gebruikersnaam",
   "auth.usernameRequired": "Gebruikersnaam is verplicht.",
   "auth.waitingPasskey": "Wachten op je passkey...",
   "bulk.addToBoxSet": "Aan box-set koppelen",

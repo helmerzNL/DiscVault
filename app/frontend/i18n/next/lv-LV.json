@@ -594,6 +594,7 @@
   "auth.signOut": "Izrakstīties",
   "auth.signedIn": "Pierakstīšanās veikta.",
   "auth.username": "Lietotājvārds",
+  "auth.ownerUsernamePlaceholder": "Izvēlieties savu lietotājvārdu",
   "auth.usernameRequired": "Lietotājvārds ir obligāts.",
   "auth.waitingPasskey": "Gaida piekļuves atslēgu...",
   "bulk.addToBoxSet": "Pievienot komplektam",

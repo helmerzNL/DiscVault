@@ -594,6 +594,7 @@
   "auth.signOut": "Wyloguj się",
   "auth.signedIn": "Zalogowano.",
   "auth.username": "Nazwa użytkownika",
+  "auth.ownerUsernamePlaceholder": "Wybierz swoją nazwę użytkownika",
   "auth.usernameRequired": "Wymagana jest nazwa użytkownika.",
   "auth.waitingPasskey": "Czekam na Twój klucz...",
   "bulk.addToBoxSet": "Dodaj do zestawu",

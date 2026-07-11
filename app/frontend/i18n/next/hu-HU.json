@@ -594,6 +594,7 @@
   "auth.signOut": "Kijelentkezés",
   "auth.signedIn": "Bejelentkezve.",
   "auth.username": "Felhasználónév",
+  "auth.ownerUsernamePlaceholder": "Válassza ki a felhasználónevét",
   "auth.usernameRequired": "Felhasználónév megadása kötelező.",
   "auth.waitingPasskey": "Várakozás a hozzáférési kulcsra...",
   "bulk.addToBoxSet": "Hozzáadás box sethez",

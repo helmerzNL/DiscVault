@@ -594,6 +594,7 @@
   "auth.signOut": "Atsijungti",
   "auth.signedIn": "Prisijungta.",
   "auth.username": "Naudotojo vardas",
+  "auth.ownerUsernamePlaceholder": "Pasirinkite naudotojo vardą",
   "auth.usernameRequired": "Naudotojo vardas yra privalomas.",
   "auth.waitingPasskey": "Laukiama prieigos rakto...",
   "bulk.addToBoxSet": "Pridėti į rinkinį",

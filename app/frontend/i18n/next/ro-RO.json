@@ -594,6 +594,7 @@
   "auth.signOut": "Deconectare",
   "auth.signedIn": "Autentificat.",
   "auth.username": "Nume de utilizator",
+  "auth.ownerUsernamePlaceholder": "Alege-ți numele de utilizator",
   "auth.usernameRequired": "Numele de utilizator este obligatoriu.",
   "auth.waitingPasskey": "Se așteaptă cheia de acces...",
   "bulk.addToBoxSet": "Adaugă la box set",
