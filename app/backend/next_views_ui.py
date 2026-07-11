@@ -31390,7 +31390,10 @@ def ui_preview_html(
         localStorage.setItem("dv_next_collection_group_filter", activeCollectionGroupFilter);
         renderCollectionSurface();
       });
-      document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
+      document.getElementById("selectModeButton")?.addEventListener("click", () => {
+        if (selectionMode) bulkLastResult = null;
+        toggleSelectMode();
+      });
       document.getElementById("libraryMetadataJobsToggleButton")?.addEventListener("click", () => toggleLibraryMetadataJobs());
       document.getElementById("libraryMetadataJobsRefreshButton")?.addEventListener("click", () => refreshLibraryMetadataJobs({open: true}));
       document.querySelectorAll("[data-app-route]").forEach((button) => {
