@@ -1047,19 +1047,11 @@ def _with_box_set_detail(context, item):
     if not box_set_id:
         return item
     merged = dict(item)
+    # MovieVault exposes no /box-sets/{id} detail endpoint (v1 or v3); the box-set record comes
+    # from the /box-sets search rows, and members are backfilled from /box-sets/{id}/members.
     try:
-        # Wave 2: box-set detail remains on /api/v1 until the v3 box-set read API is available.
-        detail = _get(context or {}, f"/api/v1/box-sets/{quote(box_set_id)}")
-        if isinstance(detail, dict):
-            merged = {**merged, **detail}
-    except Exception as exc:
-        merged["memberLookupError"] = str(exc)
-    if len(_member_list(merged)) >= 2:
-        return merged
-    try:
-        # Wave 2: box-set members remain on /api/v1 until the v3 box-set read API is available.
-        member_response = _get(context or {}, f"/api/v1/box-sets/{quote(box_set_id)}/members")
-        members = _items(member_response)
+        member_response = _get(context or {}, f"/api/v3/box-sets/{quote(box_set_id)}/members")
+        members = _member_list(member_response)
         if members:
             merged["members"] = members
     except Exception as exc:
@@ -1438,7 +1430,7 @@ def _normalize_box_set_proposal(payload, context=None, *, require_explicit=True)
     # isBoxSet, detectedWithoutMembers) OR a primary member list (members,
     # boxSetMovies, moviesInSet, …). A movie's own generic content arrays
     # (releases/discs/items) must NEVER be inferred as a box-set. The authoritative
-    # /api/v1/box-sets endpoint passes require_explicit=False, since its items are
+    # box-sets catalogue endpoint passes require_explicit=False, since its items are
     # box-sets by definition even when the inline payload lacks a marker.
     has_explicit_signal = _explicit_box_set_marker(item) or _has_primary_member_list(item)
     if require_explicit and not has_explicit_signal:
@@ -2128,8 +2120,8 @@ def box_set_candidates(payload, context=None):
         "format": payload.get("format") or payload.get("mediaType") or payload.get("media_type") or "",
         "barcode": barcode if _is_public_barcode(barcode) else "",
     }
-    # Wave 2: box-set candidate discovery remains on /api/v1 until the v3 box-set read API is available.
-    data = _get(context or {}, "/api/v1/box-sets", q=title, year=year, barcode=barcode if _is_public_barcode(barcode) else "")
+    # Wave 2: signed v3 box-set catalogue search (body identical to v1 /box-sets).
+    data = _get(context or {}, "/api/v3/box-sets", q=title, year=year, barcode=barcode if _is_public_barcode(barcode) else "")
     sources = [item for item in _items(data) if isinstance(item, dict)]
     if isinstance(data, dict):
         sources.insert(0, data)
@@ -2162,8 +2154,9 @@ def box_set_candidates(payload, context=None):
 def _person_results(payload):
     """Normalize the people read-API response into a list of person objects.
 
-    ``/api/v1/people`` returns ``{"results": [...]}`` while ``/api/v1/people/{id}``
-    returns a single object (or a ``{"error": ...}`` envelope on 404).
+    The signed ``/api/v3/people`` search returns ``{"results": [...]}`` (body identical to the
+    legacy v1 twin) while ``/api/v3/people/{id}`` returns a single object (or a
+    ``{"error": ...}`` envelope on 404).
     """
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
@@ -2330,10 +2323,10 @@ def person_details(payload, context=None):
             item = person
             source_ref = f"movievault:person:{movievault_id}"
     if not item and (tmdb_id or imdb_id or name):
-        # Wave 2: people search stays on /api/v1 until MovieVault PR #77 deploys /api/v3/people.
+        # Wave 2: signed v3 people search (body identical to v1 /people: {"results": [...]}).
         data = _get(
             context or {},
-            "/api/v1/people",
+            "/api/v3/people",
             tmdbId=tmdb_id,
             imdbId=imdb_id,
             q="" if (tmdb_id or imdb_id) else name,
@@ -2376,8 +2369,8 @@ def _safe_contribution_value(value):
 
 
 def _template_cache_key(context):
-    # deferred: contribution templates remain on /api/v1 for the separate write-path migration.
-    return f"{_contribution_url(context)}/api/v1/contribution-template"
+    # Wave 2: contribution template served over signed /api/v3 (body identical to the v1 twin).
+    return f"{_contribution_url(context)}/api/v3/contribution-template"
 
 
 def _contribution_template(context, *, force_refresh=False):
@@ -2386,7 +2379,7 @@ def _contribution_template(context, *, force_refresh=False):
     cached = _TEMPLATE_CACHE.get(key)
     if not force_refresh and cached and now - cached.get("fetchedAt", 0) < 86400:
         return cached.get("template") or {}
-    template = _json(_request("GET", key, context=context))
+    template = _get(context or {}, "/api/v3/contribution-template")
     _TEMPLATE_CACHE[key] = {"fetchedAt": now, "template": template}
     return template
 
