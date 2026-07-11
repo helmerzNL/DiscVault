@@ -8,6 +8,7 @@ import hmac
 import json
 import os
 import secrets
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 from urllib import error as url_error
@@ -35,6 +36,25 @@ HANDSHAKE_PATH = "/api/v1/internal/discvault/handshake"
 DEFAULT_MOVIEVAULT_URL = "https://movies.vaultstack.eu"
 DEFAULT_SEARCH_URL = DEFAULT_MOVIEVAULT_URL
 DEFAULT_INGEST_URL = DEFAULT_MOVIEVAULT_URL
+
+# --- MovieVault /api/v3 signed metadata API ---
+# The v3 surface mandates per-request Ed25519 signing on every endpoint and a
+# renamed/generalized bootstrap. It reuses the same instance keypair as the
+# legacy v1 signer but registers it under a v3 ``iosk_`` key id and carries its
+# own bearer token / instance id (a browser-style ``web_<uuid>``).
+V3_BOOTSTRAP_PATH = "/api/v3/clients/bootstrap"
+HEALTH_PATH = "/api/v1/health"
+V3_REQUESTED_SCOPES = ("metadata:read",)
+V3_API_TOKEN_KEY = "movievault_v3_api_token"
+V3_KEY_ID_KEY = "movievault_v3_key_id"
+V3_INSTANCE_ID_KEY = "movievault_v3_instance_id"
+V3_TOKEN_PREFIX_KEY = "movievault_v3_token_prefix"
+V3_SCOPES_KEY = "movievault_v3_scopes"
+V3_LAST_BOOTSTRAP_AT_KEY = "movievault_v3_last_bootstrap_at"
+
+# Marker prefix for Fernet-encrypted secrets stored at rest. Values without this
+# prefix are treated as legacy plaintext and transparently migrated on next read.
+SECRET_ENC_PREFIX = "enc.v1:"
 
 INSTANCE_ID_KEY = "movievault_instance_id"
 INSTANCE_NAME_KEY = "movievault_instance_name"
@@ -286,6 +306,67 @@ def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
 
 
+def _key_encryption_key() -> bytes:
+    """Derive a stable Fernet key for encrypting instance secrets at rest.
+
+    Sourced from a dedicated env var, falling back to the app JWT secret and
+    finally a DATABASE_URL-derived value (mirrors ``next_auth._jwt_secret`` so
+    self-hosted stacks keep working without extra config). Production deployments
+    should set ``DISCVAULT_NEXT_KEY_ENCRYPTION_KEY`` (or ``JWT_SECRET``) so a bare
+    database dump never leaks the MovieVault signing key.
+    """
+    configured = (
+        os.environ.get("DISCVAULT_NEXT_KEY_ENCRYPTION_KEY")
+        or os.environ.get("DISCVAULT_KEY_ENCRYPTION_KEY")
+        or os.environ.get("DISCVAULT_NEXT_JWT_SECRET")
+        or os.environ.get("JWT_SECRET")
+        or ""
+    ).strip()
+    if not configured:
+        configured = hashlib.sha256(
+            ("discvault-next-kek:" + os.environ.get("DATABASE_URL", "discvault-next")).encode("utf-8")
+        ).hexdigest()
+    return base64.urlsafe_b64encode(hashlib.sha256(configured.encode("utf-8")).digest())
+
+
+def _encrypt_secret_value(plaintext: str) -> str:
+    """Fernet-encrypt a secret for storage. Returns plaintext unchanged if empty."""
+    text = plaintext or ""
+    if not text:
+        return text
+    try:
+        from cryptography.fernet import Fernet
+    except Exception:  # pragma: no cover - cryptography is a hard dependency in prod
+        return text
+    token = Fernet(_key_encryption_key()).encrypt(text.encode("utf-8"))
+    return SECRET_ENC_PREFIX + token.decode("ascii")
+
+
+def _decrypt_secret_value(stored: Any) -> str:
+    """Decrypt a value written by :func:`_encrypt_secret_value`.
+
+    Legacy plaintext values (no marker prefix) are returned as-is so existing
+    installs keep working; callers re-encrypt them on next write.
+    """
+    text = _text(stored)
+    if not text.startswith(SECRET_ENC_PREFIX):
+        return text
+    try:
+        from cryptography.fernet import Fernet
+
+        token = text[len(SECRET_ENC_PREFIX):].encode("ascii")
+        return Fernet(_key_encryption_key()).decrypt(token).decode("utf-8")
+    except Exception as exc:  # pragma: no cover - defensive
+        raise MovieVaultConnectionError(
+            "Unable to decrypt the stored MovieVault signing key; verify the "
+            "DISCVAULT key-encryption configuration or reset the connection."
+        ) from exc
+
+
+def _is_encrypted_secret(stored: Any) -> bool:
+    return _text(stored).startswith(SECRET_ENC_PREFIX)
+
+
 def _raw_json_body(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
@@ -317,10 +398,14 @@ def _instance_id(conn) -> str:
 
 
 def _instance_key_pair(conn) -> tuple[str, str, str]:
-    private_key_pem = _text(_setting_value(conn, INSTANCE_PRIVATE_KEY_KEY, "", include_secret=True))
+    stored_private = _text(_setting_value(conn, INSTANCE_PRIVATE_KEY_KEY, "", include_secret=True))
+    private_key_pem = _decrypt_secret_value(stored_private) if stored_private else ""
     public_key = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_KEY, ""))
     public_key_id = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_ID_KEY, ""))
     if private_key_pem and public_key and public_key_id:
+        if stored_private and not _is_encrypted_secret(stored_private):
+            # One-time migration of a legacy plaintext key to encrypted-at-rest.
+            _set_setting(conn, INSTANCE_PRIVATE_KEY_KEY, _encrypt_secret_value(private_key_pem), is_secret=True)
         return private_key_pem, public_key, public_key_id
     if (public_key or public_key_id) and not private_key_pem:
         raise MovieVaultConnectionError("MovieVault instance key is missing; reset the local MovieVault connection.")
@@ -341,7 +426,7 @@ def _instance_key_pair(conn) -> tuple[str, str, str]:
     )
     public_key = _b64url(public_raw)
     public_key_id = f"dvpk_{_b64url(hashlib.sha256(public_key.encode('ascii')).digest()[:16])}"
-    _set_setting(conn, INSTANCE_PRIVATE_KEY_KEY, private_key_pem, is_secret=True)
+    _set_setting(conn, INSTANCE_PRIVATE_KEY_KEY, _encrypt_secret_value(private_key_pem), is_secret=True)
     _set_setting(conn, INSTANCE_PUBLIC_KEY_KEY, public_key, is_secret=False)
     _set_setting(conn, INSTANCE_PUBLIC_KEY_ID_KEY, public_key_id, is_secret=False)
     return private_key_pem, public_key, public_key_id
@@ -356,7 +441,7 @@ def _sign_request_body(conn, raw_body: Any) -> dict[str, str]:
     verify against the identical bytes DiscVault transmits. Reuses the same private key
     and key_id registered at bootstrap (the recovery-handshake signer key).
     """
-    private_key_pem = _text(_setting_value(conn, INSTANCE_PRIVATE_KEY_KEY, "", include_secret=True))
+    private_key_pem = _decrypt_secret_value(_setting_value(conn, INSTANCE_PRIVATE_KEY_KEY, "", include_secret=True))
     public_key_id = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_ID_KEY, ""))
     if not private_key_pem or not public_key_id:
         return {}
@@ -830,6 +915,10 @@ def movievault_plugin_context(
     def sign_request(raw_body: Any) -> dict[str, str]:
         return _sign_request_body(conn, raw_body)
 
+    def signed_request_v3_json(method: str, path: str, body_obj: Any = None) -> dict[str, Any]:
+        response = signed_request_v3(conn, method, path, body_obj=body_obj, actor_id=actor_id)
+        return {"status": response.status_code, "data": response.json()}
+
     safe_context.update(
         {
             "settings": settings,
@@ -843,6 +932,198 @@ def movievault_plugin_context(
             "movievaultMarkRevoked": mark_revoked,
             "movievaultRecoverToken": recover_token_once,
             "movievaultSignRequest": sign_request,
+            "movievaultSignedRequestV3": signed_request_v3_json,
         }
     )
     return safe_context
+
+
+# ---------------------------------------------------------------------------
+# MovieVault /api/v3 signed client
+# ---------------------------------------------------------------------------
+
+
+def _v3_base_url(conn) -> str:
+    """Base host for the signed /api/v3 metadata API (reuses the search host)."""
+    return _search_url(conn)
+
+
+def _v3_instance_id(conn) -> str:
+    existing = _text(_setting_value(conn, V3_INSTANCE_ID_KEY, ""))
+    if existing.startswith("web_"):
+        return existing
+    instance_id = "web_" + str(uuid.uuid4())
+    _set_setting(conn, V3_INSTANCE_ID_KEY, instance_id, is_secret=False)
+    return instance_id
+
+
+def _v3_key_id(conn) -> str:
+    return _text(_setting_value(conn, V3_KEY_ID_KEY, ""))
+
+
+def _v3_token(conn) -> str:
+    return _decrypt_secret_value(_setting_value(conn, V3_API_TOKEN_KEY, "", include_secret=True))
+
+
+def _http_request(method: str, url: str, headers: dict[str, str], data: bytes | None = None) -> _HttpJsonResponse:
+    request = url_request.Request(url, data=data, headers=headers, method=str(method).upper())
+    try:
+        with url_request.urlopen(request, timeout=10) as response:
+            return _HttpJsonResponse(int(response.status), response.read())
+    except url_error.HTTPError as exc:
+        return _HttpJsonResponse(int(exc.code), exc.read())
+    except (OSError, TimeoutError, url_error.URLError) as exc:
+        raise MovieVaultConnectionError(str(exc)) from exc
+
+
+def bootstrap_v3(conn, *, actor_id: Any = None) -> dict[str, Any]:
+    """Register this instance with MovieVault's generalized ``/api/v3/clients/bootstrap``.
+
+    Bootstrap is unsigned. Reuses the shared Ed25519 keypair, always adopts the
+    ``keyId`` returned by the server, and persists the v3 bearer token / key id /
+    instance id (all reused across re-bootstraps).
+    """
+    _private_key, public_key, _legacy_key_id = _instance_key_pair(conn)
+    instance_id = _v3_instance_id(conn)
+    body = {
+        "instanceId": instance_id,
+        "publicKey": public_key,
+        "platform": "web",
+        "keyAlgorithm": "ed25519",
+        "appName": "DiscVault",
+        "appVersion": _software_version(),
+        "app": {"name": "DiscVault", "platform": "web"},
+    }
+    response = _http_request(
+        "POST",
+        f"{_v3_base_url(conn)}{V3_BOOTSTRAP_PATH}",
+        {"Accept": "application/json", "Content-Type": "application/json"},
+        json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+    )
+    code = _response_error_code(response)
+    if response.status_code == 403 and code in {"instance_blocked", "instance_revoked"}:
+        _mark_revoked(conn)
+        raise MovieVaultInstanceRevoked("MovieVault instance is blocked")
+    if _is_client_version_unsupported(response):
+        _raise_client_version_unsupported(conn, response)
+    if response.status_code >= 400:
+        _set_setting(conn, LINK_STATUS_KEY, "error")
+        raise MovieVaultConnectionError(f"MovieVault v3 bootstrap failed: {code or response.status_code}")
+    data = response.json()
+    token = _text(data.get("apiToken"))
+    key_id = _text(data.get("keyId"))
+    if not token or not key_id:
+        _set_setting(conn, LINK_STATUS_KEY, "error")
+        raise MovieVaultConnectionError("MovieVault v3 bootstrap response did not include apiToken/keyId")
+    resolved_instance = _text(data.get("instanceId")) or instance_id
+    scopes = [str(scope) for scope in (data.get("scopes") or [])]
+    _set_setting(conn, V3_API_TOKEN_KEY, _encrypt_secret_value(token), is_secret=True, actor_id=actor_id)
+    _set_setting(conn, V3_KEY_ID_KEY, key_id, is_secret=False)
+    _set_setting(conn, V3_INSTANCE_ID_KEY, resolved_instance, is_secret=False)
+    _set_setting(conn, V3_TOKEN_PREFIX_KEY, _text(data.get("tokenPrefix") or token[:12]), is_secret=False)
+    _set_setting(conn, V3_SCOPES_KEY, scopes)
+    _set_setting(conn, V3_LAST_BOOTSTRAP_AT_KEY, _timestamp())
+    _set_setting(conn, INSTANCE_PUBLIC_KEY_ID_KEY, key_id, is_secret=False)
+    _set_setting(conn, LINK_STATUS_KEY, "active")
+    return {"apiToken": token, "keyId": key_id, "instanceId": resolved_instance, "scopes": scopes}
+
+
+def _v3_signature_headers(conn, body_bytes: bytes) -> dict[str, str]:
+    """Build the four ``X-MV-*`` signature headers for a v3 request.
+
+    Signs ``utf8(timestamp) + '.' + utf8(nonce) + '.' + body_bytes`` with the
+    instance Ed25519 key, matching the exact bytes transmitted (empty for GET).
+    """
+    private_key_pem = _decrypt_secret_value(_setting_value(conn, INSTANCE_PRIVATE_KEY_KEY, "", include_secret=True))
+    key_id = _v3_key_id(conn)
+    if not private_key_pem or not key_id:
+        return {}
+    timestamp = _timestamp()
+    nonce = str(uuid.uuid4())
+    message = f"{timestamp}.{nonce}.".encode("utf-8") + (body_bytes or b"")
+    from cryptography.hazmat.primitives import serialization
+
+    private_key = serialization.load_pem_private_key(private_key_pem.encode("ascii"), password=None)
+    signature = _b64url(private_key.sign(message))
+    return {
+        "X-MV-Key-Id": key_id,
+        "X-MV-Timestamp": timestamp,
+        "X-MV-Nonce": nonce,
+        "X-MV-Signature": f"key-v1={signature}",
+    }
+
+
+# Error codes that indicate the bearer token / key link is stale and a single
+# automatic re-bootstrap + retry is warranted.
+_V3_REBOOTSTRAP_CODES = frozenset(
+    {"", "unauthorized", "token_expired", "token_revoked", "signature_required", "signature_invalid", "key_not_found"}
+)
+
+
+def signed_request_v3(
+    conn,
+    method: str,
+    path: str,
+    *,
+    body_obj: Any = None,
+    actor_id: Any = None,
+    _allow_rebootstrap: bool = True,
+) -> _HttpJsonResponse:
+    """Perform a signed MovieVault ``/api/v3`` request.
+
+    Every call carries ``Authorization: Bearer`` plus the four ``X-MV-*`` headers.
+    The JSON body is serialized exactly once and both signed and transmitted, so
+    the server verifies the identical bytes. A single automatic re-bootstrap +
+    retry is attempted on a stale-auth 401 (guarded against loops); a 403
+    ``instance_blocked`` is never retried.
+    """
+    if not movievault_enabled(conn):
+        raise MovieVaultConnectionError("MovieVault integration is disabled")
+    if _text(_setting_value(conn, LINK_STATUS_KEY, "")) == "revoked":
+        raise MovieVaultInstanceRevoked("MovieVault instance is blocked")
+
+    if not _v3_token(conn) or not _v3_key_id(conn):
+        bootstrap_v3(conn, actor_id=actor_id)
+
+    body_bytes = (
+        b""
+        if body_obj is None
+        else json.dumps(body_obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    )
+    headers = {"Accept": "application/json", "Authorization": f"Bearer {_v3_token(conn)}"}
+    if body_obj is not None:
+        headers["Content-Type"] = "application/json"
+    headers.update(_v3_signature_headers(conn, body_bytes))
+
+    response = _http_request(
+        method,
+        f"{_v3_base_url(conn)}{path}",
+        headers,
+        body_bytes if body_obj is not None else None,
+    )
+    code = _response_error_code(response)
+    if response.status_code == 401 and _allow_rebootstrap and code in _V3_REBOOTSTRAP_CODES:
+        bootstrap_v3(conn, actor_id=actor_id)
+        return signed_request_v3(
+            conn,
+            method,
+            path,
+            body_obj=body_obj,
+            actor_id=actor_id,
+            _allow_rebootstrap=False,
+        )
+    if response.status_code == 403 and code in {"instance_blocked", "instance_revoked"}:
+        _mark_revoked(conn)
+        raise MovieVaultInstanceRevoked("MovieVault instance is blocked")
+    if _is_client_version_unsupported(response):
+        _raise_client_version_unsupported(conn, response)
+    return response
+
+
+def movievault_v3_health(conn) -> bool:
+    """Unauthenticated connectivity probe against ``GET /api/v1/health``."""
+    try:
+        response = _http_request("GET", f"{_v3_base_url(conn)}{HEALTH_PATH}", {"Accept": "application/json"})
+    except MovieVaultConnectionError:
+        return False
+    return 200 <= response.status_code < 300
