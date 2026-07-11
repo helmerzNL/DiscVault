@@ -12054,6 +12054,7 @@ def ui_preview_html(
     registerAppServiceWorker();
     let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera", boxSetBuilder: {target: null, members: [], captureToCamera: false, busy: false}};
     let bulkLastResult = null;
+    let longPressSuppressUntil = 0;
     let importScanner = {
       running: false,
       native: false,
@@ -28540,11 +28541,68 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    const LONG_PRESS_DURATION_MS = 500;
+    const LONG_PRESS_MOVE_TOLERANCE = 10;
+    const LONG_PRESS_CLICK_SUPPRESS_MS = 700;
+    function longPressActive() {
+      return Date.now() < longPressSuppressUntil;
+    }
+    function consumeLongPressClick() {
+      if (!longPressActive()) return false;
+      longPressSuppressUntil = 0;
+      return true;
+    }
+    function bindLongPressSelection(button, onLongPress) {
+      if (!button || button.dataset.longPressBound === "1") return;
+      button.dataset.longPressBound = "1";
+      let timer = null;
+      let startX = 0;
+      let startY = 0;
+      const clear = () => {
+        if (timer) {
+          window.clearTimeout(timer);
+          timer = null;
+        }
+      };
+      button.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+        startX = event.clientX;
+        startY = event.clientY;
+        clear();
+        timer = window.setTimeout(() => {
+          timer = null;
+          longPressSuppressUntil = Date.now() + LONG_PRESS_CLICK_SUPPRESS_MS;
+          onLongPress();
+        }, LONG_PRESS_DURATION_MS);
+      });
+      button.addEventListener("pointermove", (event) => {
+        if (!timer) return;
+        if (Math.abs(event.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE
+          || Math.abs(event.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) {
+          clear();
+        }
+      });
+      button.addEventListener("pointerup", clear);
+      button.addEventListener("pointercancel", clear);
+      button.addEventListener("pointerleave", clear);
+      button.addEventListener("contextmenu", (event) => {
+        if (timer || longPressActive()) event.preventDefault();
+      });
+    }
     function bindCollectionCardInteractions(root = document) {
       root.querySelectorAll("[data-preview-movie]").forEach((button) => {
         button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
+        bindLongPressSelection(button, () => {
+          if (!selectionMode) toggleSelectMode(true);
+          toggleMovieSelection(button.dataset.previewMovie);
+        });
         button.addEventListener("click", (event) => {
           if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+          if (consumeLongPressClick()) {
+            event.preventDefault();
+            return;
+          }
           if (selectionMode) {
             toggleMovieSelection(button.dataset.previewMovie);
             return;
@@ -28555,9 +28613,14 @@ def ui_preview_html(
       });
       root.querySelectorAll("[data-preview-container]").forEach((button) => {
         button.classList.toggle("bulk-selected", selectedContainerIds.has(button.dataset.previewContainer));
+        bindLongPressSelection(button, () => {
+          if (!selectionMode) toggleSelectMode(true);
+          toggleContainerSelection(button.dataset.previewContainer);
+        });
         button.addEventListener("click", (event) => {
           event.preventDefault();
           if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+          if (consumeLongPressClick()) return;
           if (selectionMode) {
             toggleContainerSelection(button.dataset.previewContainer);
             return;
@@ -28737,9 +28800,11 @@ def ui_preview_html(
     function toggleSelectMode(force) {
       selectionMode = typeof force === "boolean" ? force : !selectionMode;
       document.body.classList.toggle("select-mode", selectionMode);
-      if (!selectionMode) selectedMovieIds.clear();
-      if (!selectionMode) selectedContainerIds.clear();
-      if (!selectionMode) bulkSelectedTagIds.clear();
+      if (!selectionMode) {
+        selectedMovieIds.clear();
+        selectedContainerIds.clear();
+        bulkSelectedTagIds.clear();
+      }
       if (selectionMode) loadLibraryTags();
       syncSelectModeButton();
       renderCollectionSurface();
