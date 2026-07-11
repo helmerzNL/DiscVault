@@ -296,6 +296,13 @@ deployment command.
 ## Notes
 
 - `next-api` exposes the Next API on `${DISCVAULT_NEXT_API_PORT:-6180}`.
+- `next-mcp` publishes the MCP server on `${DISCVAULT_NEXT_MCP_PORT:-6090}`. Change
+  `DISCVAULT_NEXT_MCP_PORT` in `.env` if `6090` is already used by another stack to
+  avoid a `port is already allocated` error.
+- The Docker network name is `${DISCVAULT_NEXT_NETWORK_NAME:-discvault-next}`. Change
+  `DISCVAULT_NEXT_NETWORK_NAME` in `.env` to run multiple stacks side by side without
+  network name collisions. This is the actual Docker network name; no Compose project
+  prefix is added.
 - `next-worker` processes pending `background_jobs`.
 - PostgreSQL data is stored on a host bind mount at `DISCVAULT_NEXT_POSTGRES_DATA`
   (default `./postgres-data`, relative to this compose file). Point it at an

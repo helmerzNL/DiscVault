@@ -23,4 +23,4 @@ services:
 networks:
   discvault-next:
     external: true
-    name: discvault_next_deploy_discvault-next
+    name: ${DISCVAULT_NEXT_NETWORK_NAME:-discvault-next}
