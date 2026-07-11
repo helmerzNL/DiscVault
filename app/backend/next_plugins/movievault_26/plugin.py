@@ -663,7 +663,7 @@ def _movie_credits(item):
     primary = None
     for key in ("credits", "people", "moviePeople", "movie_people", "castAndCrew", "cast_and_crew"):
         value = item.get(key)
-        if isinstance(value, (list, tuple)) and value:
+        if isinstance(value, (list, tuple)) and any(isinstance(element, dict) for element in value):
             primary = value
             break
     if primary is not None:
