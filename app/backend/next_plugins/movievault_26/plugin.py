@@ -558,9 +558,9 @@ def _movie_payload(item):
         "overview": _text(item.get("overview") or item.get("plot") or item.get("description")),
         "runtimeMinutes": item.get("runtime") or item.get("runtimeMinutes"),
         "genre": _text(item.get("genre") or item.get("genres")),
-        "director": _text(item.get("director") or item.get("directors")),
-        "actor": _text(item.get("actor") or item.get("actors") or item.get("cast")),
-        "producer": _text(item.get("producer") or item.get("producers")),
+        "director": _names_text(item.get("director") or item.get("directors")),
+        "actor": _names_text(item.get("actor") or item.get("actors") or item.get("cast")),
+        "producer": _names_text(item.get("producer") or item.get("producers")),
         "studios": _text(item.get("studios") or item.get("studio")),
         "format": _reconcile_release_format(
             item.get("format") or item.get("mediaType") or item.get("media_type"),
@@ -580,6 +580,107 @@ def _movie_payload(item):
         "videos": item.get("videos") or [],
         "audienceRating": _text(item.get("audienceRating") or item.get("audience_rating")),
     }
+
+
+_PERSON_NAME_KEYS = ("name", "personName", "person_name", "displayName", "display_name")
+
+
+def _names_text(value):
+    """Join person names from a flat string or a list of names/dicts.
+
+    Some MovieVault responses expose cast/crew as a structured list of person
+    objects rather than a comma-joined string. Plain ``str()`` on such a list
+    would leak dict reprs into the flat display field, so extract the names and
+    join them the way flat providers do.
+    """
+    if isinstance(value, (list, tuple)):
+        names = []
+        for item in value:
+            if isinstance(item, dict):
+                name = ""
+                for key in _PERSON_NAME_KEYS:
+                    name = _text(item.get(key))
+                    if name:
+                        break
+            else:
+                name = _text(item)
+            if name:
+                names.append(name)
+        return ", ".join(dict.fromkeys(names))
+    return _text(value)
+
+
+def _person_name(item):
+    for key in _PERSON_NAME_KEYS:
+        name = _text(item.get(key))
+        if name:
+            return name
+    return ""
+
+
+def _credit_entry(element, default_role):
+    if not isinstance(element, dict):
+        return {}
+    name = _person_name(element)
+    if not name:
+        return {}
+    role = _text(_first_value(element, "role", "creditType", "credit_type")) or default_role
+    entry = {"role": role or "credit", "name": name}
+    tmdb_id = _text(_first_value(element, "tmdbId", "tmdb_id", "personTmdbId", "person_tmdb_id"))
+    if tmdb_id:
+        entry["tmdbId"] = tmdb_id
+    imdb_id = _text(_first_value(element, "imdbId", "imdb_id"))
+    if imdb_id:
+        entry["imdbId"] = imdb_id
+    character = _text(_first_value(element, "character", "as"))
+    if character:
+        entry["character"] = character
+    job = _text(_first_value(element, "job", "department"))
+    if job:
+        entry["job"] = job
+    sort_order = _first_value(element, "sortOrder", "sort_order", "order")
+    if sort_order not in ("", None):
+        entry["sortOrder"] = sort_order
+    return entry
+
+
+def _movie_credits(item):
+    """Extract structured cast/crew (with tmdbId) from a MovieVault movie item.
+
+    Returns entries in the shape the DiscVault backend's ``normalize_credit_entries``
+    understands so people are created and linked on tmdbId. Only returns a list
+    when the source carries real structure (tmdbId/character/job); plain name
+    strings are left to the backend's flat-field fallback to keep dedup centralized.
+    """
+    if not isinstance(item, dict):
+        return []
+    entries = []
+    primary = None
+    for key in ("credits", "people", "moviePeople", "movie_people", "castAndCrew", "cast_and_crew"):
+        value = item.get(key)
+        if isinstance(value, (list, tuple)) and value:
+            primary = value
+            break
+    if primary is not None:
+        for element in primary:
+            entry = _credit_entry(element, "")
+            if entry:
+                entries.append(entry)
+    else:
+        cast = item.get("cast")
+        if isinstance(cast, (list, tuple)):
+            for element in cast:
+                entry = _credit_entry(element, "actor")
+                if entry:
+                    entries.append(entry)
+        crew = item.get("crew")
+        if isinstance(crew, (list, tuple)):
+            for element in crew:
+                entry = _credit_entry(element, "crew")
+                if entry:
+                    entries.append(entry)
+    structured = any(entry.get("tmdbId") or entry.get("character") or entry.get("job") for entry in entries)
+    return entries if structured else []
 
 
 _BOX_SET_DIRECT_KEYS = (
@@ -899,8 +1000,8 @@ def _normalize_member(item, index):
         "runtime": _first_value(source, "runtime", "runtimeMinutes", "runtime_minutes") or movie.get("runtimeMinutes"),
         "format": _text(_first_value(source, "format", "mediaType", "media_type") or movie.get("format")),
         "genre": _text(_first_value(source, "genre", "genres") or movie.get("genre")),
-        "director": _text(_first_value(source, "director", "directors") or movie.get("director")),
-        "actor": _text(_first_value(source, "actor", "actors", "cast") or movie.get("actor")),
+        "director": _names_text(_first_value(source, "director", "directors") or movie.get("director")),
+        "actor": _names_text(_first_value(source, "actor", "actors", "cast") or movie.get("actor")),
         "poster": poster,
         "posterUrl": poster,
         "poster_url": poster,
@@ -1676,6 +1777,9 @@ def _normalize_result(payload, *, source_ref=""):
     }
     if localizations:
         result["localizations"] = localizations
+    movie_credits = _movie_credits(first_item) or _movie_credits(source_item)
+    if movie_credits:
+        result["credits"] = movie_credits
     # Surface the MovieVault catalog id as a persistable identifier so the
     # enrichment write path stores the movievault_26 link in movie_identifiers
     # (and emits the matching sync delta). Without this the link only ever
