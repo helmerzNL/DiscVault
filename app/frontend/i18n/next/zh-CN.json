@@ -594,6 +594,7 @@
   "auth.signOut": "退出登录",
   "auth.signedIn": "已登录。",
   "auth.username": "用户名",
+  "auth.ownerUsernamePlaceholder": "选择您的用户名",
   "auth.usernameRequired": "用户名为必填项。",
   "auth.waitingPasskey": "正在等待你的通行密钥...",
   "bulk.addToBoxSet": "添加到套装",

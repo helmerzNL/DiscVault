@@ -594,6 +594,7 @@
   "auth.signOut": "Sign out",
   "auth.signedIn": "Signed in.",
   "auth.username": "Username",
+  "auth.ownerUsernamePlaceholder": "Choose your username",
   "auth.usernameRequired": "Username is required.",
   "auth.waitingPasskey": "Waiting for your passkey...",
   "bulk.addToBoxSet": "Add to box-set",
