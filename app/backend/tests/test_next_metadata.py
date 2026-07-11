@@ -18,6 +18,8 @@ sys.modules.setdefault(
 )
 
 from app.backend.next_metadata import canonicalize_plugin_result
+from app.backend.next_metadata import flat_credit_entries
+from app.backend.next_metadata import plugin_credit_updates
 from app.backend.next_metadata import _clean_scanned_title
 from app.backend.next_metadata import _parse_import_country
 from app.backend.next_metadata import external_metadata_barcode
@@ -767,6 +769,84 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(merged["credits"][1]["job"], "Director")
         self.assertEqual(merged["credits"][1]["sourceLabel"], "TMDb")
 
+    def test_flat_person_fields_synthesize_credits_when_no_structured_credits(self):
+        result = canonicalize_plugin_result(
+            "movievault_26",
+            "movie_details",
+            {
+                "status": "hit",
+                "sourceLabel": "MovieVault 26",
+                "sourceRef": "title:Heat",
+                "movie": {
+                    "title": "Heat",
+                    "director": "Michael Mann",
+                    "actor": "Al Pacino, Robert De Niro",
+                    "producer": "Art Linson",
+                },
+            },
+        )
+        credits = result.get("credits") or []
+        by_key = {(c["name"], c["role"], c.get("job") or "") for c in credits}
+        self.assertIn(("Michael Mann", "crew", "Director"), by_key)
+        self.assertIn(("Al Pacino", "actor", ""), by_key)
+        self.assertIn(("Robert De Niro", "actor", ""), by_key)
+        self.assertIn(("Art Linson", "crew", "Producer"), by_key)
+        # Flat-derived people carry no tmdbId; they match on name downstream.
+        self.assertTrue(all(c.get("tmdbId", "") == "" for c in credits))
+
+    def test_structured_credits_suppress_flat_field_fallback(self):
+        result = canonicalize_plugin_result(
+            "movievault_26",
+            "movie_details",
+            {
+                "status": "hit",
+                "sourceLabel": "MovieVault 26",
+                "sourceRef": "title:Heat",
+                "credits": [
+                    {"role": "actor", "name": "Al Pacino", "tmdbId": 1158},
+                ],
+                "movie": {
+                    "title": "Heat",
+                    "director": "Michael Mann",
+                    "actor": "Al Pacino, Robert De Niro",
+                },
+            },
+        )
+        credits = result.get("credits") or []
+        self.assertEqual(len(credits), 1)
+        self.assertEqual(credits[0]["name"], "Al Pacino")
+        self.assertEqual(credits[0]["tmdbId"], "1158")
+
+    def test_flat_credit_entries_dedupes_and_maps_roles(self):
+        entries = flat_credit_entries(
+            {
+                "director": "Jane Doe",
+                "writer": ["Jane Doe", "John Roe"],
+                "actor": "A Star; B Star",
+            },
+            plugin_id="movievault_26",
+            source_label="MovieVault 26",
+            source_ref="title:Sample",
+        )
+        keyed = {(e["name"], e["role"], e["job"]) for e in entries}
+        self.assertIn(("Jane Doe", "crew", "Director"), keyed)
+        self.assertIn(("Jane Doe", "crew", "Writer"), keyed)
+        self.assertIn(("John Roe", "crew", "Writer"), keyed)
+        self.assertIn(("A Star", "actor", ""), keyed)
+        self.assertIn(("B Star", "actor", ""), keyed)
+
+    def test_plugin_credit_updates_prefers_structured_over_flat(self):
+        merged = plugin_credit_updates(
+            {"title": "Heat", "actor": "Al Pacino, Robert De Niro"},
+            {"title": "Heat", "actor": "Al Pacino, Robert De Niro"},
+            plugin_id="movievault_26",
+            source_label="MovieVault 26",
+            source_ref="title:Heat",
+        )
+        # movie_source == result here, flat fallback fires exactly once (deduped).
+        names = sorted(entry["name"] for entry in merged)
+        self.assertEqual(names, ["Al Pacino", "Robert De Niro"])
+
     def test_preferred_overwrite_allows_provider_to_replace_display_fields(self):
         current = {
             "title": "Manual Title",
@@ -1277,6 +1357,31 @@ class NextMetadataPolicyTests(unittest.TestCase):
         )
         self.assertNotIn("watchHistory", str(payload))
         self.assertNotIn("privateNotes", str(payload))
+
+    def test_receiver_contribution_payload_includes_person_tmdb_ids(self):
+        movie = {
+            "id": "m1",
+            "public_id": "legacy-movie-42",
+            "title": "Heat",
+            "barcode": "0000000000001",
+            "format": "Blu-ray",
+        }
+        preview = {"proposal": {}}
+        payload = receiver_contribution_payload(
+            movie_id="m1",
+            movie=movie,
+            preview=preview,
+            applied={"changed": True, "applied": {}},
+            credits=[
+                {"name": "Al Pacino", "credit_type": "actor", "character": "Hanna", "tmdb_id": "1158"},
+                {"name": "Michael Mann", "credit_type": "crew", "job": "Director", "tmdb_id": "7715", "imdb_id": "nm0000520"},
+            ],
+        )
+        entries = payload["payload"]["credits"]
+        by_name = {entry["name"]: entry for entry in entries}
+        self.assertEqual(by_name["Al Pacino"]["tmdbId"], "1158")
+        self.assertEqual(by_name["Michael Mann"]["tmdbId"], "7715")
+        self.assertEqual(by_name["Michael Mann"]["imdbId"], "nm0000520")
 
     def test_receiver_contribution_payload_includes_full_current_metadata(self):
         movie = {
