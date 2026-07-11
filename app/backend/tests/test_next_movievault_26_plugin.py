@@ -51,6 +51,24 @@ def _v3_barcode_match(match):
     return {"matched": True, "match": match}
 
 
+def _v3_signed_from_request(fake_request):
+    """Serve a signed /api/v3 read from the same fixture a test wired for its v1 twin.
+
+    Wave 2 catalogue reads (people search, box-sets, contribution-template) go through the
+    signed transport hook instead of the raw ``_request`` layer, but their response bodies are
+    byte-identical to the v1 endpoints. This adapter lets the existing ``fake_request`` fixtures
+    keep serving those bodies by mapping the ``/api/v3`` path back onto its ``/api/v1`` twin.
+    """
+
+    def _hook(method, path, body_obj=None):
+        assert path.startswith("/api/v3/"), f"expected a signed /api/v3 path, got {path}"
+        clean = path.split("?", 1)[0].replace("/api/v3/", "/api/v1/")
+        response = fake_request(method, "https://mv.example" + clean)
+        return {"status": getattr(response, "status_code", 200), "data": response.json()}
+
+    return _hook
+
+
 class MovieVault26PluginContractTests(unittest.TestCase):
     def test_movievault_26_manifest_declares_plugin_replacement(self):
         manifest = {
@@ -466,15 +484,9 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                             "posterUrl": "https://img.example/hp-box.jpg",
                         },
                     )
-                if path == "/api/v1/box-sets/42":
+                if path == "/api/v3/box-sets/42/members":
                     return {
-                        "id": 42,
-                        "entityType": "box_set",
-                        "title": "Harry Potter Complete Collection",
-                    }
-                if path == "/api/v1/box-sets/42/members":
-                    return {
-                        "items": [
+                        "members": [
                             {"title": "Harry Potter and the Philosopher's Stone", "year": 2001},
                             {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
                         ]
@@ -493,7 +505,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertTrue(result["boxSetProposal"]["boxSetEvidence"]["membersAreExplicit"])
         self.assertEqual(result["items"], [])
         self.assertEqual(result["candidates"], [])
-        self.assertEqual(calls, ["/api/v3/barcodes/5051890315526", "/api/v1/box-sets/42", "/api/v1/box-sets/42/members"])
+        self.assertEqual(calls, ["/api/v3/barcodes/5051890315526", "/api/v3/box-sets/42/members"])
 
     def test_barcode_lookup_can_return_movie_candidates_and_box_set_proposals(self):
         original_get = movievault_26._get
@@ -600,7 +612,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         try:
             def fake_get(_context, path, **params):
                 calls.append((path, params))
-                if path == "/api/v1/box-sets":
+                if path == "/api/v3/box-sets":
                     self.assertEqual(params["barcode"], "5051892237710")
                     return {
                         "items": [
@@ -614,11 +626,8 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                             }
                         ]
                     }
-                if path == "/api/v1/box-sets/42":
+                if path == "/api/v3/box-sets/42/members":
                     return {
-                        "id": 42,
-                        "type": "box_set",
-                        "title": "Harry Potter Complete Collection",
                         "members": [
                             {"title": "Harry Potter and the Philosopher's Stone", "year": 2001},
                             {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
@@ -638,7 +647,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["boxSetProposal"]["title"], "Harry Potter Complete Collection")
         self.assertEqual(result["boxSetProposal"]["member_count"], 2)
         self.assertEqual(result["boxSetProposal"]["members"][0]["format"], "4K UHD")
-        self.assertEqual([path for path, _params in calls], ["/api/v1/box-sets", "/api/v1/box-sets/42"])
+        self.assertEqual([path for path, _params in calls], ["/api/v3/box-sets", "/api/v3/box-sets/42/members"])
 
     def test_barcode_lookup_fetches_members_when_movievault_found_box_set_is_sparse(self):
         calls = []
@@ -656,16 +665,9 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                             "barcode": "5051892237710",
                         }
                     )
-                if path == "/api/v1/box-sets/42":
+                if path == "/api/v3/box-sets/42/members":
                     return {
-                        "status": "found",
-                        "type": "box_set",
-                        "id": 42,
-                        "title": "Harry Potter Complete Collection",
-                    }
-                if path == "/api/v1/box-sets/42/members":
-                    return {
-                        "items": [
+                        "members": [
                             {"title": "Harry Potter and the Philosopher's Stone", "year": 2001},
                             {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
                         ]
@@ -680,7 +682,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "hit")
         self.assertEqual(result["boxSetProposal"]["member_count"], 2)
         self.assertEqual(result["boxSetProposal"]["members"][1]["title"], "Harry Potter and the Chamber of Secrets")
-        self.assertEqual(calls, ["/api/v3/barcodes/5051892237710", "/api/v1/box-sets/42", "/api/v1/box-sets/42/members"])
+        self.assertEqual(calls, ["/api/v3/barcodes/5051892237710", "/api/v3/box-sets/42/members"])
 
     def test_search_title_uses_v3_search_catalog(self):
         original_get = movievault_26._get
@@ -781,6 +783,37 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["knownFor"], "Acting")
         self.assertEqual(result["profiles"], ["https://img.example/sigourney.jpg"])
 
+    def test_person_details_search_uses_signed_v3_people(self):
+        captured = {}
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                captured["path"] = path
+                captured["params"] = params
+                return {
+                    "results": [
+                        {
+                            "id": "pp_sigourney",
+                            "name": "Sigourney Weaver",
+                            "tmdbId": "10205",
+                            "knownFor": "Acting",
+                        }
+                    ]
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.person_details(
+                {"tmdbId": "10205"},
+                {"movievault": {"enabled": True}},
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(captured["path"], "/api/v3/people")
+        self.assertEqual(captured["params"].get("tmdbId"), "10205")
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["name"], "Sigourney Weaver")
+
     def test_box_set_members_keep_disc_number_for_preview(self):
         proposal = movievault_26._normalize_box_set_proposal(
             {
@@ -880,6 +913,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                         "sharingMode": "opt_in",
                         "sourceVersion": "26-test",
                     },
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -937,6 +971,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 {
                     "secrets": {"token": "mv_live_test"},
                     "movievault": {"contributionEnabled": True},
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -989,6 +1024,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 {
                     "secrets": {"token": "mv_live_test"},
                     "movievault": {"contributionEnabled": True},
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -1042,6 +1078,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 {
                     "secrets": {"token": "mv_live_test"},
                     "movievault": {"contributionEnabled": True},
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -1088,6 +1125,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 {
                     "secrets": {"token": "mv_live_test"},
                     "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -1235,6 +1273,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
 class MovieVault26SignedContributionTests(unittest.TestCase):
     def _run_contribution(self, context, fake_request):
+        context = {**context, "movievaultSignedRequestV3": _v3_signed_from_request(fake_request)}
         original_requests = movievault_26.requests
         original_cache = dict(movievault_26._TEMPLATE_CACHE)
         try:
