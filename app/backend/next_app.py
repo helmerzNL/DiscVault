@@ -28,7 +28,7 @@ import zipfile
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from uuid import UUID
 
 from flask import Flask, Response, current_app, jsonify, request, send_file
@@ -491,6 +491,11 @@ TEST_DATABASE_RESET_TABLES = (
 MEDIA_GROUP_MEMBER_ROLES = {"owner", "manager", "member", "viewer"}
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
+# Cap the longest edge before re-encoding artwork. Full-resolution phone photos
+# (multiple thousands of pixels) are needlessly expensive to JPEG-encode and can
+# stall a gunicorn worker long enough for the proxy to return a 502. Posters and
+# backdrops never need more than this on screen.
+MAX_ARTWORK_DIMENSION = 2000
 MAX_IMPORT_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_IMPORT_ARCHIVE_BYTES = 100 * 1024 * 1024
 IMPORT_UPLOAD_EXTENSIONS = {".csv", ".tsv", ".json", ".xml", ".zip"}
@@ -9757,7 +9762,71 @@ def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
         "acquiredAt": row.get("acquired_at"),
         "acquiredMovieId": str(acquired_movie) if acquired_movie else None,
         "createdByUserId": str(created_by) if created_by else None,
+        # Price alert fields
+        "alertEnabled": bool(row.get("alert_enabled")),
+        "targetPrice": float(row["target_price"]) if row.get("target_price") is not None else None,
+        "priceUrl": row.get("price_url"),
+        "lastSeenPrice": float(row["last_seen_price"]) if row.get("last_seen_price") is not None else None,
+        "priceCurrency": row.get("price_currency") or "EUR",
+        "lastPriceCheckedAt": row.get("last_price_checked_at"),
+        "lastAlertedAt": row.get("last_alerted_at"),
     }
+
+
+def _wishlist_shop_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    selector_options = row.get("selector_options")
+    if not isinstance(selector_options, dict):
+        selector_options = {}
+    return {
+        "id": str(row.get("id")),
+        "wishlistItemId": str(row.get("wishlist_item_id")),
+        "shopName": row.get("shop_name"),
+        "priceUrl": row.get("price_url"),
+        "priceCurrency": row.get("price_currency") or "EUR",
+        "priceSelector": {
+            "type": row.get("selector_type"),
+            "value": row.get("selector_value"),
+            "options": selector_options,
+        },
+        "lastSeenPrice": float(row["last_seen_price"]) if row.get("last_seen_price") is not None else None,
+        "lastPriceCheckedAt": row.get("last_price_checked_at"),
+        "createdAt": row.get("created_at"),
+        "updatedAt": row.get("updated_at"),
+    }
+
+
+def _wishlist_shops_by_item(conn, user_id, item_ids: list[Any]) -> dict[str, list[dict[str, Any]]]:
+    if not user_id or not item_ids or not table_exists(conn, "wishlist_item_shops"):
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, wishlist_item_id, shop_name, price_url, price_currency,
+                   selector_type, selector_value, selector_options,
+                   last_seen_price, last_price_checked_at, created_at, updated_at
+            FROM wishlist_item_shops
+            WHERE user_id=%s
+              AND wishlist_item_id = ANY(%s)
+            ORDER BY created_at ASC
+            """,
+            (user_id, item_ids),
+        )
+        rows = cur.fetchall()
+    out: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        key = str(row.get("wishlist_item_id"))
+        out.setdefault(key, []).append(_wishlist_shop_row_entity(row))
+    return out
+
+
+def _attach_wishlist_shops(conn, user_id, entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not entities:
+        return entities
+    item_ids = [entity.get("id") for entity in entities if entity.get("id")]
+    shops_map = _wishlist_shops_by_item(conn, user_id, item_ids)
+    for entity in entities:
+        entity["shops"] = shops_map.get(str(entity.get("id")), [])
+    return entities
 
 
 def wishlist_sync_entity(conn, user_id, item_id) -> dict[str, Any] | None:
@@ -9768,14 +9837,20 @@ def wishlist_sync_entity(conn, user_id, item_id) -> dict[str, Any] | None:
             """
             SELECT id, title, year, barcode, format, movievault_id, poster_url,
                    note, snapshot, added_at, acquired_at, acquired_movie_id,
-                   created_by_user_id
+                   created_by_user_id,
+                   alert_enabled, target_price, price_url, last_seen_price,
+                   price_currency, last_price_checked_at, last_alerted_at
             FROM wishlist_items
             WHERE user_id=%s AND id=%s
             """,
             (user_id, item_id),
         )
         row = cur.fetchone()
-    return _wishlist_row_entity(row) if row else None
+    if not row:
+        return None
+    entity = _wishlist_row_entity(row)
+    entity["shops"] = _wishlist_shops_by_item(conn, user_id, [item_id]).get(str(item_id), [])
+    return entity
 
 
 def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
@@ -9786,7 +9861,9 @@ def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
             """
             SELECT id, title, year, barcode, format, movievault_id, poster_url,
                    note, snapshot, added_at, acquired_at, acquired_movie_id,
-                   created_by_user_id
+                   created_by_user_id,
+                   alert_enabled, target_price, price_url, last_seen_price,
+                   price_currency, last_price_checked_at, last_alerted_at
             FROM wishlist_items
             WHERE user_id=%s
             ORDER BY added_at
@@ -9794,7 +9871,8 @@ def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
             (user_id,),
         )
         rows = cur.fetchall()
-    return [_wishlist_row_entity(row) for row in rows]
+    entities = [_wishlist_row_entity(row) for row in rows]
+    return _attach_wishlist_shops(conn, user_id, entities)
 
 
 def emit_wishlist_change(conn, user_id, item_id, *, operation: str) -> int:
@@ -12228,9 +12306,10 @@ def save_uploaded_artwork_file(upload: Any, *, kind: str) -> dict[str, Any]:
             image = image.convert("RGB")
         elif image.mode == "L":
             image = image.convert("RGB")
+        image.thumbnail((MAX_ARTWORK_DIMENSION, MAX_ARTWORK_DIMENSION), Image.Resampling.LANCZOS)
         width, height = image.size
         buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", quality=90, optimize=True)
+        image.save(buffer, format="JPEG", quality=90)
         data = buffer.getvalue()
     except UnidentifiedImageError as exc:
         raise NextApiError("Uploaded file is not a valid image", 400) from exc
@@ -16268,6 +16347,7 @@ def admin_operations_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         {"key": "watchlist_watched_sync_center", "group": "lists", "status": watch_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": watch_summary.get("counts", {})},
         {"key": "lending_center", "group": "lists", "status": lending_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": lending_summary.get("counts", {}) or {"planned": True}},
         {"key": "wishlist_center", "group": "lists", "status": wishlist_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": wishlist_summary.get("counts", {}) or {"planned": True}},
+        {"key": "price_alerts", "group": "lists", "status": wishlist_summary["status"], "permissionKeys": ["watchlist.manage"], "signals": {"urlPricing": True, "pluginCapability": "price_check"}},
         {"key": "statistics_dashboard", "group": "operations", "status": statistics_summary["status"], "permissionKeys": ["watchlist.manage", "collection.view"], "signals": statistics_summary["capabilities"]},
         {"key": "personal_source_dedupe", "group": "lists", "status": "ready", "permissionKeys": ["watchlist.manage", "digital_sources.view"], "signals": {"traktPlexJellyfinDedupe": True}},
         {"key": "offline_queue_ui", "group": "lists", "status": "ready", "permissionKeys": ["collection.view"], "signals": {"clientSideQueue": True}},
@@ -20838,6 +20918,51 @@ def register_routes(flask_app: Flask) -> None:
     # ------------------------------------------------------------------
     # Wishlist: metadata-only "want to acquire" entries.
     # ------------------------------------------------------------------
+    _WISHLIST_MAX_SHOPS = 10
+
+    def _normalise_shop_currency(raw: Any) -> str:
+        value = clean_text(raw)
+        return (value or "EUR").upper()[:3]
+
+    def _validated_shop_selector_payload(body: dict[str, Any]) -> tuple[str | None, str | None, dict[str, Any]]:
+        selector = body.get("priceSelector")
+        selector_type = clean_text(body.get("selectorType") or body.get("selector_type"))
+        selector_value = clean_text(body.get("selectorValue") or body.get("selector_value"))
+        selector_options: dict[str, Any] = {}
+        if isinstance(selector, dict):
+            selector_type = clean_text(selector.get("type") or selector_type)
+            selector_value = clean_text(selector.get("value") or selector_value)
+            if isinstance(selector.get("options"), dict):
+                selector_options = json_ready(selector.get("options")) or {}
+        if selector_type or selector_value:
+            allowed_types = {"css_text", "regex_capture"}
+            if selector_type not in allowed_types:
+                raise NextApiError("Selector type must be css_text or regex_capture", 400)
+            if not selector_value:
+                raise NextApiError("Selector value is required when selector type is set", 400)
+            return selector_type, selector_value, selector_options
+        return None, None, {}
+
+    def _validated_shop_payload(body: dict[str, Any]) -> tuple[str, str, str, str | None, str | None, dict[str, Any]]:
+        name = clean_text(body.get("shopName") or body.get("shop_name"))
+        if not name:
+            raise NextApiError("Shop name is required", 400)
+        raw_url = clean_text(body.get("priceUrl") or body.get("price_url"))
+        if not raw_url:
+            raise NextApiError("Shop URL is required", 400)
+        parsed = urlparse(raw_url)
+        if parsed.scheme not in ("http", "https"):
+            raise NextApiError("Price URL must be an http or https URL", 400)
+        selector_type, selector_value, selector_options = _validated_shop_selector_payload(body)
+        return (
+            name,
+            raw_url,
+            _normalise_shop_currency(body.get("priceCurrency") or body.get("price_currency")),
+            selector_type,
+            selector_value,
+            selector_options,
+        )
+
     def _wishlist_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         return json_ready(
             {
@@ -21025,7 +21150,8 @@ def register_routes(flask_app: Flask) -> None:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT title, year, barcode, format, movievault_id, poster_url, note
+                    SELECT title, year, barcode, format, movievault_id, poster_url, note,
+                           alert_enabled, target_price, price_url, price_currency
                     FROM wishlist_items
                     WHERE user_id=%s AND id=%s
                     """,
@@ -21068,6 +21194,41 @@ def register_routes(flask_app: Flask) -> None:
             if "note" in body:
                 fields["note"] = clean_text(body.get("note"))
 
+            # Price alert fields
+            alert_fields: dict[str, Any] = {
+                "alert_enabled": bool(current.get("alert_enabled")),
+                "target_price": current.get("target_price"),
+                "price_url": current.get("price_url"),
+                "price_currency": current.get("price_currency") or "EUR",
+            }
+            if "alertEnabled" in body or "alert_enabled" in body:
+                alert_fields["alert_enabled"] = parse_bool_value(
+                    body.get("alertEnabled", body.get("alert_enabled")), default=False
+                )
+            if "targetPrice" in body or "target_price" in body:
+                raw_tp = body.get("targetPrice", body.get("target_price"))
+                if raw_tp is None or raw_tp == "":
+                    alert_fields["target_price"] = None
+                else:
+                    try:
+                        tp_val = float(raw_tp)
+                        if tp_val < 0:
+                            raise NextApiError("Target price must be non-negative", 400)
+                        alert_fields["target_price"] = tp_val
+                    except (ValueError, TypeError) as exc:
+                        raise NextApiError("Target price must be a number", 400) from exc
+            if "priceUrl" in body or "price_url" in body:
+                raw_url = clean_text(body.get("priceUrl") or body.get("price_url"))
+                if raw_url:
+                    from urllib.parse import urlparse as _urlparse
+                    parsed = _urlparse(raw_url)
+                    if parsed.scheme not in ("http", "https"):
+                        raise NextApiError("Price URL must be an http or https URL", 400)
+                alert_fields["price_url"] = raw_url or None
+            if "priceCurrency" in body or "price_currency" in body:
+                raw_currency = clean_text(body.get("priceCurrency") or body.get("price_currency"))
+                alert_fields["price_currency"] = (raw_currency or "EUR").upper()[:3]
+
             snapshot = _wishlist_snapshot(fields)
             with conn.transaction():
                 with conn.cursor() as cur:
@@ -21075,7 +21236,8 @@ def register_routes(flask_app: Flask) -> None:
                         """
                         UPDATE wishlist_items
                         SET title=%s, year=%s, barcode=%s, format=%s,
-                            movievault_id=%s, poster_url=%s, note=%s, snapshot=%s
+                            movievault_id=%s, poster_url=%s, note=%s, snapshot=%s,
+                            alert_enabled=%s, target_price=%s, price_url=%s, price_currency=%s
                         WHERE user_id=%s AND id=%s
                         """,
                         (
@@ -21087,6 +21249,10 @@ def register_routes(flask_app: Flask) -> None:
                             fields["poster_url"],
                             fields["note"],
                             Jsonb(snapshot),
+                            alert_fields["alert_enabled"],
+                            alert_fields["target_price"],
+                            alert_fields["price_url"],
+                            alert_fields["price_currency"],
                             user_id,
                             item_uuid,
                         ),
@@ -21107,6 +21273,222 @@ def register_routes(flask_app: Flask) -> None:
                     "status": "ok",
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "counts": personal_list_counts(conn, user_id),
+                }
+            )
+
+    @flask_app.post("/api/next/lists/wishlist/<item_id>/shops")
+    def add_wishlist_item_shop(item_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Shop request body must be an object", 400)
+        (
+            shop_name,
+            price_url,
+            price_currency,
+            selector_type,
+            selector_value,
+            selector_options,
+        ) = _validated_shop_payload(body)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            if not table_exists(conn, "wishlist_item_shops"):
+                raise NextApiError("Wishlist shop table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM wishlist_items WHERE user_id=%s AND id=%s",
+                    (user_id, item_uuid),
+                )
+                if not cur.fetchone():
+                    raise NextApiError("Wishlist entry not found", 404)
+                cur.execute(
+                    "SELECT count(*)::int AS total FROM wishlist_item_shops WHERE user_id=%s AND wishlist_item_id=%s",
+                    (user_id, item_uuid),
+                )
+                total = int((cur.fetchone() or {}).get("total") or 0)
+            if total >= _WISHLIST_MAX_SHOPS:
+                raise NextApiError("A wishlist item can have at most 10 shops", 400)
+
+            from next_price_alerts import extract_price_from_url_with_source
+
+            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                price_url,
+                selector_type=selector_type,
+                selector_value=selector_value,
+                selector_options=selector_options,
+            )
+            effective_currency = _normalise_shop_currency(detected_currency or price_currency)
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO wishlist_item_shops
+                            (user_id, wishlist_item_id, shop_name, price_url, price_currency,
+                             selector_type, selector_value, selector_options,
+                             last_seen_price, last_price_checked_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        RETURNING id
+                        """,
+                        (
+                            user_id,
+                            item_uuid,
+                            shop_name,
+                            price_url,
+                            effective_currency,
+                            selector_type,
+                            selector_value,
+                            Jsonb(selector_options),
+                            current_price,
+                        ),
+                    )
+                    shop_id = (cur.fetchone() or {}).get("id")
+                    if shop_id and current_price is not None and table_exists(conn, "wishlist_item_shop_prices"):
+                        cur.execute(
+                            """
+                            INSERT INTO wishlist_item_shop_prices
+                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                user_id,
+                                item_uuid,
+                                shop_id,
+                                current_price,
+                                effective_currency,
+                                extraction_source or "unknown",
+                            ),
+                        )
+                emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.shop_added",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_uuid,
+                    summary="Added wishlist shop",
+                    metadata={"shopName": shop_name, "priceUrl": price_url},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "entry": wishlist_sync_entity(conn, user_id, item_uuid),
+                    "fetchedPrice": float(current_price) if current_price is not None else None,
+                    "fetchedCurrency": effective_currency,
+                },
+                201,
+            )
+
+    @flask_app.patch("/api/next/lists/wishlist/<item_id>/shops/<shop_id>")
+    def update_wishlist_item_shop(item_id: str, shop_id: str):
+        item_uuid = parse_uuid(item_id, "itemId")
+        shop_uuid = parse_uuid(shop_id, "shopId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Shop request body must be an object", 400)
+        (
+            shop_name,
+            price_url,
+            price_currency,
+            selector_type,
+            selector_value,
+            selector_options,
+        ) = _validated_shop_payload(body)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "wishlist_items"):
+                raise NextApiError("Wishlist table is not available", 503)
+            if not table_exists(conn, "wishlist_item_shops"):
+                raise NextApiError("Wishlist shop table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM wishlist_item_shops
+                    WHERE id=%s AND user_id=%s AND wishlist_item_id=%s
+                    """,
+                    (shop_uuid, user_id, item_uuid),
+                )
+                if not cur.fetchone():
+                    raise NextApiError("Wishlist shop not found", 404)
+
+            from next_price_alerts import extract_price_from_url_with_source
+
+            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                price_url,
+                selector_type=selector_type,
+                selector_value=selector_value,
+                selector_options=selector_options,
+            )
+            effective_currency = _normalise_shop_currency(detected_currency or price_currency)
+
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE wishlist_item_shops
+                        SET shop_name=%s,
+                            price_url=%s,
+                            price_currency=%s,
+                            selector_type=%s,
+                            selector_value=%s,
+                            selector_options=%s,
+                            last_seen_price=%s,
+                            last_price_checked_at=now(),
+                            updated_at=now()
+                        WHERE id=%s AND user_id=%s AND wishlist_item_id=%s
+                        """,
+                        (
+                            shop_name,
+                            price_url,
+                            effective_currency,
+                            selector_type,
+                            selector_value,
+                            Jsonb(selector_options),
+                            current_price,
+                            shop_uuid,
+                            user_id,
+                            item_uuid,
+                        ),
+                    )
+                    if current_price is not None and table_exists(conn, "wishlist_item_shop_prices"):
+                        cur.execute(
+                            """
+                            INSERT INTO wishlist_item_shop_prices
+                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            """,
+                            (
+                                user_id,
+                                item_uuid,
+                                shop_uuid,
+                                current_price,
+                                effective_currency,
+                                extraction_source or "unknown",
+                            ),
+                        )
+                emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="wishlist.shop_updated",
+                    category="personal",
+                    actor=actor,
+                    target_type="wishlist_item",
+                    target_id=item_uuid,
+                    summary="Updated wishlist shop",
+                    metadata={"shopId": str(shop_uuid), "shopName": shop_name},
+                )
+            return response(
+                {
+                    "status": "ok",
+                    "entry": wishlist_sync_entity(conn, user_id, item_uuid),
+                    "fetchedPrice": float(current_price) if current_price is not None else None,
+                    "fetchedCurrency": effective_currency,
                 }
             )
 
@@ -21284,6 +21666,11 @@ def register_routes(flask_app: Flask) -> None:
                         (user_id, tag_uuid),
                     )
                     assignment_ids = [r.get("id") for r in cur.fetchall()]
+            if assignment_ids:
+                raise NextApiError(
+                    "This tag is still linked to media. Remove it from all items before deleting it.",
+                    409,
+                )
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
@@ -21404,6 +21791,110 @@ def register_routes(flask_app: Flask) -> None:
                         metadata={"tagId": str(tag_uuid)},
                     )
             return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
+
+    @flask_app.post("/api/next/bulk/tags")
+    def bulk_tags():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Bulk tag request body must be an object", 400)
+        movie_ids = parse_uuid_list(body.get("movieIds") or body.get("movie_ids"), "movieIds")
+        if not movie_ids:
+            raise NextApiError("movieIds must be a non-empty array", 400)
+        tag_ids = parse_uuid_list(body.get("tagIds") or body.get("tag_ids"), "tagIds")
+        if not tag_ids:
+            raise NextApiError("tagIds must be a non-empty array", 400)
+        operation = str(body.get("operation") or "add").strip().lower()
+        if operation not in {"add", "remove"}:
+            raise NextApiError("operation must be add or remove", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "tags") or not table_exists(conn, "movie_tags"):
+                raise NextApiError("Tags table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM tags WHERE user_id=%s AND id = ANY(%s)",
+                    (user_id, tag_ids),
+                )
+                owned_tag_ids = [r.get("id") for r in cur.fetchall()]
+            if not owned_tag_ids:
+                raise NextApiError("No matching tags found", 404)
+            visible_movie_ids = [
+                movie_id for movie_id in movie_ids if actor_can_view_movie(conn, actor, movie_id)
+            ]
+            if not visible_movie_ids:
+                raise NextApiError("No matching movies found", 404)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    for tag_uuid in owned_tag_ids:
+                        for movie_uuid in visible_movie_ids:
+                            if operation == "remove":
+                                cur.execute(
+                                    """
+                                    DELETE FROM movie_tags
+                                    WHERE user_id=%s AND tag_id=%s AND movie_id=%s
+                                    RETURNING id
+                                    """,
+                                    (user_id, tag_uuid, movie_uuid),
+                                )
+                                row = cur.fetchone()
+                                if row:
+                                    changed += 1
+                                    emit_movie_tag_change(
+                                        conn,
+                                        user_id,
+                                        row.get("id"),
+                                        operation="delete",
+                                        tag_id=tag_uuid,
+                                        movie_id=movie_uuid,
+                                    )
+                            else:
+                                cur.execute(
+                                    """
+                                    INSERT INTO movie_tags (user_id, tag_id, movie_id)
+                                    VALUES (%s, %s, %s)
+                                    ON CONFLICT (user_id, tag_id, movie_id) DO NOTHING
+                                    RETURNING id
+                                    """,
+                                    (user_id, tag_uuid, movie_uuid),
+                                )
+                                row = cur.fetchone()
+                                if row:
+                                    changed += 1
+                                    emit_movie_tag_change(
+                                        conn,
+                                        user_id,
+                                        row.get("id"),
+                                        operation="upsert",
+                                        tag_id=tag_uuid,
+                                        movie_id=movie_uuid,
+                                    )
+                audit_event(
+                    conn,
+                    event_type="tag.bulk",
+                    category="personal",
+                    actor=actor,
+                    target_type="tag",
+                    target_id=None,
+                    summary="Bulk tag update",
+                    metadata={
+                        "operation": operation,
+                        "tagIds": [str(tag_uuid) for tag_uuid in owned_tag_ids],
+                        "movieCount": len(visible_movie_ids),
+                        "changed": changed,
+                    },
+                )
+        return response(
+            {
+                "status": "ok",
+                "operation": operation,
+                "changed": changed,
+                "requested": len(visible_movie_ids) * len(owned_tag_ids),
+                "movieCount": len(visible_movie_ids),
+                "tagCount": len(owned_tag_ids),
+            }
+        )
 
     # ------------------------------------------------------------------
     # Loan tracker: outbound lending of an owned disc.
@@ -22086,6 +22577,24 @@ def register_routes(flask_app: Flask) -> None:
                 )
             return response({"status": "ok", "loansSystemEnabled": enabled})
 
+    @flask_app.post("/api/next/admin/price-alerts/sweep")
+    def trigger_price_alert_sweep():
+        with connect() as conn:
+            actor = require_next_permission(conn, "admin.view_jobs")
+            from next_price_alerts import PRICE_ALERT_JOB_TYPE
+            job_id = create_background_job(conn, job_type=PRICE_ALERT_JOB_TYPE, payload={})
+            audit_event(
+                conn,
+                event_type="price_alert.sweep_triggered",
+                category="admin",
+                actor=actor,
+                target_type="background_job",
+                target_id=job_id,
+                summary="Triggered price alert sweep",
+                metadata={},
+            )
+        return response({"status": "ok", "jobId": str(job_id)})
+
     @flask_app.post("/api/next/preferences/locale")
     def set_preferences_locale():
         body = request.get_json(silent=True) or {}
@@ -22245,6 +22754,86 @@ def register_routes(flask_app: Flask) -> None:
                         "returned": int(row.get("returned") or 0),
                     }
 
+            wishlist_price_trend = {
+                "enabled": bool(loans_stats.get("active", 0) > 0),
+                "activeLoans": int(loans_stats.get("active") or 0),
+                "movies": [],
+            }
+            if table_exists(conn, "wishlist_items") and table_exists(conn, "wishlist_item_shop_prices"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            wi.id::text AS wishlist_item_id,
+                            COALESCE(NULLIF(TRIM(wi.title), ''), 'Unknown') AS title,
+                            wi.year AS year,
+                            date_trunc('day', p.observed_at) AS observed_day,
+                            MIN(p.observed_price)::float8 AS observed_price,
+                            COALESCE(NULLIF(TRIM(MAX(p.price_currency)), ''), 'EUR') AS price_currency
+                        FROM wishlist_items wi
+                        JOIN wishlist_item_shop_prices p ON p.wishlist_item_id = wi.id
+                        WHERE wi.user_id=%s
+                          AND wi.acquired_at IS NULL
+                          AND wi.acquired_movie_id IS NULL
+                        GROUP BY wi.id, COALESCE(NULLIF(TRIM(wi.title), ''), 'Unknown'), wi.year, date_trunc('day', p.observed_at)
+                        ORDER BY title, wi.year NULLS LAST, observed_day ASC
+                        """,
+                        (user_id,),
+                    )
+                    trend_rows = cur.fetchall()
+                movie_trends: dict[str, dict[str, Any]] = {}
+                for row in trend_rows:
+                    item_id = str(row.get("wishlist_item_id") or "").strip()
+                    if not item_id:
+                        continue
+                    observed_price = row.get("observed_price")
+                    if observed_price is None:
+                        continue
+                    try:
+                        price_value = float(observed_price)
+                    except (TypeError, ValueError):
+                        continue
+                    if price_value < 0:
+                        continue
+                    observed_day = row.get("observed_day")
+                    observed_at = (
+                        observed_day.isoformat()
+                        if isinstance(observed_day, datetime)
+                        else str(observed_day or "")
+                    )
+                    if not observed_at:
+                        continue
+                    currency = clean_text(row.get("price_currency")) or "EUR"
+                    movie = movie_trends.setdefault(
+                        item_id,
+                        {
+                            "wishlistItemId": item_id,
+                            "title": clean_text(row.get("title")) or "Unknown",
+                            "year": row.get("year"),
+                            "currency": currency.upper(),
+                            "points": [],
+                        },
+                    )
+                    movie["points"].append({"at": observed_at, "price": round(price_value, 2)})
+                movies: list[dict[str, Any]] = []
+                for movie in movie_trends.values():
+                    points = movie.get("points") or []
+                    if not points:
+                        continue
+                    first_price = float(points[0]["price"])
+                    current_price = float(points[-1]["price"])
+                    min_price = min(float(point["price"]) for point in points)
+                    max_price = max(float(point["price"]) for point in points)
+                    movie["currentPrice"] = round(current_price, 2)
+                    movie["minPrice"] = round(min_price, 2)
+                    movie["maxPrice"] = round(max_price, 2)
+                    movie["changeFromStart"] = round(current_price - first_price, 2)
+                    movie["sampleCount"] = len(points)
+                    movie["lastObservedAt"] = points[-1]["at"]
+                    movies.append(movie)
+                movies.sort(key=lambda item: (str(item.get("title") or "").lower(), str(item.get("year") or "")))
+                wishlist_price_trend["movies"] = movies
+
             return response(
                 {
                     "status": "ok",
@@ -22256,6 +22845,7 @@ def register_routes(flask_app: Flask) -> None:
                     "watch": watch,
                     "wishlistCount": wishlist_count,
                     "loans": loans_stats,
+                    "wishlistPriceTrend": wishlist_price_trend,
                 }
             )
 

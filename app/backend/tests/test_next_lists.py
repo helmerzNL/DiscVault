@@ -78,6 +78,44 @@ class ListsProvenanceMigrationContractTests(unittest.TestCase):
         self.assertIn("ON loans(borrower_user_id", sql)
 
 
+class WishlistShopPricesMigrationContractTests(unittest.TestCase):
+    """Migration 032 introduces per-wishlist-item shop tracking and price history."""
+
+    def setUp(self):
+        self.migrations = {m.version: m for m in discover_migrations()}
+
+    def test_wishlist_shop_prices_migration_is_present(self):
+        self.assertIn("032", self.migrations)
+        self.assertEqual(self.migrations["032"].name, "wishlist_item_shops")
+
+    def test_migration_declares_shop_and_price_history_tables(self):
+        sql = self.migrations["032"].sql
+        self.assertIn("CREATE TABLE IF NOT EXISTS wishlist_item_shops", sql)
+        self.assertIn("CREATE TABLE IF NOT EXISTS wishlist_item_shop_prices", sql)
+        self.assertIn("wishlist_item_id", sql)
+        self.assertIn("wishlist_item_shop_id", sql)
+
+
+class WishlistShopSelectorsMigrationContractTests(unittest.TestCase):
+    """Migration 033 extends shop sources with deterministic selector metadata."""
+
+    def setUp(self):
+        self.migrations = {m.version: m for m in discover_migrations()}
+
+    def test_wishlist_shop_selectors_migration_is_present(self):
+        self.assertIn("033", self.migrations)
+        self.assertEqual(self.migrations["033"].name, "wishlist_shop_selectors")
+
+    def test_migration_adds_selector_and_source_columns(self):
+        sql = self.migrations["033"].sql
+        self.assertIn("ALTER TABLE wishlist_item_shops", sql)
+        self.assertIn("selector_type", sql)
+        self.assertIn("selector_value", sql)
+        self.assertIn("selector_options", sql)
+        self.assertIn("ALTER TABLE wishlist_item_shop_prices", sql)
+        self.assertIn("extraction_source", sql)
+
+
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class ListsRouteRegistrationTests(unittest.TestCase):
     """The personal-list write/read surface must be wired into the Flask app."""
@@ -98,11 +136,15 @@ class ListsRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/api/next/lists/wishlist/<item_id>", rules)
         self.assertIn("/api/next/lists/wishlist/<item_id>/acquire", rules)
         self.assertIn("/api/next/lists/wishlist/<item_id>/poster", rules)
+        self.assertIn("/api/next/lists/wishlist/<item_id>/shops", rules)
+        self.assertIn("/api/next/lists/wishlist/<item_id>/shops/<shop_id>", rules)
         self.assertIn("GET", self._methods("/api/next/lists/wishlist"))
         self.assertIn("POST", self._methods("/api/next/lists/wishlist"))
         self.assertIn("PATCH", self._methods("/api/next/lists/wishlist/<item_id>"))
         self.assertIn("DELETE", self._methods("/api/next/lists/wishlist/<item_id>"))
         self.assertIn("POST", self._methods("/api/next/lists/wishlist/<item_id>/poster"))
+        self.assertIn("POST", self._methods("/api/next/lists/wishlist/<item_id>/shops"))
+        self.assertIn("PATCH", self._methods("/api/next/lists/wishlist/<item_id>/shops/<shop_id>"))
 
     def test_tag_routes_are_registered(self):
         rules = self._rules()
