@@ -1668,5 +1668,85 @@ class MovieVaultFormatReconciliationTests(unittest.TestCase):
         self.assertEqual(movie["format"], "4K UHD")
 
 
+class MovieVaultStructuredCreditsTests(unittest.TestCase):
+    def test_movie_credits_extracts_structured_cast_crew_with_tmdb(self):
+        credits = movievault_26._movie_credits(
+            {
+                "title": "Heat",
+                "cast": [
+                    {"name": "Al Pacino", "tmdbId": 1158, "character": "Vincent Hanna"},
+                    {"name": "Robert De Niro", "tmdb_id": "380", "character": "Neil McCauley"},
+                ],
+                "crew": [
+                    {"name": "Michael Mann", "job": "Director", "tmdbId": 7715},
+                ],
+            }
+        )
+        by_name = {entry["name"]: entry for entry in credits}
+        self.assertEqual(by_name["Al Pacino"]["role"], "actor")
+        self.assertEqual(by_name["Al Pacino"]["tmdbId"], "1158")
+        self.assertEqual(by_name["Al Pacino"]["character"], "Vincent Hanna")
+        self.assertEqual(by_name["Robert De Niro"]["tmdbId"], "380")
+        self.assertEqual(by_name["Michael Mann"]["role"], "crew")
+        self.assertEqual(by_name["Michael Mann"]["job"], "Director")
+        self.assertEqual(by_name["Michael Mann"]["tmdbId"], "7715")
+
+    def test_movie_credits_reads_generic_people_array(self):
+        credits = movievault_26._movie_credits(
+            {
+                "title": "Heat",
+                "people": [
+                    {"name": "Al Pacino", "role": "actor", "tmdbId": 1158, "character": "Hanna"},
+                    {"name": "Michael Mann", "role": "crew", "job": "Director", "tmdbId": 7715},
+                ],
+            }
+        )
+        by_name = {entry["name"]: entry for entry in credits}
+        self.assertEqual(by_name["Al Pacino"]["tmdbId"], "1158")
+        self.assertEqual(by_name["Michael Mann"]["job"], "Director")
+
+    def test_movie_credits_ignores_plain_name_strings(self):
+        # Plain-name lists carry no structure; leave them to the backend's
+        # flat-field fallback so people-dedup stays centralized.
+        self.assertEqual(
+            movievault_26._movie_credits(
+                {"title": "Heat", "cast": ["Al Pacino", "Robert De Niro"], "director": "Michael Mann"}
+            ),
+            [],
+        )
+
+    def test_normalize_result_forwards_structured_credits(self):
+        result = movievault_26._normalize_result(
+            {
+                "results": [
+                    {
+                        "title": "Heat",
+                        "year": "1995",
+                        "cast": [
+                            {"name": "Al Pacino", "tmdbId": 1158, "character": "Hanna"},
+                        ],
+                        "crew": [
+                            {"name": "Michael Mann", "job": "Director", "tmdbId": 7715},
+                        ],
+                    }
+                ]
+            },
+            source_ref="title:Heat",
+        )
+        self.assertEqual(result["status"], "hit")
+        credits = result.get("credits") or []
+        by_name = {entry["name"]: entry for entry in credits}
+        self.assertEqual(by_name["Al Pacino"]["tmdbId"], "1158")
+        self.assertEqual(by_name["Michael Mann"]["tmdbId"], "7715")
+
+    def test_names_text_flattens_person_dicts(self):
+        self.assertEqual(
+            movievault_26._names_text(
+                [{"name": "Al Pacino"}, {"name": "Robert De Niro"}, "Val Kilmer"]
+            ),
+            "Al Pacino, Robert De Niro, Val Kilmer",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
