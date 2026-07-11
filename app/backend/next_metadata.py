@@ -622,12 +622,36 @@ def movie_technical_specs(conn, movie_id: UUID) -> dict[str, Any]:
 def movie_contribution_credits(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
     if not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
         return []
+    # Surface each person's tmdb/imdb identifier so contributions to receivers
+    # (e.g. MovieVault) carry the person->tmdbId link. Prefer the canonical
+    # person_identifiers row and fall back to the id stashed on people.metadata
+    # by ensure_metadata_person. person_identifiers may be absent on older
+    # schemas, so the joins are added conditionally.
+    has_identifiers = table_exists(conn, "person_identifiers")
+    if has_identifiers:
+        id_select = (
+            "COALESCE(pi_tmdb.identifier, p.metadata->>'tmdb_id') AS tmdb_id, "
+            "COALESCE(pi_imdb.identifier, p.metadata->>'imdb_id') AS imdb_id"
+        )
+        id_join = (
+            "LEFT JOIN person_identifiers pi_tmdb "
+            "ON pi_tmdb.person_id = p.id AND pi_tmdb.provider_id='tmdb' "
+            "AND pi_tmdb.identifier_type='person_id' "
+            "LEFT JOIN person_identifiers pi_imdb "
+            "ON pi_imdb.person_id = p.id AND pi_imdb.provider_id='imdb' "
+            "AND pi_imdb.identifier_type='person_id'"
+        )
+    else:
+        id_select = "p.metadata->>'tmdb_id' AS tmdb_id, p.metadata->>'imdb_id' AS imdb_id"
+        id_join = ""
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT mc.credit_type, mc.character, mc.job, mc.sort_order, p.name
+            f"""
+            SELECT mc.credit_type, mc.character, mc.job, mc.sort_order, p.name,
+                   {id_select}
             FROM movie_credits mc
             JOIN people p ON p.id = mc.person_id
+            {id_join}
             WHERE mc.movie_id=%s
             ORDER BY mc.sort_order, p.name
             LIMIT %s
@@ -1162,6 +1186,97 @@ def normalize_credit_entries(
     return entries[:120]
 
 
+# Flat, comma-separated crew/cast fields that some metadata sources (notably
+# MovieVault) expose instead of structured `credits`/`cast`/`crew` arrays. Each
+# entry maps a source field name to a (role, job) pair. `job` is empty for
+# acting roles. Used only as a fallback when a result carries no structured
+# credits, so structured providers (e.g. TMDb) are never double-counted.
+FLAT_CREDIT_FIELD_ROLES: tuple[tuple[tuple[str, ...], str, str], ...] = (
+    (("director", "directors"), "crew", "Director"),
+    (("writer", "writers"), "crew", "Writer"),
+    (("screenplay",), "crew", "Screenplay"),
+    (("producer", "producers"), "crew", "Producer"),
+    (("composer", "composers", "music"), "crew", "Original Music Composer"),
+    (
+        ("cinematographer", "cinematographers", "director_of_photography", "directorOfPhotography"),
+        "crew",
+        "Director of Photography",
+    ),
+    (("actor", "actors", "cast", "starring", "stars"), "actor", ""),
+)
+
+
+def _flat_credit_names(value: Any) -> list[str]:
+    """Split a flat person field into individual names.
+
+    Accepts either a list of names or a delimiter-separated string (the way flat
+    providers join names, e.g. ``"A, B, C"``). Splits on commas, semicolons and
+    slashes, trims whitespace, and drops empties while preserving order.
+    """
+    raw_items: list[str] = []
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            name = clean_text(item.get("name")) if isinstance(item, dict) else clean_text(item)
+            if name:
+                raw_items.append(name)
+        return raw_items
+    text = clean_text(value)
+    if not text:
+        return []
+    for part in re.split(r"[,;/]|\s&\s", text):
+        name = clean_text(part)
+        if name:
+            raw_items.append(name)
+    return raw_items
+
+
+def flat_credit_entries(
+    source: Any,
+    *,
+    plugin_id: str,
+    source_label: str,
+    source_ref: str,
+) -> list[dict[str, Any]]:
+    """Synthesize structured credit entries from flat person fields.
+
+    A safety net for metadata sources that only publish comma-separated
+    ``director``/``actor``/``producer`` strings rather than structured
+    ``credits``. Without this, a refresh from such a source would create zero
+    linked people. Entries carry no ``tmdbId`` (names only), so downstream
+    matching falls back to name lookup in ``ensure_metadata_person``.
+    """
+    if not isinstance(source, dict):
+        return []
+    entries: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    sort_order = 0
+    for field_names, role, job in FLAT_CREDIT_FIELD_ROLES:
+        collected: list[str] = []
+        for field in field_names:
+            if field in source:
+                collected.extend(_flat_credit_names(source.get(field)))
+        for name in collected:
+            key = (name.casefold(), role, job.casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            entries.append(
+                {
+                    "role": role,
+                    "name": name,
+                    "character": "",
+                    "job": job,
+                    "tmdbId": "",
+                    "sortOrder": sort_order,
+                    "sourceProvider": plugin_id,
+                    "sourceLabel": source_label,
+                    "sourceRef": source_ref,
+                }
+            )
+            sort_order += 1
+    return entries[:120]
+
+
 def plugin_credit_updates(
     result: dict[str, Any],
     movie_source: dict[str, Any],
@@ -1203,6 +1318,21 @@ def plugin_credit_updates(
                     source_label=source_label,
                     source_ref=source_ref,
                     default_role="crew",
+                )
+            )
+    if not merged:
+        # No structured credits from this source. Fall back to synthesizing
+        # people from flat director/actor/producer strings so sources that only
+        # publish comma-separated names still create linked people on refresh.
+        # Only runs when structured credits are absent, so TMDb-style providers
+        # are never duplicated.
+        for source in (movie_source, result):
+            merged.extend(
+                flat_credit_entries(
+                    source,
+                    plugin_id=plugin_id,
+                    source_label=source_label,
+                    source_ref=source_ref,
                 )
             )
     deduped: list[dict[str, Any]] = []
@@ -2457,6 +2587,12 @@ def receiver_contribution_payload(
             entry["job"] = job
         if character:
             entry["character"] = character
+        person_tmdb_id = str(credit.get("tmdb_id") or credit.get("tmdbId") or "").strip()
+        if person_tmdb_id:
+            entry["tmdbId"] = person_tmdb_id
+        person_imdb_id = str(credit.get("imdb_id") or credit.get("imdbId") or "").strip()
+        if person_imdb_id:
+            entry["imdbId"] = person_imdb_id
         credit_entries.append(entry)
         if "director" in job.lower():
             directors.append(name)
