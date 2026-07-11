@@ -253,6 +253,8 @@ def mobile_feature_capabilities(conn, actor: dict[str, Any]) -> dict[str, Any]:
         },
         "personal": {
             "watchlist": has_any("watchlist.manage"),
+            "statistics": has_any("watchlist.manage"),
+            "wishlistPriceTrendStats": has_any("watchlist.manage"),
             "notifications": True,
             "push": True,
             "loanRequests": has_any("lending.request"),
@@ -315,6 +317,10 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "decline": "/api/next/loan-requests/{loanRequestId}/decline",
             "cancel": "/api/next/loan-requests/{loanRequestId}/cancel",
         },
+        "stats": {
+            "personal": "/api/next/stats/personal",
+            "wishlistPriceTrendField": "wishlistPriceTrend",
+        },
     }
 
 
@@ -339,7 +345,7 @@ def register_next_preferences_routes(flask_app: Flask, *, connect) -> None:  # p
                 {
                     "status": "ok",
                     "mobile": {
-                        "contractVersion": "2026-06-09.1",
+                        "contractVersion": "2026-07-08.1",
                         "platform": "ios",
                         "recommendedClient": {
                             "offlineFirst": True,
