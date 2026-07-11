@@ -625,6 +625,13 @@ def _credit_entry(element, default_role):
     if not name:
         return {}
     role = _text(_first_value(element, "role", "creditType", "credit_type")) or default_role
+    character = _text(_first_value(element, "character", "as"))
+    job = _text(_first_value(element, "job", "department"))
+    if not role:
+        if character:
+            role = "actor"
+        elif job:
+            role = "crew"
     entry = {"role": role or "credit", "name": name}
     tmdb_id = _text(_first_value(element, "tmdbId", "tmdb_id", "personTmdbId", "person_tmdb_id"))
     if tmdb_id:
@@ -632,10 +639,8 @@ def _credit_entry(element, default_role):
     imdb_id = _text(_first_value(element, "imdbId", "imdb_id"))
     if imdb_id:
         entry["imdbId"] = imdb_id
-    character = _text(_first_value(element, "character", "as"))
     if character:
         entry["character"] = character
-    job = _text(_first_value(element, "job", "department"))
     if job:
         entry["job"] = job
     sort_order = _first_value(element, "sortOrder", "sort_order", "order")
