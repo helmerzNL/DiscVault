@@ -594,6 +594,7 @@
   "auth.signOut": "Abmelden",
   "auth.signedIn": "Angemeldet.",
   "auth.username": "Benutzername",
+  "auth.ownerUsernamePlaceholder": "Benutzernamen wählen",
   "auth.usernameRequired": "Benutzername ist erforderlich.",
   "auth.waitingPasskey": "Warten auf Passkey...",
   "bulk.addToBoxSet": "Zu Box-Set hinzufuegen",

@@ -594,6 +594,7 @@
   "auth.signOut": "Log ud",
   "auth.signedIn": "Logget ind.",
   "auth.username": "Brugernavn",
+  "auth.ownerUsernamePlaceholder": "Vælg dit brugernavn",
   "auth.usernameRequired": "Brugernavn er p?kr?vet.",
   "auth.waitingPasskey": "Venter pa passkey...",
   "bulk.addToBoxSet": "Foj til box-set",
