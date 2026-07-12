@@ -43,6 +43,8 @@ MCP_TOOL_NAMES = (
     "get_groups",
 )
 MCP_IOS_CLIENT_PATTERNS = ("ios", "discvault-ios", "discvault/ios")
+MCP_ANDROID_CLIENT_PATTERNS = ("android", "discvault-android", "discvault/android")
+MCP_WEB_CLIENT_PATTERNS = ("mozilla/", "chrome/", "safari/", "firefox/", "edg/", "applewebkit/")
 MCP_LOG_SENSITIVE_KEYS = {
     "authorization",
     "cookie",
@@ -313,7 +315,7 @@ def mcp_activity_log_entry(row: dict[str, Any]) -> dict[str, Any]:
     method = mcp_log_first(metadata, "method", "mcpMethods")
     path = mcp_log_first(metadata, "mcpPath", "path", "endpoint")
     user_agent = mcp_log_text(row.get("user_agent") or metadata.get("agent"), maximum=240)
-    client = mcp_log_first(metadata, "client", "mcpClient", "apiTokenName", "agent")
+    client = mcp_activity_log_client(metadata, user_agent)
     agent = mcp_log_first(metadata, "mcpClient", "client", "apiTokenName", "agent") or user_agent or "Custom MCP Client"
     ip_address = mcp_log_ip_address(row, metadata)
     safe_metadata = mcp_safe_metadata(metadata)
@@ -335,6 +337,21 @@ def mcp_activity_log_entry(row: dict[str, Any]) -> dict[str, Any]:
         "path": path,
         "metadata": safe_metadata,
     }
+
+
+def mcp_activity_log_client(metadata: dict[str, Any], user_agent: str) -> str:
+    explicit = mcp_log_first(metadata, "client", "mcpClient")
+    if explicit:
+        return explicit
+    user_agent_lower = user_agent.lower()
+    if user_agent_lower:
+        if any(pattern in user_agent_lower for pattern in MCP_IOS_CLIENT_PATTERNS):
+            return "DiscVault iOS"
+        if any(pattern in user_agent_lower for pattern in MCP_ANDROID_CLIENT_PATTERNS):
+            return "DiscVault Android"
+        if any(pattern in user_agent_lower for pattern in MCP_WEB_CLIENT_PATTERNS):
+            return "Web client"
+    return mcp_log_first(metadata, "apiTokenName", "agent")
 
 
 def mcp_activity_log_is_ios(entry: dict[str, Any]) -> bool:
