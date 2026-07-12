@@ -208,6 +208,7 @@ try:
     from .next_notifications import notification_preference_map
     from .next_notifications import register_next_notifications_routes
     from .next_notifications import user_notification_rows
+    from .next_discover import register_next_discover_routes
     from .next_push import PWA_ICON_ASSETS
     from .next_push import deliver_native_push_device
     from .next_push import get_or_create_push_vapid_keys
@@ -397,6 +398,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_notifications import notification_preference_map
     from next_notifications import register_next_notifications_routes
     from next_notifications import user_notification_rows
+    from next_discover import register_next_discover_routes
     from next_push import PWA_ICON_ASSETS
     from next_push import deliver_native_push_device
     from next_push import get_or_create_push_vapid_keys
@@ -16627,6 +16629,8 @@ PUBLIC_NEXT_PATHS = {
     "/app/import/",
     "/app/lists",
     "/app/lists/",
+    "/app/discover",
+    "/app/discover/",
     "/app/notifications",
     "/app/notifications/",
     "/app/profile",
@@ -16639,6 +16643,8 @@ PUBLIC_NEXT_PATHS = {
     "/api/next/app/",
     "/api/next/app/import",
     "/api/next/app/import/",
+    "/api/next/app/discover",
+    "/api/next/app/discover/",
     "/api/next/collection",
     "/api/next/collection/",
     "/api/next/health",
@@ -16658,6 +16664,7 @@ PUBLIC_NEXT_PREFIXES = (
     "/api/next/media/assets/",
     "/api/next/media/legacy/",
     "/app/movies/",
+    "/app/discover/",
     "/app/containers/",
     "/app/people/",
     "/app/locations/",
@@ -16682,6 +16689,7 @@ def register_routes(flask_app: Flask) -> None:
     register_next_people_routes(flask_app, connect=connect)
     register_next_preferences_routes(flask_app, connect=connect)
     register_next_notifications_routes(flask_app, connect=connect)
+    register_next_discover_routes(flask_app, connect=connect)
     register_next_push_routes(flask_app, connect=connect)
 
     @flask_app.errorhandler(NextApiError)
@@ -25718,6 +25726,10 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/profile")
     @flask_app.get("/lists")
     @flask_app.get("/app/lists")
+    @flask_app.get("/discover")
+    @flask_app.get("/app/discover")
+    @flask_app.get("/discover/<discover_media_type>/<discover_id>")
+    @flask_app.get("/app/discover/<discover_media_type>/<discover_id>")
     @flask_app.get("/notifications")
     @flask_app.get("/app/notifications")
     @flask_app.get("/admin")
@@ -25725,6 +25737,7 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/import")
     @flask_app.get("/app/import")
     @flask_app.get("/api/next/app/import")
+    @flask_app.get("/api/next/app/discover")
     @flask_app.get("/movies/<movie_id>")
     @flask_app.get("/app/movies/<movie_id>")
     @flask_app.get("/containers/<container_id>")
@@ -25738,6 +25751,8 @@ def register_routes(flask_app: Flask) -> None:
         container_id: str | None = None,
         person_id: str | None = None,
         location_id: str | None = None,
+        discover_media_type: str | None = None,
+        discover_id: str | None = None,
     ):
         with connect() as conn:
             user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
