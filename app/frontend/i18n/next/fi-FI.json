@@ -594,6 +594,7 @@
   "auth.signOut": "Kirjaudu ulos",
   "auth.signedIn": "Kirjauduttu sisään.",
   "auth.username": "Käyttäjänimi",
+  "auth.ownerUsernamePlaceholder": "Valitse käyttäjänimesi",
   "auth.usernameRequired": "K?ytt?j?nimi vaaditaan.",
   "auth.waitingPasskey": "Odotetaan passkeyta...",
   "bulk.addToBoxSet": "Lisaa box-setiin",

@@ -594,6 +594,7 @@
   "auth.signOut": "サインアウト",
   "auth.signedIn": "サインインしました。",
   "auth.username": "ユーザー名",
+  "auth.ownerUsernamePlaceholder": "ユーザー名を選択してください",
   "auth.usernameRequired": "ユーザー名は必須です。",
   "auth.waitingPasskey": "パスキーを待機しています...",
   "bulk.addToBoxSet": "ボックスセットに追加",

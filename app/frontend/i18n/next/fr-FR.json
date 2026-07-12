@@ -594,6 +594,7 @@
   "auth.signOut": "Se déconnecter",
   "auth.signedIn": "Connecté.",
   "auth.username": "Nom d'utilisateur",
+  "auth.ownerUsernamePlaceholder": "Choisissez votre nom d'utilisateur",
   "auth.usernameRequired": "Le nom d?utilisateur est obligatoire.",
   "auth.waitingPasskey": "En attente de passkey...",
   "bulk.addToBoxSet": "Ajouter au coffret",

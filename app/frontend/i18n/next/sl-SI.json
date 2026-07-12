@@ -594,6 +594,7 @@
   "auth.signOut": "Odjava",
   "auth.signedIn": "Prijavljeni ste.",
   "auth.username": "Uporabniško ime",
+  "auth.ownerUsernamePlaceholder": "Izberite svoje uporabniško ime",
   "auth.usernameRequired": "Uporabniško ime je obvezno.",
   "auth.waitingPasskey": "Čakanje na dostopni ključ...",
   "bulk.addToBoxSet": "Dodaj v komplet",

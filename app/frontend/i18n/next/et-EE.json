@@ -594,6 +594,7 @@
   "auth.signOut": "Logi välja",
   "auth.signedIn": "Sisse logitud.",
   "auth.username": "Kasutajanimi",
+  "auth.ownerUsernamePlaceholder": "Vali oma kasutajanimi",
   "auth.usernameRequired": "Kasutajanimi on kohustuslik.",
   "auth.waitingPasskey": "Pääsuvõtme ootamine...",
   "bulk.addToBoxSet": "Lisa karbikomplekti",
