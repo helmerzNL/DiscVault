@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "强调色",
+  "preferences.accentHelp": "选择在整个 DiscVault 中使用的强调色。中性色和格式标记保持不变。",
+  "accent.label": "强调色",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "紫水晶",
+  "accent.chrome": "铬色",
+  "accent.emerald": "祖母绿",
+  "accent.teal": "水鸭蓝",
+  "accent.crimson": "深红色",
+  "accent.magenta": "品红色",
+  "accent.ember": "余烬"
 }

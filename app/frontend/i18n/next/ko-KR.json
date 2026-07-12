@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "강조 색상",
+  "preferences.accentHelp": "DiscVault 전체에서 사용되는 강조 색상을 선택하세요. 중립 색상과 포맷 배지는 고정됩니다.",
+  "accent.label": "강조 색상",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "자수정",
+  "accent.chrome": "크롬",
+  "accent.emerald": "에메랄드",
+  "accent.teal": "청록색",
+  "accent.crimson": "진홍색",
+  "accent.magenta": "마젠타",
+  "accent.ember": "잉걸불"
 }

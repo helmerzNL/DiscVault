@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Акцентний колір",
+  "preferences.accentHelp": "Виберіть акцент, який використовується в усьому DiscVault. Нейтральні кольори та значки форматів залишаються незмінними.",
+  "accent.label": "Акцентний колір",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Аметист",
+  "accent.chrome": "Хром",
+  "accent.emerald": "Смарагд",
+  "accent.teal": "Бірюзовий",
+  "accent.crimson": "Малиновий",
+  "accent.magenta": "Пурпуровий",
+  "accent.ember": "Жар"
 }
