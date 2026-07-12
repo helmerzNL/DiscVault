@@ -752,6 +752,139 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["movie"]["director"], "Ridley Scott")
         self.assertEqual([path for path, _params in calls], ["/api/v3/search", "/api/v3/movies/mv_alien"])
 
+    def test_movie_details_barcode_enriches_credits_from_movie_detail(self):
+        # Regression for barcode discs (e.g. Avengers: Endgame, 8717418549893):
+        # /api/v3/barcodes/{barcode} matches the precise release but carries no
+        # cast/crew, so movie_details must reach /api/v3/movies/{id} for credits
+        # while preserving the barcode-matched release/technical fields.
+        calls = []
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                calls.append(path)
+                if path == "/api/v3/barcodes/8717418549893":
+                    return _v3_barcode_release(
+                        {
+                            "id": "mv_endgame",
+                            "title": "Avengers: Endgame",
+                            "year": "2019",
+                            "format": "Blu-ray",
+                            "tmdbId": 299534,
+                        },
+                        {"format": "4K UHD", "barcode": "8717418549893", "edition": "SteelBook"},
+                    )
+                if path == "/api/v3/movies/mv_endgame":
+                    return {
+                        "matched": True,
+                        "match": {
+                            "type": "movie",
+                            "movie": {
+                                "id": "mv_endgame",
+                                "title": "Avengers: Endgame",
+                                "cast": [
+                                    {"name": "Robert Downey Jr.", "tmdbId": 3223, "character": "Tony Stark"},
+                                ],
+                                "crew": [
+                                    {"name": "Anthony Russo", "job": "Director", "tmdbId": 19271},
+                                ],
+                            },
+                        },
+                    }
+                self.fail(f"unexpected MovieVault path {path}")
+
+            movievault_26._get = fake_get
+            result = movievault_26.movie_details(
+                {"barcode": "8717418549893"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        # Barcode-matched release/technical fields are preserved.
+        self.assertEqual(result["movie"]["title"], "Avengers: Endgame")
+        self.assertEqual(result["candidates"][0]["format"], "4K UHD")
+        self.assertEqual(result["movie"]["edition"], "SteelBook")
+        # Credits are now sourced from the movie-detail endpoint.
+        credits = result.get("credits") or []
+        by_name = {entry["name"]: entry for entry in credits}
+        self.assertEqual(by_name["Robert Downey Jr."]["tmdbId"], "3223")
+        self.assertEqual(by_name["Robert Downey Jr."]["role"], "actor")
+        self.assertEqual(by_name["Anthony Russo"]["tmdbId"], "19271")
+        self.assertEqual(by_name["Anthony Russo"]["job"], "Director")
+        self.assertIn("/api/v3/movies/mv_endgame", calls)
+
+    def test_movie_details_barcode_without_detail_credits_is_unchanged(self):
+        # No regression: when /api/v3/movies/{id} yields no credits, the barcode
+        # hit is returned untouched (still a hit, credits absent).
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                if path == "/api/v3/barcodes/8717418549893":
+                    return _v3_barcode_release(
+                        {
+                            "id": "mv_endgame",
+                            "title": "Avengers: Endgame",
+                            "year": "2019",
+                            "format": "Blu-ray",
+                        },
+                        {"format": "4K UHD", "barcode": "8717418549893"},
+                    )
+                if path == "/api/v3/movies/mv_endgame":
+                    return {"matched": True, "match": {"type": "movie", "movie": {"id": "mv_endgame", "title": "Avengers: Endgame"}}}
+                self.fail(f"unexpected MovieVault path {path}")
+
+            movievault_26._get = fake_get
+            result = movievault_26.movie_details(
+                {"barcode": "8717418549893"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["candidates"][0]["format"], "4K UHD")
+        self.assertFalse(result.get("credits"))
+
+    def test_movie_details_barcode_credits_falls_back_to_id_resolution(self):
+        # When the barcode match omits a resolvable movieVaultId, credit
+        # enrichment falls back to the tmdbId/imdbId /api/v3/search resolution.
+        calls = []
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                calls.append(path)
+                if path == "/api/v3/barcodes/8717418549893":
+                    return _v3_barcode_release(
+                        {"title": "Avengers: Endgame", "year": "2019", "format": "Blu-ray"},
+                        {"format": "4K UHD", "barcode": "8717418549893"},
+                    )
+                if path == "/api/v3/search":
+                    return {"catalog": [{"movieVaultId": "mv_endgame", "title": "Avengers: Endgame"}], "editions": []}
+                if path == "/api/v3/movies/mv_endgame":
+                    return {
+                        "matched": True,
+                        "match": {
+                            "type": "movie",
+                            "movie": {
+                                "id": "mv_endgame",
+                                "title": "Avengers: Endgame",
+                                "crew": [{"name": "Anthony Russo", "job": "Director", "tmdbId": 19271}],
+                            },
+                        },
+                    }
+                self.fail(f"unexpected MovieVault path {path}")
+
+            movievault_26._get = fake_get
+            result = movievault_26.movie_details(
+                {"barcode": "8717418549893", "tmdbId": 299534}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        credits = result.get("credits") or []
+        self.assertEqual({entry["name"] for entry in credits}, {"Anthony Russo"})
+        self.assertIn("/api/v3/search", calls)
+
     def test_person_details_by_movievault_id_uses_v3_people_detail(self):
         original_get = movievault_26._get
         try:
