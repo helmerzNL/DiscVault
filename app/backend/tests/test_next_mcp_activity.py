@@ -168,6 +168,38 @@ class NextMcpActivityHelperTests(unittest.TestCase):
             )
         )
 
+    def test_activity_log_entry_detects_android_and_web_clients(self):
+        android_entry = next_mcp_activity.mcp_activity_log_entry(
+            {
+                "id": "android_1",
+                "event_type": "mcp.request",
+                "category": "mcp",
+                "summary": "MCP request",
+                "metadata": {"apiTokenName": "DiscVault iOS"},
+                "user_agent": "DiscVault/Android 1.0",
+                "created_at": None,
+            }
+        )
+        self.assertEqual(android_entry["client"], "DiscVault Android")
+        self.assertFalse(next_mcp_activity.mcp_activity_log_is_ios(android_entry))
+
+        web_entry = next_mcp_activity.mcp_activity_log_entry(
+            {
+                "id": "web_1",
+                "event_type": "mcp.request",
+                "category": "mcp",
+                "summary": "MCP request",
+                "metadata": {"apiTokenName": "DiscVault iOS"},
+                "user_agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+                ),
+                "created_at": None,
+            }
+        )
+        self.assertEqual(web_entry["client"], "Web client")
+        self.assertFalse(next_mcp_activity.mcp_activity_log_is_ios(web_entry))
+
 
 if __name__ == "__main__":
     unittest.main()
