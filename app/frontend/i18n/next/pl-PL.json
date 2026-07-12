@@ -2217,6 +2217,7 @@
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
   "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+<<<<<<< HEAD
   "discover.addWishlist": "Add to wishlist",
   "discover.awards": "Award nominations",
   "discover.awardsUnavailable": "Not available",
@@ -2232,4 +2233,17 @@
   "discover.subtitle": "Popular movies from TMDb",
   "discover.title": "Discover",
   "discover.tmdbMissing": "TMDb API key is missing. Open Plugins and add your free TMDb key."
+=======
+  "preferences.accent": "Kolor akcentu",
+  "preferences.accentHelp": "Wybierz akcent używany w całym DiscVault. Kolory neutralne i plakietki formatów pozostają bez zmian.",
+  "accent.label": "Kolor akcentu",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametyst",
+  "accent.chrome": "Chrom",
+  "accent.emerald": "Szmaragd",
+  "accent.teal": "Morski",
+  "accent.crimson": "Karmazyn",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Żar"
+>>>>>>> origin/release/v26-beta
 }

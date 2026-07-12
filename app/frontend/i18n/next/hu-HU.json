@@ -2217,6 +2217,7 @@
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
   "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+<<<<<<< HEAD
   "discover.addWishlist": "Add to wishlist",
   "discover.awards": "Award nominations",
   "discover.awardsUnavailable": "Not available",
@@ -2232,4 +2233,17 @@
   "discover.subtitle": "Popular movies from TMDb",
   "discover.title": "Discover",
   "discover.tmdbMissing": "TMDb API key is missing. Open Plugins and add your free TMDb key."
+=======
+  "preferences.accent": "Kiemelőszín",
+  "preferences.accentHelp": "Válaszd ki a DiscVaultban használt kiemelőszínt. A semleges színek és a formátumjelvények változatlanok maradnak.",
+  "accent.label": "Kiemelőszín",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametiszt",
+  "accent.chrome": "Króm",
+  "accent.emerald": "Smaragd",
+  "accent.teal": "Pávakék",
+  "accent.crimson": "Karmazsin",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Parázs"
+>>>>>>> origin/release/v26-beta
 }

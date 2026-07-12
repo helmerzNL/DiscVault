@@ -2217,6 +2217,7 @@
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
   "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+<<<<<<< HEAD
   "discover.addWishlist": "Add to wishlist",
   "discover.awards": "Award nominations",
   "discover.awardsUnavailable": "Not available",
@@ -2232,4 +2233,17 @@
   "discover.subtitle": "Popular movies from TMDb",
   "discover.title": "Discover",
   "discover.tmdbMissing": "TMDb API key is missing. Open Plugins and add your free TMDb key."
+=======
+  "preferences.accent": "Акцентний колір",
+  "preferences.accentHelp": "Виберіть акцент, який використовується в усьому DiscVault. Нейтральні кольори та значки форматів залишаються незмінними.",
+  "accent.label": "Акцентний колір",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Аметист",
+  "accent.chrome": "Хром",
+  "accent.emerald": "Смарагд",
+  "accent.teal": "Бірюзовий",
+  "accent.crimson": "Малиновий",
+  "accent.magenta": "Пурпуровий",
+  "accent.ember": "Жар"
+>>>>>>> origin/release/v26-beta
 }

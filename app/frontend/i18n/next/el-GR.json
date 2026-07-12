@@ -2217,6 +2217,7 @@
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
   "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+<<<<<<< HEAD
   "discover.addWishlist": "Add to wishlist",
   "discover.awards": "Award nominations",
   "discover.awardsUnavailable": "Not available",
@@ -2232,4 +2233,17 @@
   "discover.subtitle": "Popular movies from TMDb",
   "discover.title": "Discover",
   "discover.tmdbMissing": "TMDb API key is missing. Open Plugins and add your free TMDb key."
+=======
+  "preferences.accent": "Χρώμα τονισμού",
+  "preferences.accentHelp": "Επιλέξτε το χρώμα τονισμού που χρησιμοποιείται σε όλο το DiscVault. Τα ουδέτερα χρώματα και τα σήματα μορφής παραμένουν σταθερά.",
+  "accent.label": "Χρώμα τονισμού",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Αμέθυστος",
+  "accent.chrome": "Χρώμιο",
+  "accent.emerald": "Σμαράγδι",
+  "accent.teal": "Πετρόλ",
+  "accent.crimson": "Βαθυκόκκινο",
+  "accent.magenta": "Ματζέντα",
+  "accent.ember": "Χόβολη"
+>>>>>>> origin/release/v26-beta
 }
