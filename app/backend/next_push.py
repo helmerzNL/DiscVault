@@ -46,6 +46,8 @@ PWA_ICON_ASSETS = {
     "favicon-32.png",
     "favicon-192.png",
     "favicon-512.png",
+    "flux76-wordmark-dark.png",
+    "flux76-wordmark-light.png",
     "header-logo.svg",
     "icon.svg",
     "logo.svg",
@@ -53,6 +55,7 @@ PWA_ICON_ASSETS = {
     "pwa-icon-512.png",
     "pwa-maskable-192.png",
     "pwa-maskable-512.png",
+    "tmdb-logo.svg",
 }
 
 
