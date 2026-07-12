@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime, timezone
@@ -976,7 +977,21 @@ def _http_request(method: str, url: str, headers: dict[str, str], data: bytes | 
         raise MovieVaultConnectionError(str(exc)) from exc
 
 
-def bootstrap_v3(conn, *, actor_id: Any = None) -> dict[str, Any]:
+_V3_LINKED_INSTANCE_RE = re.compile(r"web_[0-9a-fA-F][0-9a-fA-F-]{6,}")
+
+
+def _linked_instance_from_message(message: str) -> str:
+    """Extract the instanceId MovieVault reports a signing key is already linked to.
+
+    MovieVault's bootstrap rejection reads: "This signing key is already linked to
+    web_<uuid>; reset that link or reuse its instanceId". We adopt that instanceId so
+    a drifted local instanceId self-heals instead of failing bootstrap forever.
+    """
+    match = _V3_LINKED_INSTANCE_RE.search(message or "")
+    return match.group(0) if match else ""
+
+
+def bootstrap_v3(conn, *, actor_id: Any = None, _allow_relink_retry: bool = True) -> dict[str, Any]:
     """Register this instance with MovieVault's generalized ``/api/v3/clients/bootstrap``.
 
     Bootstrap is unsigned. Reuses the shared Ed25519 keypair, always adopts the
@@ -1000,12 +1015,21 @@ def bootstrap_v3(conn, *, actor_id: Any = None) -> dict[str, Any]:
         {"Accept": "application/json", "Content-Type": "application/json"},
         json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
     )
-    code = _response_error_code(response)
+    code, message = _response_error(response)
     if response.status_code == 403 and code in {"instance_blocked", "instance_revoked"}:
         _mark_revoked(conn)
         raise MovieVaultInstanceRevoked("MovieVault instance is blocked")
     if _is_client_version_unsupported(response):
         _raise_client_version_unsupported(conn, response)
+    if response.status_code == 400 and code == "validation_error" and _allow_relink_retry:
+        linked_instance = _linked_instance_from_message(message)
+        if linked_instance and linked_instance != instance_id:
+            # The signing key is already linked to a different instanceId on
+            # MovieVault (our local instanceId drifted from the registered one).
+            # Adopt the linked id and retry bootstrap once so the transport
+            # self-heals instead of failing on every token refresh.
+            _set_setting(conn, V3_INSTANCE_ID_KEY, linked_instance, is_secret=False)
+            return bootstrap_v3(conn, actor_id=actor_id, _allow_relink_retry=False)
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
         raise MovieVaultConnectionError(f"MovieVault v3 bootstrap failed: {code or response.status_code}")

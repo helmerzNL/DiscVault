@@ -213,6 +213,60 @@ class MovieVaultV3ClientTests(unittest.TestCase):
         with self.assertRaises(mv.MovieVaultInstanceRevoked):
             mv.bootstrap_v3(None)
 
+    def test_linked_instance_from_message(self):
+        self.assertEqual(
+            mv._linked_instance_from_message(
+                "This signing key is already linked to "
+                "web_1c6b372f-fbdd-4efb-b986-773558874116; reset that link or reuse its instanceId"
+            ),
+            "web_1c6b372f-fbdd-4efb-b986-773558874116",
+        )
+        self.assertEqual(mv._linked_instance_from_message("no instance id here"), "")
+        self.assertEqual(mv._linked_instance_from_message(""), "")
+
+    def test_bootstrap_v3_self_heals_on_linked_instance(self):
+        linked = "web_1c6b372f-fbdd-4efb-b986-773558874116"
+        sender = self._install_sender([
+            _resp(400, {"error": {
+                "code": "validation_error",
+                "message": (
+                    "This signing key is already linked to "
+                    f"{linked}; reset that link or reuse its instanceId"
+                ),
+            }}),
+            _resp(200, {"keyId": "iosk_relinked", "apiToken": "mv_live_relinked", "instanceId": linked}),
+        ])
+        # Seed a drifted local instanceId so the first attempt uses it.
+        self.store[mv.V3_INSTANCE_ID_KEY] = ("web_drifted", False)
+
+        result = mv.bootstrap_v3(None)
+
+        self.assertEqual(len(sender.calls), 2)
+        # Linked instanceId persisted before the retry.
+        self.assertEqual(self.store[mv.V3_INSTANCE_ID_KEY][0], linked)
+        # Retry POST carried the linked instanceId.
+        retry_body = json.loads(sender.calls[1]["data"].decode("utf-8"))
+        self.assertEqual(retry_body["instanceId"], linked)
+        self.assertEqual(result["keyId"], "iosk_relinked")
+        self.assertEqual(mv._v3_token(None), "mv_live_relinked")
+
+    def test_bootstrap_v3_relink_retry_guarded_against_loops(self):
+        linked = "web_1c6b372f-fbdd-4efb-b986-773558874116"
+        message = (
+            "This signing key is already linked to "
+            f"{linked}; reset that link or reuse its instanceId"
+        )
+        sender = self._install_sender([
+            _resp(400, {"error": {"code": "validation_error", "message": message}}),
+            _resp(400, {"error": {"code": "validation_error", "message": message}}),
+        ])
+        self.store[mv.V3_INSTANCE_ID_KEY] = ("web_drifted", False)
+
+        with self.assertRaises(mv.MovieVaultConnectionError):
+            mv.bootstrap_v3(None)
+        # Exactly one relink retry — no infinite recursion.
+        self.assertEqual(len(sender.calls), 2)
+
     # --- signed transport --------------------------------------------------
 
     def _seed_link(self):
