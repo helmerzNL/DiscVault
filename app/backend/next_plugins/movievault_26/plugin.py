@@ -2085,6 +2085,60 @@ def search_title(payload, context=None):
     return {"status": "hit" if items else "miss", "provider": "movievault_26", "items": items}
 
 
+def _barcode_movie_id(barcode, context):
+    """Resolve the catalogue ``movieVaultId`` for a scanned public barcode.
+
+    ``/api/v3/barcodes/{barcode}`` carries the matched movie object (with its
+    ``movieVaultId``/``id``) but no cast/crew, so this returns the id that
+    ``/api/v3/movies/{id}`` — the sole credits-bearing endpoint — needs.
+    """
+    if not _is_public_barcode(barcode):
+        return ""
+    match = _v3_barcode_match(_get(context or {}, f"/api/v3/barcodes/{quote(barcode)}"))
+    movie = match.get("movie") if isinstance(match, dict) else None
+    if not isinstance(movie, dict):
+        return ""
+    return _text(movie.get("movieVaultId") or movie.get("id"))
+
+
+def _enrich_barcode_credits(result, payload, barcode, context):
+    """Attach cast/crew from ``/api/v3/movies/{id}`` to a barcode-matched hit.
+
+    The barcode endpoint resolves the precise scanned release — its
+    format/technical/edition fields are authoritative and must be preserved —
+    but never carries credits. Only ``/api/v3/movies/{id}`` serves cast/crew, so
+    when the barcode hit lacks them we resolve the catalogue ``movieVaultId``
+    (from the barcode match first, then the tmdbId/imdbId search fallback) and
+    merge in ONLY the credits, leaving every field the barcode match produced
+    untouched. Any missing id, empty detail, or transport failure simply leaves
+    the barcode result unchanged so credit enrichment never regresses a hit.
+    """
+    if not isinstance(result, dict) or result.get("status") != "hit":
+        return result
+    if result.get("credits"):
+        return result
+    try:
+        movie_id = _barcode_movie_id(barcode, context)
+        if not movie_id:
+            payload = payload or {}
+            tmdb_id = _text(payload.get("tmdbId") or payload.get("tmdb_id"))
+            imdb_id = _text(payload.get("imdbId") or payload.get("imdb_id"))
+            if tmdb_id or imdb_id:
+                films = _v3_search_films(
+                    _get(context or {}, "/api/v3/search", tmdbId=tmdb_id, imdbId=imdb_id, type="movie")
+                )
+                movie_id = _text(films[0].get("movieVaultId") or films[0].get("id")) if films else ""
+        if not movie_id:
+            return result
+        detail = _get(context or {}, f"/api/v3/movies/{quote(movie_id)}")
+        credits = _movie_credits(_v3_movie_item(detail))
+        if credits:
+            return {**result, "credits": credits}
+    except MovieVaultUnavailable:
+        return result
+    return result
+
+
 def movie_details(payload, context=None):
     barcode = str((payload or {}).get("barcode") or "").strip()
     title = str((payload or {}).get("title") or "").strip()
@@ -2094,7 +2148,7 @@ def movie_details(payload, context=None):
     if _is_public_barcode(barcode):
         result = search_barcode(payload, context)
         if result.get("status") == "hit":
-            return result
+            return _enrich_barcode_credits(result, payload, barcode, context)
     if not title and not (tmdb_id or imdb_id):
         return {"status": "skipped", "provider": PROVIDER_ID}
     # Resolve the catalogue movie by external id first: /api/v3/search performs an
