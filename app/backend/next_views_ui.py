@@ -6716,6 +6716,19 @@ def ui_preview_html(
       justify-content: flex-end;
       gap: 10px;
     }
+    .profile-hero-nav-actions {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .profile-hero-nav-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .profile-hero-nav-action .nav-item-label {
+      gap: 8px;
+    }
     .profile-grid {
       display: grid;
       grid-template-columns: minmax(280px, .82fr) minmax(0, 1.18fr);
@@ -8698,7 +8711,7 @@ def ui_preview_html(
         min-height: 70px;
         padding: 7px 8px;
         display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         align-items: center;
         gap: 4px;
         border: 1px solid color-mix(in srgb, var(--line-strong) 80%, transparent);
@@ -9073,9 +9086,27 @@ def ui_preview_html(
       }
       .profile-hero-actions {
         justify-content: stretch;
+        gap: 8px;
       }
-      .profile-hero-actions .secondary-button,
-      .profile-hero-actions .primary-button {
+      .profile-hero-nav-actions {
+        display: inline-flex;
+        flex-wrap: nowrap;
+        gap: 8px;
+        width: auto;
+      }
+      .profile-hero-nav-action {
+        width: auto;
+        min-width: 44px;
+        padding: 0 12px;
+      }
+      .profile-hero-nav-action .nav-item-label {
+        gap: 0;
+      }
+      .profile-hero-nav-action .nav-item-label span:last-child {
+        display: none;
+      }
+      .profile-hero-actions > .secondary-button,
+      .profile-hero-actions > .primary-button {
         width: 100%;
       }
       .profile-grid {
@@ -9460,7 +9491,6 @@ def ui_preview_html(
         <button type="button" class="nav-item active" data-app-route="library"><span class="nav-item-label">""" + nav_icon("library") + """<span data-next-i18n="uiPreview.navLibrary">Library</span></span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label">""" + nav_icon("lists") + """<span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
-        <button type="button" class="nav-item" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
       <div class="sidebar-footer">
@@ -10986,7 +11016,10 @@ def ui_preview_html(
             </div>
           </div>
           <div class="profile-hero-actions">
-            <button type="button" class="secondary-button hidden" id="profileOpenStatisticsButton" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span></button>
+            <div class="profile-hero-nav-actions">
+              <button type="button" class="secondary-button profile-hero-nav-action" id="profileOpenNotificationsButton" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span></button>
+              <button type="button" class="secondary-button profile-hero-nav-action hidden" id="profileOpenStatisticsButton" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span></button>
+            </div>
             <button type="button" class="secondary-button hidden" id="profileOpenAdminButton" data-app-route="admin" data-next-i18n="profile.openAdmin">Open admin</button>
             <button type="button" class="secondary-button" id="profileSignOutButton" data-next-i18n="auth.signOut">Sign out</button>
           </div>
@@ -11964,10 +11997,6 @@ def ui_preview_html(
     <button type="button" class="mobile-tab mobile-tab-primary" data-app-route="import">
       """ + nav_icon("import") + """
       <span data-next-i18n="importCenter.title">Import</span>
-    </button>
-    <button type="button" class="mobile-tab" data-app-route="notifications">
-      """ + nav_icon("notifications") + """
-      <span data-next-i18n="uiPreview.navNotifications">Notifications</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="profile">
       """ + nav_icon("profile") + """
