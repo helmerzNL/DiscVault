@@ -2089,14 +2089,24 @@ def movie_details(payload, context=None):
     barcode = str((payload or {}).get("barcode") or "").strip()
     title = str((payload or {}).get("title") or "").strip()
     year = str((payload or {}).get("year") or "").strip()
+    tmdb_id = _text((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id"))
+    imdb_id = _text((payload or {}).get("imdbId") or (payload or {}).get("imdb_id"))
     if _is_public_barcode(barcode):
         result = search_barcode(payload, context)
         if result.get("status") == "hit":
             return result
-    if not title:
+    if not title and not (tmdb_id or imdb_id):
         return {"status": "skipped", "provider": PROVIDER_ID}
-    search = _get(context or {}, "/api/v3/search", q=title, year=year, type="movie")
-    films = _v3_search_films(search)
+    # Resolve the catalogue movie by external id first: /api/v3/search performs an
+    # unambiguous tmdbId/imdbId lookup that returns the movieVaultId directly, which
+    # is the only reliable way to reach /api/v3/movies/{id} (the sole endpoint that
+    # serves cast/crew). Fuzzy title/year matching misses long, punctuated titles
+    # and is used only as a fallback.
+    films = []
+    if tmdb_id or imdb_id:
+        films = _v3_search_films(_get(context or {}, "/api/v3/search", tmdbId=tmdb_id, imdbId=imdb_id, type="movie"))
+    if not films and title:
+        films = _v3_search_films(_get(context or {}, "/api/v3/search", q=title, year=year, type="movie"))
     movie_id = _text(films[0].get("movieVaultId") or films[0].get("id")) if films else ""
     if movie_id:
         detail = _get(context or {}, f"/api/v3/movies/{quote(movie_id)}")
