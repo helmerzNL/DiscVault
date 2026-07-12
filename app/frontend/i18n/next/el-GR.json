@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Χρώμα τονισμού",
+  "preferences.accentHelp": "Επιλέξτε το χρώμα τονισμού που χρησιμοποιείται σε όλο το DiscVault. Τα ουδέτερα χρώματα και τα σήματα μορφής παραμένουν σταθερά.",
+  "accent.label": "Χρώμα τονισμού",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Αμέθυστος",
+  "accent.chrome": "Χρώμιο",
+  "accent.emerald": "Σμαράγδι",
+  "accent.teal": "Πετρόλ",
+  "accent.crimson": "Βαθυκόκκινο",
+  "accent.magenta": "Ματζέντα",
+  "accent.ember": "Χόβολη"
 }

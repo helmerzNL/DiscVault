@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f0d060"/>
-      <stop offset="50%" stop-color="#e8c547"/>
-      <stop offset="100%" stop-color="#c9a530"/>
+      <stop offset="0%" stop-color="#7EB9EB"/>
+      <stop offset="50%" stop-color="#3C7CE1"/>
+      <stop offset="100%" stop-color="#2259B0"/>
     </linearGradient>
     <linearGradient id="discGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7c6af7"/>
-      <stop offset="100%" stop-color="#5548c8"/>
+      <stop offset="0%" stop-color="#3B9EFF"/>
+      <stop offset="100%" stop-color="#2A6FD6"/>
     </linearGradient>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#12121a"/>
-      <stop offset="100%" stop-color="#0a0a0f"/>
+      <stop offset="0%" stop-color="#111A2A"/>
+      <stop offset="100%" stop-color="#090F1A"/>
     </linearGradient>
     <linearGradient id="shineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="rgba(255,255,255,0.15)"/>
@@ -44,21 +44,21 @@
   <circle cx="256" cy="240" r="160" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" opacity="0.2"/>
 
   <!-- Disc body -->
-  <circle cx="256" cy="240" r="130" fill="#1a1a26" stroke="url(#discGrad)" stroke-width="2.5"/>
+  <circle cx="256" cy="240" r="130" fill="#0E1524" stroke="url(#discGrad)" stroke-width="2.5"/>
 
   <!-- Disc tracks (concentric rings) -->
-  <circle cx="256" cy="240" r="115" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.25"/>
-  <circle cx="256" cy="240" r="100" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.2"/>
-  <circle cx="256" cy="240" r="85" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.25"/>
-  <circle cx="256" cy="240" r="70" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.2"/>
+  <circle cx="256" cy="240" r="115" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.25"/>
+  <circle cx="256" cy="240" r="100" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.2"/>
+  <circle cx="256" cy="240" r="85" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.25"/>
+  <circle cx="256" cy="240" r="70" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.2"/>
 
   <!-- Disc rainbow refraction arcs -->
-  <path d="M 160 170 A 130 130 0 0 1 290 130" fill="none" stroke="#e8c547" stroke-width="1" opacity="0.2"/>
-  <path d="M 170 320 A 130 130 0 0 1 350 260" fill="none" stroke="#7c6af7" stroke-width="1.5" opacity="0.15"/>
-  <path d="M 200 340 A 110 110 0 0 1 370 220" fill="none" stroke="#40c080" stroke-width="1" opacity="0.1"/>
+  <path d="M 160 170 A 130 130 0 0 1 290 130" fill="none" stroke="#3C7CE1" stroke-width="1" opacity="0.2"/>
+  <path d="M 170 320 A 130 130 0 0 1 350 260" fill="none" stroke="#3B9EFF" stroke-width="1.5" opacity="0.15"/>
+  <path d="M 200 340 A 110 110 0 0 1 370 220" fill="none" stroke="#7EE2C6" stroke-width="1" opacity="0.1"/>
 
   <!-- Inner hub -->
-  <circle cx="256" cy="240" r="42" fill="#12121a" stroke="url(#goldGrad)" stroke-width="2"/>
+  <circle cx="256" cy="240" r="42" fill="#111A2A" stroke="url(#goldGrad)" stroke-width="2"/>
   <circle cx="256" cy="240" r="16" fill="none" stroke="url(#goldGrad)" stroke-width="1.5" opacity="0.5"/>
 
   <!-- Vault keyhole / shield emblem in center -->
@@ -68,11 +68,11 @@
 
   <!-- 4K badge -->
   <rect x="316" y="130" width="56" height="24" rx="12" fill="url(#goldGrad)" filter="url(#glow)"/>
-  <text x="344" y="147" text-anchor="middle" font-family="'DM Mono', 'SF Mono', monospace" font-size="13" font-weight="700" fill="#0a0a0f" letter-spacing="0.5">4K</text>
+  <text x="344" y="147" text-anchor="middle" font-family="'DM Mono', 'SF Mono', monospace" font-size="13" font-weight="700" fill="#090F1A" letter-spacing="0.5">4K</text>
 
   <!-- Text: DiscVault -->
   <text x="256" y="415" text-anchor="middle" font-family="'DM Serif Display', Georgia, serif" font-size="52" fill="url(#goldGrad)" letter-spacing="-1" filter="url(#softglow)">DiscVault</text>
 
   <!-- Subtle tagline -->
-  <text x="256" y="450" text-anchor="middle" font-family="'DM Mono', 'SF Mono', monospace" font-size="12" fill="#7878a0" letter-spacing="3" text-transform="uppercase">COLLECTION MANAGER</text>
+  <text x="256" y="450" text-anchor="middle" font-family="'DM Mono', 'SF Mono', monospace" font-size="12" fill="#647082" letter-spacing="3" text-transform="uppercase">COLLECTION MANAGER</text>
 </svg>

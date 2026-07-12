@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Color de acento",
+  "preferences.accentHelp": "Elige el acento que se usa en todo DiscVault. Los neutros y las insignias de formato no cambian.",
+  "accent.label": "Color de acento",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Amatista",
+  "accent.chrome": "Cromo",
+  "accent.emerald": "Esmeralda",
+  "accent.teal": "Verde azulado",
+  "accent.crimson": "Carmesí",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Brasa"
 }

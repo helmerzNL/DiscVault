@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Accentfärg",
+  "preferences.accentHelp": "Välj accenten som används i hela DiscVault. Neutrala färger och formatmärken förblir oförändrade.",
+  "accent.label": "Accentfärg",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametist",
+  "accent.chrome": "Krom",
+  "accent.emerald": "Smaragd",
+  "accent.teal": "Blågrön",
+  "accent.crimson": "Karmosin",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Glöd"
 }

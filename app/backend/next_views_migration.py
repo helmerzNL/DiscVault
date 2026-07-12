@@ -28,16 +28,16 @@ def migration_dashboard_html() -> str:
   <style>
     :root {
       color-scheme: dark;
-      --bg: #111217;
-      --panel: #1a1d25;
-      --panel-2: #222632;
-      --line: #343949;
-      --text: #f3f4f8;
-      --muted: #a9afbf;
-      --accent: #e8c547;
-      --blue: #7aa7ff;
-      --green: #48c78e;
-      --red: #ff6b6b;
+      --bg: #090F1A;
+      --panel: #111A2A;
+      --panel-2: #1A2438;
+      --line: #2B3852;
+      --text: #EAF0F7;
+      --muted: #9AA7B8;
+      --accent: #3C7CE1;
+      --blue: #6CB4FC;
+      --green: #34D399;
+      --red: #FF5A52;
     }
     * { box-sizing: border-box; }
     body {
