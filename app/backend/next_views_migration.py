@@ -132,22 +132,19 @@ def migration_dashboard_html() -> str:
     .login-mark {
       width: 54px;
       height: 54px;
-      border-radius: 16px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.045));
-      border: 1px solid rgba(255,255,255,.16);
       color: var(--text);
       font-weight: 780;
       letter-spacing: 0;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 14px 38px rgba(0,0,0,.2);
     }
     .login-mark img {
-      width: 34px;
-      height: 34px;
+      width: 100%;
+      height: 100%;
       object-fit: contain;
       display: block;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,.55));
     }
     .login-copy {
       display: grid;
