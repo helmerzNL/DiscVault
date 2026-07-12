@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Rõhuvärv",
+  "preferences.accentHelp": "Vali kogu DiscVaultis kasutatav rõhuvärv. Neutraalsed värvid ja vormingumärgised jäävad samaks.",
+  "accent.label": "Rõhuvärv",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametüst",
+  "accent.chrome": "Kroom",
+  "accent.emerald": "Smaragd",
+  "accent.teal": "Sinakasroheline",
+  "accent.crimson": "Karmiinpunane",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Hõõguv süsi"
 }

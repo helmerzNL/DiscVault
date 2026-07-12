@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Акцентен цвят",
+  "preferences.accentHelp": "Изберете акцента, използван в целия DiscVault. Неутралните цветове и значките за формат остават непроменени.",
+  "accent.label": "Акцентен цвят",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Аметист",
+  "accent.chrome": "Хром",
+  "accent.emerald": "Изумруд",
+  "accent.teal": "Синьо-зелено",
+  "accent.crimson": "Пурпурночервено",
+  "accent.magenta": "Магента",
+  "accent.ember": "Жарава"
 }

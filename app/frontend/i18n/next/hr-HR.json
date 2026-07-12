@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Boja isticanja",
+  "preferences.accentHelp": "Odaberite naglasak koji se koristi u cijelom DiscVaultu. Neutralne boje i oznake formata ostaju nepromijenjene.",
+  "accent.label": "Boja isticanja",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametist",
+  "accent.chrome": "Krom",
+  "accent.emerald": "Smaragd",
+  "accent.teal": "Tirkizna",
+  "accent.crimson": "Grimizna",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Žar"
 }

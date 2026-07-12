@@ -28,16 +28,16 @@ def migration_dashboard_html() -> str:
   <style>
     :root {
       color-scheme: dark;
-      --bg: #111217;
-      --panel: #1a1d25;
-      --panel-2: #222632;
-      --line: #343949;
-      --text: #f3f4f8;
-      --muted: #a9afbf;
-      --accent: #e8c547;
-      --blue: #7aa7ff;
-      --green: #48c78e;
-      --red: #ff6b6b;
+      --bg: #090F1A;
+      --panel: #111A2A;
+      --panel-2: #1A2438;
+      --line: #2B3852;
+      --text: #EAF0F7;
+      --muted: #9AA7B8;
+      --accent: #3C7CE1;
+      --blue: #6CB4FC;
+      --green: #34D399;
+      --red: #FF5A52;
     }
     * { box-sizing: border-box; }
     body {
@@ -132,22 +132,19 @@ def migration_dashboard_html() -> str:
     .login-mark {
       width: 54px;
       height: 54px;
-      border-radius: 16px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(145deg, rgba(255,255,255,.22), rgba(255,255,255,.045));
-      border: 1px solid rgba(255,255,255,.16);
       color: var(--text);
       font-weight: 780;
       letter-spacing: 0;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 14px 38px rgba(0,0,0,.2);
     }
     .login-mark img {
-      width: 34px;
-      height: 34px;
+      width: 100%;
+      height: 100%;
       object-fit: contain;
       display: block;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,.55));
     }
     .login-copy {
       display: grid;

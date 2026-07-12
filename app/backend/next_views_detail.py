@@ -373,15 +373,15 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
   <style>
     :root {
       color-scheme: dark;
-      --bg: #101116;
-      --surface: #191c24;
-      --surface-2: #222633;
-      --line: #343a4c;
-      --text: #f4f5f8;
-      --muted: #aab0bd;
-      --accent: #e8c547;
-      --blue: #82aaff;
-      --green: #48c78e;
+      --bg: #090F1A;
+      --surface: #111A2A;
+      --surface-2: #1A2438;
+      --line: #2B3852;
+      --text: #EAF0F7;
+      --muted: #9AA7B8;
+      --accent: #3C7CE1;
+      --blue: #6CB4FC;
+      --green: #34D399;
     }
     * { box-sizing: border-box; }
     body {
@@ -890,15 +890,15 @@ def container_detail_html(detail: dict[str, Any]) -> str:
   <style>
     :root {
       color-scheme: dark;
-      --bg: #101116;
-      --surface: #191c24;
-      --surface-2: #222633;
-      --line: #343a4c;
-      --text: #f4f5f8;
-      --muted: #aab0bd;
-      --accent: #e8c547;
-      --blue: #82aaff;
-      --green: #48c78e;
+      --bg: #090F1A;
+      --surface: #111A2A;
+      --surface-2: #1A2438;
+      --line: #2B3852;
+      --text: #EAF0F7;
+      --muted: #9AA7B8;
+      --accent: #3C7CE1;
+      --blue: #6CB4FC;
+      --green: #34D399;
     }
     * { box-sizing: border-box; }
     body {

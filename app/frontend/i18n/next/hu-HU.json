@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Kiemelőszín",
+  "preferences.accentHelp": "Válaszd ki a DiscVaultban használt kiemelőszínt. A semleges színek és a formátumjelvények változatlanok maradnak.",
+  "accent.label": "Kiemelőszín",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametiszt",
+  "accent.chrome": "Króm",
+  "accent.emerald": "Smaragd",
+  "accent.teal": "Pávakék",
+  "accent.crimson": "Karmazsin",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Parázs"
 }
