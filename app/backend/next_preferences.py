@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
 
 APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "theme": "system",
+    "accent": "bluray",
     "show_featured_hero": True,
     "show_collection_search": True,
     "show_auto_videos": True,
@@ -55,10 +56,11 @@ APP_BOOLEAN_PREFERENCES = {
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
+    "accent": {"bluray", "amethyst", "chrome", "emerald", "teal", "crimson", "magenta", "ember"},
     "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"},
 }
 APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
-    "appearance": ("theme",),
+    "appearance": ("theme", "accent"),
     "library": (
         "show_featured_hero",
         "show_collection_search",

@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Farba akcentu",
+  "preferences.accentHelp": "Vyberte akcent používaný v celom DiscVaulte. Neutrálne farby a odznaky formátov zostávajú nezmenené.",
+  "accent.label": "Farba akcentu",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametyst",
+  "accent.chrome": "Chróm",
+  "accent.emerald": "Smaragd",
+  "accent.teal": "Modrozelená",
+  "accent.crimson": "Karmínová",
+  "accent.magenta": "Purpurová",
+  "accent.ember": "Žeravá"
 }

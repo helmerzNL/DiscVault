@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Akcenta krāsa",
+  "preferences.accentHelp": "Izvēlieties akcentu, ko izmanto visā DiscVault. Neitrālās krāsas un formātu emblēmas paliek nemainīgas.",
+  "accent.label": "Akcenta krāsa",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametists",
+  "accent.chrome": "Hroms",
+  "accent.emerald": "Smaragds",
+  "accent.teal": "Tirkīzzila",
+  "accent.crimson": "Karmīnsarkans",
+  "accent.magenta": "Madženta",
+  "accent.ember": "Kvēle"
 }

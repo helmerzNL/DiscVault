@@ -78,8 +78,8 @@ def pwa_manifest_payload(asset_prefix: str = "/api/next/assets", start_url: str 
         "display": "standalone",
         "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
         "orientation": "any",
-        "background_color": "#0a0a0f",
-        "theme_color": "#111214",
+        "background_color": "#090F1A",
+        "theme_color": "#090F1A",
         "categories": ["entertainment", "lifestyle", "productivity"],
         "prefer_related_applications": False,
         "launch_handler": {"client_mode": ["navigate-existing", "auto"]},
@@ -141,9 +141,9 @@ def pwa_head_tags(asset_prefix: str = "/api/next/assets", manifest_href: str = "
   <meta name="apple-mobile-web-app-title" content="DiscVault">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="format-detection" content="telephone=no">
-  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
-  <meta name="msapplication-TileColor" content="#111214">
+  <meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#090F1A" media="(prefers-color-scheme: dark)">
+  <meta name="msapplication-TileColor" content="#090F1A">
   <meta name="msapplication-TileImage" content="{assets}/pwa-icon-192.png">
   <link rel="manifest" href="{manifest_href}">
   <link rel="apple-touch-icon" sizes="152x152" href="{assets}/apple-touch-icon-152.png">
@@ -152,7 +152,7 @@ def pwa_head_tags(asset_prefix: str = "/api/next/assets", manifest_href: str = "
   <link rel="icon" type="image/png" sizes="32x32" href="{assets}/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="{assets}/pwa-icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="{assets}/pwa-icon-512.png">
-  <link rel="mask-icon" href="{assets}/icon.svg" color="#e8c547">""".rstrip()
+  <link rel="mask-icon" href="{assets}/icon.svg" color="#2A6FD6">""".rstrip()
 
 def push_vapid_subject() -> str:
     return os.environ.get("VAPID_SUBJECT") or os.environ.get("DISCVAULT_VAPID_SUBJECT") or "mailto:no-reply@discvault.app"
