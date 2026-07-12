@@ -351,7 +351,7 @@ def mcp_activity_log_client(metadata: dict[str, Any], user_agent: str) -> str:
             return "DiscVault Android"
         if any(pattern in user_agent_lower for pattern in MCP_WEB_CLIENT_PATTERNS):
             return "Web client"
-    return mcp_log_first(metadata, "apiTokenName", "agent")
+    return mcp_log_first(metadata, "apiTokenName", "agent") or "Custom MCP Client"
 
 
 def mcp_activity_log_is_ios(entry: dict[str, Any]) -> bool:
