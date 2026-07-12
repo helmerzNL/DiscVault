@@ -129,6 +129,7 @@ def ui_preview_html(
         "notifications": "M12 22A2.5 2.5 0 0 0 14.5 19.5H9.5A2.5 2.5 0 0 0 12 22M18 16V11A6 6 0 0 0 13 5.1V4A1 1 0 0 0 11 4V5.1A6 6 0 0 0 6 11V16L4 18V19H20V18L18 16Z",
         "profile": "M12 4A4 4 0 1 1 8 8A4 4 0 0 1 12 4M12 14C16.42 14 20 15.79 20 18V20H4V18C4 15.79 7.58 14 12 14Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
+        "discover": "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.24,7.76L14.12,14.12L7.76,16.24L9.88,9.88L16.24,7.76M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z",
     }
 
     def nav_icon(name: str) -> str:
@@ -9573,6 +9574,81 @@ def ui_preview_html(
         animation-duration: 0.001ms !important;
       }
     }
+    .discover-shell {
+      display: grid;
+      gap: 14px;
+    }
+    .discover-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .discover-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .discover-card {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+      text-align: left;
+      cursor: pointer;
+      color: inherit;
+      min-width: 0;
+    }
+    .discover-poster {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(127, 127, 127, 0.14);
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: .76rem;
+      text-align: center;
+      padding: 8px;
+    }
+    .discover-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .discover-title {
+      font-size: .78rem;
+      line-height: 1.2;
+      color: var(--text);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.3em;
+    }
+    .discover-inline-message {
+      margin: 0;
+      font-size: .82rem;
+      color: var(--muted);
+      text-align: right;
+      max-width: 52ch;
+    }
+    .discover-inline-message.error {
+      color: var(--red);
+    }
+    .discover-loading,
+    .discover-empty {
+      font-size: .84rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    #discoverSentinel {
+      height: 1px;
+    }
   </style>
 </head>
 <body data-app-mode=""" + '"' + app_mode_json + '"' + """>
@@ -9688,6 +9764,7 @@ def ui_preview_html(
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span class="nav-item-label">""" + nav_icon("library") + """<span data-next-i18n="uiPreview.navLibrary">Library</span></span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label">""" + nav_icon("lists") + """<span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="discover"><span class="nav-item-label">""" + nav_icon("discover") + """<span data-next-i18n="discover.nav">Discover</span></span><small id="navDiscoverCount">TMDb</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
@@ -10491,6 +10568,56 @@ def ui_preview_html(
             </div>
             <div class="import-post-review" id="importCenterLatestJob"></div>
             <div class="import-job-list" id="importCenterJobs"></div>
+          </div>
+        </section>
+      </section>
+      <section class="discover-view hidden" id="discoverView">
+        <section class="detail-card full discover-shell">
+          <div class="discover-head">
+            <div>
+              <h2 data-next-i18n="discover.title">Discover</h2>
+              <p class="import-source-meta" data-next-i18n="discover.subtitle">Popular movies from TMDb</p>
+            </div>
+            <p class="discover-inline-message hidden" id="discoverInlineMessage"></p>
+          </div>
+          <div class="discover-grid" id="discoverGrid"></div>
+          <div class="discover-empty hidden" id="discoverEmpty" data-next-i18n="discover.empty">No items found.</div>
+          <div class="discover-loading hidden" id="discoverLoading" data-next-i18n="collection.loading">Loading...</div>
+          <div id="discoverSentinel" aria-hidden="true"></div>
+        </section>
+      </section>
+      <section class="discover-detail-page hidden" id="discoverDetailPage" aria-labelledby="discoverDetailTitle">
+        <section class="movie-detail-hero">
+          <img id="discoverDetailBackdrop" alt="">
+          <button type="button" class="movie-detail-back" id="discoverDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
+          <div class="movie-detail-summary">
+            <div class="movie-detail-poster" id="discoverDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
+            <div class="movie-detail-copy">
+              <span class="eyebrow" data-next-i18n="discover.detailTitle">Discover details</span>
+              <h2 class="movie-detail-title" id="discoverDetailTitle">-</h2>
+              <div class="hero-meta" id="discoverDetailTags"></div>
+              <p class="movie-detail-overview" id="discoverDetailOverview"></p>
+            </div>
+          </div>
+        </section>
+        <div class="movie-detail-action-strip">
+          <div class="movie-detail-actions">
+            <button type="button" class="action secondary" id="discoverDetailWishlistButton" data-next-i18n="discover.addWishlist">Add to wishlist</button>
+          </div>
+          <div class="detail-message" id="discoverDetailMessage"></div>
+        </div>
+        <section class="detail-layout">
+          <div class="detail-card">
+            <h3 data-next-i18n="discover.releaseInfo">Release</h3>
+            <div class="detail-fields" id="discoverDetailRelease"></div>
+          </div>
+          <div class="detail-card">
+            <h3 data-next-i18n="discover.castCrew">Cast & crew</h3>
+            <div class="detail-fields" id="discoverDetailPeople"></div>
+          </div>
+          <div class="detail-card full">
+            <h3 data-next-i18n="discover.showtimes">Cinema showtimes</h3>
+            <p class="import-source-meta" id="discoverShowtimesNote"></p>
           </div>
         </section>
       </section>
@@ -12206,6 +12333,10 @@ def ui_preview_html(
       """ + nav_icon("lists") + """
       <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
+    <button type="button" class="mobile-tab" data-app-route="discover">
+      """ + nav_icon("discover") + """
+      <span data-next-i18n="discover.nav">Discover</span>
+    </button>
     <button type="button" class="mobile-tab mobile-tab-primary" data-app-route="import">
       """ + nav_icon("import") + """
       <span data-next-i18n="importCenter.title">Import</span>
@@ -12272,6 +12403,19 @@ def ui_preview_html(
     let activeLocationRouteMissing = false;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
+    let discoverState = {
+      loaded: false,
+      loading: false,
+      items: [],
+      page: 0,
+      totalPages: 1,
+      hasMore: true,
+      configured: true,
+      kind: "movie",
+      mode: "popular",
+      observer: null
+    };
+    let activeDiscoverItem = null;
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
@@ -12384,6 +12528,38 @@ def ui_preview_html(
     }
     function tNext(key, fallback) {
       return localeState.messages[key] || fallback || key;
+    }
+    const DISCOVER_DETAIL_CACHE_KEY = "dv_next_discover_detail_cache_v1";
+    const DISCOVER_DETAIL_TTL_MS = 15 * 60 * 1000;
+    function loadDiscoverDetailCache() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(DISCOVER_DETAIL_CACHE_KEY) || "{}");
+        return raw && typeof raw === "object" ? raw : {};
+      } catch (error) {
+        return {};
+      }
+    }
+    function saveDiscoverDetailCache(cache) {
+      try {
+        localStorage.setItem(DISCOVER_DETAIL_CACHE_KEY, JSON.stringify(cache || {}));
+      } catch (error) {}
+    }
+    function discoverDetailCacheGet(cacheKey) {
+      const cache = loadDiscoverDetailCache();
+      const item = cache[cacheKey];
+      if (!item || typeof item !== "object") return null;
+      const age = Date.now() - Number(item.cachedAt || 0);
+      if (!Number.isFinite(age) || age > DISCOVER_DETAIL_TTL_MS) {
+        delete cache[cacheKey];
+        saveDiscoverDetailCache(cache);
+        return null;
+      }
+      return item.detail || null;
+    }
+    function discoverDetailCacheSet(cacheKey, detail) {
+      const cache = loadDiscoverDetailCache();
+      cache[cacheKey] = {cachedAt: Date.now(), detail};
+      saveDiscoverDetailCache(cache);
     }
     function pluginDisplayName(pluginOrId, fallback = "") {
       if (!pluginOrId && fallback) return fallback;
@@ -27853,6 +28029,8 @@ def ui_preview_html(
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
+      else if (route.view === "discover") showDiscoverPage(false);
+      else if (route.view === "discoverDetail") openDiscoverDetail({id: route.discoverId, mediaType: route.mediaType || "movie"}, false);
       else if (route.view === "import") showImportPage(false);
       else if (route.view === "lists") showListsPage(false);
       else if (route.view === "statistics") showStatisticsPage(false);
@@ -28124,9 +28302,231 @@ def ui_preview_html(
         window.scrollTo({top: 0, behavior: "auto"});
       });
     }
+    function setDiscoverMessage(message, tone = "") {
+      const node = document.getElementById("discoverInlineMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.classList.toggle("hidden", !message);
+      node.classList.toggle("error", tone === "error");
+    }
+    function discoverCardHtml(item) {
+      const poster = usableImage(item.posterUrl || "");
+      const title = item.title || tNext("common.untitled", "Untitled");
+      return `
+        <button type="button" class="discover-card" data-discover-id="${escapeHtml(item.id || "")}">
+          <span class="discover-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : escapeHtml(tNext("collection.noPoster", "No poster"))}</span>
+          <span class="discover-title">${escapeHtml(title)}</span>
+        </button>
+      `;
+    }
+    function renderDiscoverView() {
+      const grid = document.getElementById("discoverGrid");
+      const empty = document.getElementById("discoverEmpty");
+      const loading = document.getElementById("discoverLoading");
+      if (!grid || !empty || !loading) return;
+      grid.innerHTML = (discoverState.items || []).map((item) => discoverCardHtml(item)).join("");
+      empty.classList.toggle("hidden", !!(discoverState.items || []).length || discoverState.loading || !discoverState.configured);
+      loading.classList.toggle("hidden", !discoverState.loading);
+      grid.querySelectorAll(".discover-card").forEach((button) => {
+        const item = (discoverState.items || []).find((entry) => String(entry.id) === String(button.dataset.discoverId));
+        if (!item) return;
+        bindLongPress(button, {
+          onClick: () => openDiscoverDetail(item),
+          onLongPress: () => addDiscoverItemToWishlist(item)
+        });
+      });
+    }
+    async function addDiscoverItemToWishlist(item) {
+      if (!hasPermission("watchlist.manage")) return;
+      try {
+        await authApiJson("/api/next/lists/wishlist", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            title: item.title || "",
+            year: item.year ? Number(item.year) || null : null,
+            posterUrl: item.posterUrl || null
+          })
+        });
+        setDiscoverMessage(tNext("lists.wishlistAdded", "Added to wishlist."));
+      } catch (error) {
+        setDiscoverMessage(error.message || String(error), "error");
+      }
+    }
+    async function loadDiscoverPage(reset = false) {
+      if (discoverState.loading) return;
+      if (reset) {
+        discoverState.items = [];
+        discoverState.page = 0;
+        discoverState.totalPages = 1;
+        discoverState.hasMore = true;
+      }
+      if (!discoverState.hasMore && !reset) return;
+      discoverState.loading = true;
+      renderDiscoverView();
+      const nextPage = discoverState.page + 1;
+      try {
+        const payload = await authApiJson(`/api/next/discover?page=${nextPage}&kind=${encodeURIComponent(discoverState.kind)}&mode=${encodeURIComponent(discoverState.mode)}&locale=${encodeURIComponent(localeState.locale)}`);
+        discoverState.configured = payload.configured !== false;
+        if (!discoverState.configured) {
+          discoverState.items = [];
+          discoverState.page = 1;
+          discoverState.totalPages = 1;
+          discoverState.hasMore = false;
+          setDiscoverMessage(
+            payload.message || tNext("discover.tmdbMissing", "TMDb API key is missing. Open Plugins and add your free TMDb key."),
+            "error"
+          );
+        } else {
+          setDiscoverMessage("");
+          discoverState.page = Number(payload.page || nextPage);
+          discoverState.totalPages = Number(payload.totalPages || 1);
+          discoverState.hasMore = !!payload.hasMore;
+          discoverState.items = [...(discoverState.items || []), ...((payload.items || []).filter(Boolean))];
+          discoverState.loaded = true;
+        }
+      } catch (error) {
+        setDiscoverMessage(error.message || String(error), "error");
+      } finally {
+        discoverState.loading = false;
+        renderDiscoverView();
+      }
+    }
+    function ensureDiscoverObserver() {
+      if (discoverState.observer) return;
+      const sentinel = document.getElementById("discoverSentinel");
+      if (!sentinel) return;
+      discoverState.observer = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        if (!document.getElementById("discoverView") || document.getElementById("discoverView").classList.contains("hidden")) return;
+        loadDiscoverPage(false);
+      }, {root: null, rootMargin: "400px 0px 400px 0px", threshold: 0.01});
+      discoverState.observer.observe(sentinel);
+    }
+    function formatDiscoverMoney(value) {
+      const amount = Number(value || 0);
+      if (!Number.isFinite(amount) || amount <= 0) return tNext("movieDetail.noData", "No data imported yet.");
+      try {
+        return new Intl.NumberFormat(localeState.locale || "en-US", {style: "currency", currency: "USD", maximumFractionDigits: 0}).format(amount);
+      } catch (error) {
+        return `$${Math.round(amount).toLocaleString()}`;
+      }
+    }
+    function showDiscoverDetailPage() {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.remove("hidden");
+      setActiveAppRoute("discover");
+      scrollPreviewTop();
+    }
+    function closeDiscoverDetail(pushUrl = true) {
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
+      showDiscoverPage(false);
+      if (pushUrl && appMode && window.location.pathname !== "/discover") {
+        history.pushState({view: "discover"}, "", "/discover");
+      }
+    }
+    async function openDiscoverDetail(item, pushUrl = true) {
+      if (!item || !item.id) return;
+      activeDiscoverItem = item;
+      showDiscoverDetailPage();
+      document.getElementById("discoverDetailTitle").textContent = tNext("collection.loading", "Loading...");
+      document.getElementById("discoverDetailOverview").textContent = "";
+      document.getElementById("discoverDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
+      document.getElementById("discoverDetailBackdrop").src = "";
+      document.getElementById("discoverDetailRelease").innerHTML = "";
+      document.getElementById("discoverDetailPeople").innerHTML = "";
+      document.getElementById("discoverDetailTags").innerHTML = "";
+      document.getElementById("discoverDetailMessage").textContent = "";
+      const detailPath = `/discover/${encodeURIComponent(item.mediaType || "movie")}/${encodeURIComponent(item.id)}`;
+      if (pushUrl && appMode && window.location.pathname !== detailPath) {
+        history.pushState({view: "discoverDetail", mediaType: item.mediaType || "movie", discoverId: item.id}, "", detailPath);
+      }
+      const cacheKey = `${item.mediaType || "movie"}:${item.id}`;
+      try {
+        const cached = discoverDetailCacheGet(cacheKey);
+        const payload = cached ? {detail: cached} : await authApiJson(`/api/next/discover/${encodeURIComponent(item.mediaType || "movie")}/${encodeURIComponent(item.id)}?locale=${encodeURIComponent(localeState.locale)}`);
+        const detail = payload.detail || {};
+        if (!cached) discoverDetailCacheSet(cacheKey, detail);
+        const poster = usableImage(detail.posterUrl || item.posterUrl || "");
+        const backdrop = usableImage(detail.backdropUrl || item.backdropUrl || "");
+        const title = detail.title || item.title || tNext("common.untitled", "Untitled");
+        activeDiscoverItem = {
+          ...item,
+          title,
+          posterUrl: poster || item.posterUrl || "",
+          year: detail.year || item.year || ""
+        };
+        document.getElementById("discoverDetailTitle").textContent = title;
+        document.getElementById("discoverDetailOverview").textContent = detail.overview || tNext("movieDetail.noOverview", "No overview imported yet.");
+        document.getElementById("discoverDetailPoster").innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        const backdropNode = document.getElementById("discoverDetailBackdrop");
+        if (backdropNode) {
+          backdropNode.src = backdrop || "";
+          backdropNode.classList.toggle("hidden", !backdrop);
+        }
+        document.getElementById("discoverDetailTags").innerHTML = detailTagHtml([detail.year, detail.mediaType === "tv" ? tNext("collection.typeTvShow", "TV Show") : tNext("collection.typeMovie", "Movie")]);
+        document.getElementById("discoverDetailRelease").innerHTML = detailFieldRows([
+          [tNext("movieDetail.releaseDate", "Release date"), detail.releaseDate || ""],
+          [tNext("discover.budget", "Budget"), formatDiscoverMoney(detail.budget)],
+          [tNext("discover.revenue", "Revenue"), formatDiscoverMoney(detail.revenue)],
+          [tNext("discover.awards", "Award nominations"), detail.awardNominations || tNext("discover.awardsUnavailable", "Not available")]
+        ]);
+        document.getElementById("discoverDetailPeople").innerHTML = detailFieldRows([
+          [tNext("movieDetail.director", "Director"), detail.director || ""],
+          [tNext("movieDetail.cast", "Cast"), detail.actors || ""]
+        ]);
+        document.getElementById("discoverShowtimesNote").textContent = tNext(
+          "discover.showtimesUnavailable",
+          "TMDb does not provide complete local cinema showtimes. Add a local showtimes provider in a future release."
+        );
+      } catch (error) {
+        document.getElementById("discoverDetailMessage").textContent = error.message || String(error);
+      }
+    }
+    function showDiscoverPage(pushUrl = true) {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.remove("hidden");
+      setActiveAppRoute("discover");
+      ensureDiscoverObserver();
+      if (!discoverState.loaded) {
+        loadDiscoverPage(true);
+      } else {
+        renderDiscoverView();
+      }
+      if (pushUrl && appMode && window.location.pathname !== "/discover") {
+        history.pushState({view: "discover"}, "", "/discover");
+      }
+      scrollPreviewTop();
+    }
     function showMovieDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -28142,6 +28542,8 @@ def ui_preview_html(
     function showContainerDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -28157,6 +28559,8 @@ def ui_preview_html(
     function showPersonDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -28177,6 +28581,8 @@ def ui_preview_html(
     function showLocationDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -28196,6 +28602,8 @@ def ui_preview_html(
       document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -28241,6 +28649,8 @@ def ui_preview_html(
       }
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -28272,6 +28682,8 @@ def ui_preview_html(
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -28298,6 +28710,8 @@ def ui_preview_html(
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -28325,6 +28739,8 @@ def ui_preview_html(
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -28356,6 +28772,8 @@ def ui_preview_html(
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -28414,6 +28832,9 @@ def ui_preview_html(
       if (/^\\/api\\/next\\/app\\/import\\/?$|^\\/app\\/import\\/?$|^\\/import\\/?$/.test(window.location.pathname)) {
         return {view: "import"};
       }
+      if (/^\\/api\\/next\\/app\\/discover\\/?$|^\\/app\\/discover\\/?$|^\\/discover\\/?$/.test(window.location.pathname)) {
+        return {view: "discover"};
+      }
       if (/^\\/app\\/profile\\/?$|^\\/profile\\/?$/.test(window.location.pathname)) {
         return {view: "profile"};
       }
@@ -28432,6 +28853,14 @@ def ui_preview_html(
       const movieMatch = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
       if (movieMatch) {
         return {view: "movie", movieId: decodeURIComponent(movieMatch[1] || movieMatch[2])};
+      }
+      const discoverDetailMatch = window.location.pathname.match(/^\\/discover\\/(movie|tv)\\/([^/]+)$|^\\/app\\/discover\\/(movie|tv)\\/([^/]+)$/);
+      if (discoverDetailMatch) {
+        return {
+          view: "discoverDetail",
+          mediaType: decodeURIComponent(discoverDetailMatch[1] || discoverDetailMatch[3]),
+          discoverId: decodeURIComponent(discoverDetailMatch[2] || discoverDetailMatch[4])
+        };
       }
       const containerMatch = window.location.pathname.match(/^\\/app\\/containers\\/([^/]+)$|^\\/containers\\/([^/]+)$/);
       if (containerMatch) {
@@ -28482,6 +28911,10 @@ def ui_preview_html(
       if (route === "lists") {
         listsState.loaded = false;
         showListsPage();
+        return;
+      }
+      if (route === "discover") {
+        showDiscoverPage();
         return;
       }
       if (route === "statistics") {
@@ -31478,6 +31911,8 @@ def ui_preview_html(
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
+      else if (route.view === "discover") showDiscoverPage(false);
+      else if (route.view === "discoverDetail") openDiscoverDetail({id: route.discoverId, mediaType: route.mediaType || "movie"}, false);
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
       else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
@@ -32465,6 +32900,10 @@ def ui_preview_html(
       document.getElementById("createContainerButton")?.addEventListener("click", () => toggleCreateContainerForm());
       document.getElementById("createContainerForm")?.addEventListener("submit", (event) => createContainer(event));
       document.getElementById("movieDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppMovieDetail()));
+      document.getElementById("discoverDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeDiscoverDetail()));
+      document.getElementById("discoverDetailWishlistButton")?.addEventListener("click", () => {
+        if (activeDiscoverItem) addDiscoverItemToWishlist(activeDiscoverItem);
+      });
       document.getElementById("containerDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppContainerDetail()));
       document.getElementById("locationDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => showLibraryPage(true)));
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
@@ -32663,6 +33102,8 @@ def ui_preview_html(
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
         else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
         else if (route.view === "people") showLibraryPage(false);
+        else if (route.view === "discover") showDiscoverPage(false);
+        else if (route.view === "discoverDetail") openDiscoverDetail({id: route.discoverId, mediaType: route.mediaType || "movie"}, false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);
         else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
