@@ -17208,7 +17208,11 @@ def ui_preview_html(
     function setAccent(accent) {
       const selected = ACCENT_PRESETS.includes(accent) ? accent : "bluray";
       document.documentElement.dataset.accent = selected;
-      localStorage.setItem("dv_next_accent", selected);
+      try {
+        localStorage.setItem("dv_next_accent", selected);
+      } catch (error) {
+        /* localStorage may be unavailable (private mode / blocked); ignore */
+      }
       document.querySelectorAll("[data-accent-choice]").forEach((button) => {
         button.classList.toggle("active", button.dataset.accentChoice === selected);
       });
