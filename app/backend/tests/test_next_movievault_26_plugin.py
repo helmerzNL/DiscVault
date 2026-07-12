@@ -82,7 +82,14 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.5.3")
+        # The bundled manifest version gates in-place plugin upgrades in
+        # production: upgrade_seeded_default_plugins() only replaces the
+        # installed copy when the bundled version is strictly newer. Assert a
+        # minimum (not an exact pin) so shipping a plugin.py change without
+        # bumping this version — which silently strands the fix in the image —
+        # is caught, while future bumps don't require editing this test.
+        version_tuple = tuple(int(part) for part in manifest["version"].split(".")[:3])
+        self.assertGreaterEqual(version_tuple, (1, 6, 0))
         self.assertIn("connection_request", manifest["capabilities"])
         self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
