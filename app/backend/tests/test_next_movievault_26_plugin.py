@@ -37,6 +37,38 @@ class FakeResponse:
             raise RuntimeError(f"HTTP {self.status_code}")
 
 
+def _v3_barcode_release(movie, release=None, **extra):
+    match = {"type": "release", "movie": movie, "release": release or {}}
+    match.update(extra)
+    return {"matched": True, "match": match}
+
+
+def _v3_barcode_box_set(box_set):
+    return {"matched": True, "match": {"type": "box_set", "boxSet": box_set}}
+
+
+def _v3_barcode_match(match):
+    return {"matched": True, "match": match}
+
+
+def _v3_signed_from_request(fake_request):
+    """Serve a signed /api/v3 read from the same fixture a test wired for its v1 twin.
+
+    Wave 2 catalogue reads (people search, box-sets, contribution-template) go through the
+    signed transport hook instead of the raw ``_request`` layer, but their response bodies are
+    byte-identical to the v1 endpoints. This adapter lets the existing ``fake_request`` fixtures
+    keep serving those bodies by mapping the ``/api/v3`` path back onto its ``/api/v1`` twin.
+    """
+
+    def _hook(method, path, body_obj=None):
+        assert path.startswith("/api/v3/"), f"expected a signed /api/v3 path, got {path}"
+        clean = path.split("?", 1)[0].replace("/api/v3/", "/api/v1/")
+        response = fake_request(method, "https://mv.example" + clean)
+        return {"status": getattr(response, "status_code", 200), "data": response.json()}
+
+    return _hook
+
+
 class MovieVault26PluginContractTests(unittest.TestCase):
     def test_movievault_26_manifest_declares_plugin_replacement(self):
         manifest = {
@@ -50,7 +82,14 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         manifest_path = Path(__file__).resolve().parents[1] / "next_plugins" / "movievault_26" / "manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertEqual(manifest["version"], "1.5.3")
+        # The bundled manifest version gates in-place plugin upgrades in
+        # production: upgrade_seeded_default_plugins() only replaces the
+        # installed copy when the bundled version is strictly newer. Assert a
+        # minimum (not an exact pin) so shipping a plugin.py change without
+        # bumping this version — which silently strands the fix in the image —
+        # is caught, while future bumps don't require editing this test.
+        version_tuple = tuple(int(part) for part in manifest["version"].split(".")[:3])
+        self.assertGreaterEqual(version_tuple, (1, 6, 0))
         self.assertIn("connection_request", manifest["capabilities"])
         self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
@@ -192,10 +231,9 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         original_get = movievault_26._get
         try:
             def fake_get(_context, path, **_params):
-                self.assertEqual(path, "/api/v1/barcodes/8712626068546")
-                return {
-                    "status": "ok",
-                    "data": {
+                self.assertEqual(path, "/api/v3/barcodes/8712626068546")
+                return _v3_barcode_release(
+                    {
                         "id": "mv_movie_1",
                         "title": "Bohemian Rhapsody",
                         "year": "2018",
@@ -203,7 +241,8 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                         "posterUrl": "https://img.example/bohemian.jpg",
                         "tmdbId": 424694,
                     },
-                }
+                    {"format": "4K UHD", "barcode": "8712626068546"},
+                )
 
             movievault_26._get = fake_get
             result = movievault_26.search_barcode({"barcode": "8712626068546"}, {"movievault": {"enabled": True}})
@@ -226,16 +265,16 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         original_get = movievault_26._get
         try:
             def fake_get(_context, path, **_params):
-                return {
-                    "status": "ok",
-                    "data": {
+                return _v3_barcode_release(
+                    {
                         "id": "mv_movie_1",
                         "title": "Bohemian Rhapsody",
                         "year": "2018",
                         "format": "4K UHD",
                         "tmdbId": 424694,
                     },
-                }
+                    {"format": "4K UHD", "barcode": "8712626068546"},
+                )
 
             movievault_26._get = fake_get
             result = movievault_26.search_barcode(
@@ -291,10 +330,9 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         try:
             for key, value in shapes.items():
                 def fake_get(_context, path, **_params):
-                    self.assertEqual(path, "/api/v1/barcodes/3344428071189")
-                    return {
-                        "status": "ok",
-                        "data": {
+                    self.assertEqual(path, "/api/v3/barcodes/3344428071189")
+                    return _v3_barcode_release(
+                        {
                             "id": "mv_tgs",
                             "title": "The Greatest Showman",
                             "year": "2017",
@@ -303,7 +341,8 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                             "tmdbId": 316029,
                             ("discItems" if key == "discs" else key): value,
                         },
-                    }
+                        {"format": "4K UHD", "barcode": "3344428071189"},
+                    )
 
                 movievault_26._get = fake_get
                 result = movievault_26.search_barcode(
@@ -327,43 +366,45 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         original_get = movievault_26._get
         try:
             def fake_get(_context, path, **_params):
-                self.assertEqual(path, "/api/v1/barcodes/3344428072513")
-                return {
-                    "type": "release",
-                    "lookup": {
-                        "barcode": "3344428072513",
-                        "normalizedBarcode": "3344428072513",
-                        "matchedType": "release",
-                    },
-                    "release": {
-                        "id": "mv_rel_fc_bd_fr",
-                        "movieId": "mv_movie_fc",
-                        "barcode": "3344428072513",
-                        "title": "Fight Club",
-                        "format": "Blu-ray",
-                        "country": "France",
-                        "edition": "StudioCanal",
-                    },
-                    "movie": {
-                        "id": "mv_movie_fc",
-                        "movieVaultId": "mv_movie_fc",
-                        "title": "Fight Club",
-                        "year": "1999",
-                        "tmdbId": 550,
-                        "posterUrl": "https://img.example/fightclub.jpg",
-                        "format": "4K UHD",
-                        "release": {"barcode": "5051890315526", "format": "4K UHD"},
-                        "releases": [
-                            {"title": "Fight Club", "barcode": "5051890315526", "format": "4K UHD"},
-                            {"title": "Fight Club - Remastered Blu-ray (Germany)", "format": "Blu-ray", "country": "Germany"},
-                            {"title": "Fight Club Blu-ray (Sweden)", "format": "Blu-ray", "country": "Sweden"},
-                            {"title": "Fight Club (Édition SteelBook Limitée)", "format": "Blu-ray", "country": "France"},
-                            {"title": "Fight Club", "barcode": "3344428072513", "format": "Blu-ray", "country": "France", "edition": "StudioCanal"},
-                            {"title": "Fight Club DVD", "format": "DVD"},
-                            {"title": "Fight Club 4K UHD (UK)", "format": "4K UHD", "country": "United Kingdom"},
-                        ],
-                    },
-                }
+                self.assertEqual(path, "/api/v3/barcodes/3344428072513")
+                return _v3_barcode_match(
+                    {
+                        "type": "release",
+                        "lookup": {
+                            "barcode": "3344428072513",
+                            "normalizedBarcode": "3344428072513",
+                            "matchedType": "release",
+                        },
+                        "release": {
+                            "id": "mv_rel_fc_bd_fr",
+                            "movieId": "mv_movie_fc",
+                            "barcode": "3344428072513",
+                            "title": "Fight Club",
+                            "format": "Blu-ray",
+                            "country": "France",
+                            "edition": "StudioCanal",
+                        },
+                        "movie": {
+                            "id": "mv_movie_fc",
+                            "movieVaultId": "mv_movie_fc",
+                            "title": "Fight Club",
+                            "year": "1999",
+                            "tmdbId": 550,
+                            "posterUrl": "https://img.example/fightclub.jpg",
+                            "format": "4K UHD",
+                            "release": {"barcode": "5051890315526", "format": "4K UHD"},
+                            "releases": [
+                                {"title": "Fight Club", "barcode": "5051890315526", "format": "4K UHD"},
+                                {"title": "Fight Club - Remastered Blu-ray (Germany)", "format": "Blu-ray", "country": "Germany"},
+                                {"title": "Fight Club Blu-ray (Sweden)", "format": "Blu-ray", "country": "Sweden"},
+                                {"title": "Fight Club (Édition SteelBook Limitée)", "format": "Blu-ray", "country": "France"},
+                                {"title": "Fight Club", "barcode": "3344428072513", "format": "Blu-ray", "country": "France", "edition": "StudioCanal"},
+                                {"title": "Fight Club DVD", "format": "DVD"},
+                                {"title": "Fight Club 4K UHD (UK)", "format": "4K UHD", "country": "United Kingdom"},
+                            ],
+                        },
+                    }
+                )
 
             movievault_26._get = fake_get
             result = movievault_26.search_barcode(
@@ -401,10 +442,10 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         original_get = movievault_26._get
         try:
             def fake_get(_context, path, **_params):
-                self.assertEqual(path, "/api/v1/barcodes/5051892237710")
-                return {
-                    "status": "ok",
-                    "data": {
+                self.assertEqual(path, "/api/v3/barcodes/5051892237710")
+                return _v3_barcode_box_set(
+                    {
+                        "type": "box_set",
                         "entityType": "box_set",
                         "id": "mv_box_1",
                         "title": "Harry Potter Complete Collection",
@@ -416,7 +457,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                             {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
                         ],
                     },
-                }
+                )
 
             movievault_26._get = fake_get
             result = movievault_26.search_barcode({"barcode": "5051892237710"}, {"movievault": {"enabled": True}})
@@ -438,10 +479,10 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         try:
             def fake_get(_context, path, **_params):
                 calls.append(path)
-                if path == "/api/v1/barcodes/5051890315526":
-                    return {
-                        "status": "ok",
-                        "data": {
+                if path == "/api/v3/barcodes/5051890315526":
+                    return _v3_barcode_box_set(
+                        {
+                            "type": "box_set",
                             "entityType": "box_set",
                             "id": 42,
                             "title": "Harry Potter Complete Collection",
@@ -449,16 +490,10 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                             "format": "4K UHD",
                             "posterUrl": "https://img.example/hp-box.jpg",
                         },
-                    }
-                if path == "/api/v1/box-sets/42":
+                    )
+                if path == "/api/v3/box-sets/42/members":
                     return {
-                        "id": 42,
-                        "entityType": "box_set",
-                        "title": "Harry Potter Complete Collection",
-                    }
-                if path == "/api/v1/box-sets/42/members":
-                    return {
-                        "items": [
+                        "members": [
                             {"title": "Harry Potter and the Philosopher's Stone", "year": 2001},
                             {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
                         ]
@@ -477,31 +512,33 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertTrue(result["boxSetProposal"]["boxSetEvidence"]["membersAreExplicit"])
         self.assertEqual(result["items"], [])
         self.assertEqual(result["candidates"], [])
-        self.assertEqual(calls, ["/api/v1/barcodes/5051890315526", "/api/v1/box-sets/42", "/api/v1/box-sets/42/members"])
+        self.assertEqual(calls, ["/api/v3/barcodes/5051890315526", "/api/v3/box-sets/42/members"])
 
     def test_barcode_lookup_can_return_movie_candidates_and_box_set_proposals(self):
         original_get = movievault_26._get
         try:
             def fake_get(_context, path, **_params):
-                self.assertEqual(path, "/api/v1/barcodes/8712626068546")
-                return {
-                    "status": "ok",
-                    "movie": {
-                        "id": "mv_movie_1",
-                        "title": "Bohemian Rhapsody",
-                        "year": "2018",
-                        "format": "4K UHD",
-                    },
-                    "boxSetProposal": {
-                        "entityType": "box_set",
-                        "id": "mv_box_1",
-                        "title": "Queen Music Films",
-                        "members": [
-                            {"title": "Bohemian Rhapsody", "year": 2018},
-                            {"title": "Queen: Rock Montreal", "year": 2007},
-                        ],
-                    },
-                }
+                self.assertEqual(path, "/api/v3/barcodes/8712626068546")
+                return _v3_barcode_match(
+                    {
+                        "type": "movie",
+                        "movie": {
+                            "id": "mv_movie_1",
+                            "title": "Bohemian Rhapsody",
+                            "year": "2018",
+                            "format": "4K UHD",
+                        },
+                        "boxSetProposal": {
+                            "entityType": "box_set",
+                            "id": "mv_box_1",
+                            "title": "Queen Music Films",
+                            "members": [
+                                {"title": "Bohemian Rhapsody", "year": 2018},
+                                {"title": "Queen: Rock Montreal", "year": 2007},
+                            ],
+                        },
+                    }
+                )
 
             movievault_26._get = fake_get
             result = movievault_26.search_barcode({"barcode": "8712626068546"}, {"movievault": {"enabled": True}})
@@ -518,28 +555,30 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         original_get = movievault_26._get
         try:
             def fake_get(_context, path, **_params):
-                self.assertEqual(path, "/api/v1/barcodes/5050582369601")
-                return {
-                    "status": "ok",
-                    "items": [
-                        {"title": "Back to the Future", "year": 1985},
-                        {"title": "Back to the Future Part II", "year": 1989},
-                        {"title": "Back to the Future Part III", "year": 1990},
-                        {"title": "Looking Back to the Future", "year": 2009},
-                    ],
-                    "boxSetProposal": {
-                        "entityType": "box_set",
-                        "id": "mv_bttf_dvd",
-                        "title": "Back to the Future Trilogy DVD",
-                        "barcode": "5050582369601",
-                        "format": "DVD",
-                        "members": [
-                            {"title": "Back to the Future", "year": 1985, "format": "DVD"},
-                            {"title": "Back to the Future Part II", "year": 1989, "format": "DVD"},
-                            {"title": "Back to the Future Part III", "year": 1990, "format": "DVD"},
+                self.assertEqual(path, "/api/v3/barcodes/5050582369601")
+                return _v3_barcode_match(
+                    {
+                        "type": "box_set",
+                        "items": [
+                            {"title": "Back to the Future", "year": 1985},
+                            {"title": "Back to the Future Part II", "year": 1989},
+                            {"title": "Back to the Future Part III", "year": 1990},
+                            {"title": "Looking Back to the Future", "year": 2009},
                         ],
-                    },
-                }
+                        "boxSetProposal": {
+                            "entityType": "box_set",
+                            "id": "mv_bttf_dvd",
+                            "title": "Back to the Future Trilogy DVD",
+                            "barcode": "5050582369601",
+                            "format": "DVD",
+                            "members": [
+                                {"title": "Back to the Future", "year": 1985, "format": "DVD"},
+                                {"title": "Back to the Future Part II", "year": 1989, "format": "DVD"},
+                                {"title": "Back to the Future Part III", "year": 1990, "format": "DVD"},
+                            ],
+                        },
+                    }
+                )
 
             movievault_26._get = fake_get
             result = movievault_26.search_barcode({"barcode": "5050582369601"}, {"movievault": {"enabled": True}})
@@ -580,7 +619,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         try:
             def fake_get(_context, path, **params):
                 calls.append((path, params))
-                if path == "/api/v1/box-sets":
+                if path == "/api/v3/box-sets":
                     self.assertEqual(params["barcode"], "5051892237710")
                     return {
                         "items": [
@@ -594,11 +633,8 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                             }
                         ]
                     }
-                if path == "/api/v1/box-sets/42":
+                if path == "/api/v3/box-sets/42/members":
                     return {
-                        "id": 42,
-                        "type": "box_set",
-                        "title": "Harry Potter Complete Collection",
                         "members": [
                             {"title": "Harry Potter and the Philosopher's Stone", "year": 2001},
                             {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
@@ -618,7 +654,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["boxSetProposal"]["title"], "Harry Potter Complete Collection")
         self.assertEqual(result["boxSetProposal"]["member_count"], 2)
         self.assertEqual(result["boxSetProposal"]["members"][0]["format"], "4K UHD")
-        self.assertEqual([path for path, _params in calls], ["/api/v1/box-sets", "/api/v1/box-sets/42"])
+        self.assertEqual([path for path, _params in calls], ["/api/v3/box-sets", "/api/v3/box-sets/42/members"])
 
     def test_barcode_lookup_fetches_members_when_movievault_found_box_set_is_sparse(self):
         calls = []
@@ -626,24 +662,19 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         try:
             def fake_get(_context, path, **_params):
                 calls.append(path)
-                if path == "/api/v1/barcodes/5051892237710":
+                if path == "/api/v3/barcodes/5051892237710":
+                    return _v3_barcode_box_set(
+                        {
+                            "status": "found",
+                            "type": "box_set",
+                            "id": 42,
+                            "title": "Harry Potter Complete Collection",
+                            "barcode": "5051892237710",
+                        }
+                    )
+                if path == "/api/v3/box-sets/42/members":
                     return {
-                        "status": "found",
-                        "type": "box_set",
-                        "id": 42,
-                        "title": "Harry Potter Complete Collection",
-                        "barcode": "5051892237710",
-                    }
-                if path == "/api/v1/box-sets/42":
-                    return {
-                        "status": "found",
-                        "type": "box_set",
-                        "id": 42,
-                        "title": "Harry Potter Complete Collection",
-                    }
-                if path == "/api/v1/box-sets/42/members":
-                    return {
-                        "items": [
+                        "members": [
                             {"title": "Harry Potter and the Philosopher's Stone", "year": 2001},
                             {"title": "Harry Potter and the Chamber of Secrets", "year": 2002},
                         ]
@@ -658,7 +689,270 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "hit")
         self.assertEqual(result["boxSetProposal"]["member_count"], 2)
         self.assertEqual(result["boxSetProposal"]["members"][1]["title"], "Harry Potter and the Chamber of Secrets")
-        self.assertEqual(calls, ["/api/v1/barcodes/5051892237710", "/api/v1/box-sets/42", "/api/v1/box-sets/42/members"])
+        self.assertEqual(calls, ["/api/v3/barcodes/5051892237710", "/api/v3/box-sets/42/members"])
+
+    def test_search_title_uses_v3_search_catalog(self):
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                self.assertEqual(path, "/api/v3/search")
+                self.assertEqual(params, {"q": "Alien", "year": "1979", "type": "movie"})
+                return {
+                    "catalog": [
+                        {
+                            "movieVaultId": "mv_alien",
+                            "title": "Alien",
+                            "year": 1979,
+                            "posterUrl": "https://img.example/alien.jpg",
+                            "tmdbId": 348,
+                        }
+                    ],
+                    "editions": [],
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.search_title(
+                {"title": "Alien", "year": "1979"},
+                {"movievault": {"enabled": True}},
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["items"][0]["id"], "mv_alien")
+        self.assertEqual(result["items"][0]["title"], "Alien")
+
+    def test_movie_details_uses_v3_search_then_movie_detail(self):
+        calls = []
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                calls.append((path, params))
+                if path == "/api/v3/search":
+                    return {"catalog": [{"movieVaultId": "mv_alien", "title": "Alien", "year": 1979}], "editions": []}
+                if path == "/api/v3/movies/mv_alien":
+                    return {
+                        "matched": True,
+                        "match": {
+                            "type": "movie",
+                            "movie": {
+                                "id": "mv_alien",
+                                "title": "Alien",
+                                "year": 1979,
+                                "posterUrls": ["https://img.example/alien.jpg"],
+                                "crew": [{"name": "Ridley Scott", "job": "Director"}],
+                            },
+                        },
+                    }
+                self.fail(f"unexpected MovieVault path {path}")
+
+            movievault_26._get = fake_get
+            result = movievault_26.movie_details(
+                {"title": "Alien", "year": "1979"},
+                {"movievault": {"enabled": True}},
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["movie"]["title"], "Alien")
+        self.assertEqual(result["movie"]["director"], "Ridley Scott")
+        self.assertEqual([path for path, _params in calls], ["/api/v3/search", "/api/v3/movies/mv_alien"])
+
+    def test_movie_details_barcode_enriches_credits_from_movie_detail(self):
+        # Regression for barcode discs (e.g. Avengers: Endgame, 8717418549893):
+        # /api/v3/barcodes/{barcode} matches the precise release but carries no
+        # cast/crew, so movie_details must reach /api/v3/movies/{id} for credits
+        # while preserving the barcode-matched release/technical fields.
+        calls = []
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                calls.append(path)
+                if path == "/api/v3/barcodes/8717418549893":
+                    return _v3_barcode_release(
+                        {
+                            "id": "mv_endgame",
+                            "title": "Avengers: Endgame",
+                            "year": "2019",
+                            "format": "Blu-ray",
+                            "tmdbId": 299534,
+                        },
+                        {"format": "4K UHD", "barcode": "8717418549893", "edition": "SteelBook"},
+                    )
+                if path == "/api/v3/movies/mv_endgame":
+                    return {
+                        "matched": True,
+                        "match": {
+                            "type": "movie",
+                            "movie": {
+                                "id": "mv_endgame",
+                                "title": "Avengers: Endgame",
+                                "cast": [
+                                    {"name": "Robert Downey Jr.", "tmdbId": 3223, "character": "Tony Stark"},
+                                ],
+                                "crew": [
+                                    {"name": "Anthony Russo", "job": "Director", "tmdbId": 19271},
+                                ],
+                            },
+                        },
+                    }
+                self.fail(f"unexpected MovieVault path {path}")
+
+            movievault_26._get = fake_get
+            result = movievault_26.movie_details(
+                {"barcode": "8717418549893"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        # Barcode-matched release/technical fields are preserved.
+        self.assertEqual(result["movie"]["title"], "Avengers: Endgame")
+        self.assertEqual(result["candidates"][0]["format"], "4K UHD")
+        self.assertEqual(result["movie"]["edition"], "SteelBook")
+        # Credits are now sourced from the movie-detail endpoint.
+        credits = result.get("credits") or []
+        by_name = {entry["name"]: entry for entry in credits}
+        self.assertEqual(by_name["Robert Downey Jr."]["tmdbId"], "3223")
+        self.assertEqual(by_name["Robert Downey Jr."]["role"], "actor")
+        self.assertEqual(by_name["Anthony Russo"]["tmdbId"], "19271")
+        self.assertEqual(by_name["Anthony Russo"]["job"], "Director")
+        self.assertIn("/api/v3/movies/mv_endgame", calls)
+
+    def test_movie_details_barcode_without_detail_credits_is_unchanged(self):
+        # No regression: when /api/v3/movies/{id} yields no credits, the barcode
+        # hit is returned untouched (still a hit, credits absent).
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                if path == "/api/v3/barcodes/8717418549893":
+                    return _v3_barcode_release(
+                        {
+                            "id": "mv_endgame",
+                            "title": "Avengers: Endgame",
+                            "year": "2019",
+                            "format": "Blu-ray",
+                        },
+                        {"format": "4K UHD", "barcode": "8717418549893"},
+                    )
+                if path == "/api/v3/movies/mv_endgame":
+                    return {"matched": True, "match": {"type": "movie", "movie": {"id": "mv_endgame", "title": "Avengers: Endgame"}}}
+                self.fail(f"unexpected MovieVault path {path}")
+
+            movievault_26._get = fake_get
+            result = movievault_26.movie_details(
+                {"barcode": "8717418549893"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["candidates"][0]["format"], "4K UHD")
+        self.assertFalse(result.get("credits"))
+
+    def test_movie_details_barcode_credits_falls_back_to_id_resolution(self):
+        # When the barcode match omits a resolvable movieVaultId, credit
+        # enrichment falls back to the tmdbId/imdbId /api/v3/search resolution.
+        calls = []
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                calls.append(path)
+                if path == "/api/v3/barcodes/8717418549893":
+                    return _v3_barcode_release(
+                        {"title": "Avengers: Endgame", "year": "2019", "format": "Blu-ray"},
+                        {"format": "4K UHD", "barcode": "8717418549893"},
+                    )
+                if path == "/api/v3/search":
+                    return {"catalog": [{"movieVaultId": "mv_endgame", "title": "Avengers: Endgame"}], "editions": []}
+                if path == "/api/v3/movies/mv_endgame":
+                    return {
+                        "matched": True,
+                        "match": {
+                            "type": "movie",
+                            "movie": {
+                                "id": "mv_endgame",
+                                "title": "Avengers: Endgame",
+                                "crew": [{"name": "Anthony Russo", "job": "Director", "tmdbId": 19271}],
+                            },
+                        },
+                    }
+                self.fail(f"unexpected MovieVault path {path}")
+
+            movievault_26._get = fake_get
+            result = movievault_26.movie_details(
+                {"barcode": "8717418549893", "tmdbId": 299534}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        credits = result.get("credits") or []
+        self.assertEqual({entry["name"] for entry in credits}, {"Anthony Russo"})
+        self.assertIn("/api/v3/search", calls)
+
+    def test_person_details_by_movievault_id_uses_v3_people_detail(self):
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **_params):
+                self.assertEqual(path, "/api/v3/people/pp_sigourney")
+                return {
+                    "matched": True,
+                    "match": {
+                        "type": "person",
+                        "person": {
+                            "id": "pp_sigourney",
+                            "name": "Sigourney Weaver",
+                            "knownForDepartment": "Acting",
+                            "profileUrls": ["https://img.example/sigourney.jpg"],
+                        },
+                    },
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.person_details(
+                {"movieVaultId": "pp_sigourney"},
+                {"movievault": {"enabled": True}},
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["movieVaultId"], "pp_sigourney")
+        self.assertEqual(result["knownFor"], "Acting")
+        self.assertEqual(result["profiles"], ["https://img.example/sigourney.jpg"])
+
+    def test_person_details_search_uses_signed_v3_people(self):
+        captured = {}
+        original_get = movievault_26._get
+        try:
+            def fake_get(_context, path, **params):
+                captured["path"] = path
+                captured["params"] = params
+                return {
+                    "results": [
+                        {
+                            "id": "pp_sigourney",
+                            "name": "Sigourney Weaver",
+                            "tmdbId": "10205",
+                            "knownFor": "Acting",
+                        }
+                    ]
+                }
+
+            movievault_26._get = fake_get
+            result = movievault_26.person_details(
+                {"tmdbId": "10205"},
+                {"movievault": {"enabled": True}},
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(captured["path"], "/api/v3/people")
+        self.assertEqual(captured["params"].get("tmdbId"), "10205")
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["name"], "Sigourney Weaver")
 
     def test_box_set_members_keep_disc_number_for_preview(self):
         proposal = movievault_26._normalize_box_set_proposal(
@@ -759,6 +1053,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                         "sharingMode": "opt_in",
                         "sourceVersion": "26-test",
                     },
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -816,6 +1111,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 {
                     "secrets": {"token": "mv_live_test"},
                     "movievault": {"contributionEnabled": True},
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -868,6 +1164,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 {
                     "secrets": {"token": "mv_live_test"},
                     "movievault": {"contributionEnabled": True},
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -921,6 +1218,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 {
                     "secrets": {"token": "mv_live_test"},
                     "movievault": {"contributionEnabled": True},
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -967,6 +1265,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                 {
                     "secrets": {"token": "mv_live_test"},
                     "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+                    "movievaultSignedRequestV3": _v3_signed_from_request(fake_request),
                 },
             )
         finally:
@@ -1114,6 +1413,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
 class MovieVault26SignedContributionTests(unittest.TestCase):
     def _run_contribution(self, context, fake_request):
+        context = {**context, "movievaultSignedRequestV3": _v3_signed_from_request(fake_request)}
         original_requests = movievault_26.requests
         original_cache = dict(movievault_26._TEMPLATE_CACHE)
         try:
@@ -1533,9 +1833,8 @@ class ReadBackLocalizationsTest(unittest.TestCase):
         original_get = movievault_26._get
         try:
             def fake_get(_context, path, **_params):
-                return {
-                    "status": "ok",
-                    "data": {
+                return _v3_barcode_release(
+                    {
                         "id": "mv_movie_1",
                         "title": "Spirited Away",
                         "year": "2001",
@@ -1545,7 +1844,8 @@ class ReadBackLocalizationsTest(unittest.TestCase):
                             {"language": "ja", "title": "千と千尋の神隠し"},
                         ],
                     },
-                }
+                    {"format": "4K UHD", "barcode": "8712626068546"},
+                )
 
             movievault_26._get = fake_get
             result = movievault_26.search_barcode({"barcode": "8712626068546"}, {"movievault": {"enabled": True}})

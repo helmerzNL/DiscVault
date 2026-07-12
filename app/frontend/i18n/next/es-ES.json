@@ -594,6 +594,7 @@
   "auth.signOut": "Cerrar sesión",
   "auth.signedIn": "Sesión iniciada.",
   "auth.username": "Usuario",
+  "auth.ownerUsernamePlaceholder": "Elige tu nombre de usuario",
   "auth.usernameRequired": "El nombre de usuario es obligatorio.",
   "auth.waitingPasskey": "Esperando passkey...",
   "bulk.addToBoxSet": "Anadir a box-set",

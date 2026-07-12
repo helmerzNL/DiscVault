@@ -594,6 +594,7 @@
   "auth.signOut": "登出",
   "auth.signedIn": "已登入。",
   "auth.username": "使用者名稱",
+  "auth.ownerUsernamePlaceholder": "選擇您的使用者名稱",
   "auth.usernameRequired": "使用者名稱為必填。",
   "auth.waitingPasskey": "正在等待你的通行密鑰...",
   "bulk.addToBoxSet": "加入套裝",
