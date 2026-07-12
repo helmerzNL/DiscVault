@@ -2217,6 +2217,7 @@
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
   "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+<<<<<<< HEAD
   "discover.addWishlist": "Add to wishlist",
   "discover.awards": "Award nominations",
   "discover.awardsUnavailable": "Not available",
@@ -2232,4 +2233,17 @@
   "discover.subtitle": "Popular movies from TMDb",
   "discover.title": "Discover",
   "discover.tmdbMissing": "TMDb API key is missing. Open Plugins and add your free TMDb key."
+=======
+  "preferences.accent": "Korostusväri",
+  "preferences.accentHelp": "Valitse koko DiscVaultissa käytettävä korostusväri. Neutraalit värit ja formaattimerkit pysyvät ennallaan.",
+  "accent.label": "Korostusväri",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametisti",
+  "accent.chrome": "Kromi",
+  "accent.emerald": "Smaragdi",
+  "accent.teal": "Sinivihreä",
+  "accent.crimson": "Karmiininpunainen",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Hehku"
+>>>>>>> origin/release/v26-beta
 }

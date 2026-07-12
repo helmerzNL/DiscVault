@@ -2217,6 +2217,7 @@
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
   "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+<<<<<<< HEAD
   "discover.addWishlist": "Add to wishlist",
   "discover.awards": "Award nominations",
   "discover.awardsUnavailable": "Not available",
@@ -2232,4 +2233,17 @@
   "discover.subtitle": "Popular movies from TMDb",
   "discover.title": "Discover",
   "discover.tmdbMissing": "TMDb API key is missing. Open Plugins and add your free TMDb key."
+=======
+  "preferences.accent": "Akcento spalva",
+  "preferences.accentHelp": "Pasirinkite visame DiscVault naudojamą akcentą. Neutralios spalvos ir formatų ženkleliai lieka nepakitę.",
+  "accent.label": "Akcento spalva",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametistas",
+  "accent.chrome": "Chromas",
+  "accent.emerald": "Smaragdas",
+  "accent.teal": "Žalsvai mėlyna",
+  "accent.crimson": "Tamsiai raudona",
+  "accent.magenta": "Purpurinė",
+  "accent.ember": "Žarija"
+>>>>>>> origin/release/v26-beta
 }

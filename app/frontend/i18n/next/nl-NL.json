@@ -2217,6 +2217,7 @@
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop opgeslagen. Huidige prijs: {price} {currency}.",
   "lists.wishlistShopSavedNoPrice": "Shop opgeslagen, maar er kon geen actuele prijs worden opgehaald.",
+<<<<<<< HEAD
   "discover.addWishlist": "Add to wishlist",
   "discover.awards": "Award nominations",
   "discover.awardsUnavailable": "Not available",
@@ -2232,4 +2233,17 @@
   "discover.subtitle": "Popular movies from TMDb",
   "discover.title": "Discover",
   "discover.tmdbMissing": "TMDb API key is missing. Open Plugins and add your free TMDb key."
+=======
+  "preferences.accent": "Accentkleur",
+  "preferences.accentHelp": "Kies het accent dat overal in DiscVault wordt gebruikt. Neutrale kleuren en formaatlabels blijven ongewijzigd.",
+  "accent.label": "Accentkleur",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Amethist",
+  "accent.chrome": "Chroom",
+  "accent.emerald": "Smaragd",
+  "accent.teal": "Blauwgroen",
+  "accent.crimson": "Karmijn",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Gloed"
+>>>>>>> origin/release/v26-beta
 }
