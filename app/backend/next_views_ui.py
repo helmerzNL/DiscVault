@@ -618,23 +618,19 @@ def ui_preview_html(
     .brand-mark {
       width: 34px;
       height: 34px;
-      border-radius: 8px;
       display: grid;
       place-items: center;
-      overflow: hidden;
-      background: #12121a;
-      box-shadow: var(--shadow-soft);
+      background: transparent;
     }
     .brand-mark img {
       width: 100%;
       height: 100%;
       display: block;
-      object-fit: cover;
+      object-fit: contain;
     }
     .preview-sidebar .brand-mark {
       width: 30px;
       height: 30px;
-      border-radius: 7px;
     }
     .brand strong {
       display: block;
@@ -883,7 +879,7 @@ def ui_preview_html(
       width: 22px;
       height: 22px;
       display: block;
-      border-radius: 6px;
+      object-fit: contain;
     }
     .mobile-shell-logo span {
       color: var(--text);
