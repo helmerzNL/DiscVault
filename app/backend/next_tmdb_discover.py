@@ -154,11 +154,12 @@ def discover_feed(context: dict[str, Any], *, media_type: str, mode: str, page: 
         if item:
             normalized.append(item)
     total_pages = int(payload.get("total_pages") or 1)
+    bounded_total_pages = max(min(total_pages, DISCOVER_PAGE_MAX), 1)
     return {
         "items": normalized,
         "page": page_number,
-        "totalPages": max(total_pages, 1),
-        "hasMore": page_number < total_pages,
+        "totalPages": bounded_total_pages,
+        "hasMore": page_number < bounded_total_pages,
     }
 
 
