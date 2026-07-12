@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop opgeslagen. Huidige prijs: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop opgeslagen, maar er kon geen actuele prijs worden opgehaald."
+  "lists.wishlistShopSavedNoPrice": "Shop opgeslagen, maar er kon geen actuele prijs worden opgehaald.",
+  "preferences.accent": "Accentkleur",
+  "preferences.accentHelp": "Kies het accent dat overal in DiscVault wordt gebruikt. Neutrale kleuren en formaatlabels blijven ongewijzigd.",
+  "accent.label": "Accentkleur",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Amethist",
+  "accent.chrome": "Chroom",
+  "accent.emerald": "Smaragd",
+  "accent.teal": "Blauwgroen",
+  "accent.crimson": "Karmijn",
+  "accent.magenta": "Magenta",
+  "accent.ember": "Gloed"
 }

@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
   <defs>
     <linearGradient id="ig" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f0d060"/>
-      <stop offset="50%" stop-color="#e8c547"/>
-      <stop offset="100%" stop-color="#c9a530"/>
+      <stop offset="0%" stop-color="#7EB9EB"/>
+      <stop offset="50%" stop-color="#3C7CE1"/>
+      <stop offset="100%" stop-color="#2259B0"/>
     </linearGradient>
     <linearGradient id="dg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7c6af7"/>
-      <stop offset="100%" stop-color="#5548c8"/>
+      <stop offset="0%" stop-color="#3B9EFF"/>
+      <stop offset="100%" stop-color="#2A6FD6"/>
     </linearGradient>
     <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#14141e"/>
-      <stop offset="100%" stop-color="#0a0a0f"/>
+      <stop offset="0%" stop-color="#111A2A"/>
+      <stop offset="100%" stop-color="#090F1A"/>
     </linearGradient>
   </defs>
 
@@ -22,19 +22,19 @@
   <circle cx="90" cy="86" r="62" fill="none" stroke="url(#ig)" stroke-width="1.5" opacity="0.3"/>
 
   <!-- Disc body -->
-  <circle cx="90" cy="86" r="52" fill="#1a1a26" stroke="url(#dg)" stroke-width="2"/>
+  <circle cx="90" cy="86" r="52" fill="#0E1524" stroke="url(#dg)" stroke-width="2"/>
 
   <!-- Track rings -->
-  <circle cx="90" cy="86" r="44" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.25"/>
-  <circle cx="90" cy="86" r="36" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.2"/>
-  <circle cx="90" cy="86" r="28" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.25"/>
+  <circle cx="90" cy="86" r="44" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.25"/>
+  <circle cx="90" cy="86" r="36" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.2"/>
+  <circle cx="90" cy="86" r="28" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.25"/>
 
   <!-- Refraction arcs -->
-  <path d="M 55 58 A 52 52 0 0 1 112 50" fill="none" stroke="#e8c547" stroke-width="1" opacity="0.2"/>
-  <path d="M 60 115 A 45 45 0 0 1 132 90" fill="none" stroke="#7c6af7" stroke-width="1" opacity="0.15"/>
+  <path d="M 55 58 A 52 52 0 0 1 112 50" fill="none" stroke="#3C7CE1" stroke-width="1" opacity="0.2"/>
+  <path d="M 60 115 A 45 45 0 0 1 132 90" fill="none" stroke="#3B9EFF" stroke-width="1" opacity="0.15"/>
 
   <!-- Hub -->
-  <circle cx="90" cy="86" r="17" fill="#12121a" stroke="url(#ig)" stroke-width="1.5"/>
+  <circle cx="90" cy="86" r="17" fill="#111A2A" stroke="url(#ig)" stroke-width="1.5"/>
   <circle cx="90" cy="86" r="6" fill="none" stroke="url(#ig)" stroke-width="1" opacity="0.5"/>
 
   <!-- Vault keyhole -->
@@ -43,7 +43,7 @@
 
   <!-- 4K badge -->
   <rect x="116" y="48" width="26" height="13" rx="6.5" fill="url(#ig)"/>
-  <text x="129" y="58" text-anchor="middle" font-family="'SF Mono', 'DM Mono', monospace" font-size="7.5" font-weight="700" fill="#0a0a0f" letter-spacing="0.3">4K</text>
+  <text x="129" y="58" text-anchor="middle" font-family="'SF Mono', 'DM Mono', monospace" font-size="7.5" font-weight="700" fill="#090F1A" letter-spacing="0.3">4K</text>
 
   <!-- Text -->
   <text x="90" y="158" text-anchor="middle" font-family="Georgia, 'DM Serif Display', serif" font-size="20" fill="url(#ig)" letter-spacing="-0.5">DiscVault</text>

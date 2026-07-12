@@ -1,26 +1,26 @@
 <svg viewBox="0 0 180 180" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="hig" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f0d060"/>
-      <stop offset="50%" stop-color="#e8c547"/>
-      <stop offset="100%" stop-color="#c9a530"/>
+      <stop offset="0%" stop-color="#7EB9EB"/>
+      <stop offset="50%" stop-color="#3C7CE1"/>
+      <stop offset="100%" stop-color="#2259B0"/>
     </linearGradient>
     <linearGradient id="hdg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#7c6af7"/>
-      <stop offset="100%" stop-color="#5548c8"/>
+      <stop offset="0%" stop-color="#3B9EFF"/>
+      <stop offset="100%" stop-color="#2A6FD6"/>
     </linearGradient>
   </defs>
-  <rect width="180" height="180" rx="36" fill="#12121a"/>
+  <rect width="180" height="180" rx="36" fill="#111A2A"/>
   <circle cx="90" cy="90" r="58" fill="none" stroke="url(#hig)" stroke-width="1.5" opacity="0.3"/>
-  <circle cx="90" cy="90" r="48" fill="#1a1a26" stroke="url(#hdg)" stroke-width="2"/>
-  <circle cx="90" cy="90" r="40" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.25"/>
-  <circle cx="90" cy="90" r="32" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.2"/>
-  <circle cx="90" cy="90" r="24" fill="none" stroke="#7c6af7" stroke-width="0.5" opacity="0.25"/>
-  <path d="M 55 62 A 48 48 0 0 1 108 54" fill="none" stroke="#e8c547" stroke-width="1" opacity="0.2"/>
-  <circle cx="90" cy="90" r="16" fill="#12121a" stroke="url(#hig)" stroke-width="1.5"/>
+  <circle cx="90" cy="90" r="48" fill="#0E1524" stroke="url(#hdg)" stroke-width="2"/>
+  <circle cx="90" cy="90" r="40" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.25"/>
+  <circle cx="90" cy="90" r="32" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.2"/>
+  <circle cx="90" cy="90" r="24" fill="none" stroke="#3B9EFF" stroke-width="0.5" opacity="0.25"/>
+  <path d="M 55 62 A 48 48 0 0 1 108 54" fill="none" stroke="#3C7CE1" stroke-width="1" opacity="0.2"/>
+  <circle cx="90" cy="90" r="16" fill="#111A2A" stroke="url(#hig)" stroke-width="1.5"/>
   <circle cx="90" cy="90" r="6" fill="none" stroke="url(#hig)" stroke-width="1" opacity="0.5"/>
   <path d="M 90 84 L 95 88.5 L 93.5 95 L 86.5 95 L 85 88.5 Z" fill="url(#hig)"/>
   <rect x="88.5" y="93" width="3" height="5" rx="1" fill="url(#hig)"/>
   <rect x="116" y="52" width="26" height="13" rx="6.5" fill="url(#hig)"/>
-  <text x="129" y="62" text-anchor="middle" font-family="monospace" font-size="7.5" font-weight="700" fill="#0a0a0f" letter-spacing="0.3">4K</text>
+  <text x="129" y="62" text-anchor="middle" font-family="monospace" font-size="7.5" font-weight="700" fill="#090F1A" letter-spacing="0.3">4K</text>
 </svg>
