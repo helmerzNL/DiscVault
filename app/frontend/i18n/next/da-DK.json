@@ -2217,7 +2217,6 @@
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
   "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
-<<<<<<< HEAD
   "discover.addWishlist": "Add to wishlist",
   "discover.awards": "Award nominations",
   "discover.awardsUnavailable": "Not available",
@@ -2232,8 +2231,7 @@
   "discover.showtimesUnavailable": "TMDb does not provide complete local cinema showtimes. Add a local showtimes provider in a future release.",
   "discover.subtitle": "Popular movies from TMDb",
   "discover.title": "Discover",
-  "discover.tmdbMissing": "TMDb API key is missing. Open Plugins and add your free TMDb key."
-=======
+  "discover.tmdbMissing": "TMDb API key is missing. Open Plugins and add your free TMDb key.",
   "preferences.accent": "Accentfarve",
   "preferences.accentHelp": "Vælg accenten, der bruges i hele DiscVault. Neutrale farver og formatmærker forbliver uændrede.",
   "accent.label": "Accentfarve",
@@ -2245,5 +2243,4 @@
   "accent.crimson": "Karmesin",
   "accent.magenta": "Magenta",
   "accent.ember": "Glød"
->>>>>>> origin/release/v26-beta
 }
