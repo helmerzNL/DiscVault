@@ -6477,15 +6477,46 @@ def ui_preview_html(
       font-size: .82rem;
       line-height: 1.34;
     }
-    .person-detail-page .movie-detail-hero {
+    /* Themed "flat" hero: used when a detail page has no backdrop image
+       (person pages always, movie/container/location when no backdrop).
+       Follows the active theme + accent instead of a fixed dark gradient. */
+    .movie-detail-hero.is-flat {
       background:
-        radial-gradient(circle at 18% 22%, rgba(255,255,255,.18), transparent 34%),
-        linear-gradient(145deg, #252932, #111214);
+        radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 48%),
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 7%, var(--panel)), var(--bg-solid));
+      color: var(--text);
     }
-    .person-detail-page .movie-detail-hero::before {
-      background:
-        linear-gradient(90deg, rgba(0,0,0,.72), rgba(0,0,0,.30) 58%, rgba(0,0,0,.10)),
-        linear-gradient(0deg, rgba(0,0,0,.74), rgba(0,0,0,.10) 68%);
+    .movie-detail-hero.is-flat::before {
+      background: none;
+    }
+    .movie-detail-hero.is-flat .eyebrow {
+      color: var(--accent);
+    }
+    .movie-detail-hero.is-flat .movie-detail-overview,
+    .movie-detail-hero.is-flat .person-bio-text {
+      color: var(--muted);
+    }
+    .movie-detail-hero.is-flat .pill {
+      color: var(--text);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+      backdrop-filter: none;
+    }
+    .movie-detail-hero.is-flat .movie-detail-back {
+      color: var(--text);
+      background: color-mix(in srgb, var(--text) 8%, transparent);
+      border-color: var(--line);
+      backdrop-filter: none;
+    }
+    .movie-detail-hero.is-flat .movie-detail-poster {
+      background: var(--field);
+      border-color: var(--line);
+      color: var(--muted);
+    }
+    .movie-detail-hero.is-flat .person-detail-portrait {
+      border-color: var(--line);
+      background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 22%, var(--field)), var(--field));
+      color: var(--text);
     }
     .person-detail-page .movie-detail-summary {
       grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
@@ -18326,8 +18357,18 @@ def ui_preview_html(
       if (lower.includes("digital") || lower.includes("vod") || lower.includes("stream")) return "physical-format-badge--digital";
       return "";
     }
+    function physicalFormatBadgeLabel(value) {
+      const text = String(value || "").trim();
+      const lower = text.toLowerCase();
+      if (!text) return "";
+      if (movieFormatIsFourKBlurayCombo(text)) return "4K + BD";
+      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K";
+      if (lower.includes("blu") || lower.includes("bd")) return "BD";
+      if (lower.includes("dvd")) return "DVD";
+      return physicalFormatLabel(value);
+    }
     function physicalFormatBadgeHtml(value) {
-      const label = physicalFormatLabel(value);
+      const label = physicalFormatBadgeLabel(value);
       if (!label) return "";
       const variant = physicalFormatBadgeClass(value);
       const cls = variant ? `physical-format-badge ${variant}` : "physical-format-badge";
@@ -20280,6 +20321,8 @@ def ui_preview_html(
         backdropNode.src = backdrop || "";
         backdropNode.classList.toggle("hidden", !backdrop);
       }
+      const movieHeroNode = document.getElementById("movieDetailHero");
+      if (movieHeroNode) movieHeroNode.classList.toggle("is-flat", !backdrop);
       const posterNode = document.getElementById("movieDetailPoster");
       if (posterNode) {
         posterNode.innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -20695,6 +20738,8 @@ def ui_preview_html(
         backdropNode.src = backdrop || "";
         backdropNode.classList.toggle("hidden", !backdrop);
       }
+      const containerHeroNode = document.getElementById("containerDetailHero");
+      if (containerHeroNode) containerHeroNode.classList.toggle("is-flat", !backdrop);
       const posterNode = document.getElementById("containerDetailPoster");
       if (posterNode) {
         let coverPoster = poster;
@@ -21066,6 +21111,8 @@ def ui_preview_html(
       if (avatarNode) {
         avatarNode.innerHTML = image ? `<img src="${escapeHtml(image)}" alt="">` : escapeHtml(initialsFromName(name));
       }
+      const personHeroNode = document.getElementById("personDetailHero");
+      if (personHeroNode) personHeroNode.classList.add("is-flat");
       document.getElementById("personDetailTitle").textContent = name;
       applyPersonBiography(person.biography || tNext("personDetail.noBiography", "No biography imported yet."));
       const knownForValue = person.known_for || metadata.knownFor || metadata.known_for || "";
@@ -28950,6 +28997,8 @@ def ui_preview_html(
       if (backdropNode && backdropNode.tagName === "IMG") {
         backdropNode.src = routeBackdrop || "";
       }
+      const locationHeroNode = document.getElementById("locationDetailHero");
+      if (locationHeroNode) locationHeroNode.classList.toggle("is-flat", !routeBackdrop);
       const qrNode = document.getElementById("locationDetailQr");
       if (qrNode) {
         qrNode.innerHTML = routeQrUrl
