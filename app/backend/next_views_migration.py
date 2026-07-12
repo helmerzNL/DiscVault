@@ -144,6 +144,7 @@ def migration_dashboard_html() -> str:
       height: 100%;
       object-fit: contain;
       display: block;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,.55));
     }
     .login-copy {
       display: grid;
