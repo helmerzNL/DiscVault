@@ -2216,5 +2216,16 @@
   "lists.wishlistShopSelectorValue": "Selector value",
   "lists.wishlistShopSelectorValueRequired": "Selector value is required when selector type is set.",
   "lists.wishlistShopSavedWithPrice": "Shop saved. Current price: {price} {currency}.",
-  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted."
+  "lists.wishlistShopSavedNoPrice": "Shop saved, but no current price could be extracted.",
+  "preferences.accent": "Vurgu rengi",
+  "preferences.accentHelp": "DiscVault genelinde kullanılan vurguyu seçin. Nötr renkler ve format rozetleri sabit kalır.",
+  "accent.label": "Vurgu rengi",
+  "accent.bluray": "Blu-ray",
+  "accent.amethyst": "Ametist",
+  "accent.chrome": "Krom",
+  "accent.emerald": "Zümrüt",
+  "accent.teal": "Deniz mavisi",
+  "accent.crimson": "Koyu kırmızı",
+  "accent.magenta": "Macenta",
+  "accent.ember": "Kor"
 }

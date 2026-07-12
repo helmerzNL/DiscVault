@@ -157,44 +157,174 @@ def ui_preview_html(
         document.documentElement.dataset.theme = "dark";
         document.documentElement.dataset.themePreference = "system";
       }
+      try {
+        const accent = localStorage.getItem("dv_next_accent") || "bluray";
+        document.documentElement.dataset.accent = accent;
+      } catch (error) {
+        document.documentElement.dataset.accent = "bluray";
+      }
     })();
   </script>
   <style>
+    /* ============================================================
+       DiscVault — "Chrome & Blue" v3.1 design tokens.
+       Source of truth: tokens.json. --dv-* tokens are the palette;
+       the app's semantic vars (--bg/--text/--accent/...) are mapped
+       onto them so the whole UI re-skins and the accent picker
+       (data-accent on <html>) drives every accent. Dark-first,
+       keyed to the app icon (--dv-bg is sampled from the icon).
+       ============================================================ */
     :root {
       color-scheme: light;
       --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --bg: #f4f5f7;
-      --bg-elevated: rgba(255, 255, 255, 0.78);
-      --bg-solid: #ffffff;
-      --text: #17181c;
-      --muted: #6b7280;
-      --subtle: #8b93a1;
-      --line: rgba(25, 28, 36, 0.12);
-      --line-strong: rgba(25, 28, 36, 0.18);
-      --accent: #0a84ff;
-      --accent-contrast: #ffffff;
-      --green: #34c759;
-      --amber: #ff9f0a;
-      --red: #ff453a;
-      --shadow: 0 18px 55px rgba(26, 31, 42, 0.14);
-      --shadow-soft: 0 10px 28px rgba(26, 31, 42, 0.10);
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+      /* Chrome & Blue neutrals + semantics — LIGHT (default) */
+      --dv-bg: #F4F7FB;
+      --dv-surface-1: #FFFFFF;
+      --dv-surface-2: #EDF1F7;
+      --dv-surface-3: #E1E8F1;
+      --dv-border-subtle: #E4EAF2;
+      --dv-border: #D0D9E5;
+      --dv-text: #0E141F;
+      --dv-text-2: #4A5666;
+      --dv-text-3: #7C8798;
+      --dv-platinum: #6B7787;
+      --dv-platinum-dim: #9AA6B4;
+      --dv-success: #0E9F6E;
+      --dv-warning: #C2540B;
+      --dv-error: #DC2626;
+      --dv-info: #0E7C93;
+
+      /* format badges — fixed, never themed by the accent picker */
+      --dv-fmt-4k: #12181F;
+      --dv-fmt-4k-on: #FFFFFF;
+      --dv-fmt-4k-line: #12181F;
+      --dv-fmt-bluray: #1E6FD8;
+      --dv-fmt-bluray-on: #FFFFFF;
+      --dv-fmt-dvd: #8C7345;
+      --dv-fmt-dvd-deep: #6B5730;
+      --dv-fmt-dvd-on: #FFFFFF;
+      --dv-fmt-steel: #556270;
+      --dv-fmt-steel-on: #FFFFFF;
+      --dv-fmt-steel-brushed: linear-gradient(115deg, #6E7B89 0%, #9AA7B5 18%, #E2EAF2 32%, #A4B1BF 44%, #7C8996 58%, #C6D2DE 72%, #8D9AA8 86%, #67737F 100%);
+      --dv-fmt-digital: #0E9C86;
+      --dv-fmt-digital-on: #FFFFFF;
+
+      --dv-sheen: conic-gradient(from 210deg, #5E9AD0, #B3A8E4, #D6A8DC, #E8E4EE, #5CC4A8, #3B7BC4, #2A6FD6, #5E9AD0);
+      --dv-shadow: 0 1px 2px rgba(20,30,45,.06), 0 12px 32px rgba(30,60,110,.10);
+
+      /* ---- semantic app vars mapped to the tokens ---- */
+      --bg: var(--dv-bg);
+      --bg-solid: var(--dv-surface-1);
+      --bg-muted: var(--dv-surface-2);
+      --bg-elevated: color-mix(in srgb, var(--dv-surface-1) 82%, transparent);
+      --surface: var(--dv-surface-1);
+      --panel: var(--dv-surface-1);
+      --field: var(--dv-surface-2);
+      --text: var(--dv-text);
+      --muted: var(--dv-text-2);
+      --muted-strong: var(--dv-text);
+      --subtle: var(--dv-text-3);
+      --line: var(--dv-border-subtle);
+      --line-strong: var(--dv-border);
+      --border: var(--dv-border);
+      --accent: var(--dv-accent);
+      --accent-hover: var(--dv-accent-hover);
+      --accent-press: var(--dv-accent-press);
+      --accent-bright: var(--dv-accent-bright);
+      --accent-contrast: var(--dv-on-accent);
+      --green: var(--dv-success);
+      --good: var(--dv-success);
+      --ok: var(--dv-success);
+      --success: var(--dv-success);
+      --amber: var(--dv-warning);
+      --warn: var(--dv-warning);
+      --red: var(--dv-error);
+      --bad: var(--dv-error);
+      --danger: var(--dv-error);
+      --info: var(--dv-info);
+      --shadow: var(--dv-shadow);
+      --shadow-soft: 0 1px 2px rgba(20,30,45,.05), 0 10px 26px rgba(30,60,110,.08);
+      --shadow-strong: 0 2px 6px rgba(20,30,45,.10), 0 22px 60px rgba(30,60,110,.16);
       --radius: 8px;
+      --radius-sm: 6px;
+      --radius-lg: 16px;
     }
     html[data-theme="dark"] {
       color-scheme: dark;
-      --bg: #111214;
-      --bg-elevated: rgba(31, 33, 38, 0.76);
-      --bg-solid: #1c1d21;
-      --text: #f5f6f8;
-      --muted: #a5acb8;
-      --subtle: #798191;
-      --line: rgba(244, 247, 255, 0.12);
-      --line-strong: rgba(244, 247, 255, 0.20);
-      --accent: #5ac8fa;
-      --accent-contrast: #071014;
-      --shadow: 0 22px 70px rgba(0, 0, 0, 0.36);
-      --shadow-soft: 0 12px 34px rgba(0, 0, 0, 0.26);
+
+      /* Chrome & Blue neutrals + semantics — DARK (default surface) */
+      --dv-bg: #090F1A;
+      --dv-surface-1: #111A2A;
+      --dv-surface-2: #1A2438;
+      --dv-surface-3: #243047;
+      --dv-border-subtle: #2B3852;
+      --dv-border: #394863;
+      --dv-text: #EAF0F7;
+      --dv-text-2: #9AA7B8;
+      --dv-text-3: #647082;
+      --dv-platinum: #C7D2DE;
+      --dv-platinum-dim: #8996A6;
+      --dv-success: #34D399;
+      --dv-warning: #FB8C3C;
+      --dv-error: #FF5A52;
+      --dv-info: #22C0DE;
+
+      --dv-fmt-4k: #F2F6FA;
+      --dv-fmt-4k-on: #0A0E14;
+      --dv-fmt-4k-line: #FFFFFF;
+      --dv-fmt-bluray: #3B9EFF;
+      --dv-fmt-bluray-on: #04121F;
+      --dv-fmt-dvd: #C2A878;
+      --dv-fmt-dvd-deep: #8C7345;
+      --dv-fmt-dvd-on: #1C1508;
+      --dv-fmt-steel: #8E9CAC;
+      --dv-fmt-steel-on: #0E141C;
+      --dv-fmt-steel-brushed: linear-gradient(115deg, #5C6875 0%, #8A97A6 18%, #D6E0EA 32%, #93A1B0 44%, #6B7683 58%, #B9C6D3 72%, #7E8B99 86%, #566270 100%);
+      --dv-fmt-digital: #22C2A8;
+      --dv-fmt-digital-on: #04211C;
+
+      --dv-sheen: conic-gradient(from 210deg, #7EB9EB, #D6CEFA, #EDC8F0, #F9F6F6, #7EE2C6, #4C93E4, #3C7CE1, #7EB9EB);
+      --dv-shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px rgba(0,0,0,.4);
+
+      --bg-elevated: color-mix(in srgb, var(--dv-surface-1) 84%, transparent);
+      --shadow-soft: 0 1px 2px rgba(0,0,0,.45), 0 12px 34px rgba(0,0,0,.30);
+      --shadow-strong: 0 2px 6px rgba(0,0,0,.55), 0 24px 68px rgba(0,0,0,.5);
     }
+
+    /* ---- Accent presets — user-selectable via data-accent on <html> ----
+       'bright' is the link/icon variant (differs per theme so it stays
+       legible on white). Every base clears WCAG AA against white button
+       text. Only this group is swappable; neutrals/semantics/format stay fixed. */
+    [data-accent="bluray"]   { --dv-accent: #2A6FD6; --dv-accent-hover: #3C7CE1; --dv-accent-press: #2259B0; --dv-accent-bright: #6CB4FC; --dv-on-accent: #FFFFFF; }
+    [data-accent="amethyst"] { --dv-accent: #6D5FE6; --dv-accent-hover: #8375EE; --dv-accent-press: #584BC4; --dv-accent-bright: #A99BFF; --dv-on-accent: #FFFFFF; }
+    [data-accent="chrome"]   { --dv-accent: #6B7787; --dv-accent-hover: #7D8998; --dv-accent-press: #565F6C; --dv-accent-bright: #C7D2DE; --dv-on-accent: #FFFFFF; }
+    [data-accent="emerald"]  { --dv-accent: #0C835B; --dv-accent-hover: #0E8F63; --dv-accent-press: #0A6C4B; --dv-accent-bright: #4ADCA4; --dv-on-accent: #FFFFFF; }
+    [data-accent="teal"]     { --dv-accent: #0E7C93; --dv-accent-hover: #1191AB; --dv-accent-press: #0B6376; --dv-accent-bright: #46CDE4; --dv-on-accent: #FFFFFF; }
+    [data-accent="crimson"]  { --dv-accent: #D62F3C; --dv-accent-hover: #E24450; --dv-accent-press: #B32530; --dv-accent-bright: #FF7A82; --dv-on-accent: #FFFFFF; }
+    [data-accent="magenta"]  { --dv-accent: #C93384; --dv-accent-hover: #D94795; --dv-accent-press: #A82A6D; --dv-accent-bright: #FF7CC0; --dv-on-accent: #FFFFFF; }
+    [data-accent="ember"]    { --dv-accent: #A76400; --dv-accent-hover: #B26B00; --dv-accent-press: #8A5300; --dv-accent-bright: #FFB23E; --dv-on-accent: #FFFFFF; }
+
+    /* On light, the link/icon variant must darken to stay legible on white */
+    html[data-theme="light"][data-accent="bluray"]   { --dv-accent-bright: #1F5FBF; }
+    html[data-theme="light"][data-accent="amethyst"] { --dv-accent-bright: #5B4CD1; }
+    html[data-theme="light"][data-accent="chrome"]    { --dv-accent-bright: #55606E; }
+    html[data-theme="light"][data-accent="emerald"]  { --dv-accent-bright: #0A6C4B; }
+    html[data-theme="light"][data-accent="teal"]     { --dv-accent-bright: #0B6376; }
+    html[data-theme="light"][data-accent="crimson"]  { --dv-accent-bright: #B32530; }
+    html[data-theme="light"][data-accent="magenta"]  { --dv-accent-bright: #A82A6D; }
+    html[data-theme="light"][data-accent="ember"]    { --dv-accent-bright: #8A5300; }
+
+    /* Fallback accent if no data-accent is set yet (bluray) */
+    :root:not([data-accent]) {
+      --dv-accent: #2A6FD6;
+      --dv-accent-hover: #3C7CE1;
+      --dv-accent-press: #2259B0;
+      --dv-accent-bright: #6CB4FC;
+      --dv-on-accent: #FFFFFF;
+    }
+    html[data-theme="light"]:not([data-accent]) { --dv-accent-bright: #1F5FBF; }
     * { box-sizing: border-box; }
     html {
       min-height: 100%;
@@ -822,6 +952,39 @@ def ui_preview_html(
       color: var(--text);
       background: var(--bg-solid);
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .accent-picker {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .accent-swatch {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+      transition: transform .14s ease;
+    }
+    .accent-swatch:hover { transform: scale(1.08); }
+    .accent-swatch-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 1px 3px rgba(0,0,0,.35);
+    }
+    .accent-swatch.active {
+      box-shadow: 0 0 0 2px var(--bg-solid), 0 0 0 4px var(--accent-bright);
+    }
+    .accent-swatch:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
     }
     .collection-toolbar {
       position: relative;
@@ -1902,6 +2065,40 @@ def ui_preview_html(
       text-overflow: ellipsis;
       backdrop-filter: blur(12px) saturate(150%);
       z-index: 2;
+    }
+    /* Per-format colors — fixed, never affected by the accent picker.
+       Each badge borrows from the real object on the shelf. */
+    .physical-format-badge--4k {
+      background: var(--dv-fmt-4k);
+      color: var(--dv-fmt-4k-on);
+      border: 1px solid var(--dv-fmt-4k-line);
+      backdrop-filter: none;
+    }
+    .physical-format-badge--bluray {
+      background: var(--dv-fmt-bluray);
+      color: var(--dv-fmt-bluray-on);
+      border: 1px solid rgba(255,255,255,.28);
+      backdrop-filter: none;
+    }
+    .physical-format-badge--dvd {
+      background: linear-gradient(180deg, var(--dv-fmt-dvd), var(--dv-fmt-dvd-deep));
+      color: var(--dv-fmt-dvd-on);
+      border: 1px solid rgba(255,255,255,.24);
+      letter-spacing: .06em;
+      backdrop-filter: none;
+    }
+    .physical-format-badge--steel {
+      background: var(--dv-fmt-steel-brushed);
+      color: var(--dv-fmt-steel-on);
+      border: 1px solid rgba(255,255,255,.3);
+      text-shadow: 0 1px 0 rgba(255,255,255,.35);
+      backdrop-filter: none;
+    }
+    .physical-format-badge--digital {
+      background: var(--dv-fmt-digital);
+      color: var(--dv-fmt-digital-on);
+      border: 1px solid rgba(255,255,255,.28);
+      backdrop-filter: none;
     }
     .preview-collection.bulk-selected {
       border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
@@ -11085,6 +11282,22 @@ def ui_preview_html(
                   </div>
                   <div class="preference-control-row">
                     <span>
+                      <strong data-next-i18n="preferences.accent">Accent color</strong>
+                      <span data-next-i18n="preferences.accentHelp">Pick the accent used across DiscVault. Neutrals and format badges stay fixed.</span>
+                    </span>
+                    <div class="accent-picker" role="group" aria-label="Accent color" data-next-i18n-aria="accent.label">
+                      <button type="button" class="accent-swatch" data-accent-choice="bluray" data-accent-swatch="#2A6FD6" aria-label="Blu-ray" data-next-i18n-aria="accent.bluray" title="Blu-ray"><span class="accent-swatch-dot" style="background:#2A6FD6"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="amethyst" data-accent-swatch="#6D5FE6" aria-label="Amethyst" data-next-i18n-aria="accent.amethyst" title="Amethyst"><span class="accent-swatch-dot" style="background:#6D5FE6"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="chrome" data-accent-swatch="#6B7787" aria-label="Chrome" data-next-i18n-aria="accent.chrome" title="Chrome"><span class="accent-swatch-dot" style="background:#6B7787"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="emerald" data-accent-swatch="#0C835B" aria-label="Emerald" data-next-i18n-aria="accent.emerald" title="Emerald"><span class="accent-swatch-dot" style="background:#0C835B"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="teal" data-accent-swatch="#0E7C93" aria-label="Teal" data-next-i18n-aria="accent.teal" title="Teal"><span class="accent-swatch-dot" style="background:#0E7C93"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="crimson" data-accent-swatch="#D62F3C" aria-label="Crimson" data-next-i18n-aria="accent.crimson" title="Crimson"><span class="accent-swatch-dot" style="background:#D62F3C"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="magenta" data-accent-swatch="#C93384" aria-label="Magenta" data-next-i18n-aria="accent.magenta" title="Magenta"><span class="accent-swatch-dot" style="background:#C93384"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="ember" data-accent-swatch="#A76400" aria-label="Ember" data-next-i18n-aria="accent.ember" title="Ember"><span class="accent-swatch-dot" style="background:#A76400"></span></button>
+                    </div>
+                  </div>
+                  <div class="preference-control-row">
+                    <span>
                       <strong data-next-i18n="preferences.language">Language</strong>
                       <span data-next-i18n="preferences.languageHelp">Choose the language for DiscVault on this device.</span>
                     </span>
@@ -16783,6 +16996,15 @@ def ui_preview_html(
         button.classList.toggle("active", button.dataset.themeChoice === selected);
       });
     }
+    const ACCENT_PRESETS = ["bluray", "amethyst", "chrome", "emerald", "teal", "crimson", "magenta", "ember"];
+    function setAccent(accent) {
+      const selected = ACCENT_PRESETS.includes(accent) ? accent : "bluray";
+      document.documentElement.dataset.accent = selected;
+      localStorage.setItem("dv_next_accent", selected);
+      document.querySelectorAll("[data-accent-choice]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.accentChoice === selected);
+      });
+    }
     function groupOptionsHtml() {
       const selected = effectiveCollectionGroupFilter();
       const options = [];
@@ -18094,9 +18316,22 @@ def ui_preview_html(
       if (lower.includes("dvd")) return "DVD";
       return text;
     }
+    function physicalFormatBadgeClass(value) {
+      const lower = String(value || "").trim().toLowerCase();
+      if (!lower) return "";
+      if (movieFormatIsFourKBlurayCombo(lower) || lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "physical-format-badge--4k";
+      if (lower.includes("steel")) return "physical-format-badge--steel";
+      if (lower.includes("blu") || lower.includes("bd")) return "physical-format-badge--bluray";
+      if (lower.includes("dvd")) return "physical-format-badge--dvd";
+      if (lower.includes("digital") || lower.includes("vod") || lower.includes("stream")) return "physical-format-badge--digital";
+      return "";
+    }
     function physicalFormatBadgeHtml(value) {
       const label = physicalFormatLabel(value);
-      return label ? `<span class="physical-format-badge">${escapeHtml(label)}</span>` : "";
+      if (!label) return "";
+      const variant = physicalFormatBadgeClass(value);
+      const cls = variant ? `physical-format-badge ${variant}` : "physical-format-badge";
+      return `<span class="${cls}">${escapeHtml(label)}</span>`;
     }
     const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "AU", "BR", "DK", "FI", "NO", "SE", "NZ", "IN", "PH", "MY", "PL", "HU", "BG", "LT"];
     function ratingCountryLabel(code) {
@@ -30205,6 +30440,7 @@ def ui_preview_html(
       mediaGroups = state.mediaGroups || [];
       preferences = Object.assign({}, preferences, state.preferences || {});
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
+      setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
       renderPreferences();
       renderProfile();
       renderCollectionSurface();
@@ -31264,6 +31500,7 @@ def ui_preview_html(
       renderLanguageSelect();
       loadLocale(localeState.locale);
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
+      setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
         select.addEventListener("change", (event) => loadLocale(event.target.value));
       });
@@ -31273,6 +31510,15 @@ def ui_preview_html(
           preferences.theme = button.dataset.themeChoice || "system";
           if (appMode) {
             updatePreference("theme", preferences.theme);
+          }
+        });
+      });
+      document.querySelectorAll("[data-accent-choice]").forEach((button) => {
+        button.addEventListener("click", () => {
+          setAccent(button.dataset.accentChoice);
+          preferences.accent = button.dataset.accentChoice || "bluray";
+          if (appMode) {
+            updatePreference("accent", preferences.accent);
           }
         });
       });
