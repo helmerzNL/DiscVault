@@ -250,6 +250,8 @@ def ui_preview_html(
       --radius: 8px;
       --radius-sm: 6px;
       --radius-lg: 16px;
+      /* Frameless disc logo: define its round edge against light surfaces */
+      --logo-shadow: drop-shadow(0 0 0.6px rgba(15,23,42,.55)) drop-shadow(0 1px 3px rgba(15,23,42,.28));
     }
     html[data-theme="dark"] {
       color-scheme: dark;
@@ -291,6 +293,7 @@ def ui_preview_html(
       --bg-elevated: color-mix(in srgb, var(--dv-surface-1) 84%, transparent);
       --shadow-soft: 0 1px 2px rgba(0,0,0,.45), 0 12px 34px rgba(0,0,0,.30);
       --shadow-strong: 0 2px 6px rgba(0,0,0,.55), 0 24px 68px rgba(0,0,0,.5);
+      --logo-shadow: drop-shadow(0 1px 2px rgba(0,0,0,.5));
     }
 
     /* ---- Accent presets — user-selectable via data-accent on <html> ----
@@ -627,6 +630,7 @@ def ui_preview_html(
       height: 100%;
       display: block;
       object-fit: contain;
+      filter: var(--logo-shadow);
     }
     .preview-sidebar .brand-mark {
       width: 30px;
@@ -880,6 +884,7 @@ def ui_preview_html(
       height: 22px;
       display: block;
       object-fit: contain;
+      filter: var(--logo-shadow);
     }
     .mobile-shell-logo span {
       color: var(--text);
