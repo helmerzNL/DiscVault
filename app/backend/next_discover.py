@@ -43,6 +43,88 @@ def _missing_config_payload(message: str) -> dict[str, Any]:
     }
 
 
+def _discover_people(detail: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for key in ("directorPeople", "castPeople"):
+        values = detail.get(key) if isinstance(detail.get(key), list) else []
+        for row in values:
+            if isinstance(row, dict):
+                rows.append(row)
+    return rows
+
+
+def _attach_local_person_ids(conn, actor: dict[str, Any], detail: dict[str, Any]) -> None:
+    rows = _discover_people(detail)
+    if not rows:
+        return
+    _app = _next_app()
+    if not _app.table_exists(conn, "people"):
+        return
+    by_tmdb: dict[str, str] = {}
+    if _app.table_exists(conn, "person_identifiers"):
+        tmdb_ids = sorted({str(row.get("tmdbId") or "").strip() for row in rows if str(row.get("tmdbId") or "").strip()})
+        if tmdb_ids:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT pi.identifier, pi.person_id
+                    FROM person_identifiers pi
+                    JOIN people p ON p.id=pi.person_id
+                    WHERE lower(pi.provider_id)='tmdb'
+                      AND pi.identifier = ANY(%s)
+                    ORDER BY p.name
+                    """,
+                    (tmdb_ids,),
+                )
+                for row in cur.fetchall():
+                    person_id = row.get("person_id")
+                    if not person_id or not _app.actor_can_view_person(conn, actor, person_id):
+                        continue
+                    tmdb_id = str(row.get("identifier") or "").strip()
+                    if tmdb_id and tmdb_id not in by_tmdb:
+                        by_tmdb[tmdb_id] = str(person_id)
+    unresolved_names = sorted(
+        {
+            str(row.get("name") or "").strip()
+            for row in rows
+            if str(row.get("name") or "").strip()
+            and str(row.get("tmdbId") or "").strip() not in by_tmdb
+        }
+    )
+    by_name: dict[str, str] = {}
+    for name in unresolved_names:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.id
+                FROM people p
+                WHERE lower(p.name)=lower(%s)
+                ORDER BY p.created_at DESC, p.id
+                LIMIT 5
+                """,
+                (name,),
+            )
+            for person_row in cur.fetchall():
+                person_id = person_row.get("id")
+                if person_id and _app.actor_can_view_person(conn, actor, person_id):
+                    by_name[name.lower()] = str(person_id)
+                    break
+    for key in ("directorPeople", "castPeople"):
+        values = detail.get(key) if isinstance(detail.get(key), list) else []
+        for row in values:
+            if not isinstance(row, dict):
+                continue
+            local_person_id = ""
+            tmdb_id = str(row.get("tmdbId") or "").strip()
+            if tmdb_id:
+                local_person_id = by_tmdb.get(tmdb_id, "")
+            if not local_person_id:
+                name = str(row.get("name") or "").strip().lower()
+                if name:
+                    local_person_id = by_name.get(name, "")
+            row["localPersonId"] = local_person_id
+
+
 def register_next_discover_routes(flask_app: Flask, *, connect) -> None:  # pragma: no cover - Flask wiring
     @flask_app.get("/api/next/discover")
     def next_discover_feed():
@@ -82,4 +164,5 @@ def register_next_discover_routes(flask_app: Flask, *, connect) -> None:  # prag
                     }
                 )
             detail = discover_detail(context_state["context"], media_type=media_type, tmdb_id=tmdb_id)
+            _attach_local_person_ids(conn, actor, detail)
         return response({"status": "ok", "configured": True, "detail": detail})
