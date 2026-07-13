@@ -67,29 +67,117 @@ _PRESET_DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
     "bol_com": ("bol.com",),
 }
 
+# Amazon-specific bot/CAPTCHA detection signatures.
+_AMAZON_BOT_SIGNATURES: tuple[str, ...] = (
+    "robot check",
+    "captchacharacters",
+    "automated access to amazon data",
+    "sorry, we just need to make sure you",
+    "/errors/validateCaptcha",
+)
+
+# Ordered list of Amazon price CSS selectors to try (most reliable first).
+_AMAZON_PRICE_PATTERNS: tuple[str, ...] = (
+    # Modern layout – hidden offscreen text inside the price badge
+    r'class=["\'][^"\']*a-offscreen[^"\']*["\'][^>]*>\s*([^<]{2,30})\s*<',
+    # Legacy explicit price blocks
+    r'id=["\']priceblock_ourprice["\'][^>]*>\s*([^<]{2,20})\s*<',
+    r'id=["\']priceblock_dealprice["\'][^>]*>\s*([^<]{2,20})\s*<',
+    r'id=["\']priceblock_saleprice["\'][^>]*>\s*([^<]{2,20})\s*<',
+    # Combined whole + fraction (e.g. "29" + "99") — uses .*? to cross the
+    # </span> tag boundary between the two elements.
+    r'class=["\'][^"\']*a-price-whole[^"\']*["\'][^>]*>\s*(\d+).*?'
+    r'class=["\'][^"\']*a-price-fraction[^"\']*["\'][^>]*>\s*(\d+)',
+)
+
+_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+
 
 # ---------------------------------------------------------------------------
 # Price extraction from a URL
 # ---------------------------------------------------------------------------
 
-def _fetch_html(url: str, *, session: Any = None) -> str:
-    """Return the raw HTML of *url*.  Raises ``ValueError`` on failure."""
-    try:
-        import urllib.request
+def _fetch_html(url: str, *, session: Any = None, browser_like: bool = False) -> str:
+    """Return the raw HTML of *url*.  Raises ``ValueError`` on failure.
 
+    When *browser_like* is True (used for sites with bot-detection), the
+    request mimics a real Chrome browser as closely as possible over plain
+    HTTP.
+    """
+    import urllib.request
+
+    if browser_like:
         headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (compatible; DiscVault-PriceBot/1.0; "
-                "+https://discvault.eu/bot)"
+            "User-Agent": _BROWSER_USER_AGENT,
+            "Accept": (
+                "text/html,application/xhtml+xml,application/xml;"
+                "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
             ),
+            "Accept-Language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0",
+            "DNT": "1",
+        }
+    else:
+        headers = {
+            "User-Agent": _BROWSER_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml",
         }
+
+    try:
+        import gzip as _gzip
+        import zlib as _zlib
+
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT) as resp:  # noqa: S310
             charset = resp.headers.get_content_charset() or "utf-8"
-            return resp.read().decode(charset, errors="replace")
+            raw = resp.read()
+            encoding = resp.headers.get("Content-Encoding", "").lower().strip()
+            if encoding == "gzip":
+                raw = _gzip.decompress(raw)
+            elif encoding == "deflate":
+                try:
+                    raw = _zlib.decompress(raw)
+                except _zlib.error:
+                    raw = _zlib.decompress(raw, -_zlib.MAX_WBITS)
+            # brotli ("br") requires the optional `brotli` package; skip gracefully.
+            return raw.decode(charset, errors="replace")
     except Exception as exc:
         raise ValueError(f"Could not fetch {url}: {exc}") from exc
+
+
+def _is_amazon_bot_blocked(html: str) -> bool:
+    """Return True when Amazon returned a bot/CAPTCHA challenge page."""
+    lower = html.lower()
+    return any(sig in lower for sig in _AMAZON_BOT_SIGNATURES)
+
+
+def _extract_amazon_asin(url: str) -> str | None:
+    """Extract the ASIN from any known Amazon URL format, or return None."""
+    patterns = [
+        r"/dp/([A-Z0-9]{10})",
+        r"/gp/product/([A-Z0-9]{10})",
+        r"/exec/obidos/(?:ASIN/)?([A-Z0-9]{10})",
+        r"[?&]asin=([A-Z0-9]{10})",
+        r"/([A-Z0-9]{10})(?:[/?]|$)",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, url, re.IGNORECASE)
+        if m:
+            candidate = m.group(1).upper()
+            if re.fullmatch(r"[A-Z0-9]{10}", candidate):
+                return candidate
+    return None
 
 
 def _extract_from_schema_org(html: str) -> tuple[float | None, str | None]:
@@ -275,15 +363,51 @@ def _extract_price_from_profile(
     return _coerce_price(text), _currency_from_text(text, (fallback_currency or "EUR").upper())
 
 
+def _extract_price_from_amazon_html(html: str, fallback_currency: str = "EUR") -> tuple[float | None, str | None]:
+    """Try all known Amazon price patterns in priority order.
+
+    Returns ``(price, currency)`` or ``(None, None)`` if nothing matched.
+    Amazon's markup varies by product type and A/B test; we try multiple
+    patterns so we are resilient to layout changes.
+    """
+    # Try multi-pattern selectors first (most specific).
+    for pattern in _AMAZON_PRICE_PATTERNS:
+        try:
+            match = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
+        except re.error:
+            continue
+        if not match:
+            continue
+        groups = [g for g in match.groups() if g and g.strip()]
+        if not groups:
+            continue
+        # Whole + fraction pattern produces two groups (e.g. "29" + "99").
+        if len(groups) >= 2 and re.fullmatch(r"\d+", groups[0].strip()) and re.fullmatch(r"\d+", groups[1].strip()):
+            raw_text = f"{groups[0].strip()}.{groups[1].strip()}"
+        else:
+            raw_text = groups[0].strip()
+        price = _coerce_price(raw_text)
+        if price is not None:
+            currency = _currency_from_text(raw_text, fallback_currency)
+            return price, currency
+
+    # Fall back to schema.org – Amazon does embed it on many product pages.
+    price, currency = _extract_from_schema_org(html)
+    if price is not None:
+        return price, currency or fallback_currency
+
+    return None, None
+
+
 def _extract_price_from_domain_preset(url: str, html: str) -> tuple[float | None, str | None, str | None]:
     host = (urlparse(url).netloc or "").casefold()
     if any(keyword in host for keyword in _PRESET_DOMAIN_KEYWORDS["amazon"]):
-        text = _extract_text_by_regex_capture(
-            html,
-            r'class=["\'][^"\']*a-offscreen[^"\']*["\'][^>]*>\s*([^<]+)\s*<',
-        )
-        if text:
-            return _coerce_price(text), _currency_from_text(text, "EUR"), "preset"
+        if _is_amazon_bot_blocked(html):
+            # Signal blocked so callers can surface a clear message.
+            return None, None, "blocked_amazon"
+        price, currency = _extract_price_from_amazon_html(html)
+        if price is not None:
+            return price, currency or "EUR", "preset_amazon"
 
     if any(keyword in host for keyword in _PRESET_DOMAIN_KEYWORDS["bol_com"]):
         text = _extract_text_by_regex_capture(
@@ -306,23 +430,36 @@ def extract_price_from_url_with_source(
 ) -> tuple[float | None, str | None, str | None]:
     """Fetch *url* and extract the current price.
 
-    Returns ``(price_float, currency_code)`` where both may be ``None`` if no
-    price could be determined.  *session* is reserved for future use (e.g.
-    passing an ``httpx.AsyncClient``).
+    Returns ``(price_float, currency_code, extraction_source)`` where all
+    values may be ``None`` if no price could be determined.
 
     Extraction order:
-    1. schema.org JSON-LD Product/Offer
-    2. Open Graph ``product:price:amount`` / ``product:price:currency`` meta
-    3. Regex heuristic near ``price``-labelled HTML elements
+    1. Domain preset (Amazon multi-selector / Bol.com) with browser-like headers
+    2. Per-shop saved selector profile (css_text / regex_capture)
+    3. schema.org JSON-LD Product/Offer
+    4. Open Graph ``product:price:amount`` / ``product:price:currency`` meta
+    5. Regex heuristic near ``price``-labelled HTML elements
+
+    For Amazon URLs the fetch uses realistic browser headers (Chrome UA +
+    full Accept/Sec-Fetch headers) to avoid bot-detection.  If Amazon
+    returns a CAPTCHA/robot-check page the extraction source is set to
+    ``"blocked_amazon"`` and ``(None, None, "blocked_amazon")`` is returned
+    so callers can surface a clear diagnostic message.
     """
+    host = (urlparse(url).netloc or "").casefold()
+    is_amazon = any(keyword in host for keyword in _PRESET_DOMAIN_KEYWORDS["amazon"])
+
     try:
-        html = _fetch_html(url, session=session)
+        html = _fetch_html(url, session=session, browser_like=is_amazon)
     except ValueError:
         return None, None, None
 
     fallback_currency = str((selector_options or {}).get("currency") or "EUR").strip().upper() or "EUR"
 
     price, currency, source = _extract_price_from_domain_preset(url, html)
+    if source == "blocked_amazon":
+        # Propagate the block signal without a price so callers know why.
+        return None, None, "blocked_amazon"
     if price is not None:
         return price, (currency or fallback_currency), (source or "preset")
 
