@@ -7708,7 +7708,7 @@ def ui_preview_html(
     }
     .profile-about-tmdb-logo {
       display: block;
-      width: 120px;
+      width: 60px;
       max-width: 100%;
       height: auto;
     }
