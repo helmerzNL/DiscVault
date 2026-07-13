@@ -9644,6 +9644,7 @@ def ui_preview_html(
       .app-admin-plugin-import .primary-button {
         width: 100%;
       }
+      .poster-rail { grid-template-columns: repeat(3, 1fr); }
     }
     @media (max-width: 560px) {
       body,
@@ -9764,7 +9765,7 @@ def ui_preview_html(
         grid-template-columns: 1fr;
         gap: 3px;
       }
-      .poster-rail { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); }
+      .poster-rail { grid-template-columns: repeat(3, 1fr); }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
