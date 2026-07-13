@@ -1,3 +1,4 @@
+import json
 import os
 import importlib
 import shutil
@@ -1265,6 +1266,18 @@ class PluginAutoUpdateTests(unittest.TestCase):
     def _mark_initialized(self):
         (self.install_dir / PLUGIN_INITIALIZED_MARKER).write_text("1", encoding="utf-8")
 
+    def _mark_initialized_with_seeded(self, seeded: list[str]):
+        (self.install_dir / PLUGIN_INITIALIZED_MARKER).write_text(
+            json.dumps(
+                {
+                    "initializedAt": 1,
+                    "source": str(self.bundled_dir),
+                    "seeded": seeded,
+                }
+            ),
+            encoding="utf-8",
+        )
+
     def test_parse_plugin_version_orders_versions(self):
         self.assertEqual(_parse_plugin_version("1.5.1"), (1, 5, 1))
         self.assertEqual(_parse_plugin_version("1.5.1-beta"), (1, 5, 1))
@@ -1322,12 +1335,23 @@ class PluginAutoUpdateTests(unittest.TestCase):
     def test_upgrade_does_not_resurrect_deleted_default(self):
         # Bundled has the plugin, but the user deleted it from the install dir.
         self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
-        self._mark_initialized()
+        self._mark_initialized_with_seeded(["movievault_26"])
 
         result = upgrade_seeded_default_plugins()
 
         self.assertEqual(result["upgraded"], [])
+        self.assertEqual(result["added"], [])
         self.assertFalse((self.install_dir / "movievault_26").exists())
+
+    def test_upgrade_adds_new_bundled_default_when_not_previously_seeded(self):
+        self._write_plugin(self.bundled_dir, "keepa", "1.0.0")
+        self._mark_initialized_with_seeded(["movievault_26"])
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertEqual(result["upgraded"], [])
+        self.assertIn("keepa", result["added"])
+        self.assertTrue((self.install_dir / "keepa").exists())
 
     def test_upgrade_noop_when_install_dir_not_initialized(self):
         self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
