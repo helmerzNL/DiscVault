@@ -9914,8 +9914,8 @@ def ui_preview_html(
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span class="nav-item-label">""" + nav_icon("library") + """<span data-next-i18n="uiPreview.navLibrary">Library</span></span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label">""" + nav_icon("lists") + """<span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.nav">Add</span></span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="discover"><span class="nav-item-label">""" + nav_icon("discover") + """<span data-next-i18n="discover.nav">Discover</span></span><small id="navDiscoverCount">TMDb</small></button>
-        <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
       <div class="sidebar-footer">
@@ -12519,13 +12519,13 @@ def ui_preview_html(
       """ + nav_icon("lists") + """
       <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
+    <button type="button" class="mobile-tab mobile-tab-primary" data-app-route="import">
+      """ + nav_icon("import") + """
+      <span data-next-i18n="importCenter.nav">Add</span>
+    </button>
     <button type="button" class="mobile-tab" data-app-route="discover">
       """ + nav_icon("discover") + """
       <span data-next-i18n="discover.nav">Discover</span>
-    </button>
-    <button type="button" class="mobile-tab mobile-tab-primary" data-app-route="import">
-      """ + nav_icon("import") + """
-      <span data-next-i18n="importCenter.title">Import</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="profile">
       """ + nav_icon("profile") + """
