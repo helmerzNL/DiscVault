@@ -2811,7 +2811,22 @@ def ui_preview_html(
       font-size: .95rem;
       font-weight: 600;
       text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 10px;
       cursor: pointer;
+    }
+    .lists-actionsheet-btn-label {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .lists-actionsheet-btn-icon {
+      flex: 0 0 auto;
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .lists-actionsheet-btn-icon.wishlist {
+      color: var(--danger, #e5484d);
     }
     .lists-actionsheet-btn:hover {
       background: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -9776,18 +9791,24 @@ def ui_preview_html(
     }
     .discover-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
       gap: 10px;
+    }
+    @media (min-width: 420px) {
+      .discover-grid {
+        grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+        gap: 11px;
+      }
     }
     @media (min-width: 720px) {
       .discover-grid {
-        grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
         gap: 12px;
       }
     }
     @media (min-width: 1280px) {
       .discover-grid {
-        grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
         gap: 14px;
       }
     }
@@ -28674,28 +28695,21 @@ def ui_preview_html(
       const alreadyOnWishlist = isDiscoverItemOnWishlist(item);
       const actions = [];
       if (hasPermission("watchlist.manage")) {
-        if (!alreadyOnWishlist) {
-          actions.push({
-            key: "wishlist",
-            label: tNext("discover.addWishlist", "Add to wishlist"),
-            run: () => addDiscoverItemToWishlist(item)
-          });
-        } else {
-          actions.push({
-            key: "wishlist",
-            label: tNext("lists.wishlistSectionPending", "On wishlist"),
-            run: () => {}
-          });
-        }
+        actions.push({
+          key: "wishlist",
+          label: alreadyOnWishlist
+            ? tNext("lists.wishlistSectionPending", "On wishlist")
+            : tNext("discover.addWishlist", "Add to wishlist"),
+          icon: "\u2665",
+          iconClass: "wishlist",
+          run: () => {
+            if (!alreadyOnWishlist) addDiscoverItemToWishlist(item);
+          }
+        });
       }
-      actions.push({
-        key: "moreInfo",
-        label: tNext("lists.moreInfo", "More info"),
-        run: () => openDiscoverDetail(item)
-      });
       const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
       const buttonsHtml = actions.map((action, index) =>
-        `<button type="button" class="lists-actionsheet-btn" data-action-index="${index}">${escapeHtml(action.label)}</button>`
+        `<button type="button" class="lists-actionsheet-btn" data-action-index="${index}"><span class="lists-actionsheet-btn-icon ${escapeHtml(action.iconClass || "")}" aria-hidden="true">${escapeHtml(action.icon || "")}</span><span class="lists-actionsheet-btn-label">${escapeHtml(action.label)}</span></button>`
       ).join("");
       panel.innerHTML = `
         <header class="lists-modal-head"><h3>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</h3></header>
@@ -28940,6 +28954,7 @@ def ui_preview_html(
           contentRatingTag ? {html: contentRatingTag} : null
         ]);
         const providersText = discoverStreamingProvidersHtml(detail);
+        const awardNominationsText = valueText(detail.awardNominations);
         document.getElementById("discoverDetailRelease").innerHTML = detailFieldRows([
           [tNext("movieDetail.releaseDate", "Release date"), formatAppDate(detail.releaseDate || "") || detail.releaseDate || ""],
           [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(detail.runtimeMinutes)],
@@ -28947,7 +28962,7 @@ def ui_preview_html(
           [tNext("metadataJobs.providers", "Providers"), providersText],
           [tNext("discover.budget", "Budget"), formatDiscoverMoney(detail.budget)],
           [tNext("discover.revenue", "Revenue"), formatDiscoverMoney(detail.revenue)],
-          [tNext("discover.awards", "Award nominations"), detail.awardNominations || tNext("discover.awardsUnavailable", "Not available")]
+          [tNext("discover.awards", "Award nominations"), awardNominationsText]
         ]);
         const directorHtml = discoverDirectorHtml(detail);
         const castHtml = discoverCastHtml(detail);
