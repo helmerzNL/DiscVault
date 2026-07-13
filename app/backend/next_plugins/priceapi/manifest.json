@@ -1,0 +1,45 @@
+{
+  "id": "priceapi",
+  "name": "PriceAPI",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["price_provider"],
+  "capabilities": ["price_check"],
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "endpoint",
+        "label": "PriceAPI endpoint",
+        "type": "text",
+        "required": false,
+        "placeholder": "https://api.priceapi.com/v2/jobs",
+        "description": "Optional custom endpoint for PriceAPI-compatible providers."
+      },
+      {
+        "name": "country",
+        "label": "Country code",
+        "type": "text",
+        "required": false,
+        "placeholder": "nl",
+        "description": "Country code used for provider lookups (for example nl, de, fr)."
+      }
+    ],
+    "secrets": [
+      {
+        "name": "apiKey",
+        "label": "PriceAPI API key",
+        "type": "password",
+        "required": true,
+        "description": "API key used for PriceAPI price checks."
+      }
+    ]
+  },
+  "defaultEnabled": false,
+  "orderIndex": 180,
+  "entitlements": {
+    "source_use": "price_provider.priceapi.use"
+  }
+}
