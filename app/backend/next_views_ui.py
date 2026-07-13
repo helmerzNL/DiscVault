@@ -7635,6 +7635,76 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--bad, #d2453d) 55%, transparent);
       background: color-mix(in srgb, var(--bad, #d2453d) 14%, transparent);
     }
+    .profile-about-stack {
+      display: grid;
+      gap: 12px;
+    }
+    .profile-about-card {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 12px;
+      background: color-mix(in srgb, var(--field) 54%, transparent);
+    }
+    .profile-about-card-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .profile-about-card-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .profile-about-card p {
+      margin: 0;
+    }
+    .profile-about-card-copy > span {
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+    .profile-about-brandmark {
+      display: flex;
+      align-items: center;
+      min-height: 46px;
+    }
+    .profile-about-brandmark img {
+      display: block;
+      width: min(100%, 220px);
+      height: auto;
+    }
+    .profile-about-brandmark .profile-about-brandmark-dark {
+      display: none;
+    }
+    html[data-theme="dark"] .profile-about-brandmark .profile-about-brandmark-light {
+      display: none;
+    }
+    html[data-theme="dark"] .profile-about-brandmark .profile-about-brandmark-dark {
+      display: block;
+    }
+    .profile-about-legal {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
+    .profile-about-tmdb-logo {
+      display: block;
+      width: 120px;
+      max-width: 100%;
+      height: auto;
+    }
+    .profile-about-card--debug {
+      display: none;
+    }
+    body.debug-mode .profile-about-card--debug {
+      display: grid;
+    }
     .profile-update-headline {
       font-weight: 700;
     }
@@ -11739,33 +11809,67 @@ def ui_preview_html(
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="about">
               <section class="profile-section-box">
-                <h4 data-next-i18n="profile.about">About</h4>
-                <p class="muted" data-next-i18n="profile.aboutHelp">App details and version information.</p>
-                <div class="profile-meta">
-                  <div class="profile-meta-row">
-                    <span data-next-i18n="profile.appVersion">App version</span>
-                    <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+                <div>
+                  <h4 data-next-i18n="profile.about">About</h4>
+                  <p class="muted" data-next-i18n="profile.aboutHelp">Version information, credits and data sources.</p>
+                </div>
+                <div class="profile-about-stack">
+                  <div class="profile-about-card">
+                    <div class="profile-meta">
+                      <div class="profile-meta-row">
+                        <span data-next-i18n="profile.appVersion">App version</span>
+                        <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+                      </div>
+                    </div>
+                    <div class="profile-update-block hidden" id="profileUpdateBlock">
+                      <div class="profile-update-controls">
+                        <label class="profile-update-channel">
+                          <span data-next-i18n="profile.updateChannel">Update channel</span>
+                          <select id="profileUpdateChannel">
+                            <option value="auto" data-next-i18n="profile.channelAuto">Automatic</option>
+                            <option value="beta" data-next-i18n="profile.channelBeta">Beta</option>
+                            <option value="stable" data-next-i18n="profile.channelStable">Stable</option>
+                          </select>
+                        </label>
+                        <button type="button" class="secondary-button" id="profileUpdateCheckButton" data-next-i18n="profile.checkForUpdate">Check for update</button>
+                      </div>
+                      <div class="profile-update-result" id="profileUpdateResult" hidden></div>
+                    </div>
                   </div>
-                  <div class="profile-meta-row">
-                    <span data-next-i18n="profile.buildSha">Build SHA</span>
-                    <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
+                  <div class="profile-about-card">
+                    <div class="profile-about-card-copy">
+                      <span data-next-i18n="profile.developedBy">Developed by</span>
+                      <div class="profile-about-brandmark">
+                        <img class="profile-about-brandmark-light" src="/api/next/assets/flux76-wordmark-light.png" alt="Flux76">
+                        <img class="profile-about-brandmark-dark" src="/api/next/assets/flux76-wordmark-dark.png" alt="Flux76">
+                      </div>
+                    </div>
+                  </div>
+                  <div class="profile-about-card">
+                    <div class="profile-about-card-head">
+                      <div class="profile-about-card-copy">
+                        <span data-next-i18n="profile.tmdbDataProvidedBy">Data provided by TMDB</span>
+                        <p class="profile-about-legal" data-next-i18n="profile.tmdbDisclaimer">DiscVault is not endorsed or certified by TMDB.</p>
+                      </div>
+                      <img class="profile-about-tmdb-logo" src="/api/next/assets/tmdb-logo.svg" alt="TMDB">
+                    </div>
+                  </div>
+                  <div class="profile-about-card profile-about-card--debug">
+                    <div class="profile-about-card-head">
+                      <div class="profile-about-card-copy">
+                        <span data-next-i18n="appAdmin.debugMode">Debug</span>
+                      </div>
+                      <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+                    </div>
+                    <div class="profile-meta">
+                      <div class="profile-meta-row">
+                        <span data-next-i18n="profile.buildSha">Build SHA</span>
+                        <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
+                      </div>
+                    </div>
+                    <div class="offline-status-list" id="profileOfflineStatus"></div>
                   </div>
                 </div>
-                <div class="profile-update-block hidden" id="profileUpdateBlock">
-                  <div class="profile-update-controls">
-                    <label class="profile-update-channel">
-                      <span data-next-i18n="profile.updateChannel">Update channel</span>
-                      <select id="profileUpdateChannel">
-                        <option value="auto" data-next-i18n="profile.channelAuto">Automatic</option>
-                        <option value="beta" data-next-i18n="profile.channelBeta">Beta</option>
-                        <option value="stable" data-next-i18n="profile.channelStable">Stable</option>
-                      </select>
-                    </label>
-                    <button type="button" class="secondary-button" id="profileUpdateCheckButton" data-next-i18n="profile.checkForUpdate">Check for update</button>
-                  </div>
-                  <div class="profile-update-result" id="profileUpdateResult" hidden></div>
-                </div>
-                <div class="offline-status-list" id="profileOfflineStatus"></div>
               </section>
             </div>
           </div>
@@ -17247,7 +17351,11 @@ def ui_preview_html(
     function setAccent(accent) {
       const selected = ACCENT_PRESETS.includes(accent) ? accent : "bluray";
       document.documentElement.dataset.accent = selected;
-      localStorage.setItem("dv_next_accent", selected);
+      try {
+        localStorage.setItem("dv_next_accent", selected);
+      } catch (error) {
+        /* localStorage may be unavailable (private mode / blocked); ignore */
+      }
       document.querySelectorAll("[data-accent-choice]").forEach((button) => {
         button.classList.toggle("active", button.dataset.accentChoice === selected);
       });
