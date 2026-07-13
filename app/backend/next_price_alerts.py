@@ -491,6 +491,85 @@ def extract_price_from_url(url: str, *, session: Any = None) -> tuple[float | No
     return price, currency
 
 
+def _enabled_price_provider_plugin_ids(conn) -> list[str]:
+    if not table_exists(conn, "plugins"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM plugins
+            WHERE installed = true
+              AND enabled = true
+              AND (
+                  capabilities @> '["price_check"]'::jsonb
+                  OR categories @> '["price_provider"]'::jsonb
+              )
+            ORDER BY order_index ASC, id ASC
+            """
+        )
+        rows = cur.fetchall()
+    return [str(row.get("id")) for row in rows if row.get("id")]
+
+
+def _provider_result_value(plugin_result: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in plugin_result:
+            return plugin_result.get(key)
+    return None
+
+
+def _run_price_provider_check(
+    plugin_id: str,
+    *,
+    item_id: Any,
+    movievault_id: Any = None,
+    shop: dict[str, Any] | None = None,
+) -> tuple[float | None, str | None, str | None, str | None, str | None, str | None, float | None]:
+    payload: dict[str, Any] = {"itemId": str(item_id) if item_id else None}
+    if movievault_id:
+        payload["movievaultId"] = str(movievault_id)
+    if shop:
+        payload["shopId"] = str(shop.get("id")) if shop.get("id") else None
+        payload["url"] = shop.get("price_url")
+        payload["currency"] = shop.get("price_currency")
+        payload["providerProductRef"] = shop.get("provider_product_ref")
+        payload["shopName"] = shop.get("shop_name")
+
+    execution = run_plugin_entrypoint(plugin_id, "price_check", payload, {})
+    execution_status = str(execution.get("status") or "").lower()
+    plugin_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+    provider_status = str(_provider_result_value(plugin_result, "status") or execution_status or "error")
+    provider_error = str(
+        _provider_result_value(plugin_result, "error")
+        or execution.get("error")
+        or ""
+    ).strip() or None
+
+    if execution_status != "ok":
+        return None, None, None, provider_status, provider_error, None, None
+
+    raw_price = _provider_result_value(plugin_result, "price")
+    price = _coerce_price(raw_price)
+    if price is None:
+        return None, None, None, provider_status, provider_error, None, None
+
+    currency = str(_provider_result_value(plugin_result, "currency") or "").strip().upper() or None
+    source_detail = str(
+        _provider_result_value(plugin_result, "source_detail", "sourceDetail", "source")
+        or ""
+    ).strip() or None
+    confidence_raw = _provider_result_value(plugin_result, "confidence")
+    confidence = None
+    if confidence_raw is not None:
+        try:
+            confidence = float(confidence_raw)
+        except (TypeError, ValueError):
+            confidence = None
+
+    return price, currency, f"provider:{plugin_id}", provider_status, provider_error, source_detail, confidence
+
+
 def _record_shop_price(
     conn,
     *,
@@ -500,6 +579,11 @@ def _record_shop_price(
     price: float | None,
     currency: str | None,
     extraction_source: str | None = None,
+    provider_id: str | None = None,
+    provider_status: str | None = None,
+    provider_error: str | None = None,
+    source_detail: str | None = None,
+    confidence: float | None = None,
 ) -> None:
     if not table_exists(conn, "wishlist_item_shops"):
         return
@@ -511,20 +595,40 @@ def _record_shop_price(
                 UPDATE wishlist_item_shops
                 SET last_seen_price = %s,
                     price_currency = %s,
+                    provider_last_status = %s,
+                    provider_last_error = %s,
                     last_price_checked_at = now(),
                     updated_at = now()
                 WHERE id = %s AND wishlist_item_id = %s AND user_id = %s
                 """,
-                (price, currency_value, shop_id, item_id, user_id),
+                (
+                    price,
+                    currency_value,
+                    provider_status,
+                    provider_error,
+                    shop_id,
+                    item_id,
+                    user_id,
+                ),
             )
             if price is not None and table_exists(conn, "wishlist_item_shop_prices"):
                 cur.execute(
                     """
                     INSERT INTO wishlist_item_shop_prices
-                        (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                        (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source, provider_id, source_detail, confidence)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (user_id, item_id, shop_id, price, currency_value, extraction_source or "unknown"),
+                    (
+                        user_id,
+                        item_id,
+                        shop_id,
+                        price,
+                        currency_value,
+                        extraction_source or "unknown",
+                        provider_id,
+                        source_detail,
+                        confidence,
+                    ),
                 )
 
 
@@ -539,7 +643,8 @@ def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | N
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, price_url, price_currency, selector_type, selector_value, selector_options
+            SELECT id, shop_name, price_url, price_currency, selector_type, selector_value, selector_options,
+                   provider_plugin_id, provider_product_ref
             FROM wishlist_item_shops
             WHERE wishlist_item_id = %s AND user_id = %s
             ORDER BY created_at ASC
@@ -553,26 +658,76 @@ def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | N
     best_currency: str | None = None
     for shop in shops:
         raw_url = (shop.get("price_url") or "").strip()
+        provider_id = clean_provider_id = str(shop.get("provider_plugin_id") or "").strip() or None
+        provider_status: str | None = None
+        provider_error: str | None = None
+        source_detail: str | None = None
+        confidence: float | None = None
+        extraction_source: str | None = None
+        shop_price: float | None = None
+        detected_currency: str | None = None
+
+        if clean_provider_id:
+            try:
+                (
+                    shop_price,
+                    detected_currency,
+                    extraction_source,
+                    provider_status,
+                    provider_error,
+                    source_detail,
+                    confidence,
+                ) = _run_price_provider_check(
+                    clean_provider_id,
+                    item_id=item_id,
+                    movievault_id=item.get("movievault_id"),
+                    shop=shop,
+                )
+            except Exception as exc:  # noqa: BLE001
+                provider_status = "error"
+                provider_error = str(exc)
+
         if not raw_url:
-            continue
-        try:
-            shop_price, detected_currency, extraction_source = extract_price_from_url_with_source(
-                raw_url,
-                selector_type=shop.get("selector_type"),
-                selector_value=shop.get("selector_value"),
-                selector_options=shop.get("selector_options") if isinstance(shop.get("selector_options"), dict) else {},
-            )
-        except Exception:  # noqa: BLE001
             _record_shop_price(
                 conn,
                 shop_id=shop.get("id"),
                 item_id=item_id,
                 user_id=user_id,
-                price=None,
-                currency=shop.get("price_currency"),
-                extraction_source="failed",
+                price=shop_price,
+                currency=detected_currency or shop.get("price_currency"),
+                extraction_source=extraction_source,
+                provider_id=provider_id,
+                provider_status=provider_status or ("ok" if shop_price is not None else "no_source"),
+                provider_error=provider_error,
+                source_detail=source_detail,
+                confidence=confidence,
             )
             continue
+
+        if shop_price is None:
+            try:
+                shop_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                    raw_url,
+                    selector_type=shop.get("selector_type"),
+                    selector_value=shop.get("selector_value"),
+                    selector_options=shop.get("selector_options") if isinstance(shop.get("selector_options"), dict) else {},
+                )
+            except Exception:  # noqa: BLE001
+                _record_shop_price(
+                    conn,
+                    shop_id=shop.get("id"),
+                    item_id=item_id,
+                    user_id=user_id,
+                    price=None,
+                    currency=shop.get("price_currency"),
+                    extraction_source="failed",
+                    provider_id=provider_id,
+                    provider_status=provider_status or "error",
+                    provider_error=provider_error,
+                    source_detail=source_detail,
+                    confidence=confidence,
+                )
+                continue
         effective_currency = str(detected_currency or shop.get("price_currency") or "EUR").strip().upper() or "EUR"
         _record_shop_price(
             conn,
@@ -582,6 +737,11 @@ def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | N
             price=shop_price,
             currency=effective_currency,
             extraction_source=extraction_source,
+            provider_id=provider_id,
+            provider_status=provider_status or ("ok" if shop_price is not None else "no_match"),
+            provider_error=provider_error,
+            source_detail=source_detail,
+            confidence=confidence,
         )
         if shop_price is None:
             continue
@@ -772,25 +932,24 @@ def run_price_alert_sweep(conn, *, limit: int = _SWEEP_BATCH_LIMIT) -> dict[str,
         # --- Plugin-based extraction (fallback when URL yields nothing) ---
         if new_price is None and movievault_id:
             try:
-                with conn.cursor() as pcur:
-                    pcur.execute(
-                        "SELECT id FROM plugin_registry WHERE capabilities @> '[\"price_check\"]' AND enabled = true"
+                for plugin_id in _enabled_price_provider_plugin_ids(conn):
+                    (
+                        plugin_price,
+                        plugin_currency,
+                        _source,
+                        _provider_status,
+                        _provider_error,
+                        _source_detail,
+                        _confidence,
+                    ) = _run_price_provider_check(
+                        plugin_id,
+                        item_id=item.get("id"),
+                        movievault_id=movievault_id,
                     )
-                    plugin_rows = pcur.fetchall()
-                for plugin_row in plugin_rows:
-                    result = run_plugin_entrypoint(
-                        plugin_row["id"],
-                        "price_check",
-                        {"movievaultId": str(movievault_id), "itemId": str(item.get("id"))},
-                        {},
-                    )
-                    if result.get("status") == "ok":
-                        plugin_result = result.get("result") or {}
-                        raw = plugin_result.get("price")
-                        if raw is not None:
-                            new_price = float(raw)
-                            currency = plugin_result.get("currency") or currency
-                            break
+                    if plugin_price is not None:
+                        new_price = plugin_price
+                        currency = plugin_currency or currency
+                        break
             except Exception:  # noqa: BLE001
                 pass
 
