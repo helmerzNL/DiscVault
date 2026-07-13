@@ -1558,6 +1558,16 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--accent) 30%, var(--bg-solid));
       border-color: color-mix(in srgb, var(--accent) 68%, transparent);
     }
+    .movie-detail-action-strip .action.secondary.active {
+      color: color-mix(in srgb, var(--accent) 76%, var(--text));
+      border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+      background: color-mix(in srgb, var(--accent) 20%, var(--bg-solid));
+      box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 26%, transparent), inset 0 1px 0 rgba(255,255,255,0.22);
+    }
+    .movie-detail-action-strip .action:disabled {
+      cursor: not-allowed;
+      opacity: 0.85;
+    }
     .movie-detail-action-strip .action.danger {
       color: var(--red);
       border-color: color-mix(in srgb, var(--red) 42%, transparent);
@@ -26957,6 +26967,7 @@ def ui_preview_html(
         listsState.loaded = true;
         persistNextLocale(localeState.locale);
         renderListsView();
+        updateDiscoverWishlistButtonState(activeDiscoverItem);
       } catch (error) {
         if (empty) {
           empty.textContent = error.message || String(error);
@@ -28506,6 +28517,47 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `detail-message ${tone || ""}`.trim();
     }
+    function normalizeTmdbId(value) {
+      if (value === null || value === undefined) return "";
+      const text = String(value).trim();
+      return /^\\d+$/.test(text) ? text : "";
+    }
+    function normalizeDiscoverMediaType(value) {
+      const text = String(value || "").trim().toLowerCase();
+      return text === "tv" ? "tv" : "movie";
+    }
+    function discoverIdentity(item) {
+      if (!item) return {tmdbId: "", mediaType: "movie"};
+      const tmdbId = normalizeTmdbId(item.tmdbId ?? item.id);
+      const mediaType = normalizeDiscoverMediaType(item.tmdbMediaType ?? item.mediaType);
+      return {tmdbId, mediaType};
+    }
+    function wishlistEntryIdentity(entry) {
+      const snapshot = (entry && typeof entry.snapshot === "object" && entry.snapshot) || {};
+      return {
+        tmdbId: normalizeTmdbId(entry?.tmdbId ?? snapshot.tmdb_id ?? snapshot.tmdbId),
+        mediaType: normalizeDiscoverMediaType(entry?.tmdbMediaType ?? snapshot.tmdb_media_type ?? snapshot.tmdbMediaType)
+      };
+    }
+    function isDiscoverItemOnWishlist(item) {
+      const {tmdbId, mediaType} = discoverIdentity(item);
+      if (!tmdbId) return false;
+      return (listsState.wishlist || []).some((entry) => {
+        const entryIdentity = wishlistEntryIdentity(entry);
+        return entryIdentity.tmdbId && entryIdentity.tmdbId === tmdbId && entryIdentity.mediaType === mediaType;
+      });
+    }
+    function updateDiscoverWishlistButtonState(item = activeDiscoverItem) {
+      const button = document.getElementById("discoverDetailWishlistButton");
+      if (!button) return;
+      const canManageWishlist = hasPermission("watchlist.manage");
+      const alreadyOnWishlist = canManageWishlist && isDiscoverItemOnWishlist(item);
+      button.classList.toggle("active", alreadyOnWishlist);
+      button.disabled = !canManageWishlist || !item || alreadyOnWishlist;
+      button.textContent = alreadyOnWishlist
+        ? tNext("lists.wishlistSectionPending", "On wishlist")
+        : tNext("discover.addWishlist", "Add to wishlist");
+    }
     function discoverCardHtml(item) {
       const poster = usableImage(item.posterUrl || "");
       const title = item.title || tNext("common.untitled", "Untitled");
@@ -28535,13 +28587,22 @@ def ui_preview_html(
     }
     function openDiscoverActionsMenu(item) {
       if (!item) return;
+      const alreadyOnWishlist = isDiscoverItemOnWishlist(item);
       const actions = [];
       if (hasPermission("watchlist.manage")) {
-        actions.push({
-          key: "wishlist",
-          label: tNext("discover.addWishlist", "Add to wishlist"),
-          run: () => addDiscoverItemToWishlist(item)
-        });
+        if (!alreadyOnWishlist) {
+          actions.push({
+            key: "wishlist",
+            label: tNext("discover.addWishlist", "Add to wishlist"),
+            run: () => addDiscoverItemToWishlist(item)
+          });
+        } else {
+          actions.push({
+            key: "wishlist",
+            label: tNext("lists.wishlistSectionPending", "On wishlist"),
+            run: () => {}
+          });
+        }
       }
       actions.push({
         key: "moreInfo",
@@ -28571,18 +28632,43 @@ def ui_preview_html(
     async function addDiscoverItemToWishlist(item, opts = {}) {
       if (!hasPermission("watchlist.manage")) return;
       const inDetail = !!opts.detail;
+      if (isDiscoverItemOnWishlist(item)) {
+        if (inDetail) setDiscoverDetailMessage(tNext("lists.wishlistSectionPending", "On wishlist"), "good");
+        else setDiscoverMessage(tNext("lists.wishlistSectionPending", "On wishlist"));
+        updateDiscoverWishlistButtonState(item);
+        return;
+      }
+      const identity = discoverIdentity(item);
       try {
-        await authApiJson("/api/next/lists/wishlist", {
+        const payload = await authApiJson("/api/next/lists/wishlist", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             title: item.title || "",
             year: item.year ? Number(item.year) || null : null,
-            posterUrl: item.posterUrl || null
+            posterUrl: item.posterUrl || null,
+            tmdbId: identity.tmdbId || null,
+            tmdbMediaType: identity.mediaType,
+            source: "discover"
           })
         });
-        if (inDetail) setDiscoverDetailMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
-        else setDiscoverMessage(tNext("lists.wishlistAdded", "Added to wishlist."));
+        await loadListsView(true);
+        const alreadyExists = !!(payload && (payload.alreadyExists || payload.state === "already_exists"));
+        if (inDetail) {
+          setDiscoverDetailMessage(
+            alreadyExists
+              ? tNext("lists.wishlistSectionPending", "On wishlist")
+              : tNext("lists.wishlistAdded", "Added to wishlist."),
+            "good"
+          );
+        } else {
+          setDiscoverMessage(
+            alreadyExists
+              ? tNext("lists.wishlistSectionPending", "On wishlist")
+              : tNext("lists.wishlistAdded", "Added to wishlist.")
+          );
+        }
+        updateDiscoverWishlistButtonState(item);
       } catch (error) {
         if (inDetail) setDiscoverDetailMessage(error.message || String(error), "bad");
         else setDiscoverMessage(error.message || String(error), "error");
@@ -28719,6 +28805,7 @@ def ui_preview_html(
       if (!item || !item.id) return;
       activeDiscoverItem = item;
       showDiscoverDetailPage();
+      updateDiscoverWishlistButtonState(activeDiscoverItem);
       document.getElementById("discoverDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("discoverDetailOverview").textContent = "";
       document.getElementById("discoverDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
@@ -28745,8 +28832,11 @@ def ui_preview_html(
           ...item,
           title,
           posterUrl: poster || item.posterUrl || "",
-          year: detail.year || item.year || ""
+          year: detail.year || item.year || "",
+          tmdbId: normalizeTmdbId(item.tmdbId ?? item.id),
+          tmdbMediaType: normalizeDiscoverMediaType(item.tmdbMediaType ?? item.mediaType)
         };
+        updateDiscoverWishlistButtonState(activeDiscoverItem);
         document.getElementById("discoverDetailTitle").textContent = title;
         document.getElementById("discoverDetailOverview").textContent = detail.overview || tNext("movieDetail.noOverview", "No overview imported yet.");
         document.getElementById("discoverDetailPoster").innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
