@@ -1261,6 +1261,7 @@
   "importCenter.target": "Cible",
   "importCenter.targetCounts": "Compteurs cible",
   "importCenter.title": "Import",
+  "importCenter.nav": "Ajouter",
   "importCenter.titlePlaceholder": "Titre du film",
   "importCenter.updated": "Updated",
   "importCenter.updatedMovies": "Updated movies",
