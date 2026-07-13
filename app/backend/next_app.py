@@ -21148,6 +21148,33 @@ def register_routes(flask_app: Flask) -> None:
             provider_product_ref,
         )
 
+    def _normalise_tmdb_id(value: Any) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return str(value) if value > 0 else None
+        if isinstance(value, float):
+            return str(int(value)) if value > 0 and value.is_integer() else None
+        text = clean_text(value)
+        if not text:
+            return None
+        return text if text.isdigit() else None
+
+    def _normalise_tmdb_media_type(value: Any) -> str | None:
+        text = clean_text(value)
+        if not text:
+            return None
+        lowered = text.lower()
+        return lowered if lowered in {"movie", "tv"} else None
+
+    def _normalise_wishlist_source(value: Any) -> str | None:
+        text = clean_text(value)
+        if not text:
+            return None
+        return text.lower()[:48]
+
     def _wishlist_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         return json_ready(
             {
@@ -21160,6 +21187,9 @@ def register_routes(flask_app: Flask) -> None:
                 "movie_format": payload.get("format"),
                 "movievault_id": payload.get("movievault_id"),
                 "poster_url": payload.get("poster_url"),
+                "tmdb_id": payload.get("tmdb_id"),
+                "tmdb_media_type": payload.get("tmdb_media_type"),
+                "source": payload.get("source"),
             }
         )
 
@@ -21194,12 +21224,41 @@ def register_routes(flask_app: Flask) -> None:
             "movievault_id": clean_text(body.get("movievaultId") or body.get("movievault_id")),
             "poster_url": clean_text(body.get("posterUrl") or body.get("poster_url")),
             "note": clean_text(body.get("note")),
+            "tmdb_id": _normalise_tmdb_id(body.get("tmdbId") or body.get("tmdb_id")),
+            "tmdb_media_type": _normalise_tmdb_media_type(body.get("tmdbMediaType") or body.get("tmdb_media_type")) or "movie",
+            "source": _normalise_wishlist_source(body.get("source")),
         }
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             user_id = actor.get("id")
+            if fields["source"] == "discover" and fields["tmdb_id"]:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id
+                        FROM wishlist_items
+                        WHERE user_id=%s
+                          AND snapshot->>'tmdb_id' = %s
+                          AND COALESCE(snapshot->>'tmdb_media_type', 'movie') = %s
+                        ORDER BY added_at ASC
+                        LIMIT 1
+                        """,
+                        (user_id, fields["tmdb_id"], fields["tmdb_media_type"] or "movie"),
+                    )
+                    existing = cur.fetchone()
+                existing_id = (existing or {}).get("id")
+                if existing_id is not None:
+                    return response(
+                        {
+                            "status": "ok",
+                            "state": "already_exists",
+                            "alreadyExists": True,
+                            "entry": wishlist_sync_entity(conn, user_id, existing_id),
+                            "counts": personal_list_counts(conn, user_id),
+                        }
+                    )
             snapshot = _wishlist_snapshot(fields)
             with conn.transaction():
                 with conn.cursor() as cur:
@@ -21239,6 +21298,8 @@ def register_routes(flask_app: Flask) -> None:
             return response(
                 {
                     "status": "ok",
+                    "state": "created",
+                    "alreadyExists": False,
                     "entry": wishlist_sync_entity(conn, user_id, item_id) if item_id is not None else None,
                     "counts": personal_list_counts(conn, user_id),
                 },
@@ -21335,7 +21396,7 @@ def register_routes(flask_app: Flask) -> None:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT title, year, barcode, format, movievault_id, poster_url, note,
+                    SELECT title, year, barcode, format, movievault_id, poster_url, note, snapshot,
                            alert_enabled, target_price, price_url, price_currency
                     FROM wishlist_items
                     WHERE user_id=%s AND id=%s
@@ -21346,6 +21407,9 @@ def register_routes(flask_app: Flask) -> None:
             if not current:
                 raise NextApiError("Wishlist entry not found", 404)
 
+            current_snapshot = current.get("snapshot")
+            if not isinstance(current_snapshot, dict):
+                current_snapshot = {}
             fields = {
                 "title": current.get("title"),
                 "year": current.get("year"),
@@ -21354,6 +21418,12 @@ def register_routes(flask_app: Flask) -> None:
                 "movievault_id": current.get("movievault_id"),
                 "poster_url": current.get("poster_url"),
                 "note": current.get("note"),
+                "tmdb_id": _normalise_tmdb_id(current_snapshot.get("tmdb_id") or current_snapshot.get("tmdbId")),
+                "tmdb_media_type": _normalise_tmdb_media_type(
+                    current_snapshot.get("tmdb_media_type") or current_snapshot.get("tmdbMediaType")
+                )
+                or "movie",
+                "source": _normalise_wishlist_source(current_snapshot.get("source")),
             }
             if "title" in body:
                 new_title = clean_text(body.get("title"))
@@ -21378,6 +21448,14 @@ def register_routes(flask_app: Flask) -> None:
                 fields["poster_url"] = clean_text(body.get("posterUrl") or body.get("poster_url"))
             if "note" in body:
                 fields["note"] = clean_text(body.get("note"))
+            if "tmdbId" in body or "tmdb_id" in body:
+                fields["tmdb_id"] = _normalise_tmdb_id(body.get("tmdbId") or body.get("tmdb_id"))
+            if "tmdbMediaType" in body or "tmdb_media_type" in body:
+                fields["tmdb_media_type"] = _normalise_tmdb_media_type(
+                    body.get("tmdbMediaType") or body.get("tmdb_media_type")
+                ) or "movie"
+            if "source" in body:
+                fields["source"] = _normalise_wishlist_source(body.get("source"))
 
             # Price alert fields
             alert_fields: dict[str, Any] = {
@@ -21709,12 +21787,19 @@ def register_routes(flask_app: Flask) -> None:
             user_id = actor.get("id")
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT title, year, barcode, format, movievault_id, poster_url, note FROM wishlist_items WHERE user_id=%s AND id=%s",
+                    """
+                    SELECT title, year, barcode, format, movievault_id, poster_url, note, snapshot
+                    FROM wishlist_items
+                    WHERE user_id=%s AND id=%s
+                    """,
                     (user_id, item_uuid),
                 )
                 current = cur.fetchone()
             if not current:
                 raise NextApiError("Wishlist entry not found", 404)
+            current_snapshot = current.get("snapshot")
+            if not isinstance(current_snapshot, dict):
+                current_snapshot = {}
             upload_info = save_uploaded_artwork_file(upload, kind="poster")
             with conn.transaction():
                 asset = store_uploaded_poster_asset(conn, upload_info=upload_info, actor=actor)
@@ -21726,6 +21811,12 @@ def register_routes(flask_app: Flask) -> None:
                     "format": current.get("format"),
                     "movievault_id": current.get("movievault_id"),
                     "poster_url": poster_url,
+                    "tmdb_id": _normalise_tmdb_id(current_snapshot.get("tmdb_id") or current_snapshot.get("tmdbId")),
+                    "tmdb_media_type": _normalise_tmdb_media_type(
+                        current_snapshot.get("tmdb_media_type") or current_snapshot.get("tmdbMediaType")
+                    )
+                    or "movie",
+                    "source": _normalise_wishlist_source(current_snapshot.get("source")),
                 }
                 snapshot = _wishlist_snapshot(fields)
                 with conn.cursor() as cur:
