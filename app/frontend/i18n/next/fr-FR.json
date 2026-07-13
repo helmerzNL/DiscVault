@@ -428,6 +428,7 @@
   "appAdmin.pluginTypeMetadataSources": "Sources de metadonnees",
   "appAdmin.pluginTypeOther": "Autres plugins",
   "appAdmin.pluginTypePersonalListSources": "Sources de listes personnelles",
+  "appAdmin.pluginTypePriceProviders": "Price providers",
   "appAdmin.pluginTypeSystem": "Integrations systeme",
   "appAdmin.pluginUpdated": "Plugin mis a jour vers {version}.",
   "appAdmin.plugins": "Plugins",

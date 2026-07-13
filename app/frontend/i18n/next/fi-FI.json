@@ -428,6 +428,7 @@
   "appAdmin.pluginTypeMetadataSources": "Metatietolahteet",
   "appAdmin.pluginTypeOther": "Muut lisaosat",
   "appAdmin.pluginTypePersonalListSources": "Henkilokohtaiset listalahteet",
+  "appAdmin.pluginTypePriceProviders": "Price providers",
   "appAdmin.pluginTypeSystem": "Jarjestelmaintegraatiot",
   "appAdmin.pluginUpdated": "Plugin updated to {version}.",
   "appAdmin.plugins": "Lis?osat",
