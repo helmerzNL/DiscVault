@@ -596,6 +596,9 @@ def ui_preview_html(
       display: grid;
       grid-template-columns: 248px minmax(0, 1fr);
     }
+    .preview-shell.sidebar-collapsed {
+      grid-template-columns: 84px minmax(0, 1fr);
+    }
     .mobile-tabbar {
       display: none;
     }
@@ -610,6 +613,33 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--bg-elevated) 86%, transparent);
       border-right: 1px solid var(--line);
       backdrop-filter: blur(24px) saturate(160%);
+    }
+    .sidebar-collapse-toggle {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid color-mix(in srgb, var(--line-strong) 70%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
+      color: var(--muted);
+      display: inline-grid;
+      place-items: center;
+      cursor: pointer;
+      transition: color .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .sidebar-collapse-toggle:hover {
+      color: var(--text);
+      border-color: color-mix(in srgb, var(--accent) 44%, var(--line-strong));
+    }
+    .sidebar-collapse-toggle.active {
+      color: var(--text);
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      border-color: color-mix(in srgb, var(--accent) 54%, var(--line-strong));
+    }
+    .sidebar-collapse-toggle svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+      fill: currentColor;
     }
     .brand {
       display: flex;
@@ -869,6 +899,30 @@ def ui_preview_html(
       color: var(--muted);
       font-size: 12px;
       line-height: 1.4;
+    }
+    .preview-shell.sidebar-collapsed .brand {
+      justify-content: center;
+      padding-left: 0;
+      padding-right: 0;
+    }
+    .preview-shell.sidebar-collapsed .brand > div:last-child,
+    .preview-shell.sidebar-collapsed .nav-item-label span:last-child,
+    .preview-shell.sidebar-collapsed .nav-item small,
+    .preview-shell.sidebar-collapsed .sidebar-footer {
+      display: none;
+    }
+    .preview-shell.sidebar-collapsed .nav-item {
+      justify-content: center;
+      padding: 0;
+      min-height: 44px;
+    }
+    .preview-shell.sidebar-collapsed .nav-item-label {
+      justify-content: center;
+      gap: 0;
+      width: 100%;
+    }
+    .preview-shell.sidebar-collapsed .sidebar-collapse-toggle {
+      min-height: 40px;
     }
     .preview-main {
       min-width: 0;
@@ -2755,7 +2809,22 @@ def ui_preview_html(
       font-size: .95rem;
       font-weight: 600;
       text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 10px;
       cursor: pointer;
+    }
+    .lists-actionsheet-btn-label {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    .lists-actionsheet-btn-icon {
+      flex: 0 0 auto;
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .lists-actionsheet-btn-icon.wishlist {
+      color: var(--danger, #e5484d);
     }
     .lists-actionsheet-btn:hover {
       background: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -8867,6 +8936,7 @@ def ui_preview_html(
     }
     @media (max-width: 1060px) {
       .preview-shell { grid-template-columns: 1fr; }
+      .preview-shell.sidebar-collapsed { grid-template-columns: 1fr; }
       .preview-sidebar {
         position: static;
         height: auto;
@@ -8881,6 +8951,7 @@ def ui_preview_html(
         grid-auto-columns: max-content;
         overflow-x: auto;
       }
+      .sidebar-collapse-toggle { display: none; }
       .sidebar-footer { display: none; }
       .preview-layout { grid-template-columns: 1fr; }
     }
@@ -9020,11 +9091,11 @@ def ui_preview_html(
         bottom: calc(10px + env(safe-area-inset-bottom));
         z-index: 20;
         min-height: 70px;
-        padding: 7px 8px;
+        padding: 6px;
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         align-items: center;
-        gap: 4px;
+        gap: 2px;
         border: 1px solid color-mix(in srgb, var(--line-strong) 80%, transparent);
         border-radius: 24px;
         background:
@@ -9712,18 +9783,24 @@ def ui_preview_html(
     }
     .discover-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
       gap: 10px;
+    }
+    @media (min-width: 420px) {
+      .discover-grid {
+        grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+        gap: 11px;
+      }
     }
     @media (min-width: 720px) {
       .discover-grid {
-        grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
         gap: 12px;
       }
     }
     @media (min-width: 1280px) {
       .discover-grid {
-        grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
         gap: 14px;
       }
     }
@@ -9911,6 +9988,9 @@ def ui_preview_html(
           <span data-next-i18n=""" + '"' + mode_label_key + '"' + """>""" + h(mode_label_fallback) + """</span>
         </div>
       </div>
+      <button type="button" class="sidebar-collapse-toggle" id="sidebarCollapseToggle" aria-label="Toggle sidebar" title="Toggle sidebar" aria-pressed="false">
+        <svg viewBox="0 0 24 24" focusable="false" role="img" aria-hidden="true"><path d="M4 5H20V7H4V5M4 11H14V13H4V11M4 17H20V19H4V17Z"></path></svg>
+      </button>
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span class="nav-item-label">""" + nav_icon("library") + """<span data-next-i18n="uiPreview.navLibrary">Library</span></span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label">""" + nav_icon("lists") + """<span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
@@ -13246,6 +13326,22 @@ def ui_preview_html(
       startupScreen?.classList.toggle("hidden", name !== "startup");
       shell?.classList.toggle("app-shell-hidden", appMode && name !== "library");
       mobile?.classList.toggle("hidden", appMode && name !== "library");
+    }
+    const SIDEBAR_COLLAPSED_STORAGE_KEY = "dv_next_sidebar_collapsed";
+    function sidebarCollapseSupported() {
+      return window.matchMedia("(min-width: 1061px)").matches;
+    }
+    function setSidebarCollapsed(collapsed) {
+      const shell = document.getElementById("libraryShell");
+      const toggle = document.getElementById("sidebarCollapseToggle");
+      const enabled = Boolean(collapsed) && sidebarCollapseSupported();
+      shell?.classList.toggle("sidebar-collapsed", enabled);
+      toggle?.classList.toggle("active", enabled);
+      toggle?.setAttribute("aria-pressed", enabled ? "true" : "false");
+    }
+    function syncSidebarCollapsedFromStorage() {
+      const collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1";
+      setSidebarCollapsed(collapsed);
     }
     function setLoginMessage(message, tone) {
       const node = document.getElementById("appLoginMessage");
@@ -28590,28 +28686,21 @@ def ui_preview_html(
       const alreadyOnWishlist = isDiscoverItemOnWishlist(item);
       const actions = [];
       if (hasPermission("watchlist.manage")) {
-        if (!alreadyOnWishlist) {
-          actions.push({
-            key: "wishlist",
-            label: tNext("discover.addWishlist", "Add to wishlist"),
-            run: () => addDiscoverItemToWishlist(item)
-          });
-        } else {
-          actions.push({
-            key: "wishlist",
-            label: tNext("lists.wishlistSectionPending", "On wishlist"),
-            run: () => {}
-          });
-        }
+        actions.push({
+          key: "wishlist",
+          label: alreadyOnWishlist
+            ? tNext("lists.wishlistSectionPending", "On wishlist")
+            : tNext("discover.addWishlist", "Add to wishlist"),
+          icon: "\u2665",
+          iconClass: "wishlist",
+          run: () => {
+            if (!alreadyOnWishlist) addDiscoverItemToWishlist(item);
+          }
+        });
       }
-      actions.push({
-        key: "moreInfo",
-        label: tNext("lists.moreInfo", "More info"),
-        run: () => openDiscoverDetail(item)
-      });
       const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
       const buttonsHtml = actions.map((action, index) =>
-        `<button type="button" class="lists-actionsheet-btn" data-action-index="${index}">${escapeHtml(action.label)}</button>`
+        `<button type="button" class="lists-actionsheet-btn" data-action-index="${index}"><span class="lists-actionsheet-btn-icon ${escapeHtml(action.iconClass || "")}" aria-hidden="true">${escapeHtml(action.icon || "")}</span><span class="lists-actionsheet-btn-label">${escapeHtml(action.label)}</span></button>`
       ).join("");
       panel.innerHTML = `
         <header class="lists-modal-head"><h3>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</h3></header>
@@ -28856,6 +28945,7 @@ def ui_preview_html(
           contentRatingTag ? {html: contentRatingTag} : null
         ]);
         const providersText = discoverStreamingProvidersHtml(detail);
+        const awardNominationsText = valueText(detail.awardNominations);
         document.getElementById("discoverDetailRelease").innerHTML = detailFieldRows([
           [tNext("movieDetail.releaseDate", "Release date"), formatAppDate(detail.releaseDate || "") || detail.releaseDate || ""],
           [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(detail.runtimeMinutes)],
@@ -28863,7 +28953,7 @@ def ui_preview_html(
           [tNext("metadataJobs.providers", "Providers"), providersText],
           [tNext("discover.budget", "Budget"), formatDiscoverMoney(detail.budget)],
           [tNext("discover.revenue", "Revenue"), formatDiscoverMoney(detail.revenue)],
-          [tNext("discover.awards", "Award nominations"), detail.awardNominations || tNext("discover.awardsUnavailable", "Not available")]
+          [tNext("discover.awards", "Award nominations"), awardNominationsText]
         ]);
         const directorHtml = discoverDirectorHtml(detail);
         const castHtml = discoverCastHtml(detail);
@@ -32552,6 +32642,13 @@ def ui_preview_html(
       });
       document.getElementById("libraryMetadataJobsToggleButton")?.addEventListener("click", () => toggleLibraryMetadataJobs());
       document.getElementById("libraryMetadataJobsRefreshButton")?.addEventListener("click", () => refreshLibraryMetadataJobs({open: true}));
+      document.getElementById("sidebarCollapseToggle")?.addEventListener("click", () => {
+        const nextState = !document.getElementById("libraryShell")?.classList.contains("sidebar-collapsed");
+        localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, nextState ? "1" : "0");
+        setSidebarCollapsed(nextState);
+      });
+      window.addEventListener("resize", syncSidebarCollapsedFromStorage);
+      syncSidebarCollapsedFromStorage();
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
       });
