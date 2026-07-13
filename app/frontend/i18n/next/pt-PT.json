@@ -428,6 +428,7 @@
   "appAdmin.pluginTypeMetadataSources": "Fontes de metadados",
   "appAdmin.pluginTypeOther": "Outros plugins",
   "appAdmin.pluginTypePersonalListSources": "Fontes de listas pessoais",
+  "appAdmin.pluginTypePriceProviders": "Price providers",
   "appAdmin.pluginTypeSystem": "Integracoes do sistema",
   "appAdmin.pluginUpdated": "Plugin atualizado para {version}.",
   "appAdmin.plugins": "Plugins",

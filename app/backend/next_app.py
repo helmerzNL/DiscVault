@@ -7752,6 +7752,8 @@ def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> t
     categories = plugin_category_set(plugin)
     if {"mcp", "api", "system"}.intersection(categories):
         return ("mcp.use", "api.read", "api.write", "api.tokens.manage", "admin.view_settings")
+    if entrypoint == "price_check":
+        return ("watchlist.manage", "metadata.manage_plugins")
     if entrypoint == "sync_library":
         return ("digital_sources.sync", "digital_sources.manage")
     if entrypoint == "sync_personal_lists":
@@ -7777,6 +7779,8 @@ def plugin_action_permissions(plugin: dict[str, Any], entrypoint: str = "") -> t
         return ("digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage")
     if "personal_list_source" in categories:
         return ("watchlist.manage",)
+    if "price_provider" in categories:
+        return ("watchlist.manage", "metadata.manage_plugins")
     return (
         "metadata.search",
         "metadata.refresh_one",
@@ -7797,6 +7801,8 @@ def plugin_manage_permissions(plugin: dict[str, Any]) -> tuple[str, ...]:
     if "digital_media_source" in categories:
         permissions.extend(["digital_sources.connect", "digital_sources.manage"])
     if "personal_list_source" in categories:
+        permissions.append("watchlist.manage")
+    if "price_provider" in categories:
         permissions.append("watchlist.manage")
     if "import_source" in categories:
         permissions.append("collection.import")
@@ -7918,7 +7924,14 @@ def validate_import_plugin_root(plugin_root: Path) -> dict[str, Any]:
     kind = str(manifest.get("kind") or "").strip()
     if not isinstance(categories, list):
         categories = [kind] if kind else []
-    valid = {"metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "import_source"}
+    valid = {
+        "metadata_source",
+        "metadata_receiver",
+        "digital_media_source",
+        "personal_list_source",
+        "import_source",
+        "price_provider",
+    }
     if not {str(item) for item in categories}.intersection(valid):
         raise NextApiError("Plugin manifest must declare a supported category", 400)
     return manifest
@@ -9790,6 +9803,10 @@ def _wishlist_shop_row_entity(row: dict[str, Any]) -> dict[str, Any]:
             "value": row.get("selector_value"),
             "options": selector_options,
         },
+        "providerId": row.get("provider_plugin_id"),
+        "providerProductRef": row.get("provider_product_ref"),
+        "providerLastStatus": row.get("provider_last_status"),
+        "providerLastError": row.get("provider_last_error"),
         "lastSeenPrice": float(row["last_seen_price"]) if row.get("last_seen_price") is not None else None,
         "lastPriceCheckedAt": row.get("last_price_checked_at"),
         "createdAt": row.get("created_at"),
@@ -9805,6 +9822,7 @@ def _wishlist_shops_by_item(conn, user_id, item_ids: list[Any]) -> dict[str, lis
             """
             SELECT id, wishlist_item_id, shop_name, price_url, price_currency,
                    selector_type, selector_value, selector_options,
+                   provider_plugin_id, provider_product_ref, provider_last_status, provider_last_error,
                    last_seen_price, last_price_checked_at, created_at, updated_at
             FROM wishlist_item_shops
             WHERE user_id=%s
@@ -19617,6 +19635,149 @@ def register_routes(flask_app: Flask) -> None:
             registry["autoUpdate"] = plugin_auto_update_setting(conn)
         return response(registry)
 
+    def _is_price_provider_plugin(plugin: dict[str, Any]) -> bool:
+        categories = {str(item) for item in (plugin.get("categories") or [])}
+        capabilities = {str(item) for item in (plugin.get("capabilities") or [])}
+        return "price_provider" in categories or "price_check" in capabilities
+
+    @flask_app.get("/api/next/price-providers")
+    def list_price_providers():
+        with connect() as conn:
+            require_any_next_permission(conn, ("watchlist.manage", "metadata.manage_plugins", "admin.view_settings"))
+            if not table_exists(conn, "plugins"):
+                return response({"status": "ok", "providers": []})
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            providers = [plugin for plugin in (registry.get("plugins") or []) if _is_price_provider_plugin(plugin)]
+            for provider in providers:
+                config = plugin_config_from_db(conn, str(provider.get("id") or ""))
+                provider["config"] = {
+                    "settingsConfigured": bool(config.get("settingsConfigured")),
+                    "secretNames": config.get("secretNames") or [],
+                    "secretsConfigured": bool(config.get("secretsConfigured")),
+                }
+        return response({"status": "ok", "providers": providers})
+
+    @flask_app.patch("/api/next/admin/price-providers/<provider_id>/enabled")
+    def set_price_provider_enabled(provider_id: str):
+        provider_id = str(provider_id or "").strip()
+        if not provider_id:
+            raise NextApiError("Provider id is required", 400)
+        body = request.get_json(silent=True) or {}
+        if "enabled" not in body:
+            raise NextApiError("'enabled' is required", 400)
+        enabled = parse_bool_value(body.get("enabled"), default=True)
+
+        with connect() as conn:
+            require_any_next_permission(conn, ("watchlist.manage", "metadata.manage_plugins"))
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            provider = next((item for item in registry.get("plugins", []) if item.get("id") == provider_id), None)
+            if not provider or not _is_price_provider_plugin(provider):
+                raise NextApiError("Price provider not found", 404)
+            actor = require_any_next_permission(conn, plugin_manage_permissions(provider))
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE plugins
+                        SET enabled=%s, updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (enabled, provider_id),
+                    )
+                audit_event(
+                    conn,
+                    event_type="price_provider.updated",
+                    category="plugins",
+                    actor=actor,
+                    target_type="plugin",
+                    target_id=provider_id,
+                    summary=f"Price provider {'enabled' if enabled else 'disabled'}: {provider_id}",
+                    metadata={"enabled": enabled},
+                )
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            provider = next((item for item in registry.get("plugins", []) if item.get("id") == provider_id), None)
+        return response({"status": "ok", "provider": provider})
+
+    @flask_app.get("/api/next/admin/price-providers/<provider_id>/config")
+    def get_price_provider_config(provider_id: str):
+        provider_id = str(provider_id or "").strip()
+        if not provider_id:
+            raise NextApiError("Provider id is required", 400)
+
+        with connect() as conn:
+            require_any_next_permission(conn, ("watchlist.manage", "metadata.manage_plugins", "admin.view_settings"))
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            provider = next((item for item in registry.get("plugins", []) if item.get("id") == provider_id), None)
+            if not provider or not _is_price_provider_plugin(provider):
+                raise NextApiError("Price provider not found", 404)
+            config = plugin_config_from_db(conn, provider_id)
+        return response({"status": "ok", "provider": provider, "config": config})
+
+    @flask_app.patch("/api/next/admin/price-providers/<provider_id>/config")
+    def update_price_provider_config(provider_id: str):
+        provider_id = str(provider_id or "").strip()
+        if not provider_id:
+            raise NextApiError("Provider id is required", 400)
+        body = request.get_json(silent=True) or {}
+        has_settings = "settings" in body
+        has_secrets = "secrets" in body
+        if not has_settings and not has_secrets:
+            raise NextApiError("Supply settings and/or secrets", 400)
+
+        with connect() as conn:
+            require_any_next_permission(conn, ("watchlist.manage", "metadata.manage_plugins"))
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Plugin registry table is not available", 503)
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            provider = next((item for item in registry.get("plugins", []) if item.get("id") == provider_id), None)
+            if not provider or not _is_price_provider_plugin(provider):
+                raise NextApiError("Price provider not found", 404)
+            actor = require_any_next_permission(conn, plugin_manage_permissions(provider))
+            update_plugin_config(
+                conn,
+                plugin_id=provider_id,
+                categories=provider.get("categories"),
+                actor_id=actor.get("id"),
+                settings_provided=has_settings,
+                settings_value=body.get("settings"),
+                secrets_provided=has_secrets,
+                secrets_value=body.get("secrets"),
+            )
+            audit_event(
+                conn,
+                event_type="price_provider.config_updated",
+                category="plugins",
+                actor=actor,
+                target_type="plugin",
+                target_id=provider_id,
+                summary=f"Updated price provider configuration for {provider_id}",
+                metadata={"settingsProvided": has_settings, "secretsProvided": has_secrets},
+            )
+            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+            provider = next((item for item in registry.get("plugins", []) if item.get("id") == provider_id), provider)
+            config = plugin_config_from_db(conn, provider_id)
+        return response({"status": "ok", "provider": provider, "config": config})
+
     @flask_app.put("/api/next/plugins/auto-update")
     def set_plugins_auto_update():
         body = request.get_json(silent=True) or {}
@@ -20951,7 +21112,20 @@ def register_routes(flask_app: Flask) -> None:
             return selector_type, selector_value, selector_options
         return None, None, {}
 
-    def _validated_shop_payload(body: dict[str, Any]) -> tuple[str, str, str, str | None, str | None, dict[str, Any]]:
+    def _validated_shop_provider_payload(body: dict[str, Any]) -> tuple[str | None, str | None]:
+        provider = body.get("provider")
+        provider_id = clean_text(body.get("providerId") or body.get("provider_id"))
+        provider_ref = clean_text(body.get("providerProductRef") or body.get("provider_product_ref"))
+        if isinstance(provider, dict):
+            provider_id = clean_text(provider.get("id") or provider_id)
+            provider_ref = clean_text(provider.get("productRef") or provider.get("product_ref") or provider_ref)
+        if provider_id and not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,80}", provider_id):
+            raise NextApiError("Provider id has an invalid format", 400)
+        return provider_id or None, provider_ref or None
+
+    def _validated_shop_payload(
+        body: dict[str, Any],
+    ) -> tuple[str, str, str, str | None, str | None, dict[str, Any], str | None, str | None]:
         name = clean_text(body.get("shopName") or body.get("shop_name"))
         if not name:
             raise NextApiError("Shop name is required", 400)
@@ -20962,6 +21136,7 @@ def register_routes(flask_app: Flask) -> None:
         if parsed.scheme not in ("http", "https"):
             raise NextApiError("Price URL must be an http or https URL", 400)
         selector_type, selector_value, selector_options = _validated_shop_selector_payload(body)
+        provider_plugin_id, provider_product_ref = _validated_shop_provider_payload(body)
         return (
             name,
             raw_url,
@@ -20969,6 +21144,8 @@ def register_routes(flask_app: Flask) -> None:
             selector_type,
             selector_value,
             selector_options,
+            provider_plugin_id,
+            provider_product_ref,
         )
 
     def _normalise_tmdb_id(value: Any) -> str | None:
@@ -21375,6 +21552,8 @@ def register_routes(flask_app: Flask) -> None:
             selector_type,
             selector_value,
             selector_options,
+            provider_plugin_id,
+            provider_product_ref,
         ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
@@ -21415,8 +21594,9 @@ def register_routes(flask_app: Flask) -> None:
                         INSERT INTO wishlist_item_shops
                             (user_id, wishlist_item_id, shop_name, price_url, price_currency,
                              selector_type, selector_value, selector_options,
+                             provider_plugin_id, provider_product_ref, provider_last_status, provider_last_error,
                              last_seen_price, last_price_checked_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         RETURNING id
                         """,
                         (
@@ -21428,6 +21608,10 @@ def register_routes(flask_app: Flask) -> None:
                             selector_type,
                             selector_value,
                             Jsonb(selector_options),
+                            provider_plugin_id,
+                            provider_product_ref,
+                            "ok" if current_price is not None else "no_match",
+                            None,
                             current_price,
                         ),
                     )
@@ -21436,8 +21620,8 @@ def register_routes(flask_app: Flask) -> None:
                         cur.execute(
                             """
                             INSERT INTO wishlist_item_shop_prices
-                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source)
-                            VALUES (%s, %s, %s, %s, %s, %s)
+                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source, provider_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
                             """,
                             (
                                 user_id,
@@ -21446,6 +21630,7 @@ def register_routes(flask_app: Flask) -> None:
                                 current_price,
                                 effective_currency,
                                 extraction_source or "unknown",
+                                provider_plugin_id,
                             ),
                         )
                 emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
@@ -21483,6 +21668,8 @@ def register_routes(flask_app: Flask) -> None:
             selector_type,
             selector_value,
             selector_options,
+            provider_plugin_id,
+            provider_product_ref,
         ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
@@ -21524,6 +21711,10 @@ def register_routes(flask_app: Flask) -> None:
                             selector_type=%s,
                             selector_value=%s,
                             selector_options=%s,
+                            provider_plugin_id=%s,
+                            provider_product_ref=%s,
+                            provider_last_status=%s,
+                            provider_last_error=%s,
                             last_seen_price=%s,
                             last_price_checked_at=now(),
                             updated_at=now()
@@ -21536,6 +21727,10 @@ def register_routes(flask_app: Flask) -> None:
                             selector_type,
                             selector_value,
                             Jsonb(selector_options),
+                            provider_plugin_id,
+                            provider_product_ref,
+                            "ok" if current_price is not None else "no_match",
+                            None,
                             current_price,
                             shop_uuid,
                             user_id,
@@ -21546,8 +21741,8 @@ def register_routes(flask_app: Flask) -> None:
                         cur.execute(
                             """
                             INSERT INTO wishlist_item_shop_prices
-                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source)
-                            VALUES (%s, %s, %s, %s, %s, %s)
+                                (user_id, wishlist_item_id, wishlist_item_shop_id, observed_price, price_currency, extraction_source, provider_id)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s)
                             """,
                             (
                                 user_id,
@@ -21556,6 +21751,7 @@ def register_routes(flask_app: Flask) -> None:
                                 current_price,
                                 effective_currency,
                                 extraction_source or "unknown",
+                                provider_plugin_id,
                             ),
                         )
                 emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")

@@ -12308,6 +12308,7 @@ def ui_preview_html(
                   <button type="button" data-app-admin-plugin-type-tab="metadata_receiver" data-next-i18n="appAdmin.pluginTypeMetadataReceivers">Metadata receivers</button>
                   <button type="button" data-app-admin-plugin-type-tab="digital_media_source" data-next-i18n="appAdmin.pluginTypeDigitalSources">Digital media sources</button>
                   <button type="button" data-app-admin-plugin-type-tab="personal_list_source" data-next-i18n="appAdmin.pluginTypePersonalListSources">Personal list sources</button>
+                  <button type="button" data-app-admin-plugin-type-tab="price_provider" data-next-i18n="appAdmin.pluginTypePriceProviders">Price providers</button>
                   <button type="button" data-app-admin-plugin-type-tab="import_source" data-next-i18n="appAdmin.pluginTypeImportSources">Import sources</button>
                   <button type="button" data-app-admin-plugin-type-tab="system" data-next-i18n="appAdmin.pluginTypeSystem">System integrations</button>
                   <button type="button" data-app-admin-plugin-type-tab="other" data-next-i18n="appAdmin.pluginTypeOther">Other plugins</button>
@@ -13750,7 +13751,7 @@ def ui_preview_html(
       });
     }
     function setAppAdminPluginTypeTab(tab, render = true) {
-      const allowed = ["metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "import_source", "system", "other"];
+      const allowed = ["metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "price_provider", "import_source", "system", "other"];
       appAdmin.activePluginTypeTab = allowed.includes(tab) ? tab : "metadata_source";
       localStorage.setItem("dv_next_admin_plugin_type_tab", appAdmin.activePluginTypeTab);
       document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
@@ -13769,6 +13770,7 @@ def ui_preview_html(
         metadata_receiver: tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"),
         digital_media_source: tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"),
         personal_list_source: tNext("appAdmin.pluginTypePersonalListSources", "Personal list sources"),
+        price_provider: tNext("appAdmin.pluginTypePriceProviders", "Price providers"),
         import_source: tNext("appAdmin.pluginTypeImportSources", "Import sources"),
         system: tNext("appAdmin.pluginTypeSystem", "System integrations"),
         mcp: tNext("appAdmin.pluginTypeMcp", "MCP"),
@@ -15249,9 +15251,10 @@ def ui_preview_html(
       const metadataReceiverPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver"));
       const digitalPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "digital_media_source"));
       const personalListPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "personal_list_source"));
+      const priceProviderPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "price_provider"));
       const importPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source"));
       const systemPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api"));
-      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...personalListPlugins, ...importPlugins, ...systemPlugins].map((plugin) => plugin.id));
+      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...personalListPlugins, ...priceProviderPlugins, ...importPlugins, ...systemPlugins].map((plugin) => plugin.id));
       const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
       const sections = {
         metadata_source: {
@@ -15269,6 +15272,10 @@ def ui_preview_html(
         personal_list_source: {
           title: tNext("appAdmin.pluginTypePersonalListSources", "Personal list sources"),
           plugins: personalListPlugins
+        },
+        price_provider: {
+          title: tNext("appAdmin.pluginTypePriceProviders", "Price providers"),
+          plugins: priceProviderPlugins
         },
         import_source: {
           title: tNext("appAdmin.pluginTypeImportSources", "Import sources"),
