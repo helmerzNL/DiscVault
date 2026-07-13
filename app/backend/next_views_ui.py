@@ -129,6 +129,7 @@ def ui_preview_html(
         "notifications": "M12 22A2.5 2.5 0 0 0 14.5 19.5H9.5A2.5 2.5 0 0 0 12 22M18 16V11A6 6 0 0 0 13 5.1V4A1 1 0 0 0 11 4V5.1A6 6 0 0 0 6 11V16L4 18V19H20V18L18 16Z",
         "profile": "M12 4A4 4 0 1 1 8 8A4 4 0 0 1 12 4M12 14C16.42 14 20 15.79 20 18V20H4V18C4 15.79 7.58 14 12 14Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
+        "discover": "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.24,7.76L14.12,14.12L7.76,16.24L9.88,9.88L16.24,7.76M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z",
     }
 
     def nav_icon(name: str) -> str:
@@ -157,44 +158,177 @@ def ui_preview_html(
         document.documentElement.dataset.theme = "dark";
         document.documentElement.dataset.themePreference = "system";
       }
+      try {
+        const accent = localStorage.getItem("dv_next_accent") || "bluray";
+        document.documentElement.dataset.accent = accent;
+      } catch (error) {
+        document.documentElement.dataset.accent = "bluray";
+      }
     })();
   </script>
   <style>
+    /* ============================================================
+       DiscVault — "Chrome & Blue" v3.1 design tokens.
+       Source of truth: tokens.json. --dv-* tokens are the palette;
+       the app's semantic vars (--bg/--text/--accent/...) are mapped
+       onto them so the whole UI re-skins and the accent picker
+       (data-accent on <html>) drives every accent. Dark-first,
+       keyed to the app icon (--dv-bg is sampled from the icon).
+       ============================================================ */
     :root {
       color-scheme: light;
       --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --bg: #f4f5f7;
-      --bg-elevated: rgba(255, 255, 255, 0.78);
-      --bg-solid: #ffffff;
-      --text: #17181c;
-      --muted: #6b7280;
-      --subtle: #8b93a1;
-      --line: rgba(25, 28, 36, 0.12);
-      --line-strong: rgba(25, 28, 36, 0.18);
-      --accent: #0a84ff;
-      --accent-contrast: #ffffff;
-      --green: #34c759;
-      --amber: #ff9f0a;
-      --red: #ff453a;
-      --shadow: 0 18px 55px rgba(26, 31, 42, 0.14);
-      --shadow-soft: 0 10px 28px rgba(26, 31, 42, 0.10);
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+      /* Chrome & Blue neutrals + semantics — LIGHT (default) */
+      --dv-bg: #F4F7FB;
+      --dv-surface-1: #FFFFFF;
+      --dv-surface-2: #EDF1F7;
+      --dv-surface-3: #E1E8F1;
+      --dv-border-subtle: #E4EAF2;
+      --dv-border: #D0D9E5;
+      --dv-text: #0E141F;
+      --dv-text-2: #4A5666;
+      --dv-text-3: #7C8798;
+      --dv-platinum: #6B7787;
+      --dv-platinum-dim: #9AA6B4;
+      --dv-success: #0E9F6E;
+      --dv-warning: #C2540B;
+      --dv-error: #DC2626;
+      --dv-info: #0E7C93;
+
+      /* format badges — fixed, never themed by the accent picker */
+      --dv-fmt-4k: #12181F;
+      --dv-fmt-4k-on: #FFFFFF;
+      --dv-fmt-4k-line: #12181F;
+      --dv-fmt-bluray: #1E6FD8;
+      --dv-fmt-bluray-on: #FFFFFF;
+      --dv-fmt-dvd: #8C7345;
+      --dv-fmt-dvd-deep: #6B5730;
+      --dv-fmt-dvd-on: #FFFFFF;
+      --dv-fmt-steel: #556270;
+      --dv-fmt-steel-on: #FFFFFF;
+      --dv-fmt-steel-brushed: linear-gradient(115deg, #6E7B89 0%, #9AA7B5 18%, #E2EAF2 32%, #A4B1BF 44%, #7C8996 58%, #C6D2DE 72%, #8D9AA8 86%, #67737F 100%);
+      --dv-fmt-digital: #0E9C86;
+      --dv-fmt-digital-on: #FFFFFF;
+
+      --dv-sheen: conic-gradient(from 210deg, #5E9AD0, #B3A8E4, #D6A8DC, #E8E4EE, #5CC4A8, #3B7BC4, #2A6FD6, #5E9AD0);
+      --dv-shadow: 0 1px 2px rgba(20,30,45,.06), 0 12px 32px rgba(30,60,110,.10);
+
+      /* ---- semantic app vars mapped to the tokens ---- */
+      --bg: var(--dv-bg);
+      --bg-solid: var(--dv-surface-1);
+      --bg-muted: var(--dv-surface-2);
+      --bg-elevated: color-mix(in srgb, var(--dv-surface-1) 82%, transparent);
+      --surface: var(--dv-surface-1);
+      --panel: var(--dv-surface-1);
+      --field: var(--dv-surface-2);
+      --text: var(--dv-text);
+      --muted: var(--dv-text-2);
+      --muted-strong: var(--dv-text);
+      --subtle: var(--dv-text-3);
+      --line: var(--dv-border-subtle);
+      --line-strong: var(--dv-border);
+      --border: var(--dv-border);
+      --accent: var(--dv-accent);
+      --accent-hover: var(--dv-accent-hover);
+      --accent-press: var(--dv-accent-press);
+      --accent-bright: var(--dv-accent-bright);
+      --accent-contrast: var(--dv-on-accent);
+      --green: var(--dv-success);
+      --good: var(--dv-success);
+      --ok: var(--dv-success);
+      --success: var(--dv-success);
+      --amber: var(--dv-warning);
+      --warn: var(--dv-warning);
+      --red: var(--dv-error);
+      --bad: var(--dv-error);
+      --danger: var(--dv-error);
+      --info: var(--dv-info);
+      --shadow: var(--dv-shadow);
+      --shadow-soft: 0 1px 2px rgba(20,30,45,.05), 0 10px 26px rgba(30,60,110,.08);
+      --shadow-strong: 0 2px 6px rgba(20,30,45,.10), 0 22px 60px rgba(30,60,110,.16);
       --radius: 8px;
+      --radius-sm: 6px;
+      --radius-lg: 16px;
+      /* Frameless disc logo: define its round edge against light surfaces */
+      --logo-shadow: drop-shadow(0 0 0.6px rgba(15,23,42,.55)) drop-shadow(0 1px 3px rgba(15,23,42,.28));
     }
     html[data-theme="dark"] {
       color-scheme: dark;
-      --bg: #111214;
-      --bg-elevated: rgba(31, 33, 38, 0.76);
-      --bg-solid: #1c1d21;
-      --text: #f5f6f8;
-      --muted: #a5acb8;
-      --subtle: #798191;
-      --line: rgba(244, 247, 255, 0.12);
-      --line-strong: rgba(244, 247, 255, 0.20);
-      --accent: #5ac8fa;
-      --accent-contrast: #071014;
-      --shadow: 0 22px 70px rgba(0, 0, 0, 0.36);
-      --shadow-soft: 0 12px 34px rgba(0, 0, 0, 0.26);
+
+      /* Chrome & Blue neutrals + semantics — DARK (default surface) */
+      --dv-bg: #090F1A;
+      --dv-surface-1: #111A2A;
+      --dv-surface-2: #1A2438;
+      --dv-surface-3: #243047;
+      --dv-border-subtle: #2B3852;
+      --dv-border: #394863;
+      --dv-text: #EAF0F7;
+      --dv-text-2: #9AA7B8;
+      --dv-text-3: #647082;
+      --dv-platinum: #C7D2DE;
+      --dv-platinum-dim: #8996A6;
+      --dv-success: #34D399;
+      --dv-warning: #FB8C3C;
+      --dv-error: #FF5A52;
+      --dv-info: #22C0DE;
+
+      --dv-fmt-4k: #F2F6FA;
+      --dv-fmt-4k-on: #0A0E14;
+      --dv-fmt-4k-line: #FFFFFF;
+      --dv-fmt-bluray: #3B9EFF;
+      --dv-fmt-bluray-on: #04121F;
+      --dv-fmt-dvd: #C2A878;
+      --dv-fmt-dvd-deep: #8C7345;
+      --dv-fmt-dvd-on: #1C1508;
+      --dv-fmt-steel: #8E9CAC;
+      --dv-fmt-steel-on: #0E141C;
+      --dv-fmt-steel-brushed: linear-gradient(115deg, #5C6875 0%, #8A97A6 18%, #D6E0EA 32%, #93A1B0 44%, #6B7683 58%, #B9C6D3 72%, #7E8B99 86%, #566270 100%);
+      --dv-fmt-digital: #22C2A8;
+      --dv-fmt-digital-on: #04211C;
+
+      --dv-sheen: conic-gradient(from 210deg, #7EB9EB, #D6CEFA, #EDC8F0, #F9F6F6, #7EE2C6, #4C93E4, #3C7CE1, #7EB9EB);
+      --dv-shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px rgba(0,0,0,.4);
+
+      --bg-elevated: color-mix(in srgb, var(--dv-surface-1) 84%, transparent);
+      --shadow-soft: 0 1px 2px rgba(0,0,0,.45), 0 12px 34px rgba(0,0,0,.30);
+      --shadow-strong: 0 2px 6px rgba(0,0,0,.55), 0 24px 68px rgba(0,0,0,.5);
+      --logo-shadow: drop-shadow(0 1px 2px rgba(0,0,0,.5));
     }
+
+    /* ---- Accent presets — user-selectable via data-accent on <html> ----
+       'bright' is the link/icon variant (differs per theme so it stays
+       legible on white). Every base clears WCAG AA against white button
+       text. Only this group is swappable; neutrals/semantics/format stay fixed. */
+    [data-accent="bluray"]   { --dv-accent: #2A6FD6; --dv-accent-hover: #3C7CE1; --dv-accent-press: #2259B0; --dv-accent-bright: #6CB4FC; --dv-on-accent: #FFFFFF; }
+    [data-accent="amethyst"] { --dv-accent: #6D5FE6; --dv-accent-hover: #8375EE; --dv-accent-press: #584BC4; --dv-accent-bright: #A99BFF; --dv-on-accent: #FFFFFF; }
+    [data-accent="chrome"]   { --dv-accent: #6B7787; --dv-accent-hover: #7D8998; --dv-accent-press: #565F6C; --dv-accent-bright: #C7D2DE; --dv-on-accent: #FFFFFF; }
+    [data-accent="emerald"]  { --dv-accent: #0C835B; --dv-accent-hover: #0E8F63; --dv-accent-press: #0A6C4B; --dv-accent-bright: #4ADCA4; --dv-on-accent: #FFFFFF; }
+    [data-accent="teal"]     { --dv-accent: #0E7C93; --dv-accent-hover: #1191AB; --dv-accent-press: #0B6376; --dv-accent-bright: #46CDE4; --dv-on-accent: #FFFFFF; }
+    [data-accent="crimson"]  { --dv-accent: #D62F3C; --dv-accent-hover: #E24450; --dv-accent-press: #B32530; --dv-accent-bright: #FF7A82; --dv-on-accent: #FFFFFF; }
+    [data-accent="magenta"]  { --dv-accent: #C93384; --dv-accent-hover: #D94795; --dv-accent-press: #A82A6D; --dv-accent-bright: #FF7CC0; --dv-on-accent: #FFFFFF; }
+    [data-accent="ember"]    { --dv-accent: #A76400; --dv-accent-hover: #B26B00; --dv-accent-press: #8A5300; --dv-accent-bright: #FFB23E; --dv-on-accent: #FFFFFF; }
+
+    /* On light, the link/icon variant must darken to stay legible on white */
+    html[data-theme="light"][data-accent="bluray"]   { --dv-accent-bright: #1F5FBF; }
+    html[data-theme="light"][data-accent="amethyst"] { --dv-accent-bright: #5B4CD1; }
+    html[data-theme="light"][data-accent="chrome"]    { --dv-accent-bright: #55606E; }
+    html[data-theme="light"][data-accent="emerald"]  { --dv-accent-bright: #0A6C4B; }
+    html[data-theme="light"][data-accent="teal"]     { --dv-accent-bright: #0B6376; }
+    html[data-theme="light"][data-accent="crimson"]  { --dv-accent-bright: #B32530; }
+    html[data-theme="light"][data-accent="magenta"]  { --dv-accent-bright: #A82A6D; }
+    html[data-theme="light"][data-accent="ember"]    { --dv-accent-bright: #8A5300; }
+
+    /* Fallback accent if no data-accent is set yet (bluray) */
+    :root:not([data-accent]) {
+      --dv-accent: #2A6FD6;
+      --dv-accent-hover: #3C7CE1;
+      --dv-accent-press: #2259B0;
+      --dv-accent-bright: #6CB4FC;
+      --dv-on-accent: #FFFFFF;
+    }
+    html[data-theme="light"]:not([data-accent]) { --dv-accent-bright: #1F5FBF; }
     * { box-sizing: border-box; }
     html {
       min-height: 100%;
@@ -304,6 +438,31 @@ def ui_preview_html(
     .startup-language span {
       color: var(--muted);
       font-size: .86rem;
+      font-weight: 700;
+    }
+    .startup-owner-fields {
+      margin-top: 18px;
+      width: min(360px, 100%);
+    }
+    .startup-owner-fields label {
+      display: grid;
+      gap: 6px;
+    }
+    .startup-owner-fields span {
+      color: var(--muted);
+      font-size: .86rem;
+      font-weight: 700;
+    }
+    .startup-owner-fields input {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 12px;
+      font: inherit;
+      font-size: .94rem;
       font-weight: 700;
     }
     .login-primary,
@@ -463,23 +622,20 @@ def ui_preview_html(
     .brand-mark {
       width: 34px;
       height: 34px;
-      border-radius: 8px;
       display: grid;
       place-items: center;
-      overflow: hidden;
-      background: #12121a;
-      box-shadow: var(--shadow-soft);
+      background: transparent;
     }
     .brand-mark img {
       width: 100%;
       height: 100%;
       display: block;
-      object-fit: cover;
+      object-fit: contain;
+      filter: var(--logo-shadow);
     }
     .preview-sidebar .brand-mark {
       width: 30px;
       height: 30px;
-      border-radius: 7px;
     }
     .brand strong {
       display: block;
@@ -728,7 +884,8 @@ def ui_preview_html(
       width: 22px;
       height: 22px;
       display: block;
-      border-radius: 6px;
+      object-fit: contain;
+      filter: var(--logo-shadow);
     }
     .mobile-shell-logo span {
       color: var(--text);
@@ -797,6 +954,39 @@ def ui_preview_html(
       color: var(--text);
       background: var(--bg-solid);
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .accent-picker {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .accent-swatch {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+      transition: transform .14s ease;
+    }
+    .accent-swatch:hover { transform: scale(1.08); }
+    .accent-swatch-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 1px 3px rgba(0,0,0,.35);
+    }
+    .accent-swatch.active {
+      box-shadow: 0 0 0 2px var(--bg-solid), 0 0 0 4px var(--accent-bright);
+    }
+    .accent-swatch:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
     }
     .collection-toolbar {
       position: relative;
@@ -938,6 +1128,7 @@ def ui_preview_html(
       right: 0;
       z-index: 40;
       min-width: 220px;
+      max-width: min(320px, calc(100vw - 16px));
       display: flex;
       flex-direction: column;
       gap: 2px;
@@ -1696,6 +1887,55 @@ def ui_preview_html(
       color: var(--accent);
       transform: translateY(-1px);
     }
+    .bulk-tag-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-height: 132px;
+      overflow-y: auto;
+      padding: 2px;
+    }
+    .bulk-tag-picker .bulk-tag-empty {
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 620;
+    }
+    .bulk-tag-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 3px 10px;
+      cursor: pointer;
+      font-size: .74rem;
+      font-weight: 680;
+    }
+    .bulk-tag-option .bulk-tag-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--tag-color, var(--muted));
+      flex: none;
+    }
+    .bulk-tag-option .bulk-tag-count {
+      color: var(--muted);
+      font-size: .68rem;
+      font-weight: 720;
+    }
+    .bulk-tag-option[aria-pressed="true"] {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      color: var(--accent);
+    }
+    .bulk-tag-option[aria-pressed="true"] .bulk-tag-count {
+      color: inherit;
+    }
+    .bulk-tag-option:not(:disabled):hover {
+      border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+    }
     .preview-layout {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
@@ -1827,6 +2067,40 @@ def ui_preview_html(
       text-overflow: ellipsis;
       backdrop-filter: blur(12px) saturate(150%);
       z-index: 2;
+    }
+    /* Per-format colors — fixed, never affected by the accent picker.
+       Each badge borrows from the real object on the shelf. */
+    .physical-format-badge--4k {
+      background: var(--dv-fmt-4k);
+      color: var(--dv-fmt-4k-on);
+      border: 1px solid var(--dv-fmt-4k-line);
+      backdrop-filter: none;
+    }
+    .physical-format-badge--bluray {
+      background: var(--dv-fmt-bluray);
+      color: var(--dv-fmt-bluray-on);
+      border: 1px solid rgba(255,255,255,.28);
+      backdrop-filter: none;
+    }
+    .physical-format-badge--dvd {
+      background: linear-gradient(180deg, var(--dv-fmt-dvd), var(--dv-fmt-dvd-deep));
+      color: var(--dv-fmt-dvd-on);
+      border: 1px solid rgba(255,255,255,.24);
+      letter-spacing: .06em;
+      backdrop-filter: none;
+    }
+    .physical-format-badge--steel {
+      background: var(--dv-fmt-steel-brushed);
+      color: var(--dv-fmt-steel-on);
+      border: 1px solid rgba(255,255,255,.3);
+      text-shadow: 0 1px 0 rgba(255,255,255,.35);
+      backdrop-filter: none;
+    }
+    .physical-format-badge--digital {
+      background: var(--dv-fmt-digital);
+      color: var(--dv-fmt-digital-on);
+      border: 1px solid rgba(255,255,255,.28);
+      backdrop-filter: none;
     }
     .preview-collection.bulk-selected {
       border-color: color-mix(in srgb, var(--accent) 70%, var(--line));
@@ -2106,6 +2380,64 @@ def ui_preview_html(
       border-radius: 50%;
       background: var(--accent);
       flex: 0 0 auto;
+    }
+    .tags-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      border: 1px solid color-mix(in srgb, var(--tag-color, var(--line)) 55%, var(--line));
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--tag-color, var(--bg-solid)) 12%, var(--bg-solid));
+      color: var(--text);
+      padding: 0 6px 0 12px;
+      font-size: .85rem;
+      font-weight: 700;
+    }
+    .tag-chip .tag-chip-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--tag-color, var(--accent));
+      flex: 0 0 auto;
+    }
+    .tag-chip .tag-chip-count {
+      font-weight: 600;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .tag-chip-remove {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border: 0;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--red) 16%, transparent);
+      color: var(--red);
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+    .tag-chip-remove svg {
+      width: 14px;
+      height: 14px;
+      fill: currentColor;
+    }
+    .tag-chip-remove:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--red) 26%, transparent);
+    }
+    .tag-chip-remove:disabled {
+      background: color-mix(in srgb, var(--muted) 14%, transparent);
+      color: var(--muted);
+      cursor: not-allowed;
     }
     .loan-overdue {
       color: var(--red);
@@ -2757,17 +3089,6 @@ def ui_preview_html(
       gap: 12px;
       margin-bottom: 14px;
     }
-    .tag-poster-art {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .tag-poster-initial {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #fff;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, .4);
-    }
     .stats-cards {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -2963,6 +3284,25 @@ def ui_preview_html(
     }
     .view-mode-control {
       flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .view-mode-control.is-disabled {
+      opacity: .4;
+      pointer-events: none;
+    }
+    .view-mode-button svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      display: block;
+    }
+    .view-mode-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 10px;
     }
     .mode-list-grid {
       display: grid;
@@ -4907,7 +5247,8 @@ def ui_preview_html(
       border-color: var(--accent, #c8901f);
       background: color-mix(in srgb, var(--accent, #c8901f) 16%, transparent);
     }
-    .movie-detail-page .movie-detail-hero {
+    .movie-detail-page .movie-detail-hero,
+    .discover-detail-page .movie-detail-hero {
       min-height: min(520px, 56vh);
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -6139,15 +6480,46 @@ def ui_preview_html(
       font-size: .82rem;
       line-height: 1.34;
     }
-    .person-detail-page .movie-detail-hero {
+    /* Themed "flat" hero: used when a detail page has no backdrop image
+       (person pages always, movie/container/location when no backdrop).
+       Follows the active theme + accent instead of a fixed dark gradient. */
+    .movie-detail-hero.is-flat {
       background:
-        radial-gradient(circle at 18% 22%, rgba(255,255,255,.18), transparent 34%),
-        linear-gradient(145deg, #252932, #111214);
+        radial-gradient(circle at 18% 20%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 48%),
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 7%, var(--panel)), var(--bg-solid));
+      color: var(--text);
     }
-    .person-detail-page .movie-detail-hero::before {
-      background:
-        linear-gradient(90deg, rgba(0,0,0,.72), rgba(0,0,0,.30) 58%, rgba(0,0,0,.10)),
-        linear-gradient(0deg, rgba(0,0,0,.74), rgba(0,0,0,.10) 68%);
+    .movie-detail-hero.is-flat::before {
+      background: none;
+    }
+    .movie-detail-hero.is-flat .eyebrow {
+      color: var(--accent);
+    }
+    .movie-detail-hero.is-flat .movie-detail-overview,
+    .movie-detail-hero.is-flat .person-bio-text {
+      color: var(--muted);
+    }
+    .movie-detail-hero.is-flat .pill {
+      color: var(--text);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+      backdrop-filter: none;
+    }
+    .movie-detail-hero.is-flat .movie-detail-back {
+      color: var(--text);
+      background: color-mix(in srgb, var(--text) 8%, transparent);
+      border-color: var(--line);
+      backdrop-filter: none;
+    }
+    .movie-detail-hero.is-flat .movie-detail-poster {
+      background: var(--field);
+      border-color: var(--line);
+      color: var(--muted);
+    }
+    .movie-detail-hero.is-flat .person-detail-portrait {
+      border-color: var(--line);
+      background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 22%, var(--field)), var(--field));
+      color: var(--text);
     }
     .person-detail-page .movie-detail-summary {
       grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
@@ -6574,6 +6946,19 @@ def ui_preview_html(
       flex-wrap: wrap;
       justify-content: flex-end;
       gap: 10px;
+    }
+    .profile-hero-nav-actions {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .profile-hero-nav-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .profile-hero-nav-action .nav-item-label {
+      gap: 8px;
     }
     .profile-grid {
       display: grid;
@@ -7262,6 +7647,76 @@ def ui_preview_html(
     .profile-update-result.bad {
       border-color: color-mix(in srgb, var(--bad, #d2453d) 55%, transparent);
       background: color-mix(in srgb, var(--bad, #d2453d) 14%, transparent);
+    }
+    .profile-about-stack {
+      display: grid;
+      gap: 12px;
+    }
+    .profile-about-card {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 12px;
+      background: color-mix(in srgb, var(--field) 54%, transparent);
+    }
+    .profile-about-card-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .profile-about-card-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .profile-about-card p {
+      margin: 0;
+    }
+    .profile-about-card-copy > span {
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .01em;
+    }
+    .profile-about-brandmark {
+      display: flex;
+      align-items: center;
+      min-height: 46px;
+    }
+    .profile-about-brandmark img {
+      display: block;
+      width: min(100%, 220px);
+      height: auto;
+    }
+    .profile-about-brandmark .profile-about-brandmark-dark {
+      display: none;
+    }
+    html[data-theme="dark"] .profile-about-brandmark .profile-about-brandmark-light {
+      display: none;
+    }
+    html[data-theme="dark"] .profile-about-brandmark .profile-about-brandmark-dark {
+      display: block;
+    }
+    .profile-about-legal {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
+    .profile-about-tmdb-logo {
+      display: block;
+      width: 120px;
+      max-width: 100%;
+      height: auto;
+    }
+    .profile-about-card--debug {
+      display: none;
+    }
+    body.debug-mode .profile-about-card--debug {
+      display: grid;
     }
     .profile-update-headline {
       font-weight: 700;
@@ -8557,7 +9012,7 @@ def ui_preview_html(
         min-height: 70px;
         padding: 7px 8px;
         display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         align-items: center;
         gap: 4px;
         border: 1px solid color-mix(in srgb, var(--line-strong) 80%, transparent);
@@ -8675,7 +9130,8 @@ def ui_preview_html(
         justify-self: start;
         width: min(44vw, 170px);
       }
-      .movie-detail-page .movie-detail-hero {
+      .movie-detail-page .movie-detail-hero,
+      .discover-detail-page .movie-detail-hero {
         min-height: min(560px, 68vh);
       }
       .movie-detail-hero {
@@ -8696,6 +9152,7 @@ def ui_preview_html(
         font-size: clamp(1.65rem, 9vw, 3rem);
       }
       #movieDetailPage .movie-detail-summary,
+      #discoverDetailPage .movie-detail-summary,
       #containerDetailPage .movie-detail-summary,
       #personDetailPage .movie-detail-summary,
       #locationDetailPage .movie-detail-summary {
@@ -8704,11 +9161,13 @@ def ui_preview_html(
         gap: 12px 14px;
       }
       #movieDetailPage .movie-detail-copy,
+      #discoverDetailPage .movie-detail-copy,
       #containerDetailPage .movie-detail-copy,
       #personDetailPage .person-detail-copy {
         display: contents;
       }
       #movieDetailPage .movie-detail-poster,
+      #discoverDetailPage .movie-detail-poster,
       #containerDetailPage .movie-detail-poster,
       #personDetailPage .person-detail-portrait,
       #locationDetailPage .movie-detail-poster {
@@ -8718,8 +9177,11 @@ def ui_preview_html(
         align-self: start;
       }
       #movieDetailPage .movie-detail-summary .eyebrow,
+      #discoverDetailPage .movie-detail-summary .eyebrow,
       #movieDetailPage .movie-detail-title,
+      #discoverDetailPage .movie-detail-title,
       #movieDetailPage .hero-meta,
+      #discoverDetailPage .hero-meta,
       #containerDetailPage .movie-detail-summary .eyebrow,
       #containerDetailPage .movie-detail-title,
       #containerDetailPage .hero-meta,
@@ -8732,6 +9194,7 @@ def ui_preview_html(
         grid-column: 2;
       }
       #movieDetailPage .movie-detail-overview,
+      #discoverDetailPage .movie-detail-overview,
       #containerDetailPage .movie-detail-overview,
       #personDetailPage .movie-detail-overview,
       #locationDetailPage .movie-detail-overview {
@@ -8932,9 +9395,27 @@ def ui_preview_html(
       }
       .profile-hero-actions {
         justify-content: stretch;
+        gap: 8px;
       }
-      .profile-hero-actions .secondary-button,
-      .profile-hero-actions .primary-button {
+      .profile-hero-nav-actions {
+        display: inline-flex;
+        flex-wrap: nowrap;
+        gap: 8px;
+        width: auto;
+      }
+      .profile-hero-nav-action {
+        width: auto;
+        min-width: 44px;
+        padding: 0 12px;
+      }
+      .profile-hero-nav-action .nav-item-label {
+        gap: 0;
+      }
+      .profile-hero-nav-action .nav-item-label span:last-child {
+        display: none;
+      }
+      .profile-hero-actions > .secondary-button,
+      .profile-hero-actions > .primary-button {
         width: 100%;
       }
       .profile-grid {
@@ -9203,6 +9684,111 @@ def ui_preview_html(
         animation-duration: 0.001ms !important;
       }
     }
+    .discover-shell {
+      display: grid;
+      gap: 14px;
+    }
+    .discover-view .detail-card.discover-shell {
+      border: 0;
+      box-shadow: none;
+      background: transparent;
+      padding: 0;
+    }
+    .discover-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .discover-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    @media (min-width: 720px) {
+      .discover-grid {
+        grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+        gap: 12px;
+      }
+    }
+    @media (min-width: 1280px) {
+      .discover-grid {
+        grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+        gap: 14px;
+      }
+    }
+    .discover-card {
+      border: 0;
+      background: transparent;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+      text-align: left;
+      cursor: pointer;
+      color: inherit;
+      min-width: 0;
+    }
+    .discover-poster {
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      border-radius: 10px;
+      overflow: hidden;
+      background: rgba(127, 127, 127, 0.14);
+      border: 0;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: .76rem;
+      text-align: center;
+      padding: 8px;
+    }
+    .discover-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .discover-title {
+      font-size: .78rem;
+      line-height: 1.2;
+      color: var(--text);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.3em;
+    }
+    .discover-person-line {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      font-weight: 400;
+      gap: 4px;
+      margin-right: 8px;
+      margin-bottom: 4px;
+    }
+    .discover-person-role {
+      font-weight: 700;
+    }
+    .discover-inline-message {
+      margin: 0;
+      font-size: .82rem;
+      color: var(--muted);
+      text-align: right;
+      max-width: 52ch;
+    }
+    .discover-inline-message.error {
+      color: var(--red);
+    }
+    .discover-loading,
+    .discover-empty {
+      font-size: .84rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    #discoverSentinel {
+      height: 1px;
+    }
   </style>
 </head>
 <body data-app-mode=""" + '"' + app_mode_json + '"' + """>
@@ -9291,6 +9877,12 @@ def ui_preview_html(
         <span data-next-i18n="language.label">Language</span>
         <select id="startupLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </label>
+      <div class="startup-owner-fields hidden" id="startupOwnerFields">
+        <label for="startupOwnerUsernameInput">
+          <span data-next-i18n="auth.username">Username</span>
+          <input id="startupOwnerUsernameInput" autocomplete="username" maxlength="80" data-next-i18n-placeholder="auth.ownerUsernamePlaceholder" placeholder="Choose your username">
+        </label>
+      </div>
       <div class="startup-actions">
         <button type="button" class="primary-button hidden" id="startupOwnerPasskeyButton" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
         <a class="primary-button" id="startupMigrationLink" href="/api/next/migration" data-next-i18n="startup.openMigrationGuide">Open migration guide</a>
@@ -9312,8 +9904,8 @@ def ui_preview_html(
       <nav class="nav-section" aria-label="Primary">
         <button type="button" class="nav-item active" data-app-route="library"><span class="nav-item-label">""" + nav_icon("library") + """<span data-next-i18n="uiPreview.navLibrary">Library</span></span><small id="navMovieCount">""" + h(counts.get("movies", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label">""" + nav_icon("lists") + """<span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
+        <button type="button" class="nav-item" data-app-route="discover"><span class="nav-item-label">""" + nav_icon("discover") + """<span data-next-i18n="discover.nav">Discover</span></span><small id="navDiscoverCount">TMDb</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.title">Import</span></span><small id="navImportState">-</small></button>
-        <button type="button" class="nav-item" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><small id="navNotificationCount">""" + h((counts.get("notifications") or {}).get("unread", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
       <div class="sidebar-footer">
@@ -9525,6 +10117,7 @@ def ui_preview_html(
         <div class="button-row compact bulk-selection-actions">
           <button type="button" class="secondary-button compact-button" data-bulk-select="all" data-next-i18n="bulk.selectAll">Select all</button>
           <button type="button" class="secondary-button compact-button" data-bulk-select="none" data-next-i18n="bulk.deselectAll">Deselect all</button>
+          <button type="button" class="secondary-button compact-button hidden" data-bulk-select="clear" id="bulkClearSelection" data-next-i18n="bulk.clearSelection">Clear selection</button>
         </div>
         <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
         <div class="bulk-targets">
@@ -9541,6 +10134,16 @@ def ui_preview_html(
             </label>
             <button type="button" class="bulk-action" disabled data-bulk-action="group-add" data-next-i18n="bulk.addToGroup">Add</button>
             <button type="button" class="bulk-action" disabled data-bulk-action="group-remove" data-next-i18n="bulk.removeFromGroup">Remove</button>
+          </div>
+          <div class="bulk-target wide">
+            <label>
+              <span data-next-i18n="bulk.tagsTarget">Tags</span>
+            </label>
+            <div class="bulk-tag-picker" id="bulkTagPicker" role="group" aria-label="Tags"></div>
+            <div class="button-row compact">
+              <button type="button" class="bulk-action" disabled data-bulk-action="tags-add" data-next-i18n="bulk.addTags">Assign tags</button>
+              <button type="button" class="bulk-action" disabled data-bulk-action="tags-remove" data-next-i18n="bulk.removeTags">Remove tags</button>
+            </div>
           </div>
           <div class="bulk-target wide">
             <label>
@@ -9657,10 +10260,13 @@ def ui_preview_html(
                 <button type="button" class="lists-seg" data-lists-tab="tags" data-next-i18n-aria="lists.tags" aria-label="Tags"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41,11.58L12.41,2.58C12.04,2.21 11.53,2 11,2H4A2,2 0 0,0 2,4V11C2,11.53 2.21,12.04 2.59,12.42L11.59,21.42C11.96,21.79 12.47,22 13,22C13.53,22 14.04,21.79 14.41,21.41L21.41,14.41C21.79,14.04 22,13.53 22,13C22,12.47 21.79,11.96 21.41,11.58M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.tags">Tags</span></button>
                 <button type="button" class="lists-seg" data-lists-tab="loans" data-next-i18n-aria="lists.loans" aria-label="On loan"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16,17V19H2V17S2,13 9,13 16,17 16,17M12.5,7.5A3.5,3.5 0 1,0 9,11A3.5,3.5 0 0,0 12.5,7.5M15.94,13A5.32,5.32 0 0,1 18,17V19H22V17S22,13.37 15.94,13M15,4A3.39,3.39 0 0,0 13.07,4.59A5,5 0 0,1 13.07,10.41A3.39,3.39 0 0,0 15,11A3.5,3.5 0 0,0 15,4Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.loans">On loan</span></button>
               </div>
-              <div class="segmented compact view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
-                <button type="button" class="active" data-lists-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
-                <button type="button" data-lists-view-mode="list" data-next-i18n="collection.viewList">List</button>
-                <button type="button" data-lists-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+              <div class="view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+                <button type="button" class="icon-button view-mode-button" data-lists-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg>
+                </button>
+                <button type="button" class="icon-button view-mode-button active" data-lists-view-mode="poster" aria-label="Poster view" data-next-i18n-aria="collection.viewPoster" title="Posters" data-next-i18n-title="collection.viewPoster">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3H11V11H3V3M13 3H21V11H13V3M3 13H11V21H3V13M13 13H21V21H13V13Z"/></svg>
+                </button>
               </div>
             </div>
           </div>
@@ -10101,6 +10707,56 @@ def ui_preview_html(
             </div>
             <div class="import-post-review" id="importCenterLatestJob"></div>
             <div class="import-job-list" id="importCenterJobs"></div>
+          </div>
+        </section>
+      </section>
+      <section class="discover-view hidden" id="discoverView">
+        <section class="detail-card full discover-shell">
+          <div class="discover-head">
+            <div>
+              <h2 data-next-i18n="discover.title">Discover</h2>
+              <p class="import-source-meta" data-next-i18n="discover.subtitle">Popular movies from TMDb</p>
+            </div>
+            <p class="discover-inline-message hidden" id="discoverInlineMessage"></p>
+          </div>
+          <div class="discover-grid" id="discoverGrid"></div>
+          <div class="discover-empty hidden" id="discoverEmpty" data-next-i18n="discover.empty">No items found.</div>
+          <div class="discover-loading hidden" id="discoverLoading" data-next-i18n="collection.loading">Loading...</div>
+          <div id="discoverSentinel" aria-hidden="true"></div>
+        </section>
+      </section>
+      <section class="discover-detail-page hidden" id="discoverDetailPage" aria-labelledby="discoverDetailTitle">
+        <section class="movie-detail-hero" id="discoverDetailHero">
+          <img id="discoverDetailBackdrop" alt="">
+          <button type="button" class="movie-detail-back" id="discoverDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
+          <div class="movie-detail-summary">
+            <div class="movie-detail-poster" id="discoverDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
+            <div class="movie-detail-copy">
+              <span class="eyebrow" data-next-i18n="discover.detailTitle">Discover details</span>
+              <h2 class="movie-detail-title" id="discoverDetailTitle">-</h2>
+              <div class="hero-meta" id="discoverDetailTags"></div>
+              <p class="movie-detail-overview" id="discoverDetailOverview"></p>
+            </div>
+          </div>
+        </section>
+        <div class="movie-detail-action-strip">
+          <div class="movie-detail-actions">
+            <button type="button" class="action secondary" id="discoverDetailWishlistButton" data-next-i18n="discover.addWishlist">Add to wishlist</button>
+          </div>
+          <div class="detail-message" id="discoverDetailMessage"></div>
+        </div>
+        <section class="detail-layout">
+          <div class="detail-card">
+            <h3 data-next-i18n="discover.releaseInfo">Release</h3>
+            <div class="detail-fields" id="discoverDetailRelease"></div>
+          </div>
+          <div class="detail-card">
+            <h3 data-next-i18n="discover.castCrew">Cast & crew</h3>
+            <div class="detail-fields" id="discoverDetailPeople"></div>
+          </div>
+          <div class="detail-card full">
+            <h3 data-next-i18n="discover.showtimes">Cinema showtimes</h3>
+            <p class="import-source-meta" id="discoverShowtimesNote"></p>
           </div>
         </section>
       </section>
@@ -10825,7 +11481,10 @@ def ui_preview_html(
             </div>
           </div>
           <div class="profile-hero-actions">
-            <button type="button" class="secondary-button hidden" id="profileOpenStatisticsButton" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span></button>
+            <div class="profile-hero-nav-actions">
+              <button type="button" class="secondary-button profile-hero-nav-action" id="profileOpenNotificationsButton" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span></button>
+              <button type="button" class="secondary-button profile-hero-nav-action hidden" id="profileOpenStatisticsButton" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span></button>
+            </div>
             <button type="button" class="secondary-button hidden" id="profileOpenAdminButton" data-app-route="admin" data-next-i18n="profile.openAdmin">Open admin</button>
             <button type="button" class="secondary-button" id="profileSignOutButton" data-next-i18n="auth.signOut">Sign out</button>
           </div>
@@ -10920,6 +11579,22 @@ def ui_preview_html(
                       <button type="button" data-theme-choice="system" data-next-i18n="appearance.system">System</button>
                       <button type="button" data-theme-choice="light" data-next-i18n="appearance.light">Light</button>
                       <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
+                    </div>
+                  </div>
+                  <div class="preference-control-row">
+                    <span>
+                      <strong data-next-i18n="preferences.accent">Accent color</strong>
+                      <span data-next-i18n="preferences.accentHelp">Pick the accent used across DiscVault. Neutrals and format badges stay fixed.</span>
+                    </span>
+                    <div class="accent-picker" role="group" aria-label="Accent color" data-next-i18n-aria="accent.label">
+                      <button type="button" class="accent-swatch" data-accent-choice="bluray" data-accent-swatch="#2A6FD6" aria-label="Blu-ray" data-next-i18n-aria="accent.bluray" title="Blu-ray"><span class="accent-swatch-dot" style="background:#2A6FD6"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="amethyst" data-accent-swatch="#6D5FE6" aria-label="Amethyst" data-next-i18n-aria="accent.amethyst" title="Amethyst"><span class="accent-swatch-dot" style="background:#6D5FE6"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="chrome" data-accent-swatch="#6B7787" aria-label="Chrome" data-next-i18n-aria="accent.chrome" title="Chrome"><span class="accent-swatch-dot" style="background:#6B7787"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="emerald" data-accent-swatch="#0C835B" aria-label="Emerald" data-next-i18n-aria="accent.emerald" title="Emerald"><span class="accent-swatch-dot" style="background:#0C835B"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="teal" data-accent-swatch="#0E7C93" aria-label="Teal" data-next-i18n-aria="accent.teal" title="Teal"><span class="accent-swatch-dot" style="background:#0E7C93"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="crimson" data-accent-swatch="#D62F3C" aria-label="Crimson" data-next-i18n-aria="accent.crimson" title="Crimson"><span class="accent-swatch-dot" style="background:#D62F3C"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="magenta" data-accent-swatch="#C93384" aria-label="Magenta" data-next-i18n-aria="accent.magenta" title="Magenta"><span class="accent-swatch-dot" style="background:#C93384"></span></button>
+                      <button type="button" class="accent-swatch" data-accent-choice="ember" data-accent-swatch="#A76400" aria-label="Ember" data-next-i18n-aria="accent.ember" title="Ember"><span class="accent-swatch-dot" style="background:#A76400"></span></button>
                     </div>
                   </div>
                   <div class="preference-control-row">
@@ -11167,33 +11842,67 @@ def ui_preview_html(
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="about">
               <section class="profile-section-box">
-                <h4 data-next-i18n="profile.about">About</h4>
-                <p class="muted" data-next-i18n="profile.aboutHelp">App details and version information.</p>
-                <div class="profile-meta">
-                  <div class="profile-meta-row">
-                    <span data-next-i18n="profile.appVersion">App version</span>
-                    <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+                <div>
+                  <h4 data-next-i18n="profile.about">About</h4>
+                  <p class="muted" data-next-i18n="profile.aboutHelp">Version information, credits and data sources.</p>
+                </div>
+                <div class="profile-about-stack">
+                  <div class="profile-about-card">
+                    <div class="profile-meta">
+                      <div class="profile-meta-row">
+                        <span data-next-i18n="profile.appVersion">App version</span>
+                        <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+                      </div>
+                    </div>
+                    <div class="profile-update-block hidden" id="profileUpdateBlock">
+                      <div class="profile-update-controls">
+                        <label class="profile-update-channel">
+                          <span data-next-i18n="profile.updateChannel">Update channel</span>
+                          <select id="profileUpdateChannel">
+                            <option value="auto" data-next-i18n="profile.channelAuto">Automatic</option>
+                            <option value="beta" data-next-i18n="profile.channelBeta">Beta</option>
+                            <option value="stable" data-next-i18n="profile.channelStable">Stable</option>
+                          </select>
+                        </label>
+                        <button type="button" class="secondary-button" id="profileUpdateCheckButton" data-next-i18n="profile.checkForUpdate">Check for update</button>
+                      </div>
+                      <div class="profile-update-result" id="profileUpdateResult" hidden></div>
+                    </div>
                   </div>
-                  <div class="profile-meta-row">
-                    <span data-next-i18n="profile.buildSha">Build SHA</span>
-                    <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
+                  <div class="profile-about-card">
+                    <div class="profile-about-card-copy">
+                      <span data-next-i18n="profile.developedBy">Developed by</span>
+                      <div class="profile-about-brandmark">
+                        <img class="profile-about-brandmark-light" src="/api/next/assets/flux76-wordmark-light.png" alt="Flux76">
+                        <img class="profile-about-brandmark-dark" src="/api/next/assets/flux76-wordmark-dark.png" alt="Flux76">
+                      </div>
+                    </div>
+                  </div>
+                  <div class="profile-about-card">
+                    <div class="profile-about-card-head">
+                      <div class="profile-about-card-copy">
+                        <span data-next-i18n="profile.tmdbDataProvidedBy">Data provided by TMDB</span>
+                        <p class="profile-about-legal" data-next-i18n="profile.tmdbDisclaimer">DiscVault is not endorsed or certified by TMDB.</p>
+                      </div>
+                      <img class="profile-about-tmdb-logo" src="/api/next/assets/tmdb-logo.svg" alt="TMDB">
+                    </div>
+                  </div>
+                  <div class="profile-about-card profile-about-card--debug">
+                    <div class="profile-about-card-head">
+                      <div class="profile-about-card-copy">
+                        <span data-next-i18n="appAdmin.debugMode">Debug</span>
+                      </div>
+                      <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+                    </div>
+                    <div class="profile-meta">
+                      <div class="profile-meta-row">
+                        <span data-next-i18n="profile.buildSha">Build SHA</span>
+                        <strong id="profileBuildSha">""" + h(build_sha()) + """</strong>
+                      </div>
+                    </div>
+                    <div class="offline-status-list" id="profileOfflineStatus"></div>
                   </div>
                 </div>
-                <div class="profile-update-block hidden" id="profileUpdateBlock">
-                  <div class="profile-update-controls">
-                    <label class="profile-update-channel">
-                      <span data-next-i18n="profile.updateChannel">Update channel</span>
-                      <select id="profileUpdateChannel">
-                        <option value="auto" data-next-i18n="profile.channelAuto">Automatic</option>
-                        <option value="beta" data-next-i18n="profile.channelBeta">Beta</option>
-                        <option value="stable" data-next-i18n="profile.channelStable">Stable</option>
-                      </select>
-                    </label>
-                    <button type="button" class="secondary-button" id="profileUpdateCheckButton" data-next-i18n="profile.checkForUpdate">Check for update</button>
-                  </div>
-                  <div class="profile-update-result" id="profileUpdateResult" hidden></div>
-                </div>
-                <div class="offline-status-list" id="profileOfflineStatus"></div>
               </section>
             </div>
           </div>
@@ -11800,13 +12509,13 @@ def ui_preview_html(
       """ + nav_icon("lists") + """
       <span data-next-i18n="uiPreview.navLists">Lists</span>
     </button>
+    <button type="button" class="mobile-tab" data-app-route="discover">
+      """ + nav_icon("discover") + """
+      <span data-next-i18n="discover.nav">Discover</span>
+    </button>
     <button type="button" class="mobile-tab mobile-tab-primary" data-app-route="import">
       """ + nav_icon("import") + """
       <span data-next-i18n="importCenter.title">Import</span>
-    </button>
-    <button type="button" class="mobile-tab" data-app-route="notifications">
-      """ + nav_icon("notifications") + """
-      <span data-next-i18n="uiPreview.navNotifications">Notifications</span>
     </button>
     <button type="button" class="mobile-tab" data-app-route="profile">
       """ + nav_icon("profile") + """
@@ -11866,6 +12575,19 @@ def ui_preview_html(
     let activeLocationRouteMissing = false;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
+    let discoverState = {
+      loaded: false,
+      loading: false,
+      items: [],
+      page: 0,
+      totalPages: 1,
+      hasMore: true,
+      configured: true,
+      kind: "movie",
+      mode: "popular",
+      observer: null
+    };
+    let activeDiscoverItem = null;
     let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
@@ -11924,6 +12646,7 @@ def ui_preview_html(
     registerAppServiceWorker();
     let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera", boxSetBuilder: {target: null, members: [], captureToCamera: false, busy: false}};
     let bulkLastResult = null;
+    let longPressSuppressUntil = 0;
     let importScanner = {
       running: false,
       native: false,
@@ -11938,6 +12661,9 @@ def ui_preview_html(
     };
     const selectedMovieIds = new Set();
     const selectedContainerIds = new Set();
+    const bulkSelectedTagIds = new Set();
+    let libraryTags = [];
+    let libraryTagsLoaded = false;
     let libraryMetadataJobs = [];
     let libraryMetadataJobVisible = false;
     let libraryMetadataJobPollTimer = null;
@@ -11974,6 +12700,38 @@ def ui_preview_html(
     }
     function tNext(key, fallback) {
       return localeState.messages[key] || fallback || key;
+    }
+    const DISCOVER_DETAIL_CACHE_KEY = "dv_next_discover_detail_cache_v1";
+    const DISCOVER_DETAIL_TTL_MS = 15 * 60 * 1000;
+    function loadDiscoverDetailCache() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(DISCOVER_DETAIL_CACHE_KEY) || "{}");
+        return raw && typeof raw === "object" ? raw : {};
+      } catch (error) {
+        return {};
+      }
+    }
+    function saveDiscoverDetailCache(cache) {
+      try {
+        localStorage.setItem(DISCOVER_DETAIL_CACHE_KEY, JSON.stringify(cache || {}));
+      } catch (error) {}
+    }
+    function discoverDetailCacheGet(cacheKey) {
+      const cache = loadDiscoverDetailCache();
+      const item = cache[cacheKey];
+      if (!item || typeof item !== "object") return null;
+      const age = Date.now() - Number(item.cachedAt || 0);
+      if (!Number.isFinite(age) || age > DISCOVER_DETAIL_TTL_MS) {
+        delete cache[cacheKey];
+        saveDiscoverDetailCache(cache);
+        return null;
+      }
+      return item.detail || null;
+    }
+    function discoverDetailCacheSet(cacheKey, detail) {
+      const cache = loadDiscoverDetailCache();
+      cache[cacheKey] = {cachedAt: Date.now(), detail};
+      saveDiscoverDetailCache(cache);
     }
     function pluginDisplayName(pluginOrId, fallback = "") {
       if (!pluginOrId && fallback) return fallback;
@@ -12748,6 +13506,7 @@ def ui_preview_html(
       syncProfilePanelVisibility();
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="metadata"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkMetadata));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="group-add"]')), hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups));
+      setElementVisible(closestCard(document.querySelector('[data-bulk-action="tags-add"]')), hasPermission("watchlist.manage"));
       setElementVisible(closestCard(document.querySelector('[data-bulk-action="container"]')), collectorsEnabled && (hasAnyPermission(APP_PERMISSION_GROUPS.bulkContainers) || hasAnyPermission(APP_PERMISSION_GROUPS.bulkCollections)));
       setElementVisible(
         closestCard(document.querySelector('[data-bulk-action="location"]')),
@@ -16261,10 +17020,16 @@ def ui_preview_html(
         setStartupGateMessage(unavailable, "bad");
         return;
       }
+      const usernameInput = document.getElementById("startupOwnerUsernameInput");
+      const username = String(usernameInput?.value || "").trim();
+      if (!username) {
+        setStartupGateMessage(tNext("auth.usernameRequired", "Username is required."), "bad");
+        usernameInput?.focus();
+        return;
+      }
       const button = document.getElementById("startupOwnerPasskeyButton");
       if (button) button.disabled = true;
-      const username = "admin";
-      const displayName = tNext("auth.firstOwner", "First owner");
+      const displayName = username;
       const credentialName = tNext("auth.ownerPasskey", "Owner passkey");
       setStartupGateMessage(tNext("auth.waitingForPasskey", "Waiting for your passkey prompt..."), "info");
       try {
@@ -16473,11 +17238,18 @@ def ui_preview_html(
       if (button) button.disabled = true;
       setLoginMessage(tNext("auth.recoveryChecking", "Checking recovery code..."));
       try {
+        const recoveryBody = {username, recovery_code: recoveryCode};
+        const mobileFlow = currentMobileAuthFlow();
+        if (mobileFlow) recoveryBody.mobile_flow = mobileFlow;
         const payload = await apiJson("/api/next/auth/recovery", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({username, recovery_code: recoveryCode})
+          body: JSON.stringify(recoveryBody)
         });
+        if (payload.callback_url || payload.callbackUrl) {
+          window.location.href = payload.callback_url || payload.callbackUrl;
+          return;
+        }
         if (payload.token) localStorage.setItem("dv_next_token", payload.token);
         const codeInput = document.getElementById("appRecoveryCode");
         if (codeInput) codeInput.value = "";
@@ -16602,6 +17374,19 @@ def ui_preview_html(
       localStorage.setItem("dv_next_theme", selected);
       document.querySelectorAll("[data-theme-choice]").forEach((button) => {
         button.classList.toggle("active", button.dataset.themeChoice === selected);
+      });
+    }
+    const ACCENT_PRESETS = ["bluray", "amethyst", "chrome", "emerald", "teal", "crimson", "magenta", "ember"];
+    function setAccent(accent) {
+      const selected = ACCENT_PRESETS.includes(accent) ? accent : "bluray";
+      document.documentElement.dataset.accent = selected;
+      try {
+        localStorage.setItem("dv_next_accent", selected);
+      } catch (error) {
+        /* localStorage may be unavailable (private mode / blocked); ignore */
+      }
+      document.querySelectorAll("[data-accent-choice]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.accentChoice === selected);
       });
     }
     function groupOptionsHtml() {
@@ -16814,9 +17599,31 @@ def ui_preview_html(
       closeAllCollectionMenus(menuId);
       const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
       if (!def) return;
-      document.getElementById(def.panel)?.classList.remove("hidden");
+      const menu = document.getElementById(def.menu);
+      const panel = document.getElementById(def.panel);
+      panel?.classList.remove("hidden");
       document.getElementById(def.trigger)?.setAttribute("aria-expanded", "true");
-      document.getElementById(def.menu)?.classList.add("open");
+      menu?.classList.add("open");
+      if (menu && panel) {
+        positionCollectionMenuPanel(menu, panel);
+      }
+    }
+    function positionCollectionMenuPanel(menu, panel) {
+      panel.style.removeProperty("left");
+      panel.style.right = "0";
+      const viewportWidth = window.visualViewport?.width || window.innerWidth || document.documentElement.clientWidth;
+      if (!viewportWidth) return;
+      const menuRect = menu.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const gutter = 8;
+      const desiredLeft = menuRect.width - panelRect.width;
+      const minLeft = gutter - menuRect.left;
+      const maxLeft = viewportWidth - gutter - menuRect.left - panelRect.width;
+      const clampedLeft = Math.min(Math.max(desiredLeft, minLeft), maxLeft);
+      if (Number.isFinite(clampedLeft)) {
+        panel.style.right = "auto";
+        panel.style.left = `${Math.round(clampedLeft)}px`;
+      }
     }
     function toggleCollectionMenu(menuId) {
       const def = COLLECTION_MENUS.find((item) => item.menu === menuId);
@@ -16842,6 +17649,15 @@ def ui_preview_html(
         collectionMenusBound = true;
         document.addEventListener("click", () => closeAllCollectionMenus());
         document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeAllCollectionMenus(); });
+        window.addEventListener("resize", () => {
+          COLLECTION_MENUS.forEach((def) => {
+            const menu = document.getElementById(def.menu);
+            const panel = document.getElementById(def.panel);
+            if (menu && panel && !panel.classList.contains("hidden")) {
+              positionCollectionMenuPanel(menu, panel);
+            }
+          });
+        });
       }
     }
     function advancedSearchDefaults() {
@@ -17119,7 +17935,56 @@ def ui_preview_html(
        populateLocationParentSelect(locationSelect, {selectedId: currentLocationValue, emptyLabel: tNext("bulk.chooseLocationFirst", "Choose location")});
        if (Array.from(locationSelect.options).some((option) => option.value === currentLocationValue)) locationSelect.value = currentLocationValue;
       }
+      renderBulkTagPicker();
       syncBulkTargetCreateControls();
+    }
+    function renderBulkTagPicker() {
+      const picker = document.getElementById("bulkTagPicker");
+      if (!picker) return;
+      const tags = Array.isArray(libraryTags) ? libraryTags : [];
+      const validIds = new Set(tags.map((tag) => String(tag.id)));
+      Array.from(bulkSelectedTagIds).forEach((id) => { if (!validIds.has(id)) bulkSelectedTagIds.delete(id); });
+      if (!tags.length) {
+        const emptyLabel = libraryTagsLoaded
+          ? tNext("bulk.tagsEmpty", "No tags yet. Create tags from the Lists screen.")
+          : tNext("bulk.tagsLoading", "Loading tags...");
+        picker.innerHTML = `<span class="bulk-tag-empty">${escapeHtml(emptyLabel)}</span>`;
+        return;
+      }
+      picker.innerHTML = tags.map((tag) => {
+        const id = String(tag.id);
+        const selected = bulkSelectedTagIds.has(id);
+        const count = Number(tag.movieCount || 0);
+        const name = tag.name || tag.slug || "";
+        const style = tag.color ? ` style="--tag-color:${escapeHtml(tag.color)}"` : "";
+        const ariaLabel = tNext("bulk.tagOptionLabel", "{name} ({count})").replace("{name}", name).replace("{count}", String(count));
+        return `<button type="button" class="bulk-tag-option" data-bulk-tag="${escapeHtml(id)}" aria-pressed="${selected ? "true" : "false"}" aria-label="${escapeHtml(ariaLabel)}"${style}>`
+          + `<span class="bulk-tag-swatch" aria-hidden="true"></span>`
+          + `<span class="bulk-tag-name">${escapeHtml(name)}</span>`
+          + `<span class="bulk-tag-count">${escapeHtml(String(count))}</span>`
+          + `</button>`;
+      }).join("");
+    }
+    async function loadLibraryTags(force = false) {
+      if (!hasPermission("watchlist.manage")) {
+        libraryTags = [];
+        libraryTagsLoaded = true;
+        renderBulkTagPicker();
+        return;
+      }
+      if (libraryTagsLoaded && !force) {
+        renderBulkTagPicker();
+        return;
+      }
+      try {
+        const payload = await authApiJson("/api/next/tags");
+        libraryTags = Array.isArray(payload.tags) ? payload.tags : [];
+        libraryTagsLoaded = true;
+      } catch (error) {
+        libraryTags = [];
+      }
+      renderBulkTagPicker();
+      updateBulkBar();
     }
     function syncBulkTargetCreateControls() {
       const containerSelect = document.getElementById("bulkContainerTarget");
@@ -17574,7 +18439,7 @@ def ui_preview_html(
       });
     }
     function normalizeViewMode(value) {
-      return ["poster", "list", "detail"].includes(value) ? value : "poster";
+      return ["poster", "list"].includes(value) ? value : "poster";
     }
     function normalizeLibraryViewMode(value) {
       return value === "list" ? "list" : "poster";
@@ -17761,7 +18626,12 @@ def ui_preview_html(
         button.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
-          openAppPersonDetail(button.dataset.personLink);
+          const discoverPage = document.getElementById("discoverDetailPage");
+          const discoverVisible = Boolean(discoverPage) && !discoverPage.classList.contains("hidden");
+          const returnRoute = discoverVisible && activeDiscoverItem?.id
+            ? {view: "discoverDetail", discoverId: activeDiscoverItem.id, mediaType: activeDiscoverItem.mediaType || "movie"}
+            : null;
+          openAppPersonDetail(button.dataset.personLink, true, returnRoute);
         });
       });
       root.querySelectorAll("[data-member-movie]").forEach((button) => {
@@ -17835,9 +18705,32 @@ def ui_preview_html(
       if (lower.includes("dvd")) return "DVD";
       return text;
     }
+    function physicalFormatBadgeClass(value) {
+      const lower = String(value || "").trim().toLowerCase();
+      if (!lower) return "";
+      if (movieFormatIsFourKBlurayCombo(lower) || lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "physical-format-badge--4k";
+      if (lower.includes("steel")) return "physical-format-badge--steel";
+      if (lower.includes("blu") || lower.includes("bd")) return "physical-format-badge--bluray";
+      if (lower.includes("dvd")) return "physical-format-badge--dvd";
+      if (lower.includes("digital") || lower.includes("vod") || lower.includes("stream")) return "physical-format-badge--digital";
+      return "";
+    }
+    function physicalFormatBadgeLabel(value) {
+      const text = String(value || "").trim();
+      const lower = text.toLowerCase();
+      if (!text) return "";
+      if (movieFormatIsFourKBlurayCombo(text)) return "4K + BD";
+      if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K";
+      if (lower.includes("blu") || lower.includes("bd")) return "BD";
+      if (lower.includes("dvd")) return "DVD";
+      return physicalFormatLabel(value);
+    }
     function physicalFormatBadgeHtml(value) {
-      const label = physicalFormatLabel(value);
-      return label ? `<span class="physical-format-badge">${escapeHtml(label)}</span>` : "";
+      const label = physicalFormatBadgeLabel(value);
+      if (!label) return "";
+      const variant = physicalFormatBadgeClass(value);
+      const cls = variant ? `physical-format-badge ${variant}` : "physical-format-badge";
+      return `<span class="${cls}">${escapeHtml(label)}</span>`;
     }
     const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "AU", "BR", "DK", "FI", "NO", "SE", "NZ", "IN", "PH", "MY", "PL", "HU", "BG", "LT"];
     function ratingCountryLabel(code) {
@@ -19181,7 +20074,12 @@ def ui_preview_html(
       }).join("")}</div>`;
     }
     function detailTagHtml(values) {
-      return values.filter(Boolean).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
+      return (values || []).filter(Boolean).map((item) => {
+        if (item && typeof item === "object" && typeof item.html === "string" && item.html.trim()) {
+          return `<span class="pill">${item.html}</span>`;
+        }
+        return `<span class="pill">${escapeHtml(String(item))}</span>`;
+      }).join("");
     }
     function setMovieDetailMessage(message, tone) {
       const node = document.getElementById("movieDetailMessage");
@@ -19786,6 +20684,8 @@ def ui_preview_html(
         backdropNode.src = backdrop || "";
         backdropNode.classList.toggle("hidden", !backdrop);
       }
+      const movieHeroNode = document.getElementById("movieDetailHero");
+      if (movieHeroNode) movieHeroNode.classList.toggle("is-flat", !backdrop);
       const posterNode = document.getElementById("movieDetailPoster");
       if (posterNode) {
         posterNode.innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -19794,11 +20694,12 @@ def ui_preview_html(
       document.getElementById("movieDetailOverview").textContent = localizedMovieOverview(movie, detail.localizations) || tNext("movieDetail.noOverview", "No overview imported yet.");
       const contentRatingInfo = preferredContentRatingInfo(movie, specs);
       const contentRating = contentRatingInfo.rating;
+      const heroContentRatingTag = contentRatingBadgeHtml(contentRatingInfo);
       document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
         movie.year,
         movie.format,
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
-        contentRatingSummaryText(contentRatingInfo),
+        heroContentRatingTag ? {html: heroContentRatingTag} : contentRatingSummaryText(contentRatingInfo),
         movieScoreLabel(movie),
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
         (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : "",
@@ -20201,6 +21102,8 @@ def ui_preview_html(
         backdropNode.src = backdrop || "";
         backdropNode.classList.toggle("hidden", !backdrop);
       }
+      const containerHeroNode = document.getElementById("containerDetailHero");
+      if (containerHeroNode) containerHeroNode.classList.toggle("is-flat", !backdrop);
       const posterNode = document.getElementById("containerDetailPoster");
       if (posterNode) {
         let coverPoster = poster;
@@ -20572,6 +21475,8 @@ def ui_preview_html(
       if (avatarNode) {
         avatarNode.innerHTML = image ? `<img src="${escapeHtml(image)}" alt="">` : escapeHtml(initialsFromName(name));
       }
+      const personHeroNode = document.getElementById("personDetailHero");
+      if (personHeroNode) personHeroNode.classList.add("is-flat");
       document.getElementById("personDetailTitle").textContent = name;
       applyPersonBiography(person.biography || tNext("personDetail.noBiography", "No biography imported yet."));
       const knownForValue = person.known_for || metadata.knownFor || metadata.known_for || "";
@@ -20844,6 +21749,10 @@ def ui_preview_html(
       personReturnRoute = null;
       if (returnRoute?.view === "movie" && returnRoute.movieId) {
         openAppMovieDetail(returnRoute.movieId, pushUrl);
+        return;
+      }
+      if (returnRoute?.view === "discoverDetail" && returnRoute.discoverId) {
+        openDiscoverDetail({id: returnRoute.discoverId, mediaType: returnRoute.mediaType || "movie"}, pushUrl);
         return;
       }
       if (returnRoute?.view === "people") {
@@ -25180,22 +26089,6 @@ def ui_preview_html(
         </div>
       `;
     }
-    function tagRowHtml(tag) {
-      const count = tag.movieCount || 0;
-      const color = tag.color || "";
-      return `
-        <div class="list-simple-card">
-          <span class="tag-swatch"${color ? ` style="background:${escapeHtml(color)}"` : ""}></span>
-          <div class="list-simple-body">
-            <span class="list-simple-title">${escapeHtml(tag.name || "")}</span>
-            <span class="list-simple-meta">${escapeHtml(count)} ${escapeHtml(tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies"))}</span>
-          </div>
-          <div class="list-simple-actions">
-            <button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>
-          </div>
-        </div>
-      `;
-    }
     function loanRowHtml(loan) {
       const snapshot = loan.snapshot || {};
       const title = snapshot.title || loan.title || tNext("common.untitled", "Untitled");
@@ -25353,11 +26246,6 @@ def ui_preview_html(
           <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
           <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
-          <span class="lists-poster-actions">
-            ${acquired ? "" : `<button type="button" data-wishlist-acquire="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.wishlistMarkAcquired", "Mark as acquired"))}</button>`}
-            <button type="button" data-wishlist-meerinfo="${escapeHtml(item.id)}">${escapeHtml(tNext("lists.moreInfo", "More info"))}</button>
-            <button type="button" class="danger" data-wishlist-remove="${escapeHtml(item.id)}">${escapeHtml(tNext("common.remove", "Remove"))}</button>
-          </span>
         </div>
       `;
     }
@@ -25438,47 +26326,27 @@ def ui_preview_html(
       return section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
         + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
-    function tagPosterCardHtml(tag) {
+    function tagChipHtml(tag) {
       const count = tag.movieCount || 0;
       const color = tag.color || "";
-      const initial = (String(tag.name || "#").trim().slice(0, 1) || "#").toUpperCase();
+      const locked = count > 0;
+      const countLabel = count + " " + tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies");
+      const removeTitle = locked
+        ? tNext("lists.tagDeleteLocked", "Remove this tag from all media before you can delete it.")
+        : tNext("common.delete", "Delete");
       return `
-        <div class="preview-poster lists-static-poster tag-poster-card">
-          <span class="preview-poster-art tag-poster-art"${color ? ` style="background:${escapeHtml(color)}"` : ""}><span class="tag-poster-initial">${escapeHtml(initial)}</span></span>
-          <span class="preview-poster-title">${escapeHtml(tag.name || "")}</span>
-          <span class="preview-poster-meta">${escapeHtml(count)} ${escapeHtml(tNext(count === 1 ? "lists.tagMovie" : "lists.tagMovies", count === 1 ? "movie" : "movies"))}</span>
-          <span class="lists-poster-actions">
-            <button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>
-          </span>
-        </div>
+        <span class="tag-chip"${color ? ` style="--tag-color:${escapeHtml(color)}"` : ""}>
+          <span class="tag-chip-swatch" aria-hidden="true"></span>
+          <span class="tag-chip-name">${escapeHtml(tag.name || "")}</span>
+          <span class="tag-chip-count">${escapeHtml(countLabel)}</span>
+          <button type="button" class="tag-chip-remove" data-tag-remove="${escapeHtml(tag.id)}"${locked ? " disabled" : ""} title="${escapeHtml(removeTitle)}" aria-label="${escapeHtml(removeTitle)}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>
+          </button>
+        </span>
       `;
     }
-    function tagDetailTableHtml(tags) {
-      return `
-        <div class="watched-detail-table" role="table">
-          <div class="watched-detail-row head" role="row">
-            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.tagName", "Tag"))}</span>
-            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("lists.tagMoviesColumn", "Movies"))}</span>
-            <span role="columnheader" class="watched-column-label">${escapeHtml(tNext("common.actions", "Actions"))}</span>
-          </div>
-          ${(tags || []).map((tag) => {
-            const count = tag.movieCount || 0;
-            const color = tag.color || "";
-            return `
-              <div class="watched-detail-row" role="row">
-                <span role="cell"><span class="tag-swatch"${color ? ` style="background:${escapeHtml(color)}"` : ""}></span> <strong>${escapeHtml(tag.name || "")}</strong></span>
-                <span role="cell">${escapeHtml(count)}</span>
-                <span role="cell" class="list-simple-actions"><button type="button" class="danger" data-tag-remove="${escapeHtml(tag.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button></span>
-              </div>
-            `;
-          }).join("")}
-        </div>
-      `;
-    }
-    function tagRenderRows(rows, mode) {
-      if (mode === "detail") return tagDetailTableHtml(rows || []);
-      if (mode === "list") return (rows || []).map(tagRowHtml).join("");
-      return (rows || []).map(tagPosterCardHtml).join("");
+    function tagRenderRows(rows) {
+      return (rows || []).map(tagChipHtml).join("");
     }
     function loanPosterUrl(loan) {
       const snapshot = loan.snapshot || {};
@@ -25948,7 +26816,15 @@ def ui_preview_html(
       const empty = document.getElementById("listsEmptyMessage");
       const active = listsState.active;
       const viewModeControl = document.getElementById("listsViewModeControl");
-      if (viewModeControl) viewModeControl.classList.remove("hidden");
+      if (viewModeControl) {
+        viewModeControl.classList.remove("hidden");
+        const tagsActive = active === "tags";
+        viewModeControl.classList.toggle("is-disabled", tagsActive);
+        viewModeControl.setAttribute("aria-hidden", tagsActive ? "true" : "false");
+        viewModeControl.querySelectorAll("[data-lists-view-mode]").forEach((button) => {
+          button.disabled = tagsActive;
+        });
+      }
       if (watchlistGrid) watchlistGrid.classList.toggle("hidden", active !== "watchlist");
       if (watchedList) watchedList.classList.toggle("hidden", active !== "watched");
       if (wishlistPanel) wishlistPanel.classList.toggle("hidden", active !== "wishlist");
@@ -26009,8 +26885,8 @@ def ui_preview_html(
       } else if (active === "tags") {
         const list = document.getElementById("listsTagsList");
         if (list) {
-          configureSimpleListNode(list, {tags: true});
-          list.innerHTML = tagRenderRows(listsState.tags || [], listsViewMode);
+          list.className = "tags-chip-list";
+          list.innerHTML = tagRenderRows(listsState.tags || []);
         }
         if (empty) {
           empty.textContent = tNext("lists.emptyTags", "You have no tags yet.");
@@ -26071,6 +26947,9 @@ def ui_preview_html(
         listsState.watched = payload.watched || [];
         listsState.wishlist = wishlistPayload.items || [];
         listsState.tags = tagsPayload.tags || [];
+        libraryTags = listsState.tags;
+        libraryTagsLoaded = true;
+        renderBulkTagPicker();
         const lentLoans = (loansPayload.loans || []).map((loan) => { loan.direction = "out"; return loan; });
         const borrowedLoans = (borrowedPayload.loans || []).map((loan) => { loan.direction = "in"; return loan; });
         listsState.loans = lentLoans.concat(borrowedLoans);
@@ -26124,10 +27003,38 @@ def ui_preview_html(
     function bindWishlistCardInteractions() {
       document.querySelectorAll("#listsWishlistList [data-wishlist-poster]").forEach((poster) => {
         const id = poster.dataset.wishlistPoster;
-        const card = poster.closest("[data-wishlist-card]");
         bindLongPress(poster, {
           onClick: () => openWishlistMeerInfo(id),
-          onLongPress: () => { if (card) card.classList.toggle("actions-visible"); }
+          onLongPress: () => openWishlistActionsMenu(id)
+        });
+      });
+    }
+    function openWishlistActionsMenu(id) {
+      const item = listsFindWishlist(id);
+      if (!item) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      const actions = [];
+      if (!item.acquiredAt) {
+        actions.push({ key: "acquire", label: tNext("lists.wishlistMarkAcquired", "Mark as acquired"), run: () => acquireWishlistItem(id) });
+      }
+      actions.push({ key: "meerinfo", label: tNext("lists.moreInfo", "More info"), run: () => openWishlistMeerInfo(id) });
+      actions.push({ key: "remove", label: tNext("common.remove", "Remove"), tone: "danger", run: () => removeWishlistItem(id) });
+      const buttonsHtml = actions.map((action, index) =>
+        `<button type="button" class="lists-actionsheet-btn${action.tone === "danger" ? " danger" : ""}" data-action-index="${index}">${escapeHtml(action.label)}</button>`
+      ).join("");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</h3></header>
+        <div class="lists-actionsheet-list">${buttonsHtml}</div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-action-index]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const action = actions[Number(btn.dataset.actionIndex)];
+          listsCloseOverlay(overlay);
+          if (action && typeof action.run === "function") action.run();
         });
       });
     }
@@ -27313,6 +28220,8 @@ def ui_preview_html(
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
+      else if (route.view === "discover") showDiscoverPage(false);
+      else if (route.view === "discoverDetail") openDiscoverDetail({id: route.discoverId, mediaType: route.mediaType || "movie"}, false);
       else if (route.view === "import") showImportPage(false);
       else if (route.view === "lists") showListsPage(false);
       else if (route.view === "statistics") showStatisticsPage(false);
@@ -27584,9 +28493,336 @@ def ui_preview_html(
         window.scrollTo({top: 0, behavior: "auto"});
       });
     }
+    function setDiscoverMessage(message, tone = "") {
+      const node = document.getElementById("discoverInlineMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.classList.toggle("hidden", !message);
+      node.classList.toggle("error", tone === "error");
+    }
+    function setDiscoverDetailMessage(message, tone = "") {
+      const node = document.getElementById("discoverDetailMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `detail-message ${tone || ""}`.trim();
+    }
+    function discoverCardHtml(item) {
+      const poster = usableImage(item.posterUrl || "");
+      const title = item.title || tNext("common.untitled", "Untitled");
+      return `
+        <button type="button" class="discover-card" data-discover-id="${escapeHtml(item.id || "")}">
+          <span class="discover-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : escapeHtml(tNext("collection.noPoster", "No poster"))}</span>
+          <span class="discover-title">${escapeHtml(title)}</span>
+        </button>
+      `;
+    }
+    function renderDiscoverView() {
+      const grid = document.getElementById("discoverGrid");
+      const empty = document.getElementById("discoverEmpty");
+      const loading = document.getElementById("discoverLoading");
+      if (!grid || !empty || !loading) return;
+      grid.innerHTML = (discoverState.items || []).map((item) => discoverCardHtml(item)).join("");
+      empty.classList.toggle("hidden", !!(discoverState.items || []).length || discoverState.loading || !discoverState.configured);
+      loading.classList.toggle("hidden", !discoverState.loading);
+      grid.querySelectorAll(".discover-card").forEach((button) => {
+        const item = (discoverState.items || []).find((entry) => String(entry.id) === String(button.dataset.discoverId));
+        if (!item) return;
+        bindLongPress(button, {
+          onClick: () => openDiscoverDetail(item),
+          onLongPress: () => openDiscoverActionsMenu(item)
+        });
+      });
+    }
+    function openDiscoverActionsMenu(item) {
+      if (!item) return;
+      const actions = [];
+      if (hasPermission("watchlist.manage")) {
+        actions.push({
+          key: "wishlist",
+          label: tNext("discover.addWishlist", "Add to wishlist"),
+          run: () => addDiscoverItemToWishlist(item)
+        });
+      }
+      actions.push({
+        key: "moreInfo",
+        label: tNext("lists.moreInfo", "More info"),
+        run: () => openDiscoverDetail(item)
+      });
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      const buttonsHtml = actions.map((action, index) =>
+        `<button type="button" class="lists-actionsheet-btn" data-action-index="${index}">${escapeHtml(action.label)}</button>`
+      ).join("");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</h3></header>
+        <div class="lists-actionsheet-list">${buttonsHtml}</div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]").addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-action-index]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const action = actions[Number(btn.dataset.actionIndex)];
+          listsCloseOverlay(overlay);
+          if (action && typeof action.run === "function") action.run();
+        });
+      });
+    }
+    async function addDiscoverItemToWishlist(item, opts = {}) {
+      if (!hasPermission("watchlist.manage")) return;
+      const inDetail = !!opts.detail;
+      try {
+        await authApiJson("/api/next/lists/wishlist", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            title: item.title || "",
+            year: item.year ? Number(item.year) || null : null,
+            posterUrl: item.posterUrl || null
+          })
+        });
+        if (inDetail) setDiscoverDetailMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        else setDiscoverMessage(tNext("lists.wishlistAdded", "Added to wishlist."));
+      } catch (error) {
+        if (inDetail) setDiscoverDetailMessage(error.message || String(error), "bad");
+        else setDiscoverMessage(error.message || String(error), "error");
+      }
+    }
+    async function loadDiscoverPage(reset = false) {
+      if (discoverState.loading) return;
+      if (reset) {
+        discoverState.items = [];
+        discoverState.page = 0;
+        discoverState.totalPages = 1;
+        discoverState.hasMore = true;
+      }
+      if (!discoverState.hasMore && !reset) return;
+      discoverState.loading = true;
+      renderDiscoverView();
+      const nextPage = discoverState.page + 1;
+      try {
+        const payload = await authApiJson(`/api/next/discover?page=${nextPage}&kind=${encodeURIComponent(discoverState.kind)}&mode=${encodeURIComponent(discoverState.mode)}&locale=${encodeURIComponent(localeState.locale)}`);
+        discoverState.configured = payload.configured !== false;
+        if (!discoverState.configured) {
+          discoverState.items = [];
+          discoverState.page = 1;
+          discoverState.totalPages = 1;
+          discoverState.hasMore = false;
+          setDiscoverMessage(
+            payload.message || tNext("discover.tmdbMissing", "TMDb API key is missing. Open Plugins and add your free TMDb key."),
+            "error"
+          );
+        } else {
+          setDiscoverMessage("");
+          discoverState.page = Number(payload.page || nextPage);
+          discoverState.totalPages = Number(payload.totalPages || 1);
+          discoverState.hasMore = !!payload.hasMore;
+          discoverState.items = [...(discoverState.items || []), ...((payload.items || []).filter(Boolean))];
+          discoverState.loaded = true;
+        }
+      } catch (error) {
+        setDiscoverMessage(error.message || String(error), "error");
+      } finally {
+        discoverState.loading = false;
+        renderDiscoverView();
+      }
+    }
+    function ensureDiscoverObserver() {
+      if (discoverState.observer) return;
+      const sentinel = document.getElementById("discoverSentinel");
+      if (!sentinel) return;
+      discoverState.observer = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        if (!document.getElementById("discoverView") || document.getElementById("discoverView").classList.contains("hidden")) return;
+        loadDiscoverPage(false);
+      }, {root: null, rootMargin: "400px 0px 400px 0px", threshold: 0.01});
+      discoverState.observer.observe(sentinel);
+    }
+    function formatDiscoverMoney(value) {
+      const amount = Number(value || 0);
+      if (!Number.isFinite(amount) || amount <= 0) return tNext("movieDetail.noData", "No data imported yet.");
+      try {
+        return new Intl.NumberFormat(localeState.locale || "en-US", {style: "currency", currency: "USD", maximumFractionDigits: 0}).format(amount);
+      } catch (error) {
+        return `$${Math.round(amount).toLocaleString()}`;
+      }
+    }
+    function isReleasedDate(value) {
+      const text = String(value || "").slice(0, 10);
+      if (!text) return false;
+      const releaseDate = new Date(`${text}T12:00:00`);
+      if (Number.isNaN(releaseDate.getTime())) return false;
+      const now = new Date();
+      return releaseDate.getTime() <= now.getTime();
+    }
+    function discoverStreamingProvidersHtml(detail) {
+      if (detail?.mediaType !== "movie" || !isReleasedDate(detail?.releaseDate)) return "";
+      const providers = Array.isArray(detail?.streamingProviders) ? detail.streamingProviders : [];
+      const labels = providers.map((entry) => String(entry?.name || "").trim()).filter(Boolean);
+      return labels.join(", ");
+    }
+    function discoverContentRatingInfo(detail) {
+      return preferredContentRatingInfo({content_ratings: detail?.contentRatings || {}}, null);
+    }
+    function discoverContentRatingTagHtml(info) {
+      if (!info?.rating || info.unknown) return "";
+      return `${info.country ? flagIconHtml(info.country, ratingCountryLabel(info.country)) : ""}<span>${escapeHtml(info.rating)}</span>`;
+    }
+    function discoverPersonLineHtml(person, roleText = "") {
+      const name = String(person?.name || "").trim();
+      if (!name) return "";
+      const personId = String(person?.localPersonId || "").trim();
+      const nameHtml = personId
+        ? `<button type="button" class="inline-person-link" data-person-link="${escapeHtml(personId)}">${escapeHtml(name)}</button>`
+        : `<span class="inline-person-text">${escapeHtml(name)}</span>`;
+      const role = String(roleText || "").trim();
+      if (!role) return `<span class="discover-person-line">${nameHtml}</span>`;
+      return `<span class="discover-person-line">${nameHtml}<span>${escapeHtml(tNext("discover.castAs", "as"))}</span><span class="discover-person-role"><strong>${escapeHtml(role)}</strong></span></span>`;
+    }
+    function discoverDirectorHtml(detail) {
+      const rows = Array.isArray(detail?.directorPeople) ? detail.directorPeople : [];
+      if (rows.length) return rows.map((person) => discoverPersonLineHtml(person)).filter(Boolean).join("");
+      if (detail?.director) return escapeHtml(String(detail.director));
+      return "";
+    }
+    function discoverCastHtml(detail) {
+      const rows = Array.isArray(detail?.castPeople) ? detail.castPeople : [];
+      if (rows.length) return rows.map((person) => discoverPersonLineHtml(person, person?.role || person?.job || "")).filter(Boolean).join("");
+      if (detail?.actors) return escapeHtml(String(detail.actors));
+      return "";
+    }
+    function showDiscoverDetailPage() {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.remove("hidden");
+      setActiveAppRoute("discover");
+      scrollPreviewTop();
+    }
+    function closeDiscoverDetail(pushUrl = true) {
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
+      showDiscoverPage(false);
+      if (pushUrl && appMode && window.location.pathname !== "/discover") {
+        history.pushState({view: "discover"}, "", "/discover");
+      }
+    }
+    async function openDiscoverDetail(item, pushUrl = true) {
+      if (!item || !item.id) return;
+      activeDiscoverItem = item;
+      showDiscoverDetailPage();
+      document.getElementById("discoverDetailTitle").textContent = tNext("collection.loading", "Loading...");
+      document.getElementById("discoverDetailOverview").textContent = "";
+      document.getElementById("discoverDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
+      document.getElementById("discoverDetailBackdrop").src = "";
+      document.getElementById("discoverDetailHero")?.classList.add("is-flat");
+      document.getElementById("discoverDetailRelease").innerHTML = "";
+      document.getElementById("discoverDetailPeople").innerHTML = "";
+      document.getElementById("discoverDetailTags").innerHTML = "";
+      setDiscoverDetailMessage("");
+      const detailPath = `/discover/${encodeURIComponent(item.mediaType || "movie")}/${encodeURIComponent(item.id)}`;
+      if (pushUrl && appMode && window.location.pathname !== detailPath) {
+        history.pushState({view: "discoverDetail", mediaType: item.mediaType || "movie", discoverId: item.id}, "", detailPath);
+      }
+      const cacheKey = `${item.mediaType || "movie"}:${item.id}`;
+      try {
+        const cached = discoverDetailCacheGet(cacheKey);
+        const payload = cached ? {detail: cached} : await authApiJson(`/api/next/discover/${encodeURIComponent(item.mediaType || "movie")}/${encodeURIComponent(item.id)}?locale=${encodeURIComponent(localeState.locale)}`);
+        const detail = payload.detail || {};
+        if (!cached) discoverDetailCacheSet(cacheKey, detail);
+        const poster = usableImage(detail.posterUrl || item.posterUrl || "");
+        const backdrop = usableImage(detail.backdropUrl || item.backdropUrl || "");
+        const title = detail.title || item.title || tNext("common.untitled", "Untitled");
+        activeDiscoverItem = {
+          ...item,
+          title,
+          posterUrl: poster || item.posterUrl || "",
+          year: detail.year || item.year || ""
+        };
+        document.getElementById("discoverDetailTitle").textContent = title;
+        document.getElementById("discoverDetailOverview").textContent = detail.overview || tNext("movieDetail.noOverview", "No overview imported yet.");
+        document.getElementById("discoverDetailPoster").innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+        const backdropNode = document.getElementById("discoverDetailBackdrop");
+        if (backdropNode) {
+          backdropNode.src = backdrop || "";
+          backdropNode.classList.toggle("hidden", !backdrop);
+        }
+        const discoverHeroNode = document.getElementById("discoverDetailHero");
+        if (discoverHeroNode) discoverHeroNode.classList.toggle("is-flat", !backdrop);
+        const contentRatingInfo = discoverContentRatingInfo(detail);
+        const contentRatingTag = discoverContentRatingTagHtml(contentRatingInfo);
+        document.getElementById("discoverDetailTags").innerHTML = detailTagHtml([
+          detail.year,
+          detail.mediaType === "tv" ? tNext("collection.typeTvShow", "TV Show") : tNext("collection.typeMovie", "Movie"),
+          detail.runtimeMinutes ? `${detail.runtimeMinutes} ${tNext("movieDetail.minutesShort", "min")}` : "",
+          contentRatingTag ? {html: contentRatingTag} : null
+        ]);
+        const providersText = discoverStreamingProvidersHtml(detail);
+        document.getElementById("discoverDetailRelease").innerHTML = detailFieldRows([
+          [tNext("movieDetail.releaseDate", "Release date"), formatAppDate(detail.releaseDate || "") || detail.releaseDate || ""],
+          [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(detail.runtimeMinutes)],
+          [tNext("movieDetail.contentRating", "Content rating"), contentRatingInfo?.rating ? {text: contentRatingInfo.rating, html: contentRatingValueHtml(contentRatingInfo)} : ""],
+          [tNext("metadataJobs.providers", "Providers"), providersText],
+          [tNext("discover.budget", "Budget"), formatDiscoverMoney(detail.budget)],
+          [tNext("discover.revenue", "Revenue"), formatDiscoverMoney(detail.revenue)],
+          [tNext("discover.awards", "Award nominations"), detail.awardNominations || tNext("discover.awardsUnavailable", "Not available")]
+        ]);
+        const directorHtml = discoverDirectorHtml(detail);
+        const castHtml = discoverCastHtml(detail);
+        document.getElementById("discoverDetailPeople").innerHTML = detailFieldRows([
+          [tNext("movieDetail.director", "Director"), directorHtml ? {text: "present", html: directorHtml} : ""],
+          [tNext("movieDetail.cast", "Cast"), castHtml ? {text: "present", html: castHtml} : ""]
+        ]);
+        bindViewModeInteractions(document.getElementById("discoverDetailPeople") || document);
+        document.getElementById("discoverShowtimesNote").textContent = tNext(
+          "discover.showtimesUnavailable",
+          "TMDb does not provide complete local cinema showtimes. Add a local showtimes provider in a future release."
+        );
+      } catch (error) {
+        setDiscoverDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function showDiscoverPage(pushUrl = true) {
+      document.getElementById("libraryView")?.classList.add("hidden");
+      document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
+      document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("importView")?.classList.add("hidden");
+      document.getElementById("profileView")?.classList.add("hidden");
+      document.getElementById("adminView")?.classList.add("hidden");
+      document.getElementById("locationDetailPage")?.classList.add("hidden");
+      document.getElementById("containerDetailPage")?.classList.add("hidden");
+      document.getElementById("personDetailPage")?.classList.add("hidden");
+      document.getElementById("movieDetailPage")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.remove("hidden");
+      setActiveAppRoute("discover");
+      ensureDiscoverObserver();
+      if (!discoverState.loaded) {
+        loadDiscoverPage(true);
+      } else {
+        renderDiscoverView();
+      }
+      if (pushUrl && appMode && window.location.pathname !== "/discover") {
+        history.pushState({view: "discover"}, "", "/discover");
+      }
+      scrollPreviewTop();
+    }
     function showMovieDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -27602,6 +28838,8 @@ def ui_preview_html(
     function showContainerDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -27617,6 +28855,8 @@ def ui_preview_html(
     function showPersonDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -27637,6 +28877,8 @@ def ui_preview_html(
     function showLocationDetailPage() {
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -27656,6 +28898,8 @@ def ui_preview_html(
       document.getElementById("personDetailPage")?.classList.add("hidden");
       document.getElementById("locationDetailPage")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
@@ -27701,6 +28945,8 @@ def ui_preview_html(
       }
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -27732,6 +28978,8 @@ def ui_preview_html(
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -27758,6 +29006,8 @@ def ui_preview_html(
       document.getElementById("libraryView")?.classList.add("hidden");
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
       document.getElementById("personDetailPage")?.classList.add("hidden");
@@ -27785,6 +29035,8 @@ def ui_preview_html(
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -27816,6 +29068,8 @@ def ui_preview_html(
       document.getElementById("listsView")?.classList.add("hidden");
       document.getElementById("peopleView")?.classList.add("hidden");
       document.getElementById("notificationsView")?.classList.add("hidden");
+      document.getElementById("discoverView")?.classList.add("hidden");
+      document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("importView")?.classList.add("hidden");
       document.getElementById("movieDetailPage")?.classList.add("hidden");
       document.getElementById("containerDetailPage")?.classList.add("hidden");
@@ -27874,6 +29128,9 @@ def ui_preview_html(
       if (/^\\/api\\/next\\/app\\/import\\/?$|^\\/app\\/import\\/?$|^\\/import\\/?$/.test(window.location.pathname)) {
         return {view: "import"};
       }
+      if (/^\\/api\\/next\\/app\\/discover\\/?$|^\\/app\\/discover\\/?$|^\\/discover\\/?$/.test(window.location.pathname)) {
+        return {view: "discover"};
+      }
       if (/^\\/app\\/profile\\/?$|^\\/profile\\/?$/.test(window.location.pathname)) {
         return {view: "profile"};
       }
@@ -27892,6 +29149,14 @@ def ui_preview_html(
       const movieMatch = window.location.pathname.match(/^\\/app\\/movies\\/([^/]+)$|^\\/movies\\/([^/]+)$/);
       if (movieMatch) {
         return {view: "movie", movieId: decodeURIComponent(movieMatch[1] || movieMatch[2])};
+      }
+      const discoverDetailMatch = window.location.pathname.match(/^\\/discover\\/(movie|tv)\\/([^/]+)$|^\\/app\\/discover\\/(movie|tv)\\/([^/]+)$/);
+      if (discoverDetailMatch) {
+        return {
+          view: "discoverDetail",
+          mediaType: decodeURIComponent(discoverDetailMatch[1] || discoverDetailMatch[3]),
+          discoverId: decodeURIComponent(discoverDetailMatch[2] || discoverDetailMatch[4])
+        };
       }
       const containerMatch = window.location.pathname.match(/^\\/app\\/containers\\/([^/]+)$|^\\/containers\\/([^/]+)$/);
       if (containerMatch) {
@@ -27940,7 +29205,12 @@ def ui_preview_html(
         return;
       }
       if (route === "lists") {
+        listsState.loaded = false;
         showListsPage();
+        return;
+      }
+      if (route === "discover") {
+        showDiscoverPage();
         return;
       }
       if (route === "statistics") {
@@ -27948,6 +29218,7 @@ def ui_preview_html(
         return;
       }
       if (route === "people") {
+        refreshAppSnapshotSilently();
         showLibraryPage(true);
         return;
       }
@@ -27955,7 +29226,11 @@ def ui_preview_html(
         showNotificationsPage();
         return;
       }
+      refreshAppSnapshotSilently();
       showLibraryPage(true, route || "library");
+    }
+    function refreshAppSnapshotSilently() {
+      loadAppSnapshot().catch(() => {});
     }
     async function saveMovieDetails(event) {
       event.preventDefault();
@@ -28315,11 +29590,68 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    const LONG_PRESS_DURATION_MS = 500;
+    const LONG_PRESS_MOVE_TOLERANCE = 10;
+    const LONG_PRESS_CLICK_SUPPRESS_MS = 700;
+    function longPressActive() {
+      return Date.now() < longPressSuppressUntil;
+    }
+    function consumeLongPressClick() {
+      if (!longPressActive()) return false;
+      longPressSuppressUntil = 0;
+      return true;
+    }
+    function bindLongPressSelection(button, onLongPress) {
+      if (!button || button.dataset.longPressBound === "1") return;
+      button.dataset.longPressBound = "1";
+      let timer = null;
+      let startX = 0;
+      let startY = 0;
+      const clear = () => {
+        if (timer) {
+          window.clearTimeout(timer);
+          timer = null;
+        }
+      };
+      button.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+        startX = event.clientX;
+        startY = event.clientY;
+        clear();
+        timer = window.setTimeout(() => {
+          timer = null;
+          longPressSuppressUntil = Date.now() + LONG_PRESS_CLICK_SUPPRESS_MS;
+          onLongPress();
+        }, LONG_PRESS_DURATION_MS);
+      });
+      button.addEventListener("pointermove", (event) => {
+        if (!timer) return;
+        if (Math.abs(event.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE
+          || Math.abs(event.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) {
+          clear();
+        }
+      });
+      button.addEventListener("pointerup", clear);
+      button.addEventListener("pointercancel", clear);
+      button.addEventListener("pointerleave", clear);
+      button.addEventListener("contextmenu", (event) => {
+        if (timer || longPressActive()) event.preventDefault();
+      });
+    }
     function bindCollectionCardInteractions(root = document) {
       root.querySelectorAll("[data-preview-movie]").forEach((button) => {
         button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
+        bindLongPressSelection(button, () => {
+          if (!selectionMode) toggleSelectMode(true);
+          toggleMovieSelection(button.dataset.previewMovie);
+        });
         button.addEventListener("click", (event) => {
           if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+          if (consumeLongPressClick()) {
+            event.preventDefault();
+            return;
+          }
           if (selectionMode) {
             toggleMovieSelection(button.dataset.previewMovie);
             return;
@@ -28330,9 +29662,14 @@ def ui_preview_html(
       });
       root.querySelectorAll("[data-preview-container]").forEach((button) => {
         button.classList.toggle("bulk-selected", selectedContainerIds.has(button.dataset.previewContainer));
+        bindLongPressSelection(button, () => {
+          if (!selectionMode) toggleSelectMode(true);
+          toggleContainerSelection(button.dataset.previewContainer);
+        });
         button.addEventListener("click", (event) => {
           event.preventDefault();
           if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+          if (consumeLongPressClick()) return;
           if (selectionMode) {
             toggleContainerSelection(button.dataset.previewContainer);
             return;
@@ -28390,6 +29727,8 @@ def ui_preview_html(
       if (backdropNode && backdropNode.tagName === "IMG") {
         backdropNode.src = routeBackdrop || "";
       }
+      const locationHeroNode = document.getElementById("locationDetailHero");
+      if (locationHeroNode) locationHeroNode.classList.toggle("is-flat", !routeBackdrop);
       const qrNode = document.getElementById("locationDetailQr");
       if (qrNode) {
         qrNode.innerHTML = routeQrUrl
@@ -28512,10 +29851,25 @@ def ui_preview_html(
     function toggleSelectMode(force) {
       selectionMode = typeof force === "boolean" ? force : !selectionMode;
       document.body.classList.toggle("select-mode", selectionMode);
-      if (!selectionMode) selectedMovieIds.clear();
-      if (!selectionMode) selectedContainerIds.clear();
+      if (!selectionMode) {
+        selectedMovieIds.clear();
+        selectedContainerIds.clear();
+        bulkSelectedTagIds.clear();
+      }
+      if (selectionMode) loadLibraryTags();
       syncSelectModeButton();
       renderCollectionSurface();
+    }
+    function clearBulkSelection() {
+      selectedMovieIds.clear();
+      selectedContainerIds.clear();
+      bulkSelectedTagIds.clear();
+      bulkLastResult = null;
+      document.querySelectorAll("[data-preview-movie].bulk-selected, [data-preview-container].bulk-selected").forEach((node) => {
+        node.classList.remove("bulk-selected");
+      });
+      renderBulkTagPicker();
+      updateBulkBar();
     }
     function toggleMovieSelection(movieId) {
       if (!movieId) return;
@@ -28585,10 +29939,12 @@ def ui_preview_html(
       document.querySelectorAll("[data-bulk-select]").forEach((button) => {
         if (button.dataset.bulkSelect === "all") button.disabled = selectableCount === 0 || selectedSelectableCount === selectableCount;
         if (button.dataset.bulkSelect === "none") button.disabled = count === 0;
+        if (button.dataset.bulkSelect === "clear") button.classList.toggle("hidden", count === 0);
       });
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         const action = button.dataset.bulkAction || "";
         if (action === "collection") button.disabled = count === 0;
+        else if (action === "tags-add" || action === "tags-remove") button.disabled = movieCount === 0 || bulkSelectedTagIds.size === 0;
         else if (action === "container") {
           const selection = bulkContainerSelection(document.getElementById("bulkContainerTarget")?.value || "");
           button.disabled = count === 0 || (!selection.targetType && !selection.createType)
@@ -28681,22 +30037,60 @@ def ui_preview_html(
       return target;
     }
     function finishBulkAction(message, details = {}) {
+      const keepSelection = details.keepSelection !== false;
       const summary = document.getElementById("librarySummary");
       bulkLastResult = {
         title: details.title || tNext("bulk.lastAction", "Last bulk action"),
         message,
         meta: details.meta || ""
       };
-      selectedMovieIds.clear();
-      selectedContainerIds.clear();
-      toggleSelectMode(false);
+      if (keepSelection) {
+        if (!selectionMode) {
+          selectionMode = true;
+          document.body.classList.add("select-mode");
+        }
+        syncSelectModeButton();
+      } else {
+        selectedMovieIds.clear();
+        selectedContainerIds.clear();
+        toggleSelectMode(false);
+      }
       if (summary) summary.textContent = message;
       loadAppSnapshot().then(() => {
         const refreshedSummary = document.getElementById("librarySummary");
         if (refreshedSummary) refreshedSummary.textContent = message;
+        if (keepSelection) updateBulkBar();
       }).catch((error) => {
         if (summary) summary.textContent = error.message || String(error);
       });
+    }
+    async function applyBulkTags(operation) {
+      if (!hasPermission("watchlist.manage")) return;
+      const movieIds = bulkSelectedMovieIds();
+      const tagIds = Array.from(bulkSelectedTagIds);
+      const summary = document.getElementById("librarySummary");
+      if (!movieIds.length) {
+        if (summary) summary.textContent = tNext("bulk.noneSelected", "No movies selected");
+        return;
+      }
+      if (!tagIds.length) {
+        if (summary) summary.textContent = tNext("bulk.chooseTagsFirst", "Choose one or more tags first.");
+        return;
+      }
+      try {
+        if (summary) summary.textContent = tNext("bulk.savingTagLinks", "Saving tags...");
+        const payload = await authApiJson("/api/next/bulk/tags", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds, tagIds, operation})
+        });
+        await loadLibraryTags(true);
+        finishBulkAction(`${payload.changed || 0} ${tNext(operation === "remove" ? "bulk.tagsRemovedLinks" : "bulk.tagsAddedLinks", operation === "remove" ? "tag links removed" : "tag links added")}`, {
+          title: operation === "remove" ? tNext("bulk.removeTags", "Remove tags") : tNext("bulk.addTags", "Assign tags")
+        });
+      } catch (error) {
+        if (summary) summary.textContent = error.message || String(error);
+      }
     }
     async function applyBulkGroup(operation) {
       if (!hasAnyPermission(APP_PERMISSION_GROUPS.bulkGroups)) return;
@@ -28843,7 +30237,8 @@ def ui_preview_html(
           body: JSON.stringify({movieIds, containerIds, confirm: "delete-selected"})
         });
         finishBulkAction(`${payload.requested || (movieIds.length + containerIds.length)} ${tNext("bulk.deletedSelected", "items deleted")}`, {
-          title: tNext("bulk.deleteSelected", "Delete selected")
+          title: tNext("bulk.deleteSelected", "Delete selected"),
+          keepSelection: false
         });
       } catch (error) {
         if (summary) summary.textContent = error.message || String(error);
@@ -29806,6 +31201,8 @@ def ui_preview_html(
         ownerPasskeyButton.classList.toggle("hidden", !startup.canCreateOwner);
         ownerPasskeyButton.disabled = !!ownerPasskeyUnavailable;
       }
+      const ownerFields = document.getElementById("startupOwnerFields");
+      if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner);
       const message = document.getElementById("startupMessage");
       if (message) {
         message.textContent = ownerPasskeyUnavailable || startup.message || "";
@@ -29822,6 +31219,7 @@ def ui_preview_html(
       mediaGroups = state.mediaGroups || [];
       preferences = Object.assign({}, preferences, state.preferences || {});
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
+      setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
       renderPreferences();
       renderProfile();
       renderCollectionSurface();
@@ -30809,6 +32207,8 @@ def ui_preview_html(
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
+      else if (route.view === "discover") showDiscoverPage(false);
+      else if (route.view === "discoverDetail") openDiscoverDetail({id: route.discoverId, mediaType: route.mediaType || "movie"}, false);
       else if (route.view === "admin" && canUseAppAdmin()) showAdminPage(false);
       else if (route.view === "import" && hasAnyPermission(APP_PERMISSION_GROUPS.importCenter)) showImportPage(false);
       else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);
@@ -30881,6 +32281,7 @@ def ui_preview_html(
       renderLanguageSelect();
       loadLocale(localeState.locale);
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
+      setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
         select.addEventListener("change", (event) => loadLocale(event.target.value));
       });
@@ -30890,6 +32291,15 @@ def ui_preview_html(
           preferences.theme = button.dataset.themeChoice || "system";
           if (appMode) {
             updatePreference("theme", preferences.theme);
+          }
+        });
+      });
+      document.querySelectorAll("[data-accent-choice]").forEach((button) => {
+        button.addEventListener("click", () => {
+          setAccent(button.dataset.accentChoice);
+          preferences.accent = button.dataset.accentChoice || "bluray";
+          if (appMode) {
+            updatePreference("accent", preferences.accent);
           }
         });
       });
@@ -31046,7 +32456,10 @@ def ui_preview_html(
         localStorage.setItem("dv_next_collection_group_filter", activeCollectionGroupFilter);
         renderCollectionSurface();
       });
-      document.getElementById("selectModeButton")?.addEventListener("click", () => toggleSelectMode());
+      document.getElementById("selectModeButton")?.addEventListener("click", () => {
+        if (selectionMode) bulkLastResult = null;
+        toggleSelectMode();
+      });
       document.getElementById("libraryMetadataJobsToggleButton")?.addEventListener("click", () => toggleLibraryMetadataJobs());
       document.getElementById("libraryMetadataJobsRefreshButton")?.addEventListener("click", () => refreshLibraryMetadataJobs({open: true}));
       document.querySelectorAll("[data-app-route]").forEach((button) => {
@@ -31075,6 +32488,7 @@ def ui_preview_html(
         button.addEventListener("click", () => {
           listsState.active = button.dataset.listsTab || "watchlist";
           renderListsView();
+          loadListsView(true);
         });
       });
       document.querySelectorAll("[data-loan-requests-tab]").forEach((button) => {
@@ -31734,6 +33148,14 @@ def ui_preview_html(
             applyBulkLocation();
             return;
           }
+          if (button.dataset.bulkAction === "tags-add") {
+            applyBulkTags("add");
+            return;
+          }
+          if (button.dataset.bulkAction === "tags-remove") {
+            applyBulkTags("remove");
+            return;
+          }
           if (button.dataset.bulkAction === "delete") {
             applyBulkDelete();
             return;
@@ -31744,7 +33166,23 @@ def ui_preview_html(
         });
       });
       document.querySelectorAll("[data-bulk-select]").forEach((button) => {
-        button.addEventListener("click", () => setBulkLibrarySelection(button.dataset.bulkSelect || "none"));
+        button.addEventListener("click", () => {
+          if (button.dataset.bulkSelect === "clear") {
+            clearBulkSelection();
+            return;
+          }
+          setBulkLibrarySelection(button.dataset.bulkSelect || "none");
+        });
+      });
+      document.getElementById("bulkTagPicker")?.addEventListener("click", (event) => {
+        const option = event.target.closest("[data-bulk-tag]");
+        if (!option) return;
+        const tagId = String(option.dataset.bulkTag || "");
+        if (!tagId) return;
+        if (bulkSelectedTagIds.has(tagId)) bulkSelectedTagIds.delete(tagId);
+        else bulkSelectedTagIds.add(tagId);
+        option.setAttribute("aria-pressed", bulkSelectedTagIds.has(tagId) ? "true" : "false");
+        updateBulkBar();
       });
       document.getElementById("heroDetailLink")?.addEventListener("click", (event) => {
         const href = event.currentTarget.getAttribute("href") || "";
@@ -31758,6 +33196,10 @@ def ui_preview_html(
       document.getElementById("createContainerButton")?.addEventListener("click", () => toggleCreateContainerForm());
       document.getElementById("createContainerForm")?.addEventListener("submit", (event) => createContainer(event));
       document.getElementById("movieDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppMovieDetail()));
+      document.getElementById("discoverDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeDiscoverDetail()));
+      document.getElementById("discoverDetailWishlistButton")?.addEventListener("click", () => {
+        if (activeDiscoverItem) addDiscoverItemToWishlist(activeDiscoverItem, {detail: true});
+      });
       document.getElementById("containerDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppContainerDetail()));
       document.getElementById("locationDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => showLibraryPage(true)));
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
@@ -31956,6 +33398,8 @@ def ui_preview_html(
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
         else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
         else if (route.view === "people") showLibraryPage(false);
+        else if (route.view === "discover") showDiscoverPage(false);
+        else if (route.view === "discoverDetail") openDiscoverDetail({id: route.discoverId, mediaType: route.mediaType || "movie"}, false);
         else if (route.view === "admin" && isNativeAdminUser()) showAdminPage(false);
         else if (route.view === "import") showImportPage(false);
         else if (route.view === "lists" && hasPermission("watchlist.manage")) showListsPage(false);

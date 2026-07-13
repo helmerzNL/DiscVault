@@ -208,6 +208,7 @@ try:
     from .next_notifications import notification_preference_map
     from .next_notifications import register_next_notifications_routes
     from .next_notifications import user_notification_rows
+    from .next_discover import register_next_discover_routes
     from .next_push import PWA_ICON_ASSETS
     from .next_push import deliver_native_push_device
     from .next_push import get_or_create_push_vapid_keys
@@ -397,6 +398,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_notifications import notification_preference_map
     from next_notifications import register_next_notifications_routes
     from next_notifications import user_notification_rows
+    from next_discover import register_next_discover_routes
     from next_push import PWA_ICON_ASSETS
     from next_push import deliver_native_push_device
     from next_push import get_or_create_push_vapid_keys
@@ -491,6 +493,11 @@ TEST_DATABASE_RESET_TABLES = (
 MEDIA_GROUP_MEMBER_ROLES = {"owner", "manager", "member", "viewer"}
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
+# Cap the longest edge before re-encoding artwork. Full-resolution phone photos
+# (multiple thousands of pixels) are needlessly expensive to JPEG-encode and can
+# stall a gunicorn worker long enough for the proxy to return a 502. Posters and
+# backdrops never need more than this on screen.
+MAX_ARTWORK_DIMENSION = 2000
 MAX_IMPORT_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_IMPORT_ARCHIVE_BYTES = 100 * 1024 * 1024
 IMPORT_UPLOAD_EXTENSIONS = {".csv", ".tsv", ".json", ".xml", ".zip"}
@@ -941,8 +948,8 @@ def pwa_manifest_payload(asset_prefix: str = "/api/next/assets", start_url: str 
         "display": "standalone",
         "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
         "orientation": "any",
-        "background_color": "#0a0a0f",
-        "theme_color": "#111214",
+        "background_color": "#090F1A",
+        "theme_color": "#090F1A",
         "categories": ["entertainment", "lifestyle", "productivity"],
         "prefer_related_applications": False,
         "launch_handler": {"client_mode": ["navigate-existing", "auto"]},
@@ -1004,9 +1011,9 @@ def pwa_head_tags(asset_prefix: str = "/api/next/assets", manifest_href: str = "
   <meta name="apple-mobile-web-app-title" content="DiscVault">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="format-detection" content="telephone=no">
-  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
-  <meta name="msapplication-TileColor" content="#111214">
+  <meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#090F1A" media="(prefers-color-scheme: dark)">
+  <meta name="msapplication-TileColor" content="#090F1A">
   <meta name="msapplication-TileImage" content="{assets}/pwa-icon-192.png">
   <link rel="manifest" href="{manifest_href}">
   <link rel="apple-touch-icon" sizes="152x152" href="{assets}/apple-touch-icon-152.png">
@@ -1015,7 +1022,7 @@ def pwa_head_tags(asset_prefix: str = "/api/next/assets", manifest_href: str = "
   <link rel="icon" type="image/png" sizes="32x32" href="{assets}/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="{assets}/pwa-icon-192.png">
   <link rel="icon" type="image/png" sizes="512x512" href="{assets}/pwa-icon-512.png">
-  <link rel="mask-icon" href="{assets}/icon.svg" color="#e8c547">""".rstrip()
+  <link rel="mask-icon" href="{assets}/icon.svg" color="#2A6FD6">""".rstrip()
 
 
 def next_i18n_dir() -> Path:
@@ -12301,9 +12308,10 @@ def save_uploaded_artwork_file(upload: Any, *, kind: str) -> dict[str, Any]:
             image = image.convert("RGB")
         elif image.mode == "L":
             image = image.convert("RGB")
+        image.thumbnail((MAX_ARTWORK_DIMENSION, MAX_ARTWORK_DIMENSION), Image.Resampling.LANCZOS)
         width, height = image.size
         buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", quality=90, optimize=True)
+        image.save(buffer, format="JPEG", quality=90)
         data = buffer.getvalue()
     except UnidentifiedImageError as exc:
         raise NextApiError("Uploaded file is not a valid image", 400) from exc
@@ -16621,6 +16629,8 @@ PUBLIC_NEXT_PATHS = {
     "/app/import/",
     "/app/lists",
     "/app/lists/",
+    "/app/discover",
+    "/app/discover/",
     "/app/notifications",
     "/app/notifications/",
     "/app/profile",
@@ -16633,6 +16643,8 @@ PUBLIC_NEXT_PATHS = {
     "/api/next/app/",
     "/api/next/app/import",
     "/api/next/app/import/",
+    "/api/next/app/discover",
+    "/api/next/app/discover/",
     "/api/next/collection",
     "/api/next/collection/",
     "/api/next/health",
@@ -16652,6 +16664,7 @@ PUBLIC_NEXT_PREFIXES = (
     "/api/next/media/assets/",
     "/api/next/media/legacy/",
     "/app/movies/",
+    "/app/discover/",
     "/app/containers/",
     "/app/people/",
     "/app/locations/",
@@ -16676,6 +16689,7 @@ def register_routes(flask_app: Flask) -> None:
     register_next_people_routes(flask_app, connect=connect)
     register_next_preferences_routes(flask_app, connect=connect)
     register_next_notifications_routes(flask_app, connect=connect)
+    register_next_discover_routes(flask_app, connect=connect)
     register_next_push_routes(flask_app, connect=connect)
 
     @flask_app.errorhandler(NextApiError)
@@ -21660,6 +21674,11 @@ def register_routes(flask_app: Flask) -> None:
                         (user_id, tag_uuid),
                     )
                     assignment_ids = [r.get("id") for r in cur.fetchall()]
+            if assignment_ids:
+                raise NextApiError(
+                    "This tag is still linked to media. Remove it from all items before deleting it.",
+                    409,
+                )
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
@@ -21780,6 +21799,110 @@ def register_routes(flask_app: Flask) -> None:
                         metadata={"tagId": str(tag_uuid)},
                     )
             return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
+
+    @flask_app.post("/api/next/bulk/tags")
+    def bulk_tags():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Bulk tag request body must be an object", 400)
+        movie_ids = parse_uuid_list(body.get("movieIds") or body.get("movie_ids"), "movieIds")
+        if not movie_ids:
+            raise NextApiError("movieIds must be a non-empty array", 400)
+        tag_ids = parse_uuid_list(body.get("tagIds") or body.get("tag_ids"), "tagIds")
+        if not tag_ids:
+            raise NextApiError("tagIds must be a non-empty array", 400)
+        operation = str(body.get("operation") or "add").strip().lower()
+        if operation not in {"add", "remove"}:
+            raise NextApiError("operation must be add or remove", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "tags") or not table_exists(conn, "movie_tags"):
+                raise NextApiError("Tags table is not available", 503)
+            user_id = actor.get("id")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM tags WHERE user_id=%s AND id = ANY(%s)",
+                    (user_id, tag_ids),
+                )
+                owned_tag_ids = [r.get("id") for r in cur.fetchall()]
+            if not owned_tag_ids:
+                raise NextApiError("No matching tags found", 404)
+            visible_movie_ids = [
+                movie_id for movie_id in movie_ids if actor_can_view_movie(conn, actor, movie_id)
+            ]
+            if not visible_movie_ids:
+                raise NextApiError("No matching movies found", 404)
+            changed = 0
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    for tag_uuid in owned_tag_ids:
+                        for movie_uuid in visible_movie_ids:
+                            if operation == "remove":
+                                cur.execute(
+                                    """
+                                    DELETE FROM movie_tags
+                                    WHERE user_id=%s AND tag_id=%s AND movie_id=%s
+                                    RETURNING id
+                                    """,
+                                    (user_id, tag_uuid, movie_uuid),
+                                )
+                                row = cur.fetchone()
+                                if row:
+                                    changed += 1
+                                    emit_movie_tag_change(
+                                        conn,
+                                        user_id,
+                                        row.get("id"),
+                                        operation="delete",
+                                        tag_id=tag_uuid,
+                                        movie_id=movie_uuid,
+                                    )
+                            else:
+                                cur.execute(
+                                    """
+                                    INSERT INTO movie_tags (user_id, tag_id, movie_id)
+                                    VALUES (%s, %s, %s)
+                                    ON CONFLICT (user_id, tag_id, movie_id) DO NOTHING
+                                    RETURNING id
+                                    """,
+                                    (user_id, tag_uuid, movie_uuid),
+                                )
+                                row = cur.fetchone()
+                                if row:
+                                    changed += 1
+                                    emit_movie_tag_change(
+                                        conn,
+                                        user_id,
+                                        row.get("id"),
+                                        operation="upsert",
+                                        tag_id=tag_uuid,
+                                        movie_id=movie_uuid,
+                                    )
+                audit_event(
+                    conn,
+                    event_type="tag.bulk",
+                    category="personal",
+                    actor=actor,
+                    target_type="tag",
+                    target_id=None,
+                    summary="Bulk tag update",
+                    metadata={
+                        "operation": operation,
+                        "tagIds": [str(tag_uuid) for tag_uuid in owned_tag_ids],
+                        "movieCount": len(visible_movie_ids),
+                        "changed": changed,
+                    },
+                )
+        return response(
+            {
+                "status": "ok",
+                "operation": operation,
+                "changed": changed,
+                "requested": len(visible_movie_ids) * len(owned_tag_ids),
+                "movieCount": len(visible_movie_ids),
+                "tagCount": len(owned_tag_ids),
+            }
+        )
 
     # ------------------------------------------------------------------
     # Loan tracker: outbound lending of an owned disc.
@@ -25603,6 +25726,10 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/profile")
     @flask_app.get("/lists")
     @flask_app.get("/app/lists")
+    @flask_app.get("/discover")
+    @flask_app.get("/app/discover")
+    @flask_app.get("/discover/<discover_media_type>/<discover_id>")
+    @flask_app.get("/app/discover/<discover_media_type>/<discover_id>")
     @flask_app.get("/notifications")
     @flask_app.get("/app/notifications")
     @flask_app.get("/admin")
@@ -25610,6 +25737,7 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/import")
     @flask_app.get("/app/import")
     @flask_app.get("/api/next/app/import")
+    @flask_app.get("/api/next/app/discover")
     @flask_app.get("/movies/<movie_id>")
     @flask_app.get("/app/movies/<movie_id>")
     @flask_app.get("/containers/<container_id>")
@@ -25623,6 +25751,8 @@ def register_routes(flask_app: Flask) -> None:
         container_id: str | None = None,
         person_id: str | None = None,
         location_id: str | None = None,
+        discover_media_type: str | None = None,
+        discover_id: str | None = None,
     ):
         with connect() as conn:
             user = next_auth_current_user(conn) if next_auth_effective_enabled(conn, table_exists) else None
