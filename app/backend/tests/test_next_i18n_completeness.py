@@ -14,6 +14,13 @@ I18N_DIR = os.path.abspath(
         "next",
     )
 )
+NEXT_VIEWS_UI_PATH = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "next_views_ui.py",
+    )
+)
 SOURCE_LOCALE = "en-US.json"
 
 
@@ -46,6 +53,9 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.source_path))
         self.assertGreater(len(self.source_keys), 0)
 
+    def test_source_catalog_includes_sidebar_toggle_key(self):
+        self.assertIn("uiPreview.toggleSidebar", self.source)
+
     def test_locale_files_discovered(self):
         self.assertGreater(len(self.locale_files), 0)
 
@@ -76,6 +86,13 @@ class NextI18nCompletenessTests(unittest.TestCase):
                 if not isinstance(value, str) or value.strip() == "":
                     problems.append("{0}:{1}".format(locale, key))
         self.assertEqual(problems, [], "Empty/non-string translations:\n" + "\n".join(problems[:20]))
+
+    def test_ui_preview_uses_localized_sidebar_toggle_attributes(self):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn('id="sidebarCollapseToggle"', source)
+        self.assertIn('data-next-i18n-aria="uiPreview.toggleSidebar"', source)
+        self.assertIn('data-next-i18n-title="uiPreview.toggleSidebar"', source)
 
 
 if __name__ == "__main__":
