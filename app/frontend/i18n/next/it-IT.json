@@ -2197,6 +2197,7 @@
   "uiPreview.profile": "Profilo",
   "uiPreview.recentlyAdded": "Aggiunti di recente",
   "uiPreview.shuffle": "Casuale",
+  "uiPreview.toggleSidebar": "Attiva/disattiva barra laterale",
   "notifications.priceCheck": "Price Check",
   "notifications.priceCheckRunning": "Running price check sweep...",
   "notifications.priceCheckDone": "Price sweep done.",

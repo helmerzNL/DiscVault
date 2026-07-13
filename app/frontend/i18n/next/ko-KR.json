@@ -2197,6 +2197,7 @@
   "uiPreview.profile": "프로필",
   "uiPreview.recentlyAdded": "최근 추가됨",
   "uiPreview.shuffle": "무작위",
+  "uiPreview.toggleSidebar": "사이드바 전환",
   "notifications.priceCheck": "Price Check",
   "notifications.priceCheckRunning": "Running price check sweep...",
   "notifications.priceCheckDone": "Price sweep done.",
