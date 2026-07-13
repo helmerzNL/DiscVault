@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 try:  # pragma: no cover - exercised indirectly in both package layouts
@@ -163,16 +164,165 @@ def discover_feed(context: dict[str, Any], *, media_type: str, mode: str, page: 
     }
 
 
-def _director_and_cast(data: dict[str, Any], media_type: str) -> tuple[str, str]:
+def _credit_person(
+    *,
+    tmdb_id: Any,
+    name: Any,
+    role: Any = "",
+    job: Any = "",
+) -> dict[str, str] | None:
+    clean_name = str(name or "").strip()
+    if not clean_name:
+        return None
+    clean_id = str(tmdb_id or "").strip()
+    clean_role = str(role or "").strip()
+    clean_job = str(job or "").strip()
+    return {
+        "tmdbId": clean_id,
+        "name": clean_name,
+        "role": clean_role,
+        "job": clean_job,
+    }
+
+
+def _director_and_cast(data: dict[str, Any], media_type: str) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     credits = data.get("credits") or {}
     crew = credits.get("crew") or []
     cast = credits.get("cast") or []
+    directors: list[dict[str, str]] = []
     if media_type == "tv":
-        directors = [str(row.get("name") or "").strip() for row in (data.get("created_by") or []) if str(row.get("name") or "").strip()]
+        for row in data.get("created_by") or []:
+            person = _credit_person(
+                tmdb_id=row.get("id"),
+                name=row.get("name"),
+                job="Creator",
+            )
+            if person:
+                directors.append(person)
     else:
-        directors = [str(row.get("name") or "").strip() for row in crew if str(row.get("job") or "") == "Director" and str(row.get("name") or "").strip()]
-    actors = [str(row.get("name") or "").strip() for row in cast[:8] if str(row.get("name") or "").strip()]
-    return ", ".join(directors), ", ".join(actors)
+        for row in crew:
+            if str(row.get("job") or "").strip().lower() != "director":
+                continue
+            person = _credit_person(
+                tmdb_id=row.get("id"),
+                name=row.get("name"),
+                job=row.get("job"),
+            )
+            if person:
+                directors.append(person)
+    actors: list[dict[str, str]] = []
+    for row in cast[:8]:
+        person = _credit_person(
+            tmdb_id=row.get("id"),
+            name=row.get("name"),
+            role=row.get("character"),
+            job=row.get("known_for_department"),
+        )
+        if person:
+            actors.append(person)
+    return directors, actors
+
+
+def _runtime_minutes(data: dict[str, Any], media_type: str) -> int | None:
+    if media_type == "movie":
+        value = int(data.get("runtime") or 0)
+        return value if value > 0 else None
+    for entry in data.get("episode_run_time") or []:
+        value = int(entry or 0)
+        if value > 0:
+            return value
+    return None
+
+
+def _content_ratings(data: dict[str, Any], media_type: str) -> dict[str, str]:
+    ratings: dict[str, str] = {}
+    if media_type == "movie":
+        entries = ((data.get("release_dates") or {}).get("results") or [])
+        for entry in entries:
+            country = str(entry.get("iso_3166_1") or "").strip().upper()
+            if not country:
+                continue
+            release_rows = entry.get("release_dates") or []
+            certification = ""
+            for release in release_rows:
+                text = str(release.get("certification") or "").strip()
+                if text:
+                    certification = text
+                    if int(release.get("type") or 0) == 3:
+                        break
+            if certification:
+                ratings[country] = certification
+        return ratings
+    entries = ((data.get("content_ratings") or {}).get("results") or [])
+    for entry in entries:
+        country = str(entry.get("iso_3166_1") or "").strip().upper()
+        rating = str(entry.get("rating") or "").strip()
+        if country and rating:
+            ratings[country] = rating
+    return ratings
+
+
+def _locale_region(context: dict[str, Any]) -> str:
+    locale = normalize_locale((context.get("settings") or {}).get("language"))
+    if "-" in locale:
+        region = locale.split("-", 1)[1].strip().upper()
+        if len(region) == 2:
+            return region
+    return "US"
+
+
+def _is_released(release_date: str) -> bool:
+    clean_release_date = str(release_date or "").strip()
+    if len(clean_release_date) < 10:
+        return False
+    try:
+        return date.fromisoformat(clean_release_date[:10]) <= date.today()
+    except ValueError:
+        return False
+
+
+def _streaming_providers(context: dict[str, Any], tmdb_id: str, *, release_date: str) -> tuple[str, list[dict[str, str]]]:
+    if not _is_released(release_date):
+        return "", []
+    try:
+        payload = tmdb_plugin._request(  # noqa: SLF001 - reusing shared plugin transport
+            context,
+            f"/movie/{tmdb_id}/watch/providers",
+        )
+    except NextApiError:
+        return "", []
+    results = payload.get("results") if isinstance(payload.get("results"), dict) else {}
+    preferred_region = _locale_region(context)
+    region_payload = results.get(preferred_region)
+    region = preferred_region
+    if not isinstance(region_payload, dict):
+        region = "US" if isinstance(results.get("US"), dict) else ""
+        region_payload = results.get(region) if region else None
+    if not isinstance(region_payload, dict):
+        for key, candidate in results.items():
+            if isinstance(candidate, dict):
+                region = str(key or "").strip().upper()
+                region_payload = candidate
+                break
+    if not isinstance(region_payload, dict):
+        return "", []
+    rows = region_payload.get("flatrate") or []
+    providers: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for row in rows:
+        provider_id = str(row.get("provider_id") or "").strip()
+        name = str(row.get("provider_name") or "").strip()
+        if not provider_id or not name or provider_id in seen:
+            continue
+        seen.add(provider_id)
+        providers.append(
+            {
+                "providerId": provider_id,
+                "name": name,
+                "logoUrl": tmdb_plugin._image(row.get("logo_path")),
+            }
+        )
+    return region, providers
 
 
 def _overview_with_fallback(context: dict[str, Any], data: dict[str, Any], media_type: str, tmdb_id: str) -> str:
@@ -189,7 +339,7 @@ def _overview_with_fallback(context: dict[str, Any], data: dict[str, Any], media
     english_data = tmdb_plugin._request(  # noqa: SLF001 - reusing shared plugin transport
         english_context,
         f"/{media_type}/{tmdb_id}",
-        append_to_response="credits,images,translations",
+        append_to_response="credits,images,translations,release_dates,content_ratings",
         include_image_language="null,en",
         language="en-US",
     )
@@ -206,22 +356,34 @@ def discover_detail(context: dict[str, Any], *, media_type: str, tmdb_id: str) -
     data = tmdb_plugin._request(  # noqa: SLF001 - reusing shared plugin transport
         context,
         f"/{clean_media_type}/{item_id}",
-        append_to_response="credits,images,translations",
+        append_to_response="credits,images,translations,release_dates,content_ratings",
         include_image_language="null,en",
         language=normalize_locale((context.get("settings") or {}).get("language")),
     )
     title = data.get("title") or data.get("name") or data.get("original_title") or data.get("original_name") or ""
     release_date = data.get("release_date") or data.get("first_air_date") or ""
-    director, actors = _director_and_cast(data, clean_media_type)
+    director_people, cast_people = _director_and_cast(data, clean_media_type)
     overview = _overview_with_fallback(context, data, clean_media_type, item_id)
+    runtime_minutes = _runtime_minutes(data, clean_media_type)
+    content_ratings = _content_ratings(data, clean_media_type)
+    providers_region = ""
+    streaming_providers: list[dict[str, str]] = []
+    if clean_media_type == "movie":
+        providers_region, streaming_providers = _streaming_providers(context, item_id, release_date=release_date)
     return {
         "tmdbId": item_id,
         "mediaType": clean_media_type,
         "title": title,
         "year": str(release_date)[:4] if release_date else "",
         "releaseDate": release_date,
-        "director": director,
-        "actors": actors,
+        "runtimeMinutes": runtime_minutes,
+        "director": ", ".join([item["name"] for item in director_people]),
+        "actors": ", ".join([item["name"] for item in cast_people]),
+        "directorPeople": director_people,
+        "castPeople": cast_people,
+        "contentRatings": content_ratings,
+        "providersRegion": providers_region,
+        "streamingProviders": streaming_providers,
         "overview": overview,
         "posterUrl": tmdb_plugin._image(data.get("poster_path")),
         "backdropUrl": tmdb_plugin._image(data.get("backdrop_path")),
