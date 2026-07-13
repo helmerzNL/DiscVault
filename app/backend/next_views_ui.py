@@ -28841,6 +28841,7 @@ def ui_preview_html(
           contentRatingTag ? {html: contentRatingTag} : null
         ]);
         const providersText = discoverStreamingProvidersHtml(detail);
+        const awardNominationsText = valueText(detail.awardNominations);
         document.getElementById("discoverDetailRelease").innerHTML = detailFieldRows([
           [tNext("movieDetail.releaseDate", "Release date"), formatAppDate(detail.releaseDate || "") || detail.releaseDate || ""],
           [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(detail.runtimeMinutes)],
@@ -28848,7 +28849,7 @@ def ui_preview_html(
           [tNext("metadataJobs.providers", "Providers"), providersText],
           [tNext("discover.budget", "Budget"), formatDiscoverMoney(detail.budget)],
           [tNext("discover.revenue", "Revenue"), formatDiscoverMoney(detail.revenue)],
-          [tNext("discover.awards", "Award nominations"), detail.awardNominations || tNext("discover.awardsUnavailable", "Not available")]
+          [tNext("discover.awards", "Award nominations"), awardNominationsText]
         ]);
         const directorHtml = discoverDirectorHtml(detail);
         const castHtml = discoverCastHtml(detail);
