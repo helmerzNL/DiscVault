@@ -17467,6 +17467,9 @@ def ui_preview_html(
       document.querySelectorAll("[data-next-i18n-aria]").forEach((node) => {
         node.setAttribute("aria-label", tNext(node.dataset.nextI18nAria, node.getAttribute("aria-label") || ""));
       });
+      document.querySelectorAll("[data-next-i18n-title]").forEach((node) => {
+        node.setAttribute("title", tNext(node.dataset.nextI18nTitle, node.getAttribute("title") || ""));
+      });
       renderAppRegistrationMode();
     }
     let lastPersistedLocale = null;
