@@ -1261,6 +1261,7 @@
   "importCenter.target": "目标",
   "importCenter.targetCounts": "Target counts",
   "importCenter.title": "导入",
+  "importCenter.nav": "添加",
   "importCenter.titlePlaceholder": "Movie title",
   "importCenter.updated": "已更新",
   "importCenter.updatedMovies": "Updated movies",
