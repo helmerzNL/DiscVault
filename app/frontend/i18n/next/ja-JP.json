@@ -2199,6 +2199,7 @@
   "uiPreview.profile": "プロフィール",
   "uiPreview.recentlyAdded": "最近追加",
   "uiPreview.shuffle": "シャッフル",
+  "uiPreview.toggleSidebar": "サイドバーを切り替え",
   "notifications.priceCheck": "Price Check",
   "notifications.priceCheckRunning": "Running price check sweep...",
   "notifications.priceCheckDone": "Price sweep done.",
