@@ -116,6 +116,29 @@ class WishlistShopSelectorsMigrationContractTests(unittest.TestCase):
         self.assertIn("extraction_source", sql)
 
 
+class WishlistShopProvidersMigrationContractTests(unittest.TestCase):
+    """Migration 034 adds provider metadata for plugin-backed shop pricing."""
+
+    def setUp(self):
+        self.migrations = {m.version: m for m in discover_migrations()}
+
+    def test_wishlist_shop_providers_migration_is_present(self):
+        self.assertIn("034", self.migrations)
+        self.assertEqual(self.migrations["034"].name, "wishlist_shop_providers")
+
+    def test_migration_adds_provider_columns(self):
+        sql = self.migrations["034"].sql
+        self.assertIn("ALTER TABLE wishlist_item_shops", sql)
+        self.assertIn("provider_plugin_id", sql)
+        self.assertIn("provider_product_ref", sql)
+        self.assertIn("provider_last_status", sql)
+        self.assertIn("provider_last_error", sql)
+        self.assertIn("ALTER TABLE wishlist_item_shop_prices", sql)
+        self.assertIn("provider_id", sql)
+        self.assertIn("source_detail", sql)
+        self.assertIn("confidence", sql)
+
+
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class ListsRouteRegistrationTests(unittest.TestCase):
     """The personal-list write/read surface must be wired into the Flask app."""
@@ -138,6 +161,9 @@ class ListsRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/api/next/lists/wishlist/<item_id>/poster", rules)
         self.assertIn("/api/next/lists/wishlist/<item_id>/shops", rules)
         self.assertIn("/api/next/lists/wishlist/<item_id>/shops/<shop_id>", rules)
+        self.assertIn("/api/next/price-providers", rules)
+        self.assertIn("/api/next/admin/price-providers/<provider_id>/enabled", rules)
+        self.assertIn("/api/next/admin/price-providers/<provider_id>/config", rules)
         self.assertIn("GET", self._methods("/api/next/lists/wishlist"))
         self.assertIn("POST", self._methods("/api/next/lists/wishlist"))
         self.assertIn("PATCH", self._methods("/api/next/lists/wishlist/<item_id>"))
@@ -145,6 +171,10 @@ class ListsRouteRegistrationTests(unittest.TestCase):
         self.assertIn("POST", self._methods("/api/next/lists/wishlist/<item_id>/poster"))
         self.assertIn("POST", self._methods("/api/next/lists/wishlist/<item_id>/shops"))
         self.assertIn("PATCH", self._methods("/api/next/lists/wishlist/<item_id>/shops/<shop_id>"))
+        self.assertIn("GET", self._methods("/api/next/price-providers"))
+        self.assertIn("PATCH", self._methods("/api/next/admin/price-providers/<provider_id>/enabled"))
+        self.assertIn("GET", self._methods("/api/next/admin/price-providers/<provider_id>/config"))
+        self.assertIn("PATCH", self._methods("/api/next/admin/price-providers/<provider_id>/config"))
 
     def test_tag_routes_are_registered(self):
         rules = self._rules()
