@@ -64,9 +64,9 @@ Passkeys require a stable relying party configuration. Set these values in
 
 ```text
 JWT_SECRET=<long stable random secret>
-RP_ID=appdev.discvault.eu
+RP_ID=discvault.example.com
 RP_NAME=DiscVault
-RP_ORIGINS=https://appdev.discvault.eu
+RP_ORIGINS=https://discvault.example.com
 ```
 
 `RP_ID` is the browser hostname without scheme or port. `RP_ORIGINS` is a
@@ -296,7 +296,22 @@ deployment command.
 ## Notes
 
 - `next-api` exposes the Next API on `${DISCVAULT_NEXT_API_PORT:-6180}`.
+- `next-mcp` publishes the MCP server on `${DISCVAULT_NEXT_MCP_PORT:-6090}`. Change
+  `DISCVAULT_NEXT_MCP_PORT` in `.env` if `6090` is already used by another stack to
+  avoid a `port is already allocated` error.
+- The Docker network name is `${DISCVAULT_NEXT_NETWORK_NAME:-discvault-next}`. Change
+  `DISCVAULT_NEXT_NETWORK_NAME` in `.env` to run multiple stacks side by side without
+  network name collisions. This is the actual Docker network name; no Compose project
+  prefix is added.
 - `next-worker` processes pending `background_jobs`.
-- PostgreSQL data is stored in the Compose named Docker volume
-  `discvault_next_deploy_postgres-data` when using the recommended project name.
+- PostgreSQL data is stored on a host bind mount at `DISCVAULT_NEXT_POSTGRES_DATA`
+  (default `./postgres-data`, relative to this compose file). Point it at an
+  absolute path on the same storage as your other data/backups so the database is
+  backed up alongside the media.
+  If you previously deployed with the named `postgres-data` volume, migrate its
+  contents once (e.g. `pg_dump`/restore or copying the volume contents) before
+  switching, otherwise PostgreSQL will initialize an empty database.
+  Docker creates the bind-mount directory if it does not exist. The postgres
+  container runs as uid 70; an existing non-empty directory owned by another user
+  can fail to start.
 - This stack is separate from the current production DiscVault container.
