@@ -18626,7 +18626,12 @@ def ui_preview_html(
         button.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
-          openAppPersonDetail(button.dataset.personLink);
+          const discoverPage = document.getElementById("discoverDetailPage");
+          const discoverVisible = Boolean(discoverPage) && !discoverPage.classList.contains("hidden");
+          const returnRoute = discoverVisible && activeDiscoverItem?.id
+            ? {view: "discoverDetail", discoverId: activeDiscoverItem.id, mediaType: activeDiscoverItem.mediaType || "movie"}
+            : null;
+          openAppPersonDetail(button.dataset.personLink, true, returnRoute);
         });
       });
       root.querySelectorAll("[data-member-movie]").forEach((button) => {
@@ -20689,11 +20694,12 @@ def ui_preview_html(
       document.getElementById("movieDetailOverview").textContent = localizedMovieOverview(movie, detail.localizations) || tNext("movieDetail.noOverview", "No overview imported yet.");
       const contentRatingInfo = preferredContentRatingInfo(movie, specs);
       const contentRating = contentRatingInfo.rating;
+      const heroContentRatingTag = contentRatingBadgeHtml(contentRatingInfo);
       document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
         movie.year,
         movie.format,
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
-        contentRatingSummaryText(contentRatingInfo),
+        heroContentRatingTag ? {html: heroContentRatingTag} : contentRatingSummaryText(contentRatingInfo),
         movieScoreLabel(movie),
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
         (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : "",
@@ -21743,6 +21749,10 @@ def ui_preview_html(
       personReturnRoute = null;
       if (returnRoute?.view === "movie" && returnRoute.movieId) {
         openAppMovieDetail(returnRoute.movieId, pushUrl);
+        return;
+      }
+      if (returnRoute?.view === "discoverDetail" && returnRoute.discoverId) {
+        openDiscoverDetail({id: returnRoute.discoverId, mediaType: returnRoute.mediaType || "movie"}, pushUrl);
         return;
       }
       if (returnRoute?.view === "people") {
@@ -28667,7 +28677,7 @@ def ui_preview_html(
         : `<span class="inline-person-text">${escapeHtml(name)}</span>`;
       const role = String(roleText || "").trim();
       if (!role) return `<span class="discover-person-line">${nameHtml}</span>`;
-      return `<span class="discover-person-line">${nameHtml}<span>-</span><span class="discover-person-role">${escapeHtml(role)}</span></span>`;
+      return `<span class="discover-person-line">${nameHtml}<span>${escapeHtml(tNext("discover.castAs", "as"))}</span><span class="discover-person-role"><strong>${escapeHtml(role)}</strong></span></span>`;
     }
     function discoverDirectorHtml(detail) {
       const rows = Array.isArray(detail?.directorPeople) ? detail.directorPeople : [];
