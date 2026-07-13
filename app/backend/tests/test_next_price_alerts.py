@@ -18,6 +18,9 @@ try:
         _extract_price_from_profile,
         _extract_from_schema_org,
         _extract_via_regex,
+        _extract_amazon_asin,
+        _is_amazon_bot_blocked,
+        _extract_price_from_amazon_html,
         evaluate_price_alert,
         extract_price_from_url,
         extract_price_from_url_with_source,
@@ -176,7 +179,7 @@ class TestExtractPriceFromUrl(unittest.TestCase):
         with patch("app.backend.next_price_alerts._fetch_html", return_value=html):
             price, currency, source = extract_price_from_url_with_source("https://www.amazon.de/dp/abc")
         self.assertAlmostEqual(price, 18.49)
-        self.assertEqual(source, "preset")
+        self.assertEqual(source, "preset_amazon")
 
     def test_uses_selector_profile_before_schema_org(self):
         html = (
@@ -249,6 +252,115 @@ class TestEvaluatePriceAlert(unittest.TestCase):
 class TestJobTypeConstant(unittest.TestCase):
     def test_job_type_value(self):
         self.assertEqual(PRICE_ALERT_JOB_TYPE, "price_alert.sweep")
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestAmazonAsinExtraction(unittest.TestCase):
+    def test_dp_url(self):
+        self.assertEqual(
+            _extract_amazon_asin("https://www.amazon.nl/dp/B09G9HD5XW"),
+            "B09G9HD5XW",
+        )
+
+    def test_gp_product_url(self):
+        self.assertEqual(
+            _extract_amazon_asin("https://www.amazon.com/gp/product/B09G9HD5XW/ref=sr_1_1"),
+            "B09G9HD5XW",
+        )
+
+    def test_query_param(self):
+        self.assertEqual(
+            _extract_amazon_asin("https://www.amazon.de/s?asin=B09G9HD5XW"),
+            "B09G9HD5XW",
+        )
+
+    def test_non_amazon_returns_none(self):
+        self.assertIsNone(_extract_amazon_asin("https://www.bol.com/nl/p/12345"))
+
+    def test_url_without_asin_returns_none(self):
+        self.assertIsNone(_extract_amazon_asin("https://www.amazon.nl/"))
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestAmazonBotDetection(unittest.TestCase):
+    def test_detects_robot_check_title(self):
+        html = "<html><head><title>Robot Check</title></head></html>"
+        self.assertTrue(_is_amazon_bot_blocked(html))
+
+    def test_detects_captcha_form(self):
+        html = '<input id="captchacharacters" type="text">'
+        self.assertTrue(_is_amazon_bot_blocked(html))
+
+    def test_clean_page_not_blocked(self):
+        html = "<html><body><div class='a-offscreen'>€ 19,99</div></body></html>"
+        self.assertFalse(_is_amazon_bot_blocked(html))
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestAmazonHtmlExtraction(unittest.TestCase):
+    def test_offscreen_price(self):
+        html = (
+            '<span class="a-price"><span class="a-offscreen">€ 24,99</span>'
+            '<span aria-hidden="true">€24,99</span></span>'
+        )
+        price, currency = _extract_price_from_amazon_html(html)
+        self.assertAlmostEqual(price, 24.99)
+        self.assertEqual(currency, "EUR")
+
+    def test_priceblock_ourprice(self):
+        html = '<span id="priceblock_ourprice">$12.99</span>'
+        price, currency = _extract_price_from_amazon_html(html)
+        self.assertAlmostEqual(price, 12.99)
+        self.assertEqual(currency, "USD")
+
+    def test_whole_fraction_pattern(self):
+        html = (
+            '<span class="a-price-whole">29</span>'
+            '<span class="a-price-fraction">99</span>'
+        )
+        price, _currency = _extract_price_from_amazon_html(html)
+        self.assertAlmostEqual(price, 29.99)
+
+    def test_schema_org_fallback(self):
+        html = (
+            '<script type="application/ld+json">'
+            '{"@type":"Product","offers":{"price":"19.99","priceCurrency":"EUR"}}'
+            "</script>"
+        )
+        price, currency = _extract_price_from_amazon_html(html)
+        self.assertAlmostEqual(price, 19.99)
+        self.assertEqual(currency, "EUR")
+
+    def test_returns_none_when_empty(self):
+        price, currency = _extract_price_from_amazon_html("<html></html>")
+        self.assertIsNone(price)
+
+    def test_blocked_page_returns_none(self):
+        html = "<html><title>Robot Check</title></html>"
+        # _extract_price_from_amazon_html itself doesn't check for blocks —
+        # the caller (_extract_price_from_domain_preset) does.  Verify that
+        # the extraction still returns None since no price markup exists.
+        price, _currency = _extract_price_from_amazon_html(html)
+        self.assertIsNone(price)
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestAmazonBlockedSignal(unittest.TestCase):
+    """extract_price_from_url_with_source returns blocked_amazon source."""
+
+    def _captcha_html(self) -> str:
+        return "<html><title>Robot Check</title><input id='captchacharacters'></html>"
+
+    def test_blocked_returns_blocked_amazon_source(self):
+        with patch(
+            "app.backend.next_price_alerts._fetch_html",
+            return_value=self._captcha_html(),
+        ):
+            price, currency, source = extract_price_from_url_with_source(
+                "https://www.amazon.nl/dp/B09G9HD5XW"
+            )
+        self.assertIsNone(price)
+        self.assertEqual(source, "blocked_amazon")
 
 
 if __name__ == "__main__":
