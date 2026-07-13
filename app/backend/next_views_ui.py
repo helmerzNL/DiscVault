@@ -708,9 +708,11 @@ def ui_preview_html(
       white-space: nowrap;
     }
     .nav-item.active {
-      color: var(--text);
-      background: var(--bg-solid);
-      box-shadow: var(--shadow-soft);
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 22%, var(--bg-solid));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 58%, transparent),
+        0 10px 24px color-mix(in srgb, var(--accent) 30%, transparent);
     }
     .nav-item small {
       color: var(--subtle);
@@ -9135,16 +9137,22 @@ def ui_preview_html(
         box-shadow: none;
       }
       .mobile-tab.mobile-tab-primary.active {
-        color: var(--text);
-        background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+        color: var(--accent-bright);
+        background: color-mix(in srgb, var(--accent) 22%, var(--bg-solid));
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--accent) 58%, transparent),
+          0 8px 18px color-mix(in srgb, var(--accent) 30%, transparent);
       }
       .mobile-tab.mobile-tab-primary .nav-symbol {
         width: 20px;
         height: 20px;
       }
       .mobile-tab.active {
-        color: var(--text);
-        background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+        color: var(--accent-bright);
+        background: color-mix(in srgb, var(--accent) 22%, var(--bg-solid));
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--accent) 58%, transparent),
+          0 8px 18px color-mix(in srgb, var(--accent) 30%, transparent);
       }
       .mobile-tab span:last-child {
         max-width: 100%;
@@ -13340,7 +13348,8 @@ def ui_preview_html(
       toggle?.setAttribute("aria-pressed", enabled ? "true" : "false");
     }
     function syncSidebarCollapsedFromStorage() {
-      const collapsed = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "1";
+      const stored = localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
+      const collapsed = stored === null ? true : stored === "1";
       setSidebarCollapsed(collapsed);
     }
     function setLoginMessage(message, tone) {
