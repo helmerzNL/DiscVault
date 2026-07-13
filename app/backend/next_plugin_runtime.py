@@ -40,6 +40,7 @@ VALID_CATEGORIES = {
     "digital_media_source",
     "import_source",
     "personal_list_source",
+    "price_provider",
     "system",
     "mcp",
     "api",
