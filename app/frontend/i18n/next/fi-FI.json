@@ -428,6 +428,7 @@
   "appAdmin.pluginTypeMetadataSources": "Metatietolahteet",
   "appAdmin.pluginTypeOther": "Muut lisaosat",
   "appAdmin.pluginTypePersonalListSources": "Henkilokohtaiset listalahteet",
+  "appAdmin.pluginTypePriceProviders": "Price providers",
   "appAdmin.pluginTypeSystem": "Jarjestelmaintegraatiot",
   "appAdmin.pluginUpdated": "Plugin updated to {version}.",
   "appAdmin.plugins": "Lis?osat",
@@ -2245,5 +2246,9 @@
   "accent.teal": "Sinivihreä",
   "accent.crimson": "Karmiininpunainen",
   "accent.magenta": "Magenta",
-  "accent.ember": "Hehku"
+  "accent.ember": "Hehku",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

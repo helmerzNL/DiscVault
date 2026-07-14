@@ -428,6 +428,7 @@
   "appAdmin.pluginTypeMetadataSources": "Metadata-bronnen",
   "appAdmin.pluginTypeOther": "Andere plugins",
   "appAdmin.pluginTypePersonalListSources": "Persoonlijke lijstbronnen",
+  "appAdmin.pluginTypePriceProviders": "Price providers",
   "appAdmin.pluginTypeSystem": "Systeemintegraties",
   "appAdmin.pluginUpdated": "Plugin bijgewerkt naar {version}.",
   "appAdmin.plugins": "Plugins",
@@ -2245,5 +2246,9 @@
   "accent.teal": "Blauwgroen",
   "accent.crimson": "Karmijn",
   "accent.magenta": "Magenta",
-  "accent.ember": "Gloed"
+  "accent.ember": "Gloed",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

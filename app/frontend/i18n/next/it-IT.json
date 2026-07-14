@@ -428,6 +428,7 @@
   "appAdmin.pluginTypeMetadataSources": "Fonti metadati",
   "appAdmin.pluginTypeOther": "Altri plugin",
   "appAdmin.pluginTypePersonalListSources": "Fonti liste personali",
+  "appAdmin.pluginTypePriceProviders": "Price providers",
   "appAdmin.pluginTypeSystem": "Integrazioni di sistema",
   "appAdmin.pluginUpdated": "Plugin aggiornato a {version}.",
   "appAdmin.plugins": "Plugin",
@@ -2245,5 +2246,9 @@
   "accent.teal": "Foglia di tè",
   "accent.crimson": "Cremisi",
   "accent.magenta": "Magenta",
-  "accent.ember": "Brace"
+  "accent.ember": "Brace",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

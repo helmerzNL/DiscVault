@@ -2029,8 +2029,26 @@ def ui_preview_html(
     }
     .poster-rail {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 10px;
+    }
+    @media (min-width: 420px) {
+      .poster-rail {
+        grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+        gap: 12px;
+      }
+    }
+    @media (min-width: 720px) {
+      .poster-rail {
+        grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+        gap: 14px;
+      }
+    }
+    @media (min-width: 1280px) {
+      .poster-rail {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 14px;
+      }
     }
     .preview-poster {
       width: 100%;
@@ -2652,6 +2670,46 @@ def ui_preview_html(
     }
     .lists-poster-badge.danger {
       background: var(--red);
+    }
+    .lists-price-badge {
+      position: absolute;
+      right: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 82%, black);
+      color: #fff;
+      font-size: .68rem;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
+      max-width: calc(100% - 16px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .lists-price-badge.current {
+      top: 8px;
+    }
+    .lists-price-badge.target {
+      bottom: 8px;
+      background: color-mix(in srgb, var(--red) 72%, #24070a);
+    }
+    .lists-price-badge-icon {
+      width: 11px;
+      height: 11px;
+      display: inline-flex;
+      flex: 0 0 auto;
+      opacity: .95;
+    }
+    .lists-price-badge-icon svg {
+      width: 11px;
+      height: 11px;
+      fill: currentColor;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      vector-effect: non-scaling-stroke;
     }
     .lists-static-poster .preview-poster-art {
       cursor: pointer;
@@ -5666,6 +5724,12 @@ def ui_preview_html(
       fill: currentColor;
       flex: 0 0 auto;
       display: block;
+    }
+    .detail-submenu button.lists-seg[data-lists-tab="wishlist"] .lists-seg-icon {
+      fill: color-mix(in srgb, var(--red) 78%, var(--text));
+    }
+    .detail-submenu button.lists-seg[data-lists-tab="wishlist"].active .lists-seg-icon {
+      fill: var(--red);
     }
     .detail-subpanel {
       min-width: 0;
@@ -9644,7 +9708,6 @@ def ui_preview_html(
       .app-admin-plugin-import .primary-button {
         width: 100%;
       }
-      .poster-rail { grid-template-columns: repeat(3, 1fr); }
     }
     @media (max-width: 560px) {
       body,
@@ -9765,7 +9828,6 @@ def ui_preview_html(
         grid-template-columns: 1fr;
         gap: 3px;
       }
-      .poster-rail { grid-template-columns: repeat(3, 1fr); }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -10525,6 +10587,7 @@ def ui_preview_html(
             <button type="button" data-notification-filter="group_invites" data-next-i18n="notifications.prefGroupInvites">Groups</button>
             <button type="button" data-notification-filter="metadata_jobs" data-next-i18n="notifications.prefMetadataJobs">Metadata jobs</button>
             <button type="button" data-notification-filter="imports" data-next-i18n="notifications.prefImports">Imports</button>
+            <button type="button" data-notification-filter="price_alerts" data-next-i18n="notifications.prefPriceAlerts">Price alerts</button>
             <button type="button" data-notification-filter="security" data-next-i18n="notifications.prefSecurity">Security</button>
           </div>
           <div class="notification-list" id="notificationsList"></div>
@@ -12308,6 +12371,7 @@ def ui_preview_html(
                   <button type="button" data-app-admin-plugin-type-tab="metadata_receiver" data-next-i18n="appAdmin.pluginTypeMetadataReceivers">Metadata receivers</button>
                   <button type="button" data-app-admin-plugin-type-tab="digital_media_source" data-next-i18n="appAdmin.pluginTypeDigitalSources">Digital media sources</button>
                   <button type="button" data-app-admin-plugin-type-tab="personal_list_source" data-next-i18n="appAdmin.pluginTypePersonalListSources">Personal list sources</button>
+                  <button type="button" data-app-admin-plugin-type-tab="price_provider" data-next-i18n="appAdmin.pluginTypePriceProviders">Price providers</button>
                   <button type="button" data-app-admin-plugin-type-tab="import_source" data-next-i18n="appAdmin.pluginTypeImportSources">Import sources</button>
                   <button type="button" data-app-admin-plugin-type-tab="system" data-next-i18n="appAdmin.pluginTypeSystem">System integrations</button>
                   <button type="button" data-app-admin-plugin-type-tab="other" data-next-i18n="appAdmin.pluginTypeOther">Other plugins</button>
@@ -13750,7 +13814,7 @@ def ui_preview_html(
       });
     }
     function setAppAdminPluginTypeTab(tab, render = true) {
-      const allowed = ["metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "import_source", "system", "other"];
+      const allowed = ["metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "price_provider", "import_source", "system", "other"];
       appAdmin.activePluginTypeTab = allowed.includes(tab) ? tab : "metadata_source";
       localStorage.setItem("dv_next_admin_plugin_type_tab", appAdmin.activePluginTypeTab);
       document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
@@ -13769,6 +13833,7 @@ def ui_preview_html(
         metadata_receiver: tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"),
         digital_media_source: tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"),
         personal_list_source: tNext("appAdmin.pluginTypePersonalListSources", "Personal list sources"),
+        price_provider: tNext("appAdmin.pluginTypePriceProviders", "Price providers"),
         import_source: tNext("appAdmin.pluginTypeImportSources", "Import sources"),
         system: tNext("appAdmin.pluginTypeSystem", "System integrations"),
         mcp: tNext("appAdmin.pluginTypeMcp", "MCP"),
@@ -15249,9 +15314,10 @@ def ui_preview_html(
       const metadataReceiverPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver"));
       const digitalPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "digital_media_source"));
       const personalListPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "personal_list_source"));
+      const priceProviderPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "price_provider"));
       const importPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source"));
       const systemPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api"));
-      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...personalListPlugins, ...importPlugins, ...systemPlugins].map((plugin) => plugin.id));
+      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...personalListPlugins, ...priceProviderPlugins, ...importPlugins, ...systemPlugins].map((plugin) => plugin.id));
       const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
       const sections = {
         metadata_source: {
@@ -15269,6 +15335,10 @@ def ui_preview_html(
         personal_list_source: {
           title: tNext("appAdmin.pluginTypePersonalListSources", "Personal list sources"),
           plugins: personalListPlugins
+        },
+        price_provider: {
+          title: tNext("appAdmin.pluginTypePriceProviders", "Price providers"),
+          plugins: priceProviderPlugins
         },
         import_source: {
           title: tNext("appAdmin.pluginTypeImportSources", "Import sources"),
@@ -26357,9 +26427,17 @@ def ui_preview_html(
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
       const acquired = !!item.acquiredAt;
+      const activeMonitor = !!item.alertEnabled && item.targetPrice != null;
+      const priceCurrency = String(item.priceCurrency || "EUR").trim().toUpperCase() || "EUR";
+      const currentBadge = activeMonitor && item.lastSeenPrice != null
+        ? `<span class="lists-price-badge current" title="${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19H2V5H4V17H20V19H4ZM6 15.4L11 10.4L14 13.4L19.6 7.8L21 9.2L14 16.2L11 13.2L7.4 16.8L6 15.4Z"/></svg></span>${escapeHtml(formatStatsPrice(item.lastSeenPrice, priceCurrency))}</span>`
+        : "";
+      const targetBadge = activeMonitor
+        ? `<span class="lists-price-badge target" title="${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none"></circle><circle cx="12" cy="12" r="4" fill="none"></circle><circle cx="12" cy="12" r="1.8"></circle></svg></span>${escapeHtml(formatStatsPrice(item.targetPrice, priceCurrency))}</span>`
+        : "";
       return `
         <div class="preview-poster lists-static-poster" data-wishlist-card="${escapeHtml(item.id)}">
-          <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
+          <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}${currentBadge}${targetBadge}</span>
           <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
         </div>
@@ -26420,7 +26498,8 @@ def ui_preview_html(
     }
     function wishlistRenderRows(rows, mode) {
       const all = rows || [];
-      const pending = all.filter((item) => !item.acquiredAt);
+      const monitored = all.filter((item) => !item.acquiredAt && !!item.alertEnabled && item.targetPrice != null);
+      const pending = all.filter((item) => !item.acquiredAt && !(!!item.alertEnabled && item.targetPrice != null));
       const acquired = all.filter((item) => !!item.acquiredAt);
       const renderGroup = (groupRows) => {
         if (mode === "detail") return wishlistDetailTableHtml(groupRows);
@@ -26439,7 +26518,8 @@ def ui_preview_html(
             : `<p class="wishlist-section-empty">${escapeHtml(tNext("lists.wishlistSectionEmpty", "Nothing here yet."))}</p>`}
         </section>
       `;
-      return section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
+      return section(tNext("appAdmin.featurePriceAlerts", "Price alerts"), monitored)
+        + section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
         + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
     function tagChipHtml(tag) {
@@ -27229,6 +27309,71 @@ def ui_preview_html(
       const normalizeShops = (list) => Array.isArray(list) ? list.map((shop) => ({...shop})) : [];
       let shops = normalizeShops(item.shops);
       let shopEditor = null;
+      let shopProvidersState = {loaded: false, loading: false, options: []};
+      const providerDomainHints = [
+        { matchers: [/zavvi\\./], providerTokens: ["zavvi"] },
+        { matchers: [/arrowfilms\\./, /arrow-video\\./], providerTokens: ["arrow", "arrowfilms", "arrow_films"] },
+      ];
+      const normalizeProviderOptions = (payload) => {
+        const providers = Array.isArray(payload?.providers) ? payload.providers : [];
+        return providers
+          .filter((provider) => provider && provider.installed !== false && provider.enabled !== false)
+          .map((provider) => {
+            const providerId = String(provider.id || provider.pluginId || "").trim();
+            if (!providerId) return null;
+            return { id: providerId, label: pluginDisplayName(provider, providerId) };
+          })
+          .filter(Boolean)
+          .sort((a, b) => String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+      };
+      const detectProviderFromUrl = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        let host = "";
+        try {
+          host = new URL(text).hostname.replace(/^www\\./, "").toLowerCase();
+        } catch (_) {
+          return "";
+        }
+        const available = Array.isArray(shopProvidersState.options) ? shopProvidersState.options : [];
+        for (const hint of providerDomainHints) {
+          if (!hint.matchers.some((matcher) => matcher.test(host))) continue;
+          for (const token of hint.providerTokens) {
+            const exact = available.find((option) => option.id === token);
+            if (exact) return exact.id;
+            const contains = available.find((option) => option.id.includes(token));
+            if (contains) return contains.id;
+          }
+        }
+        return "";
+      };
+      const applyProviderAutodetect = (nextUrl) => {
+        if (!shopEditor || shopEditor.providerTouched || shopEditor.providerId) return false;
+        const detected = detectProviderFromUrl(nextUrl);
+        if (!detected) return false;
+        shopEditor.providerId = detected;
+        shopEditor.detectedFromUrl = true;
+        return true;
+      };
+      const ensureShopProvidersLoaded = async () => {
+        if (shopProvidersState.loaded || shopProvidersState.loading) return;
+        shopProvidersState.loading = true;
+        render();
+        try {
+          const payload = await authApiJson("/api/next/price-providers");
+          shopProvidersState.options = normalizeProviderOptions(payload);
+        } catch (error) {
+          shopProvidersState.options = [];
+        } finally {
+          shopProvidersState.loading = false;
+          shopProvidersState.loaded = true;
+          if (applyProviderAutodetect(shopEditor && shopEditor.url)) {
+            render();
+            return;
+          }
+          render();
+        }
+      };
       const formatShopPrice = (shop) => {
         const value = shop && shop.lastSeenPrice;
         if (value == null) return "—";
@@ -27308,6 +27453,23 @@ def ui_preview_html(
                     <label class="lists-modal-field">
                       <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
                       <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
+                    </label>
+                    <label class="lists-modal-field">
+                      <span>${escapeHtml(tNext("lists.wishlistShopProvider", "Price provider"))}</span>
+                      <select data-shop-field="providerId">
+                        <option value="">${escapeHtml(shopProvidersState.loading ? tNext("lists.wishlistShopProviderLoading", "Loading providers...") : tNext("lists.wishlistShopProviderAuto", "Auto-detect from URL"))}</option>
+                        ${(() => {
+                          const options = Array.isArray(shopProvidersState.options) ? shopProvidersState.options.slice() : [];
+                          const selectedProviderId = String(shopEditor.providerId || "").trim();
+                          if (selectedProviderId && !options.some((option) => option.id === selectedProviderId)) {
+                            options.push({ id: selectedProviderId, label: pluginDisplayName(selectedProviderId, selectedProviderId) });
+                          }
+                          return options
+                            .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selectedProviderId ? " selected" : ""}>${escapeHtml(option.label || option.id)}</option>`)
+                            .join("");
+                        })()}
+                      </select>
+                      ${shopEditor.detectedFromUrl ? `<span data-static>${escapeHtml(tNext("lists.wishlistShopProviderDetected", "Provider detected from URL."))}</span>` : ""}
                     </label>
                     <label class="lists-modal-field">
                       <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
@@ -27401,10 +27563,14 @@ def ui_preview_html(
               id: current.id,
               name: current.shopName || "",
               url: current.priceUrl || "",
+              providerId: current.providerId || "",
+              providerTouched: !!current.providerId,
+              detectedFromUrl: false,
               currency: (current.priceCurrency || item.priceCurrency || "EUR").toUpperCase(),
               selectorType: (current.priceSelector && current.priceSelector.type) || "",
               selectorValue: (current.priceSelector && current.priceSelector.value) || "",
             };
+            applyProviderAutodetect(shopEditor.url);
             render();
           });
         });
@@ -27417,20 +27583,37 @@ def ui_preview_html(
             id: null,
             name: "",
             url: "",
+            providerId: "",
+            providerTouched: false,
+            detectedFromUrl: false,
             currency: (item.priceCurrency || "EUR").toUpperCase(),
             selectorType: "",
             selectorValue: "",
           };
+          applyProviderAutodetect(shopEditor.url);
           render();
         });
         panel.querySelector("[data-shop-cancel]")?.addEventListener("click", () => {
           shopEditor = null;
           render();
         });
+        panel.querySelector('[data-shop-field="url"]')?.addEventListener("input", (event) => {
+          if (!shopEditor) return;
+          const nextUrl = (event.target.value || "").trim();
+          shopEditor.url = nextUrl;
+          if (applyProviderAutodetect(nextUrl)) render();
+        });
+        panel.querySelector('[data-shop-field="providerId"]')?.addEventListener("change", (event) => {
+          if (!shopEditor) return;
+          shopEditor.providerId = String(event.target.value || "").trim();
+          shopEditor.providerTouched = true;
+          shopEditor.detectedFromUrl = false;
+        });
         panel.querySelector("[data-shop-save]")?.addEventListener("click", async () => {
           if (!shopEditor) return;
           const name = (panel.querySelector('[data-shop-field="name"]').value || "").trim();
           const url = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
+          const providerId = String(panel.querySelector('[data-shop-field="providerId"]')?.value || "").trim();
           const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";
           const selectorType = (panel.querySelector('[data-shop-field="selectorType"]')?.value || "").trim();
           const selectorValue = (panel.querySelector('[data-shop-field="selectorValue"]')?.value || "").trim();
@@ -27458,6 +27641,7 @@ def ui_preview_html(
                 body: JSON.stringify({
                   shopName: name,
                   priceUrl: url,
+                  providerId: providerId || null,
                   priceCurrency: currency,
                   priceSelector: selectorType ? { type: selectorType, value: selectorValue } : null
                 }),
@@ -27510,6 +27694,7 @@ def ui_preview_html(
         }
       };
       render();
+      ensureShopProvidersLoaded();
     }
     function openLoanMeerInfo(id) {
       const loan = listsFindLoan(id);
@@ -27918,7 +28103,6 @@ def ui_preview_html(
       section.classList.remove("hidden");
 
       const trend = data && data.wishlistPriceTrend ? data.wishlistPriceTrend : {};
-      const activeLoans = Number(trend.activeLoans ?? (data.loans && data.loans.active) ?? 0);
       const movies = Array.isArray(trend.movies) ? trend.movies.filter((movie) => Array.isArray(movie.points) && movie.points.length) : [];
 
       if (figuresToggleNode) {
@@ -27927,21 +28111,6 @@ def ui_preview_html(
           statsState.showPriceTrendFigures = !!figuresToggleNode.checked;
           renderStatisticsView();
         };
-      }
-
-      if (activeLoans <= 0) {
-        if (gateMessage) {
-          gateMessage.textContent = tNext("stats.priceTrendNoLoan", "Price trends appear when at least one movie is currently on loan.");
-          gateMessage.classList.remove("hidden");
-        }
-        if (chartWrap) chartWrap.classList.add("hidden");
-        if (summaryNode) summaryNode.innerHTML = "";
-        if (tableWrap) tableWrap.classList.add("hidden");
-        if (selectNode) {
-          selectNode.innerHTML = "";
-          selectNode.disabled = true;
-        }
-        return;
       }
 
       if (!movies.length) {
@@ -27970,7 +28139,7 @@ def ui_preview_html(
           })
           .join("");
         if (selectNode.innerHTML !== options) selectNode.innerHTML = options;
-        selectNode.disabled = false;
+        selectNode.disabled = movies.length <= 1;
       }
 
       const selectedId = String(statsState.selectedPriceTrendMovieId || "");
@@ -28230,7 +28399,7 @@ def ui_preview_html(
     function renderNotificationsView() {
       const list = document.getElementById("notificationsList");
       const empty = document.getElementById("notificationsEmptyMessage");
-      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "security"].includes(notificationFilter) ? notificationFilter : "all";
+      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "price_alerts", "security"].includes(notificationFilter) ? notificationFilter : "all";
       document.querySelectorAll("[data-notification-filter]").forEach((button) => {
         button.classList.toggle("active", button.dataset.notificationFilter === notificationFilter);
         button.setAttribute("aria-pressed", button.dataset.notificationFilter === notificationFilter ? "true" : "false");
@@ -28550,8 +28719,24 @@ def ui_preview_html(
     async function triggerDebugPriceSweep() {
       setPushProfileMessage(tNext("notifications.priceCheckRunning", "Running price check sweep..."));
       try {
-        const payload = await authApiJson("/api/next/admin/price-alerts/sweep", {method: "POST"});
+        const payload = await authApiJson("/api/next/admin/price-alerts/sweep?sync=1", {method: "POST"});
         notificationsState.loaded = false;
+        if (payload && payload.summary && typeof payload.summary === "object") {
+          const result = payload.summary;
+          setPushProfileMessage(
+            tNext(
+              "notifications.priceCheckDoneCounts",
+              "Price sweep done. checked={checked} notified={notified} skipped={skipped} errors={errors}"
+            )
+              .replace("{checked}", String(result.checked ?? 0))
+              .replace("{notified}", String(result.notified ?? 0))
+              .replace("{skipped}", String(result.skipped ?? 0))
+              .replace("{errors}", String(result.errors ?? 0)),
+            "good"
+          );
+          await loadNotifications(true);
+          return;
+        }
         const jobId = payload.jobId || (payload.job && payload.job.id);
         if (!jobId) {
           setPushProfileMessage(tNext("notifications.priceCheckQueued", "Price sweep queued."), "good");
@@ -28580,6 +28765,7 @@ def ui_preview_html(
                 .replace("{errors}", String(result.errors ?? 0)),
               "good"
             );
+            await loadNotifications(true);
             return;
           }
           if (status === "failed") {
@@ -29186,7 +29372,7 @@ def ui_preview_html(
       activePersonId = "";
       activePersonPayload = null;
       setActiveAppRoute("statistics");
-      loadStatisticsView();
+      loadStatisticsView(true);
       if (pushUrl && appMode && window.location.pathname !== "/statistics") {
         history.pushState({view: "statistics"}, "", "/statistics");
       }

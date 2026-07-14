@@ -40,6 +40,7 @@ VALID_CATEGORIES = {
     "digital_media_source",
     "import_source",
     "personal_list_source",
+    "price_provider",
     "system",
     "mcp",
     "api",
@@ -354,6 +355,7 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
     result: dict[str, Any] = {
         "path": str(install_dir),
         "upgraded": [],
+        "added": [],
         "skipped": [],
         "errors": [],
     }
@@ -362,13 +364,43 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
     # the live source and there is nothing to upgrade.
     if not marker.exists():
         return result
+    marker_payload: dict[str, Any] | None = None
+    marker_seeded: set[str] = set()
+    marker_changed = False
+    try:
+        loaded_marker = json.loads(marker.read_text(encoding="utf-8"))
+        if isinstance(loaded_marker, dict):
+            marker_payload = loaded_marker
+            marker_seeded = {
+                str(item).strip()
+                for item in (marker_payload.get("seeded") or [])
+                if str(item).strip()
+            }
+    except (OSError, ValueError):
+        # Keep backward-compatible behavior for legacy/non-JSON markers:
+        # do not install missing bundled defaults when we cannot prove
+        # whether they were previously seeded and user-deleted.
+        marker_payload = None
     if not plugin_auto_update_enabled():
         result["disabled"] = True
         return result
     for source in bundled_default_plugin_dirs():
         target = install_dir / source.name
         if not target.exists():
-            # Respect a user-deleted default; never resurrect it.
+            if source.name in marker_seeded:
+                # Respect a user-deleted seeded default; never resurrect it.
+                continue
+            if marker_payload is None:
+                # Legacy marker payloads do not track seeded plugin ids.
+                continue
+            try:
+                install_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(source, target)
+                marker_seeded.add(source.name)
+                result["added"].append(source.name)
+                marker_changed = True
+            except OSError as exc:
+                result["errors"].append({"path": str(target), "error": str(exc)})
             continue
         bundled_version = _read_manifest_version(source)
         installed_version = _read_manifest_version(target)
@@ -386,6 +418,14 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
             )
         except OSError as exc:
             result["errors"].append({"path": str(target), "error": str(exc)})
+    if marker_changed and marker_payload is not None:
+        marker_payload["seeded"] = sorted(marker_seeded)
+        marker_payload.setdefault("source", str(bundled_plugin_dir()))
+        marker_payload.setdefault("initializedAt", int(time.time()))
+        try:
+            marker.write_text(json.dumps(marker_payload), encoding="utf-8")
+        except OSError as exc:
+            result["errors"].append({"path": str(marker), "error": str(exc)})
     return result
 
 

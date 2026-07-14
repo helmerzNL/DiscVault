@@ -428,6 +428,7 @@
   "appAdmin.pluginTypeMetadataSources": "Metadatakallor",
   "appAdmin.pluginTypeOther": "Andra plugins",
   "appAdmin.pluginTypePersonalListSources": "Personliga listkallor",
+  "appAdmin.pluginTypePriceProviders": "Price providers",
   "appAdmin.pluginTypeSystem": "Systemintegrationer",
   "appAdmin.pluginUpdated": "Plugin updated to {version}.",
   "appAdmin.plugins": "Plugins",
@@ -2245,5 +2246,9 @@
   "accent.teal": "Blågrön",
   "accent.crimson": "Karmosin",
   "accent.magenta": "Magenta",
-  "accent.ember": "Glöd"
+  "accent.ember": "Glöd",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

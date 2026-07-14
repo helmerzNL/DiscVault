@@ -428,6 +428,7 @@
   "appAdmin.pluginTypeMetadataSources": "Metadata sources",
   "appAdmin.pluginTypeOther": "Other plugins",
   "appAdmin.pluginTypePersonalListSources": "Personal list sources",
+  "appAdmin.pluginTypePriceProviders": "Price providers",
   "appAdmin.pluginTypeSystem": "System integrations",
   "appAdmin.pluginUpdated": "Plugin updated to {version}.",
   "appAdmin.plugins": "Plugins",
@@ -2245,5 +2246,9 @@
   "accent.teal": "藍綠色",
   "accent.crimson": "深紅色",
   "accent.magenta": "洋紅色",
-  "accent.ember": "餘燼"
+  "accent.ember": "餘燼",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

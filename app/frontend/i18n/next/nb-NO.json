@@ -428,6 +428,7 @@
   "appAdmin.pluginTypeMetadataSources": "Metadatakilder",
   "appAdmin.pluginTypeOther": "Andre plugins",
   "appAdmin.pluginTypePersonalListSources": "Personlige listekilder",
+  "appAdmin.pluginTypePriceProviders": "Price providers",
   "appAdmin.pluginTypeSystem": "Systemintegrasjoner",
   "appAdmin.pluginUpdated": "Plugin updated to {version}.",
   "appAdmin.plugins": "Plugins",
@@ -2245,5 +2246,9 @@
   "accent.teal": "Blågrønn",
   "accent.crimson": "Karmosin",
   "accent.magenta": "Magenta",
-  "accent.ember": "Glo"
+  "accent.ember": "Glo",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

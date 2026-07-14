@@ -1,0 +1,37 @@
+{
+  "id": "zavvi",
+  "name": "Zavvi",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["price_provider"],
+  "capabilities": ["price_check"],
+  "requiresSecrets": false,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "currency",
+        "label": "Fallback currency",
+        "type": "text",
+        "required": false,
+        "placeholder": "GBP",
+        "description": "Fallback currency when the shop page does not expose one."
+      },
+      {
+        "name": "timeoutSeconds",
+        "label": "HTTP timeout (seconds)",
+        "type": "number",
+        "required": false,
+        "placeholder": "20",
+        "description": "Request timeout used when fetching Zavvi product pages."
+      }
+    ]
+  },
+  "defaultEnabled": false,
+  "orderIndex": 190,
+  "entitlements": {
+    "source_use": "price_provider.zavvi.use"
+  }
+}
+

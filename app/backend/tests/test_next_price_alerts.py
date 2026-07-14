@@ -21,6 +21,7 @@ try:
         _extract_amazon_asin,
         _is_amazon_bot_blocked,
         _extract_price_from_amazon_html,
+        _run_price_provider_check,
         evaluate_price_alert,
         extract_price_from_url,
         extract_price_from_url_with_source,
@@ -361,6 +362,65 @@ class TestAmazonBlockedSignal(unittest.TestCase):
             )
         self.assertIsNone(price)
         self.assertEqual(source, "blocked_amazon")
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestProviderPluginParsing(unittest.TestCase):
+    def test_provider_result_maps_price_and_metadata(self):
+        plugin_result = {
+            "status": "ok",
+            "price": "19,95",
+            "currency": "eur",
+            "source_detail": "B09XY1F8QJ",
+            "confidence": "0.9",
+        }
+        with patch(
+            "app.backend.next_price_alerts.run_plugin_entrypoint",
+            return_value={"status": "ok", "result": plugin_result},
+        ):
+            (
+                price,
+                currency,
+                source,
+                provider_status,
+                provider_error,
+                source_detail,
+                confidence,
+            ) = _run_price_provider_check(
+                "keepa",
+                item_id="00000000-0000-0000-0000-000000000111",
+                movievault_id="mv-26",
+                shop={"id": "s1", "price_url": "https://example.com/p", "shop_name": "Example", "price_currency": "EUR"},
+            )
+        self.assertAlmostEqual(price, 19.95)
+        self.assertEqual(currency, "EUR")
+        self.assertEqual(source, "provider:keepa")
+        self.assertEqual(provider_status, "ok")
+        self.assertIsNone(provider_error)
+        self.assertEqual(source_detail, "B09XY1F8QJ")
+        self.assertAlmostEqual(confidence, 0.9)
+
+    def test_provider_execution_error_is_mapped(self):
+        with patch(
+            "app.backend.next_price_alerts.run_plugin_entrypoint",
+            return_value={"status": "error", "error": "boom", "result": {"status": "throttled"}},
+        ):
+            (
+                price,
+                currency,
+                source,
+                provider_status,
+                provider_error,
+                source_detail,
+                confidence,
+            ) = _run_price_provider_check("priceapi", item_id="x")
+        self.assertIsNone(price)
+        self.assertIsNone(currency)
+        self.assertIsNone(source)
+        self.assertEqual(provider_status, "throttled")
+        self.assertEqual(provider_error, "boom")
+        self.assertIsNone(source_detail)
+        self.assertIsNone(confidence)
 
 
 if __name__ == "__main__":
