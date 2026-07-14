@@ -1,5 +1,71 @@
 # DiscVault Release Notes
 
+## 26.4.33 — Wishlist price deal alerts, responsive Library, and mobile poster carousel
+
+This release promotes the full `release/v26-beta` train to production, bumping DiscVault
+from `26.4.24` to `26.4.33`. The headline addition is **wishlist price deal alerts**: a
+plugin-based price-provider framework that monitors shop prices for items on your wishlist
+and surfaces price trends and deals. It also ships a fluidly responsive Library grid and
+groundwork for a mobile poster carousel, plus localization coverage across every supported
+locale.
+
+Promoted via [#251](https://github.com/helmerzNL/DiscVault/pull/251) (merge commit
+`c701648`).
+
+### What's new
+
+- **Wishlist price deal alerts — plugin-based price providers.**
+  Wishlist shops can now be monitored through a plugin-based price-provider framework, so
+  DiscVault tracks prices and highlights deals for items you want.
+  ([#239](https://github.com/helmerzNL/DiscVault/pull/239), commit `caf4521`)
+
+- **Admin price-provider registry tab.**
+  A dedicated price-provider tab was added to the admin plugin registry for managing and
+  configuring the available providers.
+  ([#241](https://github.com/helmerzNL/DiscVault/pull/241), commit `3f3f241`)
+
+- **Zavvi & Arrow provider plugins (plus bundled Keepa and PriceAPI).**
+  New price-provider plugins for Zavvi and Arrow ship out of the box, alongside the bundled
+  Keepa and PriceAPI providers.
+  ([#244](https://github.com/helmerzNL/DiscVault/pull/244), commit `3c3ca6a`)
+
+- **Richer wishlist price-monitor cards.**
+  The wishlist price-monitor cards were enhanced to present price data more clearly, and the
+  price-trend selector now always appears when trend data exists.
+  ([#246](https://github.com/helmerzNL/DiscVault/pull/246), commits `76b8c2e`, `3872c86`)
+
+- **Provider dropdown and shop-URL autodetect.**
+  Adding a wishlist shop now offers a provider dropdown and automatically detects the
+  provider from a pasted shop URL.
+  ([#250](https://github.com/helmerzNL/DiscVault/pull/250), commit `67f4a45`)
+
+- **Mobile 3-poster carousel groundwork.**
+  Introduces the groundwork for a three-poster carousel layout on mobile.
+  ([#243](https://github.com/helmerzNL/DiscVault/pull/243), commit `0dd89cc`)
+
+- **Responsive Library poster grid.**
+  The Library poster grid is now fluidly responsive, mirroring the Discover grid so posters
+  scale smoothly across phone, tablet, and desktop widths instead of being locked to a fixed
+  column count.
+  ([#248](https://github.com/helmerzNL/DiscVault/pull/248), commit `1303d85`)
+
+- **Expanded localization coverage.**
+  Translations for the new wishlist, price-provider, and Library flows were added and aligned
+  across all supported locales.
+
+### Notable stability fixes included in this train
+
+- Manual price sweeps now run immediately and refresh notifications rather than waiting for
+  the next scheduled cycle.
+  ([#246](https://github.com/helmerzNL/DiscVault/pull/246), commit `f8477f3`)
+- Adding a wishlist shop is idempotent for duplicate URLs, preventing duplicate entries.
+  ([#245](https://github.com/helmerzNL/DiscVault/pull/245), commit `a6cb397`)
+- Price-sweep audit events now use the background-job UUID for correct correlation.
+  ([#245](https://github.com/helmerzNL/DiscVault/pull/245), commit `cb05ff3`)
+- Newly bundled default plugins are installed after initialization, so fresh instances pick
+  up the shipped providers.
+  ([#242](https://github.com/helmerzNL/DiscVault/pull/242), commit `d04477c`)
+
 ## 26.3.0 — Location deep links, QR flow upgrades, and navigation cleanup
 
 This release promotes a full set of DiscVault Next UX improvements around
