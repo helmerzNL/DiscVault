@@ -2246,5 +2246,9 @@
   "accent.teal": "Бірюзовий",
   "accent.crimson": "Малиновий",
   "accent.magenta": "Пурпуровий",
-  "accent.ember": "Жар"
+  "accent.ember": "Жар",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

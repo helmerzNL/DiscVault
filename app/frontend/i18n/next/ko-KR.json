@@ -2246,5 +2246,9 @@
   "accent.teal": "청록색",
   "accent.crimson": "진홍색",
   "accent.magenta": "마젠타",
-  "accent.ember": "잉걸불"
+  "accent.ember": "잉걸불",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

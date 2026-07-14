@@ -2246,5 +2246,9 @@
   "accent.teal": "Morski",
   "accent.crimson": "Karmazyn",
   "accent.magenta": "Magenta",
-  "accent.ember": "Żar"
+  "accent.ember": "Żar",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

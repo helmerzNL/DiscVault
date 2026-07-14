@@ -2246,5 +2246,9 @@
   "accent.teal": "Blågrøn",
   "accent.crimson": "Karmesin",
   "accent.magenta": "Magenta",
-  "accent.ember": "Glød"
+  "accent.ember": "Glød",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

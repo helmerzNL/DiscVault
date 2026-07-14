@@ -2246,5 +2246,9 @@
   "accent.teal": "Modrozelená",
   "accent.crimson": "Karmínová",
   "accent.magenta": "Purpurová",
-  "accent.ember": "Žeravá"
+  "accent.ember": "Žeravá",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

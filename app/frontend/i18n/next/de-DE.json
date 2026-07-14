@@ -2246,5 +2246,9 @@
   "accent.teal": "Petrol",
   "accent.crimson": "Karminrot",
   "accent.magenta": "Magenta",
-  "accent.ember": "Glut"
+  "accent.ember": "Glut",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

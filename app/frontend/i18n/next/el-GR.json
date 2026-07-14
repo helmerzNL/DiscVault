@@ -2246,5 +2246,9 @@
   "accent.teal": "Πετρόλ",
   "accent.crimson": "Βαθυκόκκινο",
   "accent.magenta": "Ματζέντα",
-  "accent.ember": "Χόβολη"
+  "accent.ember": "Χόβολη",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }
