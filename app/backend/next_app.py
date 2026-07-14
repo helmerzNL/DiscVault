@@ -22900,7 +22900,21 @@ def register_routes(flask_app: Flask) -> None:
     def trigger_price_alert_sweep():
         with connect() as conn:
             actor = require_next_permission(conn, "admin.view_jobs")
-            from next_price_alerts import PRICE_ALERT_JOB_TYPE
+            sync_requested = parse_bool_value(request.args.get("sync"), default=False)
+            from next_price_alerts import PRICE_ALERT_JOB_TYPE, run_price_alert_sweep
+            if sync_requested:
+                summary = run_price_alert_sweep(conn)
+                audit_event(
+                    conn,
+                    event_type="price_alert.sweep_triggered",
+                    category="admin",
+                    actor=actor,
+                    target_type="background_job",
+                    target_id=None,
+                    summary="Ran price alert sweep",
+                    metadata={"mode": "sync", "summary": summary},
+                )
+                return response({"status": "ok", "mode": "sync", "summary": summary})
             job = create_background_job(conn, job_type=PRICE_ALERT_JOB_TYPE, payload={})
             audit_event(
                 conn,
