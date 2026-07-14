@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
+import requests
 from flask import Flask, request
 from psycopg.types.json import Jsonb
 
@@ -34,6 +35,8 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_digital_badge_on_tiles": True,
     "delete_container_members_with_container": False,
     "show_metadata_jobs": True,
+    "price_monitoring_enabled": True,
+    "preferred_price_currency": "",
     "rating_country": "NL",
     "default_media_group_id": "",
 }
@@ -53,10 +56,12 @@ APP_BOOLEAN_PREFERENCES = {
     "show_digital_badge_on_tiles",
     "delete_container_members_with_container",
     "show_metadata_jobs",
+    "price_monitoring_enabled",
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
     "accent": {"bluray", "amethyst", "chrome", "emerald", "teal", "crimson", "magenta", "ember"},
+    "preferred_price_currency": {"", "EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY"},
     "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"},
 }
 APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
@@ -68,6 +73,8 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_local_title",
         "show_extended_people_pages",
         "show_digital_badge_on_tiles",
+        "price_monitoring_enabled",
+        "preferred_price_currency",
         "rating_country",
         "default_media_group_id",
     ),
@@ -80,6 +87,18 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_metadata_jobs",
     ),
 }
+
+PRICE_DISPLAY_SUPPORTED_CURRENCIES: tuple[str, ...] = ("EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY")
+PRICE_DISPLAY_FALLBACK_RATES: dict[str, float] = {
+    "EUR": 1.0,
+    "USD": 1.08,
+    "GBP": 0.86,
+    "CAD": 1.47,
+    "AUD": 1.66,
+    "CHF": 0.94,
+    "JPY": 173.0,
+}
+_PRICE_DISPLAY_RATE_CACHE: dict[str, Any] = {"expires_at": None, "payload": None}
 
 
 def _next_app():
@@ -103,7 +122,7 @@ def validate_app_preference(key: str, value: Any) -> Any:
         return parse_bool_value(value, default=bool(APP_PREFERENCE_DEFAULTS[key]))
     if key in APP_CHOICE_PREFERENCES:
         text = str(value or APP_PREFERENCE_DEFAULTS[key]).strip()
-        text = text.upper() if key == "rating_country" else text.lower()
+        text = text.upper() if key in {"rating_country", "preferred_price_currency"} else text.lower()
         if text not in APP_CHOICE_PREFERENCES[key]:
             raise NextApiError(f"Invalid value for preference {key}", 400)
         return text
@@ -152,6 +171,73 @@ def app_effective_preferences(conn, user_id: UUID | str | None = None) -> dict[s
     values = app_global_preferences(conn)
     values.update(app_user_preferences(conn, user_id))
     return values
+
+
+def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    cached = _PRICE_DISPLAY_RATE_CACHE.get("payload")
+    expires_at = _PRICE_DISPLAY_RATE_CACHE.get("expires_at")
+    if cached and isinstance(expires_at, datetime) and expires_at > now:
+        return cached
+
+    symbols = ",".join(code for code in PRICE_DISPLAY_SUPPORTED_CURRENCIES if code != "EUR")
+    try:
+        response = requests.get(
+            f"https://api.frankfurter.app/latest?from=EUR&to={symbols}",
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json() or {}
+        raw_rates = payload.get("rates") if isinstance(payload, dict) else {}
+        rates = {"EUR": 1.0}
+        for code in PRICE_DISPLAY_SUPPORTED_CURRENCIES:
+            if code == "EUR":
+                continue
+            raw_value = raw_rates.get(code) if isinstance(raw_rates, dict) else None
+            try:
+                rates[code] = float(raw_value)
+            except (TypeError, ValueError):
+                rates[code] = PRICE_DISPLAY_FALLBACK_RATES[code]
+        result = {
+            "base": "EUR",
+            "exchangeRates": rates,
+            "updatedAt": payload.get("date") if isinstance(payload, dict) else None,
+            "source": "frankfurter",
+        }
+        _PRICE_DISPLAY_RATE_CACHE["payload"] = result
+        _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + timedelta(hours=12)
+        return result
+    except Exception:
+        if cached:
+            return cached
+        return {
+            "base": "EUR",
+            "exchangeRates": dict(PRICE_DISPLAY_FALLBACK_RATES),
+            "updatedAt": None,
+            "source": "fallback",
+        }
+
+
+def price_display_context(preferences: dict[str, Any] | None = None) -> dict[str, Any]:
+    prefs = preferences or {}
+    monitoring_enabled = bool(prefs.get("price_monitoring_enabled", APP_PREFERENCE_DEFAULTS["price_monitoring_enabled"]))
+    preferred_currency = str(prefs.get("preferred_price_currency") or "").strip().upper()
+    if preferred_currency not in APP_CHOICE_PREFERENCES["preferred_price_currency"]:
+        preferred_currency = ""
+    payload = {
+        "monitoringEnabled": monitoring_enabled,
+        "preferredCurrency": preferred_currency or None,
+        "supportedCurrencies": list(PRICE_DISPLAY_SUPPORTED_CURRENCIES),
+        "exchangeRates": {},
+        "updatedAt": None,
+        "source": None,
+    }
+    if monitoring_enabled and preferred_currency:
+        rates = price_display_exchange_rates()
+        payload["exchangeRates"] = dict(rates.get("exchangeRates") or {})
+        payload["updatedAt"] = rates.get("updatedAt")
+        payload["source"] = rates.get("source")
+    return payload
 
 
 def actor_delete_container_members_enabled(conn, actor: dict[str, Any] | None) -> bool:

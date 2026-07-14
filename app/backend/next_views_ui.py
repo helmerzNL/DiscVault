@@ -12697,6 +12697,7 @@ def ui_preview_html(
     let locations = state.locations || [];
     let containerMembership = state.containerMembership || [];
     let mediaGroups = state.mediaGroups || [];
+    let priceDisplay = state.priceDisplay || {};
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
     let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
     let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
@@ -26430,13 +26431,13 @@ def ui_preview_html(
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
       const acquired = !!item.acquiredAt;
-      const activeMonitor = !!item.alertEnabled && item.targetPrice != null;
+      const activeMonitor = priceMonitoringEnabled() && !!item.alertEnabled && item.targetPrice != null;
       const priceCurrency = String(item.priceCurrency || "EUR").trim().toUpperCase() || "EUR";
       const currentBadge = activeMonitor && item.lastSeenPrice != null
-        ? `<span class="lists-price-badge current" title="${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19H2V5H4V17H20V19H4ZM6 15.4L11 10.4L14 13.4L19.6 7.8L21 9.2L14 16.2L11 13.2L7.4 16.8L6 15.4Z"/></svg></span>${escapeHtml(formatStatsPrice(item.lastSeenPrice, priceCurrency))}</span>`
+        ? `<span class="lists-price-badge current" title="${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19H2V5H4V17H20V19H4ZM6 15.4L11 10.4L14 13.4L19.6 7.8L21 9.2L14 16.2L11 13.2L7.4 16.8L6 15.4Z"/></svg></span>${escapeHtml(formatWishlistPrice(item.lastSeenPrice, priceCurrency))}</span>`
         : "";
       const targetBadge = activeMonitor
-        ? `<span class="lists-price-badge target" title="${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none"></circle><circle cx="12" cy="12" r="4" fill="none"></circle><circle cx="12" cy="12" r="1.8"></circle></svg></span>${escapeHtml(formatStatsPrice(item.targetPrice, priceCurrency))}</span>`
+        ? `<span class="lists-price-badge target" title="${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none"></circle><circle cx="12" cy="12" r="4" fill="none"></circle><circle cx="12" cy="12" r="1.8"></circle></svg></span>${escapeHtml(formatWishlistPrice(item.targetPrice, priceCurrency))}</span>`
         : "";
       return `
         <div class="preview-poster lists-static-poster" data-wishlist-card="${escapeHtml(item.id)}">
@@ -26501,8 +26502,9 @@ def ui_preview_html(
     }
     function wishlistRenderRows(rows, mode) {
       const all = rows || [];
-      const monitored = all.filter((item) => !item.acquiredAt && !!item.alertEnabled && item.targetPrice != null);
-      const pending = all.filter((item) => !item.acquiredAt && !(!!item.alertEnabled && item.targetPrice != null));
+      const monitoringEnabled = priceMonitoringEnabled();
+      const monitored = monitoringEnabled ? all.filter((item) => !item.acquiredAt && !!item.alertEnabled && item.targetPrice != null) : [];
+      const pending = all.filter((item) => !item.acquiredAt && (!monitoringEnabled || !(!!item.alertEnabled && item.targetPrice != null)));
       const acquired = all.filter((item) => !!item.acquiredAt);
       const renderGroup = (groupRows) => {
         if (mode === "detail") return wishlistDetailTableHtml(groupRows);
@@ -26521,7 +26523,7 @@ def ui_preview_html(
             : `<p class="wishlist-section-empty">${escapeHtml(tNext("lists.wishlistSectionEmpty", "Nothing here yet."))}</p>`}
         </section>
       `;
-      return section(tNext("appAdmin.featurePriceAlerts", "Price alerts"), monitored)
+      return (monitoringEnabled ? section(tNext("appAdmin.featurePriceAlerts", "Price alerts"), monitored) : "")
         + section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
         + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
@@ -27313,12 +27315,6 @@ def ui_preview_html(
       let shops = normalizeShops(item.shops);
       let shopEditor = null;
       let shopProvidersState = {loaded: false, loading: false, options: []};
-      const providerDomainHints = [
-        { matchers: [/zavvi\\./], providerTokens: ["zavvi"] },
-        { matchers: [/arrowfilms\\./, /arrow-video\\./], providerTokens: ["arrow", "arrowfilms", "arrow_films"] },
-        { matchers: [/bol\\.com$/], providerTokens: ["bol"] },
-        { matchers: [/amazon\\./], providerTokens: ["amazon"] },
-      ];
       const AMAZON_ASIN_PATTERNS = [
         /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/i,
         /\/gp\/product\/([A-Z0-9]{10})(?:[/?]|$)/i,
@@ -27333,24 +27329,47 @@ def ui_preview_html(
         }
         return "";
       };
-      const isAmazonProvider = (providerId) => String(providerId || "").trim().toLowerCase().includes("amazon");
-      const syncAmazonProviderRefFromUrl = () => {
+      const providerOption = (providerId) => (
+        shopProvidersState.options.find((option) => option.id === String(providerId || "").trim()) || null
+      );
+      const providerProductRefType = (providerId) => providerOption(providerId)?.productRef?.type || "";
+      const isAmazonAsinProvider = (providerId) => providerProductRefType(providerId) === "amazon_asin";
+      const syncProviderProductRefFromUrl = () => {
         if (!shopEditor) return;
-        if (!isAmazonProvider(shopEditor.providerId)) return;
+        if (!isAmazonAsinProvider(shopEditor.providerId)) return;
         const asin = extractAmazonAsinFromUrl(shopEditor.url);
         if (asin) shopEditor.providerProductRef = asin;
       };
       const normalizeProviderOptions = (payload) => {
         const providers = Array.isArray(payload?.providers) ? payload.providers : [];
         return providers
-          .filter((provider) => provider && provider.installed !== false && provider.enabled !== false)
+          .filter((provider) => provider && provider.usable !== false)
           .map((provider) => {
             const providerId = String(provider.id || provider.pluginId || "").trim();
             if (!providerId) return null;
-            return { id: providerId, label: pluginDisplayName(provider, providerId) };
+            const metadata = provider.priceProvider && typeof provider.priceProvider === "object"
+              ? provider.priceProvider
+              : {};
+            return {
+              id: providerId,
+              label: pluginDisplayName(provider, providerId),
+              orderIndex: Number(provider.orderIndex || 100),
+              hostPatterns: Array.isArray(metadata.hostPatterns) ? metadata.hostPatterns : [],
+              productRef: metadata.productRef && typeof metadata.productRef === "object" ? metadata.productRef : null,
+            };
           })
           .filter(Boolean)
-          .sort((a, b) => String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+          .sort((a, b) => a.orderIndex - b.orderIndex
+            || String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+      };
+      const providerHostMatches = (host, rawPattern) => {
+        const pattern = String(rawPattern || "").trim().toLowerCase();
+        if (!pattern) return false;
+        if (pattern.endsWith(".")) {
+          const token = pattern.slice(0, -1);
+          return !!token && (host.startsWith(`${token}.`) || host.includes(`.${token}.`));
+        }
+        return host === pattern || host.endsWith(`.${pattern}`);
       };
       const detectProviderFromUrl = (value) => {
         const text = String(value || "").trim();
@@ -27362,14 +27381,8 @@ def ui_preview_html(
           return "";
         }
         const available = Array.isArray(shopProvidersState.options) ? shopProvidersState.options : [];
-        for (const hint of providerDomainHints) {
-          if (!hint.matchers.some((matcher) => matcher.test(host))) continue;
-          for (const token of hint.providerTokens) {
-            const exact = available.find((option) => option.id === token);
-            if (exact) return exact.id;
-            const contains = available.find((option) => option.id.includes(token));
-            if (contains) return contains.id;
-          }
+        for (const option of available) {
+          if (option.hostPatterns.some((pattern) => providerHostMatches(host, pattern))) return option.id;
         }
         return "";
       };
@@ -27379,7 +27392,7 @@ def ui_preview_html(
         if (!detected) return false;
         shopEditor.providerId = detected;
         shopEditor.detectedFromUrl = true;
-        syncAmazonProviderRefFromUrl();
+        syncProviderProductRefFromUrl();
         return true;
       };
       const ensureShopProvidersLoaded = async () => {
@@ -27404,9 +27417,10 @@ def ui_preview_html(
       const formatShopPrice = (shop) => {
         const value = shop && shop.lastSeenPrice;
         if (value == null) return "—";
-        return `${escapeHtml(String(value))} ${escapeHtml((shop && shop.priceCurrency) || "EUR")}`;
+        return escapeHtml(formatWishlistPrice(value, (shop && shop.priceCurrency) || "EUR"));
       };
       const render = () => {
+        const monitoringEnabled = priceMonitoringEnabled();
         const posterPreview = posterUrl
           ? `<img src="${escapeHtml(posterUrl)}" alt="">`
           : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -27437,94 +27451,96 @@ def ui_preview_html(
                 <span data-read>${escapeHtml(item.note || "")}</span>
                 <textarea data-edit data-field="note" rows="2">${escapeHtml(item.note || "")}</textarea></label>
               <div class="lists-modal-section-divider">${escapeHtml(tNext("lists.wishlistPriceDropAlert", "Price drop alert"))}</div>
-              <label class="lists-modal-field lists-modal-field-check">
-                <span>${escapeHtml(tNext("lists.wishlistAlertEnabled", "Alert on price drop"))}</span>
-                <span data-read>${item.alertEnabled ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}</span>
-                <input data-edit data-field="alertEnabled" type="checkbox"${item.alertEnabled ? " checked" : ""}>
-              </label>
-              <label class="lists-modal-field">
-                <span>${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}</span>
-                <span data-read>${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : "—"}</span>
-                <input data-edit data-field="targetPrice" type="number" min="0" step="0.01" value="${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : ""}">
-              </label>
-              <label class="lists-modal-field">
-                <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
-                <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
-                <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
-              </label>
-              <div class="lists-modal-shop-list-wrap">
-                <div class="lists-modal-shop-head">
-                  <span>${escapeHtml(tNext("lists.wishlistShopsTitle", "Shops"))}</span>
-                  ${shops.length < 10 ? `<button type="button" class="ghost" data-shop-add>${escapeHtml(tNext("lists.wishlistShopAdd", "Add shop"))}</button>` : ""}
-                </div>
-                ${shops.length
-                  ? `<div class="lists-modal-shop-list">${
-                      shops.map((shop) => `
-                        <div class="lists-modal-shop-row">
-                          <div class="lists-modal-shop-main">
-                            <strong>${escapeHtml(shop.shopName || "")}</strong>
-                            <span>${formatShopPrice(shop)}</span>
-                          </div>
-                          <button type="button" class="ghost" data-shop-edit="${escapeHtml(String(shop.id || ""))}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
-                        </div>
-                      `).join("")
-                    }</div>`
-                  : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistNoShops", "No shops added yet."))}</p>`
-                }
-                ${shopEditor ? `
-                  <div class="lists-modal-shop-editor">
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistShopName", "Shop name"))}</span>
-                      <input data-shop-field="name" type="text" value="${escapeHtml(shopEditor.name || "")}" maxlength="80">
-                    </label>
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
-                      <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
-                    </label>
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistShopProvider", "Price provider"))}</span>
-                      <select data-shop-field="providerId">
-                        <option value="">${escapeHtml(shopProvidersState.loading ? tNext("lists.wishlistShopProviderLoading", "Loading providers...") : tNext("lists.wishlistShopProviderAuto", "Auto-detect from URL"))}</option>
-                        ${(() => {
-                          const options = Array.isArray(shopProvidersState.options) ? shopProvidersState.options.slice() : [];
-                          const selectedProviderId = String(shopEditor.providerId || "").trim();
-                          if (selectedProviderId && !options.some((option) => option.id === selectedProviderId)) {
-                            options.push({ id: selectedProviderId, label: pluginDisplayName(selectedProviderId, selectedProviderId) });
-                          }
-                          return options
-                            .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selectedProviderId ? " selected" : ""}>${escapeHtml(option.label || option.id)}</option>`)
-                            .join("");
-                        })()}
-                      </select>
-                      ${shopEditor.detectedFromUrl ? `<span data-static>${escapeHtml(tNext("lists.wishlistShopProviderDetected", "Provider detected from URL."))}</span>` : ""}
-                    </label>
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
-                      <input data-shop-field="currency" type="text" maxlength="3" value="${escapeHtml(shopEditor.currency || "EUR")}">
-                    </label>
-                    <details class="lists-modal-shop-advanced">
-                      <summary>${escapeHtml(tNext("lists.wishlistShopAdvancedSelector", "Advanced price selector"))}</summary>
-                      <label class="lists-modal-field">
-                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorType", "Selector type"))}</span>
-                        <select data-shop-field="selectorType">
-                          <option value="">${escapeHtml(tNext("common.none", "None"))}</option>
-                          <option value="css_text"${shopEditor.selectorType === "css_text" ? " selected" : ""}>css_text</option>
-                          <option value="regex_capture"${shopEditor.selectorType === "regex_capture" ? " selected" : ""}>regex_capture</option>
-                        </select>
-                      </label>
-                      <label class="lists-modal-field">
-                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorValue", "Selector value"))}</span>
-                        <input data-shop-field="selectorValue" type="text" value="${escapeHtml(shopEditor.selectorValue || "")}" placeholder=".price, #our-price, regex...">
-                      </label>
-                    </details>
-                    <div class="lists-modal-shop-editor-actions">
-                      <button type="button" data-shop-save>${escapeHtml(tNext("common.save", "Save"))}</button>
-                      <button type="button" class="ghost" data-shop-cancel>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
-                    </div>
+              ${monitoringEnabled ? `
+                <label class="lists-modal-field lists-modal-field-check">
+                  <span>${escapeHtml(tNext("lists.wishlistAlertEnabled", "Alert on price drop"))}</span>
+                  <span data-read>${item.alertEnabled ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}</span>
+                  <input data-edit data-field="alertEnabled" type="checkbox"${item.alertEnabled ? " checked" : ""}>
+                </label>
+                <label class="lists-modal-field">
+                  <span>${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}</span>
+                  <span data-read>${item.targetPrice != null ? escapeHtml(formatWishlistPrice(item.targetPrice, item.priceCurrency || "EUR")) : "—"}</span>
+                  <input data-edit data-field="targetPrice" type="number" min="0" step="0.01" value="${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : ""}">
+                </label>
+                <label class="lists-modal-field">
+                  <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                  <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
+                  <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
+                </label>
+                <div class="lists-modal-shop-list-wrap">
+                  <div class="lists-modal-shop-head">
+                    <span>${escapeHtml(tNext("lists.wishlistShopsTitle", "Shops"))}</span>
+                    ${shops.length < 10 ? `<button type="button" class="ghost" data-shop-add>${escapeHtml(tNext("lists.wishlistShopAdd", "Add shop"))}</button>` : ""}
                   </div>
-                ` : ""}
-              </div>
-              ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(String(item.lastSeenPrice))} ${escapeHtml(item.priceCurrency || "EUR")}</span></div>` : ""}
+                  ${shops.length
+                    ? `<div class="lists-modal-shop-list">${
+                        shops.map((shop) => `
+                          <div class="lists-modal-shop-row">
+                            <div class="lists-modal-shop-main">
+                              <strong>${escapeHtml(shop.shopName || "")}</strong>
+                              <span>${formatShopPrice(shop)}</span>
+                            </div>
+                            <button type="button" class="ghost" data-shop-edit="${escapeHtml(String(shop.id || ""))}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+                          </div>
+                        `).join("")
+                      }</div>`
+                    : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistNoShops", "No shops added yet."))}</p>`
+                  }
+                  ${shopEditor ? `
+                    <div class="lists-modal-shop-editor">
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopName", "Shop name"))}</span>
+                        <input data-shop-field="name" type="text" value="${escapeHtml(shopEditor.name || "")}" maxlength="80">
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
+                        <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopProvider", "Price provider"))}</span>
+                        <select data-shop-field="providerId">
+                          <option value="">${escapeHtml(shopProvidersState.loading ? tNext("lists.wishlistShopProviderLoading", "Loading providers...") : tNext("lists.wishlistShopProviderAuto", "Auto-detect from URL"))}</option>
+                          ${(() => {
+                            const options = Array.isArray(shopProvidersState.options) ? shopProvidersState.options.slice() : [];
+                            const selectedProviderId = String(shopEditor.providerId || "").trim();
+                            if (selectedProviderId && !options.some((option) => option.id === selectedProviderId)) {
+                              options.push({ id: selectedProviderId, label: pluginDisplayName(selectedProviderId, selectedProviderId) });
+                            }
+                            return options
+                              .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selectedProviderId ? " selected" : ""}>${escapeHtml(option.label || option.id)}</option>`)
+                              .join("");
+                          })()}
+                        </select>
+                        ${shopEditor.detectedFromUrl ? `<span data-static>${escapeHtml(tNext("lists.wishlistShopProviderDetected", "Provider detected from URL."))}</span>` : ""}
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                        <input data-shop-field="currency" type="text" maxlength="3" value="${escapeHtml(shopEditor.currency || "EUR")}">
+                      </label>
+                      <details class="lists-modal-shop-advanced">
+                        <summary>${escapeHtml(tNext("lists.wishlistShopAdvancedSelector", "Advanced price selector"))}</summary>
+                        <label class="lists-modal-field">
+                          <span>${escapeHtml(tNext("lists.wishlistShopSelectorType", "Selector type"))}</span>
+                          <select data-shop-field="selectorType">
+                            <option value="">${escapeHtml(tNext("common.none", "None"))}</option>
+                            <option value="css_text"${shopEditor.selectorType === "css_text" ? " selected" : ""}>css_text</option>
+                            <option value="regex_capture"${shopEditor.selectorType === "regex_capture" ? " selected" : ""}>regex_capture</option>
+                          </select>
+                        </label>
+                        <label class="lists-modal-field">
+                          <span>${escapeHtml(tNext("lists.wishlistShopSelectorValue", "Selector value"))}</span>
+                          <input data-shop-field="selectorValue" type="text" value="${escapeHtml(shopEditor.selectorValue || "")}" placeholder=".price, #our-price, regex...">
+                        </label>
+                      </details>
+                      <div class="lists-modal-shop-editor-actions">
+                        <button type="button" data-shop-save>${escapeHtml(tNext("common.save", "Save"))}</button>
+                        <button type="button" class="ghost" data-shop-cancel>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+                      </div>
+                    </div>
+                  ` : ""}
+                </div>
+                ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(formatWishlistPrice(item.lastSeenPrice, item.priceCurrency || "EUR"))}</span></div>` : ""}
+              ` : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistPriceMonitoringDisabled", "Price monitoring is disabled in Settings."))}</p>`}
             </div>
           </div>
           <p class="lists-modal-message" data-message></p>
@@ -27630,7 +27646,7 @@ def ui_preview_html(
           if (!shopEditor) return;
           const nextUrl = (event.target.value || "").trim();
           shopEditor.url = nextUrl;
-          syncAmazonProviderRefFromUrl();
+          syncProviderProductRefFromUrl();
           if (applyProviderAutodetect(nextUrl)) render();
         });
         panel.querySelector('[data-shop-field="providerId"]')?.addEventListener("change", (event) => {
@@ -27638,7 +27654,7 @@ def ui_preview_html(
           shopEditor.providerId = String(event.target.value || "").trim();
           shopEditor.providerTouched = true;
           shopEditor.detectedFromUrl = false;
-          syncAmazonProviderRefFromUrl();
+          syncProviderProductRefFromUrl();
         });
         panel.querySelector("[data-shop-save]")?.addEventListener("click", async () => {
           if (!shopEditor) return;
@@ -27646,10 +27662,10 @@ def ui_preview_html(
           const rawUrl = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
           const providerId = String(panel.querySelector('[data-shop-field="providerId"]')?.value || "").trim();
           const asinOnlyMatch = rawUrl.match(/^[A-Z0-9]{10}$/i);
-          const url = (isAmazonProvider(providerId) && asinOnlyMatch)
+          const url = (isAmazonAsinProvider(providerId) && asinOnlyMatch)
             ? `https://www.amazon.nl/dp/${String(asinOnlyMatch[0]).toUpperCase()}`
             : rawUrl;
-          const providerProductRef = isAmazonProvider(providerId)
+          const providerProductRef = isAmazonAsinProvider(providerId)
             ? (extractAmazonAsinFromUrl(url) || String(shopEditor.providerProductRef || "").trim().toUpperCase() || null)
             : (String(shopEditor.providerProductRef || "").trim() || null);
           const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";
@@ -27699,8 +27715,9 @@ def ui_preview_html(
                 "Shop saved. Current price: {price} {currency}."
               );
               const priceMessage = messageTemplate
-                .replace("{price}", String(fetchedPrice))
-                .replace("{currency}", fetchedCurrency);
+                .replace("{price}", formatWishlistPrice(fetchedPrice, fetchedCurrency))
+                .replace("{currency}", "")
+                .replace(/\s+\./g, ".");
               setMessage(priceMessage, "good");
             } else {
               setMessage(
@@ -28120,6 +28137,34 @@ def ui_preview_html(
       } catch (error) {
         return `${numeric.toFixed(2)} ${code}`;
       }
+    }
+    function priceMonitoringEnabled() {
+      return preferences.price_monitoring_enabled !== false;
+    }
+    function preferredPriceCurrency() {
+      return String(preferences.preferred_price_currency || "").trim().toUpperCase();
+    }
+    function convertPriceAmount(value, fromCurrency, toCurrency) {
+      const numeric = Number(value);
+      const from = String(fromCurrency || "").trim().toUpperCase();
+      const to = String(toCurrency || "").trim().toUpperCase();
+      if (!Number.isFinite(numeric) || !from || !to) return null;
+      if (from === to) return numeric;
+      const rates = priceDisplay && typeof priceDisplay.exchangeRates === "object" ? priceDisplay.exchangeRates : {};
+      const fromRate = Number(rates[from]);
+      const toRate = Number(rates[to]);
+      if (!Number.isFinite(fromRate) || fromRate <= 0 || !Number.isFinite(toRate) || toRate <= 0) return null;
+      return (numeric / fromRate) * toRate;
+    }
+    function formatWishlistPrice(value, currency = "EUR") {
+      const original = formatStatsPrice(value, currency);
+      if (original === "—") return original;
+      const preferred = preferredPriceCurrency();
+      const source = String(currency || "EUR").trim().toUpperCase() || "EUR";
+      if (!preferred || preferred === source) return original;
+      const converted = convertPriceAmount(value, source, preferred);
+      if (converted == null) return original;
+      return `${original} (${formatStatsPrice(converted, preferred)})`;
     }
     function statsPriceChangeClass(value) {
       const numeric = Number(value);
@@ -30667,6 +30712,8 @@ def ui_preview_html(
       ["rating_country", "preferences.ratingCountry", "preferences.ratingCountryHelp"],
       ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"],
       ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"],
+      ["price_monitoring_enabled", "preferences.priceMonitoringEnabled", "preferences.priceMonitoringEnabledHelp"],
+      ["preferred_price_currency", "preferences.preferredPriceCurrency", "preferences.preferredPriceCurrencyHelp", "price_monitoring_enabled"],
       ["delete_container_members_with_container", "preferences.deleteContainerMembersWithContainer", "preferences.deleteContainerMembersWithContainerHelp"]
     ];
     const preferenceCollectorLabels = [
@@ -30677,6 +30724,7 @@ def ui_preview_html(
       ["show_metadata_jobs", "preferences.showMetadataJobs", "preferences.showMetadataJobsHelp"]
     ];
     const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
+    const DEFAULT_PRICE_DISPLAY_CURRENCIES = ["EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY"];
     function ratingCountryPickerHtml(disabled = false) {
       const selected = String(preferences.rating_country || "NL").toUpperCase();
       const active = RATING_COUNTRIES_ORDER.includes(selected) ? selected : "NL";
@@ -30692,6 +30740,27 @@ def ui_preview_html(
         </div>
       `;
     }
+    function preferredPriceCurrencyPickerHtml(disabled = false) {
+      const selected = preferredPriceCurrency();
+      const seen = new Set();
+      const currencies = [];
+      const available = Array.isArray(priceDisplay?.supportedCurrencies) ? priceDisplay.supportedCurrencies : [];
+      [...available, ...DEFAULT_PRICE_DISPLAY_CURRENCIES, selected].forEach((value) => {
+        const code = String(value || "").trim().toUpperCase();
+        if (!code || seen.has(code)) return;
+        seen.add(code);
+        currencies.push(code);
+      });
+      const options = [
+        `<option value="">${escapeHtml(tNext("preferences.preferredPriceCurrencyNone", "Website currency only"))}</option>`,
+        ...currencies.map((code) => `<option value="${escapeHtml(code)}"${code === selected ? " selected" : ""}>${escapeHtml(code)}</option>`)
+      ].join("");
+      return `
+        <select data-preference-choice-select="preferred_price_currency" aria-label="${escapeHtml(tNext("preferences.preferredPriceCurrency", "Preferred price currency"))}" ${disabled ? "disabled" : ""}>
+          ${options}
+        </select>
+      `;
+    }
     function preferenceRowsHtml(items) {
       return items.map(([key, labelKey, helpKey, requiresKey]) => {
         const disabled = requiresKey && !preferences[requiresKey];
@@ -30704,6 +30773,19 @@ def ui_preview_html(
               </span>
               <div class="country-picker" data-preference-country-picker="${escapeHtml(key)}">
                 ${ratingCountryPickerHtml(disabled)}
+              </div>
+            </div>
+          `;
+        }
+        if (key === "preferred_price_currency") {
+          return `
+            <div class="preference-control-row ${disabled ? "disabled" : ""}">
+              <span>
+                <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+                <span>${escapeHtml(tNext(helpKey, ""))}</span>
+              </span>
+              <div class="country-picker" data-preference-choice-picker="${escapeHtml(key)}">
+                ${preferredPriceCurrencyPickerHtml(disabled)}
               </div>
             </div>
           `;
@@ -30737,6 +30819,12 @@ def ui_preview_html(
         select.addEventListener("change", () => {
           if (select.disabled) return;
           updatePreference("rating_country", select.value);
+        });
+      });
+      list.querySelectorAll("[data-preference-choice-select]").forEach((select) => {
+        select.addEventListener("change", () => {
+          if (select.disabled) return;
+          updatePreference(select.dataset.preferenceChoiceSelect, select.value);
         });
       });
     }
@@ -31068,8 +31156,13 @@ def ui_preview_html(
           body: JSON.stringify({preferences: patch})
         });
         preferences = Object.assign({}, preferences, payload.preferences || {});
+        const refreshSnapshot = key === "price_monitoring_enabled" || key === "preferred_price_currency";
+        if (refreshSnapshot) {
+          await loadAppSnapshot();
+        }
         renderPreferences();
         renderCollectionSurface();
+        if (listsState.loaded) renderListsView();
         if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
         if (message) message.textContent = tNext("preferences.saved", "Saved.");
       } catch (error) {
@@ -31627,6 +31720,7 @@ def ui_preview_html(
     async function loadAppSnapshot() {
       const payload = await apiJson("/api/next/app/snapshot", {headers: authHeaders()});
       state = payload.snapshot || {};
+      priceDisplay = state.priceDisplay || {};
       movies = state.movies || [];
       containers = state.containers || [];
       locations = state.locations || locations || [];
