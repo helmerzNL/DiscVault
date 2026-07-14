@@ -10059,7 +10059,7 @@ def ui_preview_html(
           <span data-next-i18n=""" + '"' + mode_label_key + '"' + """>""" + h(mode_label_fallback) + """</span>
         </div>
       </div>
-      <button type="button" class="sidebar-collapse-toggle" id="sidebarCollapseToggle" aria-label="Toggle sidebar" title="Toggle sidebar" aria-pressed="false">
+      <button type="button" class="sidebar-collapse-toggle" id="sidebarCollapseToggle" aria-label="Toggle sidebar" data-next-i18n-aria="uiPreview.toggleSidebar" title="Toggle sidebar" data-next-i18n-title="uiPreview.toggleSidebar" aria-pressed="false">
         <svg viewBox="0 0 24 24" focusable="false" role="img" aria-hidden="true"><path d="M4 5H20V7H4V5M4 11H14V13H4V11M4 17H20V19H4V17Z"></path></svg>
       </button>
       <nav class="nav-section" aria-label="Primary">
@@ -17466,6 +17466,9 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-next-i18n-aria]").forEach((node) => {
         node.setAttribute("aria-label", tNext(node.dataset.nextI18nAria, node.getAttribute("aria-label") || ""));
+      });
+      document.querySelectorAll("[data-next-i18n-title]").forEach((node) => {
+        node.setAttribute("title", tNext(node.dataset.nextI18nTitle, node.getAttribute("title") || ""));
       });
       renderAppRegistrationMode();
     }

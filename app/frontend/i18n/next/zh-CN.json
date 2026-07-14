@@ -2199,6 +2199,7 @@
   "uiPreview.profile": "个人资料",
   "uiPreview.recentlyAdded": "最近添加",
   "uiPreview.shuffle": "随机",
+  "uiPreview.toggleSidebar": "切换侧边栏",
   "notifications.priceCheck": "Price Check",
   "notifications.priceCheckRunning": "Running price check sweep...",
   "notifications.priceCheckDone": "Price sweep done.",
