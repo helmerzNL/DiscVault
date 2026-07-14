@@ -21570,11 +21570,20 @@ def register_routes(flask_app: Flask) -> None:
                 if not cur.fetchone():
                     raise NextApiError("Wishlist entry not found", 404)
                 cur.execute(
+                    """
+                    SELECT id
+                    FROM wishlist_item_shops
+                    WHERE user_id=%s AND wishlist_item_id=%s AND price_url=%s
+                    """,
+                    (user_id, item_uuid, price_url),
+                )
+                existing_shop = cur.fetchone() or {}
+                cur.execute(
                     "SELECT count(*)::int AS total FROM wishlist_item_shops WHERE user_id=%s AND wishlist_item_id=%s",
                     (user_id, item_uuid),
                 )
                 total = int((cur.fetchone() or {}).get("total") or 0)
-            if total >= _WISHLIST_MAX_SHOPS:
+            if total >= _WISHLIST_MAX_SHOPS and not existing_shop.get("id"):
                 raise NextApiError("A wishlist item can have at most 10 shops", 400)
 
             from next_price_alerts import extract_price_from_url_with_source
@@ -21597,7 +21606,20 @@ def register_routes(flask_app: Flask) -> None:
                              provider_plugin_id, provider_product_ref, provider_last_status, provider_last_error,
                              last_seen_price, last_price_checked_at, updated_at)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
-                        RETURNING id
+                        ON CONFLICT (wishlist_item_id, price_url) DO UPDATE
+                        SET shop_name=EXCLUDED.shop_name,
+                            price_currency=EXCLUDED.price_currency,
+                            selector_type=EXCLUDED.selector_type,
+                            selector_value=EXCLUDED.selector_value,
+                            selector_options=EXCLUDED.selector_options,
+                            provider_plugin_id=EXCLUDED.provider_plugin_id,
+                            provider_product_ref=EXCLUDED.provider_product_ref,
+                            provider_last_status=EXCLUDED.provider_last_status,
+                            provider_last_error=EXCLUDED.provider_last_error,
+                            last_seen_price=EXCLUDED.last_seen_price,
+                            last_price_checked_at=now(),
+                            updated_at=now()
+                        RETURNING id, (xmax = 0) AS inserted
                         """,
                         (
                             user_id,
@@ -21615,7 +21637,9 @@ def register_routes(flask_app: Flask) -> None:
                             current_price,
                         ),
                     )
-                    shop_id = (cur.fetchone() or {}).get("id")
+                    insert_result = cur.fetchone() or {}
+                    shop_id = insert_result.get("id")
+                    shop_created = bool(insert_result.get("inserted"))
                     if shop_id and current_price is not None and table_exists(conn, "wishlist_item_shop_prices"):
                         cur.execute(
                             """
@@ -21636,12 +21660,12 @@ def register_routes(flask_app: Flask) -> None:
                 emit_wishlist_change(conn, user_id, item_uuid, operation="upsert")
                 audit_event(
                     conn,
-                    event_type="wishlist.shop_added",
+                    event_type="wishlist.shop_added" if shop_created else "wishlist.shop_updated",
                     category="personal",
                     actor=actor,
                     target_type="wishlist_item",
                     target_id=item_uuid,
-                    summary="Added wishlist shop",
+                    summary="Added wishlist shop" if shop_created else "Updated wishlist shop",
                     metadata={"shopName": shop_name, "priceUrl": price_url},
                 )
             return response(
@@ -21651,7 +21675,7 @@ def register_routes(flask_app: Flask) -> None:
                     "fetchedPrice": float(current_price) if current_price is not None else None,
                     "fetchedCurrency": effective_currency,
                 },
-                201,
+                201 if shop_created else 200,
             )
 
     @flask_app.patch("/api/next/lists/wishlist/<item_id>/shops/<shop_id>")
