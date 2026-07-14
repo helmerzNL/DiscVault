@@ -10,6 +10,7 @@ if repo_root not in sys.path:
 
 
 from app.backend.next_plugins.arrow import plugin as arrow_plugin
+from app.backend.next_plugins.amazon import plugin as amazon_plugin
 from app.backend.next_plugins.bol import plugin as bol_plugin
 from app.backend.next_plugins.keepa import plugin as keepa_plugin
 from app.backend.next_plugins.zavvi import plugin as zavvi_plugin
@@ -114,6 +115,36 @@ class TestBolProviderPlugin(unittest.TestCase):
         result = bol_plugin.price_check({"url": "https://shop.example.com/item"}, {})
         self.assertEqual(result.get("status"), "no_match")
         self.assertIn("not a bol.com", result.get("error", ""))
+
+
+class TestAmazonProviderPlugin(unittest.TestCase):
+    def test_health_check_is_available(self):
+        result = amazon_plugin.health_check({})
+        self.assertEqual(result.get("status"), "available")
+
+    def test_price_check_extracts_price_from_offscreen_markup(self):
+        html = '<span class="a-offscreen">EUR 105.24</span>'
+        with patch("app.backend.next_plugins.amazon.plugin.requests.get", return_value=_Response(html)):
+            result = amazon_plugin.price_check({"url": "https://www.amazon.nl/dp/B09G9HD5XW"}, {})
+        self.assertEqual(result.get("status"), "ok")
+        self.assertEqual(result.get("source"), "amazon")
+        self.assertEqual(result.get("providerProductRef"), "B09G9HD5XW")
+        self.assertAlmostEqual(result.get("price"), 105.24)
+        self.assertEqual(result.get("currency"), "EUR")
+
+    def test_price_check_rejects_non_amazon_urls(self):
+        result = amazon_plugin.price_check({"url": "https://shop.example.com/item"}, {})
+        self.assertEqual(result.get("status"), "no_match")
+        self.assertIn("not an Amazon", result.get("error", ""))
+
+    def test_price_check_uses_asin_provider_ref(self):
+        html = '<span class="a-offscreen">$12.49</span>'
+        with patch("app.backend.next_plugins.amazon.plugin.requests.get", return_value=_Response(html)):
+            result = amazon_plugin.price_check({"providerProductRef": "B09G9HD5XW"}, {})
+        self.assertEqual(result.get("status"), "ok")
+        self.assertEqual(result.get("providerProductRef"), "B09G9HD5XW")
+        self.assertAlmostEqual(result.get("price"), 12.49)
+        self.assertEqual(result.get("currency"), "USD")
 
 
 class TestKeepaProviderPlugin(unittest.TestCase):
