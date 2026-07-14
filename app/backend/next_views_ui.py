@@ -2653,6 +2653,46 @@ def ui_preview_html(
     .lists-poster-badge.danger {
       background: var(--red);
     }
+    .lists-price-badge {
+      position: absolute;
+      right: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 82%, black);
+      color: #fff;
+      font-size: .68rem;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
+      max-width: calc(100% - 16px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .lists-price-badge.current {
+      top: 8px;
+    }
+    .lists-price-badge.target {
+      bottom: 8px;
+      background: color-mix(in srgb, var(--red) 72%, #24070a);
+    }
+    .lists-price-badge-icon {
+      width: 11px;
+      height: 11px;
+      display: inline-flex;
+      flex: 0 0 auto;
+      opacity: .95;
+    }
+    .lists-price-badge-icon svg {
+      width: 11px;
+      height: 11px;
+      fill: currentColor;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      vector-effect: non-scaling-stroke;
+    }
     .lists-static-poster .preview-poster-art {
       cursor: pointer;
     }
@@ -5666,6 +5706,12 @@ def ui_preview_html(
       fill: currentColor;
       flex: 0 0 auto;
       display: block;
+    }
+    .detail-submenu button.lists-seg[data-lists-tab="wishlist"] .lists-seg-icon {
+      fill: color-mix(in srgb, var(--red) 78%, var(--text));
+    }
+    .detail-submenu button.lists-seg[data-lists-tab="wishlist"].active .lists-seg-icon {
+      fill: var(--red);
     }
     .detail-subpanel {
       min-width: 0;
@@ -26364,9 +26410,17 @@ def ui_preview_html(
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
       const acquired = !!item.acquiredAt;
+      const activeMonitor = !!item.alertEnabled && item.targetPrice != null;
+      const priceCurrency = String(item.priceCurrency || "EUR").trim().toUpperCase() || "EUR";
+      const currentBadge = activeMonitor && item.lastSeenPrice != null
+        ? `<span class="lists-price-badge current" title="${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19H2V5H4V17H20V19H4ZM6 15.4L11 10.4L14 13.4L19.6 7.8L21 9.2L14 16.2L11 13.2L7.4 16.8L6 15.4Z"/></svg></span>${escapeHtml(formatStatsPrice(item.lastSeenPrice, priceCurrency))}</span>`
+        : "";
+      const targetBadge = activeMonitor
+        ? `<span class="lists-price-badge target" title="${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none"></circle><circle cx="12" cy="12" r="4" fill="none"></circle><circle cx="12" cy="12" r="1.8"></circle></svg></span>${escapeHtml(formatStatsPrice(item.targetPrice, priceCurrency))}</span>`
+        : "";
       return `
         <div class="preview-poster lists-static-poster" data-wishlist-card="${escapeHtml(item.id)}">
-          <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
+          <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}${currentBadge}${targetBadge}</span>
           <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
         </div>
@@ -26427,7 +26481,8 @@ def ui_preview_html(
     }
     function wishlistRenderRows(rows, mode) {
       const all = rows || [];
-      const pending = all.filter((item) => !item.acquiredAt);
+      const monitored = all.filter((item) => !item.acquiredAt && !!item.alertEnabled && item.targetPrice != null);
+      const pending = all.filter((item) => !item.acquiredAt && !(!!item.alertEnabled && item.targetPrice != null));
       const acquired = all.filter((item) => !!item.acquiredAt);
       const renderGroup = (groupRows) => {
         if (mode === "detail") return wishlistDetailTableHtml(groupRows);
@@ -26446,7 +26501,8 @@ def ui_preview_html(
             : `<p class="wishlist-section-empty">${escapeHtml(tNext("lists.wishlistSectionEmpty", "Nothing here yet."))}</p>`}
         </section>
       `;
-      return section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
+      return section(tNext("appAdmin.featurePriceAlerts", "Price alerts"), monitored)
+        + section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
         + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
     function tagChipHtml(tag) {
