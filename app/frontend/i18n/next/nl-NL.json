@@ -2250,5 +2250,11 @@
   "lists.wishlistShopProvider": "Price provider",
   "lists.wishlistShopProviderAuto": "Auto-detect from URL",
   "lists.wishlistShopProviderLoading": "Loading providers...",
-  "lists.wishlistShopProviderDetected": "Provider detected from URL."
+  "lists.wishlistShopProviderDetected": "Provider detected from URL.",
+  "preferences.priceMonitoringEnabled": "Prijsmonitoring",
+  "preferences.priceMonitoringEnabledHelp": "Toon prijsmonitoring en prijsalerts van de verlanglijst overal in de app.",
+  "preferences.preferredPriceCurrency": "Voorkeursvaluta voor prijzen",
+  "preferences.preferredPriceCurrencyHelp": "Als je deze instelt, tonen verlanglijstprijzen ook het omgerekende bedrag in deze valuta.",
+  "preferences.preferredPriceCurrencyNone": "Alleen websitemunt",
+  "lists.wishlistPriceMonitoringDisabled": "Prijsmonitoring staat uit in Instellingen."
 }
