@@ -27296,7 +27296,33 @@ def ui_preview_html(
       const providerDomainHints = [
         { matchers: [/zavvi\\./], providerTokens: ["zavvi"] },
         { matchers: [/arrowfilms\\./, /arrow-video\\./], providerTokens: ["arrow", "arrowfilms", "arrow_films"] },
+        { matchers: [/bol\\.com$/], providerTokens: ["bol"] },
+        { matchers: [/amazon\\./], providerTokens: ["keepa", "amazon"] },
       ];
+      const AMAZON_ASIN_PATTERNS = [
+        /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/i,
+        /\/gp\/product\/([A-Z0-9]{10})(?:[/?]|$)/i,
+        /[?&]asin=([A-Z0-9]{10})(?:[&#]|$)/i,
+      ];
+      const extractAmazonAsinFromUrl = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        for (const pattern of AMAZON_ASIN_PATTERNS) {
+          const match = text.match(pattern);
+          if (match && match[1]) return String(match[1]).toUpperCase();
+        }
+        return "";
+      };
+      const isAmazonProvider = (providerId) => {
+        const value = String(providerId || "").trim().toLowerCase();
+        return value.includes("keepa") || value.includes("amazon");
+      };
+      const syncAmazonProviderRefFromUrl = () => {
+        if (!shopEditor) return;
+        if (!isAmazonProvider(shopEditor.providerId)) return;
+        const asin = extractAmazonAsinFromUrl(shopEditor.url);
+        if (asin) shopEditor.providerProductRef = asin;
+      };
       const normalizeProviderOptions = (payload) => {
         const providers = Array.isArray(payload?.providers) ? payload.providers : [];
         return providers
@@ -27336,6 +27362,7 @@ def ui_preview_html(
         if (!detected) return false;
         shopEditor.providerId = detected;
         shopEditor.detectedFromUrl = true;
+        syncAmazonProviderRefFromUrl();
         return true;
       };
       const ensureShopProvidersLoaded = async () => {
@@ -27547,6 +27574,7 @@ def ui_preview_html(
               name: current.shopName || "",
               url: current.priceUrl || "",
               providerId: current.providerId || "",
+              providerProductRef: current.providerProductRef || "",
               providerTouched: !!current.providerId,
               detectedFromUrl: false,
               currency: (current.priceCurrency || item.priceCurrency || "EUR").toUpperCase(),
@@ -27567,6 +27595,7 @@ def ui_preview_html(
             name: "",
             url: "",
             providerId: "",
+            providerProductRef: "",
             providerTouched: false,
             detectedFromUrl: false,
             currency: (item.priceCurrency || "EUR").toUpperCase(),
@@ -27584,6 +27613,7 @@ def ui_preview_html(
           if (!shopEditor) return;
           const nextUrl = (event.target.value || "").trim();
           shopEditor.url = nextUrl;
+          syncAmazonProviderRefFromUrl();
           if (applyProviderAutodetect(nextUrl)) render();
         });
         panel.querySelector('[data-shop-field="providerId"]')?.addEventListener("change", (event) => {
@@ -27591,12 +27621,20 @@ def ui_preview_html(
           shopEditor.providerId = String(event.target.value || "").trim();
           shopEditor.providerTouched = true;
           shopEditor.detectedFromUrl = false;
+          syncAmazonProviderRefFromUrl();
         });
         panel.querySelector("[data-shop-save]")?.addEventListener("click", async () => {
           if (!shopEditor) return;
           const name = (panel.querySelector('[data-shop-field="name"]').value || "").trim();
-          const url = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
+          const rawUrl = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
           const providerId = String(panel.querySelector('[data-shop-field="providerId"]')?.value || "").trim();
+          const asinOnlyMatch = rawUrl.match(/^[A-Z0-9]{10}$/i);
+          const url = (isAmazonProvider(providerId) && asinOnlyMatch)
+            ? `https://www.amazon.nl/dp/${String(asinOnlyMatch[0]).toUpperCase()}`
+            : rawUrl;
+          const providerProductRef = isAmazonProvider(providerId)
+            ? (extractAmazonAsinFromUrl(url) || String(shopEditor.providerProductRef || "").trim().toUpperCase() || null)
+            : (String(shopEditor.providerProductRef || "").trim() || null);
           const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";
           const selectorType = (panel.querySelector('[data-shop-field="selectorType"]')?.value || "").trim();
           const selectorValue = (panel.querySelector('[data-shop-field="selectorValue"]')?.value || "").trim();
@@ -27625,6 +27663,7 @@ def ui_preview_html(
                   shopName: name,
                   priceUrl: url,
                   providerId: providerId || null,
+                  providerProductRef,
                   priceCurrency: currency,
                   priceSelector: selectorType ? { type: selectorType, value: selectorValue } : null
                 }),
