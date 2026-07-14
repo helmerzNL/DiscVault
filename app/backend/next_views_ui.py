@@ -27925,7 +27925,6 @@ def ui_preview_html(
       section.classList.remove("hidden");
 
       const trend = data && data.wishlistPriceTrend ? data.wishlistPriceTrend : {};
-      const activeLoans = Number(trend.activeLoans ?? (data.loans && data.loans.active) ?? 0);
       const movies = Array.isArray(trend.movies) ? trend.movies.filter((movie) => Array.isArray(movie.points) && movie.points.length) : [];
 
       if (figuresToggleNode) {
@@ -27934,21 +27933,6 @@ def ui_preview_html(
           statsState.showPriceTrendFigures = !!figuresToggleNode.checked;
           renderStatisticsView();
         };
-      }
-
-      if (activeLoans <= 0) {
-        if (gateMessage) {
-          gateMessage.textContent = tNext("stats.priceTrendNoLoan", "Price trends appear when at least one movie is currently on loan.");
-          gateMessage.classList.remove("hidden");
-        }
-        if (chartWrap) chartWrap.classList.add("hidden");
-        if (summaryNode) summaryNode.innerHTML = "";
-        if (tableWrap) tableWrap.classList.add("hidden");
-        if (selectNode) {
-          selectNode.innerHTML = "";
-          selectNode.disabled = true;
-        }
-        return;
       }
 
       if (!movies.length) {
@@ -29210,7 +29194,7 @@ def ui_preview_html(
       activePersonId = "";
       activePersonPayload = null;
       setActiveAppRoute("statistics");
-      loadStatisticsView();
+      loadStatisticsView(true);
       if (pushUrl && appMode && window.location.pathname !== "/statistics") {
         history.pushState({view: "statistics"}, "", "/statistics");
       }
