@@ -26,6 +26,7 @@ Plugin-based pricing (``price_check`` capability):
 from __future__ import annotations
 
 import json
+import logging
 import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -95,6 +96,8 @@ _BROWSER_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/124.0.0.0 Safari/537.36"
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +529,13 @@ def _run_price_provider_check(
     movievault_id: Any = None,
     shop: dict[str, Any] | None = None,
 ) -> tuple[float | None, str | None, str | None, str | None, str | None, str | None, float | None]:
+    logger.info(
+        "price_provider_check_start plugin=%s item=%s shop=%s url=%s",
+        plugin_id,
+        item_id,
+        (shop or {}).get("id"),
+        (shop or {}).get("price_url"),
+    )
     payload: dict[str, Any] = {"itemId": str(item_id) if item_id else None}
     if movievault_id:
         payload["movievaultId"] = str(movievault_id)
@@ -547,11 +557,27 @@ def _run_price_provider_check(
     ).strip() or None
 
     if execution_status != "ok":
+        logger.warning(
+            "price_provider_check_failed plugin=%s item=%s shop=%s status=%s error=%s",
+            plugin_id,
+            item_id,
+            (shop or {}).get("id"),
+            provider_status,
+            provider_error,
+        )
         return None, None, None, provider_status, provider_error, None, None
 
     raw_price = _provider_result_value(plugin_result, "price")
     price = _coerce_price(raw_price)
     if price is None:
+        logger.warning(
+            "price_provider_check_no_price plugin=%s item=%s shop=%s status=%s error=%s",
+            plugin_id,
+            item_id,
+            (shop or {}).get("id"),
+            provider_status,
+            provider_error,
+        )
         return None, None, None, provider_status, provider_error, None, None
 
     currency = str(_provider_result_value(plugin_result, "currency") or "").strip().upper() or None
@@ -567,6 +593,15 @@ def _run_price_provider_check(
         except (TypeError, ValueError):
             confidence = None
 
+    logger.info(
+        "price_provider_check_ok plugin=%s item=%s shop=%s price=%s currency=%s source_detail=%s",
+        plugin_id,
+        item_id,
+        (shop or {}).get("id"),
+        price,
+        currency,
+        source_detail,
+    )
     return price, currency, f"provider:{plugin_id}", provider_status, provider_error, source_detail, confidence
 
 
@@ -686,6 +721,13 @@ def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | N
             except Exception as exc:  # noqa: BLE001
                 provider_status = "error"
                 provider_error = str(exc)
+                logger.warning(
+                    "price_provider_check_exception plugin=%s item=%s shop=%s error=%s",
+                    clean_provider_id,
+                    item_id,
+                    shop.get("id"),
+                    provider_error,
+                )
 
         if not raw_url:
             _record_shop_price(
@@ -713,6 +755,14 @@ def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | N
                     selector_options=shop.get("selector_options") if isinstance(shop.get("selector_options"), dict) else {},
                 )
             except Exception:  # noqa: BLE001
+                logger.warning(
+                    "price_url_extract_exception item=%s shop=%s url=%s provider=%s",
+                    item_id,
+                    shop.get("id"),
+                    raw_url,
+                    provider_id,
+                    exc_info=True,
+                )
                 _record_shop_price(
                     conn,
                     shop_id=shop.get("id"),
@@ -728,6 +778,17 @@ def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | N
                     confidence=confidence,
                 )
                 continue
+        if shop_price is None:
+            logger.warning(
+                "price_check_no_price item=%s shop=%s url=%s provider=%s provider_status=%s provider_error=%s extraction_source=%s",
+                item_id,
+                shop.get("id"),
+                raw_url,
+                provider_id,
+                provider_status,
+                provider_error,
+                extraction_source,
+            )
         effective_currency = str(detected_currency or shop.get("price_currency") or "EUR").strip().upper() or "EUR"
         _record_shop_price(
             conn,
