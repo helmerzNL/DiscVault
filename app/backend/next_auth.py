@@ -1855,6 +1855,7 @@ def register_next_auth_routes(
     )
     def login_options():
         body = request.get_json(silent=True) or {}
+        client_kind = str(body.get("client_kind") or body.get("clientKind") or "").strip().lower()
         username_raw = body.get("username")
         username = str(username_raw or "").strip()
         if username:
@@ -1878,11 +1879,11 @@ def register_next_auth_routes(
                         (username,),
                     )
                     credentials = cur.fetchall()
-                else:
-                    # Keep username-less passkey sign-in discoverable on every client.
-                    # Sending a full credential allow-list can force account-input
-                    # prompts instead of showing local platform passkeys directly.
+                elif client_kind == "ios":
                     credentials = []
+                else:
+                    cur.execute("SELECT id FROM passkey_credentials ORDER BY created_at")
+                    credentials = cur.fetchall()
             challenge = _make_challenge()
             with conn.transaction():
                 store_challenge(conn, "login", challenge)
