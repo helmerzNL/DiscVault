@@ -27297,7 +27297,7 @@ def ui_preview_html(
         { matchers: [/zavvi\\./], providerTokens: ["zavvi"] },
         { matchers: [/arrowfilms\\./, /arrow-video\\./], providerTokens: ["arrow", "arrowfilms", "arrow_films"] },
         { matchers: [/bol\\.com$/], providerTokens: ["bol"] },
-        { matchers: [/amazon\\./], providerTokens: ["keepa", "amazon"] },
+        { matchers: [/amazon\\./], providerTokens: ["amazon"] },
       ];
       const AMAZON_ASIN_PATTERNS = [
         /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/i,
@@ -27313,10 +27313,7 @@ def ui_preview_html(
         }
         return "";
       };
-      const isAmazonProvider = (providerId) => {
-        const value = String(providerId || "").trim().toLowerCase();
-        return value.includes("keepa") || value.includes("amazon");
-      };
+      const isAmazonProvider = (providerId) => String(providerId || "").trim().toLowerCase().includes("amazon");
       const syncAmazonProviderRefFromUrl = () => {
         if (!shopEditor) return;
         if (!isAmazonProvider(shopEditor.providerId)) return;

@@ -21586,14 +21586,62 @@ def register_routes(flask_app: Flask) -> None:
             if total >= _WISHLIST_MAX_SHOPS and not existing_shop.get("id"):
                 raise NextApiError("A wishlist item can have at most 10 shops", 400)
 
-            from next_price_alerts import extract_price_from_url_with_source
+            from next_price_alerts import _run_price_provider_check, extract_price_from_url_with_source
 
-            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
-                price_url,
-                selector_type=selector_type,
-                selector_value=selector_value,
-                selector_options=selector_options,
-            )
+            current_price = None
+            detected_currency = None
+            extraction_source = None
+            provider_status: str | None = None
+            provider_error: str | None = None
+            if provider_plugin_id:
+                try:
+                    (
+                        current_price,
+                        detected_currency,
+                        extraction_source,
+                        provider_status,
+                        provider_error,
+                        _source_detail,
+                        _confidence,
+                    ) = _run_price_provider_check(
+                        provider_plugin_id,
+                        item_id=item_uuid,
+                        movievault_id=None,
+                        shop={
+                            "id": None,
+                            "shop_name": shop_name,
+                            "price_url": price_url,
+                            "price_currency": price_currency,
+                            "provider_product_ref": provider_product_ref,
+                        },
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    provider_status = "error"
+                    provider_error = str(exc)
+                    current_app.logger.warning(
+                        "wishlist_shop_provider_check_exception item=%s provider=%s url=%s error=%s",
+                        item_uuid,
+                        provider_plugin_id,
+                        price_url,
+                        provider_error,
+                    )
+            if current_price is None:
+                current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                    price_url,
+                    selector_type=selector_type,
+                    selector_value=selector_value,
+                    selector_options=selector_options,
+                )
+            if current_price is None:
+                current_app.logger.warning(
+                    "wishlist_shop_price_missing item=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    item_uuid,
+                    provider_plugin_id,
+                    price_url,
+                    provider_status,
+                    provider_error,
+                    extraction_source,
+                )
             effective_currency = _normalise_shop_currency(detected_currency or price_currency)
 
             with conn.transaction():
@@ -21632,8 +21680,8 @@ def register_routes(flask_app: Flask) -> None:
                             Jsonb(selector_options),
                             provider_plugin_id,
                             provider_product_ref,
-                            "ok" if current_price is not None else "no_match",
-                            None,
+                            provider_status or ("ok" if current_price is not None else "no_match"),
+                            provider_error,
                             current_price,
                         ),
                     )
@@ -21674,6 +21722,8 @@ def register_routes(flask_app: Flask) -> None:
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "fetchedPrice": float(current_price) if current_price is not None else None,
                     "fetchedCurrency": effective_currency,
+                    "fetchedSource": extraction_source,
+                    "fetchedError": provider_error if current_price is None else None,
                 },
                 201 if shop_created else 200,
             )
@@ -21714,14 +21764,64 @@ def register_routes(flask_app: Flask) -> None:
                 if not cur.fetchone():
                     raise NextApiError("Wishlist shop not found", 404)
 
-            from next_price_alerts import extract_price_from_url_with_source
+            from next_price_alerts import _run_price_provider_check, extract_price_from_url_with_source
 
-            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
-                price_url,
-                selector_type=selector_type,
-                selector_value=selector_value,
-                selector_options=selector_options,
-            )
+            current_price = None
+            detected_currency = None
+            extraction_source = None
+            provider_status: str | None = None
+            provider_error: str | None = None
+            if provider_plugin_id:
+                try:
+                    (
+                        current_price,
+                        detected_currency,
+                        extraction_source,
+                        provider_status,
+                        provider_error,
+                        _source_detail,
+                        _confidence,
+                    ) = _run_price_provider_check(
+                        provider_plugin_id,
+                        item_id=item_uuid,
+                        movievault_id=None,
+                        shop={
+                            "id": shop_uuid,
+                            "shop_name": shop_name,
+                            "price_url": price_url,
+                            "price_currency": price_currency,
+                            "provider_product_ref": provider_product_ref,
+                        },
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    provider_status = "error"
+                    provider_error = str(exc)
+                    current_app.logger.warning(
+                        "wishlist_shop_provider_check_exception item=%s shop=%s provider=%s url=%s error=%s",
+                        item_uuid,
+                        shop_uuid,
+                        provider_plugin_id,
+                        price_url,
+                        provider_error,
+                    )
+            if current_price is None:
+                current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                    price_url,
+                    selector_type=selector_type,
+                    selector_value=selector_value,
+                    selector_options=selector_options,
+                )
+            if current_price is None:
+                current_app.logger.warning(
+                    "wishlist_shop_price_missing item=%s shop=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    item_uuid,
+                    shop_uuid,
+                    provider_plugin_id,
+                    price_url,
+                    provider_status,
+                    provider_error,
+                    extraction_source,
+                )
             effective_currency = _normalise_shop_currency(detected_currency or price_currency)
 
             with conn.transaction():
@@ -21753,8 +21853,8 @@ def register_routes(flask_app: Flask) -> None:
                             Jsonb(selector_options),
                             provider_plugin_id,
                             provider_product_ref,
-                            "ok" if current_price is not None else "no_match",
-                            None,
+                            provider_status or ("ok" if current_price is not None else "no_match"),
+                            provider_error,
                             current_price,
                             shop_uuid,
                             user_id,
@@ -21795,6 +21895,8 @@ def register_routes(flask_app: Flask) -> None:
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "fetchedPrice": float(current_price) if current_price is not None else None,
                     "fetchedCurrency": effective_currency,
+                    "fetchedSource": extraction_source,
+                    "fetchedError": provider_error if current_price is None else None,
                 }
             )
 
