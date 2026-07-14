@@ -2246,5 +2246,9 @@
   "accent.teal": "Tirkīzzila",
   "accent.crimson": "Karmīnsarkans",
   "accent.magenta": "Madženta",
-  "accent.ember": "Kvēle"
+  "accent.ember": "Kvēle",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

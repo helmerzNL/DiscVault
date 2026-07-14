@@ -2246,5 +2246,9 @@
   "accent.teal": "Pávakék",
   "accent.crimson": "Karmazsin",
   "accent.magenta": "Magenta",
-  "accent.ember": "Parázs"
+  "accent.ember": "Parázs",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

@@ -2246,5 +2246,9 @@
   "accent.teal": "ティール",
   "accent.crimson": "クリムゾン",
   "accent.magenta": "マゼンタ",
-  "accent.ember": "エンバー"
+  "accent.ember": "エンバー",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

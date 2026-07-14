@@ -27292,6 +27292,71 @@ def ui_preview_html(
       const normalizeShops = (list) => Array.isArray(list) ? list.map((shop) => ({...shop})) : [];
       let shops = normalizeShops(item.shops);
       let shopEditor = null;
+      let shopProvidersState = {loaded: false, loading: false, options: []};
+      const providerDomainHints = [
+        { matchers: [/zavvi\\./], providerTokens: ["zavvi"] },
+        { matchers: [/arrowfilms\\./, /arrow-video\\./], providerTokens: ["arrow", "arrowfilms", "arrow_films"] },
+      ];
+      const normalizeProviderOptions = (payload) => {
+        const providers = Array.isArray(payload?.providers) ? payload.providers : [];
+        return providers
+          .filter((provider) => provider && provider.installed !== false && provider.enabled !== false)
+          .map((provider) => {
+            const providerId = String(provider.id || provider.pluginId || "").trim();
+            if (!providerId) return null;
+            return { id: providerId, label: pluginDisplayName(provider, providerId) };
+          })
+          .filter(Boolean)
+          .sort((a, b) => String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+      };
+      const detectProviderFromUrl = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        let host = "";
+        try {
+          host = new URL(text).hostname.replace(/^www\\./, "").toLowerCase();
+        } catch (_) {
+          return "";
+        }
+        const available = Array.isArray(shopProvidersState.options) ? shopProvidersState.options : [];
+        for (const hint of providerDomainHints) {
+          if (!hint.matchers.some((matcher) => matcher.test(host))) continue;
+          for (const token of hint.providerTokens) {
+            const exact = available.find((option) => option.id === token);
+            if (exact) return exact.id;
+            const contains = available.find((option) => option.id.includes(token));
+            if (contains) return contains.id;
+          }
+        }
+        return "";
+      };
+      const applyProviderAutodetect = (nextUrl) => {
+        if (!shopEditor || shopEditor.providerTouched || shopEditor.providerId) return false;
+        const detected = detectProviderFromUrl(nextUrl);
+        if (!detected) return false;
+        shopEditor.providerId = detected;
+        shopEditor.detectedFromUrl = true;
+        return true;
+      };
+      const ensureShopProvidersLoaded = async () => {
+        if (shopProvidersState.loaded || shopProvidersState.loading) return;
+        shopProvidersState.loading = true;
+        render();
+        try {
+          const payload = await authApiJson("/api/next/price-providers");
+          shopProvidersState.options = normalizeProviderOptions(payload);
+        } catch (error) {
+          shopProvidersState.options = [];
+        } finally {
+          shopProvidersState.loading = false;
+          shopProvidersState.loaded = true;
+          if (applyProviderAutodetect(shopEditor && shopEditor.url)) {
+            render();
+            return;
+          }
+          render();
+        }
+      };
       const formatShopPrice = (shop) => {
         const value = shop && shop.lastSeenPrice;
         if (value == null) return "—";
@@ -27371,6 +27436,23 @@ def ui_preview_html(
                     <label class="lists-modal-field">
                       <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
                       <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
+                    </label>
+                    <label class="lists-modal-field">
+                      <span>${escapeHtml(tNext("lists.wishlistShopProvider", "Price provider"))}</span>
+                      <select data-shop-field="providerId">
+                        <option value="">${escapeHtml(shopProvidersState.loading ? tNext("lists.wishlistShopProviderLoading", "Loading providers...") : tNext("lists.wishlistShopProviderAuto", "Auto-detect from URL"))}</option>
+                        ${(() => {
+                          const options = Array.isArray(shopProvidersState.options) ? shopProvidersState.options.slice() : [];
+                          const selectedProviderId = String(shopEditor.providerId || "").trim();
+                          if (selectedProviderId && !options.some((option) => option.id === selectedProviderId)) {
+                            options.push({ id: selectedProviderId, label: pluginDisplayName(selectedProviderId, selectedProviderId) });
+                          }
+                          return options
+                            .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selectedProviderId ? " selected" : ""}>${escapeHtml(option.label || option.id)}</option>`)
+                            .join("");
+                        })()}
+                      </select>
+                      ${shopEditor.detectedFromUrl ? `<span data-static>${escapeHtml(tNext("lists.wishlistShopProviderDetected", "Provider detected from URL."))}</span>` : ""}
                     </label>
                     <label class="lists-modal-field">
                       <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
@@ -27464,10 +27546,14 @@ def ui_preview_html(
               id: current.id,
               name: current.shopName || "",
               url: current.priceUrl || "",
+              providerId: current.providerId || "",
+              providerTouched: !!current.providerId,
+              detectedFromUrl: false,
               currency: (current.priceCurrency || item.priceCurrency || "EUR").toUpperCase(),
               selectorType: (current.priceSelector && current.priceSelector.type) || "",
               selectorValue: (current.priceSelector && current.priceSelector.value) || "",
             };
+            applyProviderAutodetect(shopEditor.url);
             render();
           });
         });
@@ -27480,20 +27566,37 @@ def ui_preview_html(
             id: null,
             name: "",
             url: "",
+            providerId: "",
+            providerTouched: false,
+            detectedFromUrl: false,
             currency: (item.priceCurrency || "EUR").toUpperCase(),
             selectorType: "",
             selectorValue: "",
           };
+          applyProviderAutodetect(shopEditor.url);
           render();
         });
         panel.querySelector("[data-shop-cancel]")?.addEventListener("click", () => {
           shopEditor = null;
           render();
         });
+        panel.querySelector('[data-shop-field="url"]')?.addEventListener("input", (event) => {
+          if (!shopEditor) return;
+          const nextUrl = (event.target.value || "").trim();
+          shopEditor.url = nextUrl;
+          if (applyProviderAutodetect(nextUrl)) render();
+        });
+        panel.querySelector('[data-shop-field="providerId"]')?.addEventListener("change", (event) => {
+          if (!shopEditor) return;
+          shopEditor.providerId = String(event.target.value || "").trim();
+          shopEditor.providerTouched = true;
+          shopEditor.detectedFromUrl = false;
+        });
         panel.querySelector("[data-shop-save]")?.addEventListener("click", async () => {
           if (!shopEditor) return;
           const name = (panel.querySelector('[data-shop-field="name"]').value || "").trim();
           const url = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
+          const providerId = String(panel.querySelector('[data-shop-field="providerId"]')?.value || "").trim();
           const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";
           const selectorType = (panel.querySelector('[data-shop-field="selectorType"]')?.value || "").trim();
           const selectorValue = (panel.querySelector('[data-shop-field="selectorValue"]')?.value || "").trim();
@@ -27521,6 +27624,7 @@ def ui_preview_html(
                 body: JSON.stringify({
                   shopName: name,
                   priceUrl: url,
+                  providerId: providerId || null,
                   priceCurrency: currency,
                   priceSelector: selectorType ? { type: selectorType, value: selectorValue } : null
                 }),
@@ -27573,6 +27677,7 @@ def ui_preview_html(
         }
       };
       render();
+      ensureShopProvidersLoaded();
     }
     function openLoanMeerInfo(id) {
       const loan = listsFindLoan(id);

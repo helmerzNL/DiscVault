@@ -2246,5 +2246,9 @@
   "accent.teal": "Deniz mavisi",
   "accent.crimson": "Koyu kırmızı",
   "accent.magenta": "Macenta",
-  "accent.ember": "Kor"
+  "accent.ember": "Kor",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }
