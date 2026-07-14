@@ -2246,5 +2246,9 @@
   "accent.teal": "水鸭蓝",
   "accent.crimson": "深红色",
   "accent.magenta": "品红色",
-  "accent.ember": "余烬"
+  "accent.ember": "余烬",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }
