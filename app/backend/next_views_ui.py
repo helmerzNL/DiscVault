@@ -2029,8 +2029,26 @@ def ui_preview_html(
     }
     .poster-rail {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 10px;
+    }
+    @media (min-width: 420px) {
+      .poster-rail {
+        grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+        gap: 12px;
+      }
+    }
+    @media (min-width: 720px) {
+      .poster-rail {
+        grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
+        gap: 14px;
+      }
+    }
+    @media (min-width: 1280px) {
+      .poster-rail {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 14px;
+      }
     }
     .preview-poster {
       width: 100%;
@@ -9690,7 +9708,6 @@ def ui_preview_html(
       .app-admin-plugin-import .primary-button {
         width: 100%;
       }
-      .poster-rail { grid-template-columns: repeat(3, 1fr); }
     }
     @media (max-width: 560px) {
       body,
@@ -9811,7 +9828,6 @@ def ui_preview_html(
         grid-template-columns: 1fr;
         gap: 3px;
       }
-      .poster-rail { grid-template-columns: repeat(3, 1fr); }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
