@@ -22901,18 +22901,18 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             actor = require_next_permission(conn, "admin.view_jobs")
             from next_price_alerts import PRICE_ALERT_JOB_TYPE
-            job_id = create_background_job(conn, job_type=PRICE_ALERT_JOB_TYPE, payload={})
+            job = create_background_job(conn, job_type=PRICE_ALERT_JOB_TYPE, payload={})
             audit_event(
                 conn,
                 event_type="price_alert.sweep_triggered",
                 category="admin",
                 actor=actor,
                 target_type="background_job",
-                target_id=job_id,
+                target_id=job.get("id"),
                 summary="Triggered price alert sweep",
                 metadata={},
             )
-        return response({"status": "ok", "jobId": str(job_id)})
+        return response({"status": "ok", "jobId": str(job.get("id"))})
 
     @flask_app.post("/api/next/preferences/locale")
     def set_preferences_locale():
