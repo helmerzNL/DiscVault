@@ -2246,5 +2246,9 @@
   "accent.teal": "Turcoaz închis",
   "accent.crimson": "Purpuriu",
   "accent.magenta": "Magenta",
-  "accent.ember": "Jar"
+  "accent.ember": "Jar",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }

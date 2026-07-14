@@ -2246,5 +2246,9 @@
   "accent.teal": "Žalsvai mėlyna",
   "accent.crimson": "Tamsiai raudona",
   "accent.magenta": "Purpurinė",
-  "accent.ember": "Žarija"
+  "accent.ember": "Žarija",
+  "lists.wishlistShopProvider": "Price provider",
+  "lists.wishlistShopProviderAuto": "Auto-detect from URL",
+  "lists.wishlistShopProviderLoading": "Loading providers...",
+  "lists.wishlistShopProviderDetected": "Provider detected from URL."
 }
