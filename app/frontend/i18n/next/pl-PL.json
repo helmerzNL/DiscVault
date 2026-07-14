@@ -2250,5 +2250,11 @@
   "lists.wishlistShopProvider": "Price provider",
   "lists.wishlistShopProviderAuto": "Auto-detect from URL",
   "lists.wishlistShopProviderLoading": "Loading providers...",
-  "lists.wishlistShopProviderDetected": "Provider detected from URL."
+  "lists.wishlistShopProviderDetected": "Provider detected from URL.",
+  "preferences.priceMonitoringEnabled": "Price monitoring",
+  "preferences.priceMonitoringEnabledHelp": "Show wishlist price monitoring and alerts throughout the app.",
+  "preferences.preferredPriceCurrency": "Preferred price currency",
+  "preferences.preferredPriceCurrencyHelp": "When set, wishlist prices also show the converted amount in this currency.",
+  "preferences.preferredPriceCurrencyNone": "Website currency only",
+  "lists.wishlistPriceMonitoringDisabled": "Price monitoring is disabled in Settings."
 }
