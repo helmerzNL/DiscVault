@@ -27310,12 +27310,6 @@ def ui_preview_html(
       let shops = normalizeShops(item.shops);
       let shopEditor = null;
       let shopProvidersState = {loaded: false, loading: false, options: []};
-      const providerDomainHints = [
-        { matchers: [/zavvi\\./], providerTokens: ["zavvi"] },
-        { matchers: [/arrowfilms\\./, /arrow-video\\./], providerTokens: ["arrow", "arrowfilms", "arrow_films"] },
-        { matchers: [/bol\\.com$/], providerTokens: ["bol"] },
-        { matchers: [/amazon\\./], providerTokens: ["amazon"] },
-      ];
       const AMAZON_ASIN_PATTERNS = [
         /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/i,
         /\/gp\/product\/([A-Z0-9]{10})(?:[/?]|$)/i,
@@ -27330,24 +27324,47 @@ def ui_preview_html(
         }
         return "";
       };
-      const isAmazonProvider = (providerId) => String(providerId || "").trim().toLowerCase().includes("amazon");
-      const syncAmazonProviderRefFromUrl = () => {
+      const providerOption = (providerId) => (
+        shopProvidersState.options.find((option) => option.id === String(providerId || "").trim()) || null
+      );
+      const providerProductRefType = (providerId) => providerOption(providerId)?.productRef?.type || "";
+      const isAmazonAsinProvider = (providerId) => providerProductRefType(providerId) === "amazon_asin";
+      const syncProviderProductRefFromUrl = () => {
         if (!shopEditor) return;
-        if (!isAmazonProvider(shopEditor.providerId)) return;
+        if (!isAmazonAsinProvider(shopEditor.providerId)) return;
         const asin = extractAmazonAsinFromUrl(shopEditor.url);
         if (asin) shopEditor.providerProductRef = asin;
       };
       const normalizeProviderOptions = (payload) => {
         const providers = Array.isArray(payload?.providers) ? payload.providers : [];
         return providers
-          .filter((provider) => provider && provider.installed !== false && provider.enabled !== false)
+          .filter((provider) => provider && provider.usable !== false)
           .map((provider) => {
             const providerId = String(provider.id || provider.pluginId || "").trim();
             if (!providerId) return null;
-            return { id: providerId, label: pluginDisplayName(provider, providerId) };
+            const metadata = provider.priceProvider && typeof provider.priceProvider === "object"
+              ? provider.priceProvider
+              : {};
+            return {
+              id: providerId,
+              label: pluginDisplayName(provider, providerId),
+              orderIndex: Number(provider.orderIndex || 100),
+              hostPatterns: Array.isArray(metadata.hostPatterns) ? metadata.hostPatterns : [],
+              productRef: metadata.productRef && typeof metadata.productRef === "object" ? metadata.productRef : null,
+            };
           })
           .filter(Boolean)
-          .sort((a, b) => String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+          .sort((a, b) => a.orderIndex - b.orderIndex
+            || String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+      };
+      const providerHostMatches = (host, rawPattern) => {
+        const pattern = String(rawPattern || "").trim().toLowerCase();
+        if (!pattern) return false;
+        if (pattern.endsWith(".")) {
+          const token = pattern.slice(0, -1);
+          return !!token && (host.startsWith(`${token}.`) || host.includes(`.${token}.`));
+        }
+        return host === pattern || host.endsWith(`.${pattern}`);
       };
       const detectProviderFromUrl = (value) => {
         const text = String(value || "").trim();
@@ -27359,14 +27376,8 @@ def ui_preview_html(
           return "";
         }
         const available = Array.isArray(shopProvidersState.options) ? shopProvidersState.options : [];
-        for (const hint of providerDomainHints) {
-          if (!hint.matchers.some((matcher) => matcher.test(host))) continue;
-          for (const token of hint.providerTokens) {
-            const exact = available.find((option) => option.id === token);
-            if (exact) return exact.id;
-            const contains = available.find((option) => option.id.includes(token));
-            if (contains) return contains.id;
-          }
+        for (const option of available) {
+          if (option.hostPatterns.some((pattern) => providerHostMatches(host, pattern))) return option.id;
         }
         return "";
       };
@@ -27376,7 +27387,7 @@ def ui_preview_html(
         if (!detected) return false;
         shopEditor.providerId = detected;
         shopEditor.detectedFromUrl = true;
-        syncAmazonProviderRefFromUrl();
+        syncProviderProductRefFromUrl();
         return true;
       };
       const ensureShopProvidersLoaded = async () => {
@@ -27627,7 +27638,7 @@ def ui_preview_html(
           if (!shopEditor) return;
           const nextUrl = (event.target.value || "").trim();
           shopEditor.url = nextUrl;
-          syncAmazonProviderRefFromUrl();
+          syncProviderProductRefFromUrl();
           if (applyProviderAutodetect(nextUrl)) render();
         });
         panel.querySelector('[data-shop-field="providerId"]')?.addEventListener("change", (event) => {
@@ -27635,7 +27646,7 @@ def ui_preview_html(
           shopEditor.providerId = String(event.target.value || "").trim();
           shopEditor.providerTouched = true;
           shopEditor.detectedFromUrl = false;
-          syncAmazonProviderRefFromUrl();
+          syncProviderProductRefFromUrl();
         });
         panel.querySelector("[data-shop-save]")?.addEventListener("click", async () => {
           if (!shopEditor) return;
@@ -27643,10 +27654,10 @@ def ui_preview_html(
           const rawUrl = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
           const providerId = String(panel.querySelector('[data-shop-field="providerId"]')?.value || "").trim();
           const asinOnlyMatch = rawUrl.match(/^[A-Z0-9]{10}$/i);
-          const url = (isAmazonProvider(providerId) && asinOnlyMatch)
+          const url = (isAmazonAsinProvider(providerId) && asinOnlyMatch)
             ? `https://www.amazon.nl/dp/${String(asinOnlyMatch[0]).toUpperCase()}`
             : rawUrl;
-          const providerProductRef = isAmazonProvider(providerId)
+          const providerProductRef = isAmazonAsinProvider(providerId)
             ? (extractAmazonAsinFromUrl(url) || String(shopEditor.providerProductRef || "").trim().toUpperCase() || null)
             : (String(shopEditor.providerProductRef || "").trim() || null);
           const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";

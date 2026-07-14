@@ -44,10 +44,12 @@ try:
     from .next_common import NextApiError, json_ready, table_exists
     from .next_notifications import create_user_notification
     from .next_plugin_runtime import run_plugin_entrypoint
+    from .next_price_provider_detection import extract_amazon_asin as _extract_amazon_asin
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import NextApiError, json_ready, table_exists
     from next_notifications import create_user_notification
     from next_plugin_runtime import run_plugin_entrypoint
+    from next_price_provider_detection import extract_amazon_asin as _extract_amazon_asin
 
 PRICE_ALERT_JOB_TYPE = "price_alert.sweep"
 
@@ -163,24 +165,6 @@ def _is_amazon_bot_blocked(html: str) -> bool:
     """Return True when Amazon returned a bot/CAPTCHA challenge page."""
     lower = html.lower()
     return any(sig in lower for sig in _AMAZON_BOT_SIGNATURES)
-
-
-def _extract_amazon_asin(url: str) -> str | None:
-    """Extract the ASIN from any known Amazon URL format, or return None."""
-    patterns = [
-        r"/dp/([A-Z0-9]{10})",
-        r"/gp/product/([A-Z0-9]{10})",
-        r"/exec/obidos/(?:ASIN/)?([A-Z0-9]{10})",
-        r"[?&]asin=([A-Z0-9]{10})",
-        r"/([A-Z0-9]{10})(?:[/?]|$)",
-    ]
-    for pattern in patterns:
-        m = re.search(pattern, url, re.IGNORECASE)
-        if m:
-            candidate = m.group(1).upper()
-            if re.fullmatch(r"[A-Z0-9]{10}", candidate):
-                return candidate
-    return None
 
 
 def _extract_from_schema_org(html: str) -> tuple[float | None, str | None]:
