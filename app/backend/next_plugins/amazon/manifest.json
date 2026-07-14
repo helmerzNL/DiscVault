@@ -1,11 +1,17 @@
 {
   "id": "amazon",
   "name": "Amazon",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["price_provider"],
   "capabilities": ["price_check"],
+  "priceProvider": {
+    "hostPatterns": ["amazon."],
+    "productRef": {
+      "type": "amazon_asin"
+    }
+  },
   "requiresSecrets": false,
   "settingsSchemaVersion": 1,
   "settingsSchema": {

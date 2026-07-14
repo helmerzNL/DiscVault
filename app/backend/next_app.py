@@ -62,6 +62,9 @@ try:
     from .next_plugin_runtime import plugin_update_state
     from .next_plugin_runtime import unconfigured_integration_plugins
     from .next_plugin_runtime import validate_manifest_compatibility
+    from .next_price_provider_detection import detect_price_provider
+    from .next_price_provider_detection import derive_provider_product_ref
+    from .next_price_provider_detection import price_provider_entity
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
@@ -252,6 +255,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import plugin_update_state
     from next_plugin_runtime import unconfigured_integration_plugins
     from next_plugin_runtime import validate_manifest_compatibility
+    from next_price_provider_detection import detect_price_provider
+    from next_price_provider_detection import derive_provider_product_ref
+    from next_price_provider_detection import price_provider_entity
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
@@ -19640,25 +19646,51 @@ def register_routes(flask_app: Flask) -> None:
         capabilities = {str(item) for item in (plugin.get("capabilities") or [])}
         return "price_provider" in categories or "price_check" in capabilities
 
+    def _price_provider_entities(conn, *, sync_registry: bool) -> list[dict[str, Any]]:
+        if sync_registry:
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+        registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+        providers = [
+            plugin
+            for plugin in (registry.get("plugins") or [])
+            if _is_price_provider_plugin(plugin)
+        ]
+        for provider in providers:
+            config = plugin_config_from_db(conn, str(provider.get("id") or ""))
+            provider["config"] = {
+                "settingsConfigured": bool(config.get("settingsConfigured")),
+                "secretNames": config.get("secretNames") or [],
+                "secretsConfigured": bool(config.get("secretsConfigured")),
+            }
+        return [price_provider_entity(provider) for provider in providers]
+
+    def _resolve_shop_price_provider(
+        conn,
+        price_url: str,
+        provider_plugin_id: str | None,
+        provider_product_ref: str | None,
+    ) -> tuple[str | None, str | None]:
+        providers = _price_provider_entities(conn, sync_registry=False)
+        if provider_plugin_id:
+            provider = next(
+                (item for item in providers if item.get("id") == provider_plugin_id),
+                None,
+            )
+            if provider and not provider_product_ref:
+                provider_product_ref = derive_provider_product_ref(price_url, provider)
+            return provider_plugin_id, provider_product_ref
+        return detect_price_provider(price_url, providers)
+
     @flask_app.get("/api/next/price-providers")
     def list_price_providers():
         with connect() as conn:
             require_any_next_permission(conn, ("watchlist.manage", "metadata.manage_plugins", "admin.view_settings"))
             if not table_exists(conn, "plugins"):
                 return response({"status": "ok", "providers": []})
-            if table_exists(conn, "metadata_plugins"):
-                sync_metadata_plugin_registry(conn)
-            else:
-                sync_plugin_registry(conn, table_exists, Jsonb)
-            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            providers = [plugin for plugin in (registry.get("plugins") or []) if _is_price_provider_plugin(plugin)]
-            for provider in providers:
-                config = plugin_config_from_db(conn, str(provider.get("id") or ""))
-                provider["config"] = {
-                    "settingsConfigured": bool(config.get("settingsConfigured")),
-                    "secretNames": config.get("secretNames") or [],
-                    "secretsConfigured": bool(config.get("secretsConfigured")),
-                }
+            providers = _price_provider_entities(conn, sync_registry=True)
         return response({"status": "ok", "providers": providers})
 
     @flask_app.patch("/api/next/admin/price-providers/<provider_id>/enabled")
@@ -21561,6 +21593,12 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
                 raise NextApiError("Wishlist shop table is not available", 503)
+            provider_plugin_id, provider_product_ref = _resolve_shop_price_provider(
+                conn,
+                price_url,
+                provider_plugin_id,
+                provider_product_ref,
+            )
             user_id = actor.get("id")
             with conn.cursor() as cur:
                 cur.execute(
@@ -21751,6 +21789,12 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
                 raise NextApiError("Wishlist shop table is not available", 503)
+            provider_plugin_id, provider_product_ref = _resolve_shop_price_provider(
+                conn,
+                price_url,
+                provider_plugin_id,
+                provider_product_ref,
+            )
             user_id = actor.get("id")
             with conn.cursor() as cur:
                 cur.execute(
