@@ -1,11 +1,17 @@
 {
   "id": "keepa",
   "name": "Keepa",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["price_provider"],
   "capabilities": ["price_check"],
+  "priceProvider": {
+    "hostPatterns": ["amazon."],
+    "productRef": {
+      "type": "amazon_asin"
+    }
+  },
   "requiresSecrets": true,
   "settingsSchemaVersion": 1,
   "settingsSchema": {
@@ -35,4 +41,3 @@
     "source_use": "price_provider.keepa.use"
   }
 }
-

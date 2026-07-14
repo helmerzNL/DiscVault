@@ -25,7 +25,7 @@ import tempfile
 import time
 import uuid
 import zipfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -62,6 +62,9 @@ try:
     from .next_plugin_runtime import plugin_update_state
     from .next_plugin_runtime import unconfigured_integration_plugins
     from .next_plugin_runtime import validate_manifest_compatibility
+    from .next_price_provider_detection import detect_price_provider
+    from .next_price_provider_detection import derive_provider_product_ref
+    from .next_price_provider_detection import price_provider_entity
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
@@ -199,6 +202,7 @@ try:
     from .next_preferences import mobile_endpoint_contract_payload
     from .next_preferences import mobile_feature_capabilities
     from .next_preferences import normalized_app_preference_key
+    from .next_preferences import price_display_context
     from .next_preferences import register_next_preferences_routes
     from .next_preferences import set_app_user_preferences
     from .next_preferences import validate_app_preference
@@ -252,6 +256,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import plugin_update_state
     from next_plugin_runtime import unconfigured_integration_plugins
     from next_plugin_runtime import validate_manifest_compatibility
+    from next_price_provider_detection import detect_price_provider
+    from next_price_provider_detection import derive_provider_product_ref
+    from next_price_provider_detection import price_provider_entity
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
@@ -595,6 +602,8 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_digital_badge_on_tiles": True,
     "delete_container_members_with_container": False,
     "show_metadata_jobs": True,
+    "price_monitoring_enabled": True,
+    "preferred_price_currency": "",
     "rating_country": "NL",
     "default_media_group_id": "",
 }
@@ -614,9 +623,11 @@ APP_BOOLEAN_PREFERENCES = {
     "show_digital_badge_on_tiles",
     "delete_container_members_with_container",
     "show_metadata_jobs",
+    "price_monitoring_enabled",
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
+    "preferred_price_currency": {"", "EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY"},
     "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"},
 }
 APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
@@ -628,6 +639,8 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_local_title",
         "show_extended_people_pages",
         "show_digital_badge_on_tiles",
+        "price_monitoring_enabled",
+        "preferred_price_currency",
         "rating_country",
         "default_media_group_id",
     ),
@@ -640,6 +653,18 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_metadata_jobs",
     ),
 }
+
+PRICE_DISPLAY_SUPPORTED_CURRENCIES: tuple[str, ...] = ("EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY")
+PRICE_DISPLAY_FALLBACK_RATES: dict[str, float] = {
+    "EUR": 1.0,
+    "USD": 1.08,
+    "GBP": 0.86,
+    "CAD": 1.47,
+    "AUD": 1.66,
+    "CHF": 0.94,
+    "JPY": 173.0,
+}
+_PRICE_DISPLAY_RATE_CACHE: dict[str, Any] = {"expires_at": None, "payload": None}
 
 
 def create_app() -> Flask:
@@ -4504,6 +4529,7 @@ def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
 
 def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> dict[str, Any]:
     user_id = user.get("id") if user else None
+    preferences = app_effective_preferences(conn, user_id)
     counts = {
         "movies": visible_movie_count(conn, user) if user else count_table(conn, "movies"),
         "people": visible_people_count(conn, user) if user else count_table(conn, "people"),
@@ -4528,7 +4554,8 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "locations": location_list_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
-        "preferences": app_effective_preferences(conn, user_id),
+        "preferences": preferences,
+        "priceDisplay": price_display_context(preferences),
         "instanceSettings": {
             "loansSystemEnabled": loans_system_enabled(conn),
         },
@@ -4559,6 +4586,7 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "mediaGroups": [],
         "plugins": [],
         "preferences": dict(APP_PREFERENCE_DEFAULTS),
+        "priceDisplay": price_display_context(dict(APP_PREFERENCE_DEFAULTS)),
         "instanceSettings": {
             "loansSystemEnabled": False,
         },
@@ -6826,7 +6854,7 @@ def validate_app_preference(key: str, value: Any) -> Any:
         return parse_bool_value(value, default=bool(APP_PREFERENCE_DEFAULTS[key]))
     if key in APP_CHOICE_PREFERENCES:
         text = str(value or APP_PREFERENCE_DEFAULTS[key]).strip()
-        text = text.upper() if key == "rating_country" else text.lower()
+        text = text.upper() if key in {"rating_country", "preferred_price_currency"} else text.lower()
         if text not in APP_CHOICE_PREFERENCES[key]:
             raise NextApiError(f"Invalid value for preference {key}", 400)
         return text
@@ -6875,6 +6903,73 @@ def app_effective_preferences(conn, user_id: UUID | str | None = None) -> dict[s
     values = app_global_preferences(conn)
     values.update(app_user_preferences(conn, user_id))
     return values
+
+
+def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    cached = _PRICE_DISPLAY_RATE_CACHE.get("payload")
+    expires_at = _PRICE_DISPLAY_RATE_CACHE.get("expires_at")
+    if cached and isinstance(expires_at, datetime) and expires_at > now:
+        return cached
+
+    symbols = ",".join(code for code in PRICE_DISPLAY_SUPPORTED_CURRENCIES if code != "EUR")
+    try:
+        response = http_requests.get(
+            f"https://api.frankfurter.app/latest?from=EUR&to={symbols}",
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json() or {}
+        raw_rates = payload.get("rates") if isinstance(payload, dict) else {}
+        rates = {"EUR": 1.0}
+        for code in PRICE_DISPLAY_SUPPORTED_CURRENCIES:
+            if code == "EUR":
+                continue
+            raw_value = raw_rates.get(code) if isinstance(raw_rates, dict) else None
+            try:
+                rates[code] = float(raw_value)
+            except (TypeError, ValueError):
+                rates[code] = PRICE_DISPLAY_FALLBACK_RATES[code]
+        result = {
+            "base": "EUR",
+            "exchangeRates": rates,
+            "updatedAt": payload.get("date") if isinstance(payload, dict) else None,
+            "source": "frankfurter",
+        }
+        _PRICE_DISPLAY_RATE_CACHE["payload"] = result
+        _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + timedelta(hours=12)
+        return result
+    except Exception:
+        if cached:
+            return cached
+        return {
+            "base": "EUR",
+            "exchangeRates": dict(PRICE_DISPLAY_FALLBACK_RATES),
+            "updatedAt": None,
+            "source": "fallback",
+        }
+
+
+def price_display_context(preferences: dict[str, Any] | None = None) -> dict[str, Any]:
+    prefs = preferences or {}
+    monitoring_enabled = bool(prefs.get("price_monitoring_enabled", APP_PREFERENCE_DEFAULTS["price_monitoring_enabled"]))
+    preferred_currency = str(prefs.get("preferred_price_currency") or "").strip().upper()
+    if preferred_currency not in APP_CHOICE_PREFERENCES["preferred_price_currency"]:
+        preferred_currency = ""
+    payload = {
+        "monitoringEnabled": monitoring_enabled,
+        "preferredCurrency": preferred_currency or None,
+        "supportedCurrencies": list(PRICE_DISPLAY_SUPPORTED_CURRENCIES),
+        "exchangeRates": {},
+        "updatedAt": None,
+        "source": None,
+    }
+    if monitoring_enabled and preferred_currency:
+        rates = price_display_exchange_rates()
+        payload["exchangeRates"] = dict(rates.get("exchangeRates") or {})
+        payload["updatedAt"] = rates.get("updatedAt")
+        payload["source"] = rates.get("source")
+    return payload
 
 
 def actor_delete_container_members_enabled(conn, actor: dict[str, Any] | None) -> bool:
@@ -19640,25 +19735,51 @@ def register_routes(flask_app: Flask) -> None:
         capabilities = {str(item) for item in (plugin.get("capabilities") or [])}
         return "price_provider" in categories or "price_check" in capabilities
 
+    def _price_provider_entities(conn, *, sync_registry: bool) -> list[dict[str, Any]]:
+        if sync_registry:
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+        registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+        providers = [
+            plugin
+            for plugin in (registry.get("plugins") or [])
+            if _is_price_provider_plugin(plugin)
+        ]
+        for provider in providers:
+            config = plugin_config_from_db(conn, str(provider.get("id") or ""))
+            provider["config"] = {
+                "settingsConfigured": bool(config.get("settingsConfigured")),
+                "secretNames": config.get("secretNames") or [],
+                "secretsConfigured": bool(config.get("secretsConfigured")),
+            }
+        return [price_provider_entity(provider) for provider in providers]
+
+    def _resolve_shop_price_provider(
+        conn,
+        price_url: str,
+        provider_plugin_id: str | None,
+        provider_product_ref: str | None,
+    ) -> tuple[str | None, str | None]:
+        providers = _price_provider_entities(conn, sync_registry=False)
+        if provider_plugin_id:
+            provider = next(
+                (item for item in providers if item.get("id") == provider_plugin_id),
+                None,
+            )
+            if provider and not provider_product_ref:
+                provider_product_ref = derive_provider_product_ref(price_url, provider)
+            return provider_plugin_id, provider_product_ref
+        return detect_price_provider(price_url, providers)
+
     @flask_app.get("/api/next/price-providers")
     def list_price_providers():
         with connect() as conn:
             require_any_next_permission(conn, ("watchlist.manage", "metadata.manage_plugins", "admin.view_settings"))
             if not table_exists(conn, "plugins"):
                 return response({"status": "ok", "providers": []})
-            if table_exists(conn, "metadata_plugins"):
-                sync_metadata_plugin_registry(conn)
-            else:
-                sync_plugin_registry(conn, table_exists, Jsonb)
-            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            providers = [plugin for plugin in (registry.get("plugins") or []) if _is_price_provider_plugin(plugin)]
-            for provider in providers:
-                config = plugin_config_from_db(conn, str(provider.get("id") or ""))
-                provider["config"] = {
-                    "settingsConfigured": bool(config.get("settingsConfigured")),
-                    "secretNames": config.get("secretNames") or [],
-                    "secretsConfigured": bool(config.get("secretsConfigured")),
-                }
+            providers = _price_provider_entities(conn, sync_registry=True)
         return response({"status": "ok", "providers": providers})
 
     @flask_app.patch("/api/next/admin/price-providers/<provider_id>/enabled")
@@ -21561,6 +21682,12 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
                 raise NextApiError("Wishlist shop table is not available", 503)
+            provider_plugin_id, provider_product_ref = _resolve_shop_price_provider(
+                conn,
+                price_url,
+                provider_plugin_id,
+                provider_product_ref,
+            )
             user_id = actor.get("id")
             with conn.cursor() as cur:
                 cur.execute(
@@ -21751,6 +21878,12 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
                 raise NextApiError("Wishlist shop table is not available", 503)
+            provider_plugin_id, provider_product_ref = _resolve_shop_price_provider(
+                conn,
+                price_url,
+                provider_plugin_id,
+                provider_product_ref,
+            )
             user_id = actor.get("id")
             with conn.cursor() as cur:
                 cur.execute(
