@@ -10524,6 +10524,7 @@ def ui_preview_html(
             <button type="button" data-notification-filter="group_invites" data-next-i18n="notifications.prefGroupInvites">Groups</button>
             <button type="button" data-notification-filter="metadata_jobs" data-next-i18n="notifications.prefMetadataJobs">Metadata jobs</button>
             <button type="button" data-notification-filter="imports" data-next-i18n="notifications.prefImports">Imports</button>
+            <button type="button" data-notification-filter="price_alerts" data-next-i18n="notifications.prefPriceAlerts">Price alerts</button>
             <button type="button" data-notification-filter="security" data-next-i18n="notifications.prefSecurity">Security</button>
           </div>
           <div class="notification-list" id="notificationsList"></div>
@@ -27976,7 +27977,7 @@ def ui_preview_html(
           })
           .join("");
         if (selectNode.innerHTML !== options) selectNode.innerHTML = options;
-        selectNode.disabled = false;
+        selectNode.disabled = movies.length <= 1;
       }
 
       const selectedId = String(statsState.selectedPriceTrendMovieId || "");
@@ -28236,7 +28237,7 @@ def ui_preview_html(
     function renderNotificationsView() {
       const list = document.getElementById("notificationsList");
       const empty = document.getElementById("notificationsEmptyMessage");
-      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "security"].includes(notificationFilter) ? notificationFilter : "all";
+      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "price_alerts", "security"].includes(notificationFilter) ? notificationFilter : "all";
       document.querySelectorAll("[data-notification-filter]").forEach((button) => {
         button.classList.toggle("active", button.dataset.notificationFilter === notificationFilter);
         button.setAttribute("aria-pressed", button.dataset.notificationFilter === notificationFilter ? "true" : "false");
@@ -28556,8 +28557,24 @@ def ui_preview_html(
     async function triggerDebugPriceSweep() {
       setPushProfileMessage(tNext("notifications.priceCheckRunning", "Running price check sweep..."));
       try {
-        const payload = await authApiJson("/api/next/admin/price-alerts/sweep", {method: "POST"});
+        const payload = await authApiJson("/api/next/admin/price-alerts/sweep?sync=1", {method: "POST"});
         notificationsState.loaded = false;
+        if (payload && payload.summary && typeof payload.summary === "object") {
+          const result = payload.summary;
+          setPushProfileMessage(
+            tNext(
+              "notifications.priceCheckDoneCounts",
+              "Price sweep done. checked={checked} notified={notified} skipped={skipped} errors={errors}"
+            )
+              .replace("{checked}", String(result.checked ?? 0))
+              .replace("{notified}", String(result.notified ?? 0))
+              .replace("{skipped}", String(result.skipped ?? 0))
+              .replace("{errors}", String(result.errors ?? 0)),
+            "good"
+          );
+          await loadNotifications(true);
+          return;
+        }
         const jobId = payload.jobId || (payload.job && payload.job.id);
         if (!jobId) {
           setPushProfileMessage(tNext("notifications.priceCheckQueued", "Price sweep queued."), "good");
@@ -28586,6 +28603,7 @@ def ui_preview_html(
                 .replace("{errors}", String(result.errors ?? 0)),
               "good"
             );
+            await loadNotifications(true);
             return;
           }
           if (status === "failed") {
