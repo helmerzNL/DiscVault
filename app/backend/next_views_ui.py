@@ -2653,6 +2653,46 @@ def ui_preview_html(
     .lists-poster-badge.danger {
       background: var(--red);
     }
+    .lists-price-badge {
+      position: absolute;
+      right: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 82%, black);
+      color: #fff;
+      font-size: .68rem;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, .28);
+      max-width: calc(100% - 16px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .lists-price-badge.current {
+      top: 8px;
+    }
+    .lists-price-badge.target {
+      bottom: 8px;
+      background: color-mix(in srgb, var(--red) 72%, #24070a);
+    }
+    .lists-price-badge-icon {
+      width: 11px;
+      height: 11px;
+      display: inline-flex;
+      flex: 0 0 auto;
+      opacity: .95;
+    }
+    .lists-price-badge-icon svg {
+      width: 11px;
+      height: 11px;
+      fill: currentColor;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      vector-effect: non-scaling-stroke;
+    }
     .lists-static-poster .preview-poster-art {
       cursor: pointer;
     }
@@ -5666,6 +5706,12 @@ def ui_preview_html(
       fill: currentColor;
       flex: 0 0 auto;
       display: block;
+    }
+    .detail-submenu button.lists-seg[data-lists-tab="wishlist"] .lists-seg-icon {
+      fill: color-mix(in srgb, var(--red) 78%, var(--text));
+    }
+    .detail-submenu button.lists-seg[data-lists-tab="wishlist"].active .lists-seg-icon {
+      fill: var(--red);
     }
     .detail-subpanel {
       min-width: 0;
@@ -10525,6 +10571,7 @@ def ui_preview_html(
             <button type="button" data-notification-filter="group_invites" data-next-i18n="notifications.prefGroupInvites">Groups</button>
             <button type="button" data-notification-filter="metadata_jobs" data-next-i18n="notifications.prefMetadataJobs">Metadata jobs</button>
             <button type="button" data-notification-filter="imports" data-next-i18n="notifications.prefImports">Imports</button>
+            <button type="button" data-notification-filter="price_alerts" data-next-i18n="notifications.prefPriceAlerts">Price alerts</button>
             <button type="button" data-notification-filter="security" data-next-i18n="notifications.prefSecurity">Security</button>
           </div>
           <div class="notification-list" id="notificationsList"></div>
@@ -26364,9 +26411,17 @@ def ui_preview_html(
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
       const acquired = !!item.acquiredAt;
+      const activeMonitor = !!item.alertEnabled && item.targetPrice != null;
+      const priceCurrency = String(item.priceCurrency || "EUR").trim().toUpperCase() || "EUR";
+      const currentBadge = activeMonitor && item.lastSeenPrice != null
+        ? `<span class="lists-price-badge current" title="${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19H2V5H4V17H20V19H4ZM6 15.4L11 10.4L14 13.4L19.6 7.8L21 9.2L14 16.2L11 13.2L7.4 16.8L6 15.4Z"/></svg></span>${escapeHtml(formatStatsPrice(item.lastSeenPrice, priceCurrency))}</span>`
+        : "";
+      const targetBadge = activeMonitor
+        ? `<span class="lists-price-badge target" title="${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none"></circle><circle cx="12" cy="12" r="4" fill="none"></circle><circle cx="12" cy="12" r="1.8"></circle></svg></span>${escapeHtml(formatStatsPrice(item.targetPrice, priceCurrency))}</span>`
+        : "";
       return `
         <div class="preview-poster lists-static-poster" data-wishlist-card="${escapeHtml(item.id)}">
-          <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}</span>
+          <span class="preview-poster-art" data-wishlist-poster="${escapeHtml(item.id)}" role="button" tabindex="0">${posterHtml}${acquired ? `<span class="lists-poster-badge">${escapeHtml(tNext("lists.wishlistAcquired", "Acquired"))}</span>` : ""}${currentBadge}${targetBadge}</span>
           <span class="preview-poster-title">${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
         </div>
@@ -26427,7 +26482,8 @@ def ui_preview_html(
     }
     function wishlistRenderRows(rows, mode) {
       const all = rows || [];
-      const pending = all.filter((item) => !item.acquiredAt);
+      const monitored = all.filter((item) => !item.acquiredAt && !!item.alertEnabled && item.targetPrice != null);
+      const pending = all.filter((item) => !item.acquiredAt && !(!!item.alertEnabled && item.targetPrice != null));
       const acquired = all.filter((item) => !!item.acquiredAt);
       const renderGroup = (groupRows) => {
         if (mode === "detail") return wishlistDetailTableHtml(groupRows);
@@ -26446,7 +26502,8 @@ def ui_preview_html(
             : `<p class="wishlist-section-empty">${escapeHtml(tNext("lists.wishlistSectionEmpty", "Nothing here yet."))}</p>`}
         </section>
       `;
-      return section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
+      return section(tNext("appAdmin.featurePriceAlerts", "Price alerts"), monitored)
+        + section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
         + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
     function tagChipHtml(tag) {
@@ -27925,7 +27982,6 @@ def ui_preview_html(
       section.classList.remove("hidden");
 
       const trend = data && data.wishlistPriceTrend ? data.wishlistPriceTrend : {};
-      const activeLoans = Number(trend.activeLoans ?? (data.loans && data.loans.active) ?? 0);
       const movies = Array.isArray(trend.movies) ? trend.movies.filter((movie) => Array.isArray(movie.points) && movie.points.length) : [];
 
       if (figuresToggleNode) {
@@ -27934,21 +27990,6 @@ def ui_preview_html(
           statsState.showPriceTrendFigures = !!figuresToggleNode.checked;
           renderStatisticsView();
         };
-      }
-
-      if (activeLoans <= 0) {
-        if (gateMessage) {
-          gateMessage.textContent = tNext("stats.priceTrendNoLoan", "Price trends appear when at least one movie is currently on loan.");
-          gateMessage.classList.remove("hidden");
-        }
-        if (chartWrap) chartWrap.classList.add("hidden");
-        if (summaryNode) summaryNode.innerHTML = "";
-        if (tableWrap) tableWrap.classList.add("hidden");
-        if (selectNode) {
-          selectNode.innerHTML = "";
-          selectNode.disabled = true;
-        }
-        return;
       }
 
       if (!movies.length) {
@@ -27977,7 +28018,7 @@ def ui_preview_html(
           })
           .join("");
         if (selectNode.innerHTML !== options) selectNode.innerHTML = options;
-        selectNode.disabled = false;
+        selectNode.disabled = movies.length <= 1;
       }
 
       const selectedId = String(statsState.selectedPriceTrendMovieId || "");
@@ -28237,7 +28278,7 @@ def ui_preview_html(
     function renderNotificationsView() {
       const list = document.getElementById("notificationsList");
       const empty = document.getElementById("notificationsEmptyMessage");
-      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "security"].includes(notificationFilter) ? notificationFilter : "all";
+      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "price_alerts", "security"].includes(notificationFilter) ? notificationFilter : "all";
       document.querySelectorAll("[data-notification-filter]").forEach((button) => {
         button.classList.toggle("active", button.dataset.notificationFilter === notificationFilter);
         button.setAttribute("aria-pressed", button.dataset.notificationFilter === notificationFilter ? "true" : "false");
@@ -28557,8 +28598,24 @@ def ui_preview_html(
     async function triggerDebugPriceSweep() {
       setPushProfileMessage(tNext("notifications.priceCheckRunning", "Running price check sweep..."));
       try {
-        const payload = await authApiJson("/api/next/admin/price-alerts/sweep", {method: "POST"});
+        const payload = await authApiJson("/api/next/admin/price-alerts/sweep?sync=1", {method: "POST"});
         notificationsState.loaded = false;
+        if (payload && payload.summary && typeof payload.summary === "object") {
+          const result = payload.summary;
+          setPushProfileMessage(
+            tNext(
+              "notifications.priceCheckDoneCounts",
+              "Price sweep done. checked={checked} notified={notified} skipped={skipped} errors={errors}"
+            )
+              .replace("{checked}", String(result.checked ?? 0))
+              .replace("{notified}", String(result.notified ?? 0))
+              .replace("{skipped}", String(result.skipped ?? 0))
+              .replace("{errors}", String(result.errors ?? 0)),
+            "good"
+          );
+          await loadNotifications(true);
+          return;
+        }
         const jobId = payload.jobId || (payload.job && payload.job.id);
         if (!jobId) {
           setPushProfileMessage(tNext("notifications.priceCheckQueued", "Price sweep queued."), "good");
@@ -28587,6 +28644,7 @@ def ui_preview_html(
                 .replace("{errors}", String(result.errors ?? 0)),
               "good"
             );
+            await loadNotifications(true);
             return;
           }
           if (status === "failed") {
@@ -29193,7 +29251,7 @@ def ui_preview_html(
       activePersonId = "";
       activePersonPayload = null;
       setActiveAppRoute("statistics");
-      loadStatisticsView();
+      loadStatisticsView(true);
       if (pushUrl && appMode && window.location.pathname !== "/statistics") {
         history.pushState({view: "statistics"}, "", "/statistics");
       }
