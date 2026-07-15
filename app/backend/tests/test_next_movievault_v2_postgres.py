@@ -442,7 +442,11 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             runtime={"loaded": True, "entrypoints": ["sync_index"], "error": None},
         )
         with (
-            patch.object(next_plugin_runtime, "discover_plugins", return_value={"plugins": [discovery], "paths": []}),
+            patch.object(
+                next_plugin_runtime,
+                "discover_plugins",
+                return_value={"plugins": [discovery], "paths": [], "errors": []},
+            ),
             self.connect() as conn,
         ):
             next_plugin_runtime.sync_plugin_registry(
