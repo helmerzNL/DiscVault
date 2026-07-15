@@ -493,7 +493,11 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             with patch.object(
                 next_plugin_runtime,
                 "discover_plugins",
-                return_value={"plugins": [updated_discovery], "paths": []},
+                return_value={
+                    "plugins": [updated_discovery],
+                    "paths": [],
+                    "errors": [],
+                },
             ):
                 next_plugin_runtime.sync_plugin_registry(
                     conn,
