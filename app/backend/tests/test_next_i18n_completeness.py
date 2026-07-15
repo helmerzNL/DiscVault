@@ -94,6 +94,14 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn('data-next-i18n-aria="uiPreview.toggleSidebar"', source)
         self.assertIn('data-next-i18n-title="uiPreview.toggleSidebar"', source)
 
+    def test_plugin_config_uses_submit_feedback_and_typed_boolean_control(self):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn('data-app-admin-plugin-config-form=', source)
+        self.assertIn('data-value-type="boolean" type="checkbox"', source)
+        self.assertIn('addEventListener("submit", (event) => {', source)
+        self.assertIn('role="status" aria-live="polite"', source)
+
 
 if __name__ == "__main__":
     unittest.main()

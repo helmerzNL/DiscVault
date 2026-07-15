@@ -157,7 +157,7 @@ Before updating production:
 
 ## Install the standalone MovieVault v2 plugin
 
-DiscVault `26.4.43` and newer provide the local anonymous synchronization
+DiscVault `26.4.44` and newer provide the local anonymous synchronization
 bridge used by the separately released `movievault_v2` plugin. Download the
 plugin ZIP and checksum from
 [helmerzNL/DiscVault-Plugins](https://github.com/helmerzNL/DiscVault-Plugins),
@@ -165,12 +165,14 @@ verify the SHA-256 checksum, and extract its `movievault_v2/` root folder into
 `DISCVAULT_PLUGIN_INSTALL_DIR` (normally `/data/plugins` in the persistent
 volume).
 
-Restart DiscVault or refresh its plugin registry, configure the MovieVault v2
-origin, enable the plugin, and use **Queue sync** in Admin > Plugins. Normal
-barcode, title, release, and box-set queries then use the derived PostgreSQL
-index. The existing `movievault_26` plugin remains independently available for
-MovieVault Next. Its attributed contribution connection is not used for
-MovieVault v2 anonymous reads.
+Restart DiscVault or refresh its plugin registry. The plugin supplies the
+standard `https://movies2.vaultstack.eu` origin and safe operational defaults
+while remaining disabled. Review or override those settings, then enable the
+plugin; DiscVault queues the first synchronization automatically. Normal barcode,
+title, release, and box-set queries then use the derived PostgreSQL index. The
+existing `movievault_26` plugin remains independently available for MovieVault
+Next. Its attributed contribution connection is not used for MovieVault v2
+anonymous reads.
 
 ## Repository Structure
 
