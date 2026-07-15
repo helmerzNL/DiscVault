@@ -2986,6 +2986,13 @@ def ui_preview_html(
       font-weight: 700;
       overflow-wrap: anywhere;
     }
+    .lists-modal-shop-main a {
+      color: var(--accent);
+      font-size: .8rem;
+      overflow-wrap: anywhere;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
     .lists-modal-shop-main span {
       font-size: .8rem;
       color: var(--muted);
@@ -27419,6 +27426,18 @@ def ui_preview_html(
         if (value == null) return "—";
         return escapeHtml(formatWishlistPrice(value, (shop && shop.priceCurrency) || "EUR"));
       };
+      const shopVisitLink = (shop) => {
+        const value = String(shop?.priceUrl || "").trim();
+        if (!value) return "";
+        try {
+          const parsed = new URL(value);
+          if (!["http:", "https:"].includes(parsed.protocol)) return "";
+          const label = parsed.hostname.replace(/^www\./i, "") || value;
+          return `<a href="${escapeHtml(parsed.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+        } catch (_) {
+          return "";
+        }
+      };
       const render = () => {
         const monitoringEnabled = priceMonitoringEnabled();
         const posterPreview = posterUrl
@@ -27478,6 +27497,7 @@ def ui_preview_html(
                           <div class="lists-modal-shop-row">
                             <div class="lists-modal-shop-main">
                               <strong>${escapeHtml(shop.shopName || "")}</strong>
+                              ${shopVisitLink(shop)}
                               <span>${formatShopPrice(shop)}</span>
                             </div>
                             <button type="button" class="ghost" data-shop-edit="${escapeHtml(String(shop.id || ""))}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
