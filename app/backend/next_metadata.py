@@ -25,6 +25,8 @@ try:
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
     from .next_movievault_connection import is_movievault_plugin
     from .next_movievault_connection import movievault_plugin_context
+    from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from .next_movievault_v2 import movievault_v2_plugin_context
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import sync_plugin_registry
 except ImportError:  # pragma: no cover - supports direct module execution
@@ -33,6 +35,8 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
     from next_movievault_connection import is_movievault_plugin
     from next_movievault_connection import movievault_plugin_context
+    from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from next_movievault_v2 import movievault_v2_plugin_context
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import sync_plugin_registry
 
@@ -536,19 +540,25 @@ def plugin_execution_context(
             "role": actor.get("role") if actor else None,
         },
     }
-    return movievault_plugin_context(
+    plugin_id = str(plugin.get("id") or "")
+    context = movievault_plugin_context(
         conn,
-        str(plugin.get("id") or ""),
+        plugin_id,
         context,
-        ensure_token=is_movievault_plugin(str(plugin.get("id") or "")),
+        ensure_token=is_movievault_plugin(plugin_id),
         actor_id=actor.get("id") if actor else None,
     )
+    return movievault_v2_plugin_context(conn, plugin_id, context)
 
 
 def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint == "health_check":
         return False
-    if is_movievault_plugin(str(plugin.get("id") or "")):
+    plugin_id = str(plugin.get("id") or "")
+    if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
+        settings = config.get("settings")
+        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+    if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
