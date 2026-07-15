@@ -17,7 +17,9 @@ from app.backend import next_worker
 
 
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "distribution-v2.ndjson")
-FIXTURE_SHA256 = "e1cd182a2b40ad3a6beb2a8bfa99aed6e048e73e37726933e65b33a1cd0cebcb"
+SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "distribution-v2.schema.json")
+FIXTURE_SHA256 = "fac6de561e22bc7f95dbab61fc6746e5887865e07152acd844b8b42fb723341e"
+SCHEMA_SHA256 = "9f25a2b1ccd76dd4f7de89c33beea3250498fc96367bb0540c911bf53267948f"
 
 
 class FakeResponse:
@@ -54,7 +56,11 @@ class MovieVaultV2ContractTests(unittest.TestCase):
 
     def test_pinned_fixture_checksum_and_exact_editions(self):
         content = self.fixture()
-        self.assertEqual(hashlib.sha256(content).hexdigest(), FIXTURE_SHA256)
+        canonical_content = content.replace(b"\r\n", b"\n")
+        with open(SCHEMA_PATH, "rb") as handle:
+            canonical_schema = handle.read().replace(b"\r\n", b"\n")
+        self.assertEqual(hashlib.sha256(canonical_content).hexdigest(), FIXTURE_SHA256)
+        self.assertEqual(hashlib.sha256(canonical_schema).hexdigest(), SCHEMA_SHA256)
 
         records = next_movievault_v2.parse_ndjson(
             content,
