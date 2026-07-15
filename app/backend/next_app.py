@@ -118,6 +118,8 @@ try:
     from .next_movievault_connection import movievault_connection_status
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_connection import refresh_movievault_connection
+    from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from .next_movievault_v2 import movievault_v2_plugin_context
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
     from .next_common import NextApiError
@@ -312,6 +314,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import movievault_connection_status
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_connection import refresh_movievault_connection
+    from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from next_movievault_v2 import movievault_v2_plugin_context
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
     from next_common import NextApiError
@@ -8111,7 +8115,11 @@ def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink", "describe_payload", "activity_summary"}:
         return False
-    if is_movievault_plugin(str(plugin.get("id") or "")):
+    plugin_id = str(plugin.get("id") or "")
+    if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
+        settings = config.get("settings")
+        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+    if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
@@ -8238,12 +8246,19 @@ def plugin_execution_context(
             "role": actor.get("role") if actor else None,
         },
     }
-    return movievault_plugin_context(
+    plugin_id = str(plugin.get("id") or "")
+    context = movievault_plugin_context(
         conn,
-        str(plugin.get("id") or ""),
+        plugin_id,
         context,
         ensure_token=ensure_movievault_token,
         actor_id=actor.get("id") if actor else None,
+    )
+    return movievault_v2_plugin_context(
+        conn,
+        plugin_id,
+        context,
+        connection_factory=connect,
     )
 
 
@@ -20563,6 +20578,8 @@ def register_routes(flask_app: Flask) -> None:
             if not plugin:
                 raise NextApiError("Plugin not found", 404)
             entrypoint, payload = validate_plugin_execution_request(plugin, body)
+            if entrypoint == "sync_index":
+                raise NextApiError("Queue sync_index through the plugin jobs endpoint", 409)
             actor = require_plugin_action_permission(conn, plugin, entrypoint)
             config = plugin_config_from_db(conn, plugin_id)
             if plugin_requires_config_for_entrypoint(plugin, config, entrypoint):
@@ -20622,19 +20639,55 @@ def register_routes(flask_app: Flask) -> None:
                     "role": actor.get("role"),
                 },
             }
+            duplicate = False
             with conn.transaction():
-                job = create_background_job(conn, job_type=PLUGIN_EXECUTION_JOB_TYPE, payload=job_payload)
-                audit_event(
-                    conn,
-                    event_type="plugin.job_queued",
-                    category="plugins",
-                    actor=actor,
-                    target_type="background_job",
-                    target_id=job.get("id"),
-                    summary=f"Queued {plugin_id}.{entrypoint}",
-                    metadata={"pluginId": plugin_id, "entrypoint": entrypoint, "payload": payload},
-                )
-        return response({"status": "ok", "plugin": plugin, "job": job}, 201)
+                job = None
+                if plugin_id == MOVIEVAULT_V2_PLUGIN_ID and entrypoint == "sync_index":
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT pg_advisory_xact_lock(%s)", (2_026_262,))
+                        cur.execute(
+                            """
+                            SELECT
+                                id, job_type, status, requested_by, payload, result,
+                                error, created_at, started_at, finished_at
+                            FROM background_jobs
+                            WHERE job_type = %s
+                              AND status IN ('pending', 'running')
+                              AND payload ->> 'pluginId' = %s
+                              AND payload ->> 'entrypoint' = %s
+                            ORDER BY created_at
+                            LIMIT 1
+                            """,
+                            (
+                                PLUGIN_EXECUTION_JOB_TYPE,
+                                MOVIEVAULT_V2_PLUGIN_ID,
+                                "sync_index",
+                            ),
+                        )
+                        existing = cur.fetchone()
+                    if existing:
+                        job = job_row(existing)
+                        duplicate = True
+                if job is None:
+                    job = create_background_job(
+                        conn,
+                        job_type=PLUGIN_EXECUTION_JOB_TYPE,
+                        payload=job_payload,
+                    )
+                    audit_event(
+                        conn,
+                        event_type="plugin.job_queued",
+                        category="plugins",
+                        actor=actor,
+                        target_type="background_job",
+                        target_id=job.get("id"),
+                        summary=f"Queued {plugin_id}.{entrypoint}",
+                        metadata={"pluginId": plugin_id, "entrypoint": entrypoint, "payload": payload},
+                    )
+        return response(
+            {"status": "ok", "plugin": plugin, "job": job, "duplicate": duplicate},
+            200 if duplicate else 201,
+        )
 
     @flask_app.get("/api/next/metadata/plugins")
     def metadata_plugins():

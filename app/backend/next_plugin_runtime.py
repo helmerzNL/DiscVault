@@ -72,6 +72,7 @@ PLUGIN_ENTRYPOINTS = (
     "member_intelligence",
     "discover_library",
     "sync_library",
+    "sync_index",
     "sync_personal_lists",
     "playback_deeplink",
     "inspect_source",
