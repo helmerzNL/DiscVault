@@ -36,7 +36,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
     def connect(self):
         return psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False)
 
-    def setUp(self):
+    def _clear_state(self):
         with self.connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -61,6 +61,12 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     "DELETE FROM plugins WHERE id = %s",
                     (next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,),
                 )
+
+    def setUp(self):
+        self._clear_state()
+
+    def tearDown(self):
+        self._clear_state()
 
     def fixture(self) -> bytes:
         return FIXTURE_PATH.read_bytes()

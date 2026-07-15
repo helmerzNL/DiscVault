@@ -157,7 +157,7 @@ Before updating production:
 
 ## Install the standalone MovieVault v2 plugin
 
-DiscVault `26.4.42` and newer provide the local anonymous synchronization
+DiscVault `26.4.43` and newer provide the local anonymous synchronization
 bridge used by the separately released `movievault_v2` plugin. Download the
 plugin ZIP and checksum from
 [helmerzNL/DiscVault-Plugins](https://github.com/helmerzNL/DiscVault-Plugins),
