@@ -23,8 +23,11 @@ except ModuleNotFoundError:
     dict_row = None
     Jsonb = None
 
+from app.backend import next_app
 from app.backend import next_movievault_v2
+from app.backend import next_plugin_runtime
 from app.backend import next_worker
+from app.backend.next_plugin_runtime import PluginDiscovery
 
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -70,6 +73,12 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
 
     def fixture(self) -> bytes:
         return FIXTURE_PATH.read_bytes()
+
+    def table_exists(self, conn, table_name):
+        with conn.cursor() as cur:
+            cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
+            row = cur.fetchone()
+        return bool(row and row.get("table_name"))
 
     def manifest(self, *, revision=42, cursor="cursor-value-long-enough", checksum=None):
         return {
@@ -390,6 +399,171 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 row = cur.fetchone()
         self.assertEqual(row["job_count"], 1)
         self.assertEqual(row["source"], "scheduler")
+
+    def test_registry_materializes_defaults_without_overwriting_operator_values(self):
+        settings_schema = {
+            "settings": [
+                {
+                    "name": "origin",
+                    "type": "url",
+                    "required": True,
+                    "default": "https://movies2.vaultstack.eu",
+                },
+                {
+                    "name": "syncIntervalHours",
+                    "type": "number",
+                    "default": 6,
+                    "minimum": 1,
+                    "maximum": 168,
+                },
+                {
+                    "name": "bucketFallback",
+                    "type": "boolean",
+                    "default": False,
+                },
+            ],
+            "secrets": [],
+        }
+        manifest = {
+            "id": "movievault_v2",
+            "name": "MovieVault v2",
+            "version": "1.0.4",
+            "categories": ["metadata_source"],
+            "capabilities": ["sync_index"],
+            "orderIndex": 52,
+            "requiresSecrets": False,
+            "settingsSchema": settings_schema,
+            "entitlements": {},
+        }
+        discovery = PluginDiscovery(
+            manifest=manifest,
+            path=Path("movievault_v2"),
+            module_path=None,
+            runtime={"loaded": True, "entrypoints": ["sync_index"], "error": None},
+        )
+        with (
+            patch.object(next_plugin_runtime, "discover_plugins", return_value={"plugins": [discovery], "paths": []}),
+            self.connect() as conn,
+        ):
+            next_plugin_runtime.sync_plugin_registry(
+                conn,
+                self.table_exists,
+                Jsonb,
+            )
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE plugin_settings
+                    SET settings=settings || %s
+                    WHERE plugin_id=%s
+                    """,
+                    (
+                        Jsonb(
+                            {
+                                "origin": "https://custom.example",
+                                "bucketFallback": True,
+                            }
+                        ),
+                        "movievault_v2",
+                    ),
+                )
+
+            updated_discovery = PluginDiscovery(
+                manifest={
+                    **manifest,
+                    "settingsSchema": {
+                        **settings_schema,
+                        "settings": [
+                            {
+                                **field,
+                                **({"default": 12} if field["name"] == "syncIntervalHours" else {}),
+                            }
+                            for field in settings_schema["settings"]
+                        ],
+                    },
+                },
+                path=Path("movievault_v2"),
+                module_path=None,
+                runtime=discovery.runtime,
+            )
+            with patch.object(
+                next_plugin_runtime,
+                "discover_plugins",
+                return_value={"plugins": [updated_discovery], "paths": []},
+            ):
+                next_plugin_runtime.sync_plugin_registry(
+                    conn,
+                    self.table_exists,
+                    Jsonb,
+                )
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT settings FROM plugin_settings WHERE plugin_id=%s",
+                    ("movievault_v2",),
+                )
+                stored = cur.fetchone()["settings"]
+
+        self.assertEqual(stored["origin"], "https://custom.example")
+        self.assertEqual(stored["syncIntervalHours"], 6)
+        self.assertTrue(stored["bucketFallback"])
+
+    def test_initial_sync_job_is_duplicate_safe_and_skips_current_index(self):
+        actor = {"id": None, "username": "owner", "role": "owner"}
+        with patch.object(next_app, "audit_event"):
+            with self.connect() as conn:
+                with conn.transaction():
+                    first, duplicate, skipped = next_app.queue_movievault_v2_sync_job(
+                        conn,
+                        actor=actor,
+                        source="enable",
+                        skip_when_indexed=True,
+                    )
+                with conn.transaction():
+                    second, second_duplicate, second_skipped = next_app.queue_movievault_v2_sync_job(
+                        conn,
+                        actor=actor,
+                        source="enable",
+                        skip_when_indexed=True,
+                    )
+
+        self.assertIsNotNone(first)
+        self.assertFalse(duplicate)
+        self.assertFalse(skipped)
+        self.assertEqual(second["id"], first["id"])
+        self.assertTrue(second_duplicate)
+        self.assertFalse(second_skipped)
+
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM background_jobs WHERE payload ->> 'pluginId'=%s",
+                    ("movievault_v2",),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO movievault_v2_sync_state (
+                        plugin_id, origin, active_generation, status
+                    )
+                    VALUES (%s, %s, %s, 'current')
+                    """,
+                    (
+                        "movievault_v2",
+                        "https://movies2.vaultstack.eu",
+                        "40000000-0000-0000-0000-000000000001",
+                    ),
+                )
+            with patch.object(next_app, "audit_event"):
+                with conn.transaction():
+                    job, duplicate, skipped = next_app.queue_movievault_v2_sync_job(
+                        conn,
+                        actor=actor,
+                        source="enable",
+                        skip_when_indexed=True,
+                    )
+
+        self.assertIsNone(job)
+        self.assertFalse(duplicate)
+        self.assertTrue(skipped)
 
 
 if __name__ == "__main__":

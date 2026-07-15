@@ -12786,6 +12786,7 @@ def ui_preview_html(
       digitalSources: [],
       groups: [],
       invites: [],
+      pluginConfigMessages: {},
       pluginConfigs: {},
       pluginExecutions: {},
       pluginHealth: {},
@@ -13880,7 +13881,12 @@ def ui_preview_html(
       ].join(" / ");
     }
     function appAdminPluginNeedsConfiguration(plugin) {
-      return !!(plugin && plugin.enabled && plugin.requiresSecrets && !plugin.secretsConfigured);
+      if (!plugin || !plugin.enabled) return false;
+      const hasRequiredSettings = appAdminPluginSchemaItems(plugin, "settings").some((field) => field.required);
+      return !!(
+        (plugin.requiresSecrets && !plugin.secretsConfigured)
+        || (hasRequiredSettings && !plugin.settingsConfigured)
+      );
     }
     function appAdminPluginHealthState(plugin) {
       const health = appAdmin.pluginHealth[plugin.id] || {};
@@ -14195,14 +14201,30 @@ def ui_preview_html(
       }
       const currentSettings = (config && config.settings) || {};
       const secretNames = new Set((config && config.secretNames) || []);
+      const feedback = (appAdmin.pluginConfigMessages || {})[plugin.id] || {};
       const settingFields = settings.map((field) => {
         const name = field.name || field.key;
         const value = currentSettings[name];
-        const display = Array.isArray(value) ? value.join(", ") : (value || "");
+        const display = Array.isArray(value) ? value.join(", ") : (value === null || value === undefined ? "" : value);
+        const required = field.required ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.required", "Required"))}</span>` : "";
+        const description = field.description ? `<small>${escapeHtml(field.description)}</small>` : "";
+        if (field.type === "boolean") {
+          return `
+            <label>
+              <span>${escapeHtml(field.label || name)} ${required}</span>
+              <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="boolean" type="checkbox" ${value === true ? "checked" : ""}>
+              ${description}
+            </label>
+          `;
+        }
+        const minimum = field.minimum !== undefined ? `min="${escapeHtml(field.minimum)}"` : "";
+        const maximum = field.maximum !== undefined ? `max="${escapeHtml(field.maximum)}"` : "";
+        const step = field.type === "number" ? `step="${escapeHtml(field.step || 1)}"` : "";
         return `
           <label>
-            <span>${escapeHtml(field.label || name)} ${field.required ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.required", "Required"))}</span>` : ""}</span>
-            <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(appAdminPluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}" ${field.required ? "required" : ""}>
+            <span>${escapeHtml(field.label || name)} ${required}</span>
+            <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(appAdminPluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}" ${minimum} ${maximum} ${step} ${field.required ? "required" : ""}>
+            ${description}
           </label>
         `;
       }).join("");
@@ -14217,14 +14239,17 @@ def ui_preview_html(
         `;
       }).join("");
       return `
-        <div class="profile-passkey-meta">${escapeHtml(appAdminPluginConfigStatus(plugin, config))}</div>
-        <div class="app-admin-plugin-config">
-          ${settingFields}
-          ${secretFields}
-        </div>
-        <div class="app-admin-plugin-actions">
-          <button type="button" class="secondary-button" data-app-admin-plugin-save="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.savePluginConfig", "Save config"))}</button>
-        </div>
+        <form data-app-admin-plugin-config-form="${escapeHtml(plugin.id)}">
+          <div class="profile-passkey-meta">${escapeHtml(appAdminPluginConfigStatus(plugin, config))}</div>
+          <div class="app-admin-plugin-config">
+            ${settingFields}
+            ${secretFields}
+          </div>
+          <div class="app-admin-plugin-actions">
+            <button type="submit" class="secondary-button" ${feedback.state === "saving" ? "disabled" : ""}>${escapeHtml(tNext("appAdmin.savePluginConfig", "Save config"))}</button>
+          </div>
+          <div class="login-message ${feedback.state === "error" ? "bad" : feedback.state === "success" ? "good" : ""}" role="status" aria-live="polite">${escapeHtml(feedback.message || "")}</div>
+        </form>
       `;
     }
     function renderAppAdminPluginCard(plugin, sectionPlugins = [], sectionCategory = "") {
@@ -14235,7 +14260,7 @@ def ui_preview_html(
       const digitalSource = (appAdmin.digitalSources || []).find((source) => source.plugin_id === plugin.id);
       const runtime = plugin.runtime || {};
       const capabilities = plugin.capabilities || [];
-      const needsConfig = plugin.requiresSecrets && !plugin.secretsConfigured;
+      const needsConfig = appAdminPluginNeedsConfiguration(plugin);
       const runtimeState = health.state || (runtime.loaded ? "loaded" : "not_loaded");
       const orderedSection = [...(sectionPlugins || [])].sort(appAdminPluginSort);
       const pluginIndex = orderedSection.findIndex((item) => item.id === plugin.id);
@@ -16330,8 +16355,13 @@ def ui_preview_html(
           body: JSON.stringify({enabled})
         });
         appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        if (payload.initialSync && payload.initialSync.job) {
+          upsertAppAdminPluginJob(payload.initialSync.job);
+        }
         renderAppAdminPlugins();
-        setAppAdminMessage("appAdminPluginsMessage", enabled ? tNext("appAdmin.pluginEnabled", "Plugin enabled.") : tNext("appAdmin.pluginDisabled", "Plugin disabled."), "good");
+        const enabledMessage = enabled ? tNext("appAdmin.pluginEnabled", "Plugin enabled.") : tNext("appAdmin.pluginDisabled", "Plugin disabled.");
+        const syncMessage = payload.initialSync && payload.initialSync.job ? ` ${tNext("appAdmin.pluginJobQueued", "Plugin job queued.")}` : "";
+        setAppAdminMessage("appAdminPluginsMessage", `${enabledMessage}${syncMessage}`, "good");
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -16589,7 +16619,9 @@ def ui_preview_html(
       if (!pluginId || !row) return;
       const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
       if (!appAdminCanConfigurePlugin(plugin)) return;
-      const missingRequired = Array.from(row.querySelectorAll("[required]")).filter((input) => !String(input.value || "").trim());
+      const missingRequired = Array.from(row.querySelectorAll("[required]")).filter((input) =>
+        input.type === "checkbox" ? !input.checked : !String(input.value || "").trim()
+      );
       if (missingRequired.length) {
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.fillRequiredPluginFields", "Fill the required plugin fields first."), "bad");
         return;
@@ -16597,12 +16629,20 @@ def ui_preview_html(
       const settings = {};
       const secrets = {};
       row.querySelectorAll("[data-app-admin-plugin-setting]").forEach((input) => {
-        settings[input.dataset.appAdminPluginSetting] = coerceAppAdminPluginValue(input.value, input.dataset.valueType || "text");
+        const type = input.dataset.valueType || "text";
+        settings[input.dataset.appAdminPluginSetting] = coerceAppAdminPluginValue(
+          type === "boolean" ? input.checked : input.value,
+          type
+        );
       });
       row.querySelectorAll("[data-app-admin-plugin-secret]").forEach((input) => {
         if (input.value) secrets[input.dataset.appAdminPluginSecret] = input.value;
       });
-      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.savingPluginConfig", "Saving plugin configuration..."));
+      appAdmin.pluginConfigMessages[pluginId] = {
+        state: "saving",
+        message: tNext("appAdmin.savingPluginConfig", "Saving plugin configuration...")
+      };
+      renderAppAdminPlugins();
       try {
         const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/config`, {
           method: "PATCH",
@@ -16613,9 +16653,18 @@ def ui_preview_html(
         if (payload.plugin) {
           appAdmin.plugins = appAdmin.plugins.map((plugin) => plugin.id === pluginId ? payload.plugin : plugin);
         }
+        appAdmin.pluginConfigMessages[pluginId] = {
+          state: "success",
+          message: tNext("appAdmin.pluginConfigSaved", "Plugin configuration saved.")
+        };
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginConfigSaved", "Plugin configuration saved."), "good");
       } catch (error) {
+        appAdmin.pluginConfigMessages[pluginId] = {
+          state: "error",
+          message: error.message || String(error)
+        };
+        renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
     }
@@ -33268,7 +33317,6 @@ def ui_preview_html(
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
         const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
         const healthButton = event.target.closest("[data-app-admin-plugin-health]");
-        const saveButton = event.target.closest("[data-app-admin-plugin-save]");
         const executeButton = event.target.closest("[data-app-admin-plugin-execute]");
         const jobButton = event.target.closest("[data-app-admin-plugin-job]");
         const moveButton = event.target.closest("[data-app-admin-plugin-move]");
@@ -33280,7 +33328,6 @@ def ui_preview_html(
         const movieVaultResetButton = event.target.closest("[data-app-admin-movievault-reset]");
         if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
         if (healthButton) checkAppAdminPluginHealth(healthButton.dataset.appAdminPluginHealth);
-        if (saveButton) saveAppAdminPluginConfig(saveButton.dataset.appAdminPluginSave, saveButton.closest(".profile-passkey"));
         if (executeButton) executeAppAdminPlugin(executeButton.dataset.appAdminPluginExecute, executeButton.dataset.entrypoint);
         if (jobButton) queueAppAdminPluginJob(jobButton.dataset.appAdminPluginJob, jobButton.dataset.entrypoint);
         if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down", moveButton.dataset.sectionCategory || "");
@@ -33290,6 +33337,12 @@ def ui_preview_html(
         if (rollbackButton) rollbackAppAdminPlugin(rollbackButton.dataset.appAdminPluginRollback);
         if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(movieVaultRefreshButton.dataset.appAdminMovievaultRefresh || "movievault", false);
         if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(movieVaultResetButton.dataset.appAdminMovievaultReset || "movievault", true);
+      });
+      document.getElementById("appAdminPluginsList")?.addEventListener("submit", (event) => {
+        const form = event.target.closest("[data-app-admin-plugin-config-form]");
+        if (!form) return;
+        event.preventDefault();
+        saveAppAdminPluginConfig(form.dataset.appAdminPluginConfigForm, form);
       });
       document.getElementById("profileEditForm")?.addEventListener("submit", (event) => {
         event.preventDefault();

@@ -525,6 +525,128 @@ def normalize_categories(manifest: dict[str, Any]) -> list[str]:
     return normalized
 
 
+def plugin_setting_items(settings_schema: Any, kind: str = "settings") -> list[dict[str, Any]]:
+    if not isinstance(settings_schema, dict):
+        return []
+    raw_items = settings_schema.get(kind)
+    if isinstance(raw_items, list):
+        return [dict(item) for item in raw_items if isinstance(item, dict)]
+    if isinstance(raw_items, dict):
+        return [
+            {"name": str(name), **(dict(item) if isinstance(item, dict) else {})}
+            for name, item in raw_items.items()
+        ]
+    return []
+
+
+def _setting_name(field: dict[str, Any]) -> str:
+    return str(field.get("name") or field.get("key") or "").strip()
+
+
+def _setting_present(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return value not in ([], {})
+
+
+def _normalize_plugin_setting(field: dict[str, Any], value: Any) -> Any:
+    name = _setting_name(field)
+    setting_type = str(field.get("type") or "text").strip().lower()
+    if value is None and not field.get("required"):
+        return None
+    if setting_type == "boolean":
+        if not isinstance(value, bool):
+            raise ValueError(f"Plugin setting {name} must be a boolean")
+        return value
+    if setting_type == "number":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"Plugin setting {name} must be a number")
+        minimum = field.get("minimum")
+        maximum = field.get("maximum")
+        if isinstance(minimum, (int, float)) and value < minimum:
+            raise ValueError(f"Plugin setting {name} must be at least {minimum}")
+        if isinstance(maximum, (int, float)) and value > maximum:
+            raise ValueError(f"Plugin setting {name} must be at most {maximum}")
+        return value
+    if setting_type == "array":
+        if not isinstance(value, list):
+            raise ValueError(f"Plugin setting {name} must be an array")
+        return value
+    if not isinstance(value, str):
+        raise ValueError(f"Plugin setting {name} must be text")
+    return value.strip()
+
+
+def plugin_setting_defaults(settings_schema: Any) -> dict[str, Any]:
+    defaults: dict[str, Any] = {}
+    for field in plugin_setting_items(settings_schema):
+        name = _setting_name(field)
+        if name and "default" in field:
+            defaults[name] = _normalize_plugin_setting(field, field["default"])
+    return defaults
+
+
+def resolve_plugin_settings(settings_schema: Any, stored_settings: Any) -> dict[str, Any]:
+    resolved = plugin_setting_defaults(settings_schema)
+    if isinstance(stored_settings, dict):
+        resolved.update(stored_settings)
+    return resolved
+
+
+def plugin_settings_configured(settings_schema: Any, settings: Any) -> bool:
+    resolved = resolve_plugin_settings(settings_schema, settings)
+    fields = plugin_setting_items(settings_schema)
+    for field in fields:
+        if field.get("required") and not _setting_present(resolved.get(_setting_name(field))):
+            return False
+    return bool(resolved) if fields else False
+
+
+def validate_plugin_settings(settings_schema: Any, settings: Any) -> dict[str, Any]:
+    if not isinstance(settings, dict):
+        raise ValueError("Plugin settings must be an object")
+    fields = {
+        _setting_name(field): field
+        for field in plugin_setting_items(settings_schema)
+        if _setting_name(field)
+    }
+    normalized = dict(settings)
+    for name, value in settings.items():
+        field = fields.get(str(name))
+        if field is not None:
+            normalized[str(name)] = _normalize_plugin_setting(field, value)
+    resolved = resolve_plugin_settings(settings_schema, normalized)
+    for name, field in fields.items():
+        if field.get("required") and not _setting_present(resolved.get(name)):
+            raise ValueError(f"Plugin setting {name} is required")
+    return resolved
+
+
+def plugin_config_payload(
+    settings_schema: Any,
+    settings: Any,
+    secrets_ref: Any,
+) -> dict[str, Any]:
+    resolved = resolve_plugin_settings(settings_schema, settings)
+    refs = secrets_ref if isinstance(secrets_ref, dict) else {}
+    safe_refs: dict[str, dict[str, Any]] = {}
+    for name, ref in refs.items():
+        key = ref.get("key") if isinstance(ref, dict) else ref
+        item: dict[str, Any] = {"configured": True}
+        if key:
+            item["key"] = str(key)
+        safe_refs[str(name)] = item
+    return {
+        "settings": resolved,
+        "settingsConfigured": plugin_settings_configured(settings_schema, resolved),
+        "secretNames": sorted(safe_refs),
+        "secretsConfigured": bool(safe_refs),
+        "secretsRef": safe_refs,
+    }
+
+
 def manifest_plugin_api_versions(manifest: dict[str, Any]) -> set[str]:
     declared = manifest.get("discVaultPluginApi", manifest.get("pluginApi"))
     if declared is None:
@@ -571,6 +693,7 @@ def normalize_manifest(raw: dict[str, Any], path: Path) -> dict[str, Any]:
     manifest["capabilities"] = capabilities if isinstance(capabilities, list) else []
     settings_schema = manifest.get("settingsSchema", manifest.get("settings_schema", {}))
     manifest["settingsSchema"] = settings_schema if isinstance(settings_schema, dict) else {}
+    plugin_setting_defaults(manifest["settingsSchema"])
     entitlements = manifest.get("entitlements")
     manifest["entitlements"] = entitlements if isinstance(entitlements, dict) else {}
     if "kind" not in manifest:
@@ -898,6 +1021,8 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
     synced_metadata_ids: list[str] = []
     has_plugins_table = table_exists(conn, "plugins")
     has_metadata_plugins_table = table_exists(conn, "metadata_plugins")
+    has_plugin_settings_table = table_exists(conn, "plugin_settings")
+    has_metadata_plugin_settings_table = table_exists(conn, "metadata_plugin_settings")
 
     if has_plugins_table:
         with conn.transaction():
@@ -954,6 +1079,20 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                             str(plugin.module_path) if plugin.module_path else None,
                         ),
                     )
+                    defaults = plugin_setting_defaults(manifest["settingsSchema"])
+                    if has_plugin_settings_table and defaults:
+                        cur.execute(
+                            """
+                            INSERT INTO plugin_settings (plugin_id, settings, secrets_ref)
+                            VALUES (%s, %s, '{}'::jsonb)
+                            ON CONFLICT (plugin_id) DO UPDATE SET
+                                settings=EXCLUDED.settings || plugin_settings.settings,
+                                updated_at=now()
+                            WHERE plugin_settings.settings IS DISTINCT FROM
+                                EXCLUDED.settings || plugin_settings.settings
+                            """,
+                            (manifest["id"], Jsonb(defaults)),
+                        )
                     synced_plugin_ids.append(manifest["id"])
                 if synced_plugin_ids:
                     cur.execute(
@@ -1012,6 +1151,20 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                             manifest.get("premiumFeatureKey"),
                         ),
                     )
+                    defaults = plugin_setting_defaults(manifest["settingsSchema"])
+                    if has_metadata_plugin_settings_table and defaults:
+                        cur.execute(
+                            """
+                            INSERT INTO metadata_plugin_settings (plugin_id, settings, secrets_ref)
+                            VALUES (%s, %s, '{}'::jsonb)
+                            ON CONFLICT (plugin_id) DO UPDATE SET
+                                settings=EXCLUDED.settings || metadata_plugin_settings.settings,
+                                updated_at=now()
+                            WHERE metadata_plugin_settings.settings IS DISTINCT FROM
+                                EXCLUDED.settings || metadata_plugin_settings.settings
+                            """,
+                            (manifest["id"], Jsonb(defaults)),
+                        )
                     synced_metadata_ids.append(manifest["id"])
                 if synced_metadata_ids:
                     cur.execute(
@@ -1104,8 +1257,12 @@ def plugin_registry_row(row: dict[str, Any]) -> dict[str, Any]:
     manifest = row.get("manifest") or {}
     categories = row.get("categories") or manifest.get("categories") or []
     capabilities = row.get("capabilities") or manifest.get("capabilities") or []
-    settings = row.get("settings") or {}
-    secrets_ref = row.get("secrets_ref") or {}
+    settings_schema = row.get("settings_schema") or {}
+    config = plugin_config_payload(
+        settings_schema,
+        row.get("settings"),
+        row.get("secrets_ref"),
+    )
     update_state = plugin_update_state(str(row["id"]), str(row.get("version") or ""))
     return {
         "id": row["id"],
@@ -1118,9 +1275,9 @@ def plugin_registry_row(row: dict[str, Any]) -> dict[str, Any]:
         "orderIndex": row["order_index"],
         "manifest": manifest,
         "requiresSecrets": bool(manifest.get("requiresSecrets", False)),
-        "settingsSchema": row.get("settings_schema") or {},
-        "settingsConfigured": bool(settings),
-        "secretsConfigured": bool(secrets_ref),
+        "settingsSchema": settings_schema,
+        "settingsConfigured": config["settingsConfigured"],
+        "secretsConfigured": config["secretsConfigured"],
         "premiumFeatureKey": row.get("premium_feature_key"),
         "sourcePath": row.get("source_path"),
         "runtimeModule": row.get("runtime_module"),

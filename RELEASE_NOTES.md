@@ -1,5 +1,14 @@
 # DiscVault Release Notes
 
+## 26.4.44 - Automatic MovieVault v2 configuration
+
+- Resolves and displays typed plugin manifest defaults while preserving every
+  explicit operator override across registry refreshes and upgrades.
+- Repairs the plugin configuration form with native boolean/number controls and
+  adjacent saving, success, and error feedback.
+- Validates the MovieVault v2 root origin and queues one duplicate-safe initial
+  index synchronization when the disabled plugin is first enabled.
+
 ## 26.4.43 - MovieVault v2 anonymous local index bridge
 
 - Adds a checksum-verified `distribution-2` synchronizer with atomic full
