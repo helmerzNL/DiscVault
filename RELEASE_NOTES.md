@@ -1,5 +1,17 @@
 # DiscVault Release Notes
 
+## 26.4.43 - MovieVault v2 anonymous local index bridge
+
+- Adds a checksum-verified `distribution-2` synchronizer with atomic full
+  generations, transactional deltas, tombstones, cursor recovery, and
+  privacy-safe failure codes.
+- Stores only SHA-256 lookup hashes and MovieVault-owned release/box-set facts,
+  including ordered exact-edition members.
+- Exposes narrow local lookup, sync, bucket-fallback, and status callbacks to
+  the separately installable `movievault_v2` metadata-source plugin.
+- Adds duplicate-safe manual and scheduled `sync_index` jobs while leaving
+  `movievault_26` and its attributed contribution transport unchanged.
+
 ## 26.4.33 — Wishlist price deal alerts, responsive Library, and mobile poster carousel
 
 This release promotes the full `release/v26-beta` train to production, bumping DiscVault

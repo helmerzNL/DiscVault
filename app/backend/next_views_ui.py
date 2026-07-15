@@ -13924,7 +13924,7 @@ def ui_preview_html(
       }
       const activeJobs = jobs.filter((job) => ["pending", "running"].includes(String(job.status || "")));
       const failedJobs = jobs.filter((job) => String(job.status || "") === "failed");
-      const executablePlugins = plugins.filter((plugin) => appAdminCanExecutePlugin(plugin, "health_check") || (plugin.capabilities || []).some((capability) => ["discover_library", "sync_library", "sync_personal_lists", "inspect_source"].includes(capability)));
+      const executablePlugins = plugins.filter((plugin) => appAdminCanExecutePlugin(plugin, "health_check") || (plugin.capabilities || []).some((capability) => ["discover_library", "sync_library", "sync_index", "sync_personal_lists", "inspect_source"].includes(capability)));
       node.innerHTML = `
         <section class="plugin-operation-grid">
           <div class="plugin-operation-row">
@@ -14285,6 +14285,7 @@ def ui_preview_html(
             ${capabilities.includes("discover_library") && appAdminCanExecutePlugin(plugin, "discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
             ${capabilities.includes("inspect_source") && appAdminCanExecutePlugin(plugin, "inspect_source") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">${escapeHtml(tNext("appAdmin.inspectSource", "Inspect source"))}</button>` : ""}
             ${capabilities.includes("sync_library") && appAdminCanExecutePlugin(plugin, "sync_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
+            ${capabilities.includes("sync_index") && appAdminCanExecutePlugin(plugin, "sync_index") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_index">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
             ${capabilities.includes("sync_personal_lists") && appAdminCanExecutePlugin(plugin, "sync_personal_lists") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_personal_lists">${escapeHtml(tNext("appAdmin.queuePersonalListSync", "Queue list sync"))}</button>` : ""}
           </div>
           ${renderAppAdminMovieVaultConnection(plugin)}
