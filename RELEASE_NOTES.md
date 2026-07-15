@@ -1,6 +1,6 @@
 # DiscVault Release Notes
 
-## 26.4.40 - MovieVault v2 anonymous local index bridge
+## 26.4.41 - MovieVault v2 anonymous local index bridge
 
 - Adds a checksum-verified `distribution-2` synchronizer with atomic full
   generations, transactional deltas, tombstones, cursor recovery, and
