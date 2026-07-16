@@ -26,14 +26,18 @@ from app.backend.next_metadata import external_metadata_barcode
 from app.backend.next_metadata import filter_locked_artwork_updates
 from app.backend.next_metadata import metadata_field_decisions_with_write_state
 from app.backend.next_metadata import metadata_fetch_audit_payload
+from app.backend.next_metadata import metadata_source_policy_result
 from app.backend.next_metadata import metadata_source_plugin_allowed
 from app.backend.next_metadata import merge_metadata_results
 from app.backend.next_metadata import MOVIE_LOCKABLE_FIELDS
+from app.backend.next_metadata import movievault_identification_plan
 from app.backend.next_metadata import movie_locked_fields
 from app.backend.next_metadata import normalize_media_format
 from app.backend.next_metadata import plugin_execution_plan
+from app.backend.next_metadata import preview_enrichment_payload_from_results
 from app.backend.next_metadata import query_from_payload
 from app.backend.next_metadata import receiver_contribution_payload
+from app.backend.next_metadata import run_metadata_source_pipeline
 from app.backend.next_metadata import summarize_metadata_execution
 from app.backend.next_plugins.bluray_com import plugin as bluray_com_plugin
 
@@ -1061,6 +1065,243 @@ class NextMetadataPolicyTests(unittest.TestCase):
         )
 
         self.assertEqual([item["entrypoint"] for item in plan], ["search_barcode", "box_set_candidates"])
+
+    def test_movievault_identification_plan_never_requests_enrichment(self):
+        query = query_from_payload({"title": "Alien", "detectBoxSets": True, "previewMode": True})
+        plan = movievault_identification_plan(
+            {"capabilities": ["search_title", "movie_details", "box_set_candidates"]},
+            query,
+        )
+
+        self.assertEqual([item["entrypoint"] for item in plan], ["search_title", "box_set_candidates"])
+
+    def test_movievault_result_keeps_identity_and_filters_enrichment(self):
+        constrained = metadata_source_policy_result(
+            {
+                "pluginId": "movievault_26",
+                "movieUpdates": {"title": "Alien", "year": "1979", "overview": "MovieVault plot"},
+                "metadataUpdates": {"director": "Ridley Scott", "packaging": "SteelBook"},
+                "technicalUpdates": {"hdr": "HDR10"},
+                "mediaUpdates": {"poster": {"sourceUrl": "https://movievault.example/poster.jpg"}},
+                "identifiers": {"tmdb": "348"},
+                "credits": [{"name": "Sigourney Weaver", "role": "actor"}],
+                "localizations": [{"lang": "nl", "title": "Alien"}],
+                "candidates": [
+                    {
+                        "title": "Alien",
+                        "year": "1979",
+                        "tmdbId": "348",
+                        "posterUrl": "https://movievault.example/poster.jpg",
+                        "overview": "MovieVault plot",
+                    }
+                ],
+                "raw": {"movie": {"title": "Alien", "overview": "MovieVault plot"}},
+            }
+        )
+
+        self.assertEqual(constrained["movieUpdates"], {"title": "Alien", "year": "1979"})
+        self.assertEqual(constrained["metadataUpdates"], {"packaging": "SteelBook"})
+        self.assertEqual(constrained["technicalUpdates"], {"hdr": "HDR10"})
+        self.assertEqual(constrained["mediaUpdates"], {})
+        self.assertEqual(constrained["credits"], [])
+        self.assertEqual(constrained["localizations"], [])
+        self.assertEqual(constrained["candidates"], [{"title": "Alien", "year": "1979", "tmdbId": "348"}])
+        self.assertEqual(constrained["raw"], {})
+
+    def test_tmdb_result_enriches_without_becoming_identification_candidate(self):
+        constrained = metadata_source_policy_result(
+            {
+                "pluginId": "tmdb",
+                "movieUpdates": {
+                    "title": "Alien",
+                    "year": "1979",
+                    "overview": "TMDb plot",
+                    "runtime_minutes": 117,
+                },
+                "metadataUpdates": {"director": "Ridley Scott"},
+                "technicalUpdates": {"content_ratings": {"US": "R"}},
+                "mediaUpdates": {"poster": {"sourceUrl": "https://image.tmdb.org/poster.jpg"}},
+                "credits": [{"name": "Sigourney Weaver", "role": "actor"}],
+                "candidates": [{"title": "Alien", "tmdbId": "348"}],
+                "raw": {"movie": {"title": "Alien"}},
+            }
+        )
+
+        self.assertEqual(constrained["movieUpdates"], {"overview": "TMDb plot", "runtime_minutes": 117})
+        self.assertEqual(constrained["metadataUpdates"], {"director": "Ridley Scott"})
+        self.assertEqual(constrained["candidates"], [])
+        self.assertEqual(constrained["raw"], {})
+        self.assertEqual(len(constrained["credits"]), 1)
+        self.assertIn("poster", constrained["mediaUpdates"])
+
+    def test_enrichment_payload_prefers_movievault_identifier_over_title_only_query(self):
+        payload = preview_enrichment_payload_from_results(
+            {"title": "Alien", "previewMode": True},
+            [
+                {
+                    "pluginId": "movievault_26",
+                    "movieUpdates": {"title": "Alien", "year": "1979"},
+                    "identifiers": {"tmdb": "348"},
+                }
+            ],
+        )
+
+        self.assertEqual(payload["title"], "Alien")
+        self.assertEqual(payload["year"], "1979")
+        self.assertEqual(payload["tmdbId"], "348")
+
+    @mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_requires_config")
+    @mock.patch("app.backend.next_metadata.run_plugin_entrypoint")
+    @mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={})
+    @mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={})
+    @mock.patch("app.backend.next_metadata.metadata_source_plugins")
+    def test_missing_tmdb_key_is_non_blocking_and_movievault_still_identifies(
+        self,
+        source_plugins,
+        _plugin_config,
+        _execution_context,
+        run_entrypoint,
+        requires_config,
+        _overwrite,
+    ):
+        source_plugins.return_value = [
+            {
+                "id": "tmdb",
+                "name": "TMDb",
+                "categories": ["metadata_source"],
+                "capabilities": ["movie_details"],
+                "manifest": {"capabilities": ["movie_details"]},
+                "order_index": 10,
+            },
+            {
+                "id": "movievault_26",
+                "name": "MovieVault",
+                "categories": ["metadata_source"],
+                "capabilities": ["search_barcode"],
+                "manifest": {"capabilities": ["search_barcode"]},
+                "order_index": 51,
+            },
+        ]
+        requires_config.side_effect = lambda plugin, _config, _entrypoint: plugin["id"] == "tmdb"
+        run_entrypoint.return_value = {
+            "status": "ok",
+            "state": "available",
+            "elapsedMs": 2,
+            "result": {
+                "status": "hit",
+                "provider": "movievault_26",
+                "movie": {
+                    "title": "Alien",
+                    "year": "1979",
+                    "overview": "MovieVault plot",
+                    "posterUrl": "https://movievault.example/poster.jpg",
+                },
+                "tmdbId": "348",
+            },
+        }
+
+        result = run_metadata_source_pipeline(
+            object(),
+            query=query_from_payload({"barcode": "8717418557683", "previewMode": True}),
+            current={"metadata": {}},
+            technical_current={},
+        )
+
+        self.assertEqual(result["proposal"]["movieUpdates"]["title"], "Alien")
+        self.assertNotIn("overview", result["proposal"]["movieUpdates"])
+        self.assertEqual(result["enrichment"]["tmdb"]["state"], "needs_configuration")
+        self.assertFalse(result["enrichment"]["tmdb"]["configured"])
+        self.assertTrue(result["enrichment"]["tmdb"]["nonBlocking"])
+        self.assertEqual(run_entrypoint.call_count, 1)
+
+    @mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={})
+    @mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={"apiKey": "configured"})
+    @mock.patch("app.backend.next_metadata.metadata_source_plugins")
+    @mock.patch("app.backend.next_metadata.run_plugin_entrypoint")
+    def test_pipeline_identifies_with_movievault_then_enriches_directly_with_tmdb(
+        self,
+        run_entrypoint,
+        source_plugins,
+        _plugin_config,
+        _execution_context,
+        _requires_config,
+        _overwrite,
+    ):
+        source_plugins.return_value = [
+            {
+                "id": "tmdb",
+                "name": "TMDb",
+                "categories": ["metadata_source"],
+                "capabilities": ["movie_details"],
+                "manifest": {"capabilities": ["movie_details"]},
+                "order_index": 10,
+            },
+            {
+                "id": "movievault_26",
+                "name": "MovieVault",
+                "categories": ["metadata_source"],
+                "capabilities": ["search_barcode"],
+                "manifest": {"capabilities": ["search_barcode"]},
+                "order_index": 51,
+            },
+        ]
+
+        def execute(plugin_id, entrypoint, payload, _context):
+            if plugin_id == "movievault_26":
+                self.assertEqual(entrypoint, "search_barcode")
+                return {
+                    "status": "ok",
+                    "state": "available",
+                    "elapsedMs": 2,
+                    "result": {
+                        "status": "hit",
+                        "provider": "movievault_26",
+                        "movie": {"title": "Alien", "year": "1979", "overview": "MovieVault plot"},
+                        "tmdbId": "348",
+                    },
+                }
+            self.assertEqual(plugin_id, "tmdb")
+            self.assertEqual(entrypoint, "movie_details")
+            self.assertEqual(payload["tmdbId"], "348")
+            return {
+                "status": "ok",
+                "state": "available",
+                "elapsedMs": 3,
+                "result": {
+                    "status": "hit",
+                    "provider": "tmdb",
+                    "movie": {
+                        "title": "Alien",
+                        "year": "1979",
+                        "overview": "TMDb plot",
+                        "posterUrl": "https://image.tmdb.org/poster.jpg",
+                    },
+                    "credits": [{"name": "Sigourney Weaver", "role": "actor"}],
+                    "tmdbId": "348",
+                },
+            }
+
+        run_entrypoint.side_effect = execute
+        result = run_metadata_source_pipeline(
+            object(),
+            query=query_from_payload({"barcode": "8717418557683", "previewMode": True}),
+            current={"metadata": {}},
+            technical_current={},
+        )
+
+        self.assertEqual(
+            [(call.args[0], call.args[1]) for call in run_entrypoint.call_args_list],
+            [("movievault_26", "search_barcode"), ("tmdb", "movie_details")],
+        )
+        self.assertEqual(result["proposal"]["movieUpdates"]["title"], "Alien")
+        self.assertEqual(result["proposal"]["movieUpdates"]["overview"], "TMDb plot")
+        self.assertEqual(result["proposal"]["mediaUpdates"]["poster"]["providerId"], "tmdb")
+        self.assertEqual(len(result["proposal"]["credits"]), 1)
+        self.assertEqual(result["enrichment"]["tmdb"]["state"], "enriched")
+        self.assertTrue(result["enrichment"]["tmdb"]["configured"])
 
     def test_preview_title_lookup_can_request_box_set_candidates(self):
         query = query_from_payload({"title": "Back to the Future Trilogy", "detectBoxSets": True, "previewMode": True})
