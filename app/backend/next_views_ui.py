@@ -26937,7 +26937,7 @@ def ui_preview_html(
       const candidate = (state.candidates || []).find((c) => c.candidateKey === candidateKey);
       if (!candidate) return;
       try {
-        await authApiJson("/api/next/lists/wishlist", {
+        const payload = await authApiJson("/api/next/lists/wishlist", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -26950,9 +26950,12 @@ def ui_preview_html(
             note: candidate.editionLabel || null
           })
         });
-        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        const message = payload && (payload.alreadyExists || payload.state === "already_exists")
+          ? tNext("lists.wishlistSectionPending", "On wishlist")
+          : tNext("lists.wishlistAdded", "Added to wishlist.");
+        setWishlistSearchMessage(message, "good");
         closeWishlistSearch();
-        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        setWishlistSearchMessage(message, "good");
         await loadListsView(true);
       } catch (err) {
         setWishlistSearchMessage((err && err.message) || tNext("lists.wishlistSearchError", "Search failed. Please try again."), "error");
