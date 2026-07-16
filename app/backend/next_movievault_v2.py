@@ -368,6 +368,7 @@ def validate_record(value: Any) -> dict[str, Any]:
 def parse_ndjson(content: bytes, *, full: bool, maximum_revision: int) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     previous_revision = 0
+    full_revisions: set[int] = set()
     full_entities: set[tuple[str, str]] = set()
     for raw_line in content.splitlines():
         if not raw_line.strip():
@@ -380,7 +381,13 @@ def parse_ndjson(content: bytes, *, full: bool, maximum_revision: int) -> list[d
             raise MovieVaultV2Error("artifact_invalid") from exc
         record = validate_record(value)
         revision = record["revision"]
-        if revision <= previous_revision or revision > maximum_revision:
+        if revision > maximum_revision:
+            raise MovieVaultV2Error("revision_invalid")
+        if full:
+            if revision in full_revisions:
+                raise MovieVaultV2Error("revision_invalid")
+            full_revisions.add(revision)
+        elif revision <= previous_revision:
             raise MovieVaultV2Error("revision_invalid")
         if full and record["operation"] != "upsert":
             raise MovieVaultV2Error("artifact_invalid")

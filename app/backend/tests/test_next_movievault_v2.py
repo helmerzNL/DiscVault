@@ -98,6 +98,40 @@ class MovieVaultV2ContractTests(unittest.TestCase):
                 maximum_revision=42,
             )
 
+    def test_full_snapshot_accepts_unique_revisions_in_publisher_order(self):
+        records = self.fixture().splitlines()
+        publisher_ordered = b"\n".join((records[2], records[0], records[1])) + b"\n"
+
+        parsed = next_movievault_v2.parse_ndjson(
+            publisher_ordered,
+            full=True,
+            maximum_revision=42,
+        )
+
+        self.assertEqual([record["revision"] for record in parsed], [42, 40, 41])
+
+    def test_full_snapshot_rejects_duplicate_or_out_of_range_revisions(self):
+        first, second = self.fixture().splitlines()[:2]
+        duplicate = json.loads(second)
+        duplicate["revision"] = 40
+        too_new = json.loads(first)
+        too_new["revision"] = 43
+
+        for content in (
+            first + b"\n" + json.dumps(duplicate).encode("utf-8") + b"\n",
+            json.dumps(too_new).encode("utf-8") + b"\n",
+        ):
+            with self.subTest(content=content):
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error,
+                    "^revision_invalid$",
+                ):
+                    next_movievault_v2.parse_ndjson(
+                        content,
+                        full=True,
+                        maximum_revision=42,
+                    )
+
     def test_full_snapshot_rejects_tombstones(self):
         tombstone = {
             "contractVersion": "distribution-2",

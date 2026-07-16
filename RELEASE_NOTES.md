@@ -1,5 +1,12 @@
 # DiscVault Release Notes
 
+## 26.4.49 - MovieVault v2 full-snapshot revision ordering
+
+- Accepts deterministic full snapshots ordered by entity identity while still
+  requiring every revision to be unique and within the manifest revision.
+- Keeps delta artifacts strictly revision-ordered and preserves full-snapshot
+  entity, operation, digest, and atomic rollback validation.
+
 ## 26.4.48 - MovieVault v2 full-sync checksum correction
 
 - Validates full distribution artifacts against their own
