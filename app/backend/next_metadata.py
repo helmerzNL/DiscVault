@@ -536,6 +536,10 @@ def plugin_capabilities(plugin: dict[str, Any]) -> set[str]:
     return {str(item) for item in values if str(item)}
 
 
+def is_movievault_identity_source(plugin_id: str) -> bool:
+    return plugin_id == MOVIEVAULT_V2_PLUGIN_ID or is_movievault_plugin(plugin_id)
+
+
 def plugin_is_bootstrap_metadata_source(plugin: dict[str, Any]) -> bool:
     manifest = plugin.get("manifest") if isinstance(plugin.get("manifest"), dict) else {}
     bootstrap = manifest.get("bootstrap") if isinstance(manifest.get("bootstrap"), dict) else {}
@@ -980,7 +984,7 @@ def metadata_source_policy_result(result: dict[str, Any]) -> dict[str, Any]:
     constrained["mediaUpdates"] = {}
     constrained["credits"] = []
     constrained["localizations"] = []
-    if is_movievault_plugin(plugin_id):
+    if is_movievault_identity_source(plugin_id):
         constrained["candidates"] = [
             sanitized
             for candidate in (result.get("candidates") or [])
@@ -3088,15 +3092,19 @@ def run_metadata_source_pipeline(
         if str(plugin.get("id") or "") not in excluded
         and metadata_source_plugin_allowed(plugin, query)
     ]
-    movievault_plugins = [plugin for plugin in discovered_plugins if is_movievault_plugin(str(plugin.get("id") or ""))]
+    identity_plugins = [
+        plugin
+        for plugin in discovered_plugins
+        if is_movievault_identity_source(str(plugin.get("id") or ""))
+    ]
     tmdb_plugins = [plugin for plugin in discovered_plugins if str(plugin.get("id") or "") == TMDB_PLUGIN_ID]
     supporting_plugins = [
         plugin
         for plugin in discovered_plugins
-        if not is_movievault_plugin(str(plugin.get("id") or ""))
+        if not is_movievault_identity_source(str(plugin.get("id") or ""))
         and str(plugin.get("id") or "") != TMDB_PLUGIN_ID
     ]
-    plugins = [*movievault_plugins, *supporting_plugins, *tmdb_plugins]
+    plugins = [*identity_plugins, *supporting_plugins, *tmdb_plugins]
     overwrite_enabled = preferred_provider_overwrite(conn)
     executions: list[dict[str, Any]] = []
     normalized_results: list[dict[str, Any]] = []
@@ -3126,13 +3134,17 @@ def run_metadata_source_pipeline(
             enable_metadata_lookup_bridge=False,
         )
 
-    initial_plugins = movievault_plugins if query.get("previewMode") else [*movievault_plugins, *supporting_plugins]
+    initial_plugins = identity_plugins if query.get("previewMode") else [*identity_plugins, *supporting_plugins]
     for plugin in initial_plugins:
         config = plugin_config_from_db(conn, plugin["id"])
         context = plugin_execution_context(conn, plugin, config, actor)
         if enable_metadata_lookup_bridge and is_movievault_plugin(str(plugin.get("id") or "")):
             context["metadataLookup"] = metadata_lookup_bridge
-        plan = movievault_identification_plan(plugin, query) if is_movievault_plugin(str(plugin.get("id") or "")) else plugin_execution_plan(plugin, query)
+        plan = (
+            movievault_identification_plan(plugin, query)
+            if is_movievault_identity_source(str(plugin.get("id") or ""))
+            else plugin_execution_plan(plugin, query)
+        )
         for planned in plan:
             entrypoint = planned["entrypoint"]
             if plugin_requires_config(plugin, config, entrypoint):
