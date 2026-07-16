@@ -1001,7 +1001,7 @@ def run_sync(connection_factory: ConnectionFactory, settings: dict[str, Any]) ->
                 )
                 if status != 200:
                     raise MovieVaultV2Error("full_sync_unavailable")
-                _verify_digest(content, headers, expected=manifest["datasetChecksum"])
+                _verify_digest(content, headers)
                 records = parse_ndjson(
                     content,
                     full=True,
@@ -1033,7 +1033,7 @@ def run_sync(connection_factory: ConnectionFactory, settings: dict[str, Any]) ->
                 )
                 if status != 200:
                     raise MovieVaultV2Error("full_sync_unavailable")
-                _verify_digest(content, headers, expected=manifest["datasetChecksum"])
+                _verify_digest(content, headers)
                 records = parse_ndjson(
                     content,
                     full=True,
