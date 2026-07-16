@@ -75,6 +75,25 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
     def fixture(self) -> bytes:
         return FIXTURE_PATH.read_bytes()
 
+    def publisher_ordered_fixture(self) -> bytes:
+        records = [json.loads(line) for line in self.fixture().splitlines()]
+        records.sort(
+            key=lambda record: (
+                record["recordType"],
+                record.get("releaseId") or record.get("boxSetId"),
+            )
+        )
+        return b"".join(
+            json.dumps(
+                record,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii")
+            + b"\n"
+            for record in records
+        )
+
     def table_exists(self, conn, table_name):
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
@@ -95,9 +114,14 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
 
     def test_full_delta_current_tombstone_and_failed_digest_are_atomic(self):
         fixture = self.fixture()
-        fixture_digest = hashlib.sha256(fixture).hexdigest()
+        full_fixture = self.publisher_ordered_fixture()
+        fixture_digest = hashlib.sha256(full_fixture).hexdigest()
         settings = {"origin": "https://movievault.example"}
         initial_manifest = self.manifest()
+        full_revisions = [json.loads(line)["revision"] for line in full_fixture.splitlines()]
+        self.assertTrue(
+            any(current <= prior for prior, current in zip(full_revisions, full_revisions[1:]))
+        )
 
         with (
             patch.object(next_movievault_v2, "fetch_manifest", return_value=initial_manifest),
@@ -106,7 +130,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 "_fetch_feed",
                 return_value=(
                     200,
-                    fixture,
+                    full_fixture,
                     {
                         "x-content-sha256": fixture_digest,
                         "x-next-cursor": "cursor-value-long-enough",
@@ -284,7 +308,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         self.assertEqual(removed["results"], [])
 
     def test_cursor_conflict_forces_shadow_generation_full_resync(self):
-        fixture = self.fixture()
+        fixture = self.publisher_ordered_fixture()
         digest = hashlib.sha256(fixture).hexdigest()
         settings = {"origin": "https://movievault.example"}
         first_manifest = self.manifest()
