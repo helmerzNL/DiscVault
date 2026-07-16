@@ -2305,6 +2305,22 @@ def ui_preview_html(
       color: var(--danger);
       background: color-mix(in srgb, var(--danger) 8%, transparent);
     }
+    .preview-empty.warn {
+      border-color: color-mix(in srgb, var(--warn) 46%, var(--line-strong));
+      color: var(--text);
+      background: color-mix(in srgb, var(--warn) 8%, transparent);
+    }
+    .import-tmdb-guidance {
+      display: grid;
+      gap: 10px;
+    }
+    .import-tmdb-guidance span {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .import-tmdb-guidance .button-row {
+      justify-content: flex-start;
+    }
     .library-view {
       display: grid;
       gap: 18px;
@@ -25370,6 +25386,19 @@ def ui_preview_html(
       }
       const metadata = payload.metadata || payload;
       const results = metadata.results || metadata.sources || metadata.matches || [];
+      const tmdbEnrichment = metadata?.enrichment?.tmdb || {};
+      const tmdbNeedsConfiguration = tmdbEnrichment.configured === false
+        && tmdbEnrichment.state === "needs_configuration";
+      const tmdbGuidance = tmdbNeedsConfiguration ? `
+        <div class="preview-empty warn import-tmdb-guidance" role="status">
+          <strong>${escapeHtml(tNext("importCenter.tmdbKeyRequiredTitle", "Add a free TMDb API key for full metadata"))}</strong>
+          <span>${escapeHtml(tNext("importCenter.tmdbKeyRequiredHelp", "You can still add this movie, but plot, cast and crew, artwork, and trailers will be limited until a TMDb API key is configured."))}</span>
+          <div class="button-row compact">
+            <a class="secondary-button" href="${escapeHtml(tmdbEnrichment.requestKeyUrl || "https://www.themoviedb.org/settings/api")}" target="_blank" rel="noopener noreferrer">${escapeHtml(tNext("importCenter.requestTmdbKey", "Request free TMDb key"))}</a>
+            ${canUseAppAdmin() ? `<button type="button" class="secondary-button" data-import-configure-tmdb="1">${escapeHtml(tNext("importCenter.configureTmdbKey", "Configure TMDb key"))}</button>` : ""}
+          </div>
+        </div>
+      ` : "";
       const boxSetProposals = barcodeBoxSetProposals();
       const movieResultCards = lookupMovieCandidates();
       const addableBoxSetProposal = boxSetProposals.find((item) => {
@@ -25750,13 +25779,13 @@ def ui_preview_html(
       `;
       if (!Array.isArray(results) || !results.length) {
         if (proposalCard || boxSetCard) {
-          list.innerHTML = directResultCard + boxSetCard + proposalCard + lookupActionFooter;
+          list.innerHTML = directResultCard + tmdbGuidance + boxSetCard + proposalCard + lookupActionFooter;
         } else {
-          list.innerHTML = directResultCard + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>` + lookupActionFooter;
+          list.innerHTML = directResultCard + tmdbGuidance + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>` + lookupActionFooter;
         }
         return;
       }
-      list.innerHTML = directResultCard + boxSetCard + proposalCard + sourceGrid + lookupActionFooter;
+      list.innerHTML = directResultCard + tmdbGuidance + boxSetCard + proposalCard + sourceGrid + lookupActionFooter;
     }
     function renderImportCenter() {
       renderImportTabs();
@@ -33550,6 +33579,7 @@ def ui_preview_html(
         previewImportBatchBarcode(barcode);
       });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
+        const configureTmdbButton = event.target.closest("[data-import-configure-tmdb]");
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
         const movieCandidateButton = event.target.closest("[data-movie-candidate-key]");
         const proposalButton = event.target.closest(".import-proposal-select[data-box-set-proposal-key]");
@@ -33560,6 +33590,14 @@ def ui_preview_html(
         const containerButton = event.target.closest("[data-import-open-container]");
         const movieButton = event.target.closest("[data-open-movie]");
         const metadataButton = event.target.closest("[data-import-metadata-refresh]");
+        if (configureTmdbButton) {
+          event.preventDefault();
+          showAdminPage(true);
+          setAppAdminTab("plugins");
+          setAppAdminPluginTab("registry");
+          setAppAdminPluginTypeTab("metadata_source");
+          return;
+        }
         if (addLookupButton) {
           event.preventDefault();
           event.stopPropagation();

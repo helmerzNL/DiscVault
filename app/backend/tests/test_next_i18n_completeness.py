@@ -56,6 +56,12 @@ class NextI18nCompletenessTests(unittest.TestCase):
     def test_source_catalog_includes_sidebar_toggle_key(self):
         self.assertIn("uiPreview.toggleSidebar", self.source)
 
+    def test_source_catalog_includes_tmdb_configuration_guidance(self):
+        self.assertIn("importCenter.tmdbKeyRequiredTitle", self.source)
+        self.assertIn("importCenter.tmdbKeyRequiredHelp", self.source)
+        self.assertIn("importCenter.requestTmdbKey", self.source)
+        self.assertIn("importCenter.configureTmdbKey", self.source)
+
     def test_locale_files_discovered(self):
         self.assertGreater(len(self.locale_files), 0)
 
@@ -101,6 +107,13 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn('data-value-type="boolean" type="checkbox"', source)
         self.assertIn('addEventListener("submit", (event) => {', source)
         self.assertIn('role="status" aria-live="polite"', source)
+
+    def test_import_lookup_surfaces_non_blocking_tmdb_key_guidance(self):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("metadata?.enrichment?.tmdb", source)
+        self.assertIn('data-import-configure-tmdb="1"', source)
+        self.assertIn("https://www.themoviedb.org/settings/api", source)
 
 
 if __name__ == "__main__":
