@@ -10020,6 +10020,110 @@ def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
     return _attach_wishlist_shops(conn, user_id, entities)
 
 
+def _wishlist_existing_identity_id(conn, user_id, fields: dict[str, Any]):
+    movievault_id = fields.get("movievault_id")
+    tmdb_id = fields.get("tmdb_id")
+    if movievault_id:
+        query = """
+            SELECT id
+            FROM wishlist_items
+            WHERE user_id=%s AND movievault_id=%s
+            ORDER BY added_at, id
+            LIMIT 1
+        """
+        params = (user_id, movievault_id)
+    elif tmdb_id:
+        query = """
+            SELECT id
+            FROM wishlist_items
+            WHERE user_id=%s
+              AND snapshot->>'tmdb_id' = %s
+              AND COALESCE(NULLIF(snapshot->>'tmdb_media_type', ''), 'movie') = %s
+            ORDER BY added_at, id
+            LIMIT 1
+        """
+        params = (user_id, tmdb_id, fields.get("tmdb_media_type") or "movie")
+    else:
+        return None
+
+    with conn.cursor() as cur:
+        cur.execute(query, params)
+        row = cur.fetchone()
+    return (row or {}).get("id")
+
+
+def _insert_wishlist_item_once(
+    conn,
+    *,
+    user_id,
+    created_by_user_id,
+    fields: dict[str, Any],
+    snapshot: dict[str, Any],
+):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO wishlist_items
+                (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+            """,
+            (
+                user_id,
+                fields["title"],
+                fields["year"],
+                fields["barcode"],
+                fields["format"],
+                fields["movievault_id"],
+                fields["poster_url"],
+                fields["note"],
+                Jsonb(snapshot),
+                created_by_user_id,
+            ),
+        )
+        inserted = cur.fetchone()
+    item_id = (inserted or {}).get("id")
+    if item_id is not None:
+        return item_id, True
+
+    item_id = _wishlist_existing_identity_id(conn, user_id, fields)
+    if item_id is None:
+        raise NextApiError("Wishlist item could not be created", 409)
+    return item_id, False
+
+
+def _create_wishlist_item_record(
+    conn,
+    *,
+    actor: dict[str, Any],
+    fields: dict[str, Any],
+    snapshot: dict[str, Any],
+):
+    user_id = actor.get("id")
+    with conn.transaction():
+        item_id, created = _insert_wishlist_item_once(
+            conn,
+            user_id=user_id,
+            created_by_user_id=actor.get("id"),
+            fields=fields,
+            snapshot=snapshot,
+        )
+        if created:
+            emit_wishlist_change(conn, user_id, item_id, operation="upsert")
+            audit_event(
+                conn,
+                event_type="wishlist.added",
+                category="personal",
+                actor=actor,
+                target_type="wishlist_item",
+                target_id=item_id,
+                summary="Added wishlist entry",
+                metadata={"title": fields["title"]},
+            )
+    return item_id, created
+
+
 def emit_wishlist_change(conn, user_id, item_id, *, operation: str) -> int:
     entity_id = str(item_id)
     payload: dict[str, Any] = {"id": entity_id}
@@ -21518,77 +21622,22 @@ def register_routes(flask_app: Flask) -> None:
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             user_id = actor.get("id")
-            if fields["source"] == "discover" and fields["tmdb_id"]:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        SELECT id
-                        FROM wishlist_items
-                        WHERE user_id=%s
-                          AND snapshot->>'tmdb_id' = %s
-                          AND COALESCE(snapshot->>'tmdb_media_type', 'movie') = %s
-                        ORDER BY added_at ASC
-                        LIMIT 1
-                        """,
-                        (user_id, fields["tmdb_id"], fields["tmdb_media_type"] or "movie"),
-                    )
-                    existing = cur.fetchone()
-                existing_id = (existing or {}).get("id")
-                if existing_id is not None:
-                    return response(
-                        {
-                            "status": "ok",
-                            "state": "already_exists",
-                            "alreadyExists": True,
-                            "entry": wishlist_sync_entity(conn, user_id, existing_id),
-                            "counts": personal_list_counts(conn, user_id),
-                        }
-                    )
             snapshot = _wishlist_snapshot(fields)
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO wishlist_items
-                            (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot, created_by_user_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id
-                        """,
-                        (
-                            user_id,
-                            fields["title"],
-                            fields["year"],
-                            fields["barcode"],
-                            fields["format"],
-                            fields["movievault_id"],
-                            fields["poster_url"],
-                            fields["note"],
-                            Jsonb(snapshot),
-                            actor.get("id"),
-                        ),
-                    )
-                    item_id = (cur.fetchone() or {}).get("id")
-                if item_id is not None:
-                    emit_wishlist_change(conn, user_id, item_id, operation="upsert")
-                audit_event(
-                    conn,
-                    event_type="wishlist.added",
-                    category="personal",
-                    actor=actor,
-                    target_type="wishlist_item",
-                    target_id=item_id,
-                    summary="Added wishlist entry",
-                    metadata={"title": title},
-                )
+            item_id, created = _create_wishlist_item_record(
+                conn,
+                actor=actor,
+                fields=fields,
+                snapshot=snapshot,
+            )
             return response(
                 {
                     "status": "ok",
-                    "state": "created",
-                    "alreadyExists": False,
-                    "entry": wishlist_sync_entity(conn, user_id, item_id) if item_id is not None else None,
+                    "state": "created" if created else "already_exists",
+                    "alreadyExists": not created,
+                    "entry": wishlist_sync_entity(conn, user_id, item_id),
                     "counts": personal_list_counts(conn, user_id),
                 },
-                201,
+                201 if created else 200,
             )
 
     @flask_app.delete("/api/next/lists/wishlist/<item_id>")

@@ -1,5 +1,27 @@
 # DiscVault Release Notes
 
+## 26.4.50 - MovieVault v2 preview lookup dispatch
+
+- Executes the standalone `movievault_v2` source during preview barcode, title,
+  and box-set identification through its synchronized local index.
+- Keeps legacy MovieVault authentication, contribution, and metadata receiver
+  bridges isolated from the MovieVault v2 adapter.
+
+## 26.4.49 - MovieVault v2 full-snapshot revision ordering
+
+- Accepts deterministic full snapshots ordered by entity identity while still
+  requiring every revision to be unique and within the manifest revision.
+- Keeps delta artifacts strictly revision-ordered and preserves full-snapshot
+  entity, operation, digest, and atomic rollback validation.
+
+## 26.4.48 - MovieVault v2 full-sync checksum correction
+
+- Validates full distribution artifacts against their own
+  `X-Content-SHA256` response digest instead of comparing their bytes with the
+  separate approved lookup-hash dataset checksum.
+- Preserves strict manifest, cursor, revision, atomic generation, and rollback
+  validation for initial and cursor-recovery full synchronization.
+
 ## 26.4.44 - Automatic MovieVault v2 configuration
 
 - Resolves and displays typed plugin manifest defaults while preserving every

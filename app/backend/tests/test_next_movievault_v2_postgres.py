@@ -32,6 +32,7 @@ from app.backend.next_plugin_runtime import PluginDiscovery
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "distribution-v2.ndjson"
+DATASET_CHECKSUM = hashlib.sha256(b"approved lookup hash dataset").hexdigest()
 
 
 @unittest.skipUnless(DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured")
@@ -74,6 +75,25 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
     def fixture(self) -> bytes:
         return FIXTURE_PATH.read_bytes()
 
+    def publisher_ordered_fixture(self) -> bytes:
+        records = [json.loads(line) for line in self.fixture().splitlines()]
+        records.sort(
+            key=lambda record: (
+                record["recordType"],
+                record.get("releaseId") or record.get("boxSetId"),
+            )
+        )
+        return b"".join(
+            json.dumps(
+                record,
+                ensure_ascii=True,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii")
+            + b"\n"
+            for record in records
+        )
+
     def table_exists(self, conn, table_name):
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
@@ -87,24 +107,30 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             "currentCursor": cursor,
             "bucketPrefixLength": 4,
             "hashAlgorithm": "sha256",
-            "datasetChecksum": checksum or hashlib.sha256(self.fixture()).hexdigest(),
+            "datasetChecksum": checksum or DATASET_CHECKSUM,
             "deltaPath": "/v2/index/delta",
             "bucketPathTemplate": "/v2/bucket/{prefix}",
         }
 
     def test_full_delta_current_tombstone_and_failed_digest_are_atomic(self):
         fixture = self.fixture()
-        fixture_digest = hashlib.sha256(fixture).hexdigest()
+        full_fixture = self.publisher_ordered_fixture()
+        fixture_digest = hashlib.sha256(full_fixture).hexdigest()
         settings = {"origin": "https://movievault.example"}
+        initial_manifest = self.manifest()
+        full_revisions = [json.loads(line)["revision"] for line in full_fixture.splitlines()]
+        self.assertTrue(
+            any(current <= prior for prior, current in zip(full_revisions, full_revisions[1:]))
+        )
 
         with (
-            patch.object(next_movievault_v2, "fetch_manifest", return_value=self.manifest()),
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=initial_manifest),
             patch.object(
                 next_movievault_v2,
                 "_fetch_feed",
                 return_value=(
                     200,
-                    fixture,
+                    full_fixture,
                     {
                         "x-content-sha256": fixture_digest,
                         "x-next-cursor": "cursor-value-long-enough",
@@ -116,6 +142,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
 
         self.assertEqual(full["mode"], "full")
         self.assertEqual(full["recordsApplied"], 3)
+        self.assertNotEqual(initial_manifest["datasetChecksum"], fixture_digest)
         release_hash = json.loads(fixture.splitlines()[0])["eanHashes"][0]
         with self.connect() as conn:
             barcode = next_movievault_v2.local_lookup(
@@ -126,6 +153,17 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 conn,
                 {"kind": "title", "query": "Example", "limit": 10},
             )
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT dataset_checksum
+                    FROM movievault_v2_sync_state
+                    WHERE plugin_id = %s
+                    """,
+                    (next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,),
+                )
+                stored_dataset_checksum = cur.fetchone()["dataset_checksum"]
+        self.assertEqual(stored_dataset_checksum, initial_manifest["datasetChecksum"])
         self.assertEqual(
             {item["recordType"] for item in barcode["results"]},
             {"release", "box_set"},
@@ -270,10 +308,11 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         self.assertEqual(removed["results"], [])
 
     def test_cursor_conflict_forces_shadow_generation_full_resync(self):
-        fixture = self.fixture()
+        fixture = self.publisher_ordered_fixture()
         digest = hashlib.sha256(fixture).hexdigest()
         settings = {"origin": "https://movievault.example"}
         first_manifest = self.manifest()
+        self.assertNotEqual(first_manifest["datasetChecksum"], digest)
         with (
             patch.object(next_movievault_v2, "fetch_manifest", return_value=first_manifest),
             patch.object(
@@ -299,6 +338,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             revision=43,
             cursor="cursor-value-replacement-long-enough",
         )
+        self.assertNotEqual(replacement_manifest["datasetChecksum"], digest)
         responses = [
             (409, b"", {}),
             (
