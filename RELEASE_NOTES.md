@@ -1,5 +1,12 @@
 # DiscVault Release Notes
 
+## 26.4.50 - MovieVault v2 preview lookup dispatch
+
+- Executes the standalone `movievault_v2` source during preview barcode, title,
+  and box-set identification through its synchronized local index.
+- Keeps legacy MovieVault authentication, contribution, and metadata receiver
+  bridges isolated from the MovieVault v2 adapter.
+
 ## 26.4.49 - MovieVault v2 full-snapshot revision ordering
 
 - Accepts deterministic full snapshots ordered by entity identity while still
