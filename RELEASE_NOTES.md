@@ -1,5 +1,13 @@
 # DiscVault Release Notes
 
+## 26.4.48 - MovieVault v2 full-sync checksum correction
+
+- Validates full distribution artifacts against their own
+  `X-Content-SHA256` response digest instead of comparing their bytes with the
+  separate approved lookup-hash dataset checksum.
+- Preserves strict manifest, cursor, revision, atomic generation, and rollback
+  validation for initial and cursor-recovery full synchronization.
+
 ## 26.4.44 - Automatic MovieVault v2 configuration
 
 - Resolves and displays typed plugin manifest defaults while preserving every
