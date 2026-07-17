@@ -3878,11 +3878,6 @@ def ui_preview_html(
         display: none;
       }
     }
-    @media (min-width: 1025px) {
-      .library-list-compact-column {
-        display: none;
-      }
-    }
     .mode-detail-table {
       min-width: 820px;
       display: grid;
@@ -11111,10 +11106,6 @@ def ui_preview_html(
       </section>
       <section class="preview-layout">
         <div class="preview-panel">
-          <div class="panel-head">
-            <h2 id="libraryPanelTitle" data-next-i18n="uiPreview.recentlyAdded">Recently added</h2>
-            <span id="shownCount">""" + h(min(len(movies), 24)) + """</span>
-          </div>
           <div class="poster-rail" id="posterRail">""" + movie_cards + """</div>
         </div>
       </section>
@@ -19836,7 +19827,7 @@ def ui_preview_html(
               <tr>
                 <th scope="col" class="library-list-poster-column"><span class="visually-hidden">${escapeHtml(tNext("collection.posterColumn", "Poster"))}</span></th>
                 ${libraryListSortHeaderHtml("title", tNext("collection.titleColumn", "Title"), normalizedSort, "library-list-title-column")}
-                ${libraryListSortHeaderHtml("format", tNext("movieDetail.format", "Format"), normalizedSort, "library-list-format-column library-list-compact-column")}
+                ${libraryListSortHeaderHtml("format", tNext("movieDetail.format", "Format"), normalizedSort, "library-list-format-column")}
                 ${libraryListSortHeaderHtml("director", tNext("movieDetail.director", "Director"), normalizedSort, "library-list-director-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("actors", tNext("movieDetail.actors", "Actors"), normalizedSort, "library-list-actors-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("studios", tNext("collection.studioColumn", "Studio"), normalizedSort, "library-list-studio-column library-list-desktop-column")}
@@ -19871,7 +19862,7 @@ def ui_preview_html(
                       </button>
                       ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
                     </td>
-                    <td class="library-list-format-column library-list-compact-column">${libraryListFormatsHtml(item)}</td>
+                    <td class="library-list-format-column">${libraryListFormatsHtml(item)}</td>
                     <td class="library-list-director-column library-list-desktop-column">${libraryListPeopleHtml(itemDirectorCredits(item))}</td>
                     <td class="library-list-actors-column library-list-desktop-column">${libraryListPeopleHtml(itemActorCredits(item))}</td>
                     <td class="library-list-studio-column library-list-desktop-column">${libraryListValueLinesHtml(itemStudioValues(item))}</td>
@@ -31835,12 +31826,6 @@ def ui_preview_html(
       }
       bindCollectionCardInteractions(document.getElementById("libraryView") || document);
       bindViewModeInteractions(document.getElementById("libraryView") || document);
-      const shownCount = document.getElementById("shownCount");
-      if (shownCount) shownCount.textContent = String(displayItems.length);
-      const panelTitle = document.getElementById("libraryPanelTitle");
-      if (panelTitle) {
-        panelTitle.textContent = tNext("uiPreview.recentlyAdded", "Recently added");
-      }
       const summary = document.getElementById("librarySummary");
       if (summary) {
         const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
