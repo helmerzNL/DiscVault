@@ -11793,11 +11793,11 @@ def ui_preview_html(
                     </label>
                     <label for="movieEditAudioTracks">
                       <span data-next-i18n="movieDetail.audio">Audio</span>
-                      <input id="movieEditAudioTracks" name="audio_tracks" maxlength="400" autocomplete="off">
+                      <textarea id="movieEditAudioTracks" name="audio_tracks" rows="5" maxlength="400" autocomplete="off"></textarea>
                     </label>
                     <label for="movieEditSubtitles">
                       <span data-next-i18n="movieDetail.subtitles">Subtitles</span>
-                      <input id="movieEditSubtitles" name="subtitles" maxlength="400" autocomplete="off">
+                      <textarea id="movieEditSubtitles" name="subtitles" rows="5" maxlength="400" autocomplete="off"></textarea>
                     </label>
                   </div>
                 </div>
