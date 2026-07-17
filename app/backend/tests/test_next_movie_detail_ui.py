@@ -106,6 +106,24 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
 
+    def test_header_content_rating_reuses_release_value_markup(self):
+        render_start = self.source.index("function renderMovieDetail(detail)")
+        render_end = self.source.index("\n    function ", render_start + 1)
+        render_source = self.source[render_start:render_end]
+
+        self.assertIn(
+            "const heroContentRatingHtml = contentRatingValueHtml(contentRatingInfo);",
+            render_source,
+        )
+        self.assertIn(
+            "heroContentRatingHtml ? {html: heroContentRatingHtml}",
+            render_source,
+        )
+        self.assertNotIn(
+            "heroContentRatingTag = contentRatingBadgeHtml(contentRatingInfo)",
+            render_source,
+        )
+
     def test_cast_and_crew_block_precedes_media(self):
         self.assertIn('data-next-i18n="movieDetail.castCrew"', self.source)
         people_index = self.source.index('data-detail-tab="moviePeople"')
