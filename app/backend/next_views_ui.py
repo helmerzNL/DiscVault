@@ -3576,6 +3576,313 @@ def ui_preview_html(
       gap: 5px;
       margin-top: 3px;
     }
+    .library-list-surface {
+      display: block;
+      min-width: 0;
+    }
+    .library-list-scroll {
+      min-width: 0;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      box-shadow: var(--shadow-soft);
+    }
+    .library-list-table {
+      width: 100%;
+      min-width: 1000px;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+      color: var(--text);
+    }
+    .library-list-table th,
+    .library-list-table td {
+      min-width: 0;
+      padding: 10px 8px;
+      vertical-align: middle;
+      text-align: left;
+    }
+    .library-list-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: color-mix(in srgb, var(--bg-solid) 94%, transparent);
+      border-bottom: 1px solid var(--line);
+      color: var(--muted-strong);
+      font-size: .72rem;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .library-list-table thead th:first-child {
+      border-radius: 17px 0 0 0;
+    }
+    .library-list-table thead th:last-child {
+      border-radius: 0 17px 0 0;
+    }
+    .library-list-table tbody td {
+      border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+      font-size: .84rem;
+    }
+    .library-list-table tbody tr:first-child td {
+      border-top: 0;
+    }
+    .library-list-table tbody tr:hover td {
+      background: color-mix(in srgb, var(--accent) 7%, transparent);
+    }
+    .library-list-table tbody tr.bulk-selected td {
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+    }
+    .library-list-poster-column {
+      width: 64px;
+    }
+    .library-list-title-column {
+      width: 19%;
+    }
+    .library-list-director-column {
+      width: 13%;
+    }
+    .library-list-actors-column {
+      width: 18%;
+    }
+    .library-list-studio-column {
+      width: 13%;
+    }
+    .library-list-rating-column {
+      width: 10%;
+    }
+    .library-list-tags-column {
+      width: 14%;
+    }
+    .library-list-behavior-column {
+      width: 13%;
+    }
+    .library-list-format-column {
+      width: 92px;
+    }
+    .library-list-sort-button {
+      width: 100%;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      padding: 2px 0;
+      font: inherit;
+      font-weight: inherit;
+      text-align: left;
+      text-transform: inherit;
+      letter-spacing: inherit;
+      cursor: pointer;
+    }
+    .library-list-sort-button:hover,
+    .library-list-sort-button.active {
+      color: var(--accent);
+    }
+    .library-list-sort-button svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+      flex: 0 0 auto;
+    }
+    .library-list-poster-target {
+      width: 48px;
+      aspect-ratio: 2 / 3;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 7px;
+      overflow: hidden;
+      background: linear-gradient(145deg, #30343c, #181a1f);
+      color: rgba(255,255,255,.72);
+      padding: 0;
+      cursor: pointer;
+    }
+    .library-list-poster-target img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .library-list-poster-placeholder {
+      font-size: .65rem;
+      font-weight: 800;
+      text-align: center;
+    }
+    .library-list-title-target {
+      max-width: 100%;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 5px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 3px 0;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .library-list-title-target strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .library-list-title-target:hover strong,
+    .library-list-title-target:focus-visible strong {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .library-list-year {
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .library-list-lines {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .library-list-line,
+    .library-list-person {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--muted-strong);
+      font-size: .8rem;
+      line-height: 1.3;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    button.library-list-person {
+      width: fit-content;
+      max-width: 100%;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    button.library-list-person:hover,
+    button.library-list-person:focus-visible {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .library-list-format-badges,
+    .library-list-behavior {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+    }
+    .library-list-format-badges .physical-format-badge {
+      position: static;
+      max-width: 100%;
+      transform: none;
+    }
+    .library-list-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .library-list-tag-swatch {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: var(--library-tag-color, var(--accent));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--library-tag-color, var(--accent)) 22%, transparent);
+    }
+    .library-list-behavior-icon {
+      width: 24px;
+      height: 24px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 13%, transparent);
+      color: var(--accent);
+    }
+    .library-list-behavior-icon.watchlist {
+      background: color-mix(in srgb, #f5b942 18%, transparent);
+      color: #b87500;
+    }
+    .library-list-behavior-icon svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+    }
+    .library-list-watched-date {
+      width: 100%;
+      color: var(--muted);
+      font-size: .74rem;
+    }
+    .library-list-empty-value {
+      color: var(--muted);
+    }
+    @media (max-width: 1024px) {
+      .library-list-table {
+        min-width: 0;
+        max-width: 100%;
+      }
+      .library-list-desktop-column {
+        display: none;
+      }
+      .library-list-poster-column {
+        width: 52px;
+      }
+      .library-list-title-column {
+        width: auto;
+        overflow: hidden;
+      }
+      .library-list-title-target {
+        width: 100%;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .library-list-title-target strong,
+      .library-list-sort-button span {
+        min-width: 0;
+      }
+      .library-list-sort-button span {
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+      .library-list-format-column {
+        width: 72px;
+      }
+      .library-list-behavior-column {
+        width: 52px;
+      }
+      .library-list-table th,
+      .library-list-table td {
+        padding: 8px 4px;
+      }
+      .library-list-table thead th {
+        overflow-wrap: anywhere;
+        font-size: .64rem;
+        line-height: 1.15;
+      }
+      .library-list-poster-target {
+        width: 40px;
+      }
+      .library-list-behavior {
+        justify-content: center;
+      }
+      .library-list-behavior-icon {
+        width: 22px;
+        height: 22px;
+      }
+      .library-list-watched-date {
+        display: none;
+      }
+    }
+    @media (min-width: 1025px) {
+      .library-list-compact-column {
+        display: none;
+      }
+    }
     .mode-detail-table {
       min-width: 820px;
       display: grid;
@@ -10579,6 +10886,19 @@ def ui_preview_html(
                     <select id="collectionLocationSelect" aria-label="Location filter" data-next-i18n-aria="collection.filterLocation"></select>
                   </label>
                 </div>
+                <div class="filter-section">
+                  <span class="filter-section-title" data-next-i18n="collection.behaviorColumn">Watch activity</span>
+                  <div class="filter-switch-list">
+                    <label class="filter-toggle-row">
+                      <span data-next-i18n="collection.hideWatchlist">Hide Watchlist</span>
+                      <input type="checkbox" role="switch" data-hide-watchlist-switch>
+                    </label>
+                    <label class="filter-toggle-row">
+                      <span data-next-i18n="collection.hideWatched">Hide watched</span>
+                      <input type="checkbox" role="switch" data-hide-watched-switch>
+                    </label>
+                  </div>
+                </div>
                 <div class="filter-section filter-section-containers hidden" id="collectionContainersSection">
                   <label class="filter-toggle-row">
                     <span data-next-i18n="collection.onlyContainers">Only show Containers</span>
@@ -12050,6 +12370,19 @@ def ui_preview_html(
                       <select id="locationCollectionLocationSelect" aria-label="Location filter" data-next-i18n-aria="collection.filterLocation"></select>
                     </label>
                   </div>
+                  <div class="filter-section">
+                    <span class="filter-section-title" data-next-i18n="collection.behaviorColumn">Watch activity</span>
+                    <div class="filter-switch-list">
+                      <label class="filter-toggle-row">
+                        <span data-next-i18n="collection.hideWatchlist">Hide Watchlist</span>
+                        <input type="checkbox" role="switch" data-hide-watchlist-switch>
+                      </label>
+                      <label class="filter-toggle-row">
+                        <span data-next-i18n="collection.hideWatched">Hide watched</span>
+                        <input type="checkbox" role="switch" data-hide-watched-switch>
+                      </label>
+                    </div>
+                  </div>
                   <div class="filter-section filter-section-containers hidden" id="locationCollectionContainersSection">
                     <label class="filter-toggle-row">
                       <span data-next-i18n="collection.onlyContainers">Only show Containers</span>
@@ -13168,10 +13501,12 @@ def ui_preview_html(
     let collectionTypeFilter = localStorage.getItem("dv_next_collection_type") || "all";
     let collectionGenreFilter = localStorage.getItem("dv_next_collection_genre") || "";
     let collectionLocationFilter = localStorage.getItem("dv_next_collection_location") || "";
+    let hideWatchlist = localStorage.getItem("dv_next_hide_watchlist") === "true";
+    let hideWatched = localStorage.getItem("dv_next_hide_watched") === "true";
     let collectionItemFilter = localStorage.getItem("dv_next_collection_item_filter") || "all";
     let activeCollectionGroupFilter = localStorage.getItem("dv_next_collection_group_filter") || "";
     let libraryViewMode = normalizeLibraryViewMode(localStorage.getItem("dv_next_library_view_mode"));
-    let libraryDetailSort = JSON.parse(localStorage.getItem("dv_next_library_detail_sort") || '{"key":"title","direction":"asc"}');
+    let libraryDetailSort = parseLocalJson("dv_next_library_detail_sort", {key: "title", direction: "asc"});
     let advancedSearchOpen = localStorage.getItem("dv_next_advanced_search_open") === "true";
     let advancedSearch = parseLocalJson("dv_next_advanced_search", {});
     let smartFilters = parseLocalJson("dv_next_smart_filters", []);
@@ -18130,6 +18465,15 @@ def ui_preview_html(
         button.classList.toggle("active", active);
         button.setAttribute("aria-checked", active ? "true" : "false");
       });
+      const mainLibraryListActive = libraryViewMode === "list" && !locationDetailPageVisible();
+      const sortTrigger = document.getElementById("collectionSortTrigger");
+      const sortMenu = document.getElementById("collectionSortMenu");
+      if (sortTrigger) {
+        sortTrigger.disabled = mainLibraryListActive;
+        sortTrigger.setAttribute("aria-disabled", mainLibraryListActive ? "true" : "false");
+      }
+      if (sortMenu) sortMenu.classList.toggle("is-disabled", mainLibraryListActive);
+      if (mainLibraryListActive) closeCollectionMenu("collectionSortMenu");
       renderCollectionFilterMenu();
       syncAdvancedSearchControls();
       syncSelectModeButton();
@@ -18140,6 +18484,8 @@ def ui_preview_html(
       if (collectionTypeFilter && collectionTypeFilter !== "all") count += 1;
       if (collectionGenreFilter) count += 1;
       if (collectionLocationFilter) count += 1;
+      if (hideWatchlist) count += 1;
+      if (hideWatched) count += 1;
       if (collectorsModeEnabled() && collectionItemFilter === "containers") count += 1;
       return count;
     }
@@ -18231,6 +18577,12 @@ def ui_preview_html(
       };
       syncContainerToggle("collectionContainersSection", "collectionContainersSwitch");
       syncContainerToggle("locationCollectionContainersSection", "locationCollectionContainersSwitch");
+      document.querySelectorAll("[data-hide-watchlist-switch]").forEach((toggle) => {
+        toggle.checked = hideWatchlist;
+      });
+      document.querySelectorAll("[data-hide-watched-switch]").forEach((toggle) => {
+        toggle.checked = hideWatched;
+      });
       const badge = document.getElementById("collectionFilterBadge");
       const locationDetailBadge = document.getElementById("locationDetailFilterBadge");
       const count = collectionFilterActiveCount();
@@ -18254,6 +18606,25 @@ def ui_preview_html(
     }
     function persistCollectionFormatFilters() {
       localStorage.setItem("dv_next_collection_formats", JSON.stringify([...collectionFormatFilters]));
+    }
+    function persistCollectionBehaviorFilters() {
+      localStorage.setItem("dv_next_hide_watchlist", hideWatchlist ? "true" : "false");
+      localStorage.setItem("dv_next_hide_watched", hideWatched ? "true" : "false");
+    }
+    function resetCollectionFilters() {
+      collectionFormatFilters.clear();
+      persistCollectionFormatFilters();
+      collectionTypeFilter = "all";
+      collectionGenreFilter = "";
+      collectionLocationFilter = "";
+      hideWatchlist = false;
+      hideWatched = false;
+      if (collectionItemFilter === "containers") collectionItemFilter = "all";
+      localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
+      localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
+      localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
+      localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+      persistCollectionBehaviorFilters();
     }
     const COLLECTION_MENUS = [
       {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
@@ -18869,7 +19240,12 @@ def ui_preview_html(
       return movie?.backdrop_url || movie?.metadata?.backdrop_url || movie?.metadata?.backdrop || movie?.backdrop || "";
     }
     function movieIsWatched(movie) {
-      return !!(movie?.watched || movie?.is_watched || movie?.watched_count || movie?.last_watched_at || movie?.user_state?.watched);
+      return !!(movie?.watched || movie?.is_watched || movie?.watched_count || movie?.last_watched || movie?.last_watched_at || movie?.user_state?.watched);
+    }
+    function movieMatchesBehaviorExclusions(movie) {
+      if (hideWatchlist && movie?.on_watchlist) return false;
+      if (hideWatched && movieIsWatched(movie)) return false;
+      return true;
     }
     function movieMatchesAdvancedSearch(movie, filters = effectiveAdvancedSearchFilters()) {
       const year = movieYearNumber(movie);
@@ -19043,62 +19419,45 @@ def ui_preview_html(
         return mode === "title_desc" ? -diff : diff;
       });
     }
-    function visibleContainerItems(visibleMovieIds = null, filters = effectiveAdvancedSearchFilters()) {
+    function visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters = effectiveAdvancedSearchFilters()) {
       if (!collectorsModeEnabled()) return [];
       const visibleItems = (containers || [])
         .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters))
-        .filter((container) => {
-          if (!visibleMovieIds) return true;
-          const memberIds = movieIdSetForContainer(container.id);
-          if (!memberIds.size) return activeSearchQuery();
-          return [...memberIds].some((movieId) => visibleMovieIds.has(String(movieId)));
+        .map((container) => {
+          const allowedIds = containerMatchesSearch(container) ? eligibleMovieIds : visibleMovieIds;
+          const visibleMovies = containerMemberMovies(container.id)
+            .filter((movie) => allowedIds.has(String(movie.id || "")));
+          return {kind: "container", container, visibleMovies, title: container.title || ""};
         })
-        .map((container) => ({kind: "container", container, title: container.title || ""}));
+        .filter((item) => item.visibleMovies.length > 0);
       const visibleContainerIds = new Set(visibleItems.map((item) => String(item.container?.id || "")).filter(Boolean));
       return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
     function libraryDisplayItems(filters = effectiveAdvancedSearchFilters()) {
-      const visibleMovies = (movies || []).filter((movie) => (
+      const eligibleMovies = (movies || []).filter((movie) => (
         movieMatchesGroup(movie)
-        && movieMatchesSearch(movie)
         && movieMatchesFormat(movie)
         && movieMatchesType(movie)
         && movieMatchesGenre(movie)
         && movieMatchesLocation(movie)
+        && movieMatchesBehaviorExclusions(movie)
         && movieMatchesAdvancedSearch(movie, filters)
         && !["container", "box_set", "collection", "vault"].includes(filters.itemType)
       ));
+      const visibleMovies = eligibleMovies.filter((movie) => movieMatchesSearch(movie));
+      const eligibleMovieIds = new Set(eligibleMovies.map((movie) => String(movie.id || "")));
+      const visibleMovieIds = new Set(visibleMovies.map((movie) => String(movie.id || "")));
       if (collectionItemFilter === "containers") {
-        return sortLibraryItems(visibleContainerItems(null, filters));
+        return sortLibraryItems(visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters));
       }
       if (!mergeEditionsAsTitleEnabled()) {
         return sortLibraryItems(visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""})));
       }
-      const visibleMovieIds = new Set(visibleMovies.map((movie) => String(movie.id || "")));
-      const visibleContainerIds = new Set();
-      containerMembershipRows().forEach((row) => {
-        if (visibleMovieIds.has(String(row.movie_id || ""))) {
-          visibleContainerIds.add(String(row.container_id || ""));
-        }
-      });
-      (containers || []).forEach((container) => {
-        const memberIds = movieIdSetForContainer(container.id);
-        if (!memberIds.size && !activeSearchQuery()) return;
-        if (containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters)) {
-          visibleContainerIds.add(String(container.id || ""));
-        }
-      });
-      [...visibleContainerIds].forEach((containerId) => {
-        if (containerIsNestedChild(containerId, visibleContainerIds)) visibleContainerIds.delete(containerId);
-      });
       const representedMovieIds = new Set();
-      const containerItems = (containers || [])
-        .filter((container) => visibleContainerIds.has(String(container.id || "")))
-        .filter((container) => containerMatchesGroup(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters) && (containerMatchesSearch(container) || containerMemberMovies(container.id).some((movie) => visibleMovieIds.has(String(movie.id || "")))))
-        .map((container) => {
-          movieIdSetForContainer(container.id).forEach((movieId) => representedMovieIds.add(movieId));
-          return {kind: "container", container, title: container.title || ""};
-        });
+      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters);
+      containerItems.forEach((item) => {
+        item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
+      });
       const movieItems = visibleMovies
         .filter((movie) => !representedMovieIds.has(String(movie.id || "")))
         .map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
@@ -19108,7 +19467,9 @@ def ui_preview_html(
       const ids = new Set();
       (items || []).forEach((item) => {
         if (item.kind === "movie") ids.add(String(item.movie?.id || ""));
-        if (item.kind === "container") movieIdSetForContainer(item.container?.id).forEach((movieId) => ids.add(movieId));
+        if (item.kind === "container") {
+          itemMovieRows(item).forEach((movie) => ids.add(String(movie?.id || "")));
+        }
       });
       return ids.size;
     }
@@ -19146,7 +19507,10 @@ def ui_preview_html(
     }
     function itemMovieRows(item) {
       if (item?.kind === "movie") return item.movie ? [item.movie] : [];
-      if (item?.kind === "container") return containerMemberMovies(item.container?.id);
+      if (item?.kind === "container") {
+        if (Array.isArray(item.visibleMovies)) return item.visibleMovies;
+        return containerMemberMovies(item.container?.id);
+      }
       return [];
     }
     function itemDirectorCredits(item) {
@@ -19170,7 +19534,7 @@ def ui_preview_html(
       moviesForItem.forEach((movie) => {
         moviePreviewCredits(movie).actors.forEach((credit) => {
           const key = String(credit.id || credit.name || "").toLowerCase();
-          if (!key || seen.has(key) || result.length >= 6) return;
+          if (!key || seen.has(key) || result.length >= 5) return;
           seen.add(key);
           result.push(credit);
         });
@@ -19247,6 +19611,279 @@ def ui_preview_html(
             ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
           </span>
         </article>
+      `;
+    }
+    function libraryListCompactMode() {
+      return typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1024px)").matches;
+    }
+    function normalizeLibraryDetailSort(value, compact = libraryListCompactMode()) {
+      const allowed = compact
+        ? new Set(["title", "format", "behavior"])
+        : new Set(["title", "director", "actors", "studios", "rating", "tags", "behavior"]);
+      const key = allowed.has(value?.key) ? value.key : "title";
+      return {
+        key,
+        direction: value?.direction === "desc" ? "desc" : "asc"
+      };
+    }
+    function libraryListTextValues(value) {
+      if (Array.isArray(value)) return value.flatMap((item) => libraryListTextValues(item));
+      if (value && typeof value === "object") {
+        return libraryListTextValues(value.name || value.title || value.label || "");
+      }
+      const text = String(value || "").trim();
+      if (!text) return [];
+      if (text.startsWith("[") && text.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) return libraryListTextValues(parsed);
+        } catch (error) {}
+      }
+      return text.split(/\\s*(?:,|;|\\|)\\s*/).map((item) => item.trim()).filter(Boolean);
+    }
+    function uniqueLibraryValues(values) {
+      const seen = new Set();
+      const result = [];
+      (values || []).forEach((value) => {
+        const text = String(value || "").trim();
+        const key = text.toLocaleLowerCase(localeState.locale || undefined);
+        if (!text || seen.has(key)) return;
+        seen.add(key);
+        result.push(text);
+      });
+      return result;
+    }
+    function itemFormatValues(item) {
+      const seen = new Set();
+      const result = [];
+      itemMovieRows(item).forEach((movie) => {
+        const value = normalizedMovieFormat(movie);
+        const label = physicalFormatBadgeLabel(value);
+        const key = label.toLocaleLowerCase(localeState.locale || undefined);
+        if (!label || seen.has(key)) return;
+        seen.add(key);
+        result.push({value, label});
+      });
+      return result;
+    }
+    function itemStudioValues(item) {
+      return uniqueLibraryValues(itemMovieRows(item).flatMap((movie) => (
+        libraryListTextValues(movie?.studios || movie?.metadata?.studios)
+      )));
+    }
+    function itemTagValues(item) {
+      const seen = new Set();
+      const result = [];
+      itemMovieRows(item).forEach((movie) => {
+        const tags = Array.isArray(movie?.tags) ? movie.tags : [];
+        tags.forEach((tag) => {
+          const name = String(tag?.name || "").trim();
+          const key = String(tag?.id || name).toLocaleLowerCase(localeState.locale || undefined);
+          if (!name || seen.has(key)) return;
+          seen.add(key);
+          result.push({id: tag?.id || "", name, color: tag?.color || ""});
+        });
+      });
+      return result.sort((a, b) => a.name.localeCompare(b.name, localeState.locale || undefined, {sensitivity: "base"}));
+    }
+    function itemRatingValues(item) {
+      return uniqueLibraryValues(itemMovieRows(item).flatMap((movie) => {
+        const info = preferredContentRatingInfo(movie);
+        return info.unknown ? [] : [contentRatingValueText(info)];
+      }));
+    }
+    function itemWatchActivity(item) {
+      const rows = itemMovieRows(item);
+      let watchedAt = "";
+      let watchedTime = 0;
+      let watchlistAddedAt = "";
+      let watchlistTime = 0;
+      let watched = false;
+      let onWatchlist = false;
+      rows.forEach((movie) => {
+        watched = watched || movieIsWatched(movie);
+        onWatchlist = onWatchlist || !!movie?.on_watchlist;
+        const movieWatchedTime = Date.parse(movie?.last_watched || movie?.last_watched_at || "");
+        if (Number.isFinite(movieWatchedTime) && movieWatchedTime >= watchedTime) {
+          watchedTime = movieWatchedTime;
+          watchedAt = movie?.last_watched || movie?.last_watched_at || "";
+        }
+        const movieWatchlistTime = Date.parse(movie?.watchlist_added_at || "");
+        if (Number.isFinite(movieWatchlistTime) && movieWatchlistTime >= watchlistTime) {
+          watchlistTime = movieWatchlistTime;
+          watchlistAddedAt = movie?.watchlist_added_at || "";
+        }
+      });
+      return {watched, watchedAt, watchedTime, onWatchlist, watchlistAddedAt, watchlistTime};
+    }
+    function libraryListEmptyValueHtml() {
+      return `<span class="library-list-empty-value">${escapeHtml(tNext("common.none", "None"))}</span>`;
+    }
+    function libraryListValueLinesHtml(values) {
+      if (!values?.length) return libraryListEmptyValueHtml();
+      return `<span class="library-list-lines">${values.map((value) => `<span class="library-list-line">${escapeHtml(value)}</span>`).join("")}</span>`;
+    }
+    function libraryListPeopleHtml(credits) {
+      const rows = (credits || []).filter((credit) => credit.name);
+      if (!rows.length) return libraryListEmptyValueHtml();
+      return `<span class="library-list-lines">${rows.map((credit) => {
+        const personId = credit.id || credit.person_id || "";
+        return collectorsModeEnabled() && personId
+          ? `<button type="button" class="library-list-person" data-person-link="${escapeHtml(personId)}">${escapeHtml(credit.name)}</button>`
+          : `<span class="library-list-person">${escapeHtml(credit.name)}</span>`;
+      }).join("")}</span>`;
+    }
+    function libraryListFormatsHtml(item) {
+      const formats = itemFormatValues(item);
+      if (!formats.length) return libraryListEmptyValueHtml();
+      return `<span class="library-list-format-badges">${formats.map((format) => physicalFormatBadgeHtml(format.value)).join("")}</span>`;
+    }
+    function safeLibraryTagColor(value) {
+      const color = String(value || "").trim();
+      return /^#[0-9a-f]{6}$/i.test(color) ? color : "";
+    }
+    function libraryListTagsHtml(item) {
+      const tags = itemTagValues(item);
+      if (!tags.length) return libraryListEmptyValueHtml();
+      return `<span class="library-list-lines">${tags.map((tag) => {
+        const color = safeLibraryTagColor(tag.color);
+        const style = color ? ` style="--library-tag-color:${escapeHtml(color)}"` : "";
+        return `<span class="library-list-line library-list-tag"><span class="library-list-tag-swatch"${style}></span><span>${escapeHtml(tag.name)}</span></span>`;
+      }).join("")}</span>`;
+    }
+    function libraryListBehaviorHtml(item) {
+      const activity = itemWatchActivity(item);
+      if (!activity.watched && !activity.onWatchlist) return libraryListEmptyValueHtml();
+      const watchedLabel = tNext("lists.watched", "Watched");
+      const watchlistLabel = tNext("lists.watchlist", "Watchlist");
+      return `
+        <span class="library-list-behavior">
+          ${activity.watched ? `
+            <span class="library-list-behavior-icon watched" title="${escapeHtml(watchedLabel)}" aria-label="${escapeHtml(watchedLabel)}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5m0 13c-3.04 0-5.5-2.46-5.5-5.5S8.96 6.5 12 6.5s5.5 2.46 5.5 5.5-2.46 5.5-5.5 5.5m-1-2.17-2.59-2.58 1.42-1.42L11 12.5l3.17-3.17 1.42 1.42L11 15.33Z"/></svg>
+            </span>
+          ` : ""}
+          ${activity.onWatchlist ? `
+            <span class="library-list-behavior-icon watchlist" title="${escapeHtml(watchlistLabel)}" aria-label="${escapeHtml(watchlistLabel)}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2m0 15-5-2.18L7 18V5h10v13Z"/></svg>
+            </span>
+          ` : ""}
+          ${activity.watchedAt ? `<span class="library-list-watched-date">${escapeHtml(formatAppDate(activity.watchedAt))}</span>` : ""}
+        </span>
+      `;
+    }
+    function libraryListSortValue(item, key) {
+      if (key === "format") return itemFormatValues(item).map((format) => format.label).join(" ").toLowerCase();
+      if (key === "director") return creditText(itemDirectorCredits(item)).toLowerCase();
+      if (key === "actors") return creditText(itemActorCredits(item)).toLowerCase();
+      if (key === "studios") return itemStudioValues(item).join(" ").toLowerCase();
+      if (key === "rating") return itemRatingValues(item).join(" ").toLowerCase();
+      if (key === "tags") return itemTagValues(item).map((tag) => tag.name).join(" ").toLowerCase();
+      return itemTitleValue(item).toLowerCase();
+    }
+    function compareLibraryBehavior(leftItem, rightItem) {
+      const left = itemWatchActivity(leftItem);
+      const right = itemWatchActivity(rightItem);
+      return (left.watchedTime - right.watchedTime)
+        || (Number(left.watched) - Number(right.watched))
+        || (left.watchlistTime - right.watchlistTime)
+        || (Number(left.onWatchlist) - Number(right.onWatchlist));
+    }
+    function sortLibraryListItems(items, sortState = libraryDetailSort) {
+      const state = normalizeLibraryDetailSort(sortState);
+      return [...(items || [])].sort((a, b) => {
+        const diff = state.key === "behavior"
+          ? compareLibraryBehavior(a, b)
+          : String(libraryListSortValue(a, state.key)).localeCompare(
+              String(libraryListSortValue(b, state.key)),
+              localeState.locale || undefined,
+              {sensitivity: "base", numeric: true}
+            );
+        if (diff) return state.direction === "desc" ? -diff : diff;
+        return itemTitleValue(a).localeCompare(itemTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+      });
+    }
+    function libraryListSortIconHtml(direction) {
+      const path = direction === "desc"
+        ? "M7 10l5 5 5-5H7Z"
+        : "M7 14l5-5 5 5H7Z";
+      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`;
+    }
+    function libraryListSortHeaderHtml(key, label, sortState, className = "") {
+      const active = sortState.key === key;
+      const ariaSort = active ? ` aria-sort="${sortState.direction === "desc" ? "descending" : "ascending"}"` : "";
+      const classes = className ? ` ${className}` : "";
+      return `
+        <th scope="col" class="${classes.trim()}"${ariaSort}>
+          <button type="button" class="library-list-sort-button${active ? " active" : ""}" data-detail-sort-scope="library" data-detail-sort-key="${escapeHtml(key)}">
+            <span>${escapeHtml(label)}</span>
+            ${active ? libraryListSortIconHtml(sortState.direction) : ""}
+          </button>
+        </th>
+      `;
+    }
+    function libraryListTableHtml(items) {
+      const normalizedSort = normalizeLibraryDetailSort(libraryDetailSort);
+      if (normalizedSort.key !== libraryDetailSort?.key || normalizedSort.direction !== libraryDetailSort?.direction) {
+        libraryDetailSort = normalizedSort;
+        localStorage.setItem("dv_next_library_detail_sort", JSON.stringify(normalizedSort));
+      }
+      const sorted = sortLibraryListItems(items, normalizedSort).slice(0, 80);
+      return `
+        <div class="library-list-scroll">
+          <table class="library-list-table" aria-label="${escapeHtml(tNext("collection.viewList", "List"))}">
+            <thead>
+              <tr>
+                <th scope="col" class="library-list-poster-column"><span class="visually-hidden">${escapeHtml(tNext("collection.posterColumn", "Poster"))}</span></th>
+                ${libraryListSortHeaderHtml("title", tNext("collection.titleColumn", "Title"), normalizedSort, "library-list-title-column")}
+                ${libraryListSortHeaderHtml("format", tNext("movieDetail.format", "Format"), normalizedSort, "library-list-format-column library-list-compact-column")}
+                ${libraryListSortHeaderHtml("director", tNext("movieDetail.director", "Director"), normalizedSort, "library-list-director-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("actors", tNext("movieDetail.actors", "Actors"), normalizedSort, "library-list-actors-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("studios", tNext("collection.studioColumn", "Studio"), normalizedSort, "library-list-studio-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("rating", tNext("movieDetail.contentRating", "Content rating"), normalizedSort, "library-list-rating-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("tags", tNext("lists.tags", "Tags"), normalizedSort, "library-list-tags-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("behavior", tNext("collection.behaviorColumn", "Watch activity"), normalizedSort, "library-list-behavior-column")}
+              </tr>
+            </thead>
+            <tbody>
+              ${sorted.map((item) => {
+                const isContainer = item.kind === "container";
+                const title = itemTitleValue(item);
+                const year = itemYearLabel(item);
+                const poster = itemPosterUrl(item);
+                const targetAttr = isContainer
+                  ? `data-preview-container="${escapeHtml(item.container?.id)}"`
+                  : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
+                const selected = isContainer
+                  ? selectedContainerIds.has(String(item.container?.id || ""))
+                  : selectedMovieIds.has(String(item.movie?.id || ""));
+                return `
+                  <tr class="${isContainer ? "container-row " : ""}${selected ? "bulk-selected" : ""}">
+                    <td class="library-list-poster-column">
+                      <button type="button" class="library-list-poster-target" ${targetAttr} aria-label="${escapeHtml(title)}">
+                        ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span class="library-list-poster-placeholder" aria-hidden="true">&mdash;</span>`}
+                      </button>
+                    </td>
+                    <td class="library-list-title-column">
+                      <button type="button" class="library-list-title-target" ${targetAttr}>
+                        <strong>${escapeHtml(title)}</strong>
+                        ${year ? `<span class="library-list-year">(${escapeHtml(year)})</span>` : ""}
+                      </button>
+                      ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
+                    </td>
+                    <td class="library-list-format-column library-list-compact-column">${libraryListFormatsHtml(item)}</td>
+                    <td class="library-list-director-column library-list-desktop-column">${libraryListPeopleHtml(itemDirectorCredits(item))}</td>
+                    <td class="library-list-actors-column library-list-desktop-column">${libraryListPeopleHtml(itemActorCredits(item))}</td>
+                    <td class="library-list-studio-column library-list-desktop-column">${libraryListValueLinesHtml(itemStudioValues(item))}</td>
+                    <td class="library-list-rating-column library-list-desktop-column">${libraryListValueLinesHtml(itemRatingValues(item))}</td>
+                    <td class="library-list-tags-column library-list-desktop-column">${libraryListTagsHtml(item)}</td>
+                    <td class="library-list-behavior-column">${libraryListBehaviorHtml(item)}</td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
       `;
     }
     function detailSortValue(item, key) {
@@ -21464,10 +22101,20 @@ def ui_preview_html(
     function updateMovieListCache(movieId, userState) {
       movies = (movies || []).map((movie) => {
         if (String(movie.id) !== String(movieId)) return movie;
+        const tags = Array.isArray(userState?.tags)
+          ? userState.tags.map((tag) => ({
+              id: tag?.id || "",
+              name: tag?.name || "",
+              slug: tag?.slug || "",
+              color: tag?.color || ""
+            }))
+          : (Array.isArray(movie.tags) ? movie.tags : []);
         return Object.assign({}, movie, {
           on_watchlist: !!userState?.onWatchlist,
           watchlist_added_at: userState?.watchlistAddedAt || null,
-          last_watched: userState?.lastWatched || null
+          last_watched: userState?.lastWatched || null,
+          has_tags: tags.length > 0,
+          tags
         });
       });
       listsState.loaded = false;
@@ -31003,7 +31650,9 @@ def ui_preview_html(
     }
     function bindCollectionCardInteractions(root = document) {
       root.querySelectorAll("[data-preview-movie]").forEach((button) => {
-        button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
+        const selected = selectedMovieIds.has(button.dataset.previewMovie);
+        button.classList.toggle("bulk-selected", selected);
+        button.closest("tr")?.classList.toggle("bulk-selected", selected);
         bindLongPressSelection(button, () => {
           if (!selectionMode) toggleSelectMode(true);
           toggleMovieSelection(button.dataset.previewMovie);
@@ -31023,7 +31672,9 @@ def ui_preview_html(
         });
       });
       root.querySelectorAll("[data-preview-container]").forEach((button) => {
-        button.classList.toggle("bulk-selected", selectedContainerIds.has(button.dataset.previewContainer));
+        const selected = selectedContainerIds.has(button.dataset.previewContainer);
+        button.classList.toggle("bulk-selected", selected);
+        button.closest("tr")?.classList.toggle("bulk-selected", selected);
         bindLongPressSelection(button, () => {
           if (!selectionMode) toggleSelectMode(true);
           toggleContainerSelection(button.dataset.previewContainer);
@@ -31166,19 +31817,20 @@ def ui_preview_html(
       if (shuffleButton) shuffleButton.classList.remove("hidden");
       const rail = document.getElementById("posterRail");
       if (rail) {
-        rail.classList.toggle("mode-list-grid", libraryViewMode === "list");
+        rail.classList.remove("mode-list-grid");
         rail.classList.remove("mode-detail-grid");
+        rail.classList.toggle("library-list-surface", libraryViewMode === "list");
         rail.classList.toggle("poster-rail", libraryViewMode === "poster");
         rail.innerHTML = displayItems.length
-          ? displayItems.slice(0, 80).map((item, index) => (
+          ? (
               libraryViewMode === "list"
-                ? libraryListItemHtml(item)
-                : (
-              item.kind === "container"
-                ? containerPosterCardHtml(item.container, index)
-                : posterCardHtml(item.movie, index)
-                )
-            )).join("")
+                ? libraryListTableHtml(displayItems)
+                : displayItems.slice(0, 80).map((item, index) => (
+                    item.kind === "container"
+                      ? containerPosterCardHtml(item.container, index)
+                      : posterCardHtml(item.movie, index)
+                  )).join("")
+            )
           : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
       }
       bindCollectionCardInteractions(document.getElementById("libraryView") || document);
@@ -31204,7 +31856,7 @@ def ui_preview_html(
       if (navMovieCount) navMovieCount.textContent = String(movies.length);
       if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
-      const firstItem = displayItems[0];
+      const firstItem = libraryViewMode === "list" ? sortLibraryListItems(displayItems)[0] : displayItems[0];
       if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
       if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
       updateBulkBar();
@@ -31239,7 +31891,9 @@ def ui_preview_html(
       else selectedMovieIds.add(movieId);
       document.querySelectorAll("[data-preview-movie]").forEach((node) => {
         if (String(node.dataset.previewMovie) === String(movieId)) {
-          node.classList.toggle("bulk-selected", selectedMovieIds.has(movieId));
+          const selected = selectedMovieIds.has(movieId);
+          node.classList.toggle("bulk-selected", selected);
+          node.closest("tr")?.classList.toggle("bulk-selected", selected);
         }
       });
       updateBulkBar();
@@ -31251,7 +31905,9 @@ def ui_preview_html(
       else selectedContainerIds.add(value);
       document.querySelectorAll("[data-preview-container]").forEach((node) => {
         if (String(node.dataset.previewContainer) === value) {
-          node.classList.toggle("bulk-selected", selectedContainerIds.has(value));
+          const selected = selectedContainerIds.has(value);
+          node.classList.toggle("bulk-selected", selected);
+          node.closest("tr")?.classList.toggle("bulk-selected", selected);
         }
       });
       updateBulkBar();
@@ -31271,10 +31927,14 @@ def ui_preview_html(
         });
       }
       document.querySelectorAll("[data-preview-movie]").forEach((node) => {
-        node.classList.toggle("bulk-selected", selectedMovieIds.has(String(node.dataset.previewMovie || "")));
+        const selected = selectedMovieIds.has(String(node.dataset.previewMovie || ""));
+        node.classList.toggle("bulk-selected", selected);
+        node.closest("tr")?.classList.toggle("bulk-selected", selected);
       });
       document.querySelectorAll("[data-preview-container]").forEach((node) => {
-        node.classList.toggle("bulk-selected", selectedContainerIds.has(String(node.dataset.previewContainer || "")));
+        const selected = selectedContainerIds.has(String(node.dataset.previewContainer || ""));
+        node.classList.toggle("bulk-selected", selected);
+        node.closest("tr")?.classList.toggle("bulk-selected", selected);
       });
       updateBulkBar();
     }
@@ -33756,6 +34416,15 @@ def ui_preview_html(
           renderCollectionSurface();
         });
       });
+      const libraryListMediaQuery = window.matchMedia("(max-width: 1024px)");
+      const handleLibraryListBreakpoint = () => {
+        if (libraryViewMode === "list" && !locationDetailPageVisible()) renderLibrary();
+      };
+      if (typeof libraryListMediaQuery.addEventListener === "function") {
+        libraryListMediaQuery.addEventListener("change", handleLibraryListBreakpoint);
+      } else if (typeof libraryListMediaQuery.addListener === "function") {
+        libraryListMediaQuery.addListener(handleLibraryListBreakpoint);
+      }
       document.querySelectorAll("[data-container-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           const mode = normalizeViewMode(button.dataset.containerViewMode);
@@ -33826,17 +34495,22 @@ def ui_preview_html(
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
         renderCollectionSurface();
       });
+      document.querySelectorAll("[data-hide-watchlist-switch]").forEach((toggle) => {
+        toggle.addEventListener("change", (event) => {
+          hideWatchlist = !!event.target.checked;
+          persistCollectionBehaviorFilters();
+          renderCollectionSurface();
+        });
+      });
+      document.querySelectorAll("[data-hide-watched-switch]").forEach((toggle) => {
+        toggle.addEventListener("change", (event) => {
+          hideWatched = !!event.target.checked;
+          persistCollectionBehaviorFilters();
+          renderCollectionSurface();
+        });
+      });
       document.getElementById("collectionFilterResetButton")?.addEventListener("click", () => {
-        collectionFormatFilters.clear();
-        persistCollectionFormatFilters();
-        collectionTypeFilter = "all";
-        collectionGenreFilter = "";
-        collectionLocationFilter = "";
-        if (collectionItemFilter === "containers") collectionItemFilter = "all";
-        localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
-        localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
-        localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
-        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+        resetCollectionFilters();
         renderCollectionSurface();
       });
       document.getElementById("locationCollectionFormatSwitches")?.addEventListener("change", (event) => {
@@ -33849,16 +34523,7 @@ def ui_preview_html(
         renderCollectionSurface();
       });
       const resetLocationCollectionFilters = () => {
-        collectionFormatFilters.clear();
-        persistCollectionFormatFilters();
-        collectionTypeFilter = "all";
-        collectionGenreFilter = "";
-        collectionLocationFilter = "";
-        if (collectionItemFilter === "containers") collectionItemFilter = "all";
-        localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
-        localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
-        localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
-        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+        resetCollectionFilters();
         renderCollectionSurface();
       };
       document.getElementById("locationCollectionFilterResetButton")?.addEventListener("click", resetLocationCollectionFilters);

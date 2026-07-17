@@ -79,6 +79,16 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn("common.hide", self.source)
         self.assertIn("movieDetail.artworkHidden", self.source)
 
+    def test_source_catalog_includes_library_list_labels(self):
+        for key in (
+            "collection.behaviorColumn",
+            "collection.hideWatched",
+            "collection.hideWatchlist",
+            "collection.posterColumn",
+            "collection.studioColumn",
+        ):
+            self.assertIn(key, self.source)
+
     def test_locale_files_discovered(self):
         self.assertGreater(len(self.locale_files), 0)
 
