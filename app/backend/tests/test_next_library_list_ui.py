@@ -31,6 +31,14 @@ class NextLibraryListUiTests(unittest.TestCase):
             self.app_source.count("m.metadata->>'studios' AS studios"),
             2,
         )
+        self.assertEqual(
+            self.app_source.count("m.metadata->>'director' AS director"),
+            2,
+        )
+        self.assertEqual(
+            self.app_source.count("m.metadata->>'actor' AS actor"),
+            2,
+        )
         self.assertIn(
             "SELECT mt.movie_id, t.id, t.name, t.slug, t.color",
             self.app_source,
@@ -111,6 +119,14 @@ class NextLibraryListUiTests(unittest.TestCase):
         self.assertIn("function itemStudioValues(item)", self.source)
         self.assertIn("function itemRatingValues(item)", self.source)
         self.assertIn("function itemTagValues(item)", self.source)
+        self.assertIn(
+            ": splitCreditText(metadata.director || movie?.director, 3);",
+            self.source,
+        )
+        self.assertIn(
+            ": splitCreditText(metadata.actor || movie?.actor, 5);",
+            self.source,
+        )
 
     def test_behavior_filters_are_persisted_counted_and_reset(self):
         self.assertIn('localStorage.getItem("dv_next_hide_watchlist")', self.source)
