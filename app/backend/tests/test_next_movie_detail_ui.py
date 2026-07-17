@@ -169,6 +169,79 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
 
+    def test_movie_admin_actions_overlay_the_backdrop_with_mdi_icons(self):
+        hero_index = self.source.index('id="movieDetailHero"')
+        actions_index = self.source.index('class="movie-detail-hero-actions"')
+        summary_index = self.source.index('class="movie-detail-summary"', hero_index)
+
+        self.assertLess(hero_index, actions_index)
+        self.assertLess(actions_index, summary_index)
+        for button_id, key in (
+            ("movieEditToggleButton", "common.edit"),
+            ("movieMetadataApplyButton", "movieDetail.applyMetadata"),
+            ("movieDeleteButton", "movieDetail.deleteMovie"),
+        ):
+            button_start = self.source.index(f'id="{button_id}"')
+            button_end = self.source.index("</button>", button_start)
+            button_source = self.source[button_start:button_end]
+            self.assertIn("<svg", button_source)
+            self.assertIn(f'data-next-i18n-aria="{key}"', button_source)
+            self.assertIn(f'data-next-i18n-title="{key}"', button_source)
+
+    def test_removed_refresh_controls_are_not_rendered_or_bound(self):
+        for control_id in (
+            "movieMetadataPeopleOption",
+            "movieMetadataPeopleToggle",
+            "movieMetadataJobsButton",
+            "movieCrewRefreshButton",
+        ):
+            self.assertNotIn(control_id, self.source)
+        self.assertIn(
+            'body: JSON.stringify({dryRun, refreshPeople: false, '
+            'personRefreshScope: "all"})',
+            self.source,
+        )
+
+    def test_mobile_movie_hero_matches_ios_composition(self):
+        self.assertIn("#movieDetailPage .movie-detail-hero {", self.source)
+        self.assertIn("width: calc(100% + 24px);", self.source)
+        self.assertIn("grid-template-columns: 104px minmax(0, 1fr);", self.source)
+        self.assertIn("#movieDetailPage .movie-detail-poster {", self.source)
+        self.assertIn("#movieDetailPage .movie-detail-summary .eyebrow {", self.source)
+        self.assertIn("#movieDetailPage .movie-detail-back .button-label", self.source)
+        self.assertIn(
+            'data-next-i18n-aria="movieDetail.backToLibrary"',
+            self.source,
+        )
+
+    def test_mobile_header_is_hidden_and_personal_action_pills_are_compact(self):
+        mobile_start = self.source.index("@media (max-width: 760px)")
+        mobile_end = self.source.index("@media (max-width: 560px)", mobile_start)
+        mobile_css = self.source[mobile_start:mobile_end]
+        logo_start = mobile_css.index(".mobile-shell-logo {")
+        logo_end = mobile_css.index("}", logo_start)
+        logo_css = mobile_css[logo_start:logo_end]
+
+        self.assertIn("display: none;", logo_css)
+        self.assertNotIn("display: inline-flex;", logo_css)
+        self.assertIn("min-height: 38px;", mobile_css)
+        self.assertIn("font-size: .85rem;", mobile_css)
+
+    def test_edit_action_preserves_icon_when_label_changes_to_save(self):
+        self.assertIn('id="movieEditToggleLabel"', self.source)
+        self.assertIn('id="movieEditToggleIcon"', self.source)
+        self.assertIn("editLabel.textContent = label;", self.source)
+        self.assertIn(
+            'editIcon.setAttribute("d", show ? '
+            "editIcon.dataset.savePath : editIcon.dataset.editPath);",
+            self.source,
+        )
+        self.assertIn(
+            "node.className = `detail-message movie-detail-status "
+            '${tone || ""}`.trim();',
+            self.source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
