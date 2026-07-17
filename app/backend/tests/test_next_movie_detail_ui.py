@@ -9,6 +9,13 @@ NEXT_VIEWS_UI_PATH = os.path.abspath(
         "next_views_ui.py",
     )
 )
+NEXT_APP_PATH = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "next_app.py",
+    )
+)
 
 
 class NextMovieDetailUiTests(unittest.TestCase):
@@ -16,6 +23,8 @@ class NextMovieDetailUiTests(unittest.TestCase):
     def setUpClass(cls):
         with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
             cls.source = handle.read()
+        with open(NEXT_APP_PATH, encoding="utf-8") as handle:
+            cls.app_source = handle.read()
 
     def test_section_tabs_are_above_personal_lists(self):
         tabs_index = self.source.index(
@@ -261,6 +270,97 @@ class NextMovieDetailUiTests(unittest.TestCase):
             "      }",
             self.source,
         )
+
+    def test_empty_movie_status_does_not_leave_space_below_hero(self):
+        self.assertIn(".movie-detail-status:empty {\n      display: none;", self.source)
+        self.assertIn(
+            "#movieDetailPage {\n      gap: 8px;",
+            self.source,
+        )
+
+    def test_cast_and_crew_use_responsive_portrait_cards_with_release_age(self):
+        credits_start = self.app_source.index("def movie_credit_entities(")
+        credits_end = self.app_source.index("\ndef ", credits_start + 1)
+        self.assertIn("p.birth_date", self.app_source[credits_start:credits_end])
+        self.assertIn("function personAgeAtMovieRelease(credit, movie)", self.source)
+        self.assertIn(
+            "const displayName = age == null ? name : `${name} (${age})`;",
+            self.source,
+        )
+        self.assertIn('tNext("discover.castAs", "as")} ${role}', self.source)
+        self.assertIn(
+            '<div class="movie-people-grid" id="movieDetailCast">',
+            self.source,
+        )
+        self.assertIn(
+            '<div class="movie-people-grid" id="movieDetailCrew">',
+            self.source,
+        )
+        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", self.source)
+        self.assertIn(
+            'configureResponsiveGridLimit("movieDetailCast", "movieDetailCastMore", '
+            "{mobileRows: 4, desktopRows: 4});",
+            self.source,
+        )
+        self.assertIn(
+            'configureResponsiveGridLimit("movieDetailCrew", "movieDetailCrewMore", '
+            "{mobileRows: 4, desktopRows: 4});",
+            self.source,
+        )
+
+    def test_media_grids_are_responsive_and_row_limited(self):
+        self.assertIn(
+            'grid-template-columns: repeat(4, minmax(0, 1fr));',
+            self.source,
+        )
+        self.assertIn(
+            'grid-template-columns: repeat(2, minmax(0, 1fr));',
+            self.source,
+        )
+        self.assertIn(
+            "grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 300px));",
+            self.source,
+        )
+        for grid_id, button_id in (
+            ("movieDetailPosterArtwork", "movieDetailPosterMore"),
+            ("movieDetailBackdropArtwork", "movieDetailBackdropMore"),
+            ("movieDetailVideos", "movieDetailVideoMore"),
+        ):
+            self.assertIn(
+                f'configureResponsiveGridLimit("{grid_id}", "{button_id}", '
+                "{mobileRows: 4, desktopRows: 2});",
+                self.source,
+            )
+        self.assertIn(
+            'document.getElementById(panelId)?.querySelectorAll("[data-more-button]")'
+            ".forEach(updateResponsiveGridLimit);",
+            self.source,
+        )
+
+    def test_artwork_manager_heading_is_debug_only(self):
+        self.assertIn(
+            'class="artwork-manager-status hidden" id="movieArtworkManagerStatus">',
+            self.source,
+        )
+        self.assertIn(
+            'node.classList.toggle("hidden", !appDebugMode);',
+            self.source,
+        )
+
+    def test_movie_artwork_action_sheet_supports_primary_share_and_hide(self):
+        self.assertIn("function bindMovieArtworkLongPressMenus()", self.source)
+        self.assertIn('element.addEventListener("contextmenu"', self.source)
+        self.assertIn('if (!["Enter", " "].includes(event.key)) return;', self.source)
+        self.assertIn("await navigator.share({title: movieTitle", self.source)
+        self.assertIn("await copyArtworkUrl(url);", self.source)
+        self.assertIn(
+            'method: "DELETE"',
+            self.source,
+        )
+        self.assertIn('tNext("movieDetail.setPrimary", "Set primary")', self.source)
+        self.assertIn('tNext("common.share", "Share")', self.source)
+        self.assertIn('tNext("common.hide", "Hide")', self.source)
+        self.assertIn('tNext("movieDetail.artworkHidden", "Artwork hidden.")', self.source)
 
 
 if __name__ == "__main__":
