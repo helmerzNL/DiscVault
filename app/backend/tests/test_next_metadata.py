@@ -1160,6 +1160,69 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(decision["winner"]["pluginId"], "tmdb")
         self.assertEqual(decision["winner"]["reason"], "current field is empty")
 
+    def test_tmdb_content_ratings_replace_an_unlocked_existing_placeholder(self):
+        current = {"title": "Manual Title", "format": "4K UHD", "metadata": {}}
+        result = canonicalize_plugin_result(
+            "tmdb",
+            "movie_details",
+            {
+                "status": "hit",
+                "sourceRef": "tmdb:11814",
+                "technicalSpecs": {"contentRatings": {"NL": "12", "US": "PG-13"}},
+            },
+        )
+
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={"content_ratings": {"NL": "Onbekende leeftijdsclassificatie"}},
+            results=[result],
+            overwrite_enabled=False,
+            target_format="Blu-ray",
+        )
+
+        self.assertEqual(
+            merged["technicalUpdates"]["content_ratings"],
+            {"NL": "12", "US": "PG-13"},
+        )
+        decision = next(
+            item
+            for item in merged["fieldDecisions"]
+            if item["target"] == "technical" and item["field"] == "content_ratings"
+        )
+        self.assertEqual(decision["winner"]["reason"], "format-neutral certification refresh")
+
+    def test_locked_content_ratings_still_retain_the_existing_value(self):
+        current = {
+            "title": "Manual Title",
+            "format": "Blu-ray",
+            "metadata": {"field_locks": ["content_ratings"]},
+        }
+        result = canonicalize_plugin_result(
+            "tmdb",
+            "movie_details",
+            {
+                "status": "hit",
+                "sourceRef": "tmdb:11814",
+                "technicalSpecs": {"contentRatings": {"NL": "12"}},
+            },
+        )
+
+        merged = merge_metadata_results(
+            current=current,
+            technical_current={"content_ratings": {"NL": "16"}},
+            results=[result],
+            overwrite_enabled=False,
+            target_format="Blu-ray",
+        )
+
+        self.assertNotIn("content_ratings", merged["technicalUpdates"])
+        decision = next(
+            item
+            for item in merged["fieldDecisions"]
+            if item["target"] == "technical" and item["field"] == "content_ratings"
+        )
+        self.assertEqual(decision["candidates"][0]["reason"], "field is locked by user")
+
     def test_provider_image_options_are_kept_as_media_choices(self):
         current = {"title": "Manual Title", "format": "4K UHD", "metadata": {"poster_url": "https://local/poster.jpg"}}
         result = canonicalize_plugin_result(

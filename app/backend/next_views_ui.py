@@ -21693,7 +21693,7 @@ def ui_preview_html(
         movieEditRuntime: movie.runtime_minutes || "",
         movieEditDirector: valueText(metadata.director),
         movieEditStudios: valueText(metadata.studios),
-        movieEditContentRating: contentRatingInfo.rating || "",
+        movieEditContentRating: contentRatingInfo.unknown ? "" : (contentRatingInfo.rating || ""),
         movieEditHdr: valueText(specs.hdr || metadata.hdr),
         movieEditScreenRatio: valueText(specs.screen_ratios || metadata.screen_ratios),
         movieEditAudioTracks: valueText(specs.audio_tracks || metadata.audio_tracks),
@@ -31190,7 +31190,10 @@ def ui_preview_html(
         case "audio_tracks": return valueText(specs.audio_tracks || metadata.audio_tracks);
         case "subtitles": return valueText(specs.subtitles || metadata.subtitles);
         case "packaging": return valueText(specs.packaging || metadata.packaging || movie.edition_type);
-        case "content_ratings": return valueText(preferredContentRatingInfo(movie, specs).rating);
+        case "content_ratings": {
+          const contentRatingInfo = preferredContentRatingInfo(movie, specs);
+          return contentRatingInfo.unknown ? "" : valueText(contentRatingInfo.rating);
+        }
         default: return valueText(movie[field]);
       }
     }
