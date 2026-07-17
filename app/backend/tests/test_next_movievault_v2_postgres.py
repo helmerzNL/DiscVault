@@ -909,57 +909,59 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
     def test_poster_cache_job_activates_media_asset_and_local_lookup_reports_local_url(self):
         content = _png_bytes()
         checksum = hashlib.sha256(content).hexdigest()
-        with self.connect() as conn:
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO movievault_v2_poster_cache (asset_id, variant, checksum, status)
-                        VALUES (%s, 'display', %s, 'pending')
-                        RETURNING id
-                        """,
-                        ("poster-asset-live", checksum),
-                    )
-                    cache_id = cur.fetchone()["id"]
-            with patch.object(
-                next_movievault_v2_posters,
-                "_request",
-                return_value=(200, content, {"content-type": "image/png"}),
-            ):
-                outcome = next_movievault_v2_posters.run_poster_cache_job(
-                    conn,
-                    {
-                        "cacheId": str(cache_id),
-                        "assetId": "poster-asset-live",
-                        "variant": "display",
-                        "checksum": checksum,
-                        "origin": "https://movievault.example",
-                        "path": "/v2/assets/poster-asset-live/display",
-                    },
-                )
-            self.assertEqual(outcome["outcome"], "ready")
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT status, media_asset_id FROM movievault_v2_poster_cache WHERE id = %s",
-                    (cache_id,),
-                )
-                row = cur.fetchone()
-        self.assertEqual(row["status"], "ready")
-        self.assertIsNotNone(row["media_asset_id"])
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(os.environ, {"DISCVAULT_LEGACY_DATA_DIR": data_dir}):
+                with self.connect() as conn:
+                    with conn.transaction():
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                INSERT INTO movievault_v2_poster_cache (asset_id, variant, checksum, status)
+                                VALUES (%s, 'display', %s, 'pending')
+                                RETURNING id
+                                """,
+                                ("poster-asset-live", checksum),
+                            )
+                            cache_id = cur.fetchone()["id"]
+                    with patch.object(
+                        next_movievault_v2_posters,
+                        "_request",
+                        return_value=(200, content, {"content-type": "image/png"}),
+                    ):
+                        outcome = next_movievault_v2_posters.run_poster_cache_job(
+                            conn,
+                            {
+                                "cacheId": str(cache_id),
+                                "assetId": "poster-asset-live",
+                                "variant": "display",
+                                "checksum": checksum,
+                                "origin": "https://movievault.example",
+                                "path": "/v2/assets/poster-asset-live/display",
+                            },
+                        )
+                    self.assertEqual(outcome["outcome"], "ready")
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT status, media_asset_id FROM movievault_v2_poster_cache WHERE id = %s",
+                            (cache_id,),
+                        )
+                        row = cur.fetchone()
+                self.assertEqual(row["status"], "ready")
+                self.assertIsNotNone(row["media_asset_id"])
 
-        # A release whose poster references this exact (assetId, checksum)
-        # must now resolve to the authenticated local media-asset URL.
-        with self.connect() as conn:
-            fields = next_movievault_v2._poster_status_fields(
-                conn,
-                {
-                    "assetId": "poster-asset-live",
-                    "display": {"checksum": checksum, "path": "/v2/assets/poster-asset-live/display"},
-                },
-            )
-        self.assertEqual(fields["posterStatus"], "ready")
-        self.assertEqual(fields["posterUrl"], f"/api/next/media/assets/{row['media_asset_id']}")
-        self.assertNotIn("movievault.example", fields["posterUrl"])
+                # A release whose poster references this exact (assetId, checksum)
+                # must now resolve to the authenticated local media-asset URL.
+                with self.connect() as conn:
+                    fields = next_movievault_v2._poster_status_fields(
+                        conn,
+                        {
+                            "assetId": "poster-asset-live",
+                            "display": {"checksum": checksum, "path": "/v2/assets/poster-asset-live/display"},
+                        },
+                    )
+                self.assertEqual(fields["posterStatus"], "ready")
+                self.assertEqual(fields["posterUrl"], f"/api/next/media/assets/{row['media_asset_id']}")
+                self.assertNotIn("movievault.example", fields["posterUrl"])
 
     def test_poster_cache_job_failure_preserves_prior_ready_media_asset(self):
         content = _png_bytes()
@@ -992,20 +994,21 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     )
                     cache_id = cur.fetchone()["id"]
 
+            # The job's declared checksum intentionally does not match the
+            # fetched bytes - a corrupted/interrupted remote replacement.
+            wrong_checksum = ("0" if checksum[0] != "0" else "1") + checksum[1:]
             with patch.object(
                 next_movievault_v2_posters,
                 "_request",
                 return_value=(200, content, {"content-type": "image/png"}),
             ):
-                # The declared checksum no longer matches the fetched bytes -
-                # a corrupted/interrupted remote replacement.
                 outcome = next_movievault_v2_posters.run_poster_cache_job(
                     conn,
                     {
                         "cacheId": str(cache_id),
                         "assetId": "poster-asset-prior",
                         "variant": "display",
-                        "checksum": checksum,
+                        "checksum": wrong_checksum,
                         "origin": "https://movievault.example",
                         "path": "/v2/assets/poster-asset-prior/display",
                     },
@@ -1141,53 +1144,57 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
     def test_media_asset_route_serves_local_bytes_with_etag_and_no_remote_leakage(self):
         content = _png_bytes()
         checksum = hashlib.sha256(content).hexdigest()
-        with self.connect() as conn:
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO movievault_v2_poster_cache (asset_id, variant, checksum, status)
-                        VALUES (%s, 'display', %s, 'pending')
-                        RETURNING id
-                        """,
-                        ("poster-asset-http", checksum),
-                    )
-                    cache_id = cur.fetchone()["id"]
-            with patch.object(
-                next_movievault_v2_posters,
-                "_request",
-                return_value=(200, content, {"content-type": "image/png"}),
-            ):
-                next_movievault_v2_posters.run_poster_cache_job(
-                    conn,
-                    {
-                        "cacheId": str(cache_id),
-                        "assetId": "poster-asset-http",
-                        "variant": "display",
-                        "checksum": checksum,
-                        "origin": "https://movievault.example",
-                        "path": "/v2/assets/poster-asset-http/display",
-                    },
-                )
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT media_asset_id FROM movievault_v2_poster_cache WHERE id = %s",
-                    (cache_id,),
-                )
-                media_asset_id = cur.fetchone()["media_asset_id"]
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(os.environ, {"DISCVAULT_LEGACY_DATA_DIR": data_dir}):
+                with self.connect() as conn:
+                    with conn.transaction():
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                INSERT INTO movievault_v2_poster_cache (asset_id, variant, checksum, status)
+                                VALUES (%s, 'display', %s, 'pending')
+                                RETURNING id
+                                """,
+                                ("poster-asset-http", checksum),
+                            )
+                            cache_id = cur.fetchone()["id"]
+                    with patch.object(
+                        next_movievault_v2_posters,
+                        "_request",
+                        return_value=(200, content, {"content-type": "image/png"}),
+                    ):
+                        outcome = next_movievault_v2_posters.run_poster_cache_job(
+                            conn,
+                            {
+                                "cacheId": str(cache_id),
+                                "assetId": "poster-asset-http",
+                                "variant": "display",
+                                "checksum": checksum,
+                                "origin": "https://movievault.example",
+                                "path": "/v2/assets/poster-asset-http/display",
+                            },
+                        )
+                    self.assertEqual(outcome["outcome"], "ready")
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT media_asset_id FROM movievault_v2_poster_cache WHERE id = %s",
+                            (cache_id,),
+                        )
+                        media_asset_id = cur.fetchone()["media_asset_id"]
 
-        app = next_app.create_app()
-        client = app.test_client()
-        response = client.get(f"/api/next/media/assets/{media_asset_id}")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, content)
-        self.assertIn("ETag", response.headers)
-        self.assertIn("max-age", response.headers.get("Cache-Control", ""))
-        # The authenticated local route never leaks the MovieVault origin,
-        # any contribution token, or a raw remote asset path to the client.
-        header_blob = " ".join(f"{k}:{v}" for k, v in response.headers.items())
-        self.assertNotIn("movievault", header_blob.lower())
-        self.assertNotIn("poster-asset-http", header_blob)
+                app = next_app.create_app()
+                client = app.test_client()
+                response = client.get(f"/api/next/media/assets/{media_asset_id}")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data, content)
+                self.assertIn("ETag", response.headers)
+                self.assertIn("max-age", response.headers.get("Cache-Control", ""))
+                # The authenticated local route never leaks the MovieVault origin,
+                # any contribution token, or a raw remote asset path to the client.
+                header_blob = " ".join(f"{k}:{v}" for k, v in response.headers.items())
+                self.assertNotIn("movievault", header_blob.lower())
+                self.assertNotIn("poster-asset-http", header_blob)
+                response.close()
 
 
 if __name__ == "__main__":

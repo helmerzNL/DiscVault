@@ -1,5 +1,17 @@
 # DiscVault Release Notes
 
+## 26.4.62 - MovieVault distribution-4 poster caching CI fix
+
+- Fixes the PostgreSQL smoke-test poster-cache tests that assumed the default
+  legacy data directory was writable in CI; they now isolate an explicit
+  temporary `DISCVAULT_LEGACY_DATA_DIR` like the existing cleanup tests, so the
+  cache job can atomically activate the fetched poster bytes and the local
+  media-asset route serves them with a `200` instead of a storage-error
+  `failed` outcome.
+- Fixes a poster-cache-failure regression test that unintentionally sent the
+  correct checksum for the fetched bytes, which no longer exercises the
+  intended checksum-mismatch/corrupted-download failure path.
+
 ## 26.4.61 - MovieVault distribution-4 poster caching
 
 - Consumes the strict `distribution-4` contract (required-nullable `poster` on
