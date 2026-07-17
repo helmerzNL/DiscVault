@@ -11498,7 +11498,7 @@ def ui_preview_html(
               <p class="form-message" id="movieLoanMessage"></p>
             </div>
           </div>
-          <div class="detail-card full">
+          <div class="detail-card full debug-card hidden" id="movieMetadataCompareCard">
             <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.metadataCompare">Metadata compare</h3>
               <div class="button-row compact">
@@ -20290,6 +20290,12 @@ def ui_preview_html(
     function renderMovieMetadataCompare(detail) {
       const node = document.getElementById("movieMetadataComparePanel");
       if (!node) return;
+      const card = document.getElementById("movieMetadataCompareCard");
+      if (card) card.classList.toggle("hidden", !appDebugMode);
+      if (!appDebugMode) {
+        node.innerHTML = "";
+        return;
+      }
       const button = document.getElementById("movieMetadataCompareButton");
       if (button) {
         const canCompare = hasPermission("metadata.refresh_one");
