@@ -32,6 +32,9 @@ try:
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import is_movievault_plugin
     from .next_movievault_connection import movievault_plugin_context
+    from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from .next_movievault_v2 import movievault_v2_plugin_context
+    from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import lookup_metadata_sources
@@ -48,6 +51,9 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import is_movievault_plugin
     from next_movievault_connection import movievault_plugin_context
+    from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from next_movievault_v2 import movievault_v2_plugin_context
+    from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from next_plugin_runtime import run_plugin_entrypoint
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import lookup_metadata_sources
@@ -60,6 +66,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
 
 
 STOP = False
+MOVIEVAULT_V2_SCHEDULER_LOCK_KEY = 2_026_262
 
 
 class JobFailure(RuntimeError):
@@ -173,39 +180,22 @@ def import_container_release_key(
     return (type_key, "title", title_key)
 
 
-def plugin_config_payload(settings: Any, secrets_ref: Any) -> dict[str, Any]:
-    safe_settings = settings if isinstance(settings, dict) else {}
-    refs = secrets_ref if isinstance(secrets_ref, dict) else {}
-    safe_refs: dict[str, dict[str, Any]] = {}
-    for name, ref in refs.items():
-        key = ref.get("key") if isinstance(ref, dict) else ref
-        item: dict[str, Any] = {"configured": True}
-        if key:
-            item["key"] = str(key)
-        safe_refs[str(name)] = item
-    return {
-        "settings": safe_settings,
-        "settingsConfigured": bool(safe_settings),
-        "secretNames": sorted(safe_refs),
-        "secretsConfigured": bool(safe_refs),
-        "secretsRef": safe_refs,
-    }
-
-
 def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
     if not table_exists(conn, "plugin_settings"):
-        return plugin_config_payload({}, {})
+        return resolved_plugin_config_payload({}, {}, {})
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT settings, secrets_ref
-            FROM plugin_settings
-            WHERE plugin_id=%s
+            SELECT p.settings_schema, s.settings, s.secrets_ref
+            FROM plugins AS p
+            LEFT JOIN plugin_settings AS s ON s.plugin_id = p.id
+            WHERE p.id=%s
             """,
             (plugin_id,),
         )
         row = cur.fetchone()
-    return plugin_config_payload(
+    return resolved_plugin_config_payload(
+        row.get("settings_schema") if row else {},
         row.get("settings") if row else {},
         row.get("secrets_ref") if row else {},
     )
@@ -267,7 +257,11 @@ def plugin_record(conn, plugin_id: str) -> dict[str, Any]:
 def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink"}:
         return False
-    if is_movievault_plugin(str(plugin.get("id") or "")):
+    plugin_id = str(plugin.get("id") or "")
+    if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
+        settings = config.get("settings")
+        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+    if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
@@ -299,12 +293,18 @@ def plugin_execution_context_from_db(
         "secretsConfigured": bool(config.get("secretsConfigured")),
         "actor": queued_actor or {"id": None, "username": None, "role": None},
     }
-    return movievault_plugin_context(
+    context = movievault_plugin_context(
         conn,
         plugin_id,
         context,
         ensure_token=is_movievault_plugin(plugin_id) and entrypoint != "health_check",
         actor_id=(queued_actor or {}).get("id") if queued_actor else None,
+    )
+    return movievault_v2_plugin_context(
+        conn,
+        plugin_id,
+        context,
+        connection_factory=connect,
     )
 
 
@@ -796,7 +796,6 @@ def import_movie_metadata(item: dict[str, Any], plugin_id: str) -> dict[str, Any
         "source_provider": item.get("sourceProvider") or plugin_id,
         "source_file": item.get("sourceFile"),
         "source_url": item.get("sourceUrl"),
-        "genre": item.get("genre"),
         "director": item.get("director"),
         "actor": item.get("actor"),
         "poster_url": item.get("posterUrl") or item.get("poster_url"),
@@ -2341,9 +2340,108 @@ def _maybe_enqueue_price_sweep(worker_id: str) -> None:
         pass
 
 
+def _maybe_enqueue_movievault_v2_sync(worker_id: str) -> None:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    to_regclass('public.plugins') AS plugins,
+                    to_regclass('public.plugin_settings') AS plugin_settings,
+                    to_regclass('public.background_jobs') AS background_jobs,
+                    to_regclass('public.movievault_v2_sync_state') AS sync_state
+                """
+            )
+            tables = cur.fetchone()
+            if not tables or not all(tables.values()):
+                return
+            cur.execute(
+                "SELECT pg_try_advisory_xact_lock(%s) AS acquired",
+                (MOVIEVAULT_V2_SCHEDULER_LOCK_KEY,),
+            )
+            lock_row = cur.fetchone()
+            if not bool(lock_row and lock_row.get("acquired")):
+                return
+            cur.execute(
+                """
+                SELECT ps.settings, state.last_success_at, state.last_attempt_at
+                FROM plugins AS plugin
+                JOIN plugin_settings AS ps ON ps.plugin_id = plugin.id
+                LEFT JOIN movievault_v2_sync_state AS state
+                    ON state.plugin_id = plugin.id
+                WHERE plugin.id = %s
+                  AND plugin.installed = true
+                  AND plugin.enabled = true
+                """,
+                (MOVIEVAULT_V2_PLUGIN_ID,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return
+            settings = row.get("settings")
+            if not isinstance(settings, dict) or not clean_text(settings.get("origin")):
+                return
+            interval_hours = _movievault_v2_sync_interval(settings)
+            attempts = [
+                value
+                for value in (row.get("last_success_at"), row.get("last_attempt_at"))
+                if isinstance(value, datetime)
+            ]
+            if attempts:
+                latest_attempt = max(attempts)
+                age_seconds = (
+                    datetime.now(timezone.utc) - latest_attempt.astimezone(timezone.utc)
+                ).total_seconds()
+                if age_seconds < interval_hours * 3600:
+                    return
+            cur.execute(
+                """
+                SELECT 1
+                FROM background_jobs
+                WHERE job_type = 'plugin.execute'
+                  AND status IN ('pending', 'running')
+                  AND payload ->> 'pluginId' = %s
+                  AND payload ->> 'entrypoint' = 'sync_index'
+                LIMIT 1
+                """,
+                (MOVIEVAULT_V2_PLUGIN_ID,),
+            )
+            if cur.fetchone():
+                return
+            cur.execute(
+                """
+                INSERT INTO background_jobs (job_type, payload)
+                VALUES ('plugin.execute', %s)
+                """,
+                (
+                    Jsonb(
+                        {
+                            "pluginId": MOVIEVAULT_V2_PLUGIN_ID,
+                            "entrypoint": "sync_index",
+                            "payload": {},
+                            "source": "scheduler",
+                            "workerId": worker_id,
+                        }
+                    ),
+                ),
+            )
+
+
+def _movievault_v2_sync_interval(settings: dict[str, Any]) -> int:
+    value = settings.get("syncIntervalHours")
+    if value is None or value == "" or isinstance(value, bool):
+        return 6
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 6
+    return min(max(parsed, 1), 168)
+
+
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
         _maybe_enqueue_price_sweep(worker_id)
+        _maybe_enqueue_movievault_v2_sync(worker_id)
         run_once(worker_id, quiet_idle=True)
         if STOP:
             break

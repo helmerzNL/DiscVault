@@ -1,5 +1,48 @@
 # DiscVault Release Notes
 
+## 26.4.50 - MovieVault v2 preview lookup dispatch
+
+- Executes the standalone `movievault_v2` source during preview barcode, title,
+  and box-set identification through its synchronized local index.
+- Keeps legacy MovieVault authentication, contribution, and metadata receiver
+  bridges isolated from the MovieVault v2 adapter.
+
+## 26.4.49 - MovieVault v2 full-snapshot revision ordering
+
+- Accepts deterministic full snapshots ordered by entity identity while still
+  requiring every revision to be unique and within the manifest revision.
+- Keeps delta artifacts strictly revision-ordered and preserves full-snapshot
+  entity, operation, digest, and atomic rollback validation.
+
+## 26.4.48 - MovieVault v2 full-sync checksum correction
+
+- Validates full distribution artifacts against their own
+  `X-Content-SHA256` response digest instead of comparing their bytes with the
+  separate approved lookup-hash dataset checksum.
+- Preserves strict manifest, cursor, revision, atomic generation, and rollback
+  validation for initial and cursor-recovery full synchronization.
+
+## 26.4.44 - Automatic MovieVault v2 configuration
+
+- Resolves and displays typed plugin manifest defaults while preserving every
+  explicit operator override across registry refreshes and upgrades.
+- Repairs the plugin configuration form with native boolean/number controls and
+  adjacent saving, success, and error feedback.
+- Validates the MovieVault v2 root origin and queues one duplicate-safe initial
+  index synchronization when the disabled plugin is first enabled.
+
+## 26.4.43 - MovieVault v2 anonymous local index bridge
+
+- Adds a checksum-verified `distribution-2` synchronizer with atomic full
+  generations, transactional deltas, tombstones, cursor recovery, and
+  privacy-safe failure codes.
+- Stores only SHA-256 lookup hashes and MovieVault-owned release/box-set facts,
+  including ordered exact-edition members.
+- Exposes narrow local lookup, sync, bucket-fallback, and status callbacks to
+  the separately installable `movievault_v2` metadata-source plugin.
+- Adds duplicate-safe manual and scheduled `sync_index` jobs while leaving
+  `movievault_26` and its attributed contribution transport unchanged.
+
 ## 26.4.33 — Wishlist price deal alerts, responsive Library, and mobile poster carousel
 
 This release promotes the full `release/v26-beta` train to production, bumping DiscVault

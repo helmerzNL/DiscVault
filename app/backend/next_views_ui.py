@@ -2305,6 +2305,22 @@ def ui_preview_html(
       color: var(--danger);
       background: color-mix(in srgb, var(--danger) 8%, transparent);
     }
+    .preview-empty.warn {
+      border-color: color-mix(in srgb, var(--warn) 46%, var(--line-strong));
+      color: var(--text);
+      background: color-mix(in srgb, var(--warn) 8%, transparent);
+    }
+    .import-tmdb-guidance {
+      display: grid;
+      gap: 10px;
+    }
+    .import-tmdb-guidance span {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .import-tmdb-guidance .button-row {
+      justify-content: flex-start;
+    }
     .library-view {
       display: grid;
       gap: 18px;
@@ -2985,6 +3001,13 @@ def ui_preview_html(
       font-size: .86rem;
       font-weight: 700;
       overflow-wrap: anywhere;
+    }
+    .lists-modal-shop-main a {
+      color: var(--accent);
+      font-size: .8rem;
+      overflow-wrap: anywhere;
+      text-decoration: underline;
+      text-underline-offset: 2px;
     }
     .lists-modal-shop-main span {
       font-size: .8rem;
@@ -5550,6 +5573,13 @@ def ui_preview_html(
       gap: 16px;
       padding: 18px;
       background: var(--bg);
+    }
+    .movie-detail-section-tabs,
+    .movie-detail-section-panel {
+      grid-column: 1 / -1;
+    }
+    .movie-detail-section-tabs {
+      justify-self: start;
     }
     .movie-detail-page .movie-detail-body {
       border: 1px solid var(--line);
@@ -11004,10 +11034,6 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.director">Director</span>
                       <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
                     </label>
-                    <label for="movieEditGenre">
-                      <span data-next-i18n="movieDetail.genre">Genre</span>
-                      <input id="movieEditGenre" name="genre" maxlength="300" autocomplete="off">
-                    </label>
                     <label for="movieEditStudios">
                       <span data-next-i18n="movieDetail.studios">Studios</span>
                       <input id="movieEditStudios" name="studios" maxlength="300" autocomplete="off">
@@ -11084,6 +11110,23 @@ def ui_preview_html(
               </div>
             </form>
           </div>
+          <nav class="detail-submenu movie-detail-section-tabs" role="tablist" aria-label="Movie details" data-next-i18n-aria="movieDetail.title">
+            <button type="button" class="active" id="movieDetailReleaseTab" role="tab" aria-controls="movieDetailReleasePanel" aria-selected="true" data-detail-tab="movieSections" data-detail-panel="movieDetailReleasePanel" data-next-i18n="movieDetail.release">Release</button>
+            <button type="button" id="movieDetailTechnicalTab" role="tab" aria-controls="movieDetailTechnicalPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailTechnicalPanel" data-next-i18n="movieDetail.technical">Technical</button>
+            <button type="button" id="movieDetailCollectorsTab" role="tab" aria-controls="movieDetailCollectorsPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailCollectorsPanel" data-next-i18n="movieDetail.collectors">Collectors</button>
+          </nav>
+          <div class="detail-card full detail-subpanel movie-detail-section-panel" id="movieDetailReleasePanel" role="tabpanel" aria-labelledby="movieDetailReleaseTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.release">Release</h3>
+            <div class="detail-fields" id="movieDetailRelease"></div>
+          </div>
+          <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailTechnicalPanel" role="tabpanel" aria-labelledby="movieDetailTechnicalTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h3>
+            <div class="detail-fields" id="movieDetailTechnical"></div>
+          </div>
+          <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailCollectorsPanel" role="tabpanel" aria-labelledby="movieDetailCollectorsTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.collectors">Collectors</h3>
+            <div class="detail-fields" id="movieDetailCollectors"></div>
+          </div>
           <div class="detail-card full movie-list-card" id="movieListStateCard">
             <div class="detail-card-head">
               <div>
@@ -11142,14 +11185,6 @@ def ui_preview_html(
               <p class="form-message" id="movieLoanMessage"></p>
             </div>
           </div>
-          <div class="detail-card">
-            <h3 data-next-i18n="movieDetail.release">Release</h3>
-            <div class="detail-fields" id="movieDetailRelease"></div>
-          </div>
-          <div class="detail-card">
-            <h3 data-next-i18n="movieDetail.technical">Technical</h3>
-            <div class="detail-subsections" id="movieDetailTechnical"></div>
-          </div>
           <div class="detail-card full">
             <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.metadataCompare">Metadata compare</h3>
@@ -11188,6 +11223,24 @@ def ui_preview_html(
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
+              <h3 data-next-i18n="movieDetail.castCrew">Cast &amp; crew</h3>
+              <div class="detail-submenu" role="tablist" aria-label="Cast & crew" data-next-i18n-aria="movieDetail.castCrew">
+                <button type="button" class="active" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCast" data-next-i18n="movieDetail.cast">Cast</button>
+                <button type="button" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCrew" data-next-i18n="movieDetail.crew">Crew</button>
+              </div>
+            </div>
+            <div class="detail-subpanel" data-detail-panel-group="moviePeople" id="moviePeopleCast">
+              <div class="detail-grid" id="movieDetailCast"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
+              <div class="button-row compact person-refresh-row">
+                <button type="button" class="secondary-button hidden" id="movieCrewRefreshButton" data-next-i18n="movieDetail.refreshCrewPeople">Refresh crew people</button>
+              </div>
+              <div class="detail-grid" id="movieDetailCrew"></div>
+            </div>
+          </div>
+          <div class="detail-card full">
+            <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.media">Media</h3>
               <div class="detail-submenu" role="tablist" aria-label="Media" data-next-i18n-aria="movieDetail.media">
                 <button type="button" class="active" data-detail-tab="movieMedia" data-detail-panel="movieMediaPosters" data-next-i18n="movieDetail.posters">Posters</button>
@@ -11214,24 +11267,6 @@ def ui_preview_html(
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
               <div class="detail-grid" id="movieDetailVideos"></div>
-            </div>
-          </div>
-          <div class="detail-card full">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="movieDetail.people">People</h3>
-              <div class="detail-submenu" role="tablist" aria-label="People" data-next-i18n-aria="movieDetail.people">
-                <button type="button" class="active" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCast" data-next-i18n="movieDetail.cast">Cast</button>
-                <button type="button" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCrew" data-next-i18n="movieDetail.crew">Crew</button>
-              </div>
-            </div>
-            <div class="detail-subpanel" data-detail-panel-group="moviePeople" id="moviePeopleCast">
-              <div class="detail-grid" id="movieDetailCast"></div>
-            </div>
-            <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
-              <div class="button-row compact person-refresh-row">
-                <button type="button" class="secondary-button hidden" id="movieCrewRefreshButton" data-next-i18n="movieDetail.refreshCrewPeople">Refresh crew people</button>
-              </div>
-              <div class="detail-grid" id="movieDetailCrew"></div>
             </div>
           </div>
         </section>
@@ -12697,6 +12732,7 @@ def ui_preview_html(
     let locations = state.locations || [];
     let containerMembership = state.containerMembership || [];
     let mediaGroups = state.mediaGroups || [];
+    let priceDisplay = state.priceDisplay || {};
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
     let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
     let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
@@ -12778,6 +12814,7 @@ def ui_preview_html(
       digitalSources: [],
       groups: [],
       invites: [],
+      pluginConfigMessages: {},
       pluginConfigs: {},
       pluginExecutions: {},
       pluginHealth: {},
@@ -13872,7 +13909,12 @@ def ui_preview_html(
       ].join(" / ");
     }
     function appAdminPluginNeedsConfiguration(plugin) {
-      return !!(plugin && plugin.enabled && plugin.requiresSecrets && !plugin.secretsConfigured);
+      if (!plugin || !plugin.enabled) return false;
+      const hasRequiredSettings = appAdminPluginSchemaItems(plugin, "settings").some((field) => field.required);
+      return !!(
+        (plugin.requiresSecrets && !plugin.secretsConfigured)
+        || (hasRequiredSettings && !plugin.settingsConfigured)
+      );
     }
     function appAdminPluginHealthState(plugin) {
       const health = appAdmin.pluginHealth[plugin.id] || {};
@@ -13916,7 +13958,7 @@ def ui_preview_html(
       }
       const activeJobs = jobs.filter((job) => ["pending", "running"].includes(String(job.status || "")));
       const failedJobs = jobs.filter((job) => String(job.status || "") === "failed");
-      const executablePlugins = plugins.filter((plugin) => appAdminCanExecutePlugin(plugin, "health_check") || (plugin.capabilities || []).some((capability) => ["discover_library", "sync_library", "sync_personal_lists", "inspect_source"].includes(capability)));
+      const executablePlugins = plugins.filter((plugin) => appAdminCanExecutePlugin(plugin, "health_check") || (plugin.capabilities || []).some((capability) => ["discover_library", "sync_library", "sync_index", "sync_personal_lists", "inspect_source"].includes(capability)));
       node.innerHTML = `
         <section class="plugin-operation-grid">
           <div class="plugin-operation-row">
@@ -14187,14 +14229,30 @@ def ui_preview_html(
       }
       const currentSettings = (config && config.settings) || {};
       const secretNames = new Set((config && config.secretNames) || []);
+      const feedback = (appAdmin.pluginConfigMessages || {})[plugin.id] || {};
       const settingFields = settings.map((field) => {
         const name = field.name || field.key;
         const value = currentSettings[name];
-        const display = Array.isArray(value) ? value.join(", ") : (value || "");
+        const display = Array.isArray(value) ? value.join(", ") : (value === null || value === undefined ? "" : value);
+        const required = field.required ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.required", "Required"))}</span>` : "";
+        const description = field.description ? `<small>${escapeHtml(field.description)}</small>` : "";
+        if (field.type === "boolean") {
+          return `
+            <label>
+              <span>${escapeHtml(field.label || name)} ${required}</span>
+              <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="boolean" type="checkbox" ${value === true ? "checked" : ""}>
+              ${description}
+            </label>
+          `;
+        }
+        const minimum = field.minimum !== undefined ? `min="${escapeHtml(field.minimum)}"` : "";
+        const maximum = field.maximum !== undefined ? `max="${escapeHtml(field.maximum)}"` : "";
+        const step = field.type === "number" ? `step="${escapeHtml(field.step || 1)}"` : "";
         return `
           <label>
-            <span>${escapeHtml(field.label || name)} ${field.required ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.required", "Required"))}</span>` : ""}</span>
-            <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(appAdminPluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}" ${field.required ? "required" : ""}>
+            <span>${escapeHtml(field.label || name)} ${required}</span>
+            <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(appAdminPluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}" ${minimum} ${maximum} ${step} ${field.required ? "required" : ""}>
+            ${description}
           </label>
         `;
       }).join("");
@@ -14209,14 +14267,17 @@ def ui_preview_html(
         `;
       }).join("");
       return `
-        <div class="profile-passkey-meta">${escapeHtml(appAdminPluginConfigStatus(plugin, config))}</div>
-        <div class="app-admin-plugin-config">
-          ${settingFields}
-          ${secretFields}
-        </div>
-        <div class="app-admin-plugin-actions">
-          <button type="button" class="secondary-button" data-app-admin-plugin-save="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.savePluginConfig", "Save config"))}</button>
-        </div>
+        <form data-app-admin-plugin-config-form="${escapeHtml(plugin.id)}">
+          <div class="profile-passkey-meta">${escapeHtml(appAdminPluginConfigStatus(plugin, config))}</div>
+          <div class="app-admin-plugin-config">
+            ${settingFields}
+            ${secretFields}
+          </div>
+          <div class="app-admin-plugin-actions">
+            <button type="submit" class="secondary-button" ${feedback.state === "saving" ? "disabled" : ""}>${escapeHtml(tNext("appAdmin.savePluginConfig", "Save config"))}</button>
+          </div>
+          <div class="login-message ${feedback.state === "error" ? "bad" : feedback.state === "success" ? "good" : ""}" role="status" aria-live="polite">${escapeHtml(feedback.message || "")}</div>
+        </form>
       `;
     }
     function renderAppAdminPluginCard(plugin, sectionPlugins = [], sectionCategory = "") {
@@ -14227,7 +14288,7 @@ def ui_preview_html(
       const digitalSource = (appAdmin.digitalSources || []).find((source) => source.plugin_id === plugin.id);
       const runtime = plugin.runtime || {};
       const capabilities = plugin.capabilities || [];
-      const needsConfig = plugin.requiresSecrets && !plugin.secretsConfigured;
+      const needsConfig = appAdminPluginNeedsConfiguration(plugin);
       const runtimeState = health.state || (runtime.loaded ? "loaded" : "not_loaded");
       const orderedSection = [...(sectionPlugins || [])].sort(appAdminPluginSort);
       const pluginIndex = orderedSection.findIndex((item) => item.id === plugin.id);
@@ -14277,6 +14338,7 @@ def ui_preview_html(
             ${capabilities.includes("discover_library") && appAdminCanExecutePlugin(plugin, "discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
             ${capabilities.includes("inspect_source") && appAdminCanExecutePlugin(plugin, "inspect_source") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">${escapeHtml(tNext("appAdmin.inspectSource", "Inspect source"))}</button>` : ""}
             ${capabilities.includes("sync_library") && appAdminCanExecutePlugin(plugin, "sync_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
+            ${capabilities.includes("sync_index") && appAdminCanExecutePlugin(plugin, "sync_index") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_index">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
             ${capabilities.includes("sync_personal_lists") && appAdminCanExecutePlugin(plugin, "sync_personal_lists") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_personal_lists">${escapeHtml(tNext("appAdmin.queuePersonalListSync", "Queue list sync"))}</button>` : ""}
           </div>
           ${renderAppAdminMovieVaultConnection(plugin)}
@@ -16321,8 +16383,13 @@ def ui_preview_html(
           body: JSON.stringify({enabled})
         });
         appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        if (payload.initialSync && payload.initialSync.job) {
+          upsertAppAdminPluginJob(payload.initialSync.job);
+        }
         renderAppAdminPlugins();
-        setAppAdminMessage("appAdminPluginsMessage", enabled ? tNext("appAdmin.pluginEnabled", "Plugin enabled.") : tNext("appAdmin.pluginDisabled", "Plugin disabled."), "good");
+        const enabledMessage = enabled ? tNext("appAdmin.pluginEnabled", "Plugin enabled.") : tNext("appAdmin.pluginDisabled", "Plugin disabled.");
+        const syncMessage = payload.initialSync && payload.initialSync.job ? ` ${tNext("appAdmin.pluginJobQueued", "Plugin job queued.")}` : "";
+        setAppAdminMessage("appAdminPluginsMessage", `${enabledMessage}${syncMessage}`, "good");
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -16580,7 +16647,9 @@ def ui_preview_html(
       if (!pluginId || !row) return;
       const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
       if (!appAdminCanConfigurePlugin(plugin)) return;
-      const missingRequired = Array.from(row.querySelectorAll("[required]")).filter((input) => !String(input.value || "").trim());
+      const missingRequired = Array.from(row.querySelectorAll("[required]")).filter((input) =>
+        input.type === "checkbox" ? !input.checked : !String(input.value || "").trim()
+      );
       if (missingRequired.length) {
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.fillRequiredPluginFields", "Fill the required plugin fields first."), "bad");
         return;
@@ -16588,12 +16657,20 @@ def ui_preview_html(
       const settings = {};
       const secrets = {};
       row.querySelectorAll("[data-app-admin-plugin-setting]").forEach((input) => {
-        settings[input.dataset.appAdminPluginSetting] = coerceAppAdminPluginValue(input.value, input.dataset.valueType || "text");
+        const type = input.dataset.valueType || "text";
+        settings[input.dataset.appAdminPluginSetting] = coerceAppAdminPluginValue(
+          type === "boolean" ? input.checked : input.value,
+          type
+        );
       });
       row.querySelectorAll("[data-app-admin-plugin-secret]").forEach((input) => {
         if (input.value) secrets[input.dataset.appAdminPluginSecret] = input.value;
       });
-      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.savingPluginConfig", "Saving plugin configuration..."));
+      appAdmin.pluginConfigMessages[pluginId] = {
+        state: "saving",
+        message: tNext("appAdmin.savingPluginConfig", "Saving plugin configuration...")
+      };
+      renderAppAdminPlugins();
       try {
         const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/config`, {
           method: "PATCH",
@@ -16604,9 +16681,18 @@ def ui_preview_html(
         if (payload.plugin) {
           appAdmin.plugins = appAdmin.plugins.map((plugin) => plugin.id === pluginId ? payload.plugin : plugin);
         }
+        appAdmin.pluginConfigMessages[pluginId] = {
+          state: "success",
+          message: tNext("appAdmin.pluginConfigSaved", "Plugin configuration saved.")
+        };
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginConfigSaved", "Plugin configuration saved."), "good");
       } catch (error) {
+        appAdmin.pluginConfigMessages[pluginId] = {
+          state: "error",
+          message: error.message || String(error)
+        };
+        renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
     }
@@ -17659,15 +17745,19 @@ def ui_preview_html(
       if (collectorsModeEnabled() && collectionItemFilter === "containers") count += 1;
       return count;
     }
+    function genreLabel(key) {
+      const normalized = String(key || "").trim();
+      if (!normalized) return "";
+      return tNext(`genre.${normalized}`, GENRE_FALLBACK_LABELS[normalized] || normalized);
+    }
     function collectionGenreOptionValues() {
-      const seen = new Map();
+      const seen = new Set();
       (movies || []).forEach((movie) => {
-        movieGenreValues(movie).forEach((value) => {
-          const key = value.toLowerCase();
-          if (!seen.has(key)) seen.set(key, value);
-        });
+        movieGenreValues(movie).forEach((key) => seen.add(key));
       });
-      return [...seen.values()].sort((a, b) => a.localeCompare(b, localeState.locale || undefined, {sensitivity: "base"}));
+      return [...seen]
+        .map((key) => ({key, label: genreLabel(key)}))
+        .sort((a, b) => a.label.localeCompare(b.label, localeState.locale || undefined, {sensitivity: "base"}));
     }
     function collectionLocationOptionValues() {
       const seen = new Map();
@@ -17708,13 +17798,13 @@ def ui_preview_html(
       const applyGenreOptions = (genreSelect) => {
         if (!genreSelect) return;
         const options = collectionGenreOptionValues();
-        if (collectionGenreFilter && !options.some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase())) {
+        if (collectionGenreFilter && !options.some((option) => option.key === collectionGenreFilter)) {
           collectionGenreFilter = "";
           localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
         }
         const anyLabel = tNext("common.all", "All");
         genreSelect.innerHTML = [`<option value="">${escapeHtml(anyLabel)}</option>`]
-          .concat(options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
+          .concat(options.map((option) => `<option value="${escapeHtml(option.key)}">${escapeHtml(option.label)}</option>`))
           .join("");
         genreSelect.value = collectionGenreFilter;
       };
@@ -18310,6 +18400,11 @@ def ui_preview_html(
       const search = activeCollectionSearchInput();
       return search ? search.value.trim().toLowerCase() : "";
     }
+    function movieGenreSearchText(movie) {
+      const keys = movieGenreValues(movie);
+      if (!keys.length) return "";
+      return [movie?.genre_search || "", ...keys.map(genreLabel)].join(" ");
+    }
     function movieMatchesSearch(movie) {
       const query = activeSearchQuery();
       if (!query) return true;
@@ -18322,6 +18417,7 @@ def ui_preview_html(
         movie.barcode,
         movie.metadata_search,
         movie.search_credits,
+        movieGenreSearchText(movie),
         groups
       ].join(" ").toLowerCase();
       return haystack.includes(query);
@@ -18337,6 +18433,7 @@ def ui_preview_html(
         movie?.barcode,
         movie?.metadata_search,
         movie?.search_credits,
+        movieGenreSearchText(movie),
         movie?.metadata?.actor,
         movie?.metadata?.director,
         movie?.metadata?.producer,
@@ -18420,7 +18517,8 @@ def ui_preview_html(
         movie.format,
         movie.barcode,
         movie.metadata_search,
-        movie.search_credits
+        movie.search_credits,
+        movieGenreSearchText(movie)
       ].filter(Boolean).join(" ")).join(" ");
       const haystack = [
         container.title,
@@ -18483,15 +18581,11 @@ def ui_preview_html(
       return false;
     }
     function movieGenreValues(movie) {
-      const raw = movie?.genre || movie?.metadata?.genre || "";
-      return String(raw)
-        .split(/[,/|]/)
-        .map((value) => value.trim())
-        .filter(Boolean);
+      return Array.isArray(movie?.genres) ? movie.genres.filter(Boolean) : [];
     }
     function movieMatchesGenre(movie) {
       if (!collectionGenreFilter) return true;
-      return movieGenreValues(movie).some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase());
+      return movieGenreValues(movie).includes(collectionGenreFilter);
     }
     function movieLocationValue(movie) {
       const direct = movie?.location;
@@ -19884,7 +19978,7 @@ def ui_preview_html(
       "movie:rating": ["movieDetail.rating", "Rating"],
       "movie:runtime_minutes": ["movieDetail.runtime", "Runtime"],
       "metadata:director": ["movieDetail.director", "Director"],
-      "metadata:genre": ["movieDetail.genre", "Genre"],
+      "genre:genre": ["movieDetail.genre", "Genre"],
       "metadata:studios": ["movieDetail.studios", "Studios"],
       "metadata:distributor": ["movieDetail.distributor", "Distributor"],
       "metadata:packaging": ["movieDetail.packaging", "Packaging"],
@@ -20314,6 +20408,23 @@ def ui_preview_html(
       {value: "4K UHD", collectorOnly: false},
       {value: "VCD/SVCD", collectorOnly: true}
     ];
+    // The 19 canonical TMDB movie genre keys. English reference labels are
+    // only a fallback for genreLabel() before the active locale's
+    // genre.<key> i18n catalog entry resolves; genres are otherwise always
+    // shown in the caller's locale.
+    const GENRE_KEYS = [
+      "action", "adventure", "animation", "comedy", "crime", "documentary",
+      "drama", "family", "fantasy", "history", "horror", "music", "mystery",
+      "romance", "science_fiction", "tv_movie", "thriller", "war", "western"
+    ];
+    const GENRE_FALLBACK_LABELS = {
+      action: "Action", adventure: "Adventure", animation: "Animation",
+      comedy: "Comedy", crime: "Crime", documentary: "Documentary",
+      drama: "Drama", family: "Family", fantasy: "Fantasy",
+      history: "History", horror: "Horror", music: "Music", mystery: "Mystery",
+      romance: "Romance", science_fiction: "Science Fiction", tv_movie: "TV Movie",
+      thriller: "Thriller", war: "War", western: "Western"
+    };
     function normalizedMovieFormatValue(value) {
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
@@ -20397,7 +20508,6 @@ def ui_preview_html(
       movieEditNotes: "notes",
       movieEditRuntime: "runtime_minutes",
       movieEditDirector: "director",
-      movieEditGenre: "genre",
       movieEditStudios: "studios",
       movieEditContentRating: "content_ratings",
       movieEditHdr: "hdr",
@@ -20464,7 +20574,6 @@ def ui_preview_html(
         movieEditLocation: typeof movie.location === "string" ? movie.location : "",
         movieEditRuntime: movie.runtime_minutes || "",
         movieEditDirector: valueText(metadata.director),
-        movieEditGenre: valueText(metadata.genre),
         movieEditStudios: valueText(metadata.studios),
         movieEditContentRating: contentRatingInfo.rating || "",
         movieEditHdr: valueText(specs.hdr || metadata.hdr),
@@ -20910,25 +21019,25 @@ def ui_preview_html(
         [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
         [tNext("movieDetail.director", "Director"), metadata.director],
-        [tNext("movieDetail.genre", "Genre"), metadata.genre],
+        [tNext("movieDetail.genre", "Genre"), movieGenreValues(movie).map(genreLabel).join(", ")],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
         [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
         ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
       ]);
-      const audioVideoSubsection = detailFieldSubsection(tNext("movieDetail.audioVideo", "Audio & Video"), [
+      const audioVideoFields = [
         ["HDR", specs.hdr || metadata.hdr],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
         [tNext("movieDetail.format", "Format"), movie.format || specs.format || metadata.format],
         [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
         [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
         [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles]
-      ]);
+      ];
       const releaseLocationText = typeof movie.location === "string" ? movie.location : "";
       const storageLocationLabel = movie.location && typeof movie.location === "object"
         ? movie.location.pathLabel || movie.location.name || ""
         : "";
       const storageLocationHtml = storageLocationLabel ? locationRouteLinkHtml(movie.location, storageLocationLabel) : "";
-      const collectorsSubsection = detailFieldSubsection(tNext("movieDetail.collectors", "Collectors"), [
+      const collectorsFields = [
         [tNext("movieDetail.edition", "Edition"), movie.edition],
         [tNext("movieDetail.packaging", "Packaging"), releasePackaging],
         [tNext("movieDetail.location", "Location"), releaseLocationText],
@@ -20936,10 +21045,10 @@ def ui_preview_html(
         [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
         [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
         ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
-      ]);
-      document.getElementById("movieDetailTechnical").innerHTML = (audioVideoSubsection + collectorsSubsection)
-        || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
-      bindContainerDetailLinks("movieDetailTechnical");
+      ];
+      document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
+      document.getElementById("movieDetailCollectors").innerHTML = detailFieldRows(collectorsFields);
+      bindContainerDetailLinks("movieDetailCollectors");
       renderMovieMetadataCompare(detail);
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
@@ -21009,11 +21118,13 @@ def ui_preview_html(
       activeDetailPayload = null;
       movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
       setMovieEditPanelVisible(false);
+      activateDetailTab("movieSections", "movieDetailReleasePanel");
       document.getElementById("movieDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("movieDetailOverview").textContent = "";
       document.getElementById("movieDetailTags").innerHTML = "";
       document.getElementById("movieDetailRelease").innerHTML = "";
       document.getElementById("movieDetailTechnical").innerHTML = "";
+      document.getElementById("movieDetailCollectors").innerHTML = "";
       document.getElementById("movieMetadataComparePanel").innerHTML = "";
       document.getElementById("movieListStateSummary").textContent = "";
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
@@ -22834,7 +22945,6 @@ def ui_preview_html(
       ["overview", "Plot"],
       ["director", "Director"],
       ["actor", "Actors"],
-      ["genre", "Genre"],
       ["imdbId", "IMDb ID"],
       ["tmdbId", "TMDb ID"],
       ["poster", "Poster"],
@@ -25312,6 +25422,19 @@ def ui_preview_html(
       }
       const metadata = payload.metadata || payload;
       const results = metadata.results || metadata.sources || metadata.matches || [];
+      const tmdbEnrichment = metadata?.enrichment?.tmdb || {};
+      const tmdbNeedsConfiguration = tmdbEnrichment.configured === false
+        && tmdbEnrichment.state === "needs_configuration";
+      const tmdbGuidance = tmdbNeedsConfiguration ? `
+        <div class="preview-empty warn import-tmdb-guidance" role="status">
+          <strong>${escapeHtml(tNext("importCenter.tmdbKeyRequiredTitle", "Add a free TMDb API key for full metadata"))}</strong>
+          <span>${escapeHtml(tNext("importCenter.tmdbKeyRequiredHelp", "You can still add this movie, but plot, cast and crew, artwork, and trailers will be limited until a TMDb API key is configured."))}</span>
+          <div class="button-row compact">
+            <a class="secondary-button" href="${escapeHtml(tmdbEnrichment.requestKeyUrl || "https://www.themoviedb.org/settings/api")}" target="_blank" rel="noopener noreferrer">${escapeHtml(tNext("importCenter.requestTmdbKey", "Request free TMDb key"))}</a>
+            ${canUseAppAdmin() ? `<button type="button" class="secondary-button" data-import-configure-tmdb="1">${escapeHtml(tNext("importCenter.configureTmdbKey", "Configure TMDb key"))}</button>` : ""}
+          </div>
+        </div>
+      ` : "";
       const boxSetProposals = barcodeBoxSetProposals();
       const movieResultCards = lookupMovieCandidates();
       const addableBoxSetProposal = boxSetProposals.find((item) => {
@@ -25692,13 +25815,13 @@ def ui_preview_html(
       `;
       if (!Array.isArray(results) || !results.length) {
         if (proposalCard || boxSetCard) {
-          list.innerHTML = directResultCard + boxSetCard + proposalCard + lookupActionFooter;
+          list.innerHTML = directResultCard + tmdbGuidance + boxSetCard + proposalCard + lookupActionFooter;
         } else {
-          list.innerHTML = directResultCard + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>` + lookupActionFooter;
+          list.innerHTML = directResultCard + tmdbGuidance + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>` + lookupActionFooter;
         }
         return;
       }
-      list.innerHTML = directResultCard + boxSetCard + proposalCard + sourceGrid + lookupActionFooter;
+      list.innerHTML = directResultCard + tmdbGuidance + boxSetCard + proposalCard + sourceGrid + lookupActionFooter;
     }
     function renderImportCenter() {
       renderImportTabs();
@@ -26430,13 +26553,13 @@ def ui_preview_html(
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
       const acquired = !!item.acquiredAt;
-      const activeMonitor = !!item.alertEnabled && item.targetPrice != null;
+      const activeMonitor = priceMonitoringEnabled() && !!item.alertEnabled && item.targetPrice != null;
       const priceCurrency = String(item.priceCurrency || "EUR").trim().toUpperCase() || "EUR";
       const currentBadge = activeMonitor && item.lastSeenPrice != null
-        ? `<span class="lists-price-badge current" title="${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19H2V5H4V17H20V19H4ZM6 15.4L11 10.4L14 13.4L19.6 7.8L21 9.2L14 16.2L11 13.2L7.4 16.8L6 15.4Z"/></svg></span>${escapeHtml(formatStatsPrice(item.lastSeenPrice, priceCurrency))}</span>`
+        ? `<span class="lists-price-badge current" title="${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19H2V5H4V17H20V19H4ZM6 15.4L11 10.4L14 13.4L19.6 7.8L21 9.2L14 16.2L11 13.2L7.4 16.8L6 15.4Z"/></svg></span>${escapeHtml(formatWishlistPrice(item.lastSeenPrice, priceCurrency))}</span>`
         : "";
       const targetBadge = activeMonitor
-        ? `<span class="lists-price-badge target" title="${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none"></circle><circle cx="12" cy="12" r="4" fill="none"></circle><circle cx="12" cy="12" r="1.8"></circle></svg></span>${escapeHtml(formatStatsPrice(item.targetPrice, priceCurrency))}</span>`
+        ? `<span class="lists-price-badge target" title="${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none"></circle><circle cx="12" cy="12" r="4" fill="none"></circle><circle cx="12" cy="12" r="1.8"></circle></svg></span>${escapeHtml(formatWishlistPrice(item.targetPrice, priceCurrency))}</span>`
         : "";
       return `
         <div class="preview-poster lists-static-poster" data-wishlist-card="${escapeHtml(item.id)}">
@@ -26501,8 +26624,9 @@ def ui_preview_html(
     }
     function wishlistRenderRows(rows, mode) {
       const all = rows || [];
-      const monitored = all.filter((item) => !item.acquiredAt && !!item.alertEnabled && item.targetPrice != null);
-      const pending = all.filter((item) => !item.acquiredAt && !(!!item.alertEnabled && item.targetPrice != null));
+      const monitoringEnabled = priceMonitoringEnabled();
+      const monitored = monitoringEnabled ? all.filter((item) => !item.acquiredAt && !!item.alertEnabled && item.targetPrice != null) : [];
+      const pending = all.filter((item) => !item.acquiredAt && (!monitoringEnabled || !(!!item.alertEnabled && item.targetPrice != null)));
       const acquired = all.filter((item) => !!item.acquiredAt);
       const renderGroup = (groupRows) => {
         if (mode === "detail") return wishlistDetailTableHtml(groupRows);
@@ -26521,7 +26645,7 @@ def ui_preview_html(
             : `<p class="wishlist-section-empty">${escapeHtml(tNext("lists.wishlistSectionEmpty", "Nothing here yet."))}</p>`}
         </section>
       `;
-      return section(tNext("appAdmin.featurePriceAlerts", "Price alerts"), monitored)
+      return (monitoringEnabled ? section(tNext("appAdmin.featurePriceAlerts", "Price alerts"), monitored) : "")
         + section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
         + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
@@ -26849,7 +26973,7 @@ def ui_preview_html(
       const candidate = (state.candidates || []).find((c) => c.candidateKey === candidateKey);
       if (!candidate) return;
       try {
-        await authApiJson("/api/next/lists/wishlist", {
+        const payload = await authApiJson("/api/next/lists/wishlist", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -26862,9 +26986,12 @@ def ui_preview_html(
             note: candidate.editionLabel || null
           })
         });
-        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        const message = payload && (payload.alreadyExists || payload.state === "already_exists")
+          ? tNext("lists.wishlistSectionPending", "On wishlist")
+          : tNext("lists.wishlistAdded", "Added to wishlist.");
+        setWishlistSearchMessage(message, "good");
         closeWishlistSearch();
-        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        setWishlistSearchMessage(message, "good");
         await loadListsView(true);
       } catch (err) {
         setWishlistSearchMessage((err && err.message) || tNext("lists.wishlistSearchError", "Search failed. Please try again."), "error");
@@ -27313,21 +27440,61 @@ def ui_preview_html(
       let shops = normalizeShops(item.shops);
       let shopEditor = null;
       let shopProvidersState = {loaded: false, loading: false, options: []};
-      const providerDomainHints = [
-        { matchers: [/zavvi\\./], providerTokens: ["zavvi"] },
-        { matchers: [/arrowfilms\\./, /arrow-video\\./], providerTokens: ["arrow", "arrowfilms", "arrow_films"] },
+      const AMAZON_ASIN_PATTERNS = [
+        /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/i,
+        /\/gp\/product\/([A-Z0-9]{10})(?:[/?]|$)/i,
+        /[?&]asin=([A-Z0-9]{10})(?:[&#]|$)/i,
       ];
+      const extractAmazonAsinFromUrl = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        for (const pattern of AMAZON_ASIN_PATTERNS) {
+          const match = text.match(pattern);
+          if (match && match[1]) return String(match[1]).toUpperCase();
+        }
+        return "";
+      };
+      const providerOption = (providerId) => (
+        shopProvidersState.options.find((option) => option.id === String(providerId || "").trim()) || null
+      );
+      const providerProductRefType = (providerId) => providerOption(providerId)?.productRef?.type || "";
+      const isAmazonAsinProvider = (providerId) => providerProductRefType(providerId) === "amazon_asin";
+      const syncProviderProductRefFromUrl = () => {
+        if (!shopEditor) return;
+        if (!isAmazonAsinProvider(shopEditor.providerId)) return;
+        const asin = extractAmazonAsinFromUrl(shopEditor.url);
+        if (asin) shopEditor.providerProductRef = asin;
+      };
       const normalizeProviderOptions = (payload) => {
         const providers = Array.isArray(payload?.providers) ? payload.providers : [];
         return providers
-          .filter((provider) => provider && provider.installed !== false && provider.enabled !== false)
+          .filter((provider) => provider && provider.usable !== false)
           .map((provider) => {
             const providerId = String(provider.id || provider.pluginId || "").trim();
             if (!providerId) return null;
-            return { id: providerId, label: pluginDisplayName(provider, providerId) };
+            const metadata = provider.priceProvider && typeof provider.priceProvider === "object"
+              ? provider.priceProvider
+              : {};
+            return {
+              id: providerId,
+              label: pluginDisplayName(provider, providerId),
+              orderIndex: Number(provider.orderIndex || 100),
+              hostPatterns: Array.isArray(metadata.hostPatterns) ? metadata.hostPatterns : [],
+              productRef: metadata.productRef && typeof metadata.productRef === "object" ? metadata.productRef : null,
+            };
           })
           .filter(Boolean)
-          .sort((a, b) => String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+          .sort((a, b) => a.orderIndex - b.orderIndex
+            || String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+      };
+      const providerHostMatches = (host, rawPattern) => {
+        const pattern = String(rawPattern || "").trim().toLowerCase();
+        if (!pattern) return false;
+        if (pattern.endsWith(".")) {
+          const token = pattern.slice(0, -1);
+          return !!token && (host.startsWith(`${token}.`) || host.includes(`.${token}.`));
+        }
+        return host === pattern || host.endsWith(`.${pattern}`);
       };
       const detectProviderFromUrl = (value) => {
         const text = String(value || "").trim();
@@ -27339,14 +27506,8 @@ def ui_preview_html(
           return "";
         }
         const available = Array.isArray(shopProvidersState.options) ? shopProvidersState.options : [];
-        for (const hint of providerDomainHints) {
-          if (!hint.matchers.some((matcher) => matcher.test(host))) continue;
-          for (const token of hint.providerTokens) {
-            const exact = available.find((option) => option.id === token);
-            if (exact) return exact.id;
-            const contains = available.find((option) => option.id.includes(token));
-            if (contains) return contains.id;
-          }
+        for (const option of available) {
+          if (option.hostPatterns.some((pattern) => providerHostMatches(host, pattern))) return option.id;
         }
         return "";
       };
@@ -27356,6 +27517,7 @@ def ui_preview_html(
         if (!detected) return false;
         shopEditor.providerId = detected;
         shopEditor.detectedFromUrl = true;
+        syncProviderProductRefFromUrl();
         return true;
       };
       const ensureShopProvidersLoaded = async () => {
@@ -27380,9 +27542,22 @@ def ui_preview_html(
       const formatShopPrice = (shop) => {
         const value = shop && shop.lastSeenPrice;
         if (value == null) return "—";
-        return `${escapeHtml(String(value))} ${escapeHtml((shop && shop.priceCurrency) || "EUR")}`;
+        return escapeHtml(formatWishlistPrice(value, (shop && shop.priceCurrency) || "EUR"));
+      };
+      const shopVisitLink = (shop) => {
+        const value = String(shop?.priceUrl || "").trim();
+        if (!value) return "";
+        try {
+          const parsed = new URL(value);
+          if (!["http:", "https:"].includes(parsed.protocol)) return "";
+          const label = parsed.hostname.replace(/^www\./i, "") || value;
+          return `<a href="${escapeHtml(parsed.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+        } catch (_) {
+          return "";
+        }
       };
       const render = () => {
+        const monitoringEnabled = priceMonitoringEnabled();
         const posterPreview = posterUrl
           ? `<img src="${escapeHtml(posterUrl)}" alt="">`
           : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -27413,94 +27588,97 @@ def ui_preview_html(
                 <span data-read>${escapeHtml(item.note || "")}</span>
                 <textarea data-edit data-field="note" rows="2">${escapeHtml(item.note || "")}</textarea></label>
               <div class="lists-modal-section-divider">${escapeHtml(tNext("lists.wishlistPriceDropAlert", "Price drop alert"))}</div>
-              <label class="lists-modal-field lists-modal-field-check">
-                <span>${escapeHtml(tNext("lists.wishlistAlertEnabled", "Alert on price drop"))}</span>
-                <span data-read>${item.alertEnabled ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}</span>
-                <input data-edit data-field="alertEnabled" type="checkbox"${item.alertEnabled ? " checked" : ""}>
-              </label>
-              <label class="lists-modal-field">
-                <span>${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}</span>
-                <span data-read>${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : "—"}</span>
-                <input data-edit data-field="targetPrice" type="number" min="0" step="0.01" value="${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : ""}">
-              </label>
-              <label class="lists-modal-field">
-                <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
-                <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
-                <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
-              </label>
-              <div class="lists-modal-shop-list-wrap">
-                <div class="lists-modal-shop-head">
-                  <span>${escapeHtml(tNext("lists.wishlistShopsTitle", "Shops"))}</span>
-                  ${shops.length < 10 ? `<button type="button" class="ghost" data-shop-add>${escapeHtml(tNext("lists.wishlistShopAdd", "Add shop"))}</button>` : ""}
-                </div>
-                ${shops.length
-                  ? `<div class="lists-modal-shop-list">${
-                      shops.map((shop) => `
-                        <div class="lists-modal-shop-row">
-                          <div class="lists-modal-shop-main">
-                            <strong>${escapeHtml(shop.shopName || "")}</strong>
-                            <span>${formatShopPrice(shop)}</span>
-                          </div>
-                          <button type="button" class="ghost" data-shop-edit="${escapeHtml(String(shop.id || ""))}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
-                        </div>
-                      `).join("")
-                    }</div>`
-                  : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistNoShops", "No shops added yet."))}</p>`
-                }
-                ${shopEditor ? `
-                  <div class="lists-modal-shop-editor">
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistShopName", "Shop name"))}</span>
-                      <input data-shop-field="name" type="text" value="${escapeHtml(shopEditor.name || "")}" maxlength="80">
-                    </label>
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
-                      <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
-                    </label>
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistShopProvider", "Price provider"))}</span>
-                      <select data-shop-field="providerId">
-                        <option value="">${escapeHtml(shopProvidersState.loading ? tNext("lists.wishlistShopProviderLoading", "Loading providers...") : tNext("lists.wishlistShopProviderAuto", "Auto-detect from URL"))}</option>
-                        ${(() => {
-                          const options = Array.isArray(shopProvidersState.options) ? shopProvidersState.options.slice() : [];
-                          const selectedProviderId = String(shopEditor.providerId || "").trim();
-                          if (selectedProviderId && !options.some((option) => option.id === selectedProviderId)) {
-                            options.push({ id: selectedProviderId, label: pluginDisplayName(selectedProviderId, selectedProviderId) });
-                          }
-                          return options
-                            .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selectedProviderId ? " selected" : ""}>${escapeHtml(option.label || option.id)}</option>`)
-                            .join("");
-                        })()}
-                      </select>
-                      ${shopEditor.detectedFromUrl ? `<span data-static>${escapeHtml(tNext("lists.wishlistShopProviderDetected", "Provider detected from URL."))}</span>` : ""}
-                    </label>
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
-                      <input data-shop-field="currency" type="text" maxlength="3" value="${escapeHtml(shopEditor.currency || "EUR")}">
-                    </label>
-                    <details class="lists-modal-shop-advanced">
-                      <summary>${escapeHtml(tNext("lists.wishlistShopAdvancedSelector", "Advanced price selector"))}</summary>
-                      <label class="lists-modal-field">
-                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorType", "Selector type"))}</span>
-                        <select data-shop-field="selectorType">
-                          <option value="">${escapeHtml(tNext("common.none", "None"))}</option>
-                          <option value="css_text"${shopEditor.selectorType === "css_text" ? " selected" : ""}>css_text</option>
-                          <option value="regex_capture"${shopEditor.selectorType === "regex_capture" ? " selected" : ""}>regex_capture</option>
-                        </select>
-                      </label>
-                      <label class="lists-modal-field">
-                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorValue", "Selector value"))}</span>
-                        <input data-shop-field="selectorValue" type="text" value="${escapeHtml(shopEditor.selectorValue || "")}" placeholder=".price, #our-price, regex...">
-                      </label>
-                    </details>
-                    <div class="lists-modal-shop-editor-actions">
-                      <button type="button" data-shop-save>${escapeHtml(tNext("common.save", "Save"))}</button>
-                      <button type="button" class="ghost" data-shop-cancel>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
-                    </div>
+              ${monitoringEnabled ? `
+                <label class="lists-modal-field lists-modal-field-check">
+                  <span>${escapeHtml(tNext("lists.wishlistAlertEnabled", "Alert on price drop"))}</span>
+                  <span data-read>${item.alertEnabled ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}</span>
+                  <input data-edit data-field="alertEnabled" type="checkbox"${item.alertEnabled ? " checked" : ""}>
+                </label>
+                <label class="lists-modal-field">
+                  <span>${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}</span>
+                  <span data-read>${item.targetPrice != null ? escapeHtml(formatWishlistPrice(item.targetPrice, item.priceCurrency || "EUR")) : "—"}</span>
+                  <input data-edit data-field="targetPrice" type="number" min="0" step="0.01" value="${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : ""}">
+                </label>
+                <label class="lists-modal-field">
+                  <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                  <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
+                  <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
+                </label>
+                <div class="lists-modal-shop-list-wrap">
+                  <div class="lists-modal-shop-head">
+                    <span>${escapeHtml(tNext("lists.wishlistShopsTitle", "Shops"))}</span>
+                    ${shops.length < 10 ? `<button type="button" class="ghost" data-shop-add>${escapeHtml(tNext("lists.wishlistShopAdd", "Add shop"))}</button>` : ""}
                   </div>
-                ` : ""}
-              </div>
-              ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(String(item.lastSeenPrice))} ${escapeHtml(item.priceCurrency || "EUR")}</span></div>` : ""}
+                  ${shops.length
+                    ? `<div class="lists-modal-shop-list">${
+                        shops.map((shop) => `
+                          <div class="lists-modal-shop-row">
+                            <div class="lists-modal-shop-main">
+                              <strong>${escapeHtml(shop.shopName || "")}</strong>
+                              ${shopVisitLink(shop)}
+                              <span>${formatShopPrice(shop)}</span>
+                            </div>
+                            <button type="button" class="ghost" data-shop-edit="${escapeHtml(String(shop.id || ""))}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+                          </div>
+                        `).join("")
+                      }</div>`
+                    : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistNoShops", "No shops added yet."))}</p>`
+                  }
+                  ${shopEditor ? `
+                    <div class="lists-modal-shop-editor">
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopName", "Shop name"))}</span>
+                        <input data-shop-field="name" type="text" value="${escapeHtml(shopEditor.name || "")}" maxlength="80">
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
+                        <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopProvider", "Price provider"))}</span>
+                        <select data-shop-field="providerId">
+                          <option value="">${escapeHtml(shopProvidersState.loading ? tNext("lists.wishlistShopProviderLoading", "Loading providers...") : tNext("lists.wishlistShopProviderAuto", "Auto-detect from URL"))}</option>
+                          ${(() => {
+                            const options = Array.isArray(shopProvidersState.options) ? shopProvidersState.options.slice() : [];
+                            const selectedProviderId = String(shopEditor.providerId || "").trim();
+                            if (selectedProviderId && !options.some((option) => option.id === selectedProviderId)) {
+                              options.push({ id: selectedProviderId, label: pluginDisplayName(selectedProviderId, selectedProviderId) });
+                            }
+                            return options
+                              .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selectedProviderId ? " selected" : ""}>${escapeHtml(option.label || option.id)}</option>`)
+                              .join("");
+                          })()}
+                        </select>
+                        ${shopEditor.detectedFromUrl ? `<span data-static>${escapeHtml(tNext("lists.wishlistShopProviderDetected", "Provider detected from URL."))}</span>` : ""}
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                        <input data-shop-field="currency" type="text" maxlength="3" value="${escapeHtml(shopEditor.currency || "EUR")}">
+                      </label>
+                      <details class="lists-modal-shop-advanced">
+                        <summary>${escapeHtml(tNext("lists.wishlistShopAdvancedSelector", "Advanced price selector"))}</summary>
+                        <label class="lists-modal-field">
+                          <span>${escapeHtml(tNext("lists.wishlistShopSelectorType", "Selector type"))}</span>
+                          <select data-shop-field="selectorType">
+                            <option value="">${escapeHtml(tNext("common.none", "None"))}</option>
+                            <option value="css_text"${shopEditor.selectorType === "css_text" ? " selected" : ""}>css_text</option>
+                            <option value="regex_capture"${shopEditor.selectorType === "regex_capture" ? " selected" : ""}>regex_capture</option>
+                          </select>
+                        </label>
+                        <label class="lists-modal-field">
+                          <span>${escapeHtml(tNext("lists.wishlistShopSelectorValue", "Selector value"))}</span>
+                          <input data-shop-field="selectorValue" type="text" value="${escapeHtml(shopEditor.selectorValue || "")}" placeholder=".price, #our-price, regex...">
+                        </label>
+                      </details>
+                      <div class="lists-modal-shop-editor-actions">
+                        <button type="button" data-shop-save>${escapeHtml(tNext("common.save", "Save"))}</button>
+                        <button type="button" class="ghost" data-shop-cancel>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+                      </div>
+                    </div>
+                  ` : ""}
+                </div>
+                ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(formatWishlistPrice(item.lastSeenPrice, item.priceCurrency || "EUR"))}</span></div>` : ""}
+              ` : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistPriceMonitoringDisabled", "Price monitoring is disabled in Settings."))}</p>`}
             </div>
           </div>
           <p class="lists-modal-message" data-message></p>
@@ -27567,6 +27745,7 @@ def ui_preview_html(
               name: current.shopName || "",
               url: current.priceUrl || "",
               providerId: current.providerId || "",
+              providerProductRef: current.providerProductRef || "",
               providerTouched: !!current.providerId,
               detectedFromUrl: false,
               currency: (current.priceCurrency || item.priceCurrency || "EUR").toUpperCase(),
@@ -27587,6 +27766,7 @@ def ui_preview_html(
             name: "",
             url: "",
             providerId: "",
+            providerProductRef: "",
             providerTouched: false,
             detectedFromUrl: false,
             currency: (item.priceCurrency || "EUR").toUpperCase(),
@@ -27604,6 +27784,7 @@ def ui_preview_html(
           if (!shopEditor) return;
           const nextUrl = (event.target.value || "").trim();
           shopEditor.url = nextUrl;
+          syncProviderProductRefFromUrl();
           if (applyProviderAutodetect(nextUrl)) render();
         });
         panel.querySelector('[data-shop-field="providerId"]')?.addEventListener("change", (event) => {
@@ -27611,12 +27792,20 @@ def ui_preview_html(
           shopEditor.providerId = String(event.target.value || "").trim();
           shopEditor.providerTouched = true;
           shopEditor.detectedFromUrl = false;
+          syncProviderProductRefFromUrl();
         });
         panel.querySelector("[data-shop-save]")?.addEventListener("click", async () => {
           if (!shopEditor) return;
           const name = (panel.querySelector('[data-shop-field="name"]').value || "").trim();
-          const url = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
+          const rawUrl = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
           const providerId = String(panel.querySelector('[data-shop-field="providerId"]')?.value || "").trim();
+          const asinOnlyMatch = rawUrl.match(/^[A-Z0-9]{10}$/i);
+          const url = (isAmazonAsinProvider(providerId) && asinOnlyMatch)
+            ? `https://www.amazon.nl/dp/${String(asinOnlyMatch[0]).toUpperCase()}`
+            : rawUrl;
+          const providerProductRef = isAmazonAsinProvider(providerId)
+            ? (extractAmazonAsinFromUrl(url) || String(shopEditor.providerProductRef || "").trim().toUpperCase() || null)
+            : (String(shopEditor.providerProductRef || "").trim() || null);
           const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";
           const selectorType = (panel.querySelector('[data-shop-field="selectorType"]')?.value || "").trim();
           const selectorValue = (panel.querySelector('[data-shop-field="selectorValue"]')?.value || "").trim();
@@ -27645,6 +27834,7 @@ def ui_preview_html(
                   shopName: name,
                   priceUrl: url,
                   providerId: providerId || null,
+                  providerProductRef,
                   priceCurrency: currency,
                   priceSelector: selectorType ? { type: selectorType, value: selectorValue } : null
                 }),
@@ -27663,8 +27853,9 @@ def ui_preview_html(
                 "Shop saved. Current price: {price} {currency}."
               );
               const priceMessage = messageTemplate
-                .replace("{price}", String(fetchedPrice))
-                .replace("{currency}", fetchedCurrency);
+                .replace("{price}", formatWishlistPrice(fetchedPrice, fetchedCurrency))
+                .replace("{currency}", "")
+                .replace(/\s+\./g, ".");
               setMessage(priceMessage, "good");
             } else {
               setMessage(
@@ -28066,7 +28257,7 @@ def ui_preview_html(
           return `
             <div class="stats-bar-row">
               <div class="stats-bar-head">
-                <span>${escapeHtml(row.label || tNext("common.untitled", "Unknown"))}</span>
+                <span>${escapeHtml(row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown")))}</span>
                 <span>${escapeHtml(row.count || 0)}</span>
               </div>
               <div class="stats-bar-track"><div class="stats-bar-fill" style="width:${pct}%"></div></div>
@@ -28084,6 +28275,34 @@ def ui_preview_html(
       } catch (error) {
         return `${numeric.toFixed(2)} ${code}`;
       }
+    }
+    function priceMonitoringEnabled() {
+      return preferences.price_monitoring_enabled !== false;
+    }
+    function preferredPriceCurrency() {
+      return String(preferences.preferred_price_currency || "").trim().toUpperCase();
+    }
+    function convertPriceAmount(value, fromCurrency, toCurrency) {
+      const numeric = Number(value);
+      const from = String(fromCurrency || "").trim().toUpperCase();
+      const to = String(toCurrency || "").trim().toUpperCase();
+      if (!Number.isFinite(numeric) || !from || !to) return null;
+      if (from === to) return numeric;
+      const rates = priceDisplay && typeof priceDisplay.exchangeRates === "object" ? priceDisplay.exchangeRates : {};
+      const fromRate = Number(rates[from]);
+      const toRate = Number(rates[to]);
+      if (!Number.isFinite(fromRate) || fromRate <= 0 || !Number.isFinite(toRate) || toRate <= 0) return null;
+      return (numeric / fromRate) * toRate;
+    }
+    function formatWishlistPrice(value, currency = "EUR") {
+      const original = formatStatsPrice(value, currency);
+      if (original === "—") return original;
+      const preferred = preferredPriceCurrency();
+      const source = String(currency || "EUR").trim().toUpperCase() || "EUR";
+      if (!preferred || preferred === source) return original;
+      const converted = convertPriceAmount(value, source, preferred);
+      if (converted == null) return original;
+      return `${original} (${formatStatsPrice(converted, preferred)})`;
     }
     function statsPriceChangeClass(value) {
       const numeric = Number(value);
@@ -29641,7 +29860,6 @@ def ui_preview_html(
         locationId: document.getElementById("movieEditLocationSelect")?.value || null,
         runtimeMinutes: formTextValue("movieEditRuntime"),
         director: formTextValue("movieEditDirector"),
-        genre: formTextValue("movieEditGenre"),
         studios: formTextValue("movieEditStudios"),
         contentRating: formTextValue("movieEditContentRating"),
         ratingCountry,
@@ -29686,7 +29904,6 @@ def ui_preview_html(
       switch (field) {
         case "runtime_minutes": return valueText(movie.runtime_minutes);
         case "director": return valueText(metadata.director);
-        case "genre": return valueText(metadata.genre);
         case "studios": return valueText(metadata.studios);
         case "distributor": return valueText(metadata.distributor);
         case "hdr": return valueText(specs.hdr || metadata.hdr);
@@ -30631,6 +30848,8 @@ def ui_preview_html(
       ["rating_country", "preferences.ratingCountry", "preferences.ratingCountryHelp"],
       ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"],
       ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"],
+      ["price_monitoring_enabled", "preferences.priceMonitoringEnabled", "preferences.priceMonitoringEnabledHelp"],
+      ["preferred_price_currency", "preferences.preferredPriceCurrency", "preferences.preferredPriceCurrencyHelp", "price_monitoring_enabled"],
       ["delete_container_members_with_container", "preferences.deleteContainerMembersWithContainer", "preferences.deleteContainerMembersWithContainerHelp"]
     ];
     const preferenceCollectorLabels = [
@@ -30641,6 +30860,7 @@ def ui_preview_html(
       ["show_metadata_jobs", "preferences.showMetadataJobs", "preferences.showMetadataJobsHelp"]
     ];
     const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
+    const DEFAULT_PRICE_DISPLAY_CURRENCIES = ["EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY"];
     function ratingCountryPickerHtml(disabled = false) {
       const selected = String(preferences.rating_country || "NL").toUpperCase();
       const active = RATING_COUNTRIES_ORDER.includes(selected) ? selected : "NL";
@@ -30656,6 +30876,27 @@ def ui_preview_html(
         </div>
       `;
     }
+    function preferredPriceCurrencyPickerHtml(disabled = false) {
+      const selected = preferredPriceCurrency();
+      const seen = new Set();
+      const currencies = [];
+      const available = Array.isArray(priceDisplay?.supportedCurrencies) ? priceDisplay.supportedCurrencies : [];
+      [...available, ...DEFAULT_PRICE_DISPLAY_CURRENCIES, selected].forEach((value) => {
+        const code = String(value || "").trim().toUpperCase();
+        if (!code || seen.has(code)) return;
+        seen.add(code);
+        currencies.push(code);
+      });
+      const options = [
+        `<option value="">${escapeHtml(tNext("preferences.preferredPriceCurrencyNone", "Website currency only"))}</option>`,
+        ...currencies.map((code) => `<option value="${escapeHtml(code)}"${code === selected ? " selected" : ""}>${escapeHtml(code)}</option>`)
+      ].join("");
+      return `
+        <select data-preference-choice-select="preferred_price_currency" aria-label="${escapeHtml(tNext("preferences.preferredPriceCurrency", "Preferred price currency"))}" ${disabled ? "disabled" : ""}>
+          ${options}
+        </select>
+      `;
+    }
     function preferenceRowsHtml(items) {
       return items.map(([key, labelKey, helpKey, requiresKey]) => {
         const disabled = requiresKey && !preferences[requiresKey];
@@ -30668,6 +30909,19 @@ def ui_preview_html(
               </span>
               <div class="country-picker" data-preference-country-picker="${escapeHtml(key)}">
                 ${ratingCountryPickerHtml(disabled)}
+              </div>
+            </div>
+          `;
+        }
+        if (key === "preferred_price_currency") {
+          return `
+            <div class="preference-control-row ${disabled ? "disabled" : ""}">
+              <span>
+                <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+                <span>${escapeHtml(tNext(helpKey, ""))}</span>
+              </span>
+              <div class="country-picker" data-preference-choice-picker="${escapeHtml(key)}">
+                ${preferredPriceCurrencyPickerHtml(disabled)}
               </div>
             </div>
           `;
@@ -30701,6 +30955,12 @@ def ui_preview_html(
         select.addEventListener("change", () => {
           if (select.disabled) return;
           updatePreference("rating_country", select.value);
+        });
+      });
+      list.querySelectorAll("[data-preference-choice-select]").forEach((select) => {
+        select.addEventListener("change", () => {
+          if (select.disabled) return;
+          updatePreference(select.dataset.preferenceChoiceSelect, select.value);
         });
       });
     }
@@ -31032,8 +31292,13 @@ def ui_preview_html(
           body: JSON.stringify({preferences: patch})
         });
         preferences = Object.assign({}, preferences, payload.preferences || {});
+        const refreshSnapshot = key === "price_monitoring_enabled" || key === "preferred_price_currency";
+        if (refreshSnapshot) {
+          await loadAppSnapshot();
+        }
         renderPreferences();
         renderCollectionSurface();
+        if (listsState.loaded) renderListsView();
         if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
         if (message) message.textContent = tNext("preferences.saved", "Saved.");
       } catch (error) {
@@ -31591,6 +31856,7 @@ def ui_preview_html(
     async function loadAppSnapshot() {
       const payload = await apiJson("/api/next/app/snapshot", {headers: authHeaders()});
       state = payload.snapshot || {};
+      priceDisplay = state.priceDisplay || {};
       movies = state.movies || [];
       containers = state.containers || [];
       locations = state.locations || locations || [];
@@ -33117,7 +33383,6 @@ def ui_preview_html(
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
         const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
         const healthButton = event.target.closest("[data-app-admin-plugin-health]");
-        const saveButton = event.target.closest("[data-app-admin-plugin-save]");
         const executeButton = event.target.closest("[data-app-admin-plugin-execute]");
         const jobButton = event.target.closest("[data-app-admin-plugin-job]");
         const moveButton = event.target.closest("[data-app-admin-plugin-move]");
@@ -33129,7 +33394,6 @@ def ui_preview_html(
         const movieVaultResetButton = event.target.closest("[data-app-admin-movievault-reset]");
         if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
         if (healthButton) checkAppAdminPluginHealth(healthButton.dataset.appAdminPluginHealth);
-        if (saveButton) saveAppAdminPluginConfig(saveButton.dataset.appAdminPluginSave, saveButton.closest(".profile-passkey"));
         if (executeButton) executeAppAdminPlugin(executeButton.dataset.appAdminPluginExecute, executeButton.dataset.entrypoint);
         if (jobButton) queueAppAdminPluginJob(jobButton.dataset.appAdminPluginJob, jobButton.dataset.entrypoint);
         if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down", moveButton.dataset.sectionCategory || "");
@@ -33139,6 +33403,12 @@ def ui_preview_html(
         if (rollbackButton) rollbackAppAdminPlugin(rollbackButton.dataset.appAdminPluginRollback);
         if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(movieVaultRefreshButton.dataset.appAdminMovievaultRefresh || "movievault", false);
         if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(movieVaultResetButton.dataset.appAdminMovievaultReset || "movievault", true);
+      });
+      document.getElementById("appAdminPluginsList")?.addEventListener("submit", (event) => {
+        const form = event.target.closest("[data-app-admin-plugin-config-form]");
+        if (!form) return;
+        event.preventDefault();
+        saveAppAdminPluginConfig(form.dataset.appAdminPluginConfigForm, form);
       });
       document.getElementById("profileEditForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -33346,6 +33616,7 @@ def ui_preview_html(
         previewImportBatchBarcode(barcode);
       });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
+        const configureTmdbButton = event.target.closest("[data-import-configure-tmdb]");
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
         const movieCandidateButton = event.target.closest("[data-movie-candidate-key]");
         const proposalButton = event.target.closest(".import-proposal-select[data-box-set-proposal-key]");
@@ -33356,6 +33627,14 @@ def ui_preview_html(
         const containerButton = event.target.closest("[data-import-open-container]");
         const movieButton = event.target.closest("[data-open-movie]");
         const metadataButton = event.target.closest("[data-import-metadata-refresh]");
+        if (configureTmdbButton) {
+          event.preventDefault();
+          showAdminPage(true);
+          setAppAdminTab("plugins");
+          setAppAdminPluginTab("registry");
+          setAppAdminPluginTypeTab("metadata_source");
+          return;
+        }
         if (addLookupButton) {
           event.preventDefault();
           event.stopPropagation();
