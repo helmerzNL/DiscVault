@@ -68,6 +68,11 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn("movieDetail.collectors", self.source)
         self.assertIn("movieDetail.castCrew", self.source)
 
+    def test_source_catalog_includes_rewatch_action_sheet(self):
+        self.assertIn("lists.logRewatch", self.source)
+        self.assertIn("lists.watchedToday", self.source)
+        self.assertIn("lists.watchedYesterday", self.source)
+
     def test_locale_files_discovered(self):
         self.assertGreater(len(self.locale_files), 0)
 
