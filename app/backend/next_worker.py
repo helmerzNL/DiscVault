@@ -796,7 +796,6 @@ def import_movie_metadata(item: dict[str, Any], plugin_id: str) -> dict[str, Any
         "source_provider": item.get("sourceProvider") or plugin_id,
         "source_file": item.get("sourceFile"),
         "source_url": item.get("sourceUrl"),
-        "genre": item.get("genre"),
         "director": item.get("director"),
         "actor": item.get("actor"),
         "poster_url": item.get("posterUrl") or item.get("poster_url"),

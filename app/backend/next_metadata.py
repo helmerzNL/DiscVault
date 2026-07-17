@@ -21,6 +21,8 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
 
 try:
     from .next_import import clean_text
+    from .next_genres import genre_keys_from_tmdb_ids
+    from .next_genres import normalize_genre_keys
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
     from .next_movievault_connection import is_movievault_plugin
@@ -32,6 +34,8 @@ try:
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
 except ImportError:  # pragma: no cover - supports direct module execution
     from next_import import clean_text
+    from next_genres import genre_keys_from_tmdb_ids
+    from next_genres import normalize_genre_keys
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
     from next_movievault_connection import is_movievault_plugin
@@ -102,6 +106,9 @@ METADATA_TECHNICAL_FIELDS = {
 
 MOVIE_METADATA_LOCKS_KEY = "field_locks"
 
+# `genre` is intentionally absent: genres are read-only, sourced only from
+# TMDB, and stored as relational movie_genres associations rather than a
+# manually editable metadata field, so they cannot be locked.
 MOVIE_LOCKABLE_FIELDS = {
     "title",
     "sort_title",
@@ -118,7 +125,6 @@ MOVIE_LOCKABLE_FIELDS = {
     "notes",
     "runtime_minutes",
     "director",
-    "genre",
     "studios",
     "distributor",
     "hdr",
@@ -178,7 +184,6 @@ MOVIE_LOCK_RECEIVER_KEYS: dict[str, tuple[str, ...]] = {
     "notes": ("notes",),
     "runtime_minutes": ("runtimeMinutes",),
     "director": ("director",),
-    "genre": ("genre",),
     "studios": ("studios", "studio"),
     "distributor": ("distributor",),
     "hdr": ("hdr",),
@@ -217,6 +222,7 @@ METADATA_RELEASE_FIELDS = {
 
 TMDB_PLUGIN_ID = "tmdb"
 TMDB_API_KEY_URL = "https://www.themoviedb.org/settings/api"
+LEGACY_GENRE_FIELDS = {"genre", "genres"}
 
 METADATA_IDENTIFICATION_FIELDS = {
     "title",
@@ -240,8 +246,6 @@ METADATA_ENRICHMENT_FIELDS = {
     "runtime_minutes",
     "rating",
     "audience_rating",
-    "genre",
-    "genres",
     "director",
     "directors",
     "actor",
@@ -667,7 +671,51 @@ def movie_identifiers(conn, movie_id: UUID) -> dict[str, str]:
         elif provider == "imdb" and identifier_type == "movie_id":
             values["imdb_id"] = row["identifier"]
             values["imdbId"] = row["identifier"]
+        elif provider in MOVIEVAULT_PLUGIN_IDS and identifier_type == "movie_id":
+            values["movievault_id"] = row["identifier"]
+            values["movieVaultId"] = row["identifier"]
     return values
+
+
+def movie_genre_keys(conn, movie_id: UUID) -> list[str]:
+    """Return a movie's canonical genre keys, sorted by catalog order."""
+    if not table_exists(conn, "movie_genres"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT mg.genre_key
+            FROM movie_genres mg
+            LEFT JOIN genres g ON g.key = mg.genre_key
+            WHERE mg.movie_id=%s
+            ORDER BY g.sort_order NULLS LAST, mg.genre_key
+            """,
+            (movie_id,),
+        )
+        return [str(row["genre_key"]) for row in cur.fetchall()]
+
+
+def replace_movie_genres(conn, movie_id: UUID, genre_keys: list[str]) -> list[str]:
+    """Transactionally replace a movie's genre associations.
+
+    TMDB is the sole owner of this relation: an empty list is a legitimate,
+    authoritative "no genres" answer and clears any existing associations.
+    """
+    if not table_exists(conn, "movie_genres"):
+        return []
+    normalized = normalize_genre_keys(genre_keys)
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM movie_genres WHERE movie_id=%s", (movie_id,))
+        if normalized:
+            cur.executemany(
+                """
+                INSERT INTO movie_genres (movie_id, genre_key)
+                VALUES (%s, %s)
+                ON CONFLICT (movie_id, genre_key) DO NOTHING
+                """,
+                [(movie_id, key) for key in normalized],
+            )
+    return normalized
 
 
 def movie_container_context(conn, movie_id: UUID) -> list[dict[str, Any]]:
@@ -785,6 +833,9 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
     identifiers = movie_identifiers(conn, movie_id)
     technical = movie_technical_specs(conn, movie_id)
     containers = movie_container_context(conn, movie_id)
+    current_genres = movie_genre_keys(conn, movie_id)
+    movie_row = dict(movie)
+    movie_row["genres"] = current_genres
     box_sets = [item for item in containers if item.get("container_type") == "box_set"]
     query = {
         "movieId": str(movie_id),
@@ -797,6 +848,12 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
         "normalizedFormat": normalize_media_format(movie.get("format")),
         "tmdbId": identifiers.get("tmdbId") or metadata.get("tmdb_id") or metadata.get("tmdbId") or "",
         "imdbId": identifiers.get("imdbId") or metadata.get("imdb_id") or metadata.get("imdbId") or "",
+        "movieVaultId": (
+            identifiers.get("movieVaultId")
+            or metadata.get("movievault_id")
+            or metadata.get("movieVaultId")
+            or ""
+        ),
         "memberOfBoxSet": bool(box_sets),
         "parentBoxSets": [
             {
@@ -811,7 +868,7 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
         "containers": containers,
     }
     return {
-        "movie": dict(movie),
+        "movie": movie_row,
         "metadata": metadata,
         "identifiers": identifiers,
         "technicalSpecs": technical,
@@ -834,6 +891,13 @@ def query_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "normalizedFormat": normalize_media_format(media_format),
         "tmdbId": clean_text(payload.get("tmdbId") or payload.get("tmdb_id")),
         "imdbId": clean_text(payload.get("imdbId") or payload.get("imdb_id")),
+        "movieVaultId": clean_text(
+            payload.get("movieVaultId")
+            or payload.get("movievaultId")
+            or payload.get("movievault_id")
+            or payload.get("releaseId")
+            or payload.get("release_id")
+        ),
         "memberOfBoxSet": bool(payload.get("memberOfBoxSet") or payload.get("member_of_box_set")),
         "detectBoxSets": bool(payload.get("detectBoxSets") or payload.get("detect_box_sets") or payload.get("importBoxSets") or payload.get("import_box_sets")),
         "previewMode": bool(payload.get("previewMode") or payload.get("preview_mode")),
@@ -907,6 +971,7 @@ def movievault_identification_plan(plugin: dict[str, Any], query: dict[str, Any]
     external_barcode = clean_text(query.get("externalBarcode"))
     title = clean_text(query.get("title"))
     fallback = clean_text(query.get("fallbackTitle"))
+    movievault_id = clean_text(query.get("movieVaultId"))
     base_payload = dict(query)
 
     def add(entrypoint: str, payload: dict[str, Any]) -> None:
@@ -920,6 +985,9 @@ def movievault_identification_plan(plugin: dict[str, Any], query: dict[str, Any]
             if key not in ("externalBarcode", "barcode")
         }
         add("search_title", identity_payload)
+    elif movievault_id:
+        add("movie_details", base_payload)
+        identity_payload = base_payload
     elif external_barcode:
         identity_payload = {**base_payload, "barcode": external_barcode}
         add("search_barcode", identity_payload)
@@ -974,16 +1042,19 @@ def metadata_source_policy_result(result: dict[str, Any]) -> dict[str, Any]:
     constrained["movieUpdates"] = {
         field: value
         for field, value in movie_updates.items()
-        if field not in METADATA_ENRICHMENT_FIELDS
+        if field not in METADATA_ENRICHMENT_FIELDS and field not in LEGACY_GENRE_FIELDS
     }
     constrained["metadataUpdates"] = {
         field: value
         for field, value in metadata_updates.items()
-        if field not in METADATA_ENRICHMENT_FIELDS
+        if field not in METADATA_ENRICHMENT_FIELDS and field not in LEGACY_GENRE_FIELDS
     }
     constrained["mediaUpdates"] = {}
     constrained["credits"] = []
     constrained["localizations"] = []
+    # Genres are TMDB-only; any other plugin's genre answer is dropped here
+    # regardless of what canonicalize_plugin_result produced.
+    constrained["genreKeys"] = None
     if is_movievault_identity_source(plugin_id):
         constrained["candidates"] = [
             sanitized
@@ -2018,6 +2089,16 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
             synthesized_candidate["identifiers"] = dict(identifiers)
         candidates = [synthesized_candidate]
 
+    # Genres are TMDB-owned and relational: only the tmdb plugin may supply
+    # them, and only when it actually returned a `genreIds` list (which is
+    # always present -- possibly empty -- on a /movie/{id} hit). `None` means
+    # "this result carries no genre answer" so the merge step leaves any
+    # existing associations untouched; an empty list is an authoritative
+    # "TMDB says this movie has no genres" that clears associations.
+    genre_keys: list[str] | None = None
+    if plugin_id == TMDB_PLUGIN_ID and "genreIds" in result:
+        genre_keys = genre_keys_from_tmdb_ids(result.get("genreIds"))
+
     return {
         "pluginId": plugin_id,
         "entrypoint": entrypoint,
@@ -2035,6 +2116,7 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "identifiers": identifiers,
         "credits": credit_updates,
         "localizations": localization_updates,
+        "genreKeys": genre_keys,
         "candidates": candidates,
         "boxSetEvidence": box_set_evidence,
         "boxSetProposal": box_set_proposal,
@@ -2121,6 +2203,8 @@ def metadata_decision_initial_value(
     if target == "metadata":
         metadata = current.get("metadata") if isinstance(current.get("metadata"), dict) else {}
         return metadata.get(field)
+    if target == "genre":
+        return current.get("genres") or []
     return current.get(field)
 
 
@@ -2167,11 +2251,14 @@ def merge_metadata_results(
     localization_keys: set[str] = set()
     provenance: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    genre_keys: list[str] | None = None
+    genre_keys_selected = False
     field_decisions_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     selected_field_keys: set[tuple[str, str]] = set()
     working_movie = dict(current)
     working_metadata = dict(current.get("metadata") or {})
     working_technical = dict(technical_current)
+    current_genre_keys = normalize_genre_keys(current.get("genres"))
     locked_fields = movie_locked_fields(working_metadata)
 
     def decision_for(target: str, field: str) -> dict[str, Any]:
@@ -2300,6 +2387,39 @@ def merge_metadata_results(
         merge_bucket(result.get("movieUpdates") or {}, "movie", result, release_priority)
         merge_bucket(result.get("metadataUpdates") or {}, "metadata", result, release_priority)
         merge_bucket(result.get("technicalUpdates") or {}, "technical", result, release_priority)
+        result_genre_keys_value = result.get("genreKeys")
+        if result_genre_keys_value is not None:
+            result_genre_keys = normalize_genre_keys(result_genre_keys_value)
+            accepted_genres = not genre_keys_selected
+            genres_changed = sorted(result_genre_keys) != sorted(current_genre_keys)
+            decision_value = result_genre_keys if genres_changed else current_genre_keys
+            if accepted_genres:
+                reason = "TMDB genre answer selected" if genres_changed else "TMDB genre answer matches existing genres"
+            else:
+                reason = "genres already selected from an earlier TMDB answer"
+            add_decision_candidate(
+                target="genre",
+                field="genre",
+                result=result,
+                value=decision_value,
+                accepted=accepted_genres,
+                reason=reason,
+            )
+            if accepted_genres:
+                genre_keys_selected = True
+                if genres_changed:
+                    genre_keys = list(result_genre_keys)
+                    provenance.append(
+                        {
+                            "field": "genre",
+                            "target": "genre",
+                            "pluginId": result["pluginId"],
+                            "entrypoint": result["entrypoint"],
+                            "reason": reason,
+                            "sourceRef": result.get("sourceRef") or "",
+                            "sourceLabel": result.get("sourceLabel") or result["pluginId"],
+                        }
+                    )
         for kind, media_update in (result.get("mediaUpdates") or {}).items():
             source_url = clean_text(media_update.get("sourceUrl") if isinstance(media_update, dict) else "")
             if kind not in {"poster", "backdrop"} or not source_url:
@@ -2407,6 +2527,7 @@ def merge_metadata_results(
         "identifiers": identifiers,
         "credits": credits,
         "localizations": localizations,
+        "genreKeys": genre_keys,
         "provenance": provenance,
         "skipped": skipped,
         "fieldDecisions": field_decisions,
@@ -2418,7 +2539,10 @@ def count_update_fields(proposal: dict[str, Any]) -> int:
         len(proposal.get(key) or {})
         for key in ("movieUpdates", "metadataUpdates", "technicalUpdates", "mediaUpdates", "identifiers")
     )
-    return field_count + len(proposal.get("credits") or []) + len(proposal.get("localizations") or [])
+    field_count += len(proposal.get("credits") or []) + len(proposal.get("localizations") or [])
+    if proposal.get("genreKeys") is not None:
+        field_count += 1
+    return field_count
 
 
 def summarize_metadata_execution(
@@ -2639,7 +2763,17 @@ def metadata_field_decisions_with_write_state(
         applied_value = None
         written = False
         write_state = "dry_run" if dry_run else "not_written"
-        if not dry_run and isinstance(bucket, dict) and field in bucket:
+        genre_written = (
+            target == "genre"
+            and field == "genre"
+            and applied_payload.get("genres") is not None
+            and decision.get("changed") is not False
+        )
+        if not dry_run and genre_written:
+            applied_value = applied_payload.get("genres")
+            written = True
+            write_state = "written"
+        elif not dry_run and isinstance(bucket, dict) and field in bucket:
             applied_value = bucket.get(field)
             written = True
             write_state = "written"
@@ -2648,7 +2782,7 @@ def metadata_field_decisions_with_write_state(
                     write_state = "primary_locked_option_added"
                 elif applied_value.get("option"):
                     write_state = "media_option_added"
-        elif not dry_run and not applied.get("changed"):
+        elif not dry_run and (not applied.get("changed") or decision.get("changed") is False):
             write_state = "unchanged"
         enriched.append(
             {
@@ -3959,6 +4093,17 @@ def apply_metadata_proposal(
     credit_updates = proposal.get("credits") or []
     localization_updates = proposal.get("localizations") or []
     provenance = proposal.get("provenance") or []
+    # `None` means "no provider answered with genres this run" (leave
+    # associations untouched); a list (possibly empty) is an authoritative
+    # TMDB answer that should replace the current associations.
+    genre_keys_proposal = proposal.get("genreKeys")
+    genre_keys_provided = genre_keys_proposal is not None
+    normalized_genre_keys = normalize_genre_keys(genre_keys_proposal) if genre_keys_provided else []
+    current_genre_keys: list[str] = []
+    genre_changed = False
+    if genre_keys_provided:
+        current_genre_keys = movie_genre_keys(conn, movie_uuid)
+        genre_changed = sorted(normalized_genre_keys) != sorted(current_genre_keys)
     explicit_locked_fields = movie_field_locks_from_db(conn, movie_uuid)
     # Kinds whose primary artwork must not be overwritten by a plugin/sync.
     # Two lock sources: the explicit field lock, and a user-selected (locked)
@@ -3978,7 +4123,16 @@ def apply_metadata_proposal(
         metadata_locked_kinds=metadata_locked_kinds,
         media_locked_kinds=media_locked_kinds,
     )
-    changed = bool(movie_updates or metadata_updates or technical_updates or media_updates or identifiers or credit_updates or localization_updates)
+    changed = bool(
+        movie_updates
+        or metadata_updates
+        or technical_updates
+        or media_updates
+        or identifiers
+        or credit_updates
+        or localization_updates
+        or genre_changed
+    )
 
     if not changed:
         return {
@@ -4151,6 +4305,14 @@ def apply_metadata_proposal(
     if credit_updates:
         applied_credit_updates = apply_credit_updates(conn, movie_id=movie_uuid, credits=credit_updates)
 
+    applied_genre_keys: list[str] | None = None
+    if genre_keys_provided:
+        applied_genre_keys = (
+            replace_movie_genres(conn, movie_uuid, normalized_genre_keys)
+            if genre_changed
+            else current_genre_keys
+        )
+
     revision = record_sync_change(
         conn,
         movie_uuid,
@@ -4163,6 +4325,7 @@ def apply_metadata_proposal(
             "identifiers": identifiers,
             "credits": credit_updates,
             "localizations": localization_updates,
+            "genres": normalized_genre_keys if genre_keys_provided else None,
             "fieldDecisions": proposal.get("fieldDecisions") or [],
         },
     )
@@ -4176,6 +4339,7 @@ def apply_metadata_proposal(
         "identifiers": identifiers,
         "credits": applied_credit_updates,
         "localizations": applied_localizations,
+        "genres": applied_genre_keys,
         "provenance": len(provenance),
     }
     return {

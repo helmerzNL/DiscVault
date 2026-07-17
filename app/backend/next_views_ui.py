@@ -11027,10 +11027,6 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.director">Director</span>
                       <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
                     </label>
-                    <label for="movieEditGenre">
-                      <span data-next-i18n="movieDetail.genre">Genre</span>
-                      <input id="movieEditGenre" name="genre" maxlength="300" autocomplete="off">
-                    </label>
                     <label for="movieEditStudios">
                       <span data-next-i18n="movieDetail.studios">Studios</span>
                       <input id="movieEditStudios" name="studios" maxlength="300" autocomplete="off">
@@ -17733,15 +17729,19 @@ def ui_preview_html(
       if (collectorsModeEnabled() && collectionItemFilter === "containers") count += 1;
       return count;
     }
+    function genreLabel(key) {
+      const normalized = String(key || "").trim();
+      if (!normalized) return "";
+      return tNext(`genre.${normalized}`, GENRE_FALLBACK_LABELS[normalized] || normalized);
+    }
     function collectionGenreOptionValues() {
-      const seen = new Map();
+      const seen = new Set();
       (movies || []).forEach((movie) => {
-        movieGenreValues(movie).forEach((value) => {
-          const key = value.toLowerCase();
-          if (!seen.has(key)) seen.set(key, value);
-        });
+        movieGenreValues(movie).forEach((key) => seen.add(key));
       });
-      return [...seen.values()].sort((a, b) => a.localeCompare(b, localeState.locale || undefined, {sensitivity: "base"}));
+      return [...seen]
+        .map((key) => ({key, label: genreLabel(key)}))
+        .sort((a, b) => a.label.localeCompare(b.label, localeState.locale || undefined, {sensitivity: "base"}));
     }
     function collectionLocationOptionValues() {
       const seen = new Map();
@@ -17782,13 +17782,13 @@ def ui_preview_html(
       const applyGenreOptions = (genreSelect) => {
         if (!genreSelect) return;
         const options = collectionGenreOptionValues();
-        if (collectionGenreFilter && !options.some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase())) {
+        if (collectionGenreFilter && !options.some((option) => option.key === collectionGenreFilter)) {
           collectionGenreFilter = "";
           localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
         }
         const anyLabel = tNext("common.all", "All");
         genreSelect.innerHTML = [`<option value="">${escapeHtml(anyLabel)}</option>`]
-          .concat(options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
+          .concat(options.map((option) => `<option value="${escapeHtml(option.key)}">${escapeHtml(option.label)}</option>`))
           .join("");
         genreSelect.value = collectionGenreFilter;
       };
@@ -18384,6 +18384,11 @@ def ui_preview_html(
       const search = activeCollectionSearchInput();
       return search ? search.value.trim().toLowerCase() : "";
     }
+    function movieGenreSearchText(movie) {
+      const keys = movieGenreValues(movie);
+      if (!keys.length) return "";
+      return [movie?.genre_search || "", ...keys.map(genreLabel)].join(" ");
+    }
     function movieMatchesSearch(movie) {
       const query = activeSearchQuery();
       if (!query) return true;
@@ -18396,6 +18401,7 @@ def ui_preview_html(
         movie.barcode,
         movie.metadata_search,
         movie.search_credits,
+        movieGenreSearchText(movie),
         groups
       ].join(" ").toLowerCase();
       return haystack.includes(query);
@@ -18411,6 +18417,7 @@ def ui_preview_html(
         movie?.barcode,
         movie?.metadata_search,
         movie?.search_credits,
+        movieGenreSearchText(movie),
         movie?.metadata?.actor,
         movie?.metadata?.director,
         movie?.metadata?.producer,
@@ -18494,7 +18501,8 @@ def ui_preview_html(
         movie.format,
         movie.barcode,
         movie.metadata_search,
-        movie.search_credits
+        movie.search_credits,
+        movieGenreSearchText(movie)
       ].filter(Boolean).join(" ")).join(" ");
       const haystack = [
         container.title,
@@ -18557,15 +18565,11 @@ def ui_preview_html(
       return false;
     }
     function movieGenreValues(movie) {
-      const raw = movie?.genre || movie?.metadata?.genre || "";
-      return String(raw)
-        .split(/[,/|]/)
-        .map((value) => value.trim())
-        .filter(Boolean);
+      return Array.isArray(movie?.genres) ? movie.genres.filter(Boolean) : [];
     }
     function movieMatchesGenre(movie) {
       if (!collectionGenreFilter) return true;
-      return movieGenreValues(movie).some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase());
+      return movieGenreValues(movie).includes(collectionGenreFilter);
     }
     function movieLocationValue(movie) {
       const direct = movie?.location;
@@ -19958,7 +19962,7 @@ def ui_preview_html(
       "movie:rating": ["movieDetail.rating", "Rating"],
       "movie:runtime_minutes": ["movieDetail.runtime", "Runtime"],
       "metadata:director": ["movieDetail.director", "Director"],
-      "metadata:genre": ["movieDetail.genre", "Genre"],
+      "genre:genre": ["movieDetail.genre", "Genre"],
       "metadata:studios": ["movieDetail.studios", "Studios"],
       "metadata:distributor": ["movieDetail.distributor", "Distributor"],
       "metadata:packaging": ["movieDetail.packaging", "Packaging"],
@@ -20388,6 +20392,23 @@ def ui_preview_html(
       {value: "4K UHD", collectorOnly: false},
       {value: "VCD/SVCD", collectorOnly: true}
     ];
+    // The 19 canonical TMDB movie genre keys. English reference labels are
+    // only a fallback for genreLabel() before the active locale's
+    // genre.<key> i18n catalog entry resolves; genres are otherwise always
+    // shown in the caller's locale.
+    const GENRE_KEYS = [
+      "action", "adventure", "animation", "comedy", "crime", "documentary",
+      "drama", "family", "fantasy", "history", "horror", "music", "mystery",
+      "romance", "science_fiction", "tv_movie", "thriller", "war", "western"
+    ];
+    const GENRE_FALLBACK_LABELS = {
+      action: "Action", adventure: "Adventure", animation: "Animation",
+      comedy: "Comedy", crime: "Crime", documentary: "Documentary",
+      drama: "Drama", family: "Family", fantasy: "Fantasy",
+      history: "History", horror: "Horror", music: "Music", mystery: "Mystery",
+      romance: "Romance", science_fiction: "Science Fiction", tv_movie: "TV Movie",
+      thriller: "Thriller", war: "War", western: "Western"
+    };
     function normalizedMovieFormatValue(value) {
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
@@ -20471,7 +20492,6 @@ def ui_preview_html(
       movieEditNotes: "notes",
       movieEditRuntime: "runtime_minutes",
       movieEditDirector: "director",
-      movieEditGenre: "genre",
       movieEditStudios: "studios",
       movieEditContentRating: "content_ratings",
       movieEditHdr: "hdr",
@@ -20538,7 +20558,6 @@ def ui_preview_html(
         movieEditLocation: typeof movie.location === "string" ? movie.location : "",
         movieEditRuntime: movie.runtime_minutes || "",
         movieEditDirector: valueText(metadata.director),
-        movieEditGenre: valueText(metadata.genre),
         movieEditStudios: valueText(metadata.studios),
         movieEditContentRating: contentRatingInfo.rating || "",
         movieEditHdr: valueText(specs.hdr || metadata.hdr),
@@ -20984,7 +21003,7 @@ def ui_preview_html(
         [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
         [tNext("movieDetail.director", "Director"), metadata.director],
-        [tNext("movieDetail.genre", "Genre"), metadata.genre],
+        [tNext("movieDetail.genre", "Genre"), movieGenreValues(movie).map(genreLabel).join(", ")],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
         [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
         ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
@@ -22908,7 +22927,6 @@ def ui_preview_html(
       ["overview", "Plot"],
       ["director", "Director"],
       ["actor", "Actors"],
-      ["genre", "Genre"],
       ["imdbId", "IMDb ID"],
       ["tmdbId", "TMDb ID"],
       ["poster", "Poster"],
@@ -28221,7 +28239,7 @@ def ui_preview_html(
           return `
             <div class="stats-bar-row">
               <div class="stats-bar-head">
-                <span>${escapeHtml(row.label || tNext("common.untitled", "Unknown"))}</span>
+                <span>${escapeHtml(row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown")))}</span>
                 <span>${escapeHtml(row.count || 0)}</span>
               </div>
               <div class="stats-bar-track"><div class="stats-bar-fill" style="width:${pct}%"></div></div>
@@ -29824,7 +29842,6 @@ def ui_preview_html(
         locationId: document.getElementById("movieEditLocationSelect")?.value || null,
         runtimeMinutes: formTextValue("movieEditRuntime"),
         director: formTextValue("movieEditDirector"),
-        genre: formTextValue("movieEditGenre"),
         studios: formTextValue("movieEditStudios"),
         contentRating: formTextValue("movieEditContentRating"),
         ratingCountry,
@@ -29869,7 +29886,6 @@ def ui_preview_html(
       switch (field) {
         case "runtime_minutes": return valueText(movie.runtime_minutes);
         case "director": return valueText(metadata.director);
-        case "genre": return valueText(metadata.genre);
         case "studios": return valueText(metadata.studios);
         case "distributor": return valueText(metadata.distributor);
         case "hdr": return valueText(specs.hdr || metadata.hdr);

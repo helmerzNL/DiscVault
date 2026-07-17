@@ -529,6 +529,23 @@ def _v3_movie_item(envelope):
     if not isinstance(movie, dict):
         return {}
     movie = dict(movie)
+    release = movie.get("release")
+    if isinstance(release, dict):
+        for key in (
+            "format",
+            "edition",
+            "distributor",
+            "hdr",
+            "audioTracks",
+            "subtitles",
+            "regions",
+            "screenRatios",
+            "technicalSpecs",
+            "country",
+            "language",
+        ):
+            if movie.get(key) in (None, "", [], {}) and release.get(key) not in (None, "", [], {}):
+                movie[key] = release[key]
     if not movie.get("posterUrl"):
         posters = movie.get("posterUrls") or []
         if posters:
@@ -657,7 +674,6 @@ def _movie_payload(item):
         "releaseDate": _text(item.get("releaseDate") or item.get("release_date")),
         "overview": _text(item.get("overview") or item.get("plot") or item.get("description")),
         "runtimeMinutes": item.get("runtime") or item.get("runtimeMinutes"),
-        "genre": _text(item.get("genre") or item.get("genres")),
         "director": _names_text(item.get("director") or item.get("directors")),
         "actor": _names_text(item.get("actor") or item.get("actors") or item.get("cast")),
         "producer": _names_text(item.get("producer") or item.get("producers")),
@@ -670,10 +686,12 @@ def _movie_payload(item):
             item.get("name"),
         ),
         "edition": _text(item.get("edition")),
+        "distributor": _text(item.get("distributor") or item.get("publisher")),
         "country": _text(item.get("country")),
         "language": _text(item.get("language")),
-        "rating": _text(item.get("rating") or item.get("imdbRating")),
+        "rating": _text(item.get("rating") or item.get("imdbRating") or item.get("voteAverage")),
         "posterUrl": _text(item.get("posterUrl") or item.get("poster_url") or item.get("poster")),
+        "posters": item.get("posterUrls") or item.get("poster_urls") or item.get("posters") or [],
         "backdropUrl": _text(item.get("backdropUrl") or item.get("backdrop_url") or item.get("backdrop")),
         "backdropUrls": item.get("backdropUrls") or item.get("backdrop_urls") or [],
         "trailerUrl": _text(item.get("trailerUrl") or item.get("trailer_url")),
@@ -1626,15 +1644,44 @@ def member_intelligence(payload, context=None):
 def _technical_payload(item):
     if not isinstance(item, dict):
         return {}
+    raw_specs = item.get("technicalSpecs") or item.get("technical_specs")
+    specs = raw_specs if isinstance(raw_specs, dict) else {}
     return {
-        "format": _text(item.get("format") or item.get("mediaType") or item.get("media_type")),
-        "hdr": _text(item.get("hdr") or item.get("hdrFormat") or item.get("hdr_format")),
-        "packaging": _text(item.get("packaging")),
-        "screenRatios": _text(item.get("screenRatios") or item.get("screen_ratios")),
-        "audioTracks": item.get("audioTracks") or item.get("audio_tracks") or [],
-        "subtitles": item.get("subtitles") or [],
-        "regions": item.get("regions") or [],
-        "contentRatings": item.get("contentRatings") or item.get("content_ratings") or {},
+        "format": _text(
+            item.get("format")
+            or item.get("mediaType")
+            or item.get("media_type")
+            or specs.get("format")
+        ),
+        "hdr": _text(
+            item.get("hdr")
+            or item.get("hdrFormat")
+            or item.get("hdr_format")
+            or specs.get("hdr")
+        ),
+        "packaging": _text(item.get("packaging") or specs.get("packaging")),
+        "screenRatios": _text(
+            item.get("screenRatios")
+            or item.get("screen_ratios")
+            or specs.get("screenRatios")
+            or specs.get("screen_ratios")
+        ),
+        "audioTracks": (
+            item.get("audioTracks")
+            or item.get("audio_tracks")
+            or specs.get("audioTracks")
+            or specs.get("audio_tracks")
+            or []
+        ),
+        "subtitles": item.get("subtitles") or specs.get("subtitles") or [],
+        "regions": item.get("regions") or specs.get("regions") or [],
+        "contentRatings": (
+            item.get("contentRatings")
+            or item.get("content_ratings")
+            or specs.get("contentRatings")
+            or specs.get("content_ratings")
+            or []
+        ),
     }
 
 
@@ -1857,6 +1904,14 @@ def _normalize_result(payload, *, source_ref=""):
         return {"status": "miss", "provider": "movievault_26"}
 
     source_item = first_item or (sources[0] if sources else {})
+    best_release = source_item.get("release") if isinstance(source_item.get("release"), dict) else {}
+    releases = [
+        dict(item)
+        for item in (source_item.get("releases") or [])
+        if isinstance(item, dict)
+    ]
+    if not best_release and releases:
+        best_release = releases[0]
     localizations = []
     for candidate_source in ([source_item] + list(sources)):
         localizations = _ingest_localizations(candidate_source)
@@ -1868,12 +1923,27 @@ def _normalize_result(payload, *, source_ref=""):
         "sourceLabel": "MovieVault 26",
         "sourceRef": source_ref or _text(source_item.get("id") or source_item.get("movieVaultId") or source_item.get("movievault_id")),
         "movie": first_movie,
-        "technicalSpecs": _technical_payload(source_item),
+        "technicalSpecs": {
+            **{
+                key: value
+                for key, value in _technical_payload(source_item).items()
+                if value not in (None, "", [], {})
+            },
+            **{
+                key: value
+                for key, value in _technical_payload(best_release).items()
+                if value not in (None, "", [], {})
+            },
+        },
         "tmdbId": _text(source_item.get("tmdbId") or source_item.get("tmdb_id")),
         "imdbId": _text(source_item.get("imdbId") or source_item.get("imdb_id")),
         "items": candidates,
         "candidates": candidates,
     }
+    if best_release:
+        result["release"] = dict(best_release)
+    if releases:
+        result["releases"] = releases
     if localizations:
         result["localizations"] = localizations
     movie_credits = _movie_credits(first_item) or _movie_credits(source_item)
@@ -2140,11 +2210,24 @@ def _enrich_barcode_credits(result, payload, barcode, context):
 
 
 def movie_details(payload, context=None):
+    payload = payload or {}
+    direct_id = _text(
+        payload.get("movieVaultId")
+        or payload.get("movievaultId")
+        or payload.get("movievault_id")
+        or payload.get("releaseId")
+        or payload.get("release_id")
+    )
     barcode = str((payload or {}).get("barcode") or "").strip()
     title = str((payload or {}).get("title") or "").strip()
     year = str((payload or {}).get("year") or "").strip()
     tmdb_id = _text((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id"))
     imdb_id = _text((payload or {}).get("imdbId") or (payload or {}).get("imdb_id"))
+    if direct_id:
+        movie_item = _v3_movie_item(_get(context or {}, f"/api/v3/movies/{quote(direct_id)}"))
+        if movie_item.get("title"):
+            return _normalize_result(movie_item, source_ref=f"movievault:{direct_id}")
+        return {"status": "miss", "provider": PROVIDER_ID}
     if _is_public_barcode(barcode):
         result = search_barcode(payload, context)
         if result.get("status") == "hit":
