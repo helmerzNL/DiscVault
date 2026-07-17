@@ -86,8 +86,12 @@ try:
     from .next_metadata import refresh_movie_metadata
     from .next_metadata import normalize_movie_field_locks
     from .next_metadata import movie_locked_fields
+    from .next_metadata import movie_genre_keys
     from .next_metadata import MOVIE_LOCKABLE_FIELDS
     from .next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from .next_genres import GENRE_KEYS
+    from .next_genres import GENRE_KEY_TO_LABEL
+    from .next_genres import map_legacy_genre_text
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import backup_restore_plan
@@ -286,8 +290,12 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import refresh_movie_metadata
     from next_metadata import normalize_movie_field_locks
     from next_metadata import movie_locked_fields
+    from next_metadata import movie_genre_keys
     from next_metadata import MOVIE_LOCKABLE_FIELDS
     from next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from next_genres import GENRE_KEYS
+    from next_genres import GENRE_KEY_TO_LABEL
+    from next_genres import map_legacy_genre_text
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import backup_restore_plan
@@ -3277,7 +3285,6 @@ def normalize_import_column_mapping(value: Any) -> dict[str, str]:
         "rating",
         "director",
         "actor",
-        "genre",
         "imdbId",
         "tmdbId",
         "poster",
@@ -4164,7 +4171,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     m.format,
                     m.edition,
                     m.location,
-                    m.metadata->>'genre' AS genre,
                     m.metadata->>'audience_rating' AS audience_rating,
                     m.rating,
                     mts.content_ratings,
@@ -4173,7 +4179,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                         m.metadata->>'director',
                         m.metadata->>'producer',
                         m.metadata->>'writer',
-                        m.metadata->>'genre',
                         m.metadata->>'studios'
                     ) AS metadata_search,
                     COALESCE(m.metadata->>'poster_url', poster_asset.source_url) AS poster_url,
@@ -4220,11 +4225,14 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 """,
                 (*visibility_params, limit),
             )
-            return attach_movie_search_credits(
+            return attach_movie_genres(
                 conn,
-                attach_media_group_availability(
+                attach_movie_search_credits(
                     conn,
-                    attach_digital_availability(conn, attach_location_summaries(conn, [with_preview_media_urls(row) for row in cur.fetchall()])),
+                    attach_media_group_availability(
+                        conn,
+                        attach_digital_availability(conn, attach_location_summaries(conn, [with_preview_media_urls(row) for row in cur.fetchall()])),
+                    ),
                 ),
             )
     with conn.cursor() as cur:
@@ -4241,7 +4249,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 m.format,
                 m.edition,
                 m.location,
-                m.metadata->>'genre' AS genre,
                 m.metadata->>'audience_rating' AS audience_rating,
                 m.rating,
                 NULL::jsonb AS content_ratings,
@@ -4250,7 +4257,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     m.metadata->>'director',
                     m.metadata->>'producer',
                     m.metadata->>'writer',
-                    m.metadata->>'genre',
                     m.metadata->>'studios'
                 ) AS metadata_search,
                 m.metadata->>'poster_url' AS poster_url,
@@ -4266,10 +4272,53 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
             """,
             (*visibility_params, limit),
         )
-        return attach_movie_search_credits(
+        return attach_movie_genres(
             conn,
-            attach_media_group_availability(conn, attach_digital_availability(conn, attach_location_summaries(conn, cur.fetchall()))),
+            attach_movie_search_credits(
+                conn,
+                attach_media_group_availability(conn, attach_digital_availability(conn, attach_location_summaries(conn, cur.fetchall()))),
+            ),
         )
+
+
+def attach_movie_genres(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach canonical genre keys (movie["genres"]) from movie_genres.
+
+    Also populates movie["genre_search"] with the movie's genre keys plus
+    their English reference labels, so free-text search can match genres
+    without depending on the caller's locale.
+    """
+    if not movies or not table_exists(conn, "movie_genres"):
+        for movie in movies:
+            movie["genres"] = []
+            movie["genre_search"] = ""
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    genres_by_movie: dict[str, list[str]] = {str(movie_id): [] for movie_id in movie_ids}
+    if movie_ids:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mg.movie_id, mg.genre_key
+                FROM movie_genres mg
+                LEFT JOIN genres g ON g.key = mg.genre_key
+                WHERE mg.movie_id = ANY(%s)
+                ORDER BY mg.movie_id, g.sort_order NULLS LAST, mg.genre_key
+                """,
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                key = str(row.get("movie_id"))
+                values = genres_by_movie.get(key)
+                if values is not None:
+                    values.append(str(row.get("genre_key")))
+    for movie in movies:
+        keys = genres_by_movie.get(str(movie.get("id")), [])
+        movie["genres"] = keys
+        movie["genre_search"] = " ".join(
+            f"{key} {GENRE_KEY_TO_LABEL.get(key, key)}" for key in keys
+        )
+    return movies
 
 
 def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -8552,7 +8601,6 @@ def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int |
 def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
     aliases = {
         "director": ("director",),
-        "genre": ("genre",),
         "studios": ("studios", "studio"),
         "distributor": ("distributor",),
     }
@@ -8811,12 +8859,13 @@ def movie_edit_receiver_proposal(
         else:
             metadata_updates[field] = new_value
 
-    # Editable metadata fields stored on movies.metadata (director, genre,
-    # studios, distributor). A non-empty supplement/change becomes a
-    # contribution; locked fields are never forwarded.
+    # Editable metadata fields stored on movies.metadata (director, studios,
+    # distributor). A non-empty supplement/change becomes a contribution;
+    # locked fields are never forwarded. Genre is intentionally absent: it
+    # is read-only and sourced only from TMDB.
     existing_meta = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
     metadata_edits = payload.get("metadata_edits") or {}
-    for field in ("director", "genre", "studios", "distributor"):
+    for field in ("director", "studios", "distributor"):
         if field not in metadata_edits or field in locked:
             continue
         new_value = comparable(metadata_edits.get(field))
@@ -8904,6 +8953,8 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
             (movie_id,),
         )
         row = cur.fetchone()
+    if row is not None:
+        row["genres"] = movie_genre_keys(conn, movie_id)
     return row
 
 
@@ -14709,7 +14760,7 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             """,
             (*visibility_params, limit),
         )
-        return cur.fetchall()
+        return attach_movie_genres(conn, cur.fetchall())
 
 
 def all_movie_credit_entities(
@@ -19267,16 +19318,42 @@ def register_routes(flask_app: Flask) -> None:
                 return response({"status": "ok", "items": [], "limit": limit, "offset": offset})
             filters = []
             params: list[Any] = []
+            has_movie_genres = table_exists(conn, "movie_genres")
             if query:
+                genre_query_clause = ""
+                genre_query_params: list[Any] = []
+                if has_movie_genres:
+                    genre_query_clause = """
+                        OR EXISTS (
+                            SELECT 1
+                            FROM movie_genres mg
+                            WHERE mg.movie_id = m.id
+                              AND lower(replace(mg.genre_key, '_', ' ')) LIKE lower(%s)
+                        )
+                    """
+                    genre_query_params.append(f"%{query}%")
+                    genre_query_keys, _unmatched = map_legacy_genre_text(query)
+                    if genre_query_keys:
+                        genre_query_clause += """
+                            OR EXISTS (
+                                SELECT 1
+                                FROM movie_genres mg
+                                WHERE mg.movie_id = m.id
+                                  AND mg.genre_key = ANY(%s)
+                            )
+                        """
+                        genre_query_params.append(genre_query_keys)
                 filters.append(
-                    """(
+                    f"""(
                         lower(m.title) LIKE lower(%s)
                         OR lower(COALESCE(m.original_title, '')) LIKE lower(%s)
                         OR m.barcode=%s
                         OR lower(COALESCE(m.metadata::text, '')) LIKE lower(%s)
+                        {genre_query_clause}
                     )"""
                 )
                 params.extend([f"%{query}%", f"%{query}%", query, f"%{query}%"])
+                params.extend(genre_query_params)
             if media_format:
                 filters.append("m.format=%s")
                 params.append(media_format)
@@ -19313,7 +19390,9 @@ def register_routes(flask_app: Flask) -> None:
                     """,
                     (*params, limit, offset),
                 )
-                items = cur.fetchall()
+                items = attach_movie_genres(conn, cur.fetchall())
+                for item in items:
+                    item.pop("genre_search", None)
             audit_api_interaction(
                 conn,
                 actor,
@@ -23450,26 +23529,40 @@ def register_routes(flask_app: Flask) -> None:
             genre_counts: dict[str, int] = {}
             for row in _bucket_rows(
                 f"""
-                SELECT COALESCE(NULLIF(TRIM(m.metadata->>'genre'), ''), '') AS genre,
-                       COUNT(*)::int AS count
+                SELECT mg.genre_key AS genre, COUNT(DISTINCT m.id)::int AS count
+                FROM movies m
+                JOIN movie_genres mg ON mg.movie_id = m.id
+                WHERE {where}
+                GROUP BY mg.genre_key
+                """
+                if table_exists(conn, "movie_genres")
+                else f"SELECT NULL AS genre, 0 AS count FROM movies m WHERE {where} LIMIT 0"
+            ):
+                key = clean_text(row.get("genre"))
+                count = int(row.get("count") or 0)
+                if key in GENRE_KEYS:
+                    genre_counts[key] = genre_counts.get(key, 0) + count
+            unknown_genre_sql = (
+                f"""
+                SELECT COUNT(*)::int AS count
                 FROM movies m
                 WHERE {where}
-                GROUP BY 1
+                  AND NOT EXISTS (SELECT 1 FROM movie_genres mg WHERE mg.movie_id = m.id)
                 """
-            ):
-                raw = (row.get("genre") or "").strip()
-                count = int(row.get("count") or 0)
-                if not raw:
-                    genre_counts["Unknown"] = genre_counts.get("Unknown", 0) + count
-                    continue
-                for part in re.split(r"[,/|]", raw):
-                    label = part.strip()
-                    if label:
-                        genre_counts[label] = genre_counts.get(label, 0) + count
+                if table_exists(conn, "movie_genres")
+                else f"SELECT COUNT(*)::int AS count FROM movies m WHERE {where}"
+            )
+            unknown_rows = _bucket_rows(unknown_genre_sql)
+            unknown_count = int(unknown_rows[0].get("count") or 0) if unknown_rows else 0
             by_genre = sorted(
-                [{"label": k, "count": v} for k, v in genre_counts.items()],
+                [
+                    {"label": GENRE_KEY_TO_LABEL.get(key, key), "i18nKey": f"genre.{key}", "count": count}
+                    for key, count in genre_counts.items()
+                ],
                 key=lambda item: (-item["count"], item["label"]),
             )[:20]
+            if unknown_count:
+                by_genre.append({"label": "Unknown", "count": unknown_count})
 
             watch = {"total": 0, "thisYear": 0, "distinctMovies": 0, "topMovies": []}
             if table_exists(conn, "watch_history"):
@@ -24497,7 +24590,6 @@ def register_routes(flask_app: Flask) -> None:
         fill("release_date", movie_updates.get("release_date"), metadata_updates.get("release_date"))
         fill("runtimeMinutes", movie_updates.get("runtime_minutes"), metadata_updates.get("runtime_minutes"))
         fill("runtime", movie_updates.get("runtime_minutes"), metadata_updates.get("runtime_minutes"))
-        fill("genre", metadata_updates.get("genre"))
         fill("director", metadata_updates.get("director"))
         fill("actor", metadata_updates.get("actor"))
         fill("producer", metadata_updates.get("producer"))
@@ -24580,7 +24672,6 @@ def register_routes(flask_app: Flask) -> None:
     def box_set_member_import_payload(member: dict[str, Any], *, box_set_title: str, fallback_format: str, barcode: str) -> dict[str, Any]:
         metadata = {}
         for key in (
-            "genre",
             "director",
             "actor",
             "producer",
@@ -24623,7 +24714,6 @@ def register_routes(flask_app: Flask) -> None:
             movie_updates["format"] = member_format
         metadata_updates = {}
         for source, target in (
-            ("genre", "genre"),
             ("director", "director"),
             ("actor", "actor"),
             ("producer", "producer"),
