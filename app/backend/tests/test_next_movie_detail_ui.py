@@ -106,6 +106,18 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
 
+    def test_audio_and_subtitle_edit_fields_are_five_rows_high(self):
+        self.assertIn(
+            '<textarea id="movieEditAudioTracks" name="audio_tracks" rows="5" '
+            'maxlength="400" autocomplete="off"></textarea>',
+            self.source,
+        )
+        self.assertIn(
+            '<textarea id="movieEditSubtitles" name="subtitles" rows="5" '
+            'maxlength="400" autocomplete="off"></textarea>',
+            self.source,
+        )
+
     def test_header_content_rating_reuses_release_value_markup(self):
         render_start = self.source.index("function renderMovieDetail(detail)")
         render_end = self.source.index("\n    function ", render_start + 1)
