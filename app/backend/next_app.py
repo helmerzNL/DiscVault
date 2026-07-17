@@ -4172,6 +4172,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     m.edition,
                     m.location,
                     m.metadata->>'audience_rating' AS audience_rating,
+                    m.metadata->>'studios' AS studios,
                     m.rating,
                     mts.content_ratings,
                     concat_ws(' ',
@@ -4250,6 +4251,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 m.edition,
                 m.location,
                 m.metadata->>'audience_rating' AS audience_rating,
+                m.metadata->>'studios' AS studios,
                 m.rating,
                 NULL::jsonb AS content_ratings,
                 concat_ws(' ',
@@ -9392,7 +9394,31 @@ def attach_personal_list_state(conn, rows: list[dict[str, Any]], user_id: UUID |
             )
             loaned_movies = {row["movie_id"] for row in cur.fetchall()}
     tagged_movies: set[Any] = set()
-    if table_exists(conn, "movie_tags"):
+    tags_by_movie: dict[Any, list[dict[str, Any]]] = {}
+    if table_exists(conn, "movie_tags") and table_exists(conn, "tags"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mt.movie_id, t.id, t.name, t.slug, t.color
+                FROM movie_tags mt
+                JOIN tags t ON t.id = mt.tag_id
+                WHERE mt.user_id=%s AND mt.movie_id = ANY(%s)
+                ORDER BY mt.movie_id, lower(t.name), t.id
+                """,
+                (user_id, ids),
+            )
+            for tag_row in cur.fetchall():
+                movie_id = tag_row.get("movie_id")
+                tagged_movies.add(movie_id)
+                tags_by_movie.setdefault(movie_id, []).append(
+                    {
+                        "id": str(tag_row.get("id")),
+                        "name": tag_row.get("name"),
+                        "slug": tag_row.get("slug"),
+                        "color": tag_row.get("color"),
+                    }
+                )
+    elif table_exists(conn, "movie_tags"):
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -9410,6 +9436,7 @@ def attach_personal_list_state(conn, rows: list[dict[str, Any]], user_id: UUID |
         row["last_watched"] = watched_by_movie.get(movie_id)
         row["on_loan"] = movie_id in loaned_movies
         row["has_tags"] = movie_id in tagged_movies
+        row["tags"] = tags_by_movie.get(movie_id, [])
     return rows
 
 
