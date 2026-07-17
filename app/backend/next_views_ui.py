@@ -3822,17 +3822,17 @@ def ui_preview_html(
       align-items: center;
     }
     .movie-list-primary-action {
-      min-height: 50px;
+      min-height: 42px;
       max-width: 100%;
       border: 1px solid transparent;
       border-radius: 999px;
-      padding: 12px 20px;
+      padding: 9px 16px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
+      gap: 8px;
       font: inherit;
-      font-size: 1rem;
+      font-size: .92rem;
       font-weight: 760;
       line-height: 1.15;
       text-align: center;
@@ -3849,8 +3849,8 @@ def ui_preview_html(
       outline-offset: 3px;
     }
     .movie-list-primary-action svg {
-      width: 23px;
-      height: 23px;
+      width: 20px;
+      height: 20px;
       flex: 0 0 auto;
       fill: currentColor;
     }
@@ -5602,6 +5602,67 @@ def ui_preview_html(
       font-size: .9rem;
       font-weight: 700;
       line-height: 1;
+    }
+    .movie-detail-back,
+    .movie-detail-icon-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .movie-detail-back svg,
+    .movie-detail-icon-action svg {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+      fill: currentColor;
+    }
+    .movie-detail-hero-actions {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 4;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      max-width: calc(100% - 130px);
+    }
+    .movie-detail-icon-action {
+      min-height: 40px;
+      border: 1px solid rgba(255,255,255,.24);
+      border-radius: 999px;
+      padding: 0 14px;
+      color: #fff;
+      background: rgba(0,0,0,.42);
+      box-shadow: 0 8px 24px rgba(0,0,0,.22);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
+      backdrop-filter: blur(18px) saturate(150%);
+      cursor: pointer;
+      font: inherit;
+      font-size: .88rem;
+      font-weight: 700;
+      line-height: 1;
+      transition: background .15s ease, border-color .15s ease, transform .06s ease;
+    }
+    .movie-detail-icon-action:hover {
+      background: rgba(20,20,24,.72);
+      border-color: rgba(255,255,255,.38);
+    }
+    .movie-detail-icon-action:active {
+      transform: scale(.96);
+    }
+    .movie-detail-icon-action.metadata {
+      color: color-mix(in srgb, var(--accent-bright) 78%, #fff);
+      border-color: color-mix(in srgb, var(--accent-bright) 48%, rgba(255,255,255,.20));
+    }
+    .movie-detail-icon-action.danger {
+      color: #ff7d88;
+      border-color: rgba(255,92,108,.48);
+    }
+    .movie-detail-status {
+      min-height: 0;
+      margin: 8px 14px 0;
     }
     .movie-detail-summary {
       position: relative;
@@ -9299,10 +9360,10 @@ def ui_preview_html(
         border-bottom: 0;
       }
       .mobile-shell-logo {
+        display: none;
         justify-self: center;
         width: max-content;
         max-width: calc(100vw - 32px);
-        display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
@@ -9554,6 +9615,106 @@ def ui_preview_html(
       }
       .movie-detail-action-strip .detail-message {
         text-align: left;
+      }
+      #movieDetailPage .movie-detail-hero {
+        width: calc(100% + 24px);
+        min-height: 0;
+        margin-inline: -12px;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: #080a0f;
+        box-shadow: none;
+      }
+      #movieDetailPage .movie-detail-hero > #movieDetailBackdrop,
+      #movieDetailPage .movie-detail-hero::before {
+        bottom: auto;
+        height: 330px;
+      }
+      #movieDetailPage .movie-detail-hero > #movieDetailBackdrop {
+        opacity: 1;
+        object-position: center center;
+      }
+      #movieDetailPage .movie-detail-hero::before {
+        background:
+          linear-gradient(90deg, rgba(0,0,0,.16), rgba(0,0,0,.02) 58%, rgba(0,0,0,.12)),
+          linear-gradient(0deg, rgba(0,0,0,.88), rgba(0,0,0,.02) 64%);
+      }
+      #movieDetailPage .movie-detail-summary {
+        grid-template-columns: 104px minmax(0, 1fr);
+        gap: 10px 14px;
+        align-items: end;
+        margin-top: 174px;
+        padding: 0 14px 20px;
+      }
+      #movieDetailPage .movie-detail-poster {
+        width: 104px;
+        border-radius: 11px;
+        border-color: rgba(255,255,255,.34);
+        box-shadow: 0 14px 36px rgba(0,0,0,.52);
+      }
+      #movieDetailPage .movie-detail-summary .eyebrow {
+        display: none;
+      }
+      #movieDetailPage .movie-detail-title {
+        margin: 0 0 4px;
+        font-size: clamp(1.55rem, 8vw, 2.25rem);
+        line-height: 1;
+      }
+      #movieDetailPage .hero-meta {
+        gap: 5px;
+        margin-bottom: 0;
+      }
+      #movieDetailPage .hero-meta .pill {
+        min-height: 25px;
+        padding: 0 8px;
+        font-size: .7rem;
+      }
+      #movieDetailPage .movie-detail-overview {
+        max-height: none;
+        overflow: visible;
+        padding: 18px 0 0;
+        margin-top: 0;
+        color: rgba(255,255,255,.9);
+        font-size: .94rem;
+        line-height: 1.52;
+        scrollbar-gutter: auto;
+      }
+      #movieDetailPage .movie-detail-back,
+      #movieDetailPage .movie-detail-icon-action {
+        width: 42px;
+        min-width: 42px;
+        min-height: 42px;
+        padding: 0;
+        border-radius: 50%;
+      }
+      #movieDetailPage .movie-detail-back .button-label,
+      #movieDetailPage .movie-detail-icon-action .button-label {
+        display: none;
+      }
+      #movieDetailPage .movie-detail-back svg,
+      #movieDetailPage .movie-detail-icon-action svg {
+        width: 21px;
+        height: 21px;
+      }
+      #movieDetailPage .movie-detail-hero-actions {
+        max-width: calc(100% - 80px);
+      }
+      #movieDetailPage .movie-detail-status {
+        margin-inline: 0;
+      }
+      .movie-list-primary-actions {
+        gap: 8px;
+      }
+      .movie-list-primary-action {
+        min-height: 38px;
+        padding: 7px 14px;
+        gap: 7px;
+        font-size: .85rem;
+      }
+      .movie-list-primary-action svg {
+        width: 18px;
+        height: 18px;
       }
       .movie-detail-body {
         grid-template-columns: 1fr;
@@ -11101,7 +11262,28 @@ def ui_preview_html(
       <section class="movie-detail-page hidden" id="movieDetailPage" aria-labelledby="movieDetailTitle">
         <section class="movie-detail-hero" id="movieDetailHero">
           <img id="movieDetailBackdrop" alt="">
-          <button type="button" class="movie-detail-back" id="movieDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
+          <button type="button" class="movie-detail-back" id="movieDetailBackButton" aria-label="Back" title="Back" data-next-i18n-aria="movieDetail.backToLibrary" data-next-i18n-title="movieDetail.backToLibrary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 16.58 10.83 12 15.41 7.41 14 6 8 12 14 18 15.41 16.58Z"></path></svg>
+            <span class="button-label" data-next-i18n="movieDetail.backToLibrary">Back</span>
+          </button>
+          <div class="movie-detail-hero-actions" aria-label="Movie actions" data-next-i18n-aria="movieDetail.title">
+            <button type="button" class="movie-detail-icon-action hidden" id="movieEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path id="movieEditToggleIcon" data-edit-path="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z" data-save-path="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3M19 19H5V5H16.17L19 7.83V19M12 6C10.34 6 9 7.34 9 9S10.34 12 12 12 15 10.66 15 9 13.66 6 12 6M6 14H18V18H6V14Z" d="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z"></path></svg>
+              <span class="button-label" id="movieEditToggleLabel" data-next-i18n="common.edit">Edit</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action hidden" id="movieEditCancelTopButton" aria-label="Cancel" title="Cancel" data-next-i18n-aria="common.cancel" data-next-i18n-title="common.cancel">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"></path></svg>
+              <span class="button-label" data-next-i18n="common.cancel">Cancel</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action metadata" id="movieMetadataApplyButton" aria-label="Refresh metadata" title="Refresh metadata" data-next-i18n-aria="movieDetail.applyMetadata" data-next-i18n-title="movieDetail.applyMetadata">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4 7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18 8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"></path></svg>
+              <span class="button-label" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action danger hidden" id="movieDeleteButton" aria-label="Delete movie" title="Delete movie" data-next-i18n-aria="movieDetail.deleteMovie" data-next-i18n-title="movieDetail.deleteMovie">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
+              <span class="button-label" data-next-i18n="movieDetail.deleteMovie">Delete movie</span>
+            </button>
+          </div>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
             <div class="movie-detail-copy">
@@ -11112,20 +11294,7 @@ def ui_preview_html(
             </div>
           </div>
         </section>
-        <div class="movie-detail-action-strip">
-          <div class="movie-detail-actions">
-            <button type="button" class="action secondary hidden" id="movieEditToggleButton" data-next-i18n="common.edit">Edit</button>
-            <button type="button" class="action secondary hidden" id="movieEditCancelTopButton" data-next-i18n="common.cancel">Cancel</button>
-            <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
-            <div class="movie-metadata-option hidden" id="movieMetadataPeopleOption">
-              <button type="button" class="switch" id="movieMetadataPeopleToggle" aria-pressed="false" aria-label="Refresh cast & crew people" data-next-i18n-aria="movieDetail.refreshPeople"></button>
-              <span data-next-i18n="movieDetail.refreshPeople">Refresh cast & crew people</span>
-            </div>
-            <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Refresh history</button>
-            <button type="button" class="action danger hidden" id="movieDeleteButton" data-next-i18n="movieDetail.deleteMovie">Delete movie</button>
-          </div>
-          <div class="detail-message" id="movieDetailMessage"></div>
-        </div>
+        <div class="detail-message movie-detail-status" id="movieDetailMessage"></div>
         <section class="movie-detail-body">
           <div class="detail-card full hidden" id="movieEditPanel">
             <div class="detail-card-head">
@@ -11377,9 +11546,6 @@ def ui_preview_html(
               <div class="detail-grid" id="movieDetailCast"></div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
-              <div class="button-row compact person-refresh-row">
-                <button type="button" class="secondary-button hidden" id="movieCrewRefreshButton" data-next-i18n="movieDetail.refreshCrewPeople">Refresh crew people</button>
-              </div>
               <div class="detail-grid" id="movieDetailCrew"></div>
             </div>
           </div>
@@ -12907,7 +13073,6 @@ def ui_preview_html(
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
     let dvMissingContributionReportData = null;
-    let movieMetadataRefreshPeople = localStorage.getItem("dv_next_movie_metadata_refresh_people") === "true";
     let activeContainerId = "";
     let activeContainerPayload = null;
     let activePersonId = "";
@@ -13118,25 +13283,6 @@ def ui_preview_html(
       return pluginId
         .replace(/[_-]+/g, " ")
         .replace(/\\b\\w/g, (char) => char.toUpperCase());
-    }
-    function setMovieMetadataRefreshPeople(enabled) {
-      movieMetadataRefreshPeople = !!enabled;
-      localStorage.setItem("dv_next_movie_metadata_refresh_people", movieMetadataRefreshPeople ? "true" : "false");
-      const toggle = document.getElementById("movieMetadataPeopleToggle");
-      if (toggle) {
-        toggle.classList.toggle("on", movieMetadataRefreshPeople);
-        toggle.setAttribute("aria-pressed", movieMetadataRefreshPeople ? "true" : "false");
-      }
-    }
-    function movieMetadataPeopleRefreshMessage(personRefresh) {
-      if (!personRefresh || !personRefresh.requested) return "";
-      return " " + tNext("movieDetail.peopleRefreshSummary", "People: {previewed} previewed, {refreshed} refreshed, {skipped} skipped.")
-        .replace("{previewed}", formatNumber(personRefresh.previewed || 0))
-        .replace("{refreshed}", formatNumber(personRefresh.refreshed || 0))
-        .replace("{skipped}", formatNumber(personRefresh.skipped || 0));
-    }
-    function normalizedPersonRefreshScope(scope) {
-      return String(scope || "all").toLowerCase() === "crew" ? "crew" : "all";
     }
     function flagCodeForLocale(value) {
       const raw = String(value || "").replace("_", "-").toLowerCase();
@@ -13883,13 +14029,10 @@ def ui_preview_html(
       document.querySelectorAll("#movieMetadataDryRunButton, #movieMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       });
-      setElementVisible(document.getElementById("movieMetadataPeopleOption"), hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
-      setElementVisible(document.getElementById("movieCrewRefreshButton"), hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       document.querySelectorAll("#containerMetadataDryRunButton, #containerMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !(collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh)));
       });
       setElementVisible(document.getElementById("appAdminArtworkTrashCard"), hasActualPermission("metadata.manage_artwork_trash"));
-      setElementVisible(document.getElementById("movieMetadataJobsButton"), hasAnyPermission(["admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"]));
       const canEditMovies = hasAnyPermission(["collection.edit_all", "collection.edit_own", "collection.edit_group"]);
       setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
       if (!canEditMovies) setMovieEditPanelVisible(false);
@@ -20512,18 +20655,29 @@ def ui_preview_html(
       const node = document.getElementById("movieDetailMessage");
       if (!node) return;
       node.textContent = message || "";
-      node.className = `detail-message ${tone || ""}`.trim();
+      node.className = `detail-message movie-detail-status ${tone || ""}`.trim();
     }
     function setMovieEditPanelVisible(show) {
       const panel = document.getElementById("movieEditPanel");
       const editButton = document.getElementById("movieEditToggleButton");
+      const editLabel = document.getElementById("movieEditToggleLabel");
+      const editIcon = document.getElementById("movieEditToggleIcon");
       const cancelButton = document.getElementById("movieEditCancelTopButton");
       if (!panel) return;
       panel.classList.toggle("hidden", !show);
       if (editButton) {
-        editButton.dataset.nextI18n = show ? "common.save" : "common.edit";
-        editButton.textContent = show ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
-        editButton.classList.toggle("secondary", !show);
+        const labelKey = show ? "common.save" : "common.edit";
+        const label = show ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
+        editButton.dataset.nextI18nAria = labelKey;
+        editButton.dataset.nextI18nTitle = labelKey;
+        editButton.setAttribute("aria-label", label);
+        editButton.setAttribute("title", label);
+        editButton.classList.toggle("is-editing", show);
+        if (editLabel) {
+          editLabel.dataset.nextI18n = labelKey;
+          editLabel.textContent = label;
+        }
+        if (editIcon) editIcon.setAttribute("d", show ? editIcon.dataset.savePath : editIcon.dataset.editPath);
       }
       if (cancelButton) cancelButton.classList.toggle("hidden", !show);
       if (show) document.getElementById("movieEditTitle")?.focus();
@@ -30202,28 +30356,19 @@ def ui_preview_html(
         default: return valueText(movie[field]);
       }
     }
-    async function refreshActiveMovieMetadata(dryRun, personRefreshScope = "all", forceRefreshPeople = false) {
+    async function refreshActiveMovieMetadata(dryRun) {
       if (!hasPermission("metadata.refresh_one")) return;
       if (!activeDetailMovieId) return;
-      const scope = normalizedPersonRefreshScope(personRefreshScope);
-      const refreshPeople = forceRefreshPeople || movieMetadataRefreshPeople;
-      const refreshingCrewOnly = refreshPeople && scope === "crew";
-      setMovieDetailMessage(
-        refreshingCrewOnly
-          ? tNext("movieDetail.refreshingCrewPeople", "Refreshing crew people...")
-          : (dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata changes...") : tNext("movieDetail.applyingMetadata", "Refreshing metadata..."))
-      );
+      setMovieDetailMessage(dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata changes...") : tNext("movieDetail.applyingMetadata", "Refreshing metadata..."));
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/metadata/refresh`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({dryRun, refreshPeople, personRefreshScope: scope})
+          body: JSON.stringify({dryRun, refreshPeople: false, personRefreshScope: "all"})
         });
-        const personRefresh = (payload.metadata || {}).personRefresh || null;
-        const successMessage = (refreshingCrewOnly
-          ? tNext("movieDetail.crewPeopleRefreshed", "Crew people refreshed.")
-          : (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.")))
-          + movieMetadataPeopleRefreshMessage(personRefresh);
+        const successMessage = dryRun
+          ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.")
+          : tNext("movieDetail.applied", "Metadata refreshed.");
         if (!dryRun) {
           const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
           renderMovieDetail(refreshed.detail || {});
@@ -30291,18 +30436,6 @@ def ui_preview_html(
         if (summary) summary.textContent = tNext("containerDetail.deleted", "Container deleted.");
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
-      }
-    }
-    async function loadActiveMovieJobs() {
-      if (!activeDetailMovieId) return;
-      setMovieDetailMessage(tNext("movieDetail.loadingJobs", "Loading refresh history..."));
-      try {
-        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/metadata/jobs`);
-        const jobs = payload.jobs || [];
-        setMovieDetailMessage(jobs.length ? `${jobs.length} ${tNext("movieDetail.jobs", "refresh history").toLowerCase()}: ${jobs[0].status}` : tNext("movieDetail.noJobs", "No metadata refreshes yet."), "good");
-        console.log("movie metadata jobs", payload);
-      } catch (error) {
-        setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
     async function setPrimaryArtwork(entity, mediaId, kind) {
@@ -34313,10 +34446,6 @@ def ui_preview_html(
       });
       document.getElementById("movieMetadataDryRunButton")?.addEventListener("click", () => refreshActiveMovieMetadata(true));
       document.getElementById("movieMetadataApplyButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false));
-      document.getElementById("movieCrewRefreshButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false, "crew", true));
-      document.getElementById("movieMetadataPeopleToggle")?.addEventListener("click", () => setMovieMetadataRefreshPeople(!movieMetadataRefreshPeople));
-      setMovieMetadataRefreshPeople(movieMetadataRefreshPeople);
-      document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
       document.getElementById("movieMetadataCompareButton")?.addEventListener("click", () => loadMovieMetadataComparison());
       document.getElementById("shuffleButton")?.addEventListener("click", () => {
         const items = libraryDisplayItems();
