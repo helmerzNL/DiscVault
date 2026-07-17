@@ -286,6 +286,7 @@ def plugin_execution_context_from_db(
         "enabled": bool(plugin.get("enabled")),
         "categories": plugin.get("categories") or manifest.get("categories") or [],
         "capabilities": plugin.get("capabilities") or manifest.get("capabilities") or [],
+        "distributionContractRange": manifest.get("distributionContractRange"),
         "settings": config.get("settings") or {},
         "secrets": plugin_secret_values(conn, config),
         "settingsConfigured": bool(config.get("settingsConfigured")),
