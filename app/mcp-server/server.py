@@ -232,6 +232,13 @@ def _movie_from_list_entry(entry: dict) -> dict:
     return entry.get("movie") or entry.get("snapshot") or entry
 
 
+def _genre_label(key: str) -> str:
+    normalized = str(key or "").strip().lower()
+    if normalized == "tv_movie":
+        return "TV Movie"
+    return normalized.replace("_", " ").title()
+
+
 def _execute_tool_inner(name: str, args: dict, bearer: str | None = None) -> str:
     try:
         if name == "search_collection":
@@ -247,10 +254,13 @@ def _execute_tool_inner(name: str, args: dict, bearer: str | None = None) -> str
             for movie in items:
                 metadata = movie.get("metadata") or {}
                 lines.append(f"- {_movie_summary(movie)}")
-                for key, label in (("director", "Director"), ("genre", "Genre"), ("rating", "Rating")):
+                for key, label in (("director", "Director"), ("rating", "Rating")):
                     value = movie.get(key) or metadata.get(key)
                     if value:
                         lines.append(f"  {label}: {value}")
+                genres = movie.get("genres")
+                if genres:
+                    lines.append(f"  Genre: {', '.join(_genre_label(key) for key in genres)}")
             return "\n".join(lines)
 
         if name == "get_collection_stats":

@@ -59,11 +59,15 @@ from app.backend.next_plugin_runtime import install_bundled_plugin_update
 from app.backend.next_plugin_runtime import installed_plugin_version
 from app.backend.next_plugin_runtime import plugin_auto_update_enabled
 from app.backend.next_plugin_runtime import plugin_backup_version
+from app.backend.next_plugin_runtime import plugin_config_payload
 from app.backend.next_plugin_runtime import plugin_has_backup
+from app.backend.next_plugin_runtime import plugin_setting_defaults
+from app.backend.next_plugin_runtime import resolve_plugin_settings
 from app.backend.next_plugin_runtime import plugin_update_state
 from app.backend.next_plugin_runtime import rollback_plugin_update
 from app.backend.next_plugin_runtime import set_plugin_auto_update_enabled
 from app.backend.next_plugin_runtime import upgrade_seeded_default_plugins
+from app.backend.next_plugin_runtime import validate_plugin_settings
 from app.backend.next_plugin_runtime import write_plugin_auto_update_marker
 
 
@@ -89,6 +93,78 @@ class FakeHTTPError(Exception):
 
 
 class NextPluginRuntimeTests(unittest.TestCase):
+    def test_plugin_defaults_are_typed_and_explicit_values_win(self):
+        schema = {
+            "settings": [
+                {"name": "origin", "type": "url", "required": True, "default": "https://default.example"},
+                {"name": "hours", "type": "number", "default": 6, "minimum": 1, "maximum": 24},
+                {"name": "fallback", "type": "boolean", "default": False},
+            ]
+        }
+
+        self.assertEqual(
+            plugin_setting_defaults(schema),
+            {
+                "origin": "https://default.example",
+                "hours": 6,
+                "fallback": False,
+            },
+        )
+        self.assertEqual(
+            resolve_plugin_settings(
+                schema,
+                {
+                    "origin": "https://custom.example",
+                    "hours": None,
+                    "fallback": True,
+                },
+            ),
+            {
+                "origin": "https://custom.example",
+                "hours": None,
+                "fallback": True,
+            },
+        )
+
+    def test_plugin_config_payload_resolves_required_defaults(self):
+        schema = {
+            "settings": [
+                {
+                    "name": "origin",
+                    "type": "url",
+                    "required": True,
+                    "default": "https://movies2.vaultstack.eu",
+                }
+            ]
+        }
+
+        config = plugin_config_payload(schema, {}, {})
+
+        self.assertTrue(config["settingsConfigured"])
+        self.assertEqual(config["settings"]["origin"], "https://movies2.vaultstack.eu")
+
+    def test_plugin_setting_validation_rejects_wrong_types_and_ranges(self):
+        schema = {
+            "settings": [
+                {"name": "origin", "type": "url", "required": True},
+                {"name": "hours", "type": "number", "minimum": 1, "maximum": 24},
+                {"name": "fallback", "type": "boolean"},
+            ]
+        }
+
+        with self.assertRaisesRegex(ValueError, "origin is required"):
+            validate_plugin_settings(schema, {})
+        with self.assertRaisesRegex(ValueError, "hours must be at most 24"):
+            validate_plugin_settings(
+                schema,
+                {"origin": "https://example.test", "hours": 25},
+            )
+        with self.assertRaisesRegex(ValueError, "fallback must be a boolean"):
+            validate_plugin_settings(
+                schema,
+                {"origin": "https://example.test", "fallback": "false"},
+            )
+
     def test_plugin_import_job_fails_when_persistence_writes_no_rows(self):
         class FakeConnection:
             def __enter__(self):

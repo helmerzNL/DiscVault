@@ -25,7 +25,7 @@ import tempfile
 import time
 import uuid
 import zipfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -62,6 +62,11 @@ try:
     from .next_plugin_runtime import plugin_update_state
     from .next_plugin_runtime import unconfigured_integration_plugins
     from .next_plugin_runtime import validate_manifest_compatibility
+    from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from .next_plugin_runtime import validate_plugin_settings
+    from .next_price_provider_detection import detect_price_provider
+    from .next_price_provider_detection import derive_provider_product_ref
+    from .next_price_provider_detection import price_provider_entity
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
@@ -81,8 +86,12 @@ try:
     from .next_metadata import refresh_movie_metadata
     from .next_metadata import normalize_movie_field_locks
     from .next_metadata import movie_locked_fields
+    from .next_metadata import movie_genre_keys
     from .next_metadata import MOVIE_LOCKABLE_FIELDS
     from .next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from .next_genres import GENRE_KEYS
+    from .next_genres import GENRE_KEY_TO_LABEL
+    from .next_genres import map_legacy_genre_text
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import backup_restore_plan
@@ -115,6 +124,10 @@ try:
     from .next_movievault_connection import movievault_connection_status
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_connection import refresh_movievault_connection
+    from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from .next_movievault_v2 import MovieVaultV2Error
+    from .next_movievault_v2 import movievault_v2_plugin_context
+    from .next_movievault_v2 import normalize_origin as normalize_movievault_v2_origin
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
     from .next_common import NextApiError
@@ -199,6 +212,7 @@ try:
     from .next_preferences import mobile_endpoint_contract_payload
     from .next_preferences import mobile_feature_capabilities
     from .next_preferences import normalized_app_preference_key
+    from .next_preferences import price_display_context
     from .next_preferences import register_next_preferences_routes
     from .next_preferences import set_app_user_preferences
     from .next_preferences import validate_app_preference
@@ -252,6 +266,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import plugin_update_state
     from next_plugin_runtime import unconfigured_integration_plugins
     from next_plugin_runtime import validate_manifest_compatibility
+    from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from next_plugin_runtime import validate_plugin_settings
+    from next_price_provider_detection import detect_price_provider
+    from next_price_provider_detection import derive_provider_product_ref
+    from next_price_provider_detection import price_provider_entity
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
@@ -271,8 +290,12 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import refresh_movie_metadata
     from next_metadata import normalize_movie_field_locks
     from next_metadata import movie_locked_fields
+    from next_metadata import movie_genre_keys
     from next_metadata import MOVIE_LOCKABLE_FIELDS
     from next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from next_genres import GENRE_KEYS
+    from next_genres import GENRE_KEY_TO_LABEL
+    from next_genres import map_legacy_genre_text
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import backup_restore_plan
@@ -305,6 +328,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import movievault_connection_status
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_connection import refresh_movievault_connection
+    from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from next_movievault_v2 import MovieVaultV2Error
+    from next_movievault_v2 import movievault_v2_plugin_context
+    from next_movievault_v2 import normalize_origin as normalize_movievault_v2_origin
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
     from next_common import NextApiError
@@ -428,6 +455,7 @@ MIGRATION_LEGACY_AUTH_CHALLENGE_KEY = "migration:legacy-auth"
 MIGRATION_LEGACY_AUTH_GRANT_PREFIX = "migration:legacy-grant:"
 MIGRATION_LEGACY_AUTH_GRANT_SECONDS = 30 * 60
 PLUGIN_EXECUTION_JOB_TYPE = "plugin.execute"
+MOVIEVAULT_V2_JOB_LOCK_KEY = 2_026_262
 ARTWORK_TRASH_RETENTION_OPTIONS = {
     "1h": {"seconds": 3600, "interval": "1 hour"},
     "1d": {"seconds": 86400, "interval": "1 day"},
@@ -595,6 +623,8 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_digital_badge_on_tiles": True,
     "delete_container_members_with_container": False,
     "show_metadata_jobs": True,
+    "price_monitoring_enabled": True,
+    "preferred_price_currency": "",
     "rating_country": "NL",
     "default_media_group_id": "",
 }
@@ -614,9 +644,11 @@ APP_BOOLEAN_PREFERENCES = {
     "show_digital_badge_on_tiles",
     "delete_container_members_with_container",
     "show_metadata_jobs",
+    "price_monitoring_enabled",
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
+    "preferred_price_currency": {"", "EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY"},
     "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"},
 }
 APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
@@ -628,6 +660,8 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_local_title",
         "show_extended_people_pages",
         "show_digital_badge_on_tiles",
+        "price_monitoring_enabled",
+        "preferred_price_currency",
         "rating_country",
         "default_media_group_id",
     ),
@@ -640,6 +674,18 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_metadata_jobs",
     ),
 }
+
+PRICE_DISPLAY_SUPPORTED_CURRENCIES: tuple[str, ...] = ("EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY")
+PRICE_DISPLAY_FALLBACK_RATES: dict[str, float] = {
+    "EUR": 1.0,
+    "USD": 1.08,
+    "GBP": 0.86,
+    "CAD": 1.47,
+    "AUD": 1.66,
+    "CHF": 0.94,
+    "JPY": 173.0,
+}
+_PRICE_DISPLAY_RATE_CACHE: dict[str, Any] = {"expires_at": None, "payload": None}
 
 
 def create_app() -> Flask:
@@ -3239,7 +3285,6 @@ def normalize_import_column_mapping(value: Any) -> dict[str, str]:
         "rating",
         "director",
         "actor",
-        "genre",
         "imdbId",
         "tmdbId",
         "poster",
@@ -4126,7 +4171,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     m.format,
                     m.edition,
                     m.location,
-                    m.metadata->>'genre' AS genre,
                     m.metadata->>'audience_rating' AS audience_rating,
                     m.rating,
                     mts.content_ratings,
@@ -4135,7 +4179,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                         m.metadata->>'director',
                         m.metadata->>'producer',
                         m.metadata->>'writer',
-                        m.metadata->>'genre',
                         m.metadata->>'studios'
                     ) AS metadata_search,
                     COALESCE(m.metadata->>'poster_url', poster_asset.source_url) AS poster_url,
@@ -4182,11 +4225,14 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 """,
                 (*visibility_params, limit),
             )
-            return attach_movie_search_credits(
+            return attach_movie_genres(
                 conn,
-                attach_media_group_availability(
+                attach_movie_search_credits(
                     conn,
-                    attach_digital_availability(conn, attach_location_summaries(conn, [with_preview_media_urls(row) for row in cur.fetchall()])),
+                    attach_media_group_availability(
+                        conn,
+                        attach_digital_availability(conn, attach_location_summaries(conn, [with_preview_media_urls(row) for row in cur.fetchall()])),
+                    ),
                 ),
             )
     with conn.cursor() as cur:
@@ -4203,7 +4249,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 m.format,
                 m.edition,
                 m.location,
-                m.metadata->>'genre' AS genre,
                 m.metadata->>'audience_rating' AS audience_rating,
                 m.rating,
                 NULL::jsonb AS content_ratings,
@@ -4212,7 +4257,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     m.metadata->>'director',
                     m.metadata->>'producer',
                     m.metadata->>'writer',
-                    m.metadata->>'genre',
                     m.metadata->>'studios'
                 ) AS metadata_search,
                 m.metadata->>'poster_url' AS poster_url,
@@ -4228,10 +4272,53 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
             """,
             (*visibility_params, limit),
         )
-        return attach_movie_search_credits(
+        return attach_movie_genres(
             conn,
-            attach_media_group_availability(conn, attach_digital_availability(conn, attach_location_summaries(conn, cur.fetchall()))),
+            attach_movie_search_credits(
+                conn,
+                attach_media_group_availability(conn, attach_digital_availability(conn, attach_location_summaries(conn, cur.fetchall()))),
+            ),
         )
+
+
+def attach_movie_genres(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach canonical genre keys (movie["genres"]) from movie_genres.
+
+    Also populates movie["genre_search"] with the movie's genre keys plus
+    their English reference labels, so free-text search can match genres
+    without depending on the caller's locale.
+    """
+    if not movies or not table_exists(conn, "movie_genres"):
+        for movie in movies:
+            movie["genres"] = []
+            movie["genre_search"] = ""
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    genres_by_movie: dict[str, list[str]] = {str(movie_id): [] for movie_id in movie_ids}
+    if movie_ids:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mg.movie_id, mg.genre_key
+                FROM movie_genres mg
+                LEFT JOIN genres g ON g.key = mg.genre_key
+                WHERE mg.movie_id = ANY(%s)
+                ORDER BY mg.movie_id, g.sort_order NULLS LAST, mg.genre_key
+                """,
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                key = str(row.get("movie_id"))
+                values = genres_by_movie.get(key)
+                if values is not None:
+                    values.append(str(row.get("genre_key")))
+    for movie in movies:
+        keys = genres_by_movie.get(str(movie.get("id")), [])
+        movie["genres"] = keys
+        movie["genre_search"] = " ".join(
+            f"{key} {GENRE_KEY_TO_LABEL.get(key, key)}" for key in keys
+        )
+    return movies
 
 
 def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -4504,6 +4591,7 @@ def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
 
 def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> dict[str, Any]:
     user_id = user.get("id") if user else None
+    preferences = app_effective_preferences(conn, user_id)
     counts = {
         "movies": visible_movie_count(conn, user) if user else count_table(conn, "movies"),
         "people": visible_people_count(conn, user) if user else count_table(conn, "people"),
@@ -4528,7 +4616,8 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "locations": location_list_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
-        "preferences": app_effective_preferences(conn, user_id),
+        "preferences": preferences,
+        "priceDisplay": price_display_context(preferences),
         "instanceSettings": {
             "loansSystemEnabled": loans_system_enabled(conn),
         },
@@ -4559,6 +4648,7 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "mediaGroups": [],
         "plugins": [],
         "preferences": dict(APP_PREFERENCE_DEFAULTS),
+        "priceDisplay": price_display_context(dict(APP_PREFERENCE_DEFAULTS)),
         "instanceSettings": {
             "loansSystemEnabled": False,
         },
@@ -6826,7 +6916,7 @@ def validate_app_preference(key: str, value: Any) -> Any:
         return parse_bool_value(value, default=bool(APP_PREFERENCE_DEFAULTS[key]))
     if key in APP_CHOICE_PREFERENCES:
         text = str(value or APP_PREFERENCE_DEFAULTS[key]).strip()
-        text = text.upper() if key == "rating_country" else text.lower()
+        text = text.upper() if key in {"rating_country", "preferred_price_currency"} else text.lower()
         if text not in APP_CHOICE_PREFERENCES[key]:
             raise NextApiError(f"Invalid value for preference {key}", 400)
         return text
@@ -6875,6 +6965,73 @@ def app_effective_preferences(conn, user_id: UUID | str | None = None) -> dict[s
     values = app_global_preferences(conn)
     values.update(app_user_preferences(conn, user_id))
     return values
+
+
+def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    cached = _PRICE_DISPLAY_RATE_CACHE.get("payload")
+    expires_at = _PRICE_DISPLAY_RATE_CACHE.get("expires_at")
+    if cached and isinstance(expires_at, datetime) and expires_at > now:
+        return cached
+
+    symbols = ",".join(code for code in PRICE_DISPLAY_SUPPORTED_CURRENCIES if code != "EUR")
+    try:
+        response = http_requests.get(
+            f"https://api.frankfurter.app/latest?from=EUR&to={symbols}",
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json() or {}
+        raw_rates = payload.get("rates") if isinstance(payload, dict) else {}
+        rates = {"EUR": 1.0}
+        for code in PRICE_DISPLAY_SUPPORTED_CURRENCIES:
+            if code == "EUR":
+                continue
+            raw_value = raw_rates.get(code) if isinstance(raw_rates, dict) else None
+            try:
+                rates[code] = float(raw_value)
+            except (TypeError, ValueError):
+                rates[code] = PRICE_DISPLAY_FALLBACK_RATES[code]
+        result = {
+            "base": "EUR",
+            "exchangeRates": rates,
+            "updatedAt": payload.get("date") if isinstance(payload, dict) else None,
+            "source": "frankfurter",
+        }
+        _PRICE_DISPLAY_RATE_CACHE["payload"] = result
+        _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + timedelta(hours=12)
+        return result
+    except Exception:
+        if cached:
+            return cached
+        return {
+            "base": "EUR",
+            "exchangeRates": dict(PRICE_DISPLAY_FALLBACK_RATES),
+            "updatedAt": None,
+            "source": "fallback",
+        }
+
+
+def price_display_context(preferences: dict[str, Any] | None = None) -> dict[str, Any]:
+    prefs = preferences or {}
+    monitoring_enabled = bool(prefs.get("price_monitoring_enabled", APP_PREFERENCE_DEFAULTS["price_monitoring_enabled"]))
+    preferred_currency = str(prefs.get("preferred_price_currency") or "").strip().upper()
+    if preferred_currency not in APP_CHOICE_PREFERENCES["preferred_price_currency"]:
+        preferred_currency = ""
+    payload = {
+        "monitoringEnabled": monitoring_enabled,
+        "preferredCurrency": preferred_currency or None,
+        "supportedCurrencies": list(PRICE_DISPLAY_SUPPORTED_CURRENCIES),
+        "exchangeRates": {},
+        "updatedAt": None,
+        "source": None,
+    }
+    if monitoring_enabled and preferred_currency:
+        rates = price_display_exchange_rates()
+        payload["exchangeRates"] = dict(rates.get("exchangeRates") or {})
+        payload["updatedAt"] = rates.get("updatedAt")
+        payload["source"] = rates.get("source")
+    return payload
 
 
 def actor_delete_container_members_enabled(conn, actor: dict[str, Any] | None) -> bool:
@@ -8016,7 +8173,11 @@ def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink", "describe_payload", "activity_summary"}:
         return False
-    if is_movievault_plugin(str(plugin.get("id") or "")):
+    plugin_id = str(plugin.get("id") or "")
+    if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
+        settings = config.get("settings")
+        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+    if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
@@ -8049,41 +8210,35 @@ def plugin_is_metadata(categories: Any) -> bool:
     return bool({"metadata_source", "metadata_receiver"}.intersection(values))
 
 
-def plugin_config_payload(settings: Any, secrets_ref: Any) -> dict[str, Any]:
-    safe_settings = settings if isinstance(settings, dict) else {}
-    refs = secrets_ref if isinstance(secrets_ref, dict) else {}
-    safe_refs: dict[str, dict[str, Any]] = {}
-    for name, ref in refs.items():
-        if not PLUGIN_SECRET_NAME_PATTERN.match(str(name)):
-            continue
-        key = ref.get("key") if isinstance(ref, dict) else ref
-        item: dict[str, Any] = {"configured": True}
-        if key:
-            item["key"] = str(key)
-        safe_refs[str(name)] = item
-    return {
-        "settings": safe_settings,
-        "settingsConfigured": bool(safe_settings),
-        "secretNames": sorted(safe_refs),
-        "secretsConfigured": bool(safe_refs),
-        "secretsRef": safe_refs,
+def plugin_config_payload(settings_schema: Any, settings: Any, secrets_ref: Any) -> dict[str, Any]:
+    payload = resolved_plugin_config_payload(settings_schema, settings, secrets_ref)
+    safe_refs = {
+        str(name): ref
+        for name, ref in (payload.get("secretsRef") or {}).items()
+        if PLUGIN_SECRET_NAME_PATTERN.match(str(name))
     }
+    payload["secretNames"] = sorted(safe_refs)
+    payload["secretsConfigured"] = bool(safe_refs)
+    payload["secretsRef"] = safe_refs
+    return payload
 
 
 def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
     if not table_exists(conn, "plugin_settings"):
-        return plugin_config_payload({}, {})
+        return plugin_config_payload({}, {}, {})
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT settings, secrets_ref
-            FROM plugin_settings
-            WHERE plugin_id=%s
+            SELECT p.settings_schema, s.settings, s.secrets_ref
+            FROM plugins AS p
+            LEFT JOIN plugin_settings AS s ON s.plugin_id = p.id
+            WHERE p.id=%s
             """,
             (plugin_id,),
         )
         row = cur.fetchone()
     return plugin_config_payload(
+        row.get("settings_schema") if row else {},
         row.get("settings") if row else {},
         row.get("secrets_ref") if row else {},
     )
@@ -8132,6 +8287,7 @@ def plugin_execution_context(
         "enabled": bool(plugin.get("enabled")),
         "categories": plugin.get("categories") or manifest.get("categories") or [],
         "capabilities": plugin.get("capabilities") or manifest.get("capabilities") or [],
+        "distributionContractRange": manifest.get("distributionContractRange"),
         "settings": config.get("settings") or {},
         "secrets": plugin_secret_values(conn, config),
         "settingsConfigured": bool(config.get("settingsConfigured")),
@@ -8143,12 +8299,19 @@ def plugin_execution_context(
             "role": actor.get("role") if actor else None,
         },
     }
-    return movievault_plugin_context(
+    plugin_id = str(plugin.get("id") or "")
+    context = movievault_plugin_context(
         conn,
-        str(plugin.get("id") or ""),
+        plugin_id,
         context,
         ensure_token=ensure_movievault_token,
         actor_id=actor.get("id") if actor else None,
+    )
+    return movievault_v2_plugin_context(
+        conn,
+        plugin_id,
+        context,
+        connection_factory=connect,
     )
 
 
@@ -8197,10 +8360,22 @@ def update_plugin_config(
         )
         existing = cur.fetchone()
 
+    with conn.cursor() as cur:
+        cur.execute("SELECT settings_schema FROM plugins WHERE id=%s", (plugin_id,))
+        plugin_row = cur.fetchone()
+    settings_schema = plugin_row.get("settings_schema") if plugin_row else {}
     settings = dict(existing.get("settings") or {}) if existing else {}
     secrets_ref = dict(existing.get("secrets_ref") or {}) if existing else {}
     if settings_provided:
-        settings = dict(settings_value or {})
+        try:
+            settings = validate_plugin_settings(settings_schema, settings_value or {})
+        except ValueError as exc:
+            raise NextApiError(str(exc), 400) from exc
+        if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
+            try:
+                settings["origin"] = normalize_movievault_v2_origin(settings.get("origin"))
+            except MovieVaultV2Error as exc:
+                raise NextApiError("MovieVault v2 origin must be a root HTTP(S) origin", 400) from exc
 
     with conn.transaction():
         with conn.cursor() as cur:
@@ -8427,7 +8602,6 @@ def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int |
 def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
     aliases = {
         "director": ("director",),
-        "genre": ("genre",),
         "studios": ("studios", "studio"),
         "distributor": ("distributor",),
     }
@@ -8686,12 +8860,13 @@ def movie_edit_receiver_proposal(
         else:
             metadata_updates[field] = new_value
 
-    # Editable metadata fields stored on movies.metadata (director, genre,
-    # studios, distributor). A non-empty supplement/change becomes a
-    # contribution; locked fields are never forwarded.
+    # Editable metadata fields stored on movies.metadata (director, studios,
+    # distributor). A non-empty supplement/change becomes a contribution;
+    # locked fields are never forwarded. Genre is intentionally absent: it
+    # is read-only and sourced only from TMDB.
     existing_meta = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
     metadata_edits = payload.get("metadata_edits") or {}
-    for field in ("director", "genre", "studios", "distributor"):
+    for field in ("director", "studios", "distributor"):
         if field not in metadata_edits or field in locked:
             continue
         new_value = comparable(metadata_edits.get(field))
@@ -8779,6 +8954,8 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
             (movie_id,),
         )
         row = cur.fetchone()
+    if row is not None:
+        row["genres"] = movie_genre_keys(conn, movie_id)
     return row
 
 
@@ -9893,6 +10070,110 @@ def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
         rows = cur.fetchall()
     entities = [_wishlist_row_entity(row) for row in rows]
     return _attach_wishlist_shops(conn, user_id, entities)
+
+
+def _wishlist_existing_identity_id(conn, user_id, fields: dict[str, Any]):
+    movievault_id = fields.get("movievault_id")
+    tmdb_id = fields.get("tmdb_id")
+    if movievault_id:
+        query = """
+            SELECT id
+            FROM wishlist_items
+            WHERE user_id=%s AND movievault_id=%s
+            ORDER BY added_at, id
+            LIMIT 1
+        """
+        params = (user_id, movievault_id)
+    elif tmdb_id:
+        query = """
+            SELECT id
+            FROM wishlist_items
+            WHERE user_id=%s
+              AND snapshot->>'tmdb_id' = %s
+              AND COALESCE(NULLIF(snapshot->>'tmdb_media_type', ''), 'movie') = %s
+            ORDER BY added_at, id
+            LIMIT 1
+        """
+        params = (user_id, tmdb_id, fields.get("tmdb_media_type") or "movie")
+    else:
+        return None
+
+    with conn.cursor() as cur:
+        cur.execute(query, params)
+        row = cur.fetchone()
+    return (row or {}).get("id")
+
+
+def _insert_wishlist_item_once(
+    conn,
+    *,
+    user_id,
+    created_by_user_id,
+    fields: dict[str, Any],
+    snapshot: dict[str, Any],
+):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO wishlist_items
+                (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+            """,
+            (
+                user_id,
+                fields["title"],
+                fields["year"],
+                fields["barcode"],
+                fields["format"],
+                fields["movievault_id"],
+                fields["poster_url"],
+                fields["note"],
+                Jsonb(snapshot),
+                created_by_user_id,
+            ),
+        )
+        inserted = cur.fetchone()
+    item_id = (inserted or {}).get("id")
+    if item_id is not None:
+        return item_id, True
+
+    item_id = _wishlist_existing_identity_id(conn, user_id, fields)
+    if item_id is None:
+        raise NextApiError("Wishlist item could not be created", 409)
+    return item_id, False
+
+
+def _create_wishlist_item_record(
+    conn,
+    *,
+    actor: dict[str, Any],
+    fields: dict[str, Any],
+    snapshot: dict[str, Any],
+):
+    user_id = actor.get("id")
+    with conn.transaction():
+        item_id, created = _insert_wishlist_item_once(
+            conn,
+            user_id=user_id,
+            created_by_user_id=actor.get("id"),
+            fields=fields,
+            snapshot=snapshot,
+        )
+        if created:
+            emit_wishlist_change(conn, user_id, item_id, operation="upsert")
+            audit_event(
+                conn,
+                event_type="wishlist.added",
+                category="personal",
+                actor=actor,
+                target_type="wishlist_item",
+                target_id=item_id,
+                summary="Added wishlist entry",
+                metadata={"title": fields["title"]},
+            )
+    return item_id, created
 
 
 def emit_wishlist_change(conn, user_id, item_id, *, operation: str) -> int:
@@ -14480,7 +14761,7 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             """,
             (*visibility_params, limit),
         )
-        return cur.fetchall()
+        return attach_movie_genres(conn, cur.fetchall())
 
 
 def all_movie_credit_entities(
@@ -15353,8 +15634,11 @@ def migration_overview(conn) -> dict[str, Any]:
 def plugin_row(row: dict[str, Any]) -> dict[str, Any]:
     manifest = row.get("manifest") or {}
     settings_schema = row.get("settings_schema") or {}
-    settings = row.get("settings") or {}
-    secrets_ref = row.get("secrets_ref") or {}
+    config = plugin_config_payload(
+        settings_schema,
+        row.get("settings"),
+        row.get("secrets_ref"),
+    )
     categories = manifest.get("categories", []) if isinstance(manifest, dict) else []
     capabilities = manifest.get("capabilities", []) if isinstance(manifest, dict) else []
     entitlements = manifest.get("entitlements", {}) if isinstance(manifest, dict) else {}
@@ -15373,8 +15657,8 @@ def plugin_row(row: dict[str, Any]) -> dict[str, Any]:
         "manifest": manifest,
         "requiresSecrets": bool(manifest.get("requiresSecrets", False)) if isinstance(manifest, dict) else False,
         "settingsSchema": settings_schema,
-        "settingsConfigured": bool(settings),
-        "secretsConfigured": bool(secrets_ref),
+        "settingsConfigured": config["settingsConfigured"],
+        "secretsConfigured": config["secretsConfigured"],
         "premiumFeatureKey": row.get("premium_feature_key"),
         "runtime": runtime,
         "updatedAt": row.get("updated_at"),
@@ -15428,6 +15712,75 @@ def actor_job_payload(actor: dict[str, Any]) -> dict[str, Any]:
         "username": actor.get("username"),
         "role": actor.get("role"),
     }
+
+
+def queue_movievault_v2_sync_job(
+    conn,
+    *,
+    actor: dict[str, Any],
+    source: str,
+    skip_when_indexed: bool = False,
+) -> tuple[dict[str, Any] | None, bool, bool]:
+    if not table_exists(conn, "background_jobs"):
+        raise NextApiError("Background job table is not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (MOVIEVAULT_V2_JOB_LOCK_KEY,))
+        if skip_when_indexed and table_exists(conn, "movievault_v2_sync_state"):
+            cur.execute(
+                """
+                SELECT active_generation
+                FROM movievault_v2_sync_state
+                WHERE plugin_id=%s
+                """,
+                (MOVIEVAULT_V2_PLUGIN_ID,),
+            )
+            state = cur.fetchone()
+            if state and state.get("active_generation"):
+                return None, False, True
+        cur.execute(
+            """
+            SELECT
+                id, job_type, status, requested_by, payload, result,
+                error, created_at, started_at, finished_at
+            FROM background_jobs
+            WHERE job_type = %s
+              AND status IN ('pending', 'running')
+              AND payload ->> 'pluginId' = %s
+              AND payload ->> 'entrypoint' = 'sync_index'
+            ORDER BY created_at
+            LIMIT 1
+            """,
+            (PLUGIN_EXECUTION_JOB_TYPE, MOVIEVAULT_V2_PLUGIN_ID),
+        )
+        existing = cur.fetchone()
+    if existing:
+        return job_row(existing), True, False
+    job = create_background_job(
+        conn,
+        job_type=PLUGIN_EXECUTION_JOB_TYPE,
+        payload={
+            "pluginId": MOVIEVAULT_V2_PLUGIN_ID,
+            "entrypoint": "sync_index",
+            "payload": {},
+            "requestedBy": actor_job_payload(actor),
+            "source": source,
+        },
+    )
+    audit_event(
+        conn,
+        event_type="plugin.job_queued",
+        category="plugins",
+        actor=actor,
+        target_type="background_job",
+        target_id=job.get("id"),
+        summary=f"Queued {MOVIEVAULT_V2_PLUGIN_ID}.sync_index",
+        metadata={
+            "pluginId": MOVIEVAULT_V2_PLUGIN_ID,
+            "entrypoint": "sync_index",
+            "source": source,
+        },
+    )
+    return job, False, False
 
 
 def queue_movie_metadata_refresh_job(
@@ -18966,16 +19319,42 @@ def register_routes(flask_app: Flask) -> None:
                 return response({"status": "ok", "items": [], "limit": limit, "offset": offset})
             filters = []
             params: list[Any] = []
+            has_movie_genres = table_exists(conn, "movie_genres")
             if query:
+                genre_query_clause = ""
+                genre_query_params: list[Any] = []
+                if has_movie_genres:
+                    genre_query_clause = """
+                        OR EXISTS (
+                            SELECT 1
+                            FROM movie_genres mg
+                            WHERE mg.movie_id = m.id
+                              AND lower(replace(mg.genre_key, '_', ' ')) LIKE lower(%s)
+                        )
+                    """
+                    genre_query_params.append(f"%{query}%")
+                    genre_query_keys, _unmatched = map_legacy_genre_text(query)
+                    if genre_query_keys:
+                        genre_query_clause += """
+                            OR EXISTS (
+                                SELECT 1
+                                FROM movie_genres mg
+                                WHERE mg.movie_id = m.id
+                                  AND mg.genre_key = ANY(%s)
+                            )
+                        """
+                        genre_query_params.append(genre_query_keys)
                 filters.append(
-                    """(
+                    f"""(
                         lower(m.title) LIKE lower(%s)
                         OR lower(COALESCE(m.original_title, '')) LIKE lower(%s)
                         OR m.barcode=%s
                         OR lower(COALESCE(m.metadata::text, '')) LIKE lower(%s)
+                        {genre_query_clause}
                     )"""
                 )
                 params.extend([f"%{query}%", f"%{query}%", query, f"%{query}%"])
+                params.extend(genre_query_params)
             if media_format:
                 filters.append("m.format=%s")
                 params.append(media_format)
@@ -19012,7 +19391,9 @@ def register_routes(flask_app: Flask) -> None:
                     """,
                     (*params, limit, offset),
                 )
-                items = cur.fetchall()
+                items = attach_movie_genres(conn, cur.fetchall())
+                for item in items:
+                    item.pop("genre_search", None)
             audit_api_interaction(
                 conn,
                 actor,
@@ -19640,25 +20021,51 @@ def register_routes(flask_app: Flask) -> None:
         capabilities = {str(item) for item in (plugin.get("capabilities") or [])}
         return "price_provider" in categories or "price_check" in capabilities
 
+    def _price_provider_entities(conn, *, sync_registry: bool) -> list[dict[str, Any]]:
+        if sync_registry:
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+        registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+        providers = [
+            plugin
+            for plugin in (registry.get("plugins") or [])
+            if _is_price_provider_plugin(plugin)
+        ]
+        for provider in providers:
+            config = plugin_config_from_db(conn, str(provider.get("id") or ""))
+            provider["config"] = {
+                "settingsConfigured": bool(config.get("settingsConfigured")),
+                "secretNames": config.get("secretNames") or [],
+                "secretsConfigured": bool(config.get("secretsConfigured")),
+            }
+        return [price_provider_entity(provider) for provider in providers]
+
+    def _resolve_shop_price_provider(
+        conn,
+        price_url: str,
+        provider_plugin_id: str | None,
+        provider_product_ref: str | None,
+    ) -> tuple[str | None, str | None]:
+        providers = _price_provider_entities(conn, sync_registry=False)
+        if provider_plugin_id:
+            provider = next(
+                (item for item in providers if item.get("id") == provider_plugin_id),
+                None,
+            )
+            if provider and not provider_product_ref:
+                provider_product_ref = derive_provider_product_ref(price_url, provider)
+            return provider_plugin_id, provider_product_ref
+        return detect_price_provider(price_url, providers)
+
     @flask_app.get("/api/next/price-providers")
     def list_price_providers():
         with connect() as conn:
             require_any_next_permission(conn, ("watchlist.manage", "metadata.manage_plugins", "admin.view_settings"))
             if not table_exists(conn, "plugins"):
                 return response({"status": "ok", "providers": []})
-            if table_exists(conn, "metadata_plugins"):
-                sync_metadata_plugin_registry(conn)
-            else:
-                sync_plugin_registry(conn, table_exists, Jsonb)
-            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            providers = [plugin for plugin in (registry.get("plugins") or []) if _is_price_provider_plugin(plugin)]
-            for provider in providers:
-                config = plugin_config_from_db(conn, str(provider.get("id") or ""))
-                provider["config"] = {
-                    "settingsConfigured": bool(config.get("settingsConfigured")),
-                    "secretNames": config.get("secretNames") or [],
-                    "secretsConfigured": bool(config.get("secretsConfigured")),
-                }
+            providers = _price_provider_entities(conn, sync_registry=True)
         return response({"status": "ok", "providers": providers})
 
     @flask_app.patch("/api/next/admin/price-providers/<provider_id>/enabled")
@@ -20105,7 +20512,7 @@ def register_routes(flask_app: Flask) -> None:
 
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id, categories FROM plugins WHERE id=%s",
+                    "SELECT id, categories, enabled FROM plugins WHERE id=%s",
                     (plugin_id,),
                 )
                 plugin = cur.fetchone()
@@ -20117,7 +20524,27 @@ def register_routes(flask_app: Flask) -> None:
             is_metadata_plugin = bool(
                 {"metadata_source", "metadata_receiver"}.intersection(set(categories))
             )
+            queue_initial_sync = bool(
+                has_enabled
+                and enabled
+                and not bool(plugin.get("enabled"))
+                and plugin_id == MOVIEVAULT_V2_PLUGIN_ID
+            )
+            if queue_initial_sync:
+                config = plugin_config_from_db(conn, plugin_id)
+                if not config["settingsConfigured"]:
+                    raise NextApiError("Plugin configuration is incomplete", 409)
+                try:
+                    normalize_movievault_v2_origin(config["settings"].get("origin"))
+                except MovieVaultV2Error as exc:
+                    raise NextApiError(
+                        "MovieVault v2 origin must be a root HTTP(S) origin",
+                        409,
+                    ) from exc
 
+            initial_job = None
+            initial_duplicate = False
+            initial_skipped_current = False
             with conn.transaction():
                 with conn.cursor() as cur:
                     if is_metadata_plugin and table_exists(conn, "metadata_plugins"):
@@ -20170,12 +20597,36 @@ def register_routes(flask_app: Flask) -> None:
                         "categories": categories,
                     },
                 )
+                if queue_initial_sync:
+                    (
+                        initial_job,
+                        initial_duplicate,
+                        initial_skipped_current,
+                    ) = queue_movievault_v2_sync_job(
+                        conn,
+                        actor=actor,
+                        source="enable",
+                        skip_when_indexed=True,
+                    )
 
             if table_exists(conn, "metadata_plugins"):
                 sync_metadata_plugin_registry(conn)
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
             updated = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
-        return response({"status": "ok", "plugin": updated, "registry": registry})
+        return response(
+            {
+                "status": "ok",
+                "plugin": updated,
+                "registry": registry,
+                "initialSync": {
+                    "job": initial_job,
+                    "duplicate": initial_duplicate,
+                    "skippedCurrent": initial_skipped_current,
+                }
+                if queue_initial_sync
+                else None,
+            }
+        )
 
     @flask_app.get("/api/next/plugins/<plugin_id>/config")
     def plugin_config(plugin_id: str):
@@ -20442,6 +20893,8 @@ def register_routes(flask_app: Flask) -> None:
             if not plugin:
                 raise NextApiError("Plugin not found", 404)
             entrypoint, payload = validate_plugin_execution_request(plugin, body)
+            if entrypoint == "sync_index":
+                raise NextApiError("Queue sync_index through the plugin jobs endpoint", 409)
             actor = require_plugin_action_permission(conn, plugin, entrypoint)
             config = plugin_config_from_db(conn, plugin_id)
             if plugin_requires_config_for_entrypoint(plugin, config, entrypoint):
@@ -20501,19 +20954,35 @@ def register_routes(flask_app: Flask) -> None:
                     "role": actor.get("role"),
                 },
             }
+            duplicate = False
             with conn.transaction():
-                job = create_background_job(conn, job_type=PLUGIN_EXECUTION_JOB_TYPE, payload=job_payload)
-                audit_event(
-                    conn,
-                    event_type="plugin.job_queued",
-                    category="plugins",
-                    actor=actor,
-                    target_type="background_job",
-                    target_id=job.get("id"),
-                    summary=f"Queued {plugin_id}.{entrypoint}",
-                    metadata={"pluginId": plugin_id, "entrypoint": entrypoint, "payload": payload},
-                )
-        return response({"status": "ok", "plugin": plugin, "job": job}, 201)
+                job = None
+                if plugin_id == MOVIEVAULT_V2_PLUGIN_ID and entrypoint == "sync_index":
+                    job, duplicate, _skipped_current = queue_movievault_v2_sync_job(
+                        conn,
+                        actor=actor,
+                        source="manual",
+                    )
+                if job is None:
+                    job = create_background_job(
+                        conn,
+                        job_type=PLUGIN_EXECUTION_JOB_TYPE,
+                        payload=job_payload,
+                    )
+                    audit_event(
+                        conn,
+                        event_type="plugin.job_queued",
+                        category="plugins",
+                        actor=actor,
+                        target_type="background_job",
+                        target_id=job.get("id"),
+                        summary=f"Queued {plugin_id}.{entrypoint}",
+                        metadata={"pluginId": plugin_id, "entrypoint": entrypoint, "payload": payload},
+                    )
+        return response(
+            {"status": "ok", "plugin": plugin, "job": job, "duplicate": duplicate},
+            200 if duplicate else 201,
+        )
 
     @flask_app.get("/api/next/metadata/plugins")
     def metadata_plugins():
@@ -21233,77 +21702,22 @@ def register_routes(flask_app: Flask) -> None:
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             user_id = actor.get("id")
-            if fields["source"] == "discover" and fields["tmdb_id"]:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        SELECT id
-                        FROM wishlist_items
-                        WHERE user_id=%s
-                          AND snapshot->>'tmdb_id' = %s
-                          AND COALESCE(snapshot->>'tmdb_media_type', 'movie') = %s
-                        ORDER BY added_at ASC
-                        LIMIT 1
-                        """,
-                        (user_id, fields["tmdb_id"], fields["tmdb_media_type"] or "movie"),
-                    )
-                    existing = cur.fetchone()
-                existing_id = (existing or {}).get("id")
-                if existing_id is not None:
-                    return response(
-                        {
-                            "status": "ok",
-                            "state": "already_exists",
-                            "alreadyExists": True,
-                            "entry": wishlist_sync_entity(conn, user_id, existing_id),
-                            "counts": personal_list_counts(conn, user_id),
-                        }
-                    )
             snapshot = _wishlist_snapshot(fields)
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO wishlist_items
-                            (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot, created_by_user_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id
-                        """,
-                        (
-                            user_id,
-                            fields["title"],
-                            fields["year"],
-                            fields["barcode"],
-                            fields["format"],
-                            fields["movievault_id"],
-                            fields["poster_url"],
-                            fields["note"],
-                            Jsonb(snapshot),
-                            actor.get("id"),
-                        ),
-                    )
-                    item_id = (cur.fetchone() or {}).get("id")
-                if item_id is not None:
-                    emit_wishlist_change(conn, user_id, item_id, operation="upsert")
-                audit_event(
-                    conn,
-                    event_type="wishlist.added",
-                    category="personal",
-                    actor=actor,
-                    target_type="wishlist_item",
-                    target_id=item_id,
-                    summary="Added wishlist entry",
-                    metadata={"title": title},
-                )
+            item_id, created = _create_wishlist_item_record(
+                conn,
+                actor=actor,
+                fields=fields,
+                snapshot=snapshot,
+            )
             return response(
                 {
                     "status": "ok",
-                    "state": "created",
-                    "alreadyExists": False,
-                    "entry": wishlist_sync_entity(conn, user_id, item_id) if item_id is not None else None,
+                    "state": "created" if created else "already_exists",
+                    "alreadyExists": not created,
+                    "entry": wishlist_sync_entity(conn, user_id, item_id),
                     "counts": personal_list_counts(conn, user_id),
                 },
-                201,
+                201 if created else 200,
             )
 
     @flask_app.delete("/api/next/lists/wishlist/<item_id>")
@@ -21561,6 +21975,12 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
                 raise NextApiError("Wishlist shop table is not available", 503)
+            provider_plugin_id, provider_product_ref = _resolve_shop_price_provider(
+                conn,
+                price_url,
+                provider_plugin_id,
+                provider_product_ref,
+            )
             user_id = actor.get("id")
             with conn.cursor() as cur:
                 cur.execute(
@@ -21586,14 +22006,62 @@ def register_routes(flask_app: Flask) -> None:
             if total >= _WISHLIST_MAX_SHOPS and not existing_shop.get("id"):
                 raise NextApiError("A wishlist item can have at most 10 shops", 400)
 
-            from next_price_alerts import extract_price_from_url_with_source
+            from next_price_alerts import _run_price_provider_check, extract_price_from_url_with_source
 
-            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
-                price_url,
-                selector_type=selector_type,
-                selector_value=selector_value,
-                selector_options=selector_options,
-            )
+            current_price = None
+            detected_currency = None
+            extraction_source = None
+            provider_status: str | None = None
+            provider_error: str | None = None
+            if provider_plugin_id:
+                try:
+                    (
+                        current_price,
+                        detected_currency,
+                        extraction_source,
+                        provider_status,
+                        provider_error,
+                        _source_detail,
+                        _confidence,
+                    ) = _run_price_provider_check(
+                        provider_plugin_id,
+                        item_id=item_uuid,
+                        movievault_id=None,
+                        shop={
+                            "id": None,
+                            "shop_name": shop_name,
+                            "price_url": price_url,
+                            "price_currency": price_currency,
+                            "provider_product_ref": provider_product_ref,
+                        },
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    provider_status = "error"
+                    provider_error = str(exc)
+                    current_app.logger.warning(
+                        "wishlist_shop_provider_check_exception item=%s provider=%s url=%s error=%s",
+                        item_uuid,
+                        provider_plugin_id,
+                        price_url,
+                        provider_error,
+                    )
+            if current_price is None:
+                current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                    price_url,
+                    selector_type=selector_type,
+                    selector_value=selector_value,
+                    selector_options=selector_options,
+                )
+            if current_price is None:
+                current_app.logger.warning(
+                    "wishlist_shop_price_missing item=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    item_uuid,
+                    provider_plugin_id,
+                    price_url,
+                    provider_status,
+                    provider_error,
+                    extraction_source,
+                )
             effective_currency = _normalise_shop_currency(detected_currency or price_currency)
 
             with conn.transaction():
@@ -21632,8 +22100,8 @@ def register_routes(flask_app: Flask) -> None:
                             Jsonb(selector_options),
                             provider_plugin_id,
                             provider_product_ref,
-                            "ok" if current_price is not None else "no_match",
-                            None,
+                            provider_status or ("ok" if current_price is not None else "no_match"),
+                            provider_error,
                             current_price,
                         ),
                     )
@@ -21674,6 +22142,8 @@ def register_routes(flask_app: Flask) -> None:
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "fetchedPrice": float(current_price) if current_price is not None else None,
                     "fetchedCurrency": effective_currency,
+                    "fetchedSource": extraction_source,
+                    "fetchedError": provider_error if current_price is None else None,
                 },
                 201 if shop_created else 200,
             )
@@ -21701,6 +22171,12 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
                 raise NextApiError("Wishlist shop table is not available", 503)
+            provider_plugin_id, provider_product_ref = _resolve_shop_price_provider(
+                conn,
+                price_url,
+                provider_plugin_id,
+                provider_product_ref,
+            )
             user_id = actor.get("id")
             with conn.cursor() as cur:
                 cur.execute(
@@ -21714,14 +22190,64 @@ def register_routes(flask_app: Flask) -> None:
                 if not cur.fetchone():
                     raise NextApiError("Wishlist shop not found", 404)
 
-            from next_price_alerts import extract_price_from_url_with_source
+            from next_price_alerts import _run_price_provider_check, extract_price_from_url_with_source
 
-            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
-                price_url,
-                selector_type=selector_type,
-                selector_value=selector_value,
-                selector_options=selector_options,
-            )
+            current_price = None
+            detected_currency = None
+            extraction_source = None
+            provider_status: str | None = None
+            provider_error: str | None = None
+            if provider_plugin_id:
+                try:
+                    (
+                        current_price,
+                        detected_currency,
+                        extraction_source,
+                        provider_status,
+                        provider_error,
+                        _source_detail,
+                        _confidence,
+                    ) = _run_price_provider_check(
+                        provider_plugin_id,
+                        item_id=item_uuid,
+                        movievault_id=None,
+                        shop={
+                            "id": shop_uuid,
+                            "shop_name": shop_name,
+                            "price_url": price_url,
+                            "price_currency": price_currency,
+                            "provider_product_ref": provider_product_ref,
+                        },
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    provider_status = "error"
+                    provider_error = str(exc)
+                    current_app.logger.warning(
+                        "wishlist_shop_provider_check_exception item=%s shop=%s provider=%s url=%s error=%s",
+                        item_uuid,
+                        shop_uuid,
+                        provider_plugin_id,
+                        price_url,
+                        provider_error,
+                    )
+            if current_price is None:
+                current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                    price_url,
+                    selector_type=selector_type,
+                    selector_value=selector_value,
+                    selector_options=selector_options,
+                )
+            if current_price is None:
+                current_app.logger.warning(
+                    "wishlist_shop_price_missing item=%s shop=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    item_uuid,
+                    shop_uuid,
+                    provider_plugin_id,
+                    price_url,
+                    provider_status,
+                    provider_error,
+                    extraction_source,
+                )
             effective_currency = _normalise_shop_currency(detected_currency or price_currency)
 
             with conn.transaction():
@@ -21753,8 +22279,8 @@ def register_routes(flask_app: Flask) -> None:
                             Jsonb(selector_options),
                             provider_plugin_id,
                             provider_product_ref,
-                            "ok" if current_price is not None else "no_match",
-                            None,
+                            provider_status or ("ok" if current_price is not None else "no_match"),
+                            provider_error,
                             current_price,
                             shop_uuid,
                             user_id,
@@ -21795,6 +22321,8 @@ def register_routes(flask_app: Flask) -> None:
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "fetchedPrice": float(current_price) if current_price is not None else None,
                     "fetchedCurrency": effective_currency,
+                    "fetchedSource": extraction_source,
+                    "fetchedError": provider_error if current_price is None else None,
                 }
             )
 
@@ -23002,26 +23530,40 @@ def register_routes(flask_app: Flask) -> None:
             genre_counts: dict[str, int] = {}
             for row in _bucket_rows(
                 f"""
-                SELECT COALESCE(NULLIF(TRIM(m.metadata->>'genre'), ''), '') AS genre,
-                       COUNT(*)::int AS count
+                SELECT mg.genre_key AS genre, COUNT(DISTINCT m.id)::int AS count
+                FROM movies m
+                JOIN movie_genres mg ON mg.movie_id = m.id
+                WHERE {where}
+                GROUP BY mg.genre_key
+                """
+                if table_exists(conn, "movie_genres")
+                else f"SELECT NULL AS genre, 0 AS count FROM movies m WHERE {where} LIMIT 0"
+            ):
+                key = clean_text(row.get("genre"))
+                count = int(row.get("count") or 0)
+                if key in GENRE_KEYS:
+                    genre_counts[key] = genre_counts.get(key, 0) + count
+            unknown_genre_sql = (
+                f"""
+                SELECT COUNT(*)::int AS count
                 FROM movies m
                 WHERE {where}
-                GROUP BY 1
+                  AND NOT EXISTS (SELECT 1 FROM movie_genres mg WHERE mg.movie_id = m.id)
                 """
-            ):
-                raw = (row.get("genre") or "").strip()
-                count = int(row.get("count") or 0)
-                if not raw:
-                    genre_counts["Unknown"] = genre_counts.get("Unknown", 0) + count
-                    continue
-                for part in re.split(r"[,/|]", raw):
-                    label = part.strip()
-                    if label:
-                        genre_counts[label] = genre_counts.get(label, 0) + count
+                if table_exists(conn, "movie_genres")
+                else f"SELECT COUNT(*)::int AS count FROM movies m WHERE {where}"
+            )
+            unknown_rows = _bucket_rows(unknown_genre_sql)
+            unknown_count = int(unknown_rows[0].get("count") or 0) if unknown_rows else 0
             by_genre = sorted(
-                [{"label": k, "count": v} for k, v in genre_counts.items()],
+                [
+                    {"label": GENRE_KEY_TO_LABEL.get(key, key), "i18nKey": f"genre.{key}", "count": count}
+                    for key, count in genre_counts.items()
+                ],
                 key=lambda item: (-item["count"], item["label"]),
             )[:20]
+            if unknown_count:
+                by_genre.append({"label": "Unknown", "count": unknown_count})
 
             watch = {"total": 0, "thisYear": 0, "distinctMovies": 0, "topMovies": []}
             if table_exists(conn, "watch_history"):
@@ -24049,7 +24591,6 @@ def register_routes(flask_app: Flask) -> None:
         fill("release_date", movie_updates.get("release_date"), metadata_updates.get("release_date"))
         fill("runtimeMinutes", movie_updates.get("runtime_minutes"), metadata_updates.get("runtime_minutes"))
         fill("runtime", movie_updates.get("runtime_minutes"), metadata_updates.get("runtime_minutes"))
-        fill("genre", metadata_updates.get("genre"))
         fill("director", metadata_updates.get("director"))
         fill("actor", metadata_updates.get("actor"))
         fill("producer", metadata_updates.get("producer"))
@@ -24132,7 +24673,6 @@ def register_routes(flask_app: Flask) -> None:
     def box_set_member_import_payload(member: dict[str, Any], *, box_set_title: str, fallback_format: str, barcode: str) -> dict[str, Any]:
         metadata = {}
         for key in (
-            "genre",
             "director",
             "actor",
             "producer",
@@ -24175,7 +24715,6 @@ def register_routes(flask_app: Flask) -> None:
             movie_updates["format"] = member_format
         metadata_updates = {}
         for source, target in (
-            ("genre", "genre"),
             ("director", "director"),
             ("actor", "actor"),
             ("producer", "producer"),
