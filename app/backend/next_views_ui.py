@@ -4179,6 +4179,9 @@ def ui_preview_html(
       gap: 16px;
       min-width: 0;
     }
+    #movieDetailPage {
+      gap: 8px;
+    }
     .profile-view {
       display: grid;
       gap: 16px;
@@ -5664,6 +5667,9 @@ def ui_preview_html(
       min-height: 0;
       margin: 8px 14px 0;
     }
+    .movie-detail-status:empty {
+      display: none;
+    }
     .movie-detail-summary {
       position: relative;
       z-index: 2;
@@ -5783,6 +5789,23 @@ def ui_preview_html(
     }
     .movie-detail-section-tabs {
       justify-self: start;
+    }
+    .responsive-grid-item.is-overflow-item {
+      display: none !important;
+    }
+    .responsive-more-button {
+      min-height: 44px;
+      margin: 10px auto 0;
+      border: 0;
+      padding: 0 18px;
+      background: transparent;
+      color: var(--accent-bright);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 760;
+    }
+    .responsive-more-button:hover {
+      text-decoration: underline;
     }
     .movie-detail-page .movie-detail-body {
       border: 1px solid var(--line);
@@ -6731,28 +6754,34 @@ def ui_preview_html(
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .movie-people-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+      gap: 12px 18px;
+    }
     .person-card {
       min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--bg-solid);
+      min-height: 96px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
       color: inherit;
       cursor: pointer;
       display: grid;
-      grid-template-columns: 46px minmax(0, 1fr);
-      gap: 10px;
-      align-items: center;
-      padding: 9px;
+      grid-template-columns: 64px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 4px;
       text-align: left;
       font: inherit;
     }
     .person-card:hover {
-      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      background: color-mix(in srgb, var(--accent) 9%, transparent);
     }
     .person-avatar {
-      width: 46px;
-      height: 46px;
-      border-radius: 999px;
+      width: 64px;
+      aspect-ratio: 2 / 3;
+      border-radius: 10px;
       overflow: hidden;
       display: grid;
       place-items: center;
@@ -6771,13 +6800,16 @@ def ui_preview_html(
       display: grid;
       gap: 4px;
       min-width: 0;
+      padding-top: 2px;
     }
     .person-card-copy strong {
       overflow-wrap: anywhere;
+      font-size: .98rem;
+      line-height: 1.22;
     }
     .person-card-copy span {
       color: var(--muted);
-      font-size: .82rem;
+      font-size: .88rem;
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
@@ -7095,6 +7127,12 @@ def ui_preview_html(
     .art-option-grid.backdrops {
       grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     }
+    #movieDetailPosterArtwork {
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    }
+    #movieDetailBackdropArtwork {
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
     .art-option {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -7103,6 +7141,25 @@ def ui_preview_html(
       display: grid;
       gap: 7px;
       min-width: 0;
+    }
+    #movieDetailPage .movie-art-option {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
+      gap: 0;
+      cursor: pointer;
+      outline: none;
+      -webkit-touch-callout: none;
+      user-select: none;
+    }
+    #movieDetailPage .movie-art-option:focus-visible .art-option-preview {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 68%, transparent);
+    }
+    #movieDetailPage .movie-art-option .art-option-source,
+    #movieDetailPage .movie-art-option .art-option-meta,
+    #movieDetailPage .movie-art-option .art-option-actions {
+      display: none;
     }
     .art-option-preview {
       aspect-ratio: 2 / 3;
@@ -7223,6 +7280,16 @@ def ui_preview_html(
       min-width: 0;
       color: inherit;
       text-decoration: none;
+    }
+    .movie-media-video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 300px));
+      justify-content: start;
+      gap: 12px;
+    }
+    .movie-media-video-grid .video-card {
+      width: 100%;
+      max-width: 300px;
     }
     .video-card strong,
     .video-card span {
@@ -9703,6 +9770,9 @@ def ui_preview_html(
       #movieDetailPage .movie-detail-status {
         margin-inline: 0;
       }
+      #movieDetailPage {
+        gap: 0;
+      }
       .movie-list-primary-actions {
         gap: 8px;
       }
@@ -9719,6 +9789,42 @@ def ui_preview_html(
       .movie-detail-body {
         grid-template-columns: 1fr;
         padding: 12px;
+      }
+      .movie-people-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 8px;
+      }
+      .person-card {
+        min-height: 80px;
+        grid-template-columns: 52px minmax(0, 1fr);
+        gap: 8px;
+        padding: 2px;
+      }
+      .person-avatar {
+        width: 52px;
+        border-radius: 8px;
+      }
+      .person-card-copy strong {
+        font-size: .9rem;
+      }
+      .person-card-copy span {
+        font-size: .78rem;
+      }
+      #movieDetailPosterArtwork {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 7px;
+      }
+      #movieDetailBackdropArtwork,
+      .movie-media-video-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .movie-media-video-grid .video-card {
+        max-width: none;
+        padding: 8px;
+      }
+      .movie-media-video-grid .video-card-copy {
+        font-size: .8rem;
       }
       .container-detail-submenu {
         position: static;
@@ -11543,10 +11649,12 @@ def ui_preview_html(
               </div>
             </div>
             <div class="detail-subpanel" data-detail-panel-group="moviePeople" id="moviePeopleCast">
-              <div class="detail-grid" id="movieDetailCast"></div>
+              <div class="movie-people-grid" id="movieDetailCast"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailCastMore" data-next-i18n="common.more">More</button>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
-              <div class="detail-grid" id="movieDetailCrew"></div>
+              <div class="movie-people-grid" id="movieDetailCrew"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailCrewMore" data-next-i18n="common.more">More</button>
             </div>
           </div>
           <div class="detail-card full">
@@ -11559,8 +11667,9 @@ def ui_preview_html(
               </div>
             </div>
             <div class="detail-subpanel" data-detail-panel-group="movieMedia" id="movieMediaPosters">
-              <div class="artwork-manager-status" id="movieArtworkManagerStatus"></div>
+              <div class="artwork-manager-status hidden" id="movieArtworkManagerStatus"></div>
               <div class="art-option-grid" id="movieDetailPosterArtwork"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailPosterMore" data-next-i18n="common.more">More</button>
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="moviePosterUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="poster" data-input="moviePosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
@@ -11569,6 +11678,7 @@ def ui_preview_html(
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaBackdrops">
               <div class="art-option-grid backdrops" id="movieDetailBackdropArtwork"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailBackdropMore" data-next-i18n="common.more">More</button>
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="movieBackdropUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="backdrop" data-input="movieBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
@@ -11576,7 +11686,8 @@ def ui_preview_html(
               </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
-              <div class="detail-grid" id="movieDetailVideos"></div>
+              <div class="movie-media-video-grid" id="movieDetailVideos"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailVideoMore" data-next-i18n="common.more">More</button>
             </div>
           </div>
         </section>
@@ -19786,18 +19897,37 @@ def ui_preview_html(
     function personImageUrl(credit) {
       return usableImage(credit?.profile_url || credit?.profileUrl || "");
     }
-    function personCardHtml(credit, subtitle) {
+    function personAgeAtMovieRelease(credit, movie) {
+      const birthValue = credit?.birth_date || credit?.birthDate || credit?.person_metadata?.birth_date || credit?.person_metadata?.birthday || "";
+      const birthMatch = String(birthValue).match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+      if (!birthMatch) return null;
+      const releaseMatch = String(movie?.release_date || "").match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+      const releaseYear = releaseMatch ? Number(releaseMatch[1]) : Number(movie?.year || 0);
+      if (!releaseYear) return null;
+      let age = releaseYear - Number(birthMatch[1]);
+      if (releaseMatch) {
+        const releaseMonthDay = Number(releaseMatch[2]) * 100 + Number(releaseMatch[3]);
+        const birthMonthDay = Number(birthMatch[2]) * 100 + Number(birthMatch[3]);
+        if (releaseMonthDay < birthMonthDay) age -= 1;
+      }
+      return age >= 0 && age <= 130 ? age : null;
+    }
+    function personCardHtml(credit, subtitle, movie) {
       const image = personImageUrl(credit);
       const name = credit.name || tNext("common.untitled", "Untitled");
+      const age = personAgeAtMovieRelease(credit, movie);
+      const displayName = age == null ? name : `${name} (${age})`;
+      const role = subtitle || credit.character || credit.job || credit.credit_type || "";
+      const roleText = role ? `${tNext("discover.castAs", "as")} ${role}` : "";
       const avatar = image
         ? `<img src="${escapeHtml(image)}" alt="">`
         : escapeHtml(initialsFromName(name));
       return `
-        <button type="button" class="person-card" data-open-person="${escapeHtml(credit.person_id || "")}">
+        <button type="button" class="person-card responsive-grid-item" data-open-person="${escapeHtml(credit.person_id || "")}">
           <span class="person-avatar">${avatar}</span>
           <span class="person-card-copy">
-            <strong>${escapeHtml(name)}</strong>
-            <span>${escapeHtml(subtitle || credit.character || credit.job || credit.credit_type || "")}</span>
+            <strong>${escapeHtml(displayName)}</strong>
+            <span>${escapeHtml(roleText)}</span>
             ${debugIdHtml(credit.person_id || credit.id, "Person ID")}
           </span>
         </button>
@@ -19946,6 +20076,9 @@ def ui_preview_html(
       document.querySelectorAll("[data-detail-panel-group]").forEach((panel) => {
         if (panel.dataset.detailPanelGroup !== group) return;
         panel.classList.toggle("hidden", panel.id !== panelId);
+      });
+      window.requestAnimationFrame(() => {
+        document.getElementById(panelId)?.querySelectorAll("[data-more-button]").forEach(updateResponsiveGridLimit);
       });
     }
     function activeDetailPanel(group, fallbackPanelId = "") {
@@ -20192,33 +20325,86 @@ def ui_preview_html(
     }
     function artworkOptionsHtml(detail, kind, emptyKey) {
       const assets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
-      const className = kind === "backdrop" ? "art-option backdrop" : "art-option";
+      const className = kind === "backdrop"
+        ? "art-option backdrop movie-art-option responsive-grid-item"
+        : "art-option movie-art-option responsive-grid-item";
       if (!assets.length) {
         return `<div class="preview-empty">${escapeHtml(tNext(emptyKey || "movieDetail.noArtwork", "No artwork options yet."))}</div>`;
       }
       return assets.map((asset) => {
         const url = mediaAssetUrl(asset);
-        const metaLine = mediaAssetMetaLine(asset);
         const source = mediaAssetSourceLabel(asset);
         const metadata = (detail.movie || {}).metadata || {};
+        const kindLabel = kind === "backdrop"
+          ? tNext("movieDetail.backdrops", "Backdrops")
+          : tNext("movieDetail.posters", "Posters");
+        const actionLabel = `${kindLabel}: ${source || tNext("common.actions", "Actions")}`;
         const preview = url ? `
-          <img src="${escapeHtml(url)}" alt="">
+          <img src="${escapeHtml(url)}" alt="" draggable="false">
           ${asset.is_primary ? `<span class="art-option-badge">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
           ${artworkLockBadgeHtml(asset, kind, metadata)}
         ` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
         return `
-          <div class="${className}">
+          <div class="${className}" tabindex="0" role="button" aria-haspopup="dialog" aria-label="${escapeHtml(actionLabel)}"
+               data-movie-artwork-menu="${escapeHtml(asset.id || "")}" data-kind="${escapeHtml(kind)}"
+               data-artwork-url="${escapeHtml(url)}" data-artwork-primary="${asset.is_primary ? "true" : "false"}">
             <div class="art-option-preview">${preview}</div>
-            <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source)}</div>
-            ${metaLine ? `<div class="art-option-meta">${escapeHtml(metaLine)}</div>` : ""}
-            ${artworkOptionActionsHtml({asset, entity: "movie", kind, canDelete: true})}
           </div>
         `;
       }).join("");
     }
+    let responsiveGridResizeObserver = null;
+    function updateResponsiveGridLimit(grid) {
+      if (!grid) return;
+      const button = document.getElementById(grid.dataset.moreButton || "");
+      if (!button || !grid.clientWidth) {
+        if (button) button.classList.add("hidden");
+        return;
+      }
+      const items = Array.from(grid.querySelectorAll(":scope > .responsive-grid-item"));
+      const columnsValue = window.getComputedStyle(grid).gridTemplateColumns;
+      const columns = Math.max(1, columnsValue === "none" ? 1 : columnsValue.split(" ").filter(Boolean).length);
+      const mobile = window.matchMedia("(max-width: 760px)").matches;
+      const rows = Number(mobile ? grid.dataset.mobileRows : grid.dataset.desktopRows) || 1;
+      const visibleCount = columns * rows;
+      const expanded = grid.dataset.expanded === "true";
+      items.forEach((item, index) => item.classList.toggle("is-overflow-item", !expanded && index >= visibleCount));
+      button.classList.toggle("hidden", expanded || items.length <= visibleCount);
+    }
+    function configureResponsiveGridLimit(gridId, buttonId, {mobileRows, desktopRows}) {
+      const grid = document.getElementById(gridId);
+      const button = document.getElementById(buttonId);
+      if (!grid || !button) return;
+      grid.dataset.moreButton = buttonId;
+      grid.dataset.mobileRows = String(mobileRows);
+      grid.dataset.desktopRows = String(desktopRows);
+      grid.dataset.expanded = "false";
+      if (button.dataset.gridLimitBound !== "1") {
+        button.dataset.gridLimitBound = "1";
+        button.addEventListener("click", () => {
+          grid.dataset.expanded = "true";
+          updateResponsiveGridLimit(grid);
+        });
+      }
+      if (!responsiveGridResizeObserver && "ResizeObserver" in window) {
+        responsiveGridResizeObserver = new ResizeObserver((entries) => {
+          entries.forEach((entry) => updateResponsiveGridLimit(entry.target));
+        });
+      }
+      if (responsiveGridResizeObserver && grid.dataset.gridLimitObserved !== "1") {
+        grid.dataset.gridLimitObserved = "1";
+        responsiveGridResizeObserver.observe(grid);
+      }
+      window.requestAnimationFrame(() => updateResponsiveGridLimit(grid));
+    }
     function renderMovieArtworkManagerStatus(detail) {
       const node = document.getElementById("movieArtworkManagerStatus");
       if (!node) return;
+      node.classList.toggle("hidden", !appDebugMode);
+      if (!appDebugMode) {
+        node.innerHTML = "";
+        return;
+      }
       const assets = detail.mediaAssets || [];
       const posters = assets.filter((asset) => asset.kind === "poster");
       const backdrops = assets.filter((asset) => asset.kind === "backdrop");
@@ -20512,7 +20698,7 @@ def ui_preview_html(
       const embedUrl = youtubeEmbedUrl(url);
       if (embedUrl) {
         return `
-          <article class="video-card embedded">
+          <article class="video-card embedded responsive-grid-item">
             <div class="video-embed">
               <iframe src="${escapeHtml(embedUrl)}" title="${escapeHtml(title)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
             </div>
@@ -20525,7 +20711,7 @@ def ui_preview_html(
         `;
       }
       return `
-        <a class="video-card" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+        <a class="video-card responsive-grid-item" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
           <strong>${escapeHtml(title)}</strong>
           <span>${escapeHtml(meta)}</span>
         </a>
@@ -21535,17 +21721,25 @@ def ui_preview_html(
       document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       renderMovieArtworkManagerStatus(detail);
       reflectArtworkLockButtons(detail, "movie");
-      document.getElementById("movieDetailVideos").innerHTML = movieVideoGroupsHtml(movieVideoItems(movie, metadata));
+      document.getElementById("movieDetailVideos").innerHTML = videoCardsHtml(movieVideoItems(movie, metadata));
       const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       document.getElementById("movieDetailCast").innerHTML = castCredits.slice(0, 64).map((credit) => personCardHtml(
         credit,
-        credit.character || credit.job || credit.credit_type || ""
+        credit.character || credit.job || credit.credit_type || "",
+        movie
       )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCast", "No cast imported yet."))}</div>`;
       document.getElementById("movieDetailCrew").innerHTML = crewCredits.slice(0, 64).map((credit) => personCardHtml(
         credit,
-        credit.job || credit.character || credit.credit_type || ""
+        credit.job || credit.character || credit.credit_type || "",
+        movie
       )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCrew", "No crew imported yet."))}</div>`;
+      configureResponsiveGridLimit("movieDetailCast", "movieDetailCastMore", {mobileRows: 4, desktopRows: 4});
+      configureResponsiveGridLimit("movieDetailCrew", "movieDetailCrewMore", {mobileRows: 4, desktopRows: 4});
+      configureResponsiveGridLimit("movieDetailPosterArtwork", "movieDetailPosterMore", {mobileRows: 4, desktopRows: 2});
+      configureResponsiveGridLimit("movieDetailBackdropArtwork", "movieDetailBackdropMore", {mobileRows: 4, desktopRows: 2});
+      configureResponsiveGridLimit("movieDetailVideos", "movieDetailVideoMore", {mobileRows: 4, desktopRows: 2});
+      bindMovieArtworkLongPressMenus();
       setMovieDetailMessage("");
       applyAppPermissionVisibility();
     }
@@ -30612,6 +30806,93 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    async function shareMovieArtwork(url, kind) {
+      if (!url) return;
+      const movieTitle = activeDetailPayload?.movie?.title || tNext("movieDetail.title", "Movie details");
+      const kindLabel = kind === "backdrop"
+        ? tNext("movieDetail.backdrops", "Backdrops")
+        : tNext("movieDetail.posters", "Posters");
+      try {
+        if (navigator.share) {
+          await navigator.share({title: movieTitle, text: `${movieTitle} - ${kindLabel}`, url});
+          return;
+        }
+        await copyArtworkUrl(url);
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function hideMovieArtwork(mediaId, kind) {
+      if (!activeDetailMovieId || !mediaId || !hasPermission("collection.edit_all")) return;
+      setMovieDetailMessage(tNext("movieDetail.deletingArtwork", "Deleting artwork..."));
+      try {
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/media/${encodeURIComponent(mediaId)}?kind=${encodeURIComponent(kind || "")}`, {
+          method: "DELETE"
+        });
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
+        renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMovieDetailMessage(tNext("movieDetail.artworkHidden", "Artwork hidden."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function openMovieArtworkActionsMenu(tile) {
+      const mediaId = tile?.dataset?.movieArtworkMenu || "";
+      const kind = tile?.dataset?.kind || "";
+      const url = tile?.dataset?.artworkUrl || "";
+      if (!mediaId || !["poster", "backdrop"].includes(kind)) return;
+      const canEdit = hasPermission("collection.edit_all");
+      const isPrimary = tile.dataset.artworkPrimary === "true";
+      const actions = [];
+      if (canEdit && !isPrimary) {
+        actions.push({
+          label: tNext("movieDetail.setPrimary", "Set primary"),
+          run: () => setPrimaryArtwork("movie", mediaId, kind)
+        });
+      }
+      if (url) {
+        actions.push({
+          label: tNext("common.share", "Share"),
+          run: () => shareMovieArtwork(url, kind)
+        });
+      }
+      if (canEdit) {
+        actions.push({
+          label: tNext("common.hide", "Hide"),
+          tone: "danger",
+          run: () => hideMovieArtwork(mediaId, kind)
+        });
+      }
+      if (!actions.length) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      overlay.returnFocusElement = tile;
+      const kindLabel = kind === "backdrop"
+        ? tNext("movieDetail.backdrops", "Backdrops")
+        : tNext("movieDetail.posters", "Posters");
+      panel.innerHTML = `
+        <header class="lists-modal-head">
+          <h3>${escapeHtml(kindLabel)}</h3>
+          <span class="muted">${escapeHtml(tNext("common.actions", "Actions"))}</span>
+        </header>
+        <div class="lists-actionsheet-list">
+          ${actions.map((action, index) => `<button type="button" class="lists-actionsheet-btn${action.tone === "danger" ? " danger" : ""}" data-action-index="${index}">${escapeHtml(action.label)}</button>`).join("")}
+        </div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]")?.addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-action-index]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const action = actions[Number(button.dataset.actionIndex)];
+          listsCloseOverlay(overlay);
+          if (action?.run) action.run();
+        });
+      });
+      panel.querySelector("[data-action-index]")?.focus();
+    }
     const LONG_PRESS_DURATION_MS = 500;
     const LONG_PRESS_MOVE_TOLERANCE = 10;
     const LONG_PRESS_CLICK_SUPPRESS_MS = 700;
@@ -30659,6 +30940,65 @@ def ui_preview_html(
       button.addEventListener("pointerleave", clear);
       button.addEventListener("contextmenu", (event) => {
         if (timer || longPressActive()) event.preventDefault();
+      });
+    }
+    function bindLongPressActionMenu(element, onOpen) {
+      if (!element || element.dataset.longPressMenuBound === "1") return;
+      element.dataset.longPressMenuBound = "1";
+      let timer = null;
+      let startX = 0;
+      let startY = 0;
+      let suppressClickUntil = 0;
+      const clear = () => {
+        if (!timer) return;
+        window.clearTimeout(timer);
+        timer = null;
+      };
+      const open = () => {
+        clear();
+        if (navigator.vibrate) navigator.vibrate(10);
+        onOpen();
+      };
+      element.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        startX = event.clientX;
+        startY = event.clientY;
+        clear();
+        timer = window.setTimeout(() => {
+          suppressClickUntil = Date.now() + LONG_PRESS_CLICK_SUPPRESS_MS;
+          open();
+        }, LONG_PRESS_DURATION_MS);
+      });
+      element.addEventListener("pointermove", (event) => {
+        if (!timer) return;
+        if (Math.abs(event.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE
+          || Math.abs(event.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) {
+          clear();
+        }
+      });
+      element.addEventListener("pointerup", clear);
+      element.addEventListener("pointercancel", clear);
+      element.addEventListener("pointerleave", clear);
+      element.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (Date.now() < suppressClickUntil) return;
+        open();
+      });
+      element.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        if (Date.now() < suppressClickUntil) return;
+        suppressClickUntil = Date.now() + LONG_PRESS_CLICK_SUPPRESS_MS;
+        open();
+      });
+      element.addEventListener("keydown", (event) => {
+        if (!["Enter", " "].includes(event.key)) return;
+        event.preventDefault();
+        open();
+      });
+    }
+    function bindMovieArtworkLongPressMenus() {
+      document.querySelectorAll("#movieDetailPage [data-movie-artwork-menu]").forEach((tile) => {
+        bindLongPressActionMenu(tile, () => openMovieArtworkActionsMenu(tile));
       });
     }
     function bindCollectionCardInteractions(root = document) {

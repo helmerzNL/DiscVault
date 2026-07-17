@@ -9064,6 +9064,7 @@ def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict
                 p.id AS person_id,
                 p.public_id AS person_public_id,
                 p.name,
+                p.birth_date,
                 p.known_for,
                 p.profile_asset_id,
                 p.metadata AS person_metadata,

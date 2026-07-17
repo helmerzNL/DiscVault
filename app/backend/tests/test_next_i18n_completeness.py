@@ -73,6 +73,12 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn("lists.watchedToday", self.source)
         self.assertIn("lists.watchedYesterday", self.source)
 
+    def test_source_catalog_includes_responsive_media_actions(self):
+        self.assertIn("common.more", self.source)
+        self.assertIn("common.share", self.source)
+        self.assertIn("common.hide", self.source)
+        self.assertIn("movieDetail.artworkHidden", self.source)
+
     def test_locale_files_discovered(self):
         self.assertGreater(len(self.locale_files), 0)
 
