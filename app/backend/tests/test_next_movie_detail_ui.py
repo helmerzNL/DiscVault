@@ -242,6 +242,26 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
 
+    def test_metadata_compare_card_is_only_rendered_in_debug_mode(self):
+        self.assertIn(
+            'class="detail-card full debug-card hidden" '
+            'id="movieMetadataCompareCard">\n'
+            '            <div class="detail-card-head">\n'
+            '              <h3 data-next-i18n="movieDetail.metadataCompare">',
+            self.source,
+        )
+        self.assertIn(
+            'card.classList.toggle("hidden", !appDebugMode);',
+            self.source,
+        )
+        self.assertIn(
+            'if (!appDebugMode) {\n'
+            '        node.innerHTML = "";\n'
+            "        return;\n"
+            "      }",
+            self.source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
