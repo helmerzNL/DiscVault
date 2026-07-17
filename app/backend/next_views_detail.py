@@ -22,7 +22,6 @@ try:  # package import (Flask app factory)
         movie_detail_image,
         pwa_head_tags,
     )
-    from .next_genres import GENRE_KEY_TO_LABEL
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_app import (
         Any,
@@ -38,7 +37,6 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         movie_detail_image,
         pwa_head_tags,
     )
-    from next_genres import GENRE_KEY_TO_LABEL
 
 
 def container_detail_movie_cards(movies: list[dict[str, Any]]) -> str:
@@ -722,7 +720,7 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
             ("Director", metadata.get("director")),
             ("Producer", metadata.get("producer")),
             ("Studios", metadata.get("studios")),
-            ("Genre", ", ".join(GENRE_KEY_TO_LABEL.get(key, key) for key in (movie.get("genres") or []))),
+            ("Genre", metadata.get("genre")),
             ("Distributor", metadata.get("distributor")),
             ("Trailer", metadata.get("trailer_url")),
         ]) + """</div>

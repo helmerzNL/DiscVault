@@ -375,10 +375,7 @@ class CollectionImportPlugin:
             "rating": text(mapped_value(row, aliases["rating"], column_mapping.get("rating"))),
             "director": text(mapped_value(row, aliases["director"], column_mapping.get("director"))),
             "actor": text(mapped_value(row, aliases["actor"], column_mapping.get("actor"))),
-            # Genre is intentionally not carried through: genres are
-            # read-only and sourced only from TMDB (see next_genres.py), so
-            # imports never write a genre value even when the source file
-            # has a Genre column.
+            "genre": text(mapped_value(row, aliases["genre"], column_mapping.get("genre"))),
             "imdbId": imdb_id,
             "tmdbId": tmdb_id,
             "posterUrl": poster if is_url(poster) else "",

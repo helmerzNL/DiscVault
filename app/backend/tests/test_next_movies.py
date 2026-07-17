@@ -29,8 +29,6 @@ try:
     from app.backend.next_app import box_set_proposal_sort_key
     from app.backend.next_app import selected_import_movie_candidate_from_body
     from app.backend.next_app import selected_import_movie_candidate_proposal
-    from app.backend.next_app import movie_metadata_edits
-    from app.backend.next_app import normalize_import_column_mapping
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
     if exc.name != "flask":
         raise
@@ -55,8 +53,6 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     box_set_proposal_sort_key = None
     selected_import_movie_candidate_from_body = None
     selected_import_movie_candidate_proposal = None
-    movie_metadata_edits = None
-    normalize_import_column_mapping = None
 
 
 @unittest.skipIf(movie_update_payload is None, "Flask is not installed in this test environment")
@@ -91,18 +87,6 @@ class NextMovieEditPolicyTests(unittest.TestCase):
                 {"title": "Updated", "releaseDate": "31-05-2026"},
                 existing={"title": "Existing"},
             )
-
-    def test_movie_metadata_edits_no_longer_accepts_manual_genre(self):
-        # Genre is read-only and TMDB-only: even a well-formed manual edit
-        # payload must never produce a "genre" metadata edit.
-        edits = movie_metadata_edits({"genre": "Action, Crime", "director": "Michael Mann"})
-        self.assertNotIn("genre", edits)
-        self.assertEqual(edits["director"], "Michael Mann")
-
-    def test_normalize_import_column_mapping_no_longer_accepts_genre(self):
-        mapping = normalize_import_column_mapping({"genre": "Genre", "director": "Director"})
-        self.assertNotIn("genre", mapping)
-        self.assertEqual(mapping["director"], "Director")
 
     def test_movie_edit_receiver_proposal_tracks_public_field_changes(self):
         proposal = movie_edit_receiver_proposal(
@@ -146,9 +130,7 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         )
 
         self.assertEqual(proposal["metadataUpdates"]["director"], "New Director")
-        # Genre is read-only and TMDB-only: even if a caller sends a genre
-        # edit, it must never surface as a manual metadata update.
-        self.assertNotIn("genre", proposal["metadataUpdates"])
+        self.assertEqual(proposal["metadataUpdates"]["genre"], "Sci-Fi")
         self.assertNotIn("studios", proposal["metadataUpdates"])
         self.assertEqual(proposal["metadataUpdates"]["runtimeMinutes"], 142)
         self.assertEqual(proposal["movieUpdates"]["runtime_minutes"], 142)
