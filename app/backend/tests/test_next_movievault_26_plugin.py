@@ -54,7 +54,7 @@ def _v3_barcode_match(match):
 def _v3_signed_from_request(fake_request):
     """Serve a signed /api/v3 read from the same fixture a test wired for its v1 twin.
 
-    Wave 2 catalogue reads (people search, box-sets, contribution-template) go through the
+    Wave 2 catalogue reads (box-sets and contribution-template) go through the
     signed transport hook instead of the raw ``_request`` layer, but their response bodies are
     byte-identical to the v1 endpoints. This adapter lets the existing ``fake_request`` fixtures
     keep serving those bodies by mapping the ``/api/v3`` path back onto its ``/api/v1`` twin.
@@ -97,7 +97,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertIn("prepare_container_update", manifest["capabilities"])
         self.assertIn("prepare_barcode_update", manifest["capabilities"])
         self.assertIn("member_intelligence", manifest["capabilities"])
-        self.assertIn("person_details", manifest["capabilities"])
+        self.assertNotIn("person_details", manifest["capabilities"])
 
     def test_movievault_26_runtime_exposes_receiver_observability_hooks(self):
         discovery = discover_plugins()
@@ -756,7 +756,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "hit")
         self.assertEqual(result["movie"]["title"], "Alien")
-        self.assertEqual(result["movie"]["director"], "Ridley Scott")
+        self.assertNotIn("director", result["movie"])
         self.assertEqual([path for path, _params in calls], ["/api/v3/search", "/api/v3/movies/mv_alien"])
 
     def test_movie_details_uses_known_movievault_id_and_decodes_v3_contract(self):
@@ -847,7 +847,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["movie"]["runtimeMinutes"], 136)
         self.assertNotIn("genre", result["movie"])
         self.assertEqual(result["movie"]["posterUrl"], "https://img.example/matrix.jpg")
-        self.assertEqual(result["movie"]["director"], "Lana Wachowski")
+        self.assertNotIn("director", result["movie"])
         self.assertEqual(result["release"]["id"], "rel_matrix_4k")
         self.assertEqual(result["releases"][0]["barcode"], "5051888238400")
         self.assertEqual(result["technicalSpecs"]["format"], "4K UHD")
@@ -883,11 +883,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(calls, [("/api/v3/movies/rel_missing", {})])
         self.assertEqual(result, {"status": "miss", "provider": "movievault_26"})
 
-    def test_movie_details_barcode_enriches_credits_from_movie_detail(self):
-        # Regression for barcode discs (e.g. Avengers: Endgame, 8717418549893):
-        # /api/v3/barcodes/{barcode} matches the precise release but carries no
-        # cast/crew, so movie_details must reach /api/v3/movies/{id} for credits
-        # while preserving the barcode-matched release/technical fields.
+    def test_movie_details_barcode_does_not_fetch_people_data(self):
         calls = []
         original_get = movievault_26._get
         try:
@@ -904,23 +900,6 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                         },
                         {"format": "4K UHD", "barcode": "8717418549893", "edition": "SteelBook"},
                     )
-                if path == "/api/v3/movies/mv_endgame":
-                    return {
-                        "matched": True,
-                        "match": {
-                            "type": "movie",
-                            "movie": {
-                                "id": "mv_endgame",
-                                "title": "Avengers: Endgame",
-                                "cast": [
-                                    {"name": "Robert Downey Jr.", "tmdbId": 3223, "character": "Tony Stark"},
-                                ],
-                                "crew": [
-                                    {"name": "Anthony Russo", "job": "Director", "tmdbId": 19271},
-                                ],
-                            },
-                        },
-                    }
                 self.fail(f"unexpected MovieVault path {path}")
 
             movievault_26._get = fake_get
@@ -931,152 +910,11 @@ class MovieVault26PluginContractTests(unittest.TestCase):
             movievault_26._get = original_get
 
         self.assertEqual(result["status"], "hit")
-        # Barcode-matched release/technical fields are preserved.
         self.assertEqual(result["movie"]["title"], "Avengers: Endgame")
         self.assertEqual(result["candidates"][0]["format"], "4K UHD")
         self.assertEqual(result["movie"]["edition"], "SteelBook")
-        # Credits are now sourced from the movie-detail endpoint.
-        credits = result.get("credits") or []
-        by_name = {entry["name"]: entry for entry in credits}
-        self.assertEqual(by_name["Robert Downey Jr."]["tmdbId"], "3223")
-        self.assertEqual(by_name["Robert Downey Jr."]["role"], "actor")
-        self.assertEqual(by_name["Anthony Russo"]["tmdbId"], "19271")
-        self.assertEqual(by_name["Anthony Russo"]["job"], "Director")
-        self.assertIn("/api/v3/movies/mv_endgame", calls)
-
-    def test_movie_details_barcode_without_detail_credits_is_unchanged(self):
-        # No regression: when /api/v3/movies/{id} yields no credits, the barcode
-        # hit is returned untouched (still a hit, credits absent).
-        original_get = movievault_26._get
-        try:
-            def fake_get(_context, path, **params):
-                if path == "/api/v3/barcodes/8717418549893":
-                    return _v3_barcode_release(
-                        {
-                            "id": "mv_endgame",
-                            "title": "Avengers: Endgame",
-                            "year": "2019",
-                            "format": "Blu-ray",
-                        },
-                        {"format": "4K UHD", "barcode": "8717418549893"},
-                    )
-                if path == "/api/v3/movies/mv_endgame":
-                    return {"matched": True, "match": {"type": "movie", "movie": {"id": "mv_endgame", "title": "Avengers: Endgame"}}}
-                self.fail(f"unexpected MovieVault path {path}")
-
-            movievault_26._get = fake_get
-            result = movievault_26.movie_details(
-                {"barcode": "8717418549893"}, {"movievault": {"enabled": True}}
-            )
-        finally:
-            movievault_26._get = original_get
-
-        self.assertEqual(result["status"], "hit")
-        self.assertEqual(result["candidates"][0]["format"], "4K UHD")
-        self.assertFalse(result.get("credits"))
-
-    def test_movie_details_barcode_credits_falls_back_to_id_resolution(self):
-        # When the barcode match omits a resolvable movieVaultId, credit
-        # enrichment falls back to the tmdbId/imdbId /api/v3/search resolution.
-        calls = []
-        original_get = movievault_26._get
-        try:
-            def fake_get(_context, path, **params):
-                calls.append(path)
-                if path == "/api/v3/barcodes/8717418549893":
-                    return _v3_barcode_release(
-                        {"title": "Avengers: Endgame", "year": "2019", "format": "Blu-ray"},
-                        {"format": "4K UHD", "barcode": "8717418549893"},
-                    )
-                if path == "/api/v3/search":
-                    return {"catalog": [{"movieVaultId": "mv_endgame", "title": "Avengers: Endgame"}], "editions": []}
-                if path == "/api/v3/movies/mv_endgame":
-                    return {
-                        "matched": True,
-                        "match": {
-                            "type": "movie",
-                            "movie": {
-                                "id": "mv_endgame",
-                                "title": "Avengers: Endgame",
-                                "crew": [{"name": "Anthony Russo", "job": "Director", "tmdbId": 19271}],
-                            },
-                        },
-                    }
-                self.fail(f"unexpected MovieVault path {path}")
-
-            movievault_26._get = fake_get
-            result = movievault_26.movie_details(
-                {"barcode": "8717418549893", "tmdbId": 299534}, {"movievault": {"enabled": True}}
-            )
-        finally:
-            movievault_26._get = original_get
-
-        self.assertEqual(result["status"], "hit")
-        credits = result.get("credits") or []
-        self.assertEqual({entry["name"] for entry in credits}, {"Anthony Russo"})
-        self.assertIn("/api/v3/search", calls)
-
-    def test_person_details_by_movievault_id_uses_v3_people_detail(self):
-        original_get = movievault_26._get
-        try:
-            def fake_get(_context, path, **_params):
-                self.assertEqual(path, "/api/v3/people/pp_sigourney")
-                return {
-                    "matched": True,
-                    "match": {
-                        "type": "person",
-                        "person": {
-                            "id": "pp_sigourney",
-                            "name": "Sigourney Weaver",
-                            "knownForDepartment": "Acting",
-                            "profileUrls": ["https://img.example/sigourney.jpg"],
-                        },
-                    },
-                }
-
-            movievault_26._get = fake_get
-            result = movievault_26.person_details(
-                {"movieVaultId": "pp_sigourney"},
-                {"movievault": {"enabled": True}},
-            )
-        finally:
-            movievault_26._get = original_get
-
-        self.assertEqual(result["status"], "hit")
-        self.assertEqual(result["movieVaultId"], "pp_sigourney")
-        self.assertEqual(result["knownFor"], "Acting")
-        self.assertEqual(result["profiles"], ["https://img.example/sigourney.jpg"])
-
-    def test_person_details_search_uses_signed_v3_people(self):
-        captured = {}
-        original_get = movievault_26._get
-        try:
-            def fake_get(_context, path, **params):
-                captured["path"] = path
-                captured["params"] = params
-                return {
-                    "results": [
-                        {
-                            "id": "pp_sigourney",
-                            "name": "Sigourney Weaver",
-                            "tmdbId": "10205",
-                            "knownFor": "Acting",
-                        }
-                    ]
-                }
-
-            movievault_26._get = fake_get
-            result = movievault_26.person_details(
-                {"tmdbId": "10205"},
-                {"movievault": {"enabled": True}},
-            )
-        finally:
-            movievault_26._get = original_get
-
-        self.assertEqual(captured["path"], "/api/v3/people")
-        self.assertEqual(captured["params"].get("tmdbId"), "10205")
-        self.assertEqual(result["status"], "hit")
-        self.assertEqual(result["name"], "Sigourney Weaver")
+        self.assertEqual(calls, ["/api/v3/barcodes/8717418549893"])
+        self.assertNotIn("credits", result)
 
     def test_box_set_members_keep_disc_number_for_preview(self):
         proposal = movievault_26._normalize_box_set_proposal(
@@ -1536,7 +1374,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
 
 
 class MovieVault26SignedContributionTests(unittest.TestCase):
-    def _run_contribution(self, context, fake_request):
+    def _run_contribution(self, context, fake_request, payload=None):
         context = {**context, "movievaultSignedRequestV3": _v3_signed_from_request(fake_request)}
         original_requests = movievault_26.requests
         original_cache = dict(movievault_26._TEMPLATE_CACHE)
@@ -1544,7 +1382,8 @@ class MovieVault26SignedContributionTests(unittest.TestCase):
             movievault_26._TEMPLATE_CACHE.clear()
             movievault_26.requests = types.SimpleNamespace(request=fake_request)
             return movievault_26.receive_metadata(
-                {
+                payload
+                or {
                     "entityType": "movie",
                     "identity": "tt0078748",
                     "payload": {"title": "Alien", "overview": "A public synopsis."},
@@ -1622,6 +1461,58 @@ class MovieVault26SignedContributionTests(unittest.TestCase):
         self.assertIsNone(posts[0].get("data"))
         self.assertIsNotNone(posts[0].get("json"))
         self.assertNotIn("X-DiscVault-Signature", posts[0]["headers"])
+
+    def test_movie_contribution_never_transmits_people_fields(self):
+        posts = []
+
+        def fake_request(method, url, **kwargs):
+            if method == "GET" and url.endswith("/api/v1/contribution-template"):
+                return FakeResponse(
+                    200,
+                    {
+                        "version": "tpl-1",
+                        "allowedFields": [
+                            "title",
+                            "cast",
+                            "crew",
+                            "directorNames",
+                            "metadata",
+                        ],
+                    },
+                )
+            if method == "POST" and url.endswith("/api/v1/contributions"):
+                posts.append(kwargs["json"])
+                return FakeResponse(200, {"id": "contrib_without_people"})
+            return FakeResponse(404, {})
+
+        context = {
+            "secrets": {"token": "mv_live_test"},
+            "movievault": {"contributionEnabled": True, "sharingMode": "opt_in"},
+        }
+        result = self._run_contribution(
+            context,
+            fake_request,
+            {
+                "entityType": "movie",
+                "identity": "tt0099685",
+                "payload": {
+                    "title": "Goodfellas",
+                    "cast": [{"name": "Robert De Niro"}],
+                    "crew": [{"name": "Martin Scorsese"}],
+                    "directorNames": ["Martin Scorsese"],
+                    "metadata": {
+                        "personIds": ["1032"],
+                        "nested": {"runtime": 145},
+                    },
+                },
+            },
+        )
+
+        self.assertEqual(result["status"], "submitted")
+        self.assertEqual(
+            posts[0]["payload"],
+            {"title": "Goodfellas", "metadata": {"nested": {"runtime": 145}}},
+        )
 
     def test_signed_contribution_resigns_with_fresh_nonce_on_token_recovery_retry(self):
         nonces = []
@@ -2092,54 +1983,8 @@ class MovieVaultFormatReconciliationTests(unittest.TestCase):
         self.assertEqual(movie["format"], "4K UHD")
 
 
-class MovieVaultStructuredCreditsTests(unittest.TestCase):
-    def test_movie_credits_extracts_structured_cast_crew_with_tmdb(self):
-        credits = movievault_26._movie_credits(
-            {
-                "title": "Heat",
-                "cast": [
-                    {"name": "Al Pacino", "tmdbId": 1158, "character": "Vincent Hanna"},
-                    {"name": "Robert De Niro", "tmdb_id": "380", "character": "Neil McCauley"},
-                ],
-                "crew": [
-                    {"name": "Michael Mann", "job": "Director", "tmdbId": 7715},
-                ],
-            }
-        )
-        by_name = {entry["name"]: entry for entry in credits}
-        self.assertEqual(by_name["Al Pacino"]["role"], "actor")
-        self.assertEqual(by_name["Al Pacino"]["tmdbId"], "1158")
-        self.assertEqual(by_name["Al Pacino"]["character"], "Vincent Hanna")
-        self.assertEqual(by_name["Robert De Niro"]["tmdbId"], "380")
-        self.assertEqual(by_name["Michael Mann"]["role"], "crew")
-        self.assertEqual(by_name["Michael Mann"]["job"], "Director")
-        self.assertEqual(by_name["Michael Mann"]["tmdbId"], "7715")
-
-    def test_movie_credits_reads_generic_people_array(self):
-        credits = movievault_26._movie_credits(
-            {
-                "title": "Heat",
-                "people": [
-                    {"name": "Al Pacino", "role": "actor", "tmdbId": 1158, "character": "Hanna"},
-                    {"name": "Michael Mann", "role": "crew", "job": "Director", "tmdbId": 7715},
-                ],
-            }
-        )
-        by_name = {entry["name"]: entry for entry in credits}
-        self.assertEqual(by_name["Al Pacino"]["tmdbId"], "1158")
-        self.assertEqual(by_name["Michael Mann"]["job"], "Director")
-
-    def test_movie_credits_ignores_plain_name_strings(self):
-        # Plain-name lists carry no structure; leave them to the backend's
-        # flat-field fallback so people-dedup stays centralized.
-        self.assertEqual(
-            movievault_26._movie_credits(
-                {"title": "Heat", "cast": ["Al Pacino", "Robert De Niro"], "director": "Michael Mann"}
-            ),
-            [],
-        )
-
-    def test_normalize_result_forwards_structured_credits(self):
+class MovieVaultPersonIsolationTests(unittest.TestCase):
+    def test_normalize_result_drops_people_fields(self):
         result = movievault_26._normalize_result(
             {
                 "results": [
@@ -2152,24 +1997,62 @@ class MovieVaultStructuredCreditsTests(unittest.TestCase):
                         "crew": [
                             {"name": "Michael Mann", "job": "Director", "tmdbId": 7715},
                         ],
+                        "actor": "Al Pacino",
+                        "director": "Michael Mann",
+                        "producer": "Art Linson",
                     }
                 ]
             },
             source_ref="title:Heat",
         )
         self.assertEqual(result["status"], "hit")
-        credits = result.get("credits") or []
-        by_name = {entry["name"]: entry for entry in credits}
-        self.assertEqual(by_name["Al Pacino"]["tmdbId"], "1158")
-        self.assertEqual(by_name["Michael Mann"]["tmdbId"], "7715")
+        self.assertNotIn("credits", result)
+        for payload in (result["movie"], result["candidates"][0]):
+            for key in ("actor", "cast", "crew", "director", "producer"):
+                self.assertNotIn(key, payload)
 
-    def test_names_text_flattens_person_dicts(self):
+    def test_contribution_filter_recursively_drops_people_fields(self):
         self.assertEqual(
-            movievault_26._names_text(
-                [{"name": "Al Pacino"}, {"name": "Robert De Niro"}, "Val Kilmer"]
+            movievault_26._safe_contribution_value(
+                {
+                    "title": "Heat",
+                    "metadata": {
+                        "directorNames": ["Michael Mann"],
+                        "personIds": ["7715"],
+                        "nested": {
+                            "castMembers": [{"name": "Al Pacino"}],
+                            "runtime": 170,
+                        },
+                    },
+                    "releases": [
+                        {
+                            "format": "4K UHD",
+                            "people": [{"name": "Robert De Niro"}],
+                            "crew": [{"name": "Michael Mann"}],
+                        }
+                    ],
+                }
             ),
-            "Al Pacino, Robert De Niro, Val Kilmer",
+            {
+                "title": "Heat",
+                "metadata": {"nested": {"runtime": 170}},
+                "releases": [{"format": "4K UHD"}],
+            },
         )
+
+    def test_receive_metadata_rejects_person_without_movievault_request(self):
+        original_get = movievault_26._get
+        try:
+            movievault_26._get = lambda *_args, **_kwargs: self.fail("MovieVault must not be called for people")
+            result = movievault_26.receive_metadata(
+                {"entityType": "person", "payload": {"name": "Al Pacino"}},
+                {"movievault": {"enabled": True}},
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "person_data_not_supported")
 
 
 if __name__ == "__main__":

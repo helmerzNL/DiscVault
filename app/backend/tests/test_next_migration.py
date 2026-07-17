@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 
@@ -30,6 +31,22 @@ except ModuleNotFoundError as exc:
 
 
 class NextMigrationContractTests(unittest.TestCase):
+    def test_movievault_person_cleanup_migration_rebuilds_from_tmdb(self):
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "migrations_next"
+            / "039_remove_movievault_person_data.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("lower(movievault_identifier.provider_id) IN ('movievault', 'movievault_26')", migration)
+        self.assertIn("lower(tmdb_identifier.provider_id) = 'tmdb'", migration)
+        self.assertIn("DELETE FROM person_identifiers", migration)
+        self.assertIn("DELETE FROM person_localizations", migration)
+        self.assertIn("DELETE FROM people", migration)
+        self.assertIn("'metadata.refresh_person'", migration)
+        self.assertIn("'metadata.refresh_movie'", migration)
+        self.assertIn("existing.status IN ('pending', 'running')", migration)
+
     def test_legacy_membergroups_maps_to_basic_viewer_role(self):
         self.assertEqual(legacy_role_key("MemberGroups"), "media_viewer")
         self.assertEqual(legacy_role_key("admin"), "admin")

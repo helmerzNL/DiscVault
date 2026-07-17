@@ -75,6 +75,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
 
 STOP = False
 MOVIEVAULT_V2_SCHEDULER_LOCK_KEY = 2_026_262
+PERSON_METADATA_REFRESH_JOB_TYPE = "metadata.refresh_person"
 
 
 class JobFailure(RuntimeError):
@@ -408,6 +409,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == METADATA_REFRESH_JOB_TYPE:
         return process_metadata_refresh(payload, worker_id)
 
+    if job_type == PERSON_METADATA_REFRESH_JOB_TYPE:
+        return process_person_metadata_refresh(payload, worker_id)
+
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
@@ -457,6 +461,32 @@ def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[st
         "dryRun": dry_run,
         "refreshPeople": refresh_people,
         "personRefreshScope": person_refresh_scope,
+        "result": result,
+    }
+
+
+def process_person_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    person_id = clean_text(payload.get("personId") or payload.get("person_id"))
+    if not person_id:
+        raise RuntimeError("personId is required for person metadata refresh jobs")
+    actor = payload.get("requestedBy") or payload.get("requested_by") or {}
+    if not isinstance(actor, dict):
+        actor = {}
+    try:
+        person_uuid = UUID(person_id)
+    except ValueError as exc:
+        raise RuntimeError("personId must be a valid UUID") from exc
+    try:
+        from .next_app import refresh_person_metadata
+    except ImportError:  # pragma: no cover - supports python next_worker.py
+        from next_app import refresh_person_metadata
+    with connect() as conn:
+        result = refresh_person_metadata(conn, person_uuid, dry_run=False, actor=actor)
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": PERSON_METADATA_REFRESH_JOB_TYPE,
+        "personId": person_id,
         "result": result,
     }
 

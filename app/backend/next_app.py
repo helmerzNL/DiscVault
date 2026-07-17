@@ -11621,18 +11621,15 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
 
 
 def person_metadata_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
-    """Person metadata sources in the shared provider priority order.
-
-    Mirrors ``metadata_source_plugins`` for movies/containers: installed
-    ``metadata_source`` plugins that expose a ``person_details`` entrypoint,
-    ordered by ``order_index`` so the highest-priority provider wins on conflicts.
-    """
+    """Return TMDb when it is installed and exposes person details."""
     if not table_exists(conn, "plugins"):
         return []
     sync_metadata_plugin_registry(conn)
     registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
     plugins: list[dict[str, Any]] = []
     for plugin in registry.get("plugins") or []:
+        if str(plugin.get("id") or "").strip().lower() != "tmdb":
+            continue
         if not plugin.get("installed"):
             continue
         if not include_disabled and not plugin.get("enabled"):
@@ -11646,13 +11643,15 @@ def person_metadata_source_plugins(conn, *, include_disabled: bool = False) -> l
 
 
 def person_filmography_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
-    """Filmography sources in the shared provider priority order."""
+    """Return TMDb when it is installed and exposes person filmography."""
     if not table_exists(conn, "plugins"):
         return []
     sync_metadata_plugin_registry(conn)
     registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
     plugins: list[dict[str, Any]] = []
     for plugin in registry.get("plugins") or []:
+        if str(plugin.get("id") or "").strip().lower() != "tmdb":
+            continue
         if not plugin.get("installed"):
             continue
         if not include_disabled and not plugin.get("enabled"):
@@ -11856,128 +11855,6 @@ def sync_person_profile_media(
     }
 
 
-def merge_person_awards(*award_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Merge award lists from multiple providers with the shared dedupe rules.
-
-    De-duplicates on ``(awardWikidataId or award, year, workWikidataId or work)``
-    and collapses a nomination into a win when both share that key. Earlier lists
-    take precedence on otherwise-identical (same-result) duplicates.
-    """
-    deduped: dict[tuple, dict[str, Any]] = {}
-    order: list[tuple] = []
-    for awards in award_lists:
-        for entry in awards or []:
-            if not isinstance(entry, dict):
-                continue
-            award = clean_text(entry.get("award"))
-            award_qid = clean_text(entry.get("awardWikidataId"))
-            if not award and not award_qid:
-                continue
-            work = clean_text(entry.get("work"))
-            work_qid = clean_text(entry.get("workWikidataId"))
-            year = entry.get("year")
-            result = clean_text(entry.get("result")).lower()
-            result = "won" if result == "won" else "nominated"
-            normalized = {
-                "award": award or award_qid,
-                "awardWikidataId": award_qid,
-                "category": clean_text(entry.get("category")),
-                "year": year,
-                "work": work,
-                "workWikidataId": work_qid,
-                "workTmdbId": entry.get("workTmdbId"),
-                "result": result,
-                "source": clean_text(entry.get("source")),
-                "sourceRef": clean_text(entry.get("sourceRef")),
-            }
-            key = (award_qid or award, year, work_qid or work)
-            existing = deduped.get(key)
-            if existing is None:
-                deduped[key] = normalized
-                order.append(key)
-            elif existing.get("result") == "nominated" and result == "won":
-                deduped[key] = normalized
-    return [deduped[key] for key in order]
-
-
-def group_person_awards(awards: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Group a flat award list by award name for display (mirrors wikidata_awards)."""
-    groups: dict[str, dict[str, Any]] = {}
-    order: list[str] = []
-    for award in awards or []:
-        key = clean_text(award.get("awardWikidataId")) or clean_text(award.get("award"))
-        if not key:
-            continue
-        if key not in groups:
-            groups[key] = {
-                "award": award.get("award") or "",
-                "awardWikidataId": award.get("awardWikidataId") or "",
-                "items": [],
-            }
-            order.append(key)
-        groups[key]["items"].append(award)
-    result = []
-    for key in order:
-        group = groups[key]
-        group["items"].sort(key=lambda item: -(item.get("year") or 0))
-        group["wins"] = sum(1 for item in group["items"] if item.get("result") == "won")
-        group["nominations"] = sum(1 for item in group["items"] if item.get("result") == "nominated")
-        result.append(group)
-    return result
-
-
-def person_receiver_contribution_payload(
-    *,
-    person_id: UUID | str,
-    person: dict[str, Any],
-    tmdb_id: str,
-    updates: dict[str, Any],
-    localizations: list[dict[str, Any]],
-    source_providers: list[str],
-) -> dict[str, Any]:
-    """Build a person contribution envelope mirroring the movie receiver payload."""
-    tmdb_text = str(tmdb_id) if tmdb_id else ""
-    public: dict[str, Any] = {
-        "name": updates.get("name") or clean_text(person.get("name")),
-        "tmdbId": tmdb_text,
-        "biography": updates.get("biography"),
-        "birthday": updates.get("birth_date"),
-        "deathday": updates.get("death_date"),
-        "placeOfBirth": updates.get("place_of_birth"),
-        "knownFor": updates.get("known_for"),
-        "profileUrl": updates.get("profile_url"),
-        "photoUrl": updates.get("profile_url"),
-    }
-    for localization in localizations or []:
-        lang = clean_text(localization.get("lang"))
-        biography = clean_text(localization.get("biography"))
-        if not lang or not biography:
-            continue
-        public[f"biography_{lang.lower()}"] = biography
-        short = lang.lower().split("-")[0]
-        if short:
-            public.setdefault(f"biography_{short}", biography)
-    public = {key: value for key, value in public.items() if value not in (None, "", [], {})}
-    identity = str(person.get("public_id") or person_id)
-    return {
-        "entityType": "person",
-        "identity": identity,
-        "sourceRef": identity,
-        "sourceReference": {
-            "type": "discvault_person",
-            "key": str(person_id),
-            "publicId": person.get("public_id"),
-            "tmdbId": tmdb_text,
-        },
-        "payload": public,
-        "metadata": {
-            "personId": str(person_id),
-            "sourceProviders": sorted({str(item) for item in (source_providers or []) if item}),
-            "tmdbId": tmdb_text,
-        },
-    }
-
-
 def refresh_person_metadata(
     conn,
     person_id: UUID,
@@ -11992,12 +11869,16 @@ def refresh_person_metadata(
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
 
-    candidates = person_metadata_source_plugins(conn, include_disabled=True)
+    candidates = [
+        plugin
+        for plugin in person_metadata_source_plugins(conn, include_disabled=True)
+        if str(plugin.get("id") or "").strip().lower() == "tmdb"
+    ]
     if not candidates:
-        raise NextApiError("No enabled person metadata plugin is available", 503)
+        raise NextApiError("TMDb person metadata plugin is not available", 503)
     enabled_candidates = [plugin for plugin in candidates if plugin.get("enabled")]
     if not enabled_candidates:
-        raise NextApiError("Person metadata plugin must be enabled before refreshing person metadata", 409)
+        raise NextApiError("TMDb must be enabled before refreshing person metadata", 409)
     top_config = plugin_config_from_db(conn, str(enabled_candidates[0]["id"]))
     if plugin_requires_config_for_entrypoint(enabled_candidates[0], top_config, "person_details"):
         raise NextApiError("Person metadata plugin configuration is incomplete", 409)
@@ -12008,7 +11889,6 @@ def refresh_person_metadata(
     merged_aliases: list[str] = []
     merged_imdb = ""
     merged_profiles: list[Any] = []
-    provider_source_awards: list[dict[str, Any]] = []
     primary_plugin: dict[str, Any] | None = None
     primary_execution: dict[str, Any] = {}
     primary_result: dict[str, Any] = {}
@@ -12052,14 +11932,12 @@ def refresh_person_metadata(
         provider_imdb = clean_text(result.get("imdbId") or result.get("imdb_id"))
         provider_profiles = list(result.get("profiles") or [])
         provider_localizations = result.get("localizations") or []
-        provider_awards = [item for item in (result.get("awards") or []) if isinstance(item, dict)]
         if not (
             any(normalized.values())
             or provider_aliases
             or provider_imdb
             or provider_profiles
             or provider_localizations
-            or provider_awards
         ):
             continue
         if primary_plugin is None:
@@ -12078,8 +11956,6 @@ def refresh_person_metadata(
             merged_imdb = provider_imdb
         if not merged_profiles and provider_profiles:
             merged_profiles = provider_profiles
-        if provider_awards:
-            provider_source_awards.extend(provider_awards)
         provider_language = clean_text(result.get("language")) or primary_language or "en-US"
         for localization in provider_localizations:
             lang = clean_text(localization.get("lang"))
@@ -12149,16 +12025,6 @@ def refresh_person_metadata(
         )
         awards_status = "error"
 
-    # Fold awards that arrived inline from metadata-source providers (e.g. MovieVault
-    # person_details) into the Wikidata substep output, de-duplicated with the shared
-    # won>nominated rules. Only engage the merge when a provider actually supplied
-    # awards so the single-source Wikidata behaviour stays byte-identical otherwise.
-    if provider_source_awards:
-        merged_awards = merge_person_awards(awards, provider_source_awards)
-        awards = merged_awards
-        award_groups = group_person_awards(merged_awards)
-        awards_hit = bool(merged_awards)
-
     preview_detail = json_ready(detail)
     preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
     preview_metadata = preview_person.get("metadata") if isinstance(preview_person.get("metadata"), dict) else {}
@@ -12197,7 +12063,6 @@ def refresh_person_metadata(
     if localizations:
         preview_detail["localizations"] = [dict(item) for item in localizations]
 
-    receiver_summary: dict[str, Any] | None = None
     if not dry_run:
         with conn.cursor() as cur:
             cur.execute(
@@ -12245,39 +12110,6 @@ def refresh_person_metadata(
                 "Person profile media sync failed for %s", person_id, exc_info=True
             )
         detail = person_detail_entity(conn, person_id) or preview_detail
-        if source_providers:
-            receiver_payload = person_receiver_contribution_payload(
-                person_id=person_id,
-                person=detail.get("person") if isinstance(detail.get("person"), dict) else {},
-                tmdb_id=tmdb_id,
-                updates=updates,
-                localizations=localizations,
-                source_providers=source_providers,
-            )
-            if receiver_payload.get("payload"):
-                try:
-                    receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
-                except Exception as exc:  # noqa: BLE001 - contribution must never break the refresh
-                    current_app.logger.warning(
-                        "Person receiver contribution failed for %s", person_id, exc_info=True
-                    )
-                    receiver_summary = {"status": "error", "error": str(exc)}
-                audit_event(
-                    conn,
-                    event_type="metadata.receiver_pushed",
-                    category="metadata",
-                    actor=actor,
-                    target_type="person",
-                    target_id=person_id,
-                    summary=f"Pushed person metadata to receiver plugins for {updates.get('name') or tmdb_id}",
-                    metadata={
-                        "personId": str(person_id),
-                        "tmdbId": str(tmdb_id),
-                        "sourceProviders": sorted({str(item) for item in source_providers if item}),
-                        "fields": sorted((receiver_payload.get("payload") or {}).keys()),
-                        "receiverSummary": receiver_summary,
-                    },
-                )
     else:
         if profile_urls:
             existing_media = preview_detail.get("personMedia") if isinstance(preview_detail.get("personMedia"), list) else []
@@ -12317,7 +12149,7 @@ def refresh_person_metadata(
             "groups": len(award_groups),
         },
         "result": primary_result,
-        "receivers": receiver_summary,
+        "receivers": None,
         "detail": detail,
     }
 

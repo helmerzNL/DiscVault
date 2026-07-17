@@ -95,7 +95,7 @@ class MovieVaultV3AdapterTests(unittest.TestCase):
             ],
         )
 
-    def test_v3_movie_item_maps_gallery_and_director(self):
+    def test_v3_movie_item_maps_gallery_without_people(self):
         result = movievault_26._v3_movie_item(
             {
                 "matched": True,
@@ -117,35 +117,7 @@ class MovieVaultV3AdapterTests(unittest.TestCase):
 
         self.assertEqual(result["posterUrl"], "https://img.example/poster.jpg")
         self.assertEqual(result["backdropUrl"], "https://img.example/backdrop.jpg")
-        self.assertEqual(result["director"], ["Ridley Scott"])
-
-    def test_v3_person_item_maps_known_for_and_profiles(self):
-        result = movievault_26._v3_person_item(
-            {
-                "matched": True,
-                "match": {
-                    "type": "person",
-                    "person": {
-                        "id": "pp_1",
-                        "name": "Sigourney Weaver",
-                        "knownForDepartment": "Acting",
-                        "knownFor": [{"title": "Alien"}],
-                        "profiles": ["https://img.example/existing.jpg"],
-                        "profileUrls": [
-                            "https://img.example/existing.jpg",
-                            "https://img.example/gallery.jpg",
-                            "http://img.example/insecure.jpg",
-                        ],
-                    },
-                },
-            }
-        )
-
-        self.assertEqual(result["knownFor"], "Acting")
-        self.assertEqual(
-            result["profiles"],
-            ["https://img.example/existing.jpg", "https://img.example/gallery.jpg"],
-        )
+        self.assertNotIn("director", result)
 
     def test_get_routes_v3_through_signed_transport(self):
         calls = []
