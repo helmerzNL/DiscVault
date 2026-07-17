@@ -2183,8 +2183,11 @@ def should_apply_field(
         return False, format_reason
     if not value_present(current_value):
         return True, "current field is empty"
-    if field in METADATA_TECHNICAL_FIELDS and release_priority and format_reason == "same-format release data":
-        return True, "same-format technical release refresh"
+    if field in METADATA_TECHNICAL_FIELDS and release_priority:
+        if format_reason == "same-format release data":
+            return True, "same-format technical release refresh"
+        if field == "content_ratings" and format_reason == "format-neutral certification field":
+            return True, "format-neutral certification refresh"
     if overwrite_enabled and field not in METADATA_LOCAL_ONLY_FIELDS:
         return True, "preferred provider overwrite is enabled"
     if field in METADATA_MANUAL_PROTECTED_FIELDS:

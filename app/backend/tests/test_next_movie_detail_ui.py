@@ -91,6 +91,21 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
 
+    def test_unknown_content_rating_placeholder_is_not_written_to_edit_form(self):
+        self.assertIn(
+            'movieEditContentRating: contentRatingInfo.unknown ? "" : '
+            '(contentRatingInfo.rating || ""),',
+            self.source,
+        )
+        self.assertNotIn(
+            'movieEditContentRating: contentRatingInfo.rating || "",',
+            self.source,
+        )
+        self.assertIn(
+            'return contentRatingInfo.unknown ? "" : valueText(contentRatingInfo.rating);',
+            self.source,
+        )
+
     def test_cast_and_crew_block_precedes_media(self):
         self.assertIn('data-next-i18n="movieDetail.castCrew"', self.source)
         people_index = self.source.index('data-detail-tab="moviePeople"')
