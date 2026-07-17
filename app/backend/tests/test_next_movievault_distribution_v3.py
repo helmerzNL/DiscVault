@@ -74,7 +74,14 @@ class MovieVaultDistributionV3Tests(unittest.TestCase):
             [member["releaseEdition"] for member in full[2]["members"]],
             ["Theatrical", "Director's Cut"],
         )
-        self.assertEqual(full[0]["assets"][0]["display"]["path"].split("/")[1], "v3")
+        # MovieVault's public asset paths are deliberately /v2/assets/... for
+        # both the v3 and v4 distribution contracts - only the index/manifest
+        # routes are versioned. Regression guard against re-introducing an
+        # incorrect /v3/assets/... expectation.
+        display_path = full[0]["assets"][0]["display"]["path"]
+        self.assertTrue(display_path)
+        self.assertRegex(display_path, r"^/v2/assets/[0-9a-f-]+/display$")
+        self.assertEqual(display_path.split("/")[1], "v2")
         self.assertEqual(delta[-1]["operation"], "delete")
 
         invalid = json.loads((FIXTURES / "distribution-v3-full.ndjson").read_bytes().splitlines()[0])
@@ -165,11 +172,14 @@ class MovieVaultDistributionV3Tests(unittest.TestCase):
             ),
         ):
             with self.subTest(operation=operation.__name__):
+                # distribution-5 does not exist yet; distribution-4 is now a
+                # legitimately supported contract (see the v4 tests) so it no
+                # longer belongs in this "unsupported contract" regression.
                 with self.assertRaisesRegex(
                     next_movievault_v2.MovieVaultV2Error,
                     "^contract_incompatible$",
                 ):
-                    operation(*arguments, contract_version="distribution-4")
+                    operation(*arguments, contract_version="distribution-5")
 
     def test_v3_bucket_uses_v3_endpoint_and_dual_digest(self):
         content = (FIXTURES / "distribution-v3-bucket.json").read_bytes()

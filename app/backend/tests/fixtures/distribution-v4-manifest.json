@@ -1,0 +1,1 @@
+{"bucketPathTemplate":"/v4/bucket/{prefix}","bucketPrefixLength":1,"contractVersion":"distribution-4","currentCursor":"fixture-distribution-4-r42","currentRevision":42,"datasetChecksum":"b4f88cd47cc30528b11997341ca8a41605fcfce1ceccf1ec5b414ec6920ef251","deltaPath":"/v4/index/delta","hashAlgorithm":"sha256"}
