@@ -19,7 +19,6 @@ try:  # package import (Flask app factory)
         pwa_head_tags,
         server_usable_image,
     )
-    from .next_genres import GENRE_KEY_TO_LABEL
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_app import (
         APP_PREFERENCE_DEFAULTS,
@@ -32,7 +31,6 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         pwa_head_tags,
         server_usable_image,
     )
-    from next_genres import GENRE_KEY_TO_LABEL
 
 
 def server_movie_cards(movies: list[dict[str, Any]]) -> str:
@@ -1612,7 +1610,6 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
 
   <script>
     var initialState = JSON.parse(""" + json_lib.dumps(initial_state_json) + """);
-    var genreLabels = """ + json_lib.dumps(GENRE_KEY_TO_LABEL, separators=(",", ":")) + """;
     var state = {
       movies: initialState.movies || [],
       containers: initialState.containers || [],
@@ -3923,7 +3920,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         ["Director", metadata.director],
         ["Producer", metadata.producer],
         ["Studios", metadata.studios],
-        ["Genre", (movie.genres || []).map((key) => genreLabels[key] || key).join(", ")],
+        ["Genre", metadata.genre],
         ["Distributor", metadata.distributor],
         ["Trailer", metadata.trailer_url]
       ]);

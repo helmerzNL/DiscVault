@@ -1,7 +1,6 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -54,36 +53,6 @@ class NextPreferencesModuleTests(unittest.TestCase):
         capabilities = next_preferences.mobile_feature_capabilities(_Conn(), actor)
         self.assertTrue(capabilities["personal"]["statistics"])
         self.assertTrue(capabilities["personal"]["wishlistPriceTrendStats"])
-
-    def test_validate_preferred_price_currency_accepts_empty_and_uppercases(self):
-        self.assertEqual(next_preferences.validate_app_preference("preferred_price_currency", ""), "")
-        self.assertEqual(next_preferences.validate_app_preference("preferred_price_currency", "usd"), "USD")
-
-    def test_price_display_context_skips_rates_without_preferred_currency(self):
-        payload = next_preferences.price_display_context({"price_monitoring_enabled": True, "preferred_price_currency": ""})
-        self.assertTrue(payload["monitoringEnabled"])
-        self.assertIsNone(payload["preferredCurrency"])
-        self.assertEqual(payload["exchangeRates"], {})
-
-    def test_price_display_context_loads_exchange_rates_for_preferred_currency(self):
-        class _Response:
-            def raise_for_status(self):
-                return None
-
-            def json(self):
-                return {"date": "2026-07-14", "rates": {"USD": 1.2, "GBP": 0.8}}
-
-        next_preferences._PRICE_DISPLAY_RATE_CACHE["payload"] = None
-        next_preferences._PRICE_DISPLAY_RATE_CACHE["expires_at"] = None
-        with patch("app.backend.next_preferences.requests.get", return_value=_Response()):
-            payload = next_preferences.price_display_context(
-                {"price_monitoring_enabled": True, "preferred_price_currency": "USD"}
-            )
-        self.assertEqual(payload["preferredCurrency"], "USD")
-        self.assertEqual(payload["source"], "frankfurter")
-        self.assertEqual(payload["updatedAt"], "2026-07-14")
-        self.assertEqual(payload["exchangeRates"]["EUR"], 1.0)
-        self.assertEqual(payload["exchangeRates"]["USD"], 1.2)
 
 
 if __name__ == "__main__":

@@ -155,31 +155,6 @@ Before updating production:
 - Keep the same `/data` volume mapping so posters, backdrops, uploads, users, passkeys, and settings remain available.
 - Review release notes before moving between beta and production channels.
 
-## Install the standalone MovieVault v2 plugin
-
-DiscVault `26.4.44` and newer provide the local anonymous synchronization
-bridge used by the separately released `movievault_v2` plugin. Download the
-plugin ZIP and checksum from
-[helmerzNL/DiscVault-Plugins](https://github.com/helmerzNL/DiscVault-Plugins),
-verify the SHA-256 checksum, and extract its `movievault_v2/` root folder into
-`DISCVAULT_PLUGIN_INSTALL_DIR` (normally `/data/plugins` in the persistent
-volume).
-
-Restart DiscVault or refresh its plugin registry. The plugin supplies the
-standard `https://movies2.vaultstack.eu` origin and safe operational defaults
-while remaining disabled. Review or override those settings, then enable the
-plugin; DiscVault queues the first synchronization automatically. Normal barcode,
-title, release, and box-set queries then use the derived PostgreSQL index. The
-existing `movievault_26` plugin remains independently available for MovieVault
-Next. Its attributed contribution connection is not used for MovieVault v2
-anonymous reads.
-
-DiscVault `26.4.53` adds negotiated `distribution-3` support. The matching
-deterministic `movievault_v2` 1.1.0 feature package is also available under
-`dist/plugins/` for staged installation. Older plugins continue to use
-`distribution-2`; v3 is selected only when both the plugin manifest and core
-declare support.
-
 ## Repository Structure
 
 - `app/` - Main application code (backend, frontend, mcp-server, deployment files)

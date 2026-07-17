@@ -17,10 +17,6 @@ __pycache__/
 .idea/
 *.swp
 
-# Purged native iOS artifacts
-/ios/
-/iosnativeapp.patch
-
 # Local runtime/cache
 app/.local/
 app/data/

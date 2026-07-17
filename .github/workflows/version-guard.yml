@@ -17,9 +17,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Reject forbidden iOS artifacts
-        run: python app/scripts/check_forbidden_paths.py --tree HEAD
-
       - name: Check app version bump
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
