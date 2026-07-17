@@ -3815,12 +3815,80 @@ def ui_preview_html(
       display: grid;
       gap: 12px;
     }
-    .movie-list-actions {
+    .movie-list-primary-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 12px;
       align-items: center;
-      justify-content: flex-end;
+    }
+    .movie-list-primary-action {
+      min-height: 50px;
+      max-width: 100%;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 12px 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 760;
+      line-height: 1.15;
+      text-align: center;
+      white-space: normal;
+      cursor: pointer;
+      transition: transform .15s ease, filter .15s ease, background .15s ease;
+    }
+    .movie-list-primary-action:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+    .movie-list-primary-action:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 48%, transparent);
+      outline-offset: 3px;
+    }
+    .movie-list-primary-action svg {
+      width: 23px;
+      height: 23px;
+      flex: 0 0 auto;
+      fill: currentColor;
+    }
+    .movie-list-primary-action.rewatch {
+      background: #28c95b;
+      border-color: #28c95b;
+      color: #fff;
+    }
+    .movie-list-primary-action.watchlist {
+      background: color-mix(in srgb, #1264d8 24%, var(--bg-solid));
+      border-color: color-mix(in srgb, #2f80ed 38%, transparent);
+      color: #5a97f5;
+    }
+    .movie-list-primary-action.watchlist.active {
+      background: color-mix(in srgb, #1264d8 34%, var(--bg-solid));
+      border-color: color-mix(in srgb, #5a97f5 68%, transparent);
+      color: #7aabff;
+    }
+    .movie-rewatch-date {
+      display: grid;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .movie-rewatch-date span {
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 700;
+    }
+    .movie-rewatch-date input {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      padding: 0 12px;
+      box-sizing: border-box;
+      font: inherit;
     }
     .list-pill-button {
       min-height: 38px;
@@ -3836,36 +3904,6 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
       background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
       color: var(--accent);
-    }
-    .watch-date-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
-    }
-    .watch-date-row input {
-      min-height: 38px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: var(--bg-solid);
-      color: var(--text);
-      padding: 0 12px;
-      font: inherit;
-    }
-    .watch-date-row .segmented {
-      flex: 1 1 320px;
-    }
-    .watch-custom-date {
-      display: inline-flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      justify-content: flex-end;
     }
     .watch-history-pills {
       display: flex;
@@ -3912,6 +3950,27 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 8px;
     }
+    .movie-tag-add-button {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      color: var(--text);
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+      cursor: pointer;
+    }
+    .movie-tag-add-button:hover {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      color: var(--accent);
+    }
+    .movie-tag-add-button svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
     .movie-tag-chip {
       display: inline-flex;
       align-items: center;
@@ -3934,14 +3993,97 @@ def ui_preview_html(
       color: var(--muted);
       cursor: pointer;
     }
-    .movie-tag-add,
+    .movie-tag-picker-search {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 86%, transparent);
+      color: var(--text);
+      padding: 0 16px;
+      box-sizing: border-box;
+      font: inherit;
+    }
+    .movie-tag-picker-results {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .movie-tag-picker-option,
+    .movie-tag-picker-create {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 84%, transparent);
+      color: var(--text);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      font: inherit;
+      font-weight: 680;
+      cursor: pointer;
+    }
+    .movie-tag-picker-option:hover,
+    .movie-tag-picker-create:hover {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--line));
+      background: color-mix(in srgb, var(--accent) 13%, var(--bg-solid));
+    }
+    .movie-tag-picker-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--tag-color, var(--muted));
+      flex: 0 0 auto;
+    }
+    .movie-tag-create-section {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .movie-tag-color-label {
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 700;
+    }
+    .movie-tag-color-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .movie-tag-color-option {
+      width: 34px;
+      height: 34px;
+      border: 2px solid transparent;
+      border-radius: 50%;
+      background: var(--tag-color, color-mix(in srgb, var(--muted) 24%, transparent));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent);
+      padding: 0;
+      position: relative;
+      cursor: pointer;
+    }
+    .movie-tag-color-option[aria-checked="true"] {
+      border-color: var(--text);
+      box-shadow: 0 0 0 2px var(--bg-solid), 0 0 0 4px var(--accent);
+    }
+    .movie-tag-color-option.none::after {
+      content: "";
+      position: absolute;
+      inset: 15px 5px;
+      height: 2px;
+      background: var(--muted);
+      transform: rotate(45deg);
+    }
     .movie-loan-add {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
     }
-    .movie-tag-add input,
     .movie-loan-add input {
       flex: 1 1 160px;
       min-width: 0;
@@ -9445,6 +9587,10 @@ def ui_preview_html(
         align-items: stretch;
         flex-direction: column;
       }
+      .movie-tags-section .detail-card-head.compact {
+        align-items: center;
+        flex-direction: row;
+      }
       .detail-submenu {
         width: 100%;
         justify-content: flex-start;
@@ -11133,31 +11279,29 @@ def ui_preview_html(
                 <h3 data-next-i18n="lists.personalTitle">Personal lists</h3>
                 <p class="import-source-meta" id="movieListStateSummary" data-next-i18n="lists.personalHelp">Save this film for later or mark when you watched it.</p>
               </div>
-              <div class="movie-list-actions">
-                <button type="button" class="list-pill-button" id="movieWatchlistToggleButton" data-next-i18n="lists.addToWatchlist">Add to Watchlist</button>
-              </div>
             </div>
-            <div class="watch-date-row">
-              <div class="segmented compact" role="group" aria-label="Watched date" data-next-i18n-aria="lists.watchedDate">
-                <button type="button" id="movieWatchedTodayButton" data-watch-date-choice="today" data-next-i18n="lists.markWatchedToday">Today</button>
-                <button type="button" id="movieWatchedYesterdayButton" data-watch-date-choice="yesterday" data-next-i18n="lists.markWatchedYesterday">Yesterday</button>
-                <button type="button" id="movieWatchedChooseDateButton" data-watch-date-choice="choose" data-next-i18n="lists.chooseWatchedDate">Choose a date</button>
-              </div>
-              <div class="watch-custom-date hidden" id="movieWatchedCustomDateControls">
-                <input type="date" id="movieWatchedDateInput" aria-label="Watched date" data-next-i18n-aria="lists.watchedDate">
-                <button type="button" class="secondary-button" id="movieWatchedDateButton" data-next-i18n="lists.markWatchedDate">Add date</button>
-              </div>
+            <div class="movie-list-primary-actions">
+              <button type="button" class="movie-list-primary-action rewatch" id="movieLogRewatchButton" aria-haspopup="dialog">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M10.2 16.2 6.5 12.5l1.4-1.4 2.3 2.3 5.9-5.9 1.4 1.4z" fill="#28c95b"></path>
+                </svg>
+                <span data-next-i18n="lists.logRewatch">Log rewatch</span>
+              </button>
+              <button type="button" class="movie-list-primary-action watchlist" id="movieWatchlistToggleButton" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"></path></svg>
+                <span id="movieWatchlistToggleLabel" data-next-i18n="lists.addToWatchlist">Add to Watchlist</span>
+              </button>
             </div>
             <div class="watch-history-pills" id="movieWatchHistoryPills"></div>
             <div class="movie-tags-section" id="movieTagsSection">
               <div class="detail-card-head compact">
                 <h4 data-next-i18n="lists.tagsTitle">Tags</h4>
+                <button type="button" class="movie-tag-add-button" id="movieTagAddButton" aria-label="Add tag" title="Add tag" data-next-i18n-aria="lists.tagAdd" data-next-i18n-title="lists.tagAdd">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5H13V11H19V13H13V19H11V13H5V11H11V5Z"></path></svg>
+                </button>
               </div>
               <div class="movie-tags-chips" id="movieTagsChips"></div>
-              <form class="movie-tag-add" id="movieTagAddForm" autocomplete="off">
-                <input type="text" id="movieTagAddInput" data-next-i18n-placeholder="lists.tagAddPlaceholder" placeholder="Add a tag">
-                <button type="submit" class="secondary-button" data-next-i18n="lists.tagAdd">Add tag</button>
-              </form>
             </div>
             <div class="movie-loan-section" id="movieLoanSection">
               <div class="detail-card-head compact">
@@ -20603,10 +20747,7 @@ def ui_preview_html(
     function renderMovieListState(detail) {
       const state = detail.userState || {};
       const watchButton = document.getElementById("movieWatchlistToggleButton");
-      const watchedButton = document.getElementById("movieWatchedTodayButton");
-      const yesterdayButton = document.getElementById("movieWatchedYesterdayButton");
-      const chooseDateButton = document.getElementById("movieWatchedChooseDateButton");
-      const customDateControls = document.getElementById("movieWatchedCustomDateControls");
+      const watchButtonLabel = document.getElementById("movieWatchlistToggleLabel");
       const summary = document.getElementById("movieListStateSummary");
       const historyNode = document.getElementById("movieWatchHistoryPills");
       const canUseLists = hasPermission("watchlist.manage");
@@ -20614,16 +20755,13 @@ def ui_preview_html(
       if (!canUseLists) return;
       if (watchButton) {
         watchButton.classList.toggle("active", !!state.onWatchlist);
-        watchButton.textContent = state.onWatchlist
+        watchButton.setAttribute("aria-pressed", state.onWatchlist ? "true" : "false");
+      }
+      if (watchButtonLabel) {
+        watchButtonLabel.textContent = state.onWatchlist
           ? tNext("lists.inWatchlist", "In Watchlist")
           : tNext("lists.addToWatchlist", "Add to Watchlist");
       }
-      if (watchedButton) {
-        watchedButton.classList.toggle("active", sameLocalDate(state.lastWatched, localDateString(0)));
-      }
-      if (yesterdayButton) yesterdayButton.classList.toggle("active", sameLocalDate(state.lastWatched, localDateString(-1)));
-      if (chooseDateButton) chooseDateButton.classList.remove("active");
-      if (customDateControls) customDateControls.classList.add("hidden");
       const lastWatched = state.lastWatched ? formatAppDate(state.lastWatched) : "";
       if (summary) {
         summary.textContent = lastWatched
@@ -20738,24 +20876,124 @@ def ui_preview_html(
       }
       if (requestForm) requestForm.classList.toggle("hidden", pending || approved);
     }
-    async function attachActiveMovieTag(name) {
+    async function attachActiveMovieTag(tag) {
       if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
-      const clean = String(name || "").trim();
-      if (!clean) return;
+      const source = typeof tag === "string" ? {name: tag} : (tag || {});
+      const tagId = String(source.tagId || source.id || "").trim();
+      const name = String(source.name || "").trim();
+      if (!tagId && !name) return false;
+      const body = tagId ? {tagId} : {name, color: source.color || null};
       setMovieDetailMessage(tNext("lists.tagAdding", "Adding tag..."));
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/tags`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({name: clean})
+          body: JSON.stringify(body)
         });
         activeDetailPayload.userState = payload.userState || {};
+        libraryTagsLoaded = false;
+        listsState.loaded = false;
         renderMovieListState(activeDetailPayload);
-        const input = document.getElementById("movieTagAddInput");
-        if (input) input.value = "";
         setMovieDetailMessage(tNext("lists.tagAdded", "Tag added."), "good");
+        return true;
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
+        return false;
+      }
+    }
+    async function openMovieTagPicker() {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      const { overlay, panel } = listsCreateOverlay("lists-tag-picker");
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-modal", "true");
+      panel.setAttribute("aria-labelledby", "movieTagPickerTitle");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3 id="movieTagPickerTitle">${escapeHtml(tNext("lists.tagAdd", "Add tag"))}</h3></header>
+        <input type="search" class="movie-tag-picker-search" data-tag-search maxlength="60" placeholder="${escapeHtml(tNext("lists.tagAddPlaceholder", "Add a tag"))}" aria-label="${escapeHtml(tNext("lists.tagAdd", "Add tag"))}">
+        <div class="movie-tag-picker-results" data-tag-results>
+          <p class="lists-modal-message">${escapeHtml(tNext("common.loading", "Loading..."))}</p>
+        </div>
+        <div data-tag-create></div>
+        <p class="lists-modal-message" data-message></p>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+        </footer>
+      `;
+      const searchInput = panel.querySelector("[data-tag-search]");
+      const resultsNode = panel.querySelector("[data-tag-results]");
+      const createNode = panel.querySelector("[data-tag-create]");
+      const messageNode = panel.querySelector("[data-message]");
+      const attachedIds = new Set(((activeDetailPayload?.userState || {}).tags || []).map((tag) => String(tag.id)));
+      const colorOptions = ["", "#e5484d", "#f97316", "#f5b942", "#35a66f", "#1aa790", "#139dc2", "#3478d4", "#5b5bd6", "#8f46d5", "#d33f92", "#8b8f99"];
+      let tags = [];
+      let selectedColor = "#e5484d";
+      const setMessage = (text, tone = "") => {
+        messageNode.textContent = text || "";
+        messageNode.className = "lists-modal-message" + (tone ? " " + tone : "");
+      };
+      const attachAndClose = async (tagInput) => {
+        setMessage(tNext("lists.tagAdding", "Adding tag..."));
+        if (await attachActiveMovieTag(tagInput)) listsCloseOverlay(overlay);
+      };
+      const renderOptions = () => {
+        const query = String(searchInput.value || "").trim();
+        const normalizedQuery = query.toLocaleLowerCase();
+        const matching = tags.filter((tag) => {
+          if (attachedIds.has(String(tag.id))) return false;
+          const name = String(tag.name || tag.slug || "");
+          return !normalizedQuery || name.toLocaleLowerCase().includes(normalizedQuery);
+        });
+        resultsNode.innerHTML = matching.length
+          ? matching.map((tag) => `
+              <button type="button" class="movie-tag-picker-option" data-tag-id="${escapeHtml(tag.id)}"${tag.color ? ` style="--tag-color:${escapeHtml(tag.color)}"` : ""}>
+                <span class="movie-tag-picker-swatch" aria-hidden="true"></span>
+                <span>${escapeHtml(tag.name || tag.slug || "")}</span>
+              </button>
+            `).join("")
+          : `<p class="lists-modal-message">${escapeHtml(tNext("bulk.tagsEmpty", "No tags found."))}</p>`;
+        resultsNode.querySelectorAll("[data-tag-id]").forEach((button) => {
+          button.addEventListener("click", () => attachAndClose({tagId: button.dataset.tagId}));
+        });
+        const exactMatch = tags.some((tag) => String(tag.name || tag.slug || "").trim().toLocaleLowerCase() === normalizedQuery);
+        if (!query || exactMatch) {
+          createNode.innerHTML = "";
+          return;
+        }
+        const colorButtons = colorOptions.map((color) => {
+          const active = color === selectedColor;
+          const style = color ? ` style="--tag-color:${escapeHtml(color)}"` : "";
+          return `<button type="button" class="movie-tag-color-option${color ? "" : " none"}" role="radio" aria-checked="${active ? "true" : "false"}" aria-label="${escapeHtml(color || tNext("common.none", "None"))}" data-tag-color="${escapeHtml(color)}"${style}></button>`;
+        }).join("");
+        createNode.innerHTML = `
+          <div class="movie-tag-create-section">
+            <button type="button" class="movie-tag-picker-create" data-create-tag>
+              <span aria-hidden="true">+</span>
+              <span>${escapeHtml(tNext("lists.tagCreateSubmit", "Create"))} "${escapeHtml(query)}"</span>
+            </button>
+            <span class="movie-tag-color-label">${escapeHtml(tNext("lists.tagColorLabel", "Colour"))}</span>
+            <div class="movie-tag-color-options" role="radiogroup">${colorButtons}</div>
+          </div>
+        `;
+        createNode.querySelectorAll("[data-tag-color]").forEach((button) => {
+          button.addEventListener("click", () => {
+            selectedColor = button.dataset.tagColor || "";
+            renderOptions();
+          });
+        });
+        createNode.querySelector("[data-create-tag]")?.addEventListener("click", () => attachAndClose({name: query, color: selectedColor}));
+      };
+      panel.querySelector("[data-secondary]")?.addEventListener("click", () => listsCloseOverlay(overlay));
+      searchInput.addEventListener("input", renderOptions);
+      searchInput.focus();
+      try {
+        const payload = await authApiJson("/api/next/tags");
+        tags = Array.isArray(payload.tags) ? payload.tags : [];
+        libraryTags = tags.slice();
+        libraryTagsLoaded = true;
+        renderOptions();
+      } catch (error) {
+        resultsNode.innerHTML = "";
+        setMessage(error.message || String(error), "bad");
       }
     }
     async function detachActiveMovieTag(tagId) {
@@ -20901,10 +21139,6 @@ def ui_preview_html(
       const day = String(date.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
     }
-    function sameLocalDate(value, dateText) {
-      if (!value || !dateText) return false;
-      return String(value).slice(0, 10) === dateText;
-    }
     async function toggleActiveMovieWatchlist() {
       if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
       const current = !!(activeDetailPayload?.userState || {}).onWatchlist;
@@ -20939,22 +21173,64 @@ def ui_preview_html(
         setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
-    function handleWatchedDateChoice(choice) {
-      if (choice === "today") {
-        markActiveMovieWatched(localDateString(0));
-        return;
-      }
-      if (choice === "yesterday") {
-        markActiveMovieWatched(localDateString(-1));
-        return;
-      }
-      const controls = document.getElementById("movieWatchedCustomDateControls");
-      const input = document.getElementById("movieWatchedDateInput");
-      const chooseButton = document.getElementById("movieWatchedChooseDateButton");
-      if (controls) controls.classList.remove("hidden");
-      if (chooseButton) chooseButton.classList.add("active");
-      if (input && !input.value) input.value = localDateString(0);
-      input?.focus();
+    function openMovieRewatchDialog() {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet movie-rewatch-sheet");
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-modal", "true");
+      panel.setAttribute("aria-labelledby", "movieRewatchDialogTitle");
+      panel.innerHTML = `
+        <header class="lists-modal-head">
+          <h3 id="movieRewatchDialogTitle">${escapeHtml(tNext("lists.logRewatch", "Log rewatch"))}</h3>
+        </header>
+        <div class="lists-actionsheet-list">
+          <button type="button" class="lists-actionsheet-btn" data-rewatch-date="today">${escapeHtml(tNext("lists.watchedToday", "Watched today"))}</button>
+          <button type="button" class="lists-actionsheet-btn" data-rewatch-date="yesterday">${escapeHtml(tNext("lists.watchedYesterday", "Watched yesterday"))}</button>
+          <button type="button" class="lists-actionsheet-btn" data-rewatch-date="choose">${escapeHtml(tNext("lists.chooseWatchedDate", "Choose a date"))}</button>
+        </div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]")?.addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-rewatch-date]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const choice = button.dataset.rewatchDate;
+          if (choice === "choose") {
+            openMovieRewatchDatePicker(overlay, panel);
+            return;
+          }
+          listsCloseOverlay(overlay);
+          markActiveMovieWatched(localDateString(choice === "yesterday" ? -1 : 0));
+        });
+      });
+      panel.querySelector("[data-rewatch-date]")?.focus();
+    }
+    function openMovieRewatchDatePicker(overlay, panel) {
+      panel.innerHTML = `
+        <header class="lists-modal-head">
+          <h3 id="movieRewatchDialogTitle">${escapeHtml(tNext("lists.chooseWatchedDate", "Choose a date"))}</h3>
+        </header>
+        <form id="movieRewatchDateForm">
+          <label class="movie-rewatch-date">
+            <span>${escapeHtml(tNext("lists.watchedDate", "Watched date"))}</span>
+            <input type="date" id="movieRewatchDateInput" value="${escapeHtml(localDateString(0))}" required>
+          </label>
+          <footer class="lists-modal-actions">
+            <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+            <button type="submit">${escapeHtml(tNext("lists.markWatchedDate", "Add date"))}</button>
+          </footer>
+        </form>
+      `;
+      panel.querySelector("[data-secondary]")?.addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelector("#movieRewatchDateForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const value = panel.querySelector("#movieRewatchDateInput")?.value || "";
+        if (!value) return;
+        listsCloseOverlay(overlay);
+        markActiveMovieWatched(value);
+      });
+      panel.querySelector("#movieRewatchDateInput")?.focus();
     }
     async function deleteActiveMovieWatchedEntry(entryId) {
       if (!activeDetailMovieId || !entryId || !hasPermission("watchlist.manage")) return;
@@ -27409,15 +27685,26 @@ def ui_preview_html(
       });
     }
     function listsCloseOverlay(overlay) {
-      if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (!overlay) return;
+      const returnFocus = overlay.returnFocusElement;
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (returnFocus && document.contains(returnFocus) && typeof returnFocus.focus === "function") returnFocus.focus();
     }
     function listsCreateOverlay(className) {
+      const returnFocus = document.activeElement;
       const overlay = document.createElement("div");
       overlay.className = "lists-modal-overlay";
+      overlay.returnFocusElement = returnFocus;
       const panel = document.createElement("div");
       panel.className = "lists-modal " + (className || "");
       overlay.appendChild(panel);
       overlay.addEventListener("mousedown", (event) => { if (event.target === overlay) listsCloseOverlay(overlay); });
+      overlay.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        listsCloseOverlay(overlay);
+      });
       document.body.appendChild(overlay);
       return { overlay, panel };
     }
@@ -33872,21 +34159,12 @@ def ui_preview_html(
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
       document.getElementById("movieDeleteButton")?.addEventListener("click", () => deleteActiveMovie());
       document.getElementById("movieWatchlistToggleButton")?.addEventListener("click", () => toggleActiveMovieWatchlist());
-      document.querySelectorAll("[data-watch-date-choice]").forEach((button) => {
-        button.addEventListener("click", () => handleWatchedDateChoice(button.dataset.watchDateChoice || "today"));
-      });
-      document.getElementById("movieWatchedDateButton")?.addEventListener("click", () => {
-        const value = document.getElementById("movieWatchedDateInput")?.value || "";
-        if (value) markActiveMovieWatched(value);
-      });
+      document.getElementById("movieLogRewatchButton")?.addEventListener("click", () => openMovieRewatchDialog());
       document.getElementById("movieWatchHistoryPills")?.addEventListener("click", (event) => {
         const deleteButton = event.target.closest("[data-delete-watch-history]");
         if (deleteButton) deleteActiveMovieWatchedEntry(deleteButton.dataset.deleteWatchHistory);
       });
-      document.getElementById("movieTagAddForm")?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        attachActiveMovieTag(document.getElementById("movieTagAddInput")?.value || "");
-      });
+      document.getElementById("movieTagAddButton")?.addEventListener("click", () => openMovieTagPicker());
       document.getElementById("movieTagsChips")?.addEventListener("click", (event) => {
         const removeButton = event.target.closest("[data-detach-tag]");
         if (removeButton) detachActiveMovieTag(removeButton.dataset.detachTag);

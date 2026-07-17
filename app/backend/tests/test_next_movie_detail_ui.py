@@ -89,6 +89,86 @@ class NextMovieDetailUiTests(unittest.TestCase):
 
         self.assertLess(people_index, media_index)
 
+    def test_personal_lists_use_reference_style_primary_actions(self):
+        actions_index = self.source.index('class="movie-list-primary-actions"')
+        history_index = self.source.index('id="movieWatchHistoryPills"')
+
+        self.assertLess(actions_index, history_index)
+        self.assertIn(
+            'class="movie-list-primary-action rewatch" '
+            'id="movieLogRewatchButton" aria-haspopup="dialog"',
+            self.source,
+        )
+        self.assertIn(
+            'class="movie-list-primary-action watchlist" '
+            'id="movieWatchlistToggleButton" aria-pressed="false"',
+            self.source,
+        )
+        self.assertIn('data-next-i18n="lists.logRewatch"', self.source)
+        self.assertIn('id="movieWatchlistToggleLabel"', self.source)
+
+    def test_rewatch_action_sheet_has_localized_date_choices(self):
+        self.assertIn("function openMovieRewatchDialog()", self.source)
+        self.assertIn('tNext("lists.logRewatch", "Log rewatch")', self.source)
+        self.assertIn('tNext("lists.watchedToday", "Watched today")', self.source)
+        self.assertIn(
+            'tNext("lists.watchedYesterday", "Watched yesterday")',
+            self.source,
+        )
+        self.assertIn(
+            'tNext("lists.chooseWatchedDate", "Choose a date")',
+            self.source,
+        )
+        self.assertIn('data-rewatch-date="today"', self.source)
+        self.assertIn('data-rewatch-date="yesterday"', self.source)
+        self.assertIn('data-rewatch-date="choose"', self.source)
+
+    def test_rewatch_custom_date_uses_native_date_picker(self):
+        self.assertIn("function openMovieRewatchDatePicker(overlay, panel)", self.source)
+        self.assertIn(
+            '<input type="date" id="movieRewatchDateInput"',
+            self.source,
+        )
+        self.assertIn('id="movieRewatchDateForm"', self.source)
+        self.assertIn("markActiveMovieWatched(value);", self.source)
+        self.assertNotIn('data-watch-date-choice="today"', self.source)
+
+    def test_tags_use_plus_button_instead_of_inline_form(self):
+        self.assertIn(
+            'class="movie-tag-add-button" id="movieTagAddButton"',
+            self.source,
+        )
+        self.assertIn('data-next-i18n-aria="lists.tagAdd"', self.source)
+        self.assertNotIn('id="movieTagAddForm"', self.source)
+        self.assertNotIn('id="movieTagAddInput"', self.source)
+
+    def test_movie_tag_picker_reuses_existing_tag_api_and_colour_palette(self):
+        self.assertIn("async function openMovieTagPicker()", self.source)
+        self.assertIn('await authApiJson("/api/next/tags")', self.source)
+        self.assertIn('data-tag-id="${escapeHtml(tag.id)}"', self.source)
+        self.assertIn('class="movie-tag-color-options" role="radiogroup"', self.source)
+        self.assertIn('data-create-tag', self.source)
+        self.assertIn(
+            "attachAndClose({name: query, color: selectedColor})",
+            self.source,
+        )
+        self.assertIn(
+            "document.getElementById(\"movieTagAddButton\")?.addEventListener",
+            self.source,
+        )
+
+    def test_list_dialogs_handle_escape_and_restore_trigger_focus(self):
+        self.assertIn(
+            "overlay.returnFocusElement = returnFocus;",
+            self.source,
+        )
+        self.assertIn('if (event.key !== "Escape") return;', self.source)
+        self.assertIn("event.stopPropagation();", self.source)
+        self.assertIn(
+            'typeof returnFocus.focus === "function"',
+            self.source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
