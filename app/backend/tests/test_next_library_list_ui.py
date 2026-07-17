@@ -47,12 +47,22 @@ class NextLibraryListUiTests(unittest.TestCase):
 
     def test_compact_and_desktop_column_sets_switch_at_1024_pixels(self):
         self.assertIn("@media (max-width: 1024px)", self.source)
-        self.assertIn("@media (min-width: 1025px)", self.source)
         self.assertIn(".library-list-desktop-column {", self.source)
-        self.assertIn(".library-list-compact-column {", self.source)
         self.assertIn("width: 72px;", self.source)
         self.assertIn(".library-list-title-target strong,", self.source)
         self.assertIn("overflow-wrap: anywhere;", self.source)
+        self.assertIn(
+            'libraryListSortHeaderHtml("format", '
+            'tNext("movieDetail.format", "Format"), normalizedSort, '
+            '"library-list-format-column")',
+            self.source,
+        )
+        self.assertIn(
+            '<td class="library-list-format-column">'
+            "${libraryListFormatsHtml(item)}</td>",
+            self.source,
+        )
+        self.assertNotIn("library-list-compact-column", self.source)
         for key in (
             '"format"',
             '"director"',
@@ -63,6 +73,10 @@ class NextLibraryListUiTests(unittest.TestCase):
             '"behavior"',
         ):
             self.assertIn(f"libraryListSortHeaderHtml({key}", self.source)
+
+    def test_library_does_not_show_a_redundant_panel_header(self):
+        self.assertNotIn('id="libraryPanelTitle"', self.source)
+        self.assertNotIn('id="shownCount"', self.source)
 
     def test_poster_and_title_are_separate_detail_links_with_release_year(self):
         self.assertIn(
