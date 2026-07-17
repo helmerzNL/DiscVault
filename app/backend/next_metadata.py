@@ -761,8 +761,8 @@ def movie_technical_specs(conn, movie_id: UUID) -> dict[str, Any]:
 def movie_contribution_credits(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
     if not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
         return []
-    # Surface each person's tmdb/imdb identifier so contributions to receivers
-    # (e.g. MovieVault) carry the person->tmdbId link. Prefer the canonical
+    # Surface each person's tmdb/imdb identifier for receivers that accept
+    # credits. Prefer the canonical
     # person_identifiers row and fall back to the id stashed on people.metadata
     # by ensure_metadata_person. person_identifiers may be absent on older
     # schemas, so the joins are added conditionally.
