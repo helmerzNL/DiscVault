@@ -28,10 +28,12 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
 MOVIEVAULT_V2_PLUGIN_ID = "movievault_v2"
 MOVIEVAULT_V2_CONTRACT = "distribution-2"
 MOVIEVAULT_V3_CONTRACT = "distribution-3"
-SUPPORTED_CONTRACTS = (MOVIEVAULT_V2_CONTRACT, MOVIEVAULT_V3_CONTRACT)
+MOVIEVAULT_V4_CONTRACT = "distribution-4"
+SUPPORTED_CONTRACTS = (MOVIEVAULT_V2_CONTRACT, MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT)
 CONTRACT_PATH_VERSIONS = {
     MOVIEVAULT_V2_CONTRACT: "2",
     MOVIEVAULT_V3_CONTRACT: "3",
+    MOVIEVAULT_V4_CONTRACT: "4",
 }
 SYNC_LOCK_KEY = 2_026_261
 DEFAULT_TIMEOUT_SECONDS = 20
@@ -41,10 +43,17 @@ DEFAULT_MAX_BUCKET_BYTES = 8 * 1024 * 1024
 MAX_RECORDS = 2_000_000
 HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COUNTRY_PATTERN = re.compile(r"^[A-Z]{2}$")
+# NOTE: MovieVault public asset paths are deliberately `/v2/assets/...` for both
+# distribution-3 and distribution-4 (the producer never versions this path); only
+# the contract envelope itself is versioned.
 ASSET_PATH_PATTERNS = {
     MOVIEVAULT_V2_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
-    MOVIEVAULT_V3_CONTRACT: re.compile(r"^/v3/assets/[0-9a-f-]+/(thumbnail|display)$"),
+    MOVIEVAULT_V3_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
+    MOVIEVAULT_V4_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
 }
+POSTER_ASSET_TYPE = "front_cover"
+POSTER_ATTESTATIONS = {"original", "licensed"}
+POSTER_LICENSES = {"cc0-1.0", "cc-by-4.0", "cc-by-sa-4.0"}
 
 ConnectionFactory = Callable[[], ContextManager[Any]]
 
@@ -196,6 +205,34 @@ def _assets(value: Any, contract_version: str) -> list[dict[str, Any]]:
     return result
 
 
+def _poster(value: Any, contract_version: str) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise MovieVaultV2Error("record_invalid")
+    _exact_keys(
+        value,
+        required={"assetId", "assetType", "attestation", "license", "thumbnail", "display"},
+        optional=set(),
+    )
+    if value["assetType"] != POSTER_ASSET_TYPE:
+        raise MovieVaultV2Error("record_invalid")
+    attestation = value["attestation"]
+    license_name = value["license"]
+    if attestation not in POSTER_ATTESTATIONS:
+        raise MovieVaultV2Error("record_invalid")
+    if license_name not in POSTER_LICENSES:
+        raise MovieVaultV2Error("record_invalid")
+    return {
+        "assetId": _uuid(value["assetId"]),
+        "assetType": POSTER_ASSET_TYPE,
+        "attestation": attestation,
+        "license": license_name,
+        "thumbnail": _asset_variant(value["thumbnail"], contract_version),
+        "display": _asset_variant(value["display"], contract_version),
+    }
+
+
 def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, Any]:
     required = {
         "contractVersion",
@@ -220,8 +257,10 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "releaseDate",
         "discCount",
     }
-    if contract_version == MOVIEVAULT_V3_CONTRACT:
+    if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
         optional.update({"studio", "distributor", "runtimeMinutes"})
+    if contract_version == MOVIEVAULT_V4_CONTRACT:
+        required.add("poster")
     _exact_keys(value, required=required, optional=optional)
     provider_ids = value["providerIds"]
     if not isinstance(provider_ids, dict):
@@ -271,6 +310,11 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         ),
         "eanHashes": _hashes(value["eanHashes"]),
         "assets": _assets(value["assets"], contract_version),
+        "poster": (
+            _poster(value["poster"], contract_version)
+            if contract_version == MOVIEVAULT_V4_CONTRACT
+            else None
+        ),
     }
 
 
@@ -294,7 +338,7 @@ def _member(value: Any, contract_version: str) -> dict[str, Any]:
         "discFormat",
         "discBarcodeHash",
     }
-    if contract_version == MOVIEVAULT_V3_CONTRACT:
+    if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
         optional.update({"studio", "distributor", "runtimeMinutes"})
     _exact_keys(value, required=required, optional=optional)
     if value["relationship"] != "contains":
@@ -336,6 +380,8 @@ def _box_set_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "members",
     }
     optional = {"edition", "yearRange", "format", "countryCode", "languageCode"}
+    if contract_version == MOVIEVAULT_V4_CONTRACT:
+        required.add("poster")
     _exact_keys(value, required=required, optional=optional)
     members_value = value["members"]
     if not isinstance(members_value, list) or len(members_value) > 1000:
@@ -363,6 +409,11 @@ def _box_set_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "languageCode": _optional_text(value.get("languageCode"), maximum=35),
         "eanHashes": _hashes(value["eanHashes"]),
         "members": sorted(members, key=lambda member: member["position"]),
+        "poster": (
+            _poster(value["poster"], contract_version)
+            if contract_version == MOVIEVAULT_V4_CONTRACT
+            else None
+        ),
     }
 
 
@@ -571,7 +622,7 @@ def _verify_digest(
         or not hmac.compare_digest(header_digest, digest)
     ):
         raise MovieVaultV2Error("checksum_invalid")
-    if contract_version == MOVIEVAULT_V3_CONTRACT:
+    if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
         content_digest = _content_digest_sha256(headers.get("content-digest"))
         if not hmac.compare_digest(content_digest, bytes.fromhex(digest)):
             raise MovieVaultV2Error("checksum_invalid")
@@ -711,7 +762,7 @@ def _insert_lookup(
     )
 
 
-def _upsert_release(cur: Any, generation: str, record: dict[str, Any]) -> None:
+def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: str) -> None:
     release_id = record["releaseId"]
     cur.execute(
         """
@@ -726,12 +777,12 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any]) -> None:
             generation, release_id, film_id, canonical_title, release_year,
             provider_ids, release_title, edition, format, region, country_code,
             language_code, release_date, disc_count, studio, distributor,
-            runtime_minutes, assets, revision
+            runtime_minutes, assets, revision, poster
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s
+            %s, %s, %s, %s
         )
         ON CONFLICT (generation, release_id) DO UPDATE
         SET film_id = EXCLUDED.film_id,
@@ -750,7 +801,8 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any]) -> None:
             distributor = EXCLUDED.distributor,
             runtime_minutes = EXCLUDED.runtime_minutes,
             assets = EXCLUDED.assets,
-            revision = EXCLUDED.revision
+            revision = EXCLUDED.revision,
+            poster = EXCLUDED.poster
         """,
         (
             generation,
@@ -772,13 +824,15 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any]) -> None:
             record["runtimeMinutes"],
             Jsonb(record["assets"]),
             record["revision"],
+            Jsonb(record["poster"]) if record.get("poster") is not None else None,
         ),
     )
     for lookup_hash in record["eanHashes"]:
         _insert_lookup(cur, generation, lookup_hash, "release", release_id, "release_ean")
+    _enqueue_poster_cache(cur, origin, record.get("poster"))
 
 
-def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any]) -> None:
+def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any], origin: str) -> None:
     box_set_id = record["boxSetId"]
     cur.execute(
         """
@@ -791,9 +845,9 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any]) -> None:
         """
         INSERT INTO movievault_v2_box_sets (
             generation, box_set_id, title, edition, year_range, format,
-            country_code, language_code, revision
+            country_code, language_code, revision, poster
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (generation, box_set_id) DO UPDATE
         SET title = EXCLUDED.title,
             edition = EXCLUDED.edition,
@@ -801,7 +855,8 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any]) -> None:
             format = EXCLUDED.format,
             country_code = EXCLUDED.country_code,
             language_code = EXCLUDED.language_code,
-            revision = EXCLUDED.revision
+            revision = EXCLUDED.revision,
+            poster = EXCLUDED.poster
         """,
         (
             generation,
@@ -813,6 +868,7 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any]) -> None:
             record["countryCode"],
             record["languageCode"],
             record["revision"],
+            Jsonb(record["poster"]) if record.get("poster") is not None else None,
         ),
     )
     cur.execute(
@@ -879,14 +935,67 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any]) -> None:
                 "member_barcode",
                 member["position"],
             )
+    _enqueue_poster_cache(cur, origin, record.get("poster"))
 
 
-def _apply_record(cur: Any, generation: str, record: dict[str, Any]) -> None:
+POSTER_CACHE_JOB_TYPE = "movievault_v2.poster_cache"
+POSTER_CLEANUP_JOB_TYPE = "movievault_v2.poster_cleanup"
+
+
+def _enqueue_poster_cache(cur: Any, origin: str, poster: dict[str, Any] | None) -> None:
+    """Discover a changed selected poster during index sync and enqueue a bounded,
+    idempotent background caching job for each variant. Keyed by (asset_id, variant,
+    checksum) so unchanged posters never re-enqueue and no remote MovieVault URL or
+    request telemetry is persisted anywhere other than the transient job payload
+    needed to perform the anonymous, bounded fetch."""
+    if poster is None:
+        return
+    asset_id = poster["assetId"]
+    for variant_name in ("thumbnail", "display"):
+        variant = poster[variant_name]
+        checksum = variant["checksum"]
+        cur.execute(
+            """
+            INSERT INTO movievault_v2_poster_cache (
+                asset_id, variant, checksum, status, created_at, checked_at
+            )
+            VALUES (%s, %s, %s, 'pending', now(), now())
+            ON CONFLICT (asset_id, variant, checksum) DO NOTHING
+            RETURNING id
+            """,
+            (asset_id, variant_name, checksum),
+        )
+        row = cur.fetchone()
+        if row is None:
+            continue
+        cache_id = _row_value(row, "id")
+        cur.execute(
+            """
+            INSERT INTO background_jobs (job_type, payload)
+            VALUES (%s, %s)
+            """,
+            (
+                POSTER_CACHE_JOB_TYPE,
+                Jsonb(
+                    {
+                        "cacheId": str(cache_id),
+                        "assetId": asset_id,
+                        "variant": variant_name,
+                        "checksum": checksum,
+                        "origin": origin,
+                        "path": variant["path"],
+                    }
+                ),
+            ),
+        )
+
+
+def _apply_record(cur: Any, generation: str, record: dict[str, Any], origin: str) -> None:
     if record["operation"] == "upsert":
         if record["recordType"] == "release":
-            _upsert_release(cur, generation, record)
+            _upsert_release(cur, generation, record, origin)
         else:
-            _upsert_box_set(cur, generation, record)
+            _upsert_box_set(cur, generation, record, origin)
         return
     entity_id = record["entityId"]
     cur.execute(
@@ -928,7 +1037,7 @@ def _apply_full(
             (MOVIEVAULT_V2_PLUGIN_ID,),
         )
         for record in records:
-            _apply_record(cur, generation, record)
+            _apply_record(cur, generation, record, origin)
         cur.execute(
             """
             UPDATE movievault_v2_sync_state
@@ -983,6 +1092,7 @@ def _apply_full(
 def _apply_delta(
     conn: Any,
     *,
+    origin: str,
     expected_cursor: str,
     manifest: dict[str, Any],
     records: list[dict[str, Any]],
@@ -997,7 +1107,7 @@ def _apply_delta(
         for record in records:
             if record["revision"] <= int(state["revision"]):
                 raise MovieVaultV2Error("revision_invalid")
-            _apply_record(cur, str(generation), record)
+            _apply_record(cur, str(generation), record, origin)
         cur.execute(
             """
             UPDATE movievault_v2_sync_state
@@ -1202,6 +1312,7 @@ def run_sync(
                 raise MovieVaultV2Error("revision_invalid")
             result = _apply_delta(
                 conn,
+                origin=origin,
                 expected_cursor=cursor,
                 manifest=manifest,
                 records=records,
@@ -1252,8 +1363,63 @@ def _json_value(value: Any) -> Any:
     return value
 
 
-def _release_payload(row: dict[str, Any]) -> dict[str, Any]:
+def _local_media_asset_url(media_asset_id: Any) -> str | None:
+    if not media_asset_id:
+        return None
+    return f"/api/next/media/assets/{media_asset_id}"
+
+
+def _poster_status_fields(conn: Any, poster: dict[str, Any] | None) -> dict[str, Any]:
+    """Map a persisted MovieVault poster descriptor onto authenticated,
+    DiscVault-local fields. The raw poster object (remote MovieVault asset
+    paths) is never returned to a caller; only a local media-asset URL,
+    cache status, checksum, and a checksum-derived revision are exposed."""
+    if poster is None:
+        return {
+            "posterUrl": None,
+            "posterStatus": "unavailable",
+            "posterChecksum": None,
+            "posterRevision": None,
+        }
+    asset_id = poster.get("assetId")
+    display = poster.get("display") or {}
+    checksum = display.get("checksum")
+    if not asset_id or not checksum:
+        return {
+            "posterUrl": None,
+            "posterStatus": "unavailable",
+            "posterChecksum": None,
+            "posterRevision": None,
+        }
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT status, media_asset_id
+            FROM movievault_v2_poster_cache
+            WHERE asset_id = %s AND variant = 'display' AND checksum = %s
+            """,
+            (asset_id, checksum),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {
+            "posterUrl": None,
+            "posterStatus": "pending",
+            "posterChecksum": checksum,
+            "posterRevision": None,
+        }
+    media_asset_id = row.get("media_asset_id")
+    poster_url = _local_media_asset_url(media_asset_id)
     return {
+        "posterUrl": poster_url,
+        "posterStatus": str(row.get("status") or "pending"),
+        "posterChecksum": checksum,
+        "posterRevision": checksum[:16] if poster_url else None,
+    }
+
+
+def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
+    payload = {
         "recordType": "release",
         "releaseId": str(row["release_id"]),
         "filmId": str(row["film_id"]),
@@ -1274,6 +1440,8 @@ def _release_payload(row: dict[str, Any]) -> dict[str, Any]:
         "assets": _json_value(row.get("assets") or []),
         "revision": int(row["revision"]),
     }
+    payload.update(_poster_status_fields(conn, row.get("poster")))
+    return payload
 
 
 def _box_set_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
@@ -1309,7 +1477,7 @@ def _box_set_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         }
         for member in member_rows
     ]
-    return {
+    payload = {
         "recordType": "box_set",
         "boxSetId": str(row["box_set_id"]),
         "title": row["title"],
@@ -1321,6 +1489,8 @@ def _box_set_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         "members": members,
         "revision": int(row["revision"]),
     }
+    payload.update(_poster_status_fields(conn, row.get("poster")))
+    return payload
 
 
 def local_lookup(conn: Any, request: dict[str, Any]) -> dict[str, Any]:
@@ -1459,7 +1629,7 @@ def _entity_payload(
                 (generation, entity_id),
             )
             row = cur.fetchone()
-        return _release_payload(dict(row)) if row else None
+        return _release_payload(conn, dict(row)) if row else None
     with conn.cursor() as cur:
         cur.execute(
             """

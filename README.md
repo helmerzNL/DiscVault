@@ -180,6 +180,18 @@ deterministic `movievault_v2` 1.1.0 feature package is also available under
 `distribution-2`; v3 is selected only when both the plugin manifest and core
 declare support.
 
+DiscVault `26.4.61` adds core consumer support for `distribution-4` (a
+strict `distribution-3` superset that adds a required-nullable primary
+`poster` on release and box-set upserts, with bounded anonymous background
+caching and authenticated local poster URLs). Distribution-4 is negotiated
+only when both the installed plugin manifest and DiscVault core declare
+support, so it stays **inactive by default** until the matching
+`movievault_v2` plugin release advertises `distribution-4` in its
+`distributionContractRange`; that plugin change ships separately from
+[helmerzNL/DiscVault-Plugins](https://github.com/helmerzNL/DiscVault-Plugins)
+and is not part of this repository. Existing `distribution-2`/`distribution-3`
+installations are unaffected.
+
 ## Repository Structure
 
 - `app/` - Main application code (backend, frontend, mcp-server, deployment files)

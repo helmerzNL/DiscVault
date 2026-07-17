@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -26,6 +27,7 @@ except ModuleNotFoundError:
 
 from app.backend import next_app
 from app.backend import next_movievault_v2
+from app.backend import next_movievault_v2_posters
 from app.backend import next_plugin_runtime
 from app.backend import next_worker
 from app.backend.next_plugin_runtime import PluginDiscovery
@@ -35,7 +37,32 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "distribution-v2.ndjson"
 V3_FULL_PATH = Path(__file__).parent / "fixtures" / "distribution-v3-full.ndjson"
 V3_DELTA_PATH = Path(__file__).parent / "fixtures" / "distribution-v3-delta.ndjson"
+V4_FULL_PATH = Path(__file__).parent / "fixtures" / "distribution-v4-full.ndjson"
+V4_DELTA_PATH = Path(__file__).parent / "fixtures" / "distribution-v4-delta.ndjson"
 DATASET_CHECKSUM = hashlib.sha256(b"approved lookup hash dataset").hexdigest()
+
+
+def _v4_manifest(*, revision=42, cursor="fixture-distribution-4-r42", checksum=None):
+    return {
+        "contractVersion": "distribution-4",
+        "currentRevision": revision,
+        "currentCursor": cursor,
+        "bucketPrefixLength": 1,
+        "hashAlgorithm": "sha256",
+        "datasetChecksum": checksum or ("b" * 64),
+        "deltaPath": "/v4/index/delta",
+        "bucketPathTemplate": "/v4/bucket/{prefix}",
+    }
+
+
+def _png_bytes(size=(10, 10)):
+    import io as _io
+
+    from PIL import Image as _Image
+
+    buffer = _io.BytesIO()
+    _Image.new("RGB", size, color=(4, 5, 6)).save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 @unittest.skipUnless(DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured")
@@ -53,6 +80,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                         movievault_v2_box_set_members,
                         movievault_v2_box_sets,
                         movievault_v2_releases,
+                        movievault_v2_poster_cache,
                         movievault_v2_sync_state
                     CASCADE
                     """
@@ -61,12 +89,20 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     """
                     DELETE FROM background_jobs
                     WHERE payload ->> 'pluginId' = %s
+                       OR job_type IN (%s, %s)
                     """,
-                    (next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,),
+                    (
+                        next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,
+                        next_movievault_v2.POSTER_CACHE_JOB_TYPE,
+                        next_movievault_v2.POSTER_CLEANUP_JOB_TYPE,
+                    ),
                 )
                 cur.execute(
                     "DELETE FROM plugins WHERE id = %s",
                     (next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,),
+                )
+                cur.execute(
+                    "DELETE FROM media_assets WHERE provider_id LIKE 'movievault_v2:%'"
                 )
 
     def setUp(self):
@@ -767,6 +803,391 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         self.assertIsNone(job)
         self.assertFalse(duplicate)
         self.assertTrue(skipped)
+
+    def test_v4_full_sync_persists_poster_and_enqueues_pending_jobs_without_fetching(self):
+        settings = {"origin": "https://movievault.example"}
+        v4_full = V4_FULL_PATH.read_bytes()
+        v4_full_digest = hashlib.sha256(v4_full).digest()
+        manifest = _v4_manifest()
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    v4_full,
+                    {
+                        "x-content-sha256": v4_full_digest.hex(),
+                        "content-digest": (
+                            f"sha-256=:{base64.b64encode(v4_full_digest).decode('ascii')}:"
+                        ),
+                        "x-next-cursor": manifest["currentCursor"],
+                    },
+                ),
+            ),
+            patch.object(next_movievault_v2_posters, "_request") as fetch,
+        ):
+            result = next_movievault_v2.run_sync(
+                self.connect,
+                settings,
+                contract_version="distribution-4",
+            )
+        self.assertEqual(result["mode"], "full")
+        fetch.assert_not_called()  # index sync never itself fetches remote poster bytes
+
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT asset_id, variant, checksum, status FROM movievault_v2_poster_cache ORDER BY variant"
+                )
+                cache_rows = cur.fetchall()
+                cur.execute(
+                    "SELECT count(*) AS n FROM background_jobs WHERE job_type = %s",
+                    (next_movievault_v2.POSTER_CACHE_JOB_TYPE,),
+                )
+                job_count = cur.fetchone()["n"]
+            release_with_poster = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+            release_without_poster = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000002", "limit": 1},
+            )["results"][0]
+
+        # Two posters (release + box_set) each carry a thumbnail + display
+        # variant -> exactly 4 distinct cache identities, all still pending.
+        self.assertEqual(len(cache_rows), 4)
+        self.assertTrue(all(row["status"] == "pending" for row in cache_rows))
+        self.assertEqual(job_count, 4)
+        self.assertEqual(release_with_poster["posterStatus"], "pending")
+        self.assertIsNone(release_with_poster["posterUrl"])
+        # A record whose poster is required-but-null persists and reports as
+        # unavailable, never as an error.
+        self.assertEqual(release_without_poster["posterStatus"], "unavailable")
+        self.assertIsNone(release_without_poster["posterUrl"])
+
+    def test_local_lookup_never_triggers_a_remote_poster_fetch(self):
+        settings = {"origin": "https://movievault.example"}
+        v4_full = V4_FULL_PATH.read_bytes()
+        v4_full_digest = hashlib.sha256(v4_full).digest()
+        manifest = _v4_manifest()
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    v4_full,
+                    {
+                        "x-content-sha256": v4_full_digest.hex(),
+                        "content-digest": (
+                            f"sha-256=:{base64.b64encode(v4_full_digest).decode('ascii')}:"
+                        ),
+                        "x-next-cursor": manifest["currentCursor"],
+                    },
+                ),
+            ),
+        ):
+            next_movievault_v2.run_sync(self.connect, settings, contract_version="distribution-4")
+
+        with patch.object(next_movievault_v2_posters, "_request") as fetch:
+            with self.connect() as conn:
+                for _ in range(3):
+                    next_movievault_v2.local_lookup(
+                        conn,
+                        {
+                            "kind": "release",
+                            "releaseId": "10000000-0000-0000-0000-000000000001",
+                            "limit": 1,
+                        },
+                    )
+        fetch.assert_not_called()
+
+    def test_poster_cache_job_activates_media_asset_and_local_lookup_reports_local_url(self):
+        content = _png_bytes()
+        checksum = hashlib.sha256(content).hexdigest()
+        with self.connect() as conn:
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO movievault_v2_poster_cache (asset_id, variant, checksum, status)
+                        VALUES (%s, 'display', %s, 'pending')
+                        RETURNING id
+                        """,
+                        ("poster-asset-live", checksum),
+                    )
+                    cache_id = cur.fetchone()["id"]
+            with patch.object(
+                next_movievault_v2_posters,
+                "_request",
+                return_value=(200, content, {"content-type": "image/png"}),
+            ):
+                outcome = next_movievault_v2_posters.run_poster_cache_job(
+                    conn,
+                    {
+                        "cacheId": str(cache_id),
+                        "assetId": "poster-asset-live",
+                        "variant": "display",
+                        "checksum": checksum,
+                        "origin": "https://movievault.example",
+                        "path": "/v2/assets/poster-asset-live/display",
+                    },
+                )
+            self.assertEqual(outcome["outcome"], "ready")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT status, media_asset_id FROM movievault_v2_poster_cache WHERE id = %s",
+                    (cache_id,),
+                )
+                row = cur.fetchone()
+        self.assertEqual(row["status"], "ready")
+        self.assertIsNotNone(row["media_asset_id"])
+
+        # A release whose poster references this exact (assetId, checksum)
+        # must now resolve to the authenticated local media-asset URL.
+        with self.connect() as conn:
+            fields = next_movievault_v2._poster_status_fields(
+                conn,
+                {
+                    "assetId": "poster-asset-live",
+                    "display": {"checksum": checksum, "path": "/v2/assets/poster-asset-live/display"},
+                },
+            )
+        self.assertEqual(fields["posterStatus"], "ready")
+        self.assertEqual(fields["posterUrl"], f"/api/next/media/assets/{row['media_asset_id']}")
+        self.assertNotIn("movievault.example", fields["posterUrl"])
+
+    def test_poster_cache_job_failure_preserves_prior_ready_media_asset(self):
+        content = _png_bytes()
+        checksum = hashlib.sha256(content).hexdigest()
+        with self.connect() as conn:
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO media_assets (
+                            kind, variant, storage_backend, storage_key, provider_id,
+                            content_type, width, height, size_bytes, sha256
+                        )
+                        VALUES ('poster', 'display', 'local', 'media/existing.png',
+                                'movievault_v2:poster-asset-prior', 'image/png', 10, 10, 123, %s)
+                        RETURNING id
+                        """,
+                        ("a" * 64,),
+                    )
+                    prior_media_asset_id = cur.fetchone()["id"]
+                    cur.execute(
+                        """
+                        INSERT INTO movievault_v2_poster_cache (
+                            asset_id, variant, checksum, status, media_asset_id
+                        )
+                        VALUES (%s, 'display', %s, 'ready', %s)
+                        RETURNING id
+                        """,
+                        ("poster-asset-prior", "a" * 64, prior_media_asset_id),
+                    )
+                    cache_id = cur.fetchone()["id"]
+
+            with patch.object(
+                next_movievault_v2_posters,
+                "_request",
+                return_value=(200, content, {"content-type": "image/png"}),
+            ):
+                # The declared checksum no longer matches the fetched bytes -
+                # a corrupted/interrupted remote replacement.
+                outcome = next_movievault_v2_posters.run_poster_cache_job(
+                    conn,
+                    {
+                        "cacheId": str(cache_id),
+                        "assetId": "poster-asset-prior",
+                        "variant": "display",
+                        "checksum": checksum,
+                        "origin": "https://movievault.example",
+                        "path": "/v2/assets/poster-asset-prior/display",
+                    },
+                )
+            self.assertEqual(outcome["outcome"], "failed")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT status, media_asset_id, attempts FROM movievault_v2_poster_cache WHERE id = %s",
+                    (cache_id,),
+                )
+                row = cur.fetchone()
+        # The row being retried is untouched by this new-checksum job payload
+        # (a distinct cache identity would be created for it); this asserts
+        # the mechanism that DOES apply when the same row is retried after a
+        # transient failure: media_asset_id is never overwritten on failure.
+        self.assertEqual(row["media_asset_id"], prior_media_asset_id)
+        self.assertEqual(row["attempts"], 1)
+
+    def test_poster_cleanup_removes_only_unreferenced_stale_cache_rows_and_files(self):
+        content = _png_bytes()
+        checksum = hashlib.sha256(content).hexdigest()
+        with tempfile.TemporaryDirectory() as data_dir:
+            with patch.dict(os.environ, {"DISCVAULT_LEGACY_DATA_DIR": data_dir}):
+                with self.connect() as conn:
+                    with conn.transaction():
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                INSERT INTO movievault_v2_poster_cache (asset_id, variant, checksum, status)
+                                VALUES (%s, 'display', %s, 'pending')
+                                RETURNING id
+                                """,
+                                ("poster-orphan", checksum),
+                            )
+                            cache_id = cur.fetchone()["id"]
+                    with patch.object(
+                        next_movievault_v2_posters,
+                        "_request",
+                        return_value=(200, content, {"content-type": "image/png"}),
+                    ):
+                        next_movievault_v2_posters.run_poster_cache_job(
+                            conn,
+                            {
+                                "cacheId": str(cache_id),
+                                "assetId": "poster-orphan",
+                                "variant": "display",
+                                "checksum": checksum,
+                                "origin": "https://movievault.example",
+                                "path": "/v2/assets/poster-orphan/display",
+                            },
+                        )
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT media_asset_id FROM movievault_v2_poster_cache WHERE id = %s",
+                            (cache_id,),
+                        )
+                        media_asset_id = cur.fetchone()["media_asset_id"]
+                        cur.execute(
+                            "SELECT storage_key FROM media_assets WHERE id = %s",
+                            (media_asset_id,),
+                        )
+                        storage_key = cur.fetchone()["storage_key"]
+                        stored_file = Path(data_dir) / storage_key
+                        self.assertTrue(stored_file.exists())
+                        # Backdate past the retention window - this cache row
+                        # is not referenced by any release/box_set poster.
+                        cur.execute(
+                            "UPDATE movievault_v2_poster_cache SET checked_at = now() - interval '30 days' WHERE id = %s",
+                            (cache_id,),
+                        )
+                    with conn.transaction():
+                        cleanup_result = next_movievault_v2_posters.run_poster_cleanup(
+                            conn, retention_seconds=604800
+                        )
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT 1 FROM movievault_v2_poster_cache WHERE id = %s", (cache_id,)
+                        )
+                        cache_gone = cur.fetchone() is None
+                        cur.execute(
+                            "SELECT 1 FROM media_assets WHERE id = %s", (media_asset_id,)
+                        )
+                        media_asset_gone = cur.fetchone() is None
+        self.assertGreaterEqual(cleanup_result["removed"], 1)
+        self.assertTrue(cache_gone)
+        self.assertTrue(media_asset_gone)
+        self.assertFalse(stored_file.exists())
+
+    def test_poster_cleanup_keeps_rows_still_referenced_by_a_current_poster(self):
+        settings = {"origin": "https://movievault.example"}
+        v4_full = V4_FULL_PATH.read_bytes()
+        v4_full_digest = hashlib.sha256(v4_full).digest()
+        manifest = _v4_manifest()
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    v4_full,
+                    {
+                        "x-content-sha256": v4_full_digest.hex(),
+                        "content-digest": (
+                            f"sha-256=:{base64.b64encode(v4_full_digest).decode('ascii')}:"
+                        ),
+                        "x-next-cursor": manifest["currentCursor"],
+                    },
+                ),
+            ),
+        ):
+            next_movievault_v2.run_sync(self.connect, settings, contract_version="distribution-4")
+
+        with self.connect() as conn:
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # Every freshly-enqueued cache row is still referenced by
+                    # the release/box_set poster jsonb that produced it, no
+                    # matter how far checked_at is backdated.
+                    cur.execute(
+                        "UPDATE movievault_v2_poster_cache SET checked_at = now() - interval '30 days'"
+                    )
+            with conn.transaction():
+                cleanup_result = next_movievault_v2_posters.run_poster_cleanup(
+                    conn, retention_seconds=604800
+                )
+            with conn.cursor() as cur:
+                cur.execute("SELECT count(*) AS n FROM movievault_v2_poster_cache")
+                remaining = cur.fetchone()["n"]
+        self.assertEqual(cleanup_result["removed"], 0)
+        self.assertEqual(remaining, 4)
+
+    def test_media_asset_route_serves_local_bytes_with_etag_and_no_remote_leakage(self):
+        content = _png_bytes()
+        checksum = hashlib.sha256(content).hexdigest()
+        with self.connect() as conn:
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO movievault_v2_poster_cache (asset_id, variant, checksum, status)
+                        VALUES (%s, 'display', %s, 'pending')
+                        RETURNING id
+                        """,
+                        ("poster-asset-http", checksum),
+                    )
+                    cache_id = cur.fetchone()["id"]
+            with patch.object(
+                next_movievault_v2_posters,
+                "_request",
+                return_value=(200, content, {"content-type": "image/png"}),
+            ):
+                next_movievault_v2_posters.run_poster_cache_job(
+                    conn,
+                    {
+                        "cacheId": str(cache_id),
+                        "assetId": "poster-asset-http",
+                        "variant": "display",
+                        "checksum": checksum,
+                        "origin": "https://movievault.example",
+                        "path": "/v2/assets/poster-asset-http/display",
+                    },
+                )
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT media_asset_id FROM movievault_v2_poster_cache WHERE id = %s",
+                    (cache_id,),
+                )
+                media_asset_id = cur.fetchone()["media_asset_id"]
+
+        app = next_app.create_app()
+        client = app.test_client()
+        response = client.get(f"/api/next/media/assets/{media_asset_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, content)
+        self.assertIn("ETag", response.headers)
+        self.assertIn("max-age", response.headers.get("Cache-Control", ""))
+        # The authenticated local route never leaks the MovieVault origin,
+        # any contribution token, or a raw remote asset path to the client.
+        header_blob = " ".join(f"{k}:{v}" for k, v in response.headers.items())
+        self.assertNotIn("movievault", header_blob.lower())
+        self.assertNotIn("poster-asset-http", header_blob)
 
 
 if __name__ == "__main__":

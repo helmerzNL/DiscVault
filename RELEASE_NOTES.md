@@ -1,5 +1,25 @@
 # DiscVault Release Notes
 
+## 26.4.61 - MovieVault distribution-4 poster caching
+
+- Consumes the strict `distribution-4` contract (required-nullable `poster` on
+  release and box-set upserts) while retaining full `distribution-2`/`-3`
+  compatibility and exact box-set member editions.
+- Fetches every changed selected poster anonymously and in the background as
+  part of index sync only, keyed by asset ID, variant, and checksum; item
+  views never trigger a remote fetch.
+- Validates HTTP status, exact media type, byte limit, SHA-256, and decoded
+  image dimensions before atomically activating a cached poster; failed
+  replacements keep the prior valid poster and report an explicit
+  degraded/pending/error cache status instead of leaving partial bytes.
+- Serves cached posters only through an authenticated, checksum/ETag-backed
+  local DiscVault route; release, box-set, search, add, detail, and PWA
+  responses map to that local URL, never to a MovieVault origin, token, or
+  raw remote payload.
+- Adds bounded cleanup for unreferenced cached poster bytes and rows on the
+  existing retention convention, independent of collection membership and
+  without retaining MovieVault request telemetry.
+
 ## 26.4.57 - MovieVault distribution-3 local index
 
 - Negotiates `distribution-3` only with compatible `movievault_v2` plugins while
