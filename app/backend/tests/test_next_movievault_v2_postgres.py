@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import json
@@ -32,6 +33,8 @@ from app.backend.next_plugin_runtime import PluginDiscovery
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "distribution-v2.ndjson"
+V3_FULL_PATH = Path(__file__).parent / "fixtures" / "distribution-v3-full.ndjson"
+V3_DELTA_PATH = Path(__file__).parent / "fixtures" / "distribution-v3-delta.ndjson"
 DATASET_CHECKSUM = hashlib.sha256(b"approved lookup hash dataset").hexdigest()
 
 
@@ -377,6 +380,158 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 generation_count = cur.fetchone()["generations"]
         self.assertNotEqual(first_generation, second_generation)
         self.assertEqual(generation_count, 1)
+
+    def test_v3_replaces_v2_cursor_then_applies_delta_atomically(self):
+        settings = {"origin": "https://movievault.example"}
+        v2_content = self.publisher_ordered_fixture()
+        v2_digest = hashlib.sha256(v2_content).hexdigest()
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=self.manifest()),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    v2_content,
+                    {
+                        "x-content-sha256": v2_digest,
+                        "x-next-cursor": "cursor-value-long-enough",
+                    },
+                ),
+            ),
+        ):
+            next_movievault_v2.run_sync(self.connect, settings)
+
+        v3_full = V3_FULL_PATH.read_bytes()
+        v3_full_digest = hashlib.sha256(v3_full).digest()
+        v3_full_cursor = "distribution-3-full-cursor"
+        v3_full_manifest = {
+            "contractVersion": "distribution-3",
+            "currentRevision": 42,
+            "currentCursor": v3_full_cursor,
+            "bucketPrefixLength": 4,
+            "hashAlgorithm": "sha256",
+            "datasetChecksum": "c" * 64,
+            "deltaPath": "/v3/index/delta",
+            "bucketPathTemplate": "/v3/bucket/{prefix}",
+        }
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=v3_full_manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    v3_full,
+                    {
+                        "x-content-sha256": v3_full_digest.hex(),
+                        "content-digest": (
+                            f"sha-256=:{base64.b64encode(v3_full_digest).decode('ascii')}:"
+                        ),
+                        "x-next-cursor": v3_full_cursor,
+                    },
+                ),
+            ) as fetch_full,
+        ):
+            result = next_movievault_v2.run_sync(
+                self.connect,
+                settings,
+                contract_version="distribution-3",
+            )
+        self.assertEqual(result["mode"], "full")
+        self.assertIsNone(fetch_full.call_args.kwargs["cursor"])
+
+        v3_delta = V3_DELTA_PATH.read_bytes()
+        v3_delta_digest = hashlib.sha256(v3_delta).digest()
+        v3_delta_cursor = "distribution-3-delta-cursor"
+        v3_delta_manifest = {
+            **v3_full_manifest,
+            "currentRevision": 45,
+            "currentCursor": v3_delta_cursor,
+            "datasetChecksum": "d" * 64,
+        }
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=v3_delta_manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    v3_delta,
+                    {
+                        "x-content-sha256": v3_delta_digest.hex(),
+                        "content-digest": (
+                            f"sha-256=:{base64.b64encode(v3_delta_digest).decode('ascii')}:"
+                        ),
+                        "x-next-cursor": v3_delta_cursor,
+                    },
+                ),
+            ),
+        ):
+            result = next_movievault_v2.run_sync(
+                self.connect,
+                settings,
+                contract_version="distribution-3",
+            )
+        self.assertEqual(result["mode"], "delta")
+
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {
+                    "kind": "release",
+                    "releaseId": "10000000-0000-0000-0000-000000000002",
+                    "limit": 1,
+                },
+            )["results"][0]
+            box_set = next_movievault_v2.local_lookup(
+                conn,
+                {
+                    "kind": "box_set",
+                    "boxSetId": "30000000-0000-0000-0000-000000000001",
+                    "limit": 1,
+                },
+            )["results"][0]
+            state = next_movievault_v2._sync_state(conn)
+        self.assertEqual(state["contract_version"], "distribution-3")
+        self.assertEqual(state["cursor"], v3_delta_cursor)
+        self.assertEqual(release["studio"], "Example Studio")
+        self.assertEqual(release["distributor"], "New Distributor")
+        self.assertEqual(release["runtimeMinutes"], 128)
+        self.assertEqual(
+            [member["releaseEdition"] for member in box_set["members"]],
+            ["Theatrical", "Director's Cut"],
+        )
+
+        failed_manifest = {
+            **v3_delta_manifest,
+            "currentRevision": 46,
+            "currentCursor": "distribution-3-failed-cursor",
+        }
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=failed_manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    b"invalid",
+                    {
+                        "x-content-sha256": hashlib.sha256(b"invalid").hexdigest(),
+                        "content-digest": "sha-256=:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=:",
+                    },
+                ),
+            ),
+            self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^checksum_invalid$"),
+        ):
+            next_movievault_v2.run_sync(
+                self.connect,
+                settings,
+                contract_version="distribution-3",
+            )
+        with self.connect() as conn:
+            state = next_movievault_v2._sync_state(conn)
+        self.assertEqual(state["cursor"], v3_delta_cursor)
 
     def test_scheduler_enqueues_one_due_job(self):
         manifest = {

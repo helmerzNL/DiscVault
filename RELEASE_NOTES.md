@@ -1,5 +1,16 @@
 # DiscVault Release Notes
 
+## 26.4.57 - MovieVault distribution-3 local index
+
+- Negotiates `distribution-3` only with compatible `movievault_v2` plugins while
+  retaining strict `distribution-2` support for existing installations.
+- Verifies both `X-Content-SHA256` and `Content-Digest`, then applies v3 full
+  generations atomically and deltas transactionally.
+- Maps nullable studio, distributor, and runtime metadata while preserving
+  hash-only lookup indexes and exact ordered box-set editions.
+- Ships the deterministic `movievault_v2` 1.1.0 feature package with an explicit
+  supported contract range.
+
 ## 26.4.50 - MovieVault v2 preview lookup dispatch
 
 - Executes the standalone `movievault_v2` source during preview barcode, title,

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
+import hmac
 import json
 import re
 import socket
@@ -24,6 +27,12 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
 
 MOVIEVAULT_V2_PLUGIN_ID = "movievault_v2"
 MOVIEVAULT_V2_CONTRACT = "distribution-2"
+MOVIEVAULT_V3_CONTRACT = "distribution-3"
+SUPPORTED_CONTRACTS = (MOVIEVAULT_V2_CONTRACT, MOVIEVAULT_V3_CONTRACT)
+CONTRACT_PATH_VERSIONS = {
+    MOVIEVAULT_V2_CONTRACT: "2",
+    MOVIEVAULT_V3_CONTRACT: "3",
+}
 SYNC_LOCK_KEY = 2_026_261
 DEFAULT_TIMEOUT_SECONDS = 20
 DEFAULT_MAX_MANIFEST_BYTES = 64 * 1024
@@ -32,7 +41,10 @@ DEFAULT_MAX_BUCKET_BYTES = 8 * 1024 * 1024
 MAX_RECORDS = 2_000_000
 HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COUNTRY_PATTERN = re.compile(r"^[A-Z]{2}$")
-ASSET_PATH_PATTERN = re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$")
+ASSET_PATH_PATTERNS = {
+    MOVIEVAULT_V2_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
+    MOVIEVAULT_V3_CONTRACT: re.compile(r"^/v3/assets/[0-9a-f-]+/(thumbnail|display)$"),
+}
 
 ConnectionFactory = Callable[[], ContextManager[Any]]
 
@@ -140,17 +152,17 @@ def _exact_keys(
         raise MovieVaultV2Error("record_invalid")
 
 
-def _asset_variant(value: Any) -> dict[str, str]:
+def _asset_variant(value: Any, contract_version: str) -> dict[str, str]:
     if not isinstance(value, dict):
         raise MovieVaultV2Error("record_invalid")
     _exact_keys(value, required={"path", "checksum"}, optional=set())
     path = _text(value["path"], minimum=1, maximum=500)
-    if not ASSET_PATH_PATTERN.fullmatch(path):
+    if not ASSET_PATH_PATTERNS[contract_version].fullmatch(path):
         raise MovieVaultV2Error("record_invalid")
     return {"path": path, "checksum": _hash(value["checksum"])}
 
 
-def _assets(value: Any) -> list[dict[str, Any]]:
+def _assets(value: Any, contract_version: str) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         raise MovieVaultV2Error("record_invalid")
     result: list[dict[str, Any]] = []
@@ -177,14 +189,14 @@ def _assets(value: Any) -> list[dict[str, Any]]:
                 "assetType": asset_type,
                 "attestation": attestation,
                 "license": license_name,
-                "thumbnail": _asset_variant(item["thumbnail"]),
-                "display": _asset_variant(item["display"]),
+                "thumbnail": _asset_variant(item["thumbnail"], contract_version),
+                "display": _asset_variant(item["display"], contract_version),
             }
         )
     return result
 
 
-def _release_record(value: dict[str, Any]) -> dict[str, Any]:
+def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, Any]:
     required = {
         "contractVersion",
         "recordType",
@@ -208,6 +220,8 @@ def _release_record(value: dict[str, Any]) -> dict[str, Any]:
         "releaseDate",
         "discCount",
     }
+    if contract_version == MOVIEVAULT_V3_CONTRACT:
+        optional.update({"studio", "distributor", "runtimeMinutes"})
     _exact_keys(value, required=required, optional=optional)
     provider_ids = value["providerIds"]
     if not isinstance(provider_ids, dict):
@@ -231,7 +245,7 @@ def _release_record(value: dict[str, Any]) -> dict[str, Any]:
         except ValueError as exc:
             raise MovieVaultV2Error("record_invalid") from exc
     return {
-        "contractVersion": MOVIEVAULT_V2_CONTRACT,
+        "contractVersion": contract_version,
         "recordType": "release",
         "operation": "upsert",
         "revision": _integer(value["revision"], minimum=1),
@@ -248,12 +262,19 @@ def _release_record(value: dict[str, Any]) -> dict[str, Any]:
         "languageCode": _optional_text(value.get("languageCode"), maximum=35),
         "releaseDate": release_date,
         "discCount": _optional_integer(value.get("discCount"), minimum=1, maximum=999),
+        "studio": _optional_text(value.get("studio"), maximum=500),
+        "distributor": _optional_text(value.get("distributor"), maximum=500),
+        "runtimeMinutes": _optional_integer(
+            value.get("runtimeMinutes"),
+            minimum=1,
+            maximum=10000,
+        ),
         "eanHashes": _hashes(value["eanHashes"]),
-        "assets": _assets(value["assets"]),
+        "assets": _assets(value["assets"], contract_version),
     }
 
 
-def _member(value: Any) -> dict[str, Any]:
+def _member(value: Any, contract_version: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise MovieVaultV2Error("record_invalid")
     required = {
@@ -273,6 +294,8 @@ def _member(value: Any) -> dict[str, Any]:
         "discFormat",
         "discBarcodeHash",
     }
+    if contract_version == MOVIEVAULT_V3_CONTRACT:
+        optional.update({"studio", "distributor", "runtimeMinutes"})
     _exact_keys(value, required=required, optional=optional)
     if value["relationship"] != "contains":
         raise MovieVaultV2Error("record_invalid")
@@ -291,10 +314,17 @@ def _member(value: Any) -> dict[str, Any]:
         "discNumber": _optional_integer(value.get("discNumber"), minimum=1, maximum=999),
         "discFormat": _optional_text(value.get("discFormat"), maximum=80),
         "discBarcodeHash": None if barcode_hash is None else _hash(barcode_hash),
+        "studio": _optional_text(value.get("studio"), maximum=500),
+        "distributor": _optional_text(value.get("distributor"), maximum=500),
+        "runtimeMinutes": _optional_integer(
+            value.get("runtimeMinutes"),
+            minimum=1,
+            maximum=10000,
+        ),
     }
 
 
-def _box_set_record(value: dict[str, Any]) -> dict[str, Any]:
+def _box_set_record(value: dict[str, Any], contract_version: str) -> dict[str, Any]:
     required = {
         "contractVersion",
         "recordType",
@@ -310,7 +340,7 @@ def _box_set_record(value: dict[str, Any]) -> dict[str, Any]:
     members_value = value["members"]
     if not isinstance(members_value, list) or len(members_value) > 1000:
         raise MovieVaultV2Error("record_invalid")
-    members = [_member(item) for item in members_value]
+    members = [_member(item, contract_version) for item in members_value]
     positions = [member["position"] for member in members]
     if len(set(positions)) != len(positions):
         raise MovieVaultV2Error("record_invalid")
@@ -320,7 +350,7 @@ def _box_set_record(value: dict[str, Any]) -> dict[str, Any]:
     ):
         raise MovieVaultV2Error("record_invalid")
     return {
-        "contractVersion": MOVIEVAULT_V2_CONTRACT,
+        "contractVersion": contract_version,
         "recordType": "box_set",
         "operation": "upsert",
         "revision": _integer(value["revision"], minimum=1),
@@ -336,10 +366,14 @@ def _box_set_record(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def validate_record(value: Any) -> dict[str, Any]:
+def validate_record(
+    value: Any,
+    *,
+    contract_version: str = MOVIEVAULT_V2_CONTRACT,
+) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise MovieVaultV2Error("record_invalid")
-    if value.get("contractVersion") != MOVIEVAULT_V2_CONTRACT:
+    if contract_version not in SUPPORTED_CONTRACTS or value.get("contractVersion") != contract_version:
         raise MovieVaultV2Error("contract_incompatible")
     record_type = value.get("recordType")
     operation = value.get("operation")
@@ -352,7 +386,7 @@ def validate_record(value: Any) -> dict[str, Any]:
             optional=set(),
         )
         return {
-            "contractVersion": MOVIEVAULT_V2_CONTRACT,
+            "contractVersion": contract_version,
             "recordType": record_type,
             "operation": "delete",
             "revision": _integer(value["revision"], minimum=1),
@@ -361,11 +395,17 @@ def validate_record(value: Any) -> dict[str, Any]:
     if operation != "upsert":
         raise MovieVaultV2Error("record_invalid")
     if record_type == "release":
-        return _release_record(value)
-    return _box_set_record(value)
+        return _release_record(value, contract_version)
+    return _box_set_record(value, contract_version)
 
 
-def parse_ndjson(content: bytes, *, full: bool, maximum_revision: int) -> list[dict[str, Any]]:
+def parse_ndjson(
+    content: bytes,
+    *,
+    full: bool,
+    maximum_revision: int,
+    contract_version: str = MOVIEVAULT_V2_CONTRACT,
+) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     previous_revision = 0
     full_revisions: set[int] = set()
@@ -379,7 +419,7 @@ def parse_ndjson(content: bytes, *, full: bool, maximum_revision: int) -> list[d
             value = json.loads(raw_line)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise MovieVaultV2Error("artifact_invalid") from exc
-        record = validate_record(value)
+        record = validate_record(value, contract_version=contract_version)
         revision = record["revision"]
         if revision > maximum_revision:
             raise MovieVaultV2Error("revision_invalid")
@@ -404,7 +444,11 @@ def parse_ndjson(content: bytes, *, full: bool, maximum_revision: int) -> list[d
     return records
 
 
-def validate_manifest(value: Any) -> dict[str, Any]:
+def validate_manifest(
+    value: Any,
+    *,
+    contract_version: str = MOVIEVAULT_V2_CONTRACT,
+) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise MovieVaultV2Error("manifest_invalid")
     expected = {
@@ -420,23 +464,28 @@ def validate_manifest(value: Any) -> dict[str, Any]:
     if set(value) != expected:
         raise MovieVaultV2Error("manifest_invalid")
     if (
-        value["contractVersion"] != MOVIEVAULT_V2_CONTRACT
+        contract_version not in SUPPORTED_CONTRACTS
+        or value["contractVersion"] != contract_version
         or value["hashAlgorithm"] != "sha256"
-        or value["deltaPath"] != "/v2/index/delta"
-        or value["bucketPathTemplate"] != "/v2/bucket/{prefix}"
+        or value["deltaPath"]
+        != f"/v{CONTRACT_PATH_VERSIONS[contract_version]}/index/delta"
+        or value["bucketPathTemplate"]
+        != f"/v{CONTRACT_PATH_VERSIONS[contract_version]}/bucket/{{prefix}}"
         or not isinstance(value["currentCursor"], str)
         or not 20 <= len(value["currentCursor"]) <= 120
     ):
         raise MovieVaultV2Error("manifest_invalid")
     return {
-        "contractVersion": MOVIEVAULT_V2_CONTRACT,
+        "contractVersion": contract_version,
         "currentRevision": _manifest_integer(value["currentRevision"], 0, None),
         "currentCursor": value["currentCursor"],
         "bucketPrefixLength": _manifest_integer(value["bucketPrefixLength"], 1, 12),
         "hashAlgorithm": "sha256",
         "datasetChecksum": _manifest_hash(value["datasetChecksum"]),
-        "deltaPath": "/v2/index/delta",
-        "bucketPathTemplate": "/v2/bucket/{prefix}",
+        "deltaPath": f"/v{CONTRACT_PATH_VERSIONS[contract_version]}/index/delta",
+        "bucketPathTemplate": (
+            f"/v{CONTRACT_PATH_VERSIONS[contract_version]}/bucket/{{prefix}}"
+        ),
     }
 
 
@@ -488,12 +537,45 @@ def _request(
     return status, content, headers
 
 
-def _verify_digest(content: bytes, headers: dict[str, str], *, expected: str | None = None) -> str:
+def _content_digest_sha256(value: Any) -> bytes:
+    if not isinstance(value, str):
+        raise MovieVaultV2Error("checksum_invalid")
+    matches: list[str] = []
+    for item in value.split(","):
+        match = re.fullmatch(r"sha-256=:(.*):", item.strip(), flags=re.IGNORECASE)
+        if match:
+            matches.append(match.group(1))
+    if len(matches) != 1:
+        raise MovieVaultV2Error("checksum_invalid")
+    try:
+        digest = base64.b64decode(matches[0], validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise MovieVaultV2Error("checksum_invalid") from exc
+    if len(digest) != hashlib.sha256().digest_size:
+        raise MovieVaultV2Error("checksum_invalid")
+    return digest
+
+
+def _verify_digest(
+    content: bytes,
+    headers: dict[str, str],
+    *,
+    expected: str | None = None,
+    contract_version: str = MOVIEVAULT_V2_CONTRACT,
+) -> str:
     digest = hashlib.sha256(content).hexdigest()
     header_digest = headers.get("x-content-sha256")
-    if not header_digest or not HASH_PATTERN.fullmatch(header_digest) or header_digest != digest:
+    if (
+        not header_digest
+        or not HASH_PATTERN.fullmatch(header_digest)
+        or not hmac.compare_digest(header_digest, digest)
+    ):
         raise MovieVaultV2Error("checksum_invalid")
-    if expected is not None and digest != expected:
+    if contract_version == MOVIEVAULT_V3_CONTRACT:
+        content_digest = _content_digest_sha256(headers.get("content-digest"))
+        if not hmac.compare_digest(content_digest, bytes.fromhex(digest)):
+            raise MovieVaultV2Error("checksum_invalid")
+    if expected is not None and not hmac.compare_digest(digest, expected):
         raise MovieVaultV2Error("checksum_invalid")
     return digest
 
@@ -503,18 +585,22 @@ def fetch_manifest(
     *,
     timeout_seconds: int,
     maximum_bytes: int = DEFAULT_MAX_MANIFEST_BYTES,
+    contract_version: str = MOVIEVAULT_V2_CONTRACT,
 ) -> dict[str, Any]:
+    if contract_version not in SUPPORTED_CONTRACTS:
+        raise MovieVaultV2Error("contract_incompatible")
+    version = CONTRACT_PATH_VERSIONS[contract_version]
     status, content, headers = _request(
-        f"{origin}/v2/index/manifest",
+        f"{origin}/v{version}/index/manifest",
         accept="application/json",
         timeout_seconds=timeout_seconds,
         maximum_bytes=maximum_bytes,
     )
     if status != 200:
         raise MovieVaultV2Error("manifest_unavailable")
-    _verify_digest(content, headers)
+    _verify_digest(content, headers, contract_version=contract_version)
     try:
-        return validate_manifest(json.loads(content))
+        return validate_manifest(json.loads(content), contract_version=contract_version)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise MovieVaultV2Error("manifest_invalid") from exc
 
@@ -525,8 +611,11 @@ def _fetch_feed(
     cursor: str | None,
     timeout_seconds: int,
     maximum_bytes: int,
+    contract_version: str = MOVIEVAULT_V2_CONTRACT,
 ) -> tuple[int, bytes, dict[str, str]]:
-    url = f"{origin}/v2/index/delta"
+    if contract_version not in SUPPORTED_CONTRACTS:
+        raise MovieVaultV2Error("contract_incompatible")
+    url = f"{origin}/v{CONTRACT_PATH_VERSIONS[contract_version]}/index/delta"
     if cursor is not None:
         url = f"{url}?{urllib.parse.urlencode({'since': cursor})}"
     return _request(
@@ -636,11 +725,13 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any]) -> None:
         INSERT INTO movievault_v2_releases (
             generation, release_id, film_id, canonical_title, release_year,
             provider_ids, release_title, edition, format, region, country_code,
-            language_code, release_date, disc_count, assets, revision
+            language_code, release_date, disc_count, studio, distributor,
+            runtime_minutes, assets, revision
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s
         )
         ON CONFLICT (generation, release_id) DO UPDATE
         SET film_id = EXCLUDED.film_id,
@@ -655,6 +746,9 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any]) -> None:
             language_code = EXCLUDED.language_code,
             release_date = EXCLUDED.release_date,
             disc_count = EXCLUDED.disc_count,
+            studio = EXCLUDED.studio,
+            distributor = EXCLUDED.distributor,
+            runtime_minutes = EXCLUDED.runtime_minutes,
             assets = EXCLUDED.assets,
             revision = EXCLUDED.revision
         """,
@@ -673,6 +767,9 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any]) -> None:
             record["languageCode"],
             record["releaseDate"],
             record["discCount"],
+            record["studio"],
+            record["distributor"],
+            record["runtimeMinutes"],
             Jsonb(record["assets"]),
             record["revision"],
         ),
@@ -733,11 +830,13 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any]) -> None:
             INSERT INTO movievault_v2_box_set_members (
                 generation, box_set_id, position, release_id, film_id,
                 canonical_title, release_title, release_edition, format, region,
-                relationship, disc_number, disc_format, disc_barcode_hash
+                relationship, disc_number, disc_format, disc_barcode_hash,
+                studio, distributor, runtime_minutes
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s
             )
             """,
             (
@@ -755,6 +854,9 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any]) -> None:
                 member["discNumber"],
                 member["discFormat"],
                 member["discBarcodeHash"],
+                member["studio"],
+                member["distributor"],
+                member["runtimeMinutes"],
             ),
         )
         for lookup_hash in member["eanHashes"]:
@@ -846,7 +948,7 @@ def _apply_full(
             (
                 origin,
                 generation,
-                MOVIEVAULT_V2_CONTRACT,
+                manifest["contractVersion"],
                 manifest["currentCursor"],
                 manifest["currentRevision"],
                 manifest["datasetChecksum"],
@@ -952,7 +1054,14 @@ def _mark_current(conn: Any, manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def run_sync(connection_factory: ConnectionFactory, settings: dict[str, Any]) -> dict[str, Any]:
+def run_sync(
+    connection_factory: ConnectionFactory,
+    settings: dict[str, Any],
+    *,
+    contract_version: str = MOVIEVAULT_V2_CONTRACT,
+) -> dict[str, Any]:
+    if contract_version not in SUPPORTED_CONTRACTS:
+        raise MovieVaultV2Error("contract_incompatible")
     origin = normalize_origin(settings.get("origin"))
     timeout_seconds = _bounded_setting(
         settings.get("requestTimeoutSeconds"),
@@ -985,10 +1094,15 @@ def run_sync(connection_factory: ConnectionFactory, settings: dict[str, Any]) ->
             _mark_syncing(conn, origin, stale_threshold_hours)
             conn.commit()
             state = _sync_state(conn)
-            manifest = fetch_manifest(origin, timeout_seconds=timeout_seconds)
+            manifest = fetch_manifest(
+                origin,
+                timeout_seconds=timeout_seconds,
+                contract_version=contract_version,
+            )
             if (
                 state
                 and state.get("origin") == origin
+                and state.get("contract_version") == contract_version
                 and int(manifest["currentRevision"]) < int(state.get("revision") or 0)
             ):
                 raise MovieVaultV2Error("revision_regressed")
@@ -996,7 +1110,7 @@ def run_sync(connection_factory: ConnectionFactory, settings: dict[str, Any]) ->
                 not state
                 or not state.get("active_generation")
                 or state.get("origin") != origin
-                or state.get("contract_version") != MOVIEVAULT_V2_CONTRACT
+                or state.get("contract_version") != contract_version
                 or not state.get("cursor")
             )
             if needs_full:
@@ -1005,14 +1119,16 @@ def run_sync(connection_factory: ConnectionFactory, settings: dict[str, Any]) ->
                     cursor=None,
                     timeout_seconds=timeout_seconds,
                     maximum_bytes=maximum_bytes,
+                    contract_version=contract_version,
                 )
                 if status != 200:
                     raise MovieVaultV2Error("full_sync_unavailable")
-                _verify_digest(content, headers)
+                _verify_digest(content, headers, contract_version=contract_version)
                 records = parse_ndjson(
                     content,
                     full=True,
                     maximum_revision=manifest["currentRevision"],
+                    contract_version=contract_version,
                 )
                 result = _apply_full(
                     conn,
@@ -1030,6 +1146,7 @@ def run_sync(connection_factory: ConnectionFactory, settings: dict[str, Any]) ->
                 cursor=cursor,
                 timeout_seconds=timeout_seconds,
                 maximum_bytes=maximum_bytes,
+                contract_version=contract_version,
             )
             if status == 409:
                 status, content, headers = _fetch_feed(
@@ -1037,14 +1154,16 @@ def run_sync(connection_factory: ConnectionFactory, settings: dict[str, Any]) ->
                     cursor=None,
                     timeout_seconds=timeout_seconds,
                     maximum_bytes=maximum_bytes,
+                    contract_version=contract_version,
                 )
                 if status != 200:
                     raise MovieVaultV2Error("full_sync_unavailable")
-                _verify_digest(content, headers)
+                _verify_digest(content, headers, contract_version=contract_version)
                 records = parse_ndjson(
                     content,
                     full=True,
                     maximum_revision=manifest["currentRevision"],
+                    contract_version=contract_version,
                 )
                 result = _apply_full(
                     conn,
@@ -1064,13 +1183,14 @@ def run_sync(connection_factory: ConnectionFactory, settings: dict[str, Any]) ->
                 return result
             if status != 200:
                 raise MovieVaultV2Error("delta_sync_unavailable")
-            _verify_digest(content, headers)
+            _verify_digest(content, headers, contract_version=contract_version)
             if headers.get("x-next-cursor") != manifest["currentCursor"]:
                 raise MovieVaultV2Error("cursor_invalid")
             records = parse_ndjson(
                 content,
                 full=False,
                 maximum_revision=manifest["currentRevision"],
+                contract_version=contract_version,
             )
             if (
                 int(manifest["currentRevision"]) > int(state.get("revision") or 0)
@@ -1148,6 +1268,9 @@ def _release_payload(row: dict[str, Any]) -> dict[str, Any]:
         "languageCode": row.get("language_code"),
         "releaseDate": _json_value(row.get("release_date")),
         "discCount": row.get("disc_count"),
+        "studio": row.get("studio"),
+        "distributor": row.get("distributor"),
+        "runtimeMinutes": row.get("runtime_minutes"),
         "assets": _json_value(row.get("assets") or []),
         "revision": int(row["revision"]),
     }
@@ -1159,7 +1282,7 @@ def _box_set_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
             """
             SELECT position, release_id, film_id, canonical_title, release_title,
                    release_edition, format, region, relationship, disc_number,
-                   disc_format
+                   disc_format, studio, distributor, runtime_minutes
             FROM movievault_v2_box_set_members
             WHERE generation = %s AND box_set_id = %s
             ORDER BY position
@@ -1180,6 +1303,9 @@ def _box_set_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
             "relationship": member["relationship"],
             "discNumber": member.get("disc_number"),
             "discFormat": member.get("disc_format"),
+            "studio": member.get("studio"),
+            "distributor": member.get("distributor"),
+            "runtimeMinutes": member.get("runtime_minutes"),
         }
         for member in member_rows
     ]
@@ -1377,7 +1503,14 @@ def sync_status(conn: Any) -> dict[str, Any]:
     }
 
 
-def bucket_lookup(settings: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
+def bucket_lookup(
+    settings: dict[str, Any],
+    request: dict[str, Any],
+    *,
+    contract_version: str = MOVIEVAULT_V2_CONTRACT,
+) -> dict[str, Any]:
+    if contract_version not in SUPPORTED_CONTRACTS:
+        raise MovieVaultV2Error("contract_incompatible")
     if not isinstance(request, dict):
         raise MovieVaultV2Error("lookup_invalid")
     lookup_hash = request.get("hash")
@@ -1391,17 +1524,21 @@ def bucket_lookup(settings: dict[str, Any], request: dict[str, Any]) -> dict[str
         maximum=120,
         code="settings_invalid",
     )
-    manifest = fetch_manifest(origin, timeout_seconds=timeout_seconds)
+    manifest = fetch_manifest(
+        origin,
+        timeout_seconds=timeout_seconds,
+        contract_version=contract_version,
+    )
     prefix = lookup_hash[: manifest["bucketPrefixLength"]]
     status, content, headers = _request(
-        f"{origin}/v2/bucket/{prefix}",
+        f"{origin}/v{CONTRACT_PATH_VERSIONS[contract_version]}/bucket/{prefix}",
         accept="application/json",
         timeout_seconds=timeout_seconds,
         maximum_bytes=DEFAULT_MAX_BUCKET_BYTES,
     )
     if status != 200:
         raise MovieVaultV2Error("bucket_unavailable")
-    _verify_digest(content, headers)
+    _verify_digest(content, headers, contract_version=contract_version)
     try:
         payload = json.loads(content)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -1409,12 +1546,15 @@ def bucket_lookup(settings: dict[str, Any], request: dict[str, Any]) -> dict[str
     if (
         not isinstance(payload, dict)
         or set(payload) != {"contractVersion", "prefix", "records"}
-        or payload.get("contractVersion") != MOVIEVAULT_V2_CONTRACT
+        or payload.get("contractVersion") != contract_version
         or payload.get("prefix") != prefix
         or not isinstance(payload.get("records"), list)
     ):
         raise MovieVaultV2Error("bucket_invalid")
-    records = [validate_record(record) for record in payload["records"]]
+    records = [
+        validate_record(record, contract_version=contract_version)
+        for record in payload["records"]
+    ]
     matches = [record for record in records if _record_contains_hash(record, lookup_hash)]
     return {"state": "remote_bucket", "results": matches[:50]}
 
@@ -1431,6 +1571,23 @@ def _record_contains_hash(record: dict[str, Any], lookup_hash: str) -> bool:
     )
 
 
+def _negotiated_contract(context: dict[str, Any]) -> str:
+    supported_range = context.get("distributionContractRange")
+    if not isinstance(supported_range, dict):
+        return MOVIEVAULT_V2_CONTRACT
+    if set(supported_range) != {"minimum", "maximum"}:
+        return MOVIEVAULT_V2_CONTRACT
+    minimum = supported_range.get("minimum")
+    maximum = supported_range.get("maximum")
+    if minimum not in SUPPORTED_CONTRACTS or maximum not in SUPPORTED_CONTRACTS:
+        return MOVIEVAULT_V2_CONTRACT
+    start = SUPPORTED_CONTRACTS.index(minimum)
+    end = SUPPORTED_CONTRACTS.index(maximum)
+    if start > end:
+        return MOVIEVAULT_V2_CONTRACT
+    return SUPPORTED_CONTRACTS[end]
+
+
 def movievault_v2_plugin_context(
     conn: Any,
     plugin_id: str,
@@ -1442,6 +1599,7 @@ def movievault_v2_plugin_context(
         return context
     settings = context.get("settings")
     safe_settings = settings if isinstance(settings, dict) else {}
+    contract_version = _negotiated_contract(context)
 
     def lookup_callback(request: dict[str, Any]) -> dict[str, Any]:
         with _connection_scope(conn, connection_factory) as active_conn:
@@ -1454,10 +1612,18 @@ def movievault_v2_plugin_context(
     def sync_callback(_request: dict[str, Any] | None = None) -> dict[str, Any]:
         if connection_factory is None:
             raise MovieVaultV2Error("core_bridge_unavailable")
-        return run_sync(connection_factory, safe_settings)
+        return run_sync(
+            connection_factory,
+            safe_settings,
+            contract_version=contract_version,
+        )
 
     def bucket_callback(request: dict[str, Any]) -> dict[str, Any]:
-        return bucket_lookup(safe_settings, request)
+        return bucket_lookup(
+            safe_settings,
+            request,
+            contract_version=contract_version,
+        )
 
     return {
         **context,
@@ -1465,4 +1631,9 @@ def movievault_v2_plugin_context(
         "movievaultV2Status": status_callback,
         "movievaultV2Sync": sync_callback,
         "movievaultV2BucketLookup": bucket_callback,
+        "movievaultDistributionContract": contract_version,
+        "movievaultDistributionContractRange": {
+            "minimum": SUPPORTED_CONTRACTS[0],
+            "maximum": SUPPORTED_CONTRACTS[-1],
+        },
     }
