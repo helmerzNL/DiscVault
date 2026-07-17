@@ -62,6 +62,12 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn("importCenter.requestTmdbKey", self.source)
         self.assertIn("importCenter.configureTmdbKey", self.source)
 
+    def test_source_catalog_includes_movie_detail_section_tabs(self):
+        self.assertIn("movieDetail.release", self.source)
+        self.assertIn("movieDetail.technical", self.source)
+        self.assertIn("movieDetail.collectors", self.source)
+        self.assertIn("movieDetail.castCrew", self.source)
+
     def test_locale_files_discovered(self):
         self.assertGreater(len(self.locale_files), 0)
 

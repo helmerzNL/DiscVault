@@ -5574,6 +5574,13 @@ def ui_preview_html(
       padding: 18px;
       background: var(--bg);
     }
+    .movie-detail-section-tabs,
+    .movie-detail-section-panel {
+      grid-column: 1 / -1;
+    }
+    .movie-detail-section-tabs {
+      justify-self: start;
+    }
     .movie-detail-page .movie-detail-body {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -11103,6 +11110,23 @@ def ui_preview_html(
               </div>
             </form>
           </div>
+          <nav class="detail-submenu movie-detail-section-tabs" role="tablist" aria-label="Movie details" data-next-i18n-aria="movieDetail.title">
+            <button type="button" class="active" id="movieDetailReleaseTab" role="tab" aria-controls="movieDetailReleasePanel" aria-selected="true" data-detail-tab="movieSections" data-detail-panel="movieDetailReleasePanel" data-next-i18n="movieDetail.release">Release</button>
+            <button type="button" id="movieDetailTechnicalTab" role="tab" aria-controls="movieDetailTechnicalPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailTechnicalPanel" data-next-i18n="movieDetail.technical">Technical</button>
+            <button type="button" id="movieDetailCollectorsTab" role="tab" aria-controls="movieDetailCollectorsPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailCollectorsPanel" data-next-i18n="movieDetail.collectors">Collectors</button>
+          </nav>
+          <div class="detail-card full detail-subpanel movie-detail-section-panel" id="movieDetailReleasePanel" role="tabpanel" aria-labelledby="movieDetailReleaseTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.release">Release</h3>
+            <div class="detail-fields" id="movieDetailRelease"></div>
+          </div>
+          <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailTechnicalPanel" role="tabpanel" aria-labelledby="movieDetailTechnicalTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h3>
+            <div class="detail-fields" id="movieDetailTechnical"></div>
+          </div>
+          <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailCollectorsPanel" role="tabpanel" aria-labelledby="movieDetailCollectorsTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.collectors">Collectors</h3>
+            <div class="detail-fields" id="movieDetailCollectors"></div>
+          </div>
           <div class="detail-card full movie-list-card" id="movieListStateCard">
             <div class="detail-card-head">
               <div>
@@ -11161,14 +11185,6 @@ def ui_preview_html(
               <p class="form-message" id="movieLoanMessage"></p>
             </div>
           </div>
-          <div class="detail-card">
-            <h3 data-next-i18n="movieDetail.release">Release</h3>
-            <div class="detail-fields" id="movieDetailRelease"></div>
-          </div>
-          <div class="detail-card">
-            <h3 data-next-i18n="movieDetail.technical">Technical</h3>
-            <div class="detail-subsections" id="movieDetailTechnical"></div>
-          </div>
           <div class="detail-card full">
             <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.metadataCompare">Metadata compare</h3>
@@ -11207,6 +11223,24 @@ def ui_preview_html(
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
+              <h3 data-next-i18n="movieDetail.castCrew">Cast &amp; crew</h3>
+              <div class="detail-submenu" role="tablist" aria-label="Cast & crew" data-next-i18n-aria="movieDetail.castCrew">
+                <button type="button" class="active" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCast" data-next-i18n="movieDetail.cast">Cast</button>
+                <button type="button" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCrew" data-next-i18n="movieDetail.crew">Crew</button>
+              </div>
+            </div>
+            <div class="detail-subpanel" data-detail-panel-group="moviePeople" id="moviePeopleCast">
+              <div class="detail-grid" id="movieDetailCast"></div>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
+              <div class="button-row compact person-refresh-row">
+                <button type="button" class="secondary-button hidden" id="movieCrewRefreshButton" data-next-i18n="movieDetail.refreshCrewPeople">Refresh crew people</button>
+              </div>
+              <div class="detail-grid" id="movieDetailCrew"></div>
+            </div>
+          </div>
+          <div class="detail-card full">
+            <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.media">Media</h3>
               <div class="detail-submenu" role="tablist" aria-label="Media" data-next-i18n-aria="movieDetail.media">
                 <button type="button" class="active" data-detail-tab="movieMedia" data-detail-panel="movieMediaPosters" data-next-i18n="movieDetail.posters">Posters</button>
@@ -11233,24 +11267,6 @@ def ui_preview_html(
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
               <div class="detail-grid" id="movieDetailVideos"></div>
-            </div>
-          </div>
-          <div class="detail-card full">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="movieDetail.people">People</h3>
-              <div class="detail-submenu" role="tablist" aria-label="People" data-next-i18n-aria="movieDetail.people">
-                <button type="button" class="active" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCast" data-next-i18n="movieDetail.cast">Cast</button>
-                <button type="button" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCrew" data-next-i18n="movieDetail.crew">Crew</button>
-              </div>
-            </div>
-            <div class="detail-subpanel" data-detail-panel-group="moviePeople" id="moviePeopleCast">
-              <div class="detail-grid" id="movieDetailCast"></div>
-            </div>
-            <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
-              <div class="button-row compact person-refresh-row">
-                <button type="button" class="secondary-button hidden" id="movieCrewRefreshButton" data-next-i18n="movieDetail.refreshCrewPeople">Refresh crew people</button>
-              </div>
-              <div class="detail-grid" id="movieDetailCrew"></div>
             </div>
           </div>
         </section>
@@ -21008,20 +21024,20 @@ def ui_preview_html(
         [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
         ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
       ]);
-      const audioVideoSubsection = detailFieldSubsection(tNext("movieDetail.audioVideo", "Audio & Video"), [
+      const audioVideoFields = [
         ["HDR", specs.hdr || metadata.hdr],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
         [tNext("movieDetail.format", "Format"), movie.format || specs.format || metadata.format],
         [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
         [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
         [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles]
-      ]);
+      ];
       const releaseLocationText = typeof movie.location === "string" ? movie.location : "";
       const storageLocationLabel = movie.location && typeof movie.location === "object"
         ? movie.location.pathLabel || movie.location.name || ""
         : "";
       const storageLocationHtml = storageLocationLabel ? locationRouteLinkHtml(movie.location, storageLocationLabel) : "";
-      const collectorsSubsection = detailFieldSubsection(tNext("movieDetail.collectors", "Collectors"), [
+      const collectorsFields = [
         [tNext("movieDetail.edition", "Edition"), movie.edition],
         [tNext("movieDetail.packaging", "Packaging"), releasePackaging],
         [tNext("movieDetail.location", "Location"), releaseLocationText],
@@ -21029,10 +21045,10 @@ def ui_preview_html(
         [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
         [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
         ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
-      ]);
-      document.getElementById("movieDetailTechnical").innerHTML = (audioVideoSubsection + collectorsSubsection)
-        || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
-      bindContainerDetailLinks("movieDetailTechnical");
+      ];
+      document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
+      document.getElementById("movieDetailCollectors").innerHTML = detailFieldRows(collectorsFields);
+      bindContainerDetailLinks("movieDetailCollectors");
       renderMovieMetadataCompare(detail);
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
@@ -21102,11 +21118,13 @@ def ui_preview_html(
       activeDetailPayload = null;
       movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
       setMovieEditPanelVisible(false);
+      activateDetailTab("movieSections", "movieDetailReleasePanel");
       document.getElementById("movieDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("movieDetailOverview").textContent = "";
       document.getElementById("movieDetailTags").innerHTML = "";
       document.getElementById("movieDetailRelease").innerHTML = "";
       document.getElementById("movieDetailTechnical").innerHTML = "";
+      document.getElementById("movieDetailCollectors").innerHTML = "";
       document.getElementById("movieMetadataComparePanel").innerHTML = "";
       document.getElementById("movieListStateSummary").textContent = "";
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
