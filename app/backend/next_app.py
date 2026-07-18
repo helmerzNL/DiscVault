@@ -11307,6 +11307,31 @@ def media_asset_entity(conn, media_id: UUID) -> dict[str, Any] | None:
         return cur.fetchone()
 
 
+def is_movievault_v2_poster_media_asset(asset: dict[str, Any]) -> bool:
+    provider_id = str(asset.get("provider_id") or "")
+    return asset.get("kind") == "poster" and provider_id.startswith("movievault_v2:")
+
+
+def movievault_v2_poster_media_asset_entity(conn, media_id: UUID) -> dict[str, Any] | None:
+    if not table_exists(conn, "media_assets") or not table_exists(conn, "movievault_v2_poster_cache"):
+        return None
+    asset = media_asset_entity(conn, media_id)
+    if not asset or not is_movievault_v2_poster_media_asset(asset):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM movievault_v2_poster_cache
+            WHERE media_asset_id = %s
+              AND status IN ('ready', 'degraded')
+            LIMIT 1
+            """,
+            (media_id,),
+        )
+        return asset if cur.fetchone() else None
+
+
 def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list[dict[str, Any]]:
     if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
         return []
@@ -26038,7 +26063,7 @@ def register_routes(flask_app: Flask) -> None:
         media_uuid = parse_uuid(media_id, "mediaId")
         with connect() as conn:
             asset = media_asset_entity(conn, media_uuid)
-        if not asset:
+        if not asset or is_movievault_v2_poster_media_asset(asset):
             raise NextApiError("Media asset not found", 404)
         path = local_media_asset_path(asset.get("storage_key"))
         if not path:
@@ -26046,6 +26071,21 @@ def register_routes(flask_app: Flask) -> None:
         mimetype = asset.get("content_type") or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         result = send_file(path, mimetype=mimetype, conditional=True, max_age=86400)
         result.headers["Cache-Control"] = "public, max-age=86400"
+        return result
+
+    @flask_app.get("/api/next/movievault-v2/posters/<media_id>")
+    def movievault_v2_poster_media_asset(media_id: str):
+        media_uuid = parse_uuid(media_id, "mediaId")
+        with connect() as conn:
+            asset = movievault_v2_poster_media_asset_entity(conn, media_uuid)
+        if not asset:
+            raise NextApiError("MovieVault poster not found", 404)
+        path = local_media_asset_path(asset.get("storage_key"))
+        if not path:
+            raise NextApiError("Local media file not found", 404)
+        mimetype = asset.get("content_type") or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        result = send_file(path, mimetype=mimetype, conditional=True)
+        result.headers["Cache-Control"] = "private, no-store"
         return result
 
     @flask_app.get("/api/next/jobs")

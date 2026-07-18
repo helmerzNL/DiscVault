@@ -1,5 +1,12 @@
 # DiscVault Release Notes
 
+## 26.4.66 - Authenticated MovieVault poster media
+
+- Serves cached MovieVault v2 posters only through a dedicated authenticated
+  local route with private browser-cache semantics.
+- Blocks the same poster assets on the generic public media route while
+  preserving existing intentionally public non-MovieVault media assets.
+
 ## 26.4.62 - MovieVault distribution-4 poster caching CI fix
 
 - Fixes the PostgreSQL smoke-test poster-cache tests that assumed the default

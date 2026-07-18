@@ -11,7 +11,7 @@ repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
-from app.backend import next_movievault_v2
+from app.backend import next_app, next_movievault_v2
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -21,6 +21,21 @@ class MovieVaultDistributionV4Tests(unittest.TestCase):
     """Strict parser/contract coverage for the distribution-4 poster
     extension, vendored byte-identical from Flux76HQ/MovieVault-v2#61
     (commit 1ae144f, frozen contracts/fixtures at d7bec09)."""
+
+    def test_local_poster_url_uses_the_authenticated_movievault_route(self):
+        media_asset_id = "b510f16e-58a9-4329-a696-50545f8133eb"
+        self.assertEqual(
+            next_movievault_v2._local_media_asset_url(media_asset_id),
+            f"/api/next/movievault-v2/posters/{media_asset_id}",
+        )
+        self.assertFalse(
+            next_app.is_public_next_path(
+                f"/api/next/movievault-v2/posters/{media_asset_id}"
+            )
+        )
+        self.assertTrue(
+            next_app.is_public_next_path(f"/api/next/media/assets/{media_asset_id}")
+        )
 
     def test_frozen_fixtures_match_pinned_byte_digests(self):
         expected = {}
