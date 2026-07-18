@@ -10794,7 +10794,7 @@ def ui_preview_html(
         <select id="authLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </div>
       <div class="login-actions">
-        <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="legacyAuth.passkeyRecommended">Sign in with passkey (recommended)</button>
+        <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.loginDescription">Sign in with passkey</button>
         <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
@@ -14713,12 +14713,21 @@ def ui_preview_html(
       if (auth) currentAuthStatus = auth || {};
       const publicRegistration = !!currentAuthStatus.registration_enabled;
       const reviewLoginAvailable = !!currentAuthStatus.legacy_auth_enabled;
+      const loginButton = document.getElementById("appLoginButton");
       const toggleButton = document.getElementById("appInviteToggleButton");
       const reviewToggleButton = document.getElementById("appReviewToggleButton");
       const codeLabel = document.getElementById("appInviteCodeLabel");
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
       const reviewForm = document.getElementById("appReviewForm");
+      if (loginButton) {
+        const key = reviewLoginAvailable ? "legacyAuth.passkeyRecommended" : "auth.loginDescription";
+        loginButton.dataset.nextI18n = key;
+        loginButton.textContent = tNext(
+          key,
+          reviewLoginAvailable ? "Sign in with passkey (recommended)" : "Sign in with passkey"
+        );
+      }
       if (toggleButton) {
         const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
         toggleButton.dataset.nextI18n = key;
@@ -33819,10 +33828,11 @@ def ui_preview_html(
       const auth = currentStartup.auth || {};
       const user = Object.assign({}, state.user || {});
       const name = user.displayName || user.display_name || auth.displayName || auth.username || user.username || "DiscVault";
+      const roleKey = user.role || auth.role || "-";
       return {
         name,
         username: user.username || auth.username || "-",
-        role: user.role || auth.role || "-",
+        role: user.roleDisplayName || user.role_display_name || roleKey,
         avatarUrl: user.avatarUrl || user.avatar_url || "",
         userCount: (state.counts && state.counts.users) || auth.userCount || 0,
         credentialCount: profileCredentials.length || auth.credentialCount || 0

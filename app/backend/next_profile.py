@@ -86,6 +86,15 @@ def _next_app():
     return next_app
 
 
+def _profile_role_display_name(conn, role_key: str | None) -> str | None:
+    if not role_key or not table_exists(conn, "roles"):
+        return role_key
+    with conn.cursor() as cur:
+        cur.execute("SELECT name FROM roles WHERE key=%s", (role_key,))
+        row = cur.fetchone()
+    return row["name"] if row and row.get("name") else role_key
+
+
 def next_profile_user_payload(conn, user: dict[str, Any]) -> dict[str, Any]:
     next_app = _next_app()
     user_id = user["id"]
@@ -146,6 +155,8 @@ def next_profile_user_payload(conn, user: dict[str, Any]) -> dict[str, Any]:
                 }
     avatar_url = next_app.media_asset_public_url(avatar)
     display_name = fresh_user.get("display_name") or fresh_user.get("username")
+    role_key = fresh_user.get("role") or next_app.next_user_primary_role(conn, user_id)
+    role_display_name = _profile_role_display_name(conn, role_key)
     return {
         "id": fresh_user.get("id"),
         "username": fresh_user.get("username"),
@@ -153,7 +164,9 @@ def next_profile_user_payload(conn, user: dict[str, Any]) -> dict[str, Any]:
         "display_name": display_name,
         "first_name": fresh_user.get("first_name"),
         "last_name": fresh_user.get("last_name"),
-        "role": fresh_user.get("role") or next_app.next_user_primary_role(conn, user_id),
+        "role": role_key,
+        "roleDisplayName": role_display_name,
+        "role_display_name": role_display_name,
         "avatarAssetId": fresh_user.get("avatar_asset_id"),
         "avatar_asset_id": fresh_user.get("avatar_asset_id"),
         "avatarUrl": avatar_url,

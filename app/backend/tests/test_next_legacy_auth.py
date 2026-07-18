@@ -282,7 +282,20 @@ class LegacyAuthContractTests(unittest.TestCase):
         self.assertIn("startupLegacyButton", self.ui_source)
         self.assertIn("appAdminLegacyUserForm", self.ui_source)
         self.assertIn("profileLegacyPasswordForm", self.ui_source)
-        self.assertIn('data-next-i18n="legacyAuth.passkeyRecommended"', self.ui_source)
+        self.assertIn(
+            'id="appLoginButton" data-next-i18n="auth.loginDescription"',
+            self.ui_source,
+        )
+        registration_start = self.ui_source.index(
+            "function renderAppRegistrationMode(auth)"
+        )
+        registration_body = self.ui_source[
+            registration_start : registration_start + 1800
+        ]
+        self.assertIn(
+            'reviewLoginAvailable ? "legacyAuth.passkeyRecommended" : "auth.loginDescription"',
+            registration_body,
+        )
         self.assertGreaterEqual(
             self.ui_source.count('class="legacy-checkbox-row'), 7
         )
