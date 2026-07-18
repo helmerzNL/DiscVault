@@ -1,5 +1,118 @@
 # DiscVault Release Notes
 
+## 26.4.70 - Modern Library, Legacy authentication, MovieVault posters, and owned containers
+
+This release promotes the complete `release/v26-beta` feature train from
+DiscVault 26.4.54 to 26.4.70. It introduces a redesigned Library and movie
+detail experience, optional password and TOTP authentication, secure MovieVault
+poster distribution, reversible artwork hiding, and more flexible Member Group
+and container management.
+
+### Highlights
+
+- **Modern responsive Library.** The Library is now a sortable table with
+  responsive desktop and compact layouts, richer metadata columns, persistent
+  watched and Watchlist filters, and improved director fallbacks.
+  ([#288](https://github.com/helmerzNL/DiscVault/pull/288),
+  [#289](https://github.com/helmerzNL/DiscVault/pull/289),
+  [#290](https://github.com/helmerzNL/DiscVault/pull/290))
+- **iOS-inspired movie details.** Movie pages now use a full-bleed mobile hero,
+  streamlined management controls, redesigned personal-list actions, dated
+  rewatch logging, searchable colour-coded tags, and responsive cast, crew,
+  artwork, and video galleries.
+  ([#281](https://github.com/helmerzNL/DiscVault/pull/281),
+  [#282](https://github.com/helmerzNL/DiscVault/pull/282),
+  [#284](https://github.com/helmerzNL/DiscVault/pull/284))
+- **Optional Legacy authentication.** Administrators can enable Argon2id
+  username/password authentication with TOTP, temporary passwords, unified
+  single-use recovery codes, per-user passkey policy, Owner bootstrap, and
+  expanded Users & Roles management.
+  ([#297](https://github.com/helmerzNL/DiscVault/pull/297),
+  [#298](https://github.com/helmerzNL/DiscVault/pull/298),
+  [#302](https://github.com/helmerzNL/DiscVault/pull/302))
+- **MovieVault distribution 3 and 4.** DiscVault adds strict,
+  checksum-verified local-index synchronization, exact box-set editions, richer
+  release metadata, and secure background caching of MovieVault posters.
+  ([#287](https://github.com/helmerzNL/DiscVault/pull/287),
+  [#295](https://github.com/helmerzNL/DiscVault/pull/295),
+  [#301](https://github.com/helmerzNL/DiscVault/pull/301))
+- **Member Groups and owned containers.** Group-shared movies now expose their
+  containing box sets and vaults. Group owners can rename eligible groups,
+  remove empty groups, and convert owned box sets into vaults or vaults into
+  box sets without losing container data.
+  ([#305](https://github.com/helmerzNL/DiscVault/pull/305))
+
+### Movie details, artwork, and metadata
+
+- Personal Lists now provide dedicated **Log rewatch** and **Watchlist**
+  actions, quick date choices, a native date picker, and a searchable tag
+  picker.
+- Cast and crew use responsive portrait cards with age-at-release information,
+  while media galleries use localized **More** controls and accessible artwork
+  actions.
+- Hidden posters and backdrops can be reviewed, restored, or permanently
+  deleted. Hidden artwork remains excluded from primary-artwork selection and
+  metadata refreshes, and its state is retained in backups.
+  ([#304](https://github.com/helmerzNL/DiscVault/pull/304))
+- Country flags and age classifications now appear consistently in the movie
+  header. Metadata refreshes update unlocked ratings while preserving manually
+  locked values.
+  ([#291](https://github.com/helmerzNL/DiscVault/pull/291),
+  [#292](https://github.com/helmerzNL/DiscVault/pull/292))
+- Audio and subtitle editing fields have been expanded for multi-line values.
+  ([#294](https://github.com/helmerzNL/DiscVault/pull/294))
+- Metadata comparison and artwork diagnostics are now restricted to Debug
+  mode. ([#283](https://github.com/helmerzNL/DiscVault/pull/283))
+
+### MovieVault and privacy
+
+- Distribution 3 introduces atomic full generations, transactional deltas,
+  strict digest validation, nullable studio/distributor/runtime metadata, and
+  ordered exact-edition box sets.
+- Distribution 4 adds secure poster metadata and bounded background caching.
+  Downloads are validated for media type, size, checksum, and decoded image
+  dimensions before activation.
+- Cached MovieVault posters are served only through authenticated local
+  DiscVault URLs with private cache semantics; MovieVault origins and
+  credentials are never exposed to clients.
+- Failed poster replacements retain the previous valid image and report an
+  explicit degraded, pending, or error state.
+- Person profiles and filmographies now come exclusively from TMDb. Stored
+  MovieVault-derived person data is migrated or rebuilt where appropriate.
+  ([#296](https://github.com/helmerzNL/DiscVault/pull/296))
+
+### Member Groups and container ownership
+
+- Members can discover the box sets and vaults that contain movies shared with
+  their Member Groups.
+- Member Group owners can rename groups and delete a group once no other
+  members remain.
+- Containers now have durable ownership across creation, synchronization,
+  import, background workers, backup, and restore.
+- Authorized owners can convert a box set into a vault, or a vault into a box
+  set, from the existing editor while preserving movies, ordering, artwork,
+  metadata, identifiers, barcode, location, cover, public identity, and
+  collection references.
+
+### Additional improvements
+
+- Accessibility, keyboard focus restoration, compact layouts, and responsive
+  controls have been improved throughout the Library and movie-detail
+  interfaces.
+- New and changed user-facing flows include complete translations across all
+  29 supported locales.
+- Backup and restore coverage now includes Legacy authentication, hidden
+  artwork, and container ownership.
+
+### Upgrade notes
+
+- MovieVault distribution 4 remains inactive until the installed
+  `movievault_v2` plugin explicitly advertises distribution-4 compatibility.
+- Enabling Legacy authentication requires the corresponding deployment and
+  environment configuration; existing passkey authentication remains
+  supported.
+- Database migrations run automatically during the normal upgrade process.
+
 ## 26.4.66 - Authenticated MovieVault poster media
 
 - Serves cached MovieVault v2 posters only through a dedicated authenticated
