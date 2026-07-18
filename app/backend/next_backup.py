@@ -193,7 +193,16 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
     ),
     TableSpec(
         "entity_media",
-        ("entity_type", "entity_id", "media_id", "role", "is_primary", "sort_order", "created_at"),
+        (
+            "entity_type",
+            "entity_id",
+            "media_id",
+            "role",
+            "is_primary",
+            "sort_order",
+            "hidden_at",
+            "created_at",
+        ),
     ),
 )
 

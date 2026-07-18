@@ -74,10 +74,20 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn("lists.watchedYesterday", self.source)
 
     def test_source_catalog_includes_responsive_media_actions(self):
-        self.assertIn("common.more", self.source)
-        self.assertIn("common.share", self.source)
-        self.assertIn("common.hide", self.source)
-        self.assertIn("movieDetail.artworkHidden", self.source)
+        for key in (
+            "common.more",
+            "common.share",
+            "common.hide",
+            "common.unhide",
+            "movieDetail.artworkHidden",
+            "movieDetail.artworkUnhidden",
+            "movieDetail.hiddenArtwork",
+            "movieDetail.hideAgain",
+            "movieDetail.hidingArtwork",
+            "movieDetail.showHidden",
+            "movieDetail.unhidingArtwork",
+        ):
+            self.assertIn(key, self.source)
 
     def test_source_catalog_includes_library_list_labels(self):
         for key in (

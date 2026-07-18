@@ -76,6 +76,18 @@ class NextMigrationContractTests(unittest.TestCase):
         self.assertIn("FROM legacy_mfa_recovery_codes AS legacy", migration)
         self.assertIn("recovery.legacy_code_hash = legacy.code_hash", migration)
 
+    def test_entity_media_hidden_migration_is_separate_from_trash(self):
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "migrations_next"
+            / "043_entity_media_hidden.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("ADD COLUMN IF NOT EXISTS hidden_at timestamptz", migration)
+        self.assertIn("idx_entity_media_active_hidden_artwork", migration)
+        self.assertIn("WHERE deleted_at IS NULL", migration)
+        self.assertNotIn("purge_after", migration)
+
     def test_legacy_membergroups_maps_to_basic_viewer_role(self):
         self.assertEqual(legacy_role_key("MemberGroups"), "media_viewer")
         self.assertEqual(legacy_role_key("admin"), "admin")

@@ -3661,6 +3661,7 @@ def apply_primary_media_update(
             WHERE em.entity_type='movie'
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND em.role=%s
               AND ma.kind=%s
               AND em.is_primary=true
@@ -3674,7 +3675,7 @@ def apply_primary_media_update(
             return None
         cur.execute(
             """
-            SELECT deleted_at
+            SELECT deleted_at, hidden_at
             FROM entity_media
             WHERE entity_type='movie'
               AND entity_id=%s
@@ -3684,7 +3685,11 @@ def apply_primary_media_update(
             (movie_id, media_id, role),
         )
         existing_link = cur.fetchone()
-        if existing_link and (existing_link["deleted_at"] if isinstance(existing_link, dict) else existing_link[0]):
+        if existing_link and (
+            (existing_link["deleted_at"] or existing_link["hidden_at"])
+            if isinstance(existing_link, dict)
+            else (existing_link[0] or existing_link[1])
+        ):
             return None
         current_metadata = current.get("metadata") if isinstance(current, dict) else (current[3] if current else {})
         current_metadata = current_metadata if isinstance(current_metadata, dict) else {}
@@ -3718,6 +3723,7 @@ def apply_primary_media_update(
             WHERE entity_type='movie'
               AND entity_id=%s
               AND deleted_at IS NULL
+              AND hidden_at IS NULL
               AND role=%s
               AND is_primary=true
             """,
@@ -3797,6 +3803,56 @@ def filter_locked_artwork_updates(
     return metadata_updates, media_updates
 
 
+def filter_hidden_artwork_updates(
+    conn,
+    movie_id: UUID,
+    metadata_updates: dict[str, Any],
+    media_updates: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Prevent a metadata refresh from selecting an explicitly hidden asset."""
+    metadata_updates = dict(metadata_updates)
+    media_updates = dict(media_updates)
+    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        return metadata_updates, media_updates
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ma.id, ma.kind, ma.source_url
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type='movie'
+              AND em.entity_id=%s
+              AND em.deleted_at IS NULL
+              AND em.hidden_at IS NOT NULL
+              AND ma.kind IN ('poster', 'backdrop')
+            """,
+            (movie_id,),
+        )
+        hidden_rows = cur.fetchall()
+    hidden_urls: dict[str, set[str]] = {"poster": set(), "backdrop": set()}
+    for row in hidden_rows:
+        kind = clean_text(row.get("kind") if isinstance(row, dict) else row[1]) or ""
+        media_id = row.get("id") if isinstance(row, dict) else row[0]
+        source_url = clean_text(row.get("source_url") if isinstance(row, dict) else row[2])
+        if kind not in hidden_urls:
+            continue
+        if source_url:
+            hidden_urls[kind].add(source_url)
+        if media_id:
+            hidden_urls[kind].add(f"/api/next/media/assets/{media_id}")
+    for kind, urls in hidden_urls.items():
+        if not urls:
+            continue
+        media_update = media_updates.get(kind)
+        if isinstance(media_update, dict) and clean_text(media_update.get("sourceUrl")) in urls:
+            media_updates.pop(kind, None)
+        for key in _ARTWORK_METADATA_URL_KEYS[kind]:
+            value = clean_text(metadata_updates.get(key))
+            if value in urls:
+                metadata_updates.pop(key, None)
+    return metadata_updates, media_updates
+
+
 def has_locked_primary_media(conn, *, movie_id: UUID, kind: str) -> bool:
     if kind not in {"poster", "backdrop"} or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
         return False
@@ -3809,6 +3865,7 @@ def has_locked_primary_media(conn, *, movie_id: UUID, kind: str) -> bool:
             WHERE em.entity_type='movie'
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND em.role=%s
               AND ma.kind=%s
               AND em.is_primary=true
@@ -3844,7 +3901,7 @@ def link_media_option(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT is_primary, deleted_at
+            SELECT is_primary, deleted_at, hidden_at
             FROM entity_media
             WHERE entity_type='movie'
               AND entity_id=%s
@@ -3854,7 +3911,11 @@ def link_media_option(
             (movie_id, media_id, kind),
         )
         row = cur.fetchone()
-        if row and (row["deleted_at"] if isinstance(row, dict) else row[1]):
+        if row and (
+            (row["deleted_at"] or row["hidden_at"])
+            if isinstance(row, dict)
+            else (row[1] or row[2])
+        ):
             return None
         if row and bool(row["is_primary"] if isinstance(row, dict) else row[0]):
             return None
@@ -4126,6 +4187,12 @@ def apply_metadata_proposal(
         media_updates,
         metadata_locked_kinds=metadata_locked_kinds,
         media_locked_kinds=media_locked_kinds,
+    )
+    metadata_updates, media_updates = filter_hidden_artwork_updates(
+        conn,
+        movie_uuid,
+        metadata_updates,
+        media_updates,
     )
     changed = bool(
         movie_updates
