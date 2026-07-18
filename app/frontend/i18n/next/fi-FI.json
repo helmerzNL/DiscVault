@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "vahvista: TOTP",
   "legacyAuth.warning": "Passkey: suositeltu. Salasana.",
   "legacyAuth.downloadCodes": "Tallenna",
-  "legacyAuth.codesCopied": "Tallenna"
+  "legacyAuth.codesCopied": "Tallenna",
+  "containerDetail.convertBarcodeConflict": "Toinen box-set käyttää jo tätä viivakoodia.",
+  "containerDetail.convertConfirm": "Muunna tämä säilö? Elokuvat, kuvitus, metatiedot ja kokoelmalinkit säilytetään.",
+  "containerDetail.converted": "Säilö muunnettiin.",
+  "containerDetail.converting": "Muunnetaan säilöä...",
+  "containerDetail.convertPermissionDenied": "Vain säilön omistaja tai instanssin omistaja/järjestelmänvalvoja voi muuntaa sen.",
+  "groups.deleteConfirm": "Poistetaanko ”{name}”? Myös jaettujen elokuvien linkit ja odottavat kutsut poistetaan.",
+  "groups.deleted": "Ryhmä poistettu.",
+  "groups.renamed": "Ryhmän nimi muutettu.",
+  "groups.renamePrompt": "Ryhmän uusi nimi"
 }

@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "確認: TOTP",
   "legacyAuth.warning": "通行密鑰: 建議. 密碼.",
   "legacyAuth.downloadCodes": "儲存",
-  "legacyAuth.codesCopied": "儲存"
+  "legacyAuth.codesCopied": "儲存",
+  "containerDetail.convertBarcodeConflict": "另一個套裝已使用此條碼。",
+  "containerDetail.convertConfirm": "要轉換此容器嗎？電影、圖片、中繼資料和收藏連結都會保留。",
+  "containerDetail.converted": "容器已轉換。",
+  "containerDetail.converting": "正在轉換容器...",
+  "containerDetail.convertPermissionDenied": "只有容器擁有者或執行個體擁有者/管理員才能轉換。",
+  "groups.deleteConfirm": "要刪除「{name}」嗎？共享電影連結和待處理邀請也會一併移除。",
+  "groups.deleted": "群組已刪除。",
+  "groups.renamed": "群組已重新命名。",
+  "groups.renamePrompt": "新的群組名稱"
 }

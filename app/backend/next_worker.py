@@ -29,6 +29,7 @@ try:
     from .next_import import ImportError as NextImportError
     from .next_import import NextImporter
     from .next_import import clean_text
+    from .next_ownership import actor_or_instance_owner_id
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import is_movievault_plugin
     from .next_movievault_connection import movievault_plugin_context
@@ -52,6 +53,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
     from next_import import clean_text
+    from next_ownership import actor_or_instance_owner_id
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import is_movievault_plugin
     from next_movievault_connection import movievault_plugin_context
@@ -1134,6 +1136,7 @@ def upsert_import_container(
     source_kind: str,
     barcode: str = "",
     metadata_extra: dict[str, Any] | None = None,
+    actor: dict[str, Any] | None = None,
 ) -> tuple[UUID, bool]:
     metadata_extra = metadata_extra if isinstance(metadata_extra, dict) else {}
     incoming_format = clean_text(metadata_extra.get("format") or metadata_extra.get("media_format"))
@@ -1194,12 +1197,13 @@ def upsert_import_container(
             "source_hash": source_hash,
         }
         metadata.update({key: value for key, value in metadata_extra.items() if value not in (None, "", [], {})})
+        owner_id = actor_or_instance_owner_id(conn, actor)
         cur.execute(
             """
             INSERT INTO containers (
-                id, public_id, container_type, title, barcode, metadata, created_at, updated_at
+                id, public_id, container_type, title, barcode, owner_id, metadata, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=EXCLUDED.title,
                 barcode=COALESCE(NULLIF(containers.barcode, ''), EXCLUDED.barcode),
@@ -1212,6 +1216,7 @@ def upsert_import_container(
                 container_type,
                 title,
                 barcode or None,
+                owner_id,
                 Jsonb(
                     json_ready(
                         metadata
@@ -1424,6 +1429,7 @@ def persist_import_box_set_item(
     item: dict[str, Any],
     detection: dict[str, Any],
     index: int,
+    actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     proposal = detection.get("proposal") if isinstance(detection.get("proposal"), dict) else {}
     barcode = clean_text(detection.get("barcode") or item.get("barcode") or proposal.get("barcode"))
@@ -1453,6 +1459,7 @@ def persist_import_box_set_item(
             "member_count": len(members),
             "import_detected_box_set": True,
         },
+        actor=actor,
     )
     imported_members: list[dict[str, Any]] = []
     movie_ids: list[str] = []
@@ -1602,6 +1609,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                                 item=item,
                                 detection=box_set_detection,
                                 index=index,
+                                actor=actor,
                             )
                         imported += 1
                         created += int(box_set_result.get("created") or 0)
@@ -1685,6 +1693,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                                                 "member_count": spec.get("memberCount") or len(item.get("boxSetMembers") or []),
                                                 "members_are_explicit": spec.get("membersAreExplicit") or bool(item.get("boxSetMembers")),
                                             },
+                                            actor=actor,
                                         )
                                         local_container_cache[key] = spec_container_id
                                         if was_container_created:
@@ -1740,6 +1749,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                                             "member_count": spec.get("memberCount"),
                                             "members_are_explicit": spec.get("membersAreExplicit"),
                                         },
+                                        actor=actor,
                                     )
                                     local_container_cache[key] = spec_container_id
                                     if was_container_created:

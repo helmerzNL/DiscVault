@@ -68,6 +68,16 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn("movieDetail.collectors", self.source)
         self.assertIn("movieDetail.castCrew", self.source)
 
+    def test_source_catalog_includes_container_conversion_messages(self):
+        for key in (
+            "containerDetail.convertBarcodeConflict",
+            "containerDetail.convertConfirm",
+            "containerDetail.converted",
+            "containerDetail.converting",
+            "containerDetail.convertPermissionDenied",
+        ):
+            self.assertIn(key, self.source)
+
     def test_source_catalog_includes_rewatch_action_sheet(self):
         self.assertIn("lists.logRewatch", self.source)
         self.assertIn("lists.watchedToday", self.source)
@@ -136,6 +146,13 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn('id="sidebarCollapseToggle"', source)
         self.assertIn('data-next-i18n-aria="uiPreview.toggleSidebar"', source)
         self.assertIn('data-next-i18n-title="uiPreview.toggleSidebar"', source)
+
+    def test_container_editor_confirms_authorized_type_conversion(self):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("const canConvert = !!((detail.actions || {}).canConvert);", source)
+        self.assertIn('"containerDetail.convertConfirm"', source)
+        self.assertIn("containerType: requestedType", source)
 
     def test_plugin_config_uses_submit_feedback_and_typed_boolean_control(self):
         with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:

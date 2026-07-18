@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "확인: TOTP",
   "legacyAuth.warning": "패스키: 권장. 비밀번호.",
   "legacyAuth.downloadCodes": "저장",
-  "legacyAuth.codesCopied": "저장"
+  "legacyAuth.codesCopied": "저장",
+  "containerDetail.convertBarcodeConflict": "다른 박스 세트에서 이미 이 바코드를 사용하고 있습니다.",
+  "containerDetail.convertConfirm": "이 컨테이너를 변환할까요? 영화, 아트워크, 메타데이터 및 컬렉션 링크는 유지됩니다.",
+  "containerDetail.converted": "컨테이너가 변환되었습니다.",
+  "containerDetail.converting": "컨테이너 변환 중...",
+  "containerDetail.convertPermissionDenied": "컨테이너 소유자 또는 인스턴스 소유자/관리자만 변환할 수 있습니다.",
+  "groups.deleteConfirm": "‘{name}’을(를) 삭제하시겠습니까? 공유 영화 연결과 대기 중인 초대도 삭제됩니다.",
+  "groups.deleted": "그룹을 삭제했습니다.",
+  "groups.renamed": "그룹 이름을 변경했습니다.",
+  "groups.renamePrompt": "새 그룹 이름"
 }

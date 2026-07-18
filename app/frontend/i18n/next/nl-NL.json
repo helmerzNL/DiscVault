@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "bevestigen: TOTP",
   "legacyAuth.warning": "Passkey: aanbevolen. Wachtwoord.",
   "legacyAuth.downloadCodes": "Opslaan",
-  "legacyAuth.codesCopied": "Opslaan"
+  "legacyAuth.codesCopied": "Opslaan",
+  "containerDetail.convertBarcodeConflict": "Een andere box-set gebruikt deze barcode al.",
+  "containerDetail.convertConfirm": "Deze container converteren? Films, artwork, metadata en collectiekoppelingen blijven behouden.",
+  "containerDetail.converted": "Container geconverteerd.",
+  "containerDetail.converting": "Container converteren...",
+  "containerDetail.convertPermissionDenied": "Alleen de containereigenaar of een instance-eigenaar/-beheerder kan deze converteren.",
+  "groups.deleteConfirm": "'{name}' verwijderen? Gedeelde filmkoppelingen en openstaande uitnodigingen worden ook verwijderd.",
+  "groups.deleted": "Groep verwijderd.",
+  "groups.renamed": "Groep hernoemd.",
+  "groups.renamePrompt": "Nieuwe groepsnaam"
 }

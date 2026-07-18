@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "potvrdi: TOTP",
   "legacyAuth.warning": "Pristupni ključ: preporučeno. Lozinka.",
   "legacyAuth.downloadCodes": "Spremi",
-  "legacyAuth.codesCopied": "Spremi"
+  "legacyAuth.codesCopied": "Spremi",
+  "containerDetail.convertBarcodeConflict": "Drugi box-set već koristi ovaj crtični kod.",
+  "containerDetail.convertConfirm": "Pretvoriti ovaj spremnik? Filmovi, slike, metapodaci i poveznice zbirki bit će sačuvani.",
+  "containerDetail.converted": "Spremnik je pretvoren.",
+  "containerDetail.converting": "Pretvaranje spremnika...",
+  "containerDetail.convertPermissionDenied": "Pretvoriti ga može samo vlasnik spremnika ili vlasnik/administrator instance.",
+  "groups.deleteConfirm": "Izbrisati „{name}”? Uklonit će se i poveznice dijeljenih filmova te pozivnice na čekanju.",
+  "groups.deleted": "Grupa je izbrisana.",
+  "groups.renamed": "Grupa je preimenovana.",
+  "groups.renamePrompt": "Novi naziv grupe"
 }

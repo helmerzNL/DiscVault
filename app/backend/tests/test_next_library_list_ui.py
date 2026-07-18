@@ -160,6 +160,26 @@ class NextLibraryListUiTests(unittest.TestCase):
             self.source,
         )
 
+    def test_member_group_library_groups_shared_container_movies(self):
+        self.assertIn("function memberGroupLibrarySelected()", self.source)
+        self.assertIn(
+            "return memberGroupLibrarySelected() || "
+            "(collectorsModeEnabled() && preferences.merge_editions_as_title === true);",
+            self.source,
+        )
+        self.assertIn("if (!containerGroupingEnabled()) return [];", self.source)
+
+    def test_member_group_owner_can_rename_and_safely_delete_group(self):
+        self.assertIn('data-member-group-rename="${id}"', self.source)
+        self.assertIn('canDelete ? `<button type="button" class="danger-button" data-member-group-delete="${id}"', self.source)
+        self.assertIn('method: "PATCH"', self.source)
+        self.assertIn('method: "DELETE"', self.source)
+        self.assertIn("await loadAppSnapshot();", self.source)
+        self.assertIn('@flask_app.patch("/api/next/media-groups/<group_id>")', self.app_source)
+        self.assertIn('@flask_app.delete("/api/next/media-groups/<group_id>")', self.app_source)
+        self.assertIn('owner_state.get("actor_role") != "owner"', self.app_source)
+        self.assertIn("media_group_owner_can_delete(actor, owner_state)", self.app_source)
+
     def test_column_sorting_is_accessible_and_disables_toolbar_sort(self):
         self.assertIn("function libraryListSortHeaderHtml(", self.source)
         self.assertIn('aria-sort="${sortState.direction', self.source)

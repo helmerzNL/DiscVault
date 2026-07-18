@@ -25,9 +25,11 @@ from typing import Any
 try:
     from .next_genres import map_legacy_genre_text
     from .next_genres import normalize_genre_keys
+    from .next_ownership import actor_or_instance_owner_id
 except ImportError:  # pragma: no cover - supports direct script execution
     from next_genres import map_legacy_genre_text
     from next_genres import normalize_genre_keys
+    from next_ownership import actor_or_instance_owner_id
 
 
 IMPORT_NAMESPACE = uuid.UUID("7c76309b-063d-4c63-b925-2f49fdad332c")
@@ -1226,12 +1228,13 @@ class NextImporter:
                         year,
                         description,
                         primary_movie_id,
+                        owner_id,
                         metadata,
                         created_at,
                         updated_at
                     )
                     VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         COALESCE(%s, now()), COALESCE(%s, now())
                     )
                     ON CONFLICT (public_id) DO UPDATE SET
@@ -1254,6 +1257,7 @@ class NextImporter:
                         clean_text(row["year"]) if "year" in row.keys() else None,
                         clean_text(row["description"]) if "description" in row.keys() else None,
                         primary_movie_id,
+                        actor_or_instance_owner_id(conn),
                         self.Jsonb(metadata),
                         clean_text(row["created_at"]) if "created_at" in row.keys() else None,
                         clean_text(row["updated_at"]) if "updated_at" in row.keys() else None,

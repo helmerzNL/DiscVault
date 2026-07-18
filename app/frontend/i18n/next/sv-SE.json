@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "bekräfta: TOTP",
   "legacyAuth.warning": "Passkey: rekommenderat. Lösenord.",
   "legacyAuth.downloadCodes": "Spara",
-  "legacyAuth.codesCopied": "Spara"
+  "legacyAuth.codesCopied": "Spara",
+  "containerDetail.convertBarcodeConflict": "Ett annat box-set använder redan den här streckkoden.",
+  "containerDetail.convertConfirm": "Konvertera den här behållaren? Filmer, grafik, metadata och samlingslänkar bevaras.",
+  "containerDetail.converted": "Behållaren har konverterats.",
+  "containerDetail.converting": "Konverterar behållare...",
+  "containerDetail.convertPermissionDenied": "Endast behållarens ägare eller en instansägare/-administratör kan konvertera den.",
+  "groups.deleteConfirm": "Ta bort ”{name}”? Länkar till delade filmer och väntande inbjudningar tas också bort.",
+  "groups.deleted": "Grupp borttagen.",
+  "groups.renamed": "Gruppens namn har ändrats.",
+  "groups.renamePrompt": "Nytt gruppnamn"
 }

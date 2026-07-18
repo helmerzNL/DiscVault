@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "apstiprināt: TOTP",
   "legacyAuth.warning": "Piekļuves atslēga: ieteicams. Parole.",
   "legacyAuth.downloadCodes": "Saglabāt",
-  "legacyAuth.codesCopied": "Saglabāt"
+  "legacyAuth.codesCopied": "Saglabāt",
+  "containerDetail.convertBarcodeConflict": "Cits box-set jau izmanto šo svītrkodu.",
+  "containerDetail.convertConfirm": "Vai pārveidot šo konteineru? Filmas, noformējums, metadati un kolekciju saites tiks saglabātas.",
+  "containerDetail.converted": "Konteiners ir pārveidots.",
+  "containerDetail.converting": "Konteinera pārveidošana...",
+  "containerDetail.convertPermissionDenied": "To var pārveidot tikai konteinera īpašnieks vai instances īpašnieks/administrators.",
+  "groups.deleteConfirm": "Vai dzēst “{name}”? Tiks noņemtas arī kopīgoto filmu saites un neapstiprinātie uzaicinājumi.",
+  "groups.deleted": "Grupa izdzēsta.",
+  "groups.renamed": "Grupa pārdēvēta.",
+  "groups.renamePrompt": "Jauns grupas nosaukums"
 }

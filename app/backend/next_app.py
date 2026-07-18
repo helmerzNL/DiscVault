@@ -46,6 +46,7 @@ try:
     from .next_import import CLIENT_SYNC_SETTING_KEYS
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
+    from .next_ownership import actor_or_instance_owner_id
     from .next_plugin_runtime import plugin_registry_snapshot
     from .next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from .next_plugin_runtime import PLUGIN_ID_PATTERN
@@ -250,6 +251,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import CLIENT_SYNC_SETTING_KEYS
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
+    from next_ownership import actor_or_instance_owner_id
     from next_plugin_runtime import plugin_registry_snapshot
     from next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from next_plugin_runtime import PLUGIN_ID_PATTERN
@@ -4412,6 +4414,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     c.badge_label,
                     c.year,
                     c.description,
+                    c.owner_id,
                     c.metadata,
                     poster_asset.id AS poster_asset_id,
                     poster_asset.storage_backend AS poster_asset_storage_backend,
@@ -4994,6 +4997,59 @@ def can_manage_media_group_members(conn, group_id: UUID, actor: dict[str, Any]) 
     return bool(member and member.get("role") in {"owner", "manager"})
 
 
+def media_group_owner_state(
+    conn,
+    group_id: UUID,
+    actor: dict[str, Any],
+    *,
+    lock: bool = False,
+) -> dict[str, Any] | None:
+    actor_id = actor.get("id")
+    system_owner = not actor_id and actor.get("role") == "owner"
+    if not actor_id and not system_owner:
+        return None
+    if lock and not lock_media_group_row(conn, group_id):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                mg.id,
+                mg.name,
+                member.role AS actor_role,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_members member_count
+                    WHERE member_count.group_id=mg.id
+                ) AS member_count
+            FROM media_groups mg
+            LEFT JOIN media_group_members member
+              ON member.group_id=mg.id
+             AND member.user_id=%s
+            WHERE mg.id=%s
+            """,
+            (actor_id, group_id),
+        )
+        state = cur.fetchone()
+    if state and system_owner:
+        state = dict(state)
+        state["actor_role"] = "owner"
+    return state
+
+
+def lock_media_group_row(conn, group_id: UUID) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM media_groups WHERE id=%s FOR UPDATE", (group_id,))
+        return bool(cur.fetchone())
+
+
+def media_group_owner_can_delete(actor: dict[str, Any], owner_state: dict[str, Any]) -> bool:
+    member_count = int(owner_state.get("member_count") or 0)
+    if not actor.get("id") and actor.get("role") == "owner":
+        return member_count == 0
+    return member_count == 1
+
+
 def require_existing_movie_ids(conn, movie_ids: list[UUID]) -> None:
     if not movie_ids:
         return
@@ -5018,13 +5074,22 @@ def container_type_for_id(conn, container_id: UUID) -> str:
     return str(row["container_type"] or "")
 
 
-def container_types_for_ids(conn, container_ids: list[UUID]) -> dict[UUID, str]:
+def container_types_for_ids(
+    conn,
+    container_ids: list[UUID],
+    *,
+    lock: bool = False,
+) -> dict[UUID, str]:
     if not container_ids:
         return {}
     if not table_exists(conn, "containers"):
         raise NextApiError("Container table is not available", 503)
     with conn.cursor() as cur:
-        cur.execute("SELECT id, container_type FROM containers WHERE id = ANY(%s)", (container_ids,))
+        lock_clause = " ORDER BY id FOR UPDATE" if lock else ""
+        cur.execute(
+            f"SELECT id, container_type FROM containers WHERE id = ANY(%s){lock_clause}",
+            (container_ids,),
+        )
         rows = cur.fetchall()
     found = {row["id"]: str(row["container_type"] or "") for row in rows}
     missing = [str(item) for item in container_ids if item not in found]
@@ -5038,6 +5103,36 @@ def normalize_container_type(value: Any) -> str:
     if container_type not in {"box_set", "collection", "vault"}:
         raise NextApiError("containerType must be box_set, collection or vault", 400)
     return container_type
+
+
+def container_type_change(current_type: Any, requested_type: Any) -> tuple[str, bool]:
+    current = normalize_container_type(current_type)
+    requested = normalize_container_type(requested_type)
+    if requested == current:
+        return current, False
+    if {current, requested} != {"box_set", "vault"}:
+        raise NextApiError("Only box-sets and vaults can be converted into each other", 400)
+    return requested, True
+
+
+def actor_can_convert_container(container: dict[str, Any], actor: dict[str, Any] | None) -> bool:
+    if str(container.get("container_type") or "") not in {"box_set", "vault"} or not actor:
+        return False
+    if not actor_effective_has_permission(actor, "containers.edit"):
+        return False
+    if str(actor.get("role") or "") in {"owner", "admin"}:
+        return True
+    actor_id = actor.get("id")
+    owner_id = container.get("owner_id")
+    return bool(actor_id and owner_id and str(actor_id) == str(owner_id))
+
+
+def lock_box_set_barcode(conn, barcode: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            (barcode,),
+        )
 
 
 def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -13925,6 +14020,7 @@ def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
                 description,
                 primary_movie_id,
                 location_id,
+                owner_id,
                 metadata,
                 created_at,
                 updated_at
@@ -14846,7 +14942,9 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
         return None
     if isinstance(container, dict):
         primary_movie_id = container.get("primary_movie_id")
+        owner_id = container.get("owner_id")
         container["primaryMovieId"] = str(primary_movie_id) if primary_movie_id else None
+        container["ownerId"] = str(owner_id) if owner_id else None
     attach_location_summaries(conn, [container])
     aggregate_movies = container_aggregate_movie_entities(conn, container_id, actor=actor)
     aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
@@ -14867,6 +14965,9 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
         "aggregateVideos": aggregate_videos,
         "aggregateSummary": container_aggregate_summary(aggregate_movies, aggregate_assets, aggregate_videos),
         "metadataDebug": metadata_debug,
+        "actions": {
+            "canConvert": actor_can_convert_container(container, actor),
+        },
     }
 
 
@@ -15042,6 +15143,7 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.badge_label,
                 c.year,
                 c.description,
+                c.owner_id,
                 c.metadata,
                 c.created_at,
                 c.updated_at
@@ -15426,6 +15528,7 @@ def apply_container_upsert(
     client_id: str,
     idem_key: str,
     mutation: dict[str, Any],
+    actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = mutation.get("payload")
     if not isinstance(payload, dict):
@@ -15461,9 +15564,9 @@ def apply_container_upsert(
         cur.execute(
             """
             INSERT INTO containers (
-                id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, metadata, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=COALESCE(EXCLUDED.title, containers.title),
                 barcode=EXCLUDED.barcode,
@@ -15482,6 +15585,7 @@ def apply_container_upsert(
                 fields["badge_label"],
                 fields["year"],
                 fields["description"],
+                actor_or_instance_owner_id(conn, actor),
                 Jsonb(json_ready(fields["metadata"])),
             ),
         )
@@ -15679,6 +15783,7 @@ def apply_sync_mutation(
     client_id: str,
     mutation: dict[str, Any],
     batch_ctx: "SyncBatchContext | None" = None,
+    actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not isinstance(mutation, dict):
         raise NextApiError("Each mutation must be an object", 400)
@@ -15701,7 +15806,13 @@ def apply_sync_mutation(
     elif entity_type == "movie" and operation == "delete":
         result = apply_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "container" and operation == "upsert":
-        result = apply_container_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
+        result = apply_container_upsert(
+            conn,
+            client_id=client_id,
+            idem_key=key,
+            mutation=mutation,
+            actor=actor,
+        )
     elif entity_type == "container" and operation == "delete":
         result = apply_container_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "containerMovie" and operation == "upsert":
@@ -17526,6 +17637,80 @@ def register_routes(flask_app: Flask) -> None:
             detail = media_group_detail_entity(conn, group_uuid)
         return response({"status": "ok", "group": detail}, 201)
 
+    @flask_app.patch("/api/next/media-groups/<group_id>")
+    def rename_media_group(group_id: str):
+        group_uuid = parse_uuid(group_id, "groupId")
+        if not group_uuid:
+            raise NextApiError("groupId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media group request body must be an object", 400)
+        name = clean_text(body.get("name")) or ""
+        if not name:
+            raise NextApiError("Group name is required", 400)
+        if len(name) > 120:
+            raise NextApiError("Group name must be 120 characters or fewer", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.view")
+            if not table_exists(conn, "media_groups") or not table_exists(conn, "media_group_members"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.transaction():
+                owner_state = media_group_owner_state(conn, group_uuid, actor, lock=True)
+                if not owner_state:
+                    raise NextApiError("Media group not found", 404)
+                if owner_state.get("actor_role") != "owner":
+                    raise NextApiError("Only the group owner can rename this media group", 403)
+                previous_name = str(owner_state.get("name") or "")
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE media_groups SET name=%s, updated_at=now() WHERE id=%s",
+                        (name, group_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="group.renamed",
+                    category="group",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary=f"Renamed media group {previous_name} to {name}",
+                    metadata={"previousName": previous_name, "name": name},
+                )
+            detail = media_group_detail_entity(conn, group_uuid, actor=actor)
+        return response({"status": "ok", "group": detail})
+
+    @flask_app.delete("/api/next/media-groups/<group_id>")
+    def delete_media_group(group_id: str):
+        group_uuid = parse_uuid(group_id, "groupId")
+        if not group_uuid:
+            raise NextApiError("groupId is required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.view")
+            if not table_exists(conn, "media_groups") or not table_exists(conn, "media_group_members"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.transaction():
+                owner_state = media_group_owner_state(conn, group_uuid, actor, lock=True)
+                if not owner_state:
+                    raise NextApiError("Media group not found", 404)
+                if owner_state.get("actor_role") != "owner":
+                    raise NextApiError("Only the group owner can delete this media group", 403)
+                if not media_group_owner_can_delete(actor, owner_state):
+                    raise NextApiError("Remove all other members before deleting this media group", 409)
+                group_name = str(owner_state.get("name") or "")
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM media_groups WHERE id=%s", (group_uuid,))
+                audit_event(
+                    conn,
+                    event_type="group.deleted",
+                    category="group",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary=f"Deleted media group {group_name}",
+                    metadata={"name": group_name},
+                )
+        return response({"status": "deleted", "groupId": group_uuid})
+
     @flask_app.put("/api/next/media-groups/<group_id>/members/<user_id>")
     @flask_app.patch("/api/next/media-groups/<group_id>/members/<user_id>")
     def upsert_media_group_member(group_id: str, user_id: str):
@@ -17541,35 +17726,33 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_members") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
+            with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
                     raise NextApiError("Media group not found", 404)
                 if not can_manage_media_group_members(conn, group_uuid, actor):
                     raise NextApiError("Media group manager access required", 403)
                 if actor.get("role") not in {"owner", "admin"} and role == "owner":
                     raise NextApiError("Only admins can assign group owners", 403)
-                cur.execute("SELECT id FROM users WHERE id=%s", (user_uuid,))
-                if not cur.fetchone():
-                    raise NextApiError("User not found", 404)
-                cur.execute(
-                    "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
-                    (group_uuid, user_uuid),
-                )
-                existing_member = cur.fetchone()
-                if existing_member and existing_member.get("role") == "owner" and role != "owner":
-                    cur.execute(
-                        """
-                        SELECT COUNT(*)::int AS count
-                        FROM media_group_members
-                        WHERE group_id=%s AND role='owner'
-                        """,
-                        (group_uuid,),
-                    )
-                    if int(cur.fetchone()["count"]) <= 1:
-                        raise NextApiError("The last group owner cannot be demoted", 400)
-            with conn.transaction():
                 with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM users WHERE id=%s", (user_uuid,))
+                    if not cur.fetchone():
+                        raise NextApiError("User not found", 404)
+                    cur.execute(
+                        "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
+                        (group_uuid, user_uuid),
+                    )
+                    existing_member = cur.fetchone()
+                    if existing_member and existing_member.get("role") == "owner" and role != "owner":
+                        cur.execute(
+                            """
+                            SELECT COUNT(*)::int AS count
+                            FROM media_group_members
+                            WHERE group_id=%s AND role='owner'
+                            """,
+                            (group_uuid,),
+                        )
+                        if int(cur.fetchone()["count"]) <= 1:
+                            raise NextApiError("The last group owner cannot be demoted", 400)
                     cur.execute(
                         """
                         INSERT INTO media_group_members (group_id, user_id, role, created_at)
@@ -17747,26 +17930,36 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Media group invites are not available yet", 503)
             with conn.cursor() as cur:
                 cur.execute(
-                    """
-                    SELECT id, group_id, invitee_id, status, metadata
-                    FROM media_group_invites
-                    WHERE id=%s
-                    """,
+                    "SELECT group_id FROM media_group_invites WHERE id=%s",
                     (invite_uuid,),
                 )
                 invite = cur.fetchone()
                 if not invite:
                     raise NextApiError("Invite not found", 404)
-                if str(invite.get("invitee_id")) != str(actor.get("id")):
-                    raise NextApiError("This invite belongs to another user", 403)
-                if invite.get("status") != "pending":
-                    raise NextApiError("Invite is no longer pending", 409)
-                role = normalize_media_group_member_role((invite.get("metadata") or {}).get("role"))
-                if role == "owner":
-                    role = "member"
             group_uuid = invite["group_id"]
             with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
+                    raise NextApiError("Media group not found", 404)
                 with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, group_id, invitee_id, status, metadata
+                        FROM media_group_invites
+                        WHERE id=%s
+                        FOR UPDATE
+                        """,
+                        (invite_uuid,),
+                    )
+                    invite = cur.fetchone()
+                    if not invite:
+                        raise NextApiError("Invite not found", 404)
+                    if str(invite.get("invitee_id")) != str(actor.get("id")):
+                        raise NextApiError("This invite belongs to another user", 403)
+                    if invite.get("status") != "pending":
+                        raise NextApiError("Invite is no longer pending", 409)
+                    role = normalize_media_group_member_role((invite.get("metadata") or {}).get("role"))
+                    if role == "owner":
+                        role = "member"
                     cur.execute(
                         """
                         INSERT INTO media_group_members (group_id, user_id, role, created_at)
@@ -17807,25 +18000,25 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_authenticated_user(conn)
             if not table_exists(conn, "media_group_invites"):
                 raise NextApiError("Media group invites are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT id, group_id, invitee_id, status
-                    FROM media_group_invites
-                    WHERE id=%s
-                    """,
-                    (invite_uuid,),
-                )
-                invite = cur.fetchone()
-                if not invite:
-                    raise NextApiError("Invite not found", 404)
-                if str(invite.get("invitee_id")) != str(actor.get("id")):
-                    raise NextApiError("This invite belongs to another user", 403)
-                if invite.get("status") != "pending":
-                    raise NextApiError("Invite is no longer pending", 409)
-            group_uuid = invite["group_id"]
             with conn.transaction():
                 with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, group_id, invitee_id, status
+                        FROM media_group_invites
+                        WHERE id=%s
+                        FOR UPDATE
+                        """,
+                        (invite_uuid,),
+                    )
+                    invite = cur.fetchone()
+                    if not invite:
+                        raise NextApiError("Invite not found", 404)
+                    if str(invite.get("invitee_id")) != str(actor.get("id")):
+                        raise NextApiError("This invite belongs to another user", 403)
+                    if invite.get("status") != "pending":
+                        raise NextApiError("Invite is no longer pending", 409)
+                    group_uuid = invite["group_id"]
                     cur.execute(
                         """
                         UPDATE media_group_invites
@@ -17857,34 +18050,32 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_members") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
+            with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
                     raise NextApiError("Media group not found", 404)
                 if not can_manage_media_group_members(conn, group_uuid, actor):
                     raise NextApiError("Media group manager access required", 403)
-                cur.execute(
-                    "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
-                    (group_uuid, user_uuid),
-                )
-                member = cur.fetchone()
-                if not member:
-                    raise NextApiError("Media group member not found", 404)
-                if member.get("role") == "owner":
-                    if actor.get("role") not in {"owner", "admin"}:
-                        raise NextApiError("Only admins can remove group owners", 403)
-                    cur.execute(
-                        """
-                        SELECT COUNT(*)::int AS count
-                        FROM media_group_members
-                        WHERE group_id=%s AND role='owner'
-                        """,
-                        (group_uuid,),
-                    )
-                    if int(cur.fetchone()["count"]) <= 1:
-                        raise NextApiError("The last group owner cannot be removed", 400)
-            with conn.transaction():
                 with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
+                        (group_uuid, user_uuid),
+                    )
+                    member = cur.fetchone()
+                    if not member:
+                        raise NextApiError("Media group member not found", 404)
+                    if member.get("role") == "owner":
+                        if actor.get("role") not in {"owner", "admin"}:
+                            raise NextApiError("Only admins can remove group owners", 403)
+                        cur.execute(
+                            """
+                            SELECT COUNT(*)::int AS count
+                            FROM media_group_members
+                            WHERE group_id=%s AND role='owner'
+                            """,
+                            (group_uuid,),
+                        )
+                        if int(cur.fetchone()["count"]) <= 1:
+                            raise NextApiError("The last group owner cannot be removed", 400)
                     cur.execute(
                         "DELETE FROM media_group_members WHERE group_id=%s AND user_id=%s",
                         (group_uuid, user_uuid),
@@ -17921,15 +18112,13 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
-                    raise NextApiError("Media group not found", 404)
-            if not can_manage_media_group_members(conn, group_uuid, actor):
-                raise NextApiError("Media group manager access required", 403)
             require_existing_movie_ids(conn, movie_ids)
             changed = 0
             with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
+                    raise NextApiError("Media group not found", 404)
+                if not can_manage_media_group_members(conn, group_uuid, actor):
+                    raise NextApiError("Media group manager access required", 403)
                 with conn.cursor() as cur:
                     if operation == "remove":
                         cur.execute(
@@ -18367,15 +18556,13 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
-                    raise NextApiError("Media group not found", 404)
-            if not can_manage_media_group_members(conn, group_uuid, actor):
-                raise NextApiError("Media group manager access required", 403)
             require_existing_movie_ids(conn, [movie_uuid])
             changed = 0
             with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
+                    raise NextApiError("Media group not found", 404)
+                if not can_manage_media_group_members(conn, group_uuid, actor):
+                    raise NextApiError("Media group manager access required", 403)
                 with conn.cursor() as cur:
                     actor_id = actor.get("id")
                     cur.execute(
@@ -18428,14 +18615,12 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
-                    raise NextApiError("Media group not found", 404)
-            if not can_manage_media_group_members(conn, group_uuid, actor):
-                raise NextApiError("Media group manager access required", 403)
             changed = 0
             with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
+                    raise NextApiError("Media group not found", 404)
+                if not can_manage_media_group_members(conn, group_uuid, actor):
+                    raise NextApiError("Media group manager access required", 403)
                 with conn.cursor() as cur:
                     cur.execute(
                         "DELETE FROM media_group_movies WHERE group_id=%s AND movie_id=%s",
@@ -18486,6 +18671,7 @@ def register_routes(flask_app: Flask) -> None:
                     if cur.fetchone():
                         raise NextApiError("A container with this public id already exists", 409)
                     if container_type == "box_set" and payload["barcode"]:
+                        lock_box_set_barcode(conn, payload["barcode"])
                         cur.execute(
                             "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set' LIMIT 1",
                             (payload["barcode"],),
@@ -18495,9 +18681,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -18509,6 +18695,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["year"],
                             payload["description"],
                             payload["location_id"],
+                            actor_or_instance_owner_id(conn, actor),
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -18530,7 +18717,7 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 )
                 emit_container_change(conn, container_uuid, operation="upsert")
-            detail = container_detail_entity(conn, container_uuid)
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
         return response({"status": "ok", "detail": detail}, 201)
 
     @flask_app.patch("/api/next/containers/<container_id>")
@@ -18547,6 +18734,12 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Container not found", 404)
             payload = container_payload(body, existing=existing)
+            type_provided = "containerType" in body or "container_type" in body
+            requested_type = body.get("containerType", body.get("container_type")) if type_provided else None
+            target_type, type_changed = container_type_change(
+                existing.get("container_type"),
+                requested_type if type_provided else existing.get("container_type"),
+            )
             primary_provided = "primaryMovieId" in body or "primary_movie_id" in body
             primary_movie_uuid = None
             if primary_provided:
@@ -18566,10 +18759,46 @@ def register_routes(flask_app: Flask) -> None:
                         )
                         if not cur.fetchone():
                             raise NextApiError("Cover movie must be a member of this box-set", 400)
-            receiver_payload = container_receiver_payload(conn, existing, payload)
+            receiver_payload = None
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
+            collection_references_updated = 0
             with conn.transaction():
                 with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT * FROM containers WHERE id=%s FOR UPDATE",
+                        (container_uuid,),
+                    )
+                    locked = cur.fetchone()
+                if not locked:
+                    raise NextApiError("Container not found", 404)
+                payload = container_payload(body, existing=locked)
+                target_type, type_changed = container_type_change(
+                    locked.get("container_type"),
+                    requested_type if type_provided else locked.get("container_type"),
+                )
+                if type_changed and not actor_can_convert_container(locked, actor):
+                    raise NextApiError("Only the container owner or an instance owner/admin can convert it", 403)
+                receiver_payload = (
+                    container_receiver_payload(conn, locked, payload)
+                    if target_type == "box_set" and not type_changed
+                    else None
+                )
+                with conn.cursor() as cur:
+                    if target_type == "box_set" and payload["barcode"]:
+                        lock_box_set_barcode(conn, payload["barcode"])
+                        cur.execute(
+                            """
+                            SELECT id
+                            FROM containers
+                            WHERE container_type='box_set'
+                              AND barcode=%s
+                              AND id<>%s
+                            LIMIT 1
+                            """,
+                            (payload["barcode"], container_uuid),
+                        )
+                        if cur.fetchone():
+                            raise NextApiError("A box-set with this barcode already exists", 409)
                     cur.execute(
                         """
                         UPDATE containers
@@ -18579,6 +18808,7 @@ def register_routes(flask_app: Flask) -> None:
                             year=%s,
                             description=%s,
                             location_id=%s,
+                            container_type=%s,
                             metadata=%s,
                             updated_at=now()
                         WHERE id=%s
@@ -18590,10 +18820,48 @@ def register_routes(flask_app: Flask) -> None:
                             payload["year"],
                             payload["description"],
                             payload["location_id"],
+                            target_type,
                             Jsonb(json_ready(payload["metadata"])),
                             container_uuid,
                         ),
                     )
+                    if type_changed and table_exists(conn, "collection_items"):
+                        previous_type = str(locked.get("container_type"))
+                        cur.execute(
+                            """
+                            UPDATE collection_items target
+                            SET sort_order=LEAST(target.sort_order, source.sort_order)
+                            FROM collection_items source
+                            WHERE source.collection_id=target.collection_id
+                              AND source.item_id=target.item_id
+                              AND source.item_id=%s
+                              AND source.item_type=%s
+                              AND target.item_type=%s
+                            """,
+                            (container_uuid, previous_type, target_type),
+                        )
+                        cur.execute(
+                            """
+                            DELETE FROM collection_items source
+                            USING collection_items target
+                            WHERE source.collection_id=target.collection_id
+                              AND source.item_id=target.item_id
+                              AND source.item_id=%s
+                              AND source.item_type=%s
+                              AND target.item_type=%s
+                            """,
+                            (container_uuid, previous_type, target_type),
+                        )
+                        collection_references_updated += int(cur.rowcount or 0)
+                        cur.execute(
+                            """
+                            UPDATE collection_items
+                            SET item_type=%s
+                            WHERE item_id=%s AND item_type=%s
+                            """,
+                            (target_type, container_uuid, previous_type),
+                        )
+                        collection_references_updated += int(cur.rowcount or 0)
                 if primary_provided:
                     with conn.cursor() as cur:
                         cur.execute(
@@ -18602,19 +18870,26 @@ def register_routes(flask_app: Flask) -> None:
                         )
                 audit_event(
                     conn,
-                    event_type="container.updated",
+                    event_type="container.converted" if type_changed else "container.updated",
                     category="admin",
                     actor=actor,
                     target_type="container",
                     target_id=container_uuid,
-                    summary=f"Updated container {payload['title']}",
+                    summary=(
+                        f"Converted {locked.get('container_type')} {payload['title']} to {target_type}"
+                        if type_changed
+                        else f"Updated container {payload['title']}"
+                    ),
                     metadata={
-                        "containerType": existing.get("container_type"),
-                        "publicId": existing.get("public_id"),
+                        "containerType": target_type,
+                        "previousContainerType": locked.get("container_type"),
+                        "converted": type_changed,
+                        "collectionReferencesUpdated": collection_references_updated,
+                        "publicId": locked.get("public_id"),
                         "title": payload["title"],
-                        "previousTitle": existing.get("title"),
+                        "previousTitle": locked.get("title"),
                         "barcode": payload["barcode"],
-                        "previousBarcode": existing.get("barcode"),
+                        "previousBarcode": locked.get("barcode"),
                         "year": payload["year"],
                         "badgeLabel": payload["badge_label"],
                     },
@@ -18633,7 +18908,7 @@ def register_routes(flask_app: Flask) -> None:
                         target_id=container_uuid,
                         summary=f"Pushed box-set edit to receiver plugins for {payload['title']}",
                         metadata={
-                            "containerType": existing.get("container_type"),
+                            "containerType": locked.get("container_type"),
                             "title": payload["title"],
                             "barcode": payload["barcode"],
                             "changedFields": (receiver_payload.get("metadata") or {}).get("changedFields") or [],
@@ -18641,8 +18916,15 @@ def register_routes(flask_app: Flask) -> None:
                         },
                     )
                 emit_container_change(conn, container_uuid, operation="upsert")
-            detail = container_detail_entity(conn, container_uuid)
-        return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
+        return response(
+            {
+                "status": "ok",
+                "detail": detail,
+                "converted": type_changed,
+                "receiverSummary": receiver_summary,
+            }
+        )
 
     @flask_app.put("/api/next/containers/<container_id>/artwork-locks")
     def set_container_artwork_locks(container_id: str):
@@ -19070,13 +19352,13 @@ def register_routes(flask_app: Flask) -> None:
             if target_type != "collection":
                 raise NextApiError("Target container must be a collection", 400)
             require_existing_movie_ids(conn, movie_ids)
-            container_types = container_types_for_ids(conn, container_ids)
-            allowed_container_ids = [
-                item for item in container_ids if container_types.get(item) in {"box_set", "vault", "collection"}
-            ]
             changed = 0
-            requested = len(movie_ids) + len(allowed_container_ids)
             with conn.transaction():
+                container_types = container_types_for_ids(conn, container_ids, lock=True)
+                allowed_container_ids = [
+                    item for item in container_ids if container_types.get(item) in {"box_set", "vault", "collection"}
+                ]
+                requested = len(movie_ids) + len(allowed_container_ids)
                 with conn.cursor() as cur:
                     if operation == "remove":
                         if movie_ids:
@@ -19824,6 +20106,7 @@ def register_routes(flask_app: Flask) -> None:
                     if cur.fetchone():
                         raise NextApiError("A container with this public id already exists", 409)
                     if container_type == "box_set" and payload["barcode"]:
+                        lock_box_set_barcode(conn, payload["barcode"])
                         cur.execute(
                             "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set' LIMIT 1",
                             (payload["barcode"],),
@@ -19833,9 +20116,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -19847,6 +20130,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["year"],
                             payload["description"],
                             payload["location_id"],
+                            actor_or_instance_owner_id(conn, actor),
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -25038,6 +25322,8 @@ def register_routes(flask_app: Flask) -> None:
             "backdrop_urls": proposal.get("backdrop_urls") or proposal.get("backdropUrls") or [],
         }
         existing_container = None
+        if barcode:
+            lock_box_set_barcode(conn, barcode)
         with conn.cursor() as cur:
             if barcode:
                 cur.execute(
@@ -25097,9 +25383,9 @@ def register_routes(flask_app: Flask) -> None:
                 cur.execute(
                     """
                     INSERT INTO containers (
-                        id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                        id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, metadata, created_at, updated_at
                     )
-                    VALUES (%s, %s, 'box_set', %s, %s, NULL, %s, %s, %s, now(), now())
+                    VALUES (%s, %s, 'box_set', %s, %s, NULL, %s, %s, %s, %s, now(), now())
                     """,
                     (
                         container_uuid,
@@ -25108,6 +25394,7 @@ def register_routes(flask_app: Flask) -> None:
                         barcode or None,
                         clean_text(proposal.get("year") or proposal.get("year_range")),
                         clean_text(proposal.get("description")),
+                        actor_or_instance_owner_id(conn, actor),
                         Jsonb(json_ready(container_metadata)),
                     ),
                 )
@@ -27583,6 +27870,7 @@ def register_routes(flask_app: Flask) -> None:
         results = []
         batch_ctx = SyncBatchContext()
         with connect() as conn:
+            actor = require_next_authenticated_user(conn)
             ensure_sync_state(conn)
             for mutation in mutations:
                 client_mutation_id = None
@@ -27596,6 +27884,7 @@ def register_routes(flask_app: Flask) -> None:
                                 client_id=client_id,
                                 mutation=mutation,
                                 batch_ctx=batch_ctx,
+                                actor=actor,
                             )
                         )
                 except NextApiError as exc:

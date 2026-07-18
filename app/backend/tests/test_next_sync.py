@@ -381,6 +381,38 @@ class NextBatchCreateHealTests(unittest.TestCase):
         )
         self.assertEqual(entity_id, mapped)
 
+    def test_container_sync_upsert_receives_authenticated_actor(self):
+        actor = {"id": "creator-1", "role": "media_editor"}
+        mutation = {
+            "clientMutationId": "mutation-1",
+            "entityType": "container",
+            "operation": "upsert",
+            "payload": {"title": "Owned vault", "containerType": "vault"},
+        }
+        applied = {
+            "clientMutationId": "mutation-1",
+            "status": "applied",
+            "entityType": "container",
+            "operation": "upsert",
+            "entityId": uuid.uuid4(),
+        }
+
+        with (
+            patch.object(next_app, "stored_idempotency_response", return_value=None),
+            patch.object(next_app, "apply_container_upsert", return_value=applied) as upsert,
+            patch.object(next_app, "store_idempotency_response"),
+        ):
+            result = next_app.apply_sync_mutation(
+                object(),
+                client_id="client-1",
+                mutation=mutation,
+                actor=actor,
+            )
+
+        self.assertEqual(result, applied)
+        upsert.assert_called_once()
+        self.assertIs(upsert.call_args.kwargs["actor"], actor)
+
 
 if __name__ == "__main__":
     unittest.main()

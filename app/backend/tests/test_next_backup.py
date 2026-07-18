@@ -15,6 +15,8 @@ from app.backend.next_backup import BACKUP_FORMAT
 from app.backend.next_backup import BACKUP_FORMAT_VERSION
 from app.backend.next_backup import BACKUP_TABLES
 from app.backend.next_backup import TABLE_SPEC_BY_NAME
+from app.backend.next_backup import redact_owner_ids
+from app.backend.next_backup import restore_owned_resource
 from app.backend.next_backup import validate_backup_zip
 
 
@@ -49,6 +51,40 @@ class NextBackupValidationTests(unittest.TestCase):
     def test_entity_media_backup_round_trips_hidden_timestamp(self):
         entity_media = TABLE_SPEC_BY_NAME["entity_media"]
         self.assertIn("hidden_at", entity_media.columns)
+
+    def test_container_backup_round_trips_owner(self):
+        containers = TABLE_SPEC_BY_NAME["containers"]
+        self.assertIn("owner_id", containers.columns)
+
+    def test_restore_clears_container_owner_when_account_is_unavailable(self):
+        row = {"id": "container-1", "owner_id": "missing-owner"}
+
+        restored = restore_owned_resource(
+            row,
+            include_user_accounts=True,
+            owner_ids={"available-owner"},
+        )
+
+        self.assertIsNone(restored["owner_id"])
+
+    def test_restore_preserves_container_owner_when_account_was_restored(self):
+        row = {"id": "container-1", "owner_id": "available-owner"}
+
+        restored = restore_owned_resource(
+            row,
+            include_user_accounts=True,
+            owner_ids={"available-owner"},
+        )
+
+        self.assertEqual(restored["owner_id"], "available-owner")
+
+    def test_account_excluded_backup_redacts_container_owner(self):
+        rows = [{"id": "container-1", "owner_id": "private-owner"}]
+
+        redacted = redact_owner_ids(rows)
+
+        self.assertIsNone(redacted[0]["owner_id"])
+        self.assertEqual(rows[0]["owner_id"], "private-owner")
 
     def test_validate_accepts_collection_graph_with_embedded_media(self):
         movie_id = str(uuid.uuid4())

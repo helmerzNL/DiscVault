@@ -19652,8 +19652,15 @@ def ui_preview_html(
     function collectorsModeEnabled() {
       return preferences.collectors_mode === true;
     }
+    function memberGroupLibrarySelected() {
+      const selected = effectiveCollectionGroupFilter();
+      return Boolean(selected && !String(selected).startsWith("__"));
+    }
+    function containerGroupingEnabled() {
+      return memberGroupLibrarySelected() || collectorsModeEnabled();
+    }
     function mergeEditionsAsTitleEnabled() {
-      return collectorsModeEnabled() && preferences.merge_editions_as_title === true;
+      return memberGroupLibrarySelected() || (collectorsModeEnabled() && preferences.merge_editions_as_title === true);
     }
     function containerMembershipRows() {
       return Array.isArray(containerMembership) ? containerMembership : [];
@@ -19814,7 +19821,7 @@ def ui_preview_html(
       return true;
     }
     function containerMatchesGroup(container) {
-      if (!collectorsModeEnabled()) return false;
+      if (!containerGroupingEnabled()) return false;
       const selected = effectiveCollectionGroupFilter();
       if (!selected) return true;
       const memberMovies = containerMemberMovies(container.id);
@@ -19822,7 +19829,7 @@ def ui_preview_html(
       return memberMovies.some((movie) => movieMatchesGroup(movie));
     }
     function containerMatchesSearch(container) {
-      if (!collectorsModeEnabled()) return false;
+      if (!containerGroupingEnabled()) return false;
       const query = activeSearchQuery();
       if (!query) return true;
       const memberText = containerMemberMovies(container.id).map((movie) => [
@@ -19852,7 +19859,7 @@ def ui_preview_html(
       return container?.backdrop_url || container?.metadata?.backdrop_url || container?.metadata?.backdrop || container?.backdrop || "";
     }
     function containerMatchesAdvancedSearch(container, filters = effectiveAdvancedSearchFilters()) {
-      if (!collectorsModeEnabled()) return false;
+      if (!containerGroupingEnabled()) return false;
       const type = String(container?.container_type || "");
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
@@ -19924,7 +19931,7 @@ def ui_preview_html(
       return true;
     }
     function containerMatchesFormat(container) {
-      if (!collectorsModeEnabled()) return false;
+      if (!containerGroupingEnabled()) return false;
       if (!collectionFormatFilters || collectionFormatFilters.size === 0) return true;
       return containerMemberMovies(container.id).some((movie) => movieMatchesFormat(movie));
     }
@@ -19961,7 +19968,7 @@ def ui_preview_html(
       });
     }
     function visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters = effectiveAdvancedSearchFilters()) {
-      if (!collectorsModeEnabled()) return [];
+      if (!containerGroupingEnabled()) return [];
       const visibleItems = (containers || [])
         .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters))
         .map((container) => {
@@ -23147,7 +23154,13 @@ def ui_preview_html(
       });
       if (typeInput) {
         typeInput.value = container.container_type || "collection";
-        typeInput.disabled = true;
+        const canConvert = !!((detail.actions || {}).canConvert);
+        Array.from(typeInput.options || []).forEach((option) => {
+          const conversionType = ["box_set", "vault"].includes(option.value);
+          option.disabled = canConvert && !conversionType;
+          option.hidden = canConvert && !conversionType;
+        });
+        typeInput.disabled = !canConvert;
       }
       const locationSelect = document.getElementById("containerEditLocationSelect");
       if (locationSelect && document.activeElement !== locationSelect) {
@@ -23978,9 +23991,24 @@ def ui_preview_html(
     async function saveContainerDetails(event) {
       event.preventDefault();
       if (!activeContainerId) return;
-      setContainerDetailMessage(tNext("containerDetail.saving", "Saving container..."));
+      const currentContainer = activeContainer();
+      const requestedType = document.getElementById("containerEditType")?.value || currentContainer.container_type || "";
+      const converting = !!(
+        requestedType
+        && currentContainer.container_type
+        && requestedType !== currentContainer.container_type
+      );
+      if (converting && !window.confirm(tNext(
+        "containerDetail.convertConfirm",
+        "Convert this container? Movies, artwork, metadata and collection links will be preserved."
+      ))) return;
+      setContainerDetailMessage(tNext(
+        converting ? "containerDetail.converting" : "containerDetail.saving",
+        converting ? "Converting container..." : "Saving container..."
+      ));
       const body = {
         title: formTextValue("containerEditTitle"),
+        containerType: requestedType,
         year: formTextValue("containerEditYear"),
         barcode: formTextValue("containerEditBarcode"),
         badgeLabel: formTextValue("containerEditBadge"),
@@ -23996,9 +24024,19 @@ def ui_preview_html(
         renderContainerDetail(payload.detail || {});
         await loadAppSnapshot();
         setContainerEditPanelVisible(false);
-        setContainerDetailMessage(tNext("containerDetail.saved", "Container saved."), "good");
+        setContainerDetailMessage(tNext(
+          payload.converted ? "containerDetail.converted" : "containerDetail.saved",
+          payload.converted ? "Container converted." : "Container saved."
+        ), "good");
       } catch (error) {
-        setContainerDetailMessage(error.message || String(error), "bad");
+        const rawMessage = error.message || String(error);
+        let message = rawMessage;
+        if (rawMessage.includes("box-set with this barcode")) {
+          message = tNext("containerDetail.convertBarcodeConflict", "Another box-set already uses this barcode.");
+        } else if (rawMessage.includes("container owner") || rawMessage.includes("instance owner/admin")) {
+          message = tNext("containerDetail.convertPermissionDenied", "Only the container owner or an instance owner/admin can convert it.");
+        }
+        setContainerDetailMessage(message, "bad");
       }
     }
     async function addContainerMovie(event) {
@@ -33155,7 +33193,9 @@ def ui_preview_html(
     }
     function memberRoleForCurrentUser(group) {
       const userId = currentUserId();
-      if (!userId) return "";
+      if (!userId) {
+        return currentAuthStatus.auth_enabled === false && currentRole() === "owner" ? "owner" : "";
+      }
       const members = Array.isArray(group?.members) ? group.members : [];
       const member = members.find((item) => String(item.user_id || item.userId || "") === String(userId));
       if (member?.role) return String(member.role);
@@ -33189,6 +33229,9 @@ def ui_preview_html(
       const members = Array.isArray(group.members) ? group.members : [];
       const role = memberRoleForCurrentUser(group);
       const canInvite = canManageMemberGroup(group);
+      const isOwner = role === "owner";
+      const isSystemOwner = isOwner && !currentUserId() && currentAuthStatus.auth_enabled === false;
+      const canDelete = isOwner && (isSystemOwner ? members.length === 0 : members.length === 1);
       const owner = group.created_by_display_name || group.created_by_username || "";
       const currentId = String(currentUserId() || "");
       const memberRows = members.length
@@ -33221,6 +33264,10 @@ def ui_preview_html(
           </div>
           <div class="container-manager-actions member-group-actions">
             <button type="button" class="secondary-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
+            ${isOwner ? `
+              <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+              ${canDelete ? `<button type="button" class="danger-button" data-member-group-delete="${id}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
+            ` : ""}
             ${canInvite ? `
               <input data-member-group-invite="${id}" maxlength="120" autocomplete="username" placeholder="${escapeHtml(tNext("groups.inviteUsername", "Username"))}" aria-label="${escapeHtml(tNext("groups.inviteUsername", "Username"))}">
               <button type="button" class="secondary-button" data-member-group-invite-send="${id}">${escapeHtml(tNext("groups.invite", "Invite"))}</button>
@@ -33269,6 +33316,59 @@ def ui_preview_html(
         renderGroupFilter();
         renderMemberGroups();
         setMemberGroupMessage(tNext("groups.created", "Group created."), "good");
+      } catch (error) {
+        setMemberGroupMessage(error.message || String(error), "bad");
+      }
+    }
+    async function renameMemberGroup(groupId) {
+      const group = mediaGroups.find((item) => String(item.id) === String(groupId));
+      if (!group || memberRoleForCurrentUser(group) !== "owner") return;
+      const nextName = window.prompt(tNext("groups.renamePrompt", "New group name"), group.name || "");
+      if (nextName === null) return;
+      const name = String(nextName || "").trim();
+      if (!name) {
+        setMemberGroupMessage(tNext("groups.nameRequired", "Enter a group name first."), "bad");
+        return;
+      }
+      setMemberGroupMessage(tNext("common.saving", "Saving…"));
+      try {
+        const payload = await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name})
+        });
+        if (payload.group) {
+          mediaGroups = mediaGroups.map((item) => String(item.id) === String(groupId) ? payload.group : item);
+        }
+        renderGroupFilter();
+        renderMemberGroups();
+        renderCollectionSurface();
+        setMemberGroupMessage(tNext("groups.renamed", "Group renamed."), "good");
+      } catch (error) {
+        setMemberGroupMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteMemberGroup(groupId) {
+      const group = mediaGroups.find((item) => String(item.id) === String(groupId));
+      const members = Array.isArray(group?.members) ? group.members : [];
+      const isSystemOwner = !currentUserId() && currentAuthStatus.auth_enabled === false;
+      const canDelete = memberRoleForCurrentUser(group) === "owner"
+        && (isSystemOwner ? members.length === 0 : members.length === 1);
+      if (!group || !canDelete) return;
+      const confirmed = window.confirm(
+        tNext("groups.deleteConfirm", "Delete '{name}'? Shared movie links and pending invites will also be removed.")
+          .replace("{name}", group.name || "")
+      );
+      if (!confirmed) return;
+      setMemberGroupMessage(tNext("common.saving", "Saving…"));
+      try {
+        await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}`, {method: "DELETE"});
+        if (String(activeCollectionGroupFilter) === String(groupId)) {
+          activeCollectionGroupFilter = "";
+          localStorage.removeItem("dv_next_collection_group_filter");
+        }
+        await loadAppSnapshot();
+        setMemberGroupMessage(tNext("groups.deleted", "Group deleted."), "good");
       } catch (error) {
         setMemberGroupMessage(error.message || String(error), "bad");
       }
@@ -35311,6 +35411,16 @@ def ui_preview_html(
       setProfileTab(activeProfileTab);
       document.getElementById("memberGroupCreateForm")?.addEventListener("submit", (event) => createMemberGroup(event));
       document.getElementById("memberGroupList")?.addEventListener("click", (event) => {
+        const renameButton = event.target.closest("[data-member-group-rename]");
+        if (renameButton) {
+          renameMemberGroup(renameButton.dataset.memberGroupRename);
+          return;
+        }
+        const deleteButton = event.target.closest("[data-member-group-delete]");
+        if (deleteButton) {
+          deleteMemberGroup(deleteButton.dataset.memberGroupDelete);
+          return;
+        }
         const removeButton = event.target.closest("[data-member-group-remove-user]");
         if (removeButton) {
           removeMemberGroupUser(removeButton.dataset.memberGroupRemoveUser, removeButton.dataset.memberGroupUserId);

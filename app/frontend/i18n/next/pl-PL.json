@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "potwierdź: TOTP",
   "legacyAuth.warning": "Klucz: zalecane. Hasło.",
   "legacyAuth.downloadCodes": "Zapisz",
-  "legacyAuth.codesCopied": "Zapisz"
+  "legacyAuth.codesCopied": "Zapisz",
+  "containerDetail.convertBarcodeConflict": "Inny box-set używa już tego kodu kreskowego.",
+  "containerDetail.convertConfirm": "Przekonwertować ten kontener? Filmy, grafiki, metadane i łącza kolekcji zostaną zachowane.",
+  "containerDetail.converted": "Kontener został przekonwertowany.",
+  "containerDetail.converting": "Konwertowanie kontenera...",
+  "containerDetail.convertPermissionDenied": "Może go przekonwertować tylko właściciel kontenera albo właściciel/administrator instancji.",
+  "groups.deleteConfirm": "Usunąć „{name}”? Łącza do udostępnionych filmów i oczekujące zaproszenia również zostaną usunięte.",
+  "groups.deleted": "Grupa usunięta.",
+  "groups.renamed": "Nazwa grupy zmieniona.",
+  "groups.renamePrompt": "Nowa nazwa grupy"
 }
