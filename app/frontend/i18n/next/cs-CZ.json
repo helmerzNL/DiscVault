@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "potvrdit: TOTP",
   "legacyAuth.warning": "Heslo: doporučeno. Heslo.",
   "legacyAuth.downloadCodes": "Uložit",
-  "legacyAuth.codesCopied": "Uložit"
+  "legacyAuth.codesCopied": "Uložit",
+  "containerDetail.convertBarcodeConflict": "Tento čárový kód již používá jiný box-set.",
+  "containerDetail.convertConfirm": "Převést tento kontejner? Filmy, grafika, metadata a odkazy na kolekce zůstanou zachovány.",
+  "containerDetail.converted": "Kontejner byl převeden.",
+  "containerDetail.converting": "Převádění kontejneru...",
+  "containerDetail.convertPermissionDenied": "Převést jej může pouze vlastník kontejneru nebo vlastník či správce instance.",
+  "groups.deleteConfirm": "Smazat „{name}“? Budou odstraněny také odkazy na sdílené filmy a čekající pozvánky.",
+  "groups.deleted": "Skupina smazána.",
+  "groups.renamed": "Skupina přejmenována.",
+  "groups.renamePrompt": "Nový název skupiny"
 }

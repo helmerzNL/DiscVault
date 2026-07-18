@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "potvrdiť: TOTP",
   "legacyAuth.warning": "Prístupový kľúč: odporúčané. heslo.",
   "legacyAuth.downloadCodes": "Uložiť",
-  "legacyAuth.codesCopied": "Uložiť"
+  "legacyAuth.codesCopied": "Uložiť",
+  "containerDetail.convertBarcodeConflict": "Tento čiarový kód už používa iný box-set.",
+  "containerDetail.convertConfirm": "Previesť tento kontajner? Filmy, grafika, metadáta a odkazy na kolekcie zostanú zachované.",
+  "containerDetail.converted": "Kontajner bol prevedený.",
+  "containerDetail.converting": "Prevádzanie kontajnera...",
+  "containerDetail.convertPermissionDenied": "Previesť ho môže iba vlastník kontajnera alebo vlastník či správca inštancie.",
+  "groups.deleteConfirm": "Odstrániť „{name}“? Odstránia sa aj odkazy na zdieľané filmy a čakajúce pozvánky.",
+  "groups.deleted": "Skupina odstránená.",
+  "groups.renamed": "Skupina premenovaná.",
+  "groups.renamePrompt": "Nový názov skupiny"
 }

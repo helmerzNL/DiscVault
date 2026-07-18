@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "Verify authenticator",
   "legacyAuth.warning": "Passwords are less phishing-resistant than passkeys.",
   "legacyAuth.downloadCodes": "Download codes",
-  "legacyAuth.codesCopied": "Recovery codes copied."
+  "legacyAuth.codesCopied": "Recovery codes copied.",
+  "containerDetail.convertBarcodeConflict": "Another box-set already uses this barcode.",
+  "containerDetail.convertConfirm": "Convert this container? Movies, artwork, metadata and collection links will be preserved.",
+  "containerDetail.converted": "Container converted.",
+  "containerDetail.converting": "Converting container...",
+  "containerDetail.convertPermissionDenied": "Only the container owner or an instance owner/admin can convert it.",
+  "groups.deleteConfirm": "Delete '{name}'? Shared movie links and pending invites will also be removed.",
+  "groups.deleted": "Group deleted.",
+  "groups.renamed": "Group renamed.",
+  "groups.renamePrompt": "New group name"
 }

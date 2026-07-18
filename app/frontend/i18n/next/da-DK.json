@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "bekræft: TOTP",
   "legacyAuth.warning": "Passkey: anbefalet. Adgangskode.",
   "legacyAuth.downloadCodes": "Gem",
-  "legacyAuth.codesCopied": "Gem"
+  "legacyAuth.codesCopied": "Gem",
+  "containerDetail.convertBarcodeConflict": "Et andet box-set bruger allerede denne stregkode.",
+  "containerDetail.convertConfirm": "Konvertér denne container? Film, grafik, metadata og samlingslinks bevares.",
+  "containerDetail.converted": "Containeren er konverteret.",
+  "containerDetail.converting": "Konverterer container...",
+  "containerDetail.convertPermissionDenied": "Kun containerens ejer eller en instansejer/-administrator kan konvertere den.",
+  "groups.deleteConfirm": "Slet \"{name}\"? Links til delte film og afventende invitationer fjernes også.",
+  "groups.deleted": "Gruppe slettet.",
+  "groups.renamed": "Gruppe omdøbt.",
+  "groups.renamePrompt": "Nyt gruppenavn"
 }

@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "kinnita: TOTP",
   "legacyAuth.warning": "Pääsuvõti: soovitatud. Parool.",
   "legacyAuth.downloadCodes": "Salvesta",
-  "legacyAuth.codesCopied": "Salvesta"
+  "legacyAuth.codesCopied": "Salvesta",
+  "containerDetail.convertBarcodeConflict": "Teine box-set kasutab juba seda vöötkoodi.",
+  "containerDetail.convertConfirm": "Kas teisendada see konteiner? Filmid, kujundus, metaandmed ja kogude lingid säilitatakse.",
+  "containerDetail.converted": "Konteiner on teisendatud.",
+  "containerDetail.converting": "Konteineri teisendamine...",
+  "containerDetail.convertPermissionDenied": "Seda saab teisendada ainult konteineri omanik või eksemplari omanik/administraator.",
+  "groups.deleteConfirm": "Kas kustutada „{name}“? Samuti eemaldatakse jagatud filmide lingid ja ootel kutsed.",
+  "groups.deleted": "Grupp kustutatud.",
+  "groups.renamed": "Grupp ümber nimetatud.",
+  "groups.renamePrompt": "Uus rühma nimi"
 }

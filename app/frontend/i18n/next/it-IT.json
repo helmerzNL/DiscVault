@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "conferma: TOTP",
   "legacyAuth.warning": "Passkey: consigliato. Password.",
   "legacyAuth.downloadCodes": "Salva",
-  "legacyAuth.codesCopied": "Salva"
+  "legacyAuth.codesCopied": "Salva",
+  "containerDetail.convertBarcodeConflict": "Un altro box-set utilizza già questo codice a barre.",
+  "containerDetail.convertConfirm": "Convertire questo contenitore? Film, immagini, metadati e collegamenti alle raccolte verranno conservati.",
+  "containerDetail.converted": "Contenitore convertito.",
+  "containerDetail.converting": "Conversione del contenitore...",
+  "containerDetail.convertPermissionDenied": "Solo il proprietario del contenitore o un proprietario/amministratore dell’istanza può convertirlo.",
+  "groups.deleteConfirm": "Eliminare «{name}»? Verranno rimossi anche i collegamenti ai film condivisi e gli inviti in sospeso.",
+  "groups.deleted": "Gruppo eliminato.",
+  "groups.renamed": "Gruppo rinominato.",
+  "groups.renamePrompt": "Nuovo nome del gruppo"
 }

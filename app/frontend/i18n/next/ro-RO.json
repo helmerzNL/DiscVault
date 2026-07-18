@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "confirmă: TOTP",
   "legacyAuth.warning": "Cheie de acces: recomandat. Parolă.",
   "legacyAuth.downloadCodes": "Salvează",
-  "legacyAuth.codesCopied": "Salvează"
+  "legacyAuth.codesCopied": "Salvează",
+  "containerDetail.convertBarcodeConflict": "Un alt box-set folosește deja acest cod de bare.",
+  "containerDetail.convertConfirm": "Convertiți acest container? Filmele, ilustrațiile, metadatele și legăturile colecțiilor vor fi păstrate.",
+  "containerDetail.converted": "Container convertit.",
+  "containerDetail.converting": "Se convertește containerul...",
+  "containerDetail.convertPermissionDenied": "Doar proprietarul containerului sau un proprietar/administrator al instanței îl poate converti.",
+  "groups.deleteConfirm": "Ștergi „{name}”? Legăturile filmelor partajate și invitațiile în așteptare vor fi eliminate și ele.",
+  "groups.deleted": "Grup șters.",
+  "groups.renamed": "Grup redenumit.",
+  "groups.renamePrompt": "Noul nume al grupului"
 }

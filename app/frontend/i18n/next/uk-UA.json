@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "підтвердити: TOTP",
   "legacyAuth.warning": "Ключ доступу: рекомендовано. Пароль.",
   "legacyAuth.downloadCodes": "Зберегти",
-  "legacyAuth.codesCopied": "Зберегти"
+  "legacyAuth.codesCopied": "Зберегти",
+  "containerDetail.convertBarcodeConflict": "Інший box-set уже використовує цей штрихкод.",
+  "containerDetail.convertConfirm": "Перетворити цей контейнер? Фільми, зображення, метадані та посилання колекцій буде збережено.",
+  "containerDetail.converted": "Контейнер перетворено.",
+  "containerDetail.converting": "Перетворення контейнера...",
+  "containerDetail.convertPermissionDenied": "Перетворити його може лише власник контейнера або власник/адміністратор екземпляра.",
+  "groups.deleteConfirm": "Видалити «{name}»? Посилання на спільні фільми та запрошення, що очікують, також буде видалено.",
+  "groups.deleted": "Групу видалено.",
+  "groups.renamed": "Групу перейменовано.",
+  "groups.renamePrompt": "Нова назва групи"
 }

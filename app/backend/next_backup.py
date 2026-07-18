@@ -173,6 +173,7 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
             "year",
             "description",
             "primary_movie_id",
+            "owner_id",
             "metadata",
             "created_at",
             "updated_at",
@@ -692,6 +693,10 @@ def add_media_files(
     }
 
 
+def redact_owner_ids(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{**row, "owner_id": None} for row in rows]
+
+
 def export_functional_backup(
     conn,
     output_path: Path,
@@ -739,8 +744,8 @@ def export_functional_backup(
                 if str(row.get("entity_type") or "") in entity_types
                 and str(row.get("entity_id")) in available.get(str(row.get("entity_type") or ""), set())
             ]
-        elif spec.name == "movies" and not include_user_accounts:
-            rows = [{**row, "owner_id": None} for row in rows]
+        elif spec.name in {"movies", "containers"} and not include_user_accounts:
+            rows = redact_owner_ids(rows)
         elif spec.name == "media_groups" and not include_user_accounts:
             rows = [{**row, "created_by": None} for row in rows]
         tables[spec.name] = rows
@@ -1655,6 +1660,17 @@ COLLECTION_UPSERT_ORDER = (
 )
 
 
+def restore_owned_resource(
+    row: dict[str, Any],
+    *,
+    include_user_accounts: bool,
+    owner_ids: set[str],
+) -> dict[str, Any]:
+    if not include_user_accounts or str(row.get("owner_id") or "") not in owner_ids:
+        row["owner_id"] = None
+    return row
+
+
 def restore_functional_backup(
     conn,
     backup_zip: Path,
@@ -1726,10 +1742,12 @@ def restore_functional_backup(
         owner_ids = existing_id_set(conn, "users") if include_user_accounts else set()
         media_ids_after: set[str] = set()
 
-        def movie_transform(row: dict[str, Any]) -> dict[str, Any]:
-            if not include_user_accounts or str(row.get("owner_id") or "") not in owner_ids:
-                row["owner_id"] = None
-            return row
+        def owned_resource_transform(row: dict[str, Any]) -> dict[str, Any]:
+            return restore_owned_resource(
+                row,
+                include_user_accounts=include_user_accounts,
+                owner_ids=owner_ids,
+            )
 
         def person_transform(row: dict[str, Any]) -> dict[str, Any]:
             if str(row.get("profile_asset_id") or "") not in media_ids_after:
@@ -1743,8 +1761,13 @@ def restore_functional_backup(
             if table_name == "media_assets":
                 result = upsert_rows(conn, spec, tables.get(table_name) or [])
                 media_ids_after = existing_id_set(conn, "media_assets")
-            elif table_name == "movies":
-                result = upsert_rows(conn, spec, tables.get(table_name) or [], transform=movie_transform)
+            elif table_name in {"movies", "containers"}:
+                result = upsert_rows(
+                    conn,
+                    spec,
+                    tables.get(table_name) or [],
+                    transform=owned_resource_transform,
+                )
             elif table_name == "people":
                 result = upsert_rows(conn, spec, tables.get(table_name) or [], transform=person_transform)
             else:

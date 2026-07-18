@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "onayla: TOTP",
   "legacyAuth.warning": "Geçiş anahtarı: önerilen. Şifre.",
   "legacyAuth.downloadCodes": "Kaydet",
-  "legacyAuth.codesCopied": "Kaydet"
+  "legacyAuth.codesCopied": "Kaydet",
+  "containerDetail.convertBarcodeConflict": "Başka bir box-set bu barkodu zaten kullanıyor.",
+  "containerDetail.convertConfirm": "Bu kapsayıcı dönüştürülsün mü? Filmler, görseller, meta veriler ve koleksiyon bağlantıları korunur.",
+  "containerDetail.converted": "Kapsayıcı dönüştürüldü.",
+  "containerDetail.converting": "Kapsayıcı dönüştürülüyor...",
+  "containerDetail.convertPermissionDenied": "Yalnızca kapsayıcı sahibi veya örnek sahibi/yöneticisi dönüştürebilir.",
+  "groups.deleteConfirm": "“{name}” silinsin mi? Paylaşılan film bağlantıları ve bekleyen davetler de kaldırılacak.",
+  "groups.deleted": "Grup silindi.",
+  "groups.renamed": "Grup yeniden adlandırıldı.",
+  "groups.renamePrompt": "Yeni grup adı"
 }

@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "potrdi: TOTP",
   "legacyAuth.warning": "Dostopni ključ: priporočeno. Geslo.",
   "legacyAuth.downloadCodes": "Shrani",
-  "legacyAuth.codesCopied": "Shrani"
+  "legacyAuth.codesCopied": "Shrani",
+  "containerDetail.convertBarcodeConflict": "Drug box-set že uporablja to črtno kodo.",
+  "containerDetail.convertConfirm": "Pretvorim ta vsebnik? Filmi, grafike, metapodatki in povezave zbirk bodo ohranjeni.",
+  "containerDetail.converted": "Vsebnik je pretvorjen.",
+  "containerDetail.converting": "Pretvarjanje vsebnika...",
+  "containerDetail.convertPermissionDenied": "Pretvori ga lahko samo lastnik vsebnika ali lastnik/skrbnik primerka.",
+  "groups.deleteConfirm": "Izbrišem »{name}«? Odstranjene bodo tudi povezave do filmov v skupni rabi in čakajoča povabila.",
+  "groups.deleted": "Skupina je izbrisana.",
+  "groups.renamed": "Skupina je preimenovana.",
+  "groups.renamePrompt": "Novo ime skupine"
 }

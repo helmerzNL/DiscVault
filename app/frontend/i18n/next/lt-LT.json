@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "patvirtinti: TOTP",
   "legacyAuth.warning": "Prieigos raktas: rekomenduojama. Slaptažodis.",
   "legacyAuth.downloadCodes": "Išsaugoti",
-  "legacyAuth.codesCopied": "Išsaugoti"
+  "legacyAuth.codesCopied": "Išsaugoti",
+  "containerDetail.convertBarcodeConflict": "Kitas box-set jau naudoja šį brūkšninį kodą.",
+  "containerDetail.convertConfirm": "Konvertuoti šį konteinerį? Filmai, iliustracijos, metaduomenys ir kolekcijų nuorodos bus išsaugoti.",
+  "containerDetail.converted": "Konteineris konvertuotas.",
+  "containerDetail.converting": "Konvertuojamas konteineris...",
+  "containerDetail.convertPermissionDenied": "Jį konvertuoti gali tik konteinerio savininkas arba egzemplioriaus savininkas / administratorius.",
+  "groups.deleteConfirm": "Ištrinti „{name}“? Taip pat bus pašalintos bendrinamų filmų nuorodos ir laukiantys kvietimai.",
+  "groups.deleted": "Grupė ištrinta.",
+  "groups.renamed": "Grupė pervadinta.",
+  "groups.renamePrompt": "Naujas grupės pavadinimas"
 }

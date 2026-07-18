@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "επιβεβαίωση: TOTP",
   "legacyAuth.warning": "Κλειδί πρόσβασης: προτεινόμενο. Σύνθημα.",
   "legacyAuth.downloadCodes": "Αποθήκευση",
-  "legacyAuth.codesCopied": "Αποθήκευση"
+  "legacyAuth.codesCopied": "Αποθήκευση",
+  "containerDetail.convertBarcodeConflict": "Ένα άλλο box-set χρησιμοποιεί ήδη αυτόν τον γραμμωτό κώδικα.",
+  "containerDetail.convertConfirm": "Μετατροπή αυτού του container; Οι ταινίες, τα γραφικά, τα μεταδεδομένα και οι σύνδεσμοι συλλογών θα διατηρηθούν.",
+  "containerDetail.converted": "Το container μετατράπηκε.",
+  "containerDetail.converting": "Μετατροπή container...",
+  "containerDetail.convertPermissionDenied": "Μόνο ο κάτοχος του container ή ένας κάτοχος/διαχειριστής της εγκατάστασης μπορεί να το μετατρέψει.",
+  "groups.deleteConfirm": "Διαγραφή του «{name}»; Θα αφαιρεθούν επίσης οι σύνδεσμοι κοινόχρηστων ταινιών και οι εκκρεμείς προσκλήσεις.",
+  "groups.deleted": "Η ομάδα διαγράφηκε.",
+  "groups.renamed": "Η ομάδα μετονομάστηκε.",
+  "groups.renamePrompt": "Νέο όνομα ομάδας"
 }

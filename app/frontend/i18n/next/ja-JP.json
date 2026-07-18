@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "確認: TOTP",
   "legacyAuth.warning": "パスキー: 推奨. パスワード.",
   "legacyAuth.downloadCodes": "保存",
-  "legacyAuth.codesCopied": "保存"
+  "legacyAuth.codesCopied": "保存",
+  "containerDetail.convertBarcodeConflict": "別のボックスセットがすでにこのバーコードを使用しています。",
+  "containerDetail.convertConfirm": "このコンテナを変換しますか？映画、アートワーク、メタデータ、コレクションのリンクは保持されます。",
+  "containerDetail.converted": "コンテナを変換しました。",
+  "containerDetail.converting": "コンテナを変換しています...",
+  "containerDetail.convertPermissionDenied": "変換できるのはコンテナの所有者またはインスタンスの所有者/管理者のみです。",
+  "groups.deleteConfirm": "「{name}」を削除しますか？共有映画のリンクと保留中の招待も削除されます。",
+  "groups.deleted": "グループを削除しました。",
+  "groups.renamed": "グループ名を変更しました。",
+  "groups.renamePrompt": "新しいグループ名"
 }

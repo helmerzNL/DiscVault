@@ -88,6 +88,19 @@ class NextMigrationContractTests(unittest.TestCase):
         self.assertIn("WHERE deleted_at IS NULL", migration)
         self.assertNotIn("purge_after", migration)
 
+    def test_container_ownership_migration_backfills_instance_owner(self):
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "migrations_next"
+            / "044_container_ownership.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("ADD COLUMN IF NOT EXISTS owner_id uuid REFERENCES users(id) ON DELETE SET NULL", migration)
+        self.assertIn("WHERE r.key = 'owner'", migration)
+        self.assertIn("UPDATE containers c", migration)
+        self.assertIn("WHERE c.owner_id IS NULL", migration)
+        self.assertIn("idx_containers_owner_id", migration)
+
     def test_legacy_membergroups_maps_to_basic_viewer_role(self):
         self.assertEqual(legacy_role_key("MemberGroups"), "media_viewer")
         self.assertEqual(legacy_role_key("admin"), "admin")

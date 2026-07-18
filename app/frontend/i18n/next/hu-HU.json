@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "megerősítés: TOTP",
   "legacyAuth.warning": "Hozzáférési kulcs: ajánlott. Jelszó.",
   "legacyAuth.downloadCodes": "Mentés",
-  "legacyAuth.codesCopied": "Mentés"
+  "legacyAuth.codesCopied": "Mentés",
+  "containerDetail.convertBarcodeConflict": "Egy másik box-set már használja ezt a vonalkódot.",
+  "containerDetail.convertConfirm": "Átalakítja ezt a tárolót? A filmek, grafikák, metaadatok és gyűjteményhivatkozások megmaradnak.",
+  "containerDetail.converted": "A tároló átalakítva.",
+  "containerDetail.converting": "Tároló átalakítása...",
+  "containerDetail.convertPermissionDenied": "Csak a tároló tulajdonosa vagy egy példánytulajdonos/-adminisztrátor alakíthatja át.",
+  "groups.deleteConfirm": "Törlöd ezt: „{name}”? A megosztott filmek hivatkozásai és a függőben lévő meghívók is törlődnek.",
+  "groups.deleted": "Csoport törölve.",
+  "groups.renamed": "Csoport átnevezve.",
+  "groups.renamePrompt": "Új csoportnév"
 }

@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "确认: TOTP",
   "legacyAuth.warning": "通行密钥: 推荐. 密码.",
   "legacyAuth.downloadCodes": "保存",
-  "legacyAuth.codesCopied": "保存"
+  "legacyAuth.codesCopied": "保存",
+  "containerDetail.convertBarcodeConflict": "另一个套装已使用此条形码。",
+  "containerDetail.convertConfirm": "转换此容器？电影、图稿、元数据和收藏链接都将保留。",
+  "containerDetail.converted": "容器已转换。",
+  "containerDetail.converting": "正在转换容器...",
+  "containerDetail.convertPermissionDenied": "只有容器所有者或实例所有者/管理员才能转换它。",
+  "groups.deleteConfirm": "删除“{name}”吗？共享影片链接和待处理邀请也将被删除。",
+  "groups.deleted": "群组已删除。",
+  "groups.renamed": "群组已重命名。",
+  "groups.renamePrompt": "新的群组名称"
 }

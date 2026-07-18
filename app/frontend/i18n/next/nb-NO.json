@@ -2361,5 +2361,14 @@
   "legacyAuth.verifyTotp": "bekreft: TOTP",
   "legacyAuth.warning": "Passkey: anbefalt. Passord.",
   "legacyAuth.downloadCodes": "Lagre",
-  "legacyAuth.codesCopied": "Lagre"
+  "legacyAuth.codesCopied": "Lagre",
+  "containerDetail.convertBarcodeConflict": "Et annet box-set bruker allerede denne strekkoden.",
+  "containerDetail.convertConfirm": "Konverter denne beholderen? Filmer, grafikk, metadata og samlingslenker blir bevart.",
+  "containerDetail.converted": "Beholderen er konvertert.",
+  "containerDetail.converting": "Konverterer beholder...",
+  "containerDetail.convertPermissionDenied": "Bare beholderens eier eller en instanseier/-administrator kan konvertere den.",
+  "groups.deleteConfirm": "Slette «{name}»? Koblinger til delte filmer og ventende invitasjoner fjernes også.",
+  "groups.deleted": "Gruppe slettet.",
+  "groups.renamed": "Gruppe omdøpt.",
+  "groups.renamePrompt": "Nytt gruppenavn"
 }
