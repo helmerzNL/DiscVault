@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import pathlib
@@ -136,7 +137,11 @@ class LegacyAuthSecurityTests(unittest.TestCase):
             decrypt_totp_secret(nonce, ciphertext, key_secret="another-secret")
         uri = totp_uri(secret, "owner")
         self.assertTrue(uri.startswith("otpauth://totp/DiscVault%3Aowner?"))
-        self.assertTrue(totp_qr_data_uri(uri).startswith("data:image/svg+xml;base64,"))
+        qr_data_uri = totp_qr_data_uri(uri)
+        self.assertTrue(qr_data_uri.startswith("data:image/svg+xml;base64,"))
+        qr_svg = base64.b64decode(qr_data_uri.partition(",")[2]).decode("utf-8")
+        self.assertIn('<path fill="#fff"', qr_svg)
+        self.assertIn('stroke="#000"', qr_svg)
 
     def test_recovery_codes_are_random_hashed_and_single_value_verifiable(self):
         codes = generate_recovery_codes()
@@ -278,6 +283,61 @@ class LegacyAuthContractTests(unittest.TestCase):
         self.assertIn("appAdminLegacyUserForm", self.ui_source)
         self.assertIn("profileLegacyPasswordForm", self.ui_source)
         self.assertIn('data-next-i18n="legacyAuth.passkeyRecommended"', self.ui_source)
+        self.assertGreaterEqual(
+            self.ui_source.count('class="legacy-checkbox-row'), 7
+        )
+        self.assertIn(
+            'label.legacy-checkbox-row input[type="checkbox"]',
+            self.ui_source,
+        )
+        admin_visibility_start = self.ui_source.index(
+            "function renderAppAdminVisibility()"
+        )
+        admin_visibility = self.ui_source[
+            admin_visibility_start : admin_visibility_start + 300
+        ]
+        self.assertIn(
+            "const allowed = isNativeAdminUser() && canUseAppAdmin();",
+            admin_visibility,
+        )
+        self.assertIn("function clearProfileRecoveryCodes()", self.ui_source)
+        self.assertIn(
+            'if (route !== "profile") clearProfileRecoveryCodes();',
+            self.ui_source,
+        )
+        self.assertIn(
+            'if (selected !== "security") clearProfileRecoveryCodes();',
+            self.ui_source,
+        )
+        self.assertIn('class="profile-security-column"', self.ui_source)
+        self.assertIn(
+            'data-next-i18n="legacyAuth.passwordSecurity">Legacy security',
+            self.ui_source,
+        )
+        self.assertIn(
+            'data-next-i18n="legacyAuth.mfaStatus">2FA status',
+            self.ui_source,
+        )
+        self.assertNotIn('id="profileLegacyRecoveryCount"', self.ui_source)
+        self.assertIn(
+            "Recovery codes let you regain access when your usual sign-in methods are unavailable.",
+            self.ui_source,
+        )
+        self.assertGreaterEqual(
+            self.auth_source.count("next_replace_recovery_codes("),
+            3,
+        )
+        self.assertGreaterEqual(
+            self.auth_source.count("next_consume_recovery_code("),
+            3,
+        )
+        backup_specs = {
+            spec.name: spec for spec in next_backup.USER_ACCOUNT_BACKUP_TABLE_SPECS
+        }
+        self.assertIn(
+            "legacy_code_hash",
+            backup_specs["recovery_codes"].columns,
+        )
         self.assertLess(
             self.ui_source.index("async function copyLegacyCodes(codes)"),
             self.ui_source.index("async function runStartupLegacyBootstrap()"),

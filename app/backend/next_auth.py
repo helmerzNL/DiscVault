@@ -41,7 +41,6 @@ try:
         flow_token_hash,
         failed_attempt_state,
         generate_flow_token,
-        generate_recovery_codes,
         generate_totp_secret,
         hash_password,
         hash_recovery_code,
@@ -69,7 +68,6 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         flow_token_hash,
         failed_attempt_state,
         generate_flow_token,
-        generate_recovery_codes,
         generate_totp_secret,
         hash_password,
         hash_recovery_code,
@@ -179,6 +177,74 @@ def next_generate_recovery_codes(count: int = 8) -> list[str]:
         if code not in codes:
             codes.append(code)
     return codes
+
+
+def next_replace_recovery_codes(cur, user_id: UUID | str, codes: list[str]) -> None:
+    cur.execute(
+        """
+        UPDATE recovery_codes
+        SET used_at=COALESCE(used_at, now())
+        WHERE user_id=%s
+          AND used_at IS NULL
+        """,
+        (user_id,),
+    )
+    for index, code in enumerate(codes, start=1):
+        cur.execute(
+            """
+            INSERT INTO recovery_codes (
+                user_id, code_hash, legacy_code_hash, label, created_at
+            )
+            VALUES (%s, %s, %s, %s, now())
+            """,
+            (
+                user_id,
+                next_recovery_code_hash(code),
+                hash_recovery_code(code),
+                f"Recovery code {index}",
+            ),
+        )
+
+
+def next_consume_recovery_code(cur, user_id: UUID | str, code: Any) -> bool:
+    normalized = next_normalize_recovery_code(code)
+    if not normalized:
+        return False
+    deterministic_hash = next_recovery_code_hash(normalized)
+    cur.execute(
+        """
+        SELECT id, code_hash, legacy_code_hash
+        FROM recovery_codes
+        WHERE user_id=%s
+          AND used_at IS NULL
+          AND (expires_at IS NULL OR expires_at > now())
+        FOR UPDATE
+        """,
+        (user_id,),
+    )
+    matched_id = None
+    for row in cur.fetchall():
+        deterministic_match = secrets.compare_digest(
+            str(row.get("code_hash") or ""),
+            deterministic_hash,
+        )
+        legacy_hash = row.get("legacy_code_hash")
+        if deterministic_match or (
+            legacy_hash and verify_recovery_code(legacy_hash, normalized)
+        ):
+            matched_id = row["id"]
+            break
+    if not matched_id:
+        return False
+    cur.execute(
+        """
+        UPDATE recovery_codes
+        SET used_at=now()
+        WHERE id=%s AND used_at IS NULL
+        """,
+        (matched_id,),
+    )
+    return cur.rowcount == 1
 
 
 def _jwt_secret() -> str:
@@ -2313,15 +2379,9 @@ def register_next_auth_routes(
                         (user_id, _b64url_decode(payload["encryptedSecret"]), _b64url_decode(payload["nonce"]), accepted_step),
                     )
                 assign_role(conn, user_id, "owner")
-                recovery_codes = generate_recovery_codes()
+                recovery_codes = next_generate_recovery_codes()
                 with conn.cursor() as cur:
-                    cur.executemany(
-                        """
-                        INSERT INTO legacy_mfa_recovery_codes (user_id, code_hash)
-                        VALUES (%s, %s)
-                        """,
-                        [(user_id, hash_recovery_code(code)) for code in recovery_codes],
-                    )
+                    next_replace_recovery_codes(cur, user_id, recovery_codes)
                 set_setting(conn, LEGACY_AUTH_SETTING, True)
                 set_setting(conn, "auth_enabled", True)
                 ack_token = issue_legacy_flow(
@@ -2593,8 +2653,10 @@ def register_next_auth_routes(
                             WHERE t.user_id=c.user_id AND t.confirmed_at IS NOT NULL
                         ) AS mfa_enrolled,
                         (
-                            SELECT COUNT(*) FROM legacy_mfa_recovery_codes r
-                            WHERE r.user_id=c.user_id AND r.used_at IS NULL
+                            SELECT COUNT(*) FROM recovery_codes r
+                            WHERE r.user_id=c.user_id
+                              AND r.used_at IS NULL
+                              AND (r.expires_at IS NULL OR r.expires_at > now())
                         )::int AS active_recovery_codes
                     FROM legacy_password_credentials c
                     WHERE c.user_id=%s
@@ -2667,7 +2729,7 @@ def register_next_auth_routes(
                         {"status": "error", "error": "Invalid authentication code"},
                         400,
                     )
-                recovery_codes = generate_recovery_codes()
+                recovery_codes = next_generate_recovery_codes()
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -2684,14 +2746,7 @@ def register_next_auth_routes(
                         """,
                         (user["id"], ciphertext, nonce, accepted_step),
                     )
-                    cur.execute("DELETE FROM legacy_mfa_recovery_codes WHERE user_id=%s", (user["id"],))
-                    cur.executemany(
-                        """
-                        INSERT INTO legacy_mfa_recovery_codes (user_id, code_hash)
-                        VALUES (%s, %s)
-                        """,
-                        [(user["id"], hash_recovery_code(code)) for code in recovery_codes],
-                    )
+                    next_replace_recovery_codes(cur, user["id"], recovery_codes)
                 ack_token = issue_legacy_flow(
                     conn,
                     "mfa_recovery_ack",
@@ -2798,24 +2853,11 @@ def register_next_auth_routes(
                 )
                 user = legacy_user_row(conn, flow["user_id"])
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        SELECT id, code_hash
-                        FROM legacy_mfa_recovery_codes
-                        WHERE user_id=%s AND used_at IS NULL
-                        FOR UPDATE
-                        """,
-                        (user["id"],),
+                    matched = next_consume_recovery_code(
+                        cur,
+                        user["id"],
+                        body.get("recovery_code"),
                     )
-                    rows = cur.fetchall()
-                matched = next(
-                    (
-                        row
-                        for row in rows
-                        if verify_recovery_code(row["code_hash"], body.get("recovery_code"))
-                    ),
-                    None,
-                )
                 if not matched:
                     record_legacy_attempt(
                         conn,
@@ -2827,17 +2869,6 @@ def register_next_auth_routes(
                         {"status": "error", "error": "Invalid authentication code"},
                         401,
                     )
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE legacy_mfa_recovery_codes
-                        SET used_at=now()
-                        WHERE id=%s AND used_at IS NULL
-                        """,
-                        (matched["id"],),
-                    )
-                    if cur.rowcount != 1:
-                        raise next_api_error("Invalid authentication code", 401)
                 return legacy_complete_login(
                     conn,
                     user=user,
@@ -3338,8 +3369,6 @@ def register_next_auth_routes(
         mobile_flow = _parse_uuid(mobile_flow_raw)
         if mobile_flow_raw and not mobile_flow:
             raise next_api_error("mobile_flow is invalid", 400)
-        code_hash = next_recovery_code_hash(recovery_code)
-
         with connect() as conn:
             if not table_exists(conn, "users") or not table_exists(conn, "recovery_codes"):
                 raise next_api_error("Recovery is not available yet", 503)
@@ -3347,29 +3376,19 @@ def register_next_auth_routes(
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        SELECT rc.id AS recovery_code_id, u.id AS user_id, u.username, u.status AS user_status
-                        FROM recovery_codes rc
-                        JOIN users u ON u.id = rc.user_id
+                        SELECT u.id AS user_id, u.username, u.status AS user_status
+                        FROM users u
                         WHERE u.username=%s
-                          AND rc.code_hash=%s
-                          AND rc.used_at IS NULL
-                          AND (rc.expires_at IS NULL OR rc.expires_at > now())
                         """,
-                        (username, code_hash),
+                        (username,),
                     )
                     row = cur.fetchone()
                     if not row:
                         raise next_api_error("Invalid username or recovery code", 401)
                     if row["user_status"] != "active":
                         raise next_api_error("User is disabled", 403)
-                    cur.execute(
-                        """
-                        UPDATE recovery_codes
-                        SET used_at=now()
-                        WHERE id=%s
-                        """,
-                        (row["recovery_code_id"],),
-                    )
+                    if not next_consume_recovery_code(cur, row["user_id"], recovery_code):
+                        raise next_api_error("Invalid username or recovery code", 401)
                     cur.execute(
                         """
                         SELECT COUNT(*) AS count

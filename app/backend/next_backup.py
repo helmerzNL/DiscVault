@@ -269,7 +269,16 @@ USER_ACCOUNT_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
     ),
     TableSpec(
         "recovery_codes",
-        ("id", "user_id", "code_hash", "label", "created_at", "used_at", "expires_at"),
+        (
+            "id",
+            "user_id",
+            "code_hash",
+            "legacy_code_hash",
+            "label",
+            "created_at",
+            "used_at",
+            "expires_at",
+        ),
     ),
     TableSpec(
         "api_access_tokens",

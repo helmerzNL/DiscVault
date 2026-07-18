@@ -19,15 +19,33 @@ except ModuleNotFoundError as exc:
         raise
     next_app = None
 try:
+    from app.backend.next_auth import next_consume_recovery_code
     from app.backend.next_auth import next_generate_recovery_codes
     from app.backend.next_auth import next_normalize_recovery_code
+    from app.backend.next_auth import next_replace_recovery_codes
     from app.backend.next_auth import next_recovery_code_hash
 except ModuleNotFoundError as exc:
     if exc.name not in {"cbor2", "psycopg"}:
         raise
+    next_consume_recovery_code = None
     next_generate_recovery_codes = None
     next_normalize_recovery_code = None
+    next_replace_recovery_codes = None
     next_recovery_code_hash = None
+
+
+class _RecoveryCursor:
+    def __init__(self, rows=None):
+        self.calls = []
+        self.rows = list(rows or [])
+        self.rowcount = 0
+
+    def execute(self, query, params):
+        self.calls.append((" ".join(query.split()), params))
+        self.rowcount = 1 if "SET used_at=now()" in query else 0
+
+    def fetchall(self):
+        return list(self.rows)
 
 
 class NextMigrationContractTests(unittest.TestCase):
@@ -46,6 +64,17 @@ class NextMigrationContractTests(unittest.TestCase):
         self.assertIn("'metadata.refresh_person'", migration)
         self.assertIn("'metadata.refresh_movie'", migration)
         self.assertIn("existing.status IN ('pending', 'running')", migration)
+
+    def test_recovery_code_migration_unifies_passkey_and_legacy_codes(self):
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "migrations_next"
+            / "042_unified_recovery_codes.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("ADD COLUMN IF NOT EXISTS legacy_code_hash text", migration)
+        self.assertIn("FROM legacy_mfa_recovery_codes AS legacy", migration)
+        self.assertIn("recovery.legacy_code_hash = legacy.code_hash", migration)
 
     def test_legacy_membergroups_maps_to_basic_viewer_role(self):
         self.assertEqual(legacy_role_key("MemberGroups"), "media_viewer")
@@ -152,6 +181,37 @@ class NextMigrationContractTests(unittest.TestCase):
         self.assertEqual(
             next_recovery_code_hash("ab12-cd34"),
             next_recovery_code_hash("AB12CD34"),
+        )
+
+    @unittest.skipIf(next_replace_recovery_codes is None, "Passkey dependencies are not installed")
+    def test_recovery_codes_store_both_hashes_and_share_consumption(self):
+        replace_cursor = _RecoveryCursor()
+        with (
+            patch("app.backend.next_auth.next_recovery_code_hash", return_value="passkey-hash"),
+            patch("app.backend.next_auth.hash_recovery_code", return_value="legacy-hash"),
+        ):
+            next_replace_recovery_codes(replace_cursor, "user-1", ["ABCD-EFGH"])
+
+        insert_call = next(
+            call for call in replace_cursor.calls if call[0].startswith("INSERT INTO recovery_codes")
+        )
+        self.assertEqual(
+            insert_call[1],
+            ("user-1", "passkey-hash", "legacy-hash", "Recovery code 1"),
+        )
+
+        consume_cursor = _RecoveryCursor(
+            [{"id": "code-1", "code_hash": "not-a-match", "legacy_code_hash": "legacy-hash"}]
+        )
+        with patch("app.backend.next_auth.verify_recovery_code", return_value=True):
+            self.assertTrue(
+                next_consume_recovery_code(consume_cursor, "user-1", "ABCD-EFGH")
+            )
+        self.assertTrue(
+            any(
+                query.startswith("UPDATE recovery_codes SET used_at=now()")
+                for query, _ in consume_cursor.calls
+            )
         )
 
 

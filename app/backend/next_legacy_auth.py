@@ -267,6 +267,8 @@ def totp_qr_data_uri(uri: str) -> str:
         kind="svg",
         scale=5,
         border=2,
+        dark="#000",
+        light="#fff",
         xmldecl=False,
         svgns=True,
     )
