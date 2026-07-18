@@ -102,7 +102,11 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     (next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,),
                 )
                 cur.execute(
-                    "DELETE FROM media_assets WHERE provider_id LIKE 'movievault_v2:%'"
+                    """
+                    DELETE FROM media_assets
+                    WHERE provider_id LIKE 'movievault_v2:%'
+                       OR provider_id = 'test:movievault-v2-public-media'
+                    """
                 )
 
     def setUp(self):
@@ -960,7 +964,10 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                         },
                     )
                 self.assertEqual(fields["posterStatus"], "ready")
-                self.assertEqual(fields["posterUrl"], f"/api/next/media/assets/{row['media_asset_id']}")
+                self.assertEqual(
+                    fields["posterUrl"],
+                    f"/api/next/movievault-v2/posters/{row['media_asset_id']}",
+                )
                 self.assertNotIn("movievault.example", fields["posterUrl"])
 
     def test_poster_cache_job_failure_preserves_prior_ready_media_asset(self):
@@ -1141,11 +1148,17 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         self.assertEqual(cleanup_result["removed"], 0)
         self.assertEqual(remaining, 4)
 
-    def test_media_asset_route_serves_local_bytes_with_etag_and_no_remote_leakage(self):
+    def test_movievault_poster_route_requires_auth_and_keeps_generic_media_public(self):
         content = _png_bytes()
         checksum = hashlib.sha256(content).hexdigest()
+        public_content = _png_bytes(size=(11, 11))
+        public_checksum = hashlib.sha256(public_content).hexdigest()
         with tempfile.TemporaryDirectory() as data_dir:
             with patch.dict(os.environ, {"DISCVAULT_LEGACY_DATA_DIR": data_dir}):
+                public_storage_key = "media/public/poster.png"
+                public_path = Path(data_dir) / public_storage_key
+                public_path.parent.mkdir(parents=True, exist_ok=True)
+                public_path.write_bytes(public_content)
                 with self.connect() as conn:
                     with conn.transaction():
                         with conn.cursor() as cur:
@@ -1158,6 +1171,21 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                                 ("poster-asset-http", checksum),
                             )
                             cache_id = cur.fetchone()["id"]
+                            cur.execute(
+                                """
+                                INSERT INTO media_assets (
+                                    kind, variant, storage_backend, storage_key, provider_id,
+                                    content_type, width, height, size_bytes, sha256
+                                )
+                                VALUES (
+                                    'poster', 'poster', 'local', %s, 'test:movievault-v2-public-media',
+                                    'image/png', 11, 11, %s, %s
+                                )
+                                RETURNING id
+                                """,
+                                (public_storage_key, len(public_content), public_checksum),
+                            )
+                            public_media_asset_id = cur.fetchone()["id"]
                     with patch.object(
                         next_movievault_v2_posters,
                         "_request",
@@ -1184,17 +1212,87 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
 
                 app = next_app.create_app()
                 client = app.test_client()
-                response = client.get(f"/api/next/media/assets/{media_asset_id}")
+                protected_path = f"/api/next/movievault-v2/posters/{media_asset_id}"
+                self.assertFalse(next_app.is_public_next_path(protected_path))
+                self.assertTrue(next_app.is_public_next_path(f"/api/next/media/assets/{media_asset_id}"))
+
+                with (
+                    patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+                    patch.object(next_app, "next_auth_current_user", return_value=None),
+                ):
+                    anonymous = client.get(protected_path)
+                self.assertEqual(anonymous.status_code, 401)
+
+                with (
+                    patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+                    patch.object(
+                        next_app,
+                        "next_auth_current_user",
+                        return_value={"id": "authenticated-user"},
+                    ),
+                ):
+                    response = client.get(protected_path)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.data, content)
                 self.assertIn("ETag", response.headers)
-                self.assertIn("max-age", response.headers.get("Cache-Control", ""))
+                self.assertIn("private", response.headers.get("Cache-Control", ""))
+                self.assertIn("no-store", response.headers.get("Cache-Control", ""))
+                self.assertNotIn("public", response.headers.get("Cache-Control", ""))
                 # The authenticated local route never leaks the MovieVault origin,
                 # any contribution token, or a raw remote asset path to the client.
                 header_blob = " ".join(f"{k}:{v}" for k, v in response.headers.items())
                 self.assertNotIn("movievault", header_blob.lower())
                 self.assertNotIn("poster-asset-http", header_blob)
                 response.close()
+
+                with self.connect() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE movievault_v2_poster_cache
+                            SET status = 'degraded'
+                            WHERE id = %s
+                            """,
+                            (cache_id,),
+                        )
+                with (
+                    patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+                    patch.object(
+                        next_app,
+                        "next_auth_current_user",
+                        return_value={"id": "authenticated-user"},
+                    ),
+                ):
+                    degraded_fallback = client.get(protected_path)
+                self.assertEqual(degraded_fallback.status_code, 200)
+                self.assertEqual(degraded_fallback.data, content)
+                degraded_fallback.close()
+
+                public_bypass = client.get(f"/api/next/media/assets/{media_asset_id}")
+                self.assertEqual(public_bypass.status_code, 404)
+
+                with (
+                    patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+                    patch.object(
+                        next_app,
+                        "next_auth_current_user",
+                        return_value={"id": "authenticated-user"},
+                    ),
+                ):
+                    protected_non_movievault = client.get(
+                        f"/api/next/movievault-v2/posters/{public_media_asset_id}"
+                    )
+                self.assertEqual(protected_non_movievault.status_code, 404)
+
+                public_response = client.get(f"/api/next/media/assets/{public_media_asset_id}")
+                self.assertEqual(public_response.status_code, 200)
+                self.assertEqual(public_response.data, public_content)
+                self.assertIn("public", public_response.headers.get("Cache-Control", ""))
+                public_response.close()
+
+                with self.connect() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("DELETE FROM media_assets WHERE id = %s", (public_media_asset_id,))
 
 
 if __name__ == "__main__":

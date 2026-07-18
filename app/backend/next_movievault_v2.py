@@ -1366,7 +1366,7 @@ def _json_value(value: Any) -> Any:
 def _local_media_asset_url(media_asset_id: Any) -> str | None:
     if not media_asset_id:
         return None
-    return f"/api/next/media/assets/{media_asset_id}"
+    return f"/api/next/movievault-v2/posters/{media_asset_id}"
 
 
 def _poster_status_fields(conn: Any, poster: dict[str, Any] | None) -> dict[str, Any]:
