@@ -1,6 +1,6 @@
 # DiscVault Release Notes
 
-## 26.4.65 - Authenticated MovieVault poster media
+## 26.4.66 - Authenticated MovieVault poster media
 
 - Serves cached MovieVault v2 posters only through a dedicated authenticated
   local route with private browser-cache semantics.

@@ -1178,7 +1178,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                                     content_type, width, height, size_bytes, sha256
                                 )
                                 VALUES (
-                                    'poster', 'poster', 'local', %s, 'test:movievault-v2-public-media',
+                                    'poster', 'display', 'local', %s, 'test:movievault-v2-public-media',
                                     'image/png', 11, 11, %s, %s
                                 )
                                 RETURNING id
