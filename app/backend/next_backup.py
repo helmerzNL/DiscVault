@@ -1,9 +1,8 @@
 """Functional collection backup and restore helpers for DiscVault Next.
 
-The backup format intentionally covers movie-related collection data only. It
-excludes auth, passkeys, invite codes, plugin configuration, plugin secrets,
-subscription state, and notifications. Personal watchlists and watch history can
-be included explicitly.
+The optional user-account scope includes password hashes and Legacy policy, but
+never passkeys, decryptable TOTP secrets, recovery material, active auth flows,
+invite codes, plugin secrets, subscription state, or notifications.
 """
 
 from __future__ import annotations
@@ -25,8 +24,10 @@ SUPPORTED_BACKUP_FORMAT_VERSIONS = frozenset({1, 2})
 BACKUP_RESTORE_JOB_TYPE = "backup.restore_functional"
 
 EXCLUDED_SCOPES = (
-    "auth",
     "passkeys",
+    "totp_secrets",
+    "legacy_recovery_codes",
+    "legacy_auth_flows",
     "invite_codes",
     "plugin_configuration",
     "plugin_secrets",
@@ -250,6 +251,23 @@ USER_ACCOUNT_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
         ("user_id", "role_id", "scope_type", "scope_id", "assigned_by", "assigned_at"),
     ),
     TableSpec(
+        "legacy_password_credentials",
+        (
+            "user_id",
+            "password_hash",
+            "hash_version",
+            "must_change_password",
+            "mfa_required",
+            "passkey_registration_allowed",
+            "credential_expires_at",
+            "password_changed_at",
+            "last_login_at",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ),
+    ),
+    TableSpec(
         "recovery_codes",
         ("id", "user_id", "code_hash", "label", "created_at", "used_at", "expires_at"),
     ),
@@ -320,6 +338,7 @@ CONFLICT_KEYS: dict[str, tuple[str, ...]] = {
     "roles": ("key",),
     "role_permissions": ("role_id", "permission_key"),
     "user_roles": ("user_id", "role_id", "scope_type", "scope_id"),
+    "legacy_password_credentials": ("user_id",),
     "recovery_codes": ("id",),
     "api_access_tokens": ("id",),
     "watchlist_items": ("id",),
@@ -356,6 +375,7 @@ SCOPE_TABLES: dict[str, tuple[str, ...]] = {
         "roles",
         "role_permissions",
         "user_roles",
+        "legacy_password_credentials",
         "recovery_codes",
         "api_access_tokens",
     ),
@@ -1439,7 +1459,9 @@ def bump_restore_revision(conn, summary: dict[str, Any]) -> int | None:
 
 def restore_user_accounts(conn, tables: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     """Upsert user accounts: users, roles (remapped by key), permissions, recovery
-    codes and API tokens. Passkeys are never restored, so this cannot lock anyone out.
+    codes and API tokens. Passkeys and TOTP secrets are never restored. Legacy
+    users with MFA policy enabled are left without a TOTP row so their next
+    password login enters enrollment rather than locking them out.
     """
     if not table_exists(conn, "users"):
         return {"skipped": "users table missing"}
@@ -1458,6 +1480,56 @@ def restore_user_accounts(conn, tables: dict[str, list[dict[str, Any]]]) -> dict
     )
 
     user_ids = existing_id_set(conn, "users")
+
+    def legacy_credential_transform(row: dict[str, Any]) -> dict[str, Any] | None:
+        if str(row.get("user_id") or "") not in user_ids:
+            return None
+        if str(row.get("created_by") or "") not in user_ids:
+            row["created_by"] = None
+        return row
+
+    summary["legacy_password_credentials"] = upsert_rows(
+        conn,
+        TABLE_SPEC_BY_NAME["legacy_password_credentials"],
+        tables.get("legacy_password_credentials") or [],
+        transform=legacy_credential_transform,
+    )
+    restored_legacy_ids = [
+        row.get("user_id")
+        for row in tables.get("legacy_password_credentials") or []
+        if str(row.get("user_id") or "") in user_ids
+    ]
+    if restored_legacy_ids:
+        with conn.cursor() as cur:
+            if table_exists(conn, "legacy_password_credentials"):
+                cur.execute(
+                    """
+                    UPDATE legacy_password_credentials
+                    SET failed_attempt_count=0, first_failed_at=NULL,
+                        locked_until=NULL, updated_at=now()
+                    WHERE user_id = ANY(%s)
+                    """,
+                    (restored_legacy_ids,),
+                )
+            if table_exists(conn, "legacy_auth_flows"):
+                cur.execute("DELETE FROM legacy_auth_flows WHERE user_id = ANY(%s)", (restored_legacy_ids,))
+            if table_exists(conn, "legacy_mfa_recovery_codes"):
+                cur.execute(
+                    "DELETE FROM legacy_mfa_recovery_codes WHERE user_id = ANY(%s)",
+                    (restored_legacy_ids,),
+                )
+            if table_exists(conn, "legacy_totp_credentials"):
+                cur.execute(
+                    "DELETE FROM legacy_totp_credentials WHERE user_id = ANY(%s)",
+                    (restored_legacy_ids,),
+                )
+        summary["legacy_mfa"] = {
+            "requires_reenrollment": sum(
+                1
+                for row in tables.get("legacy_password_credentials") or []
+                if row.get("mfa_required") and str(row.get("user_id") or "") in user_ids
+            )
+        }
 
     # Roles: upsert by business key and build a source-id -> target-id remap so
     # role_permissions / user_roles attach to the right (instance-specific) role ids.

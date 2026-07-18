@@ -130,6 +130,19 @@ RP_ID=discvault.example.com
 RP_ORIGIN=https://discvault.example.com
 ```
 
+### Optional password + TOTP authentication
+
+Passkeys remain the preferred sign-in method. To expose Legacy password
+authentication, set `LEGACY_AUTH_ENABLED=true` and use a long, stable
+`JWT_SECRET`. Existing installations must then enable password login in
+**Users & roles** and confirm the warning with a fresh passkey assertion.
+
+On a completely fresh installation (no users or credentials), the setup wizard
+may instead create the first Owner with a 15+ character password and mandatory
+TOTP. This no-passkey bootstrap is atomic and single-use. TOTP secrets and
+recovery codes are never included in backups; restored MFA-enabled password
+users are prompted to enroll TOTP again.
+
 ## Install DiscVault 26 Production / Stable
 
 Use the production channel for stable deployments. When DiscVault 26 is promoted

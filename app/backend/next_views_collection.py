@@ -1980,7 +1980,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const unavailable = webauthnUnavailableReason();
       const setupRequired = !!authState.setup_required;
       const authenticated = !!authState.authenticated;
-      const reviewLoginAvailable = !!authState.review_login_available;
+      const reviewLoginAvailable = !!authState.legacy_auth_enabled;
       const joinAllowed = !setupRequired && !authenticated && !!authState.auth_enabled;
       title.textContent = authenticated ? "Signed in" : setupRequired ? "First passkey" : "Passkeys";
       description.textContent = authenticated
@@ -2372,8 +2372,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       }
     }
     async function loginReviewPassword() {
-      if (!authState.review_login_available) {
-        setAuthStatus("Username/password review login is not available.", "bad");
+      if (!authState.legacy_auth_enabled) {
+        setAuthStatus(tNext("legacyAuth.unavailable", "Password login is not available."), "bad");
         return;
       }
       const username = String(document.getElementById("authReviewUsername")?.value || "").trim();
@@ -2389,10 +2389,42 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         const reviewBody = {username, password};
         const mobileFlow = currentMobileAuthFlow();
         if (mobileFlow) reviewBody.mobile_flow = mobileFlow;
-        const payload = await authJson("/api/next/auth/review/login", {
+        let payload = await authJson("/api/next/auth/legacy/login", {
           method: "POST",
           body: JSON.stringify(reviewBody)
         });
+        while (payload.stage && payload.stage !== "complete") {
+          if (payload.stage === "password_change") {
+            const newPassword = window.prompt(tNext("legacyAuth.newPassword", "New password"));
+            if (!newPassword) throw new Error(tNext("legacyAuth.newPassword", "New password"));
+            payload = await authJson("/api/next/auth/legacy/password/change", {
+              method: "POST",
+              body: JSON.stringify({flow_token: payload.flow_token, new_password: newPassword})
+            });
+          } else if (payload.stage === "mfa_enrollment") {
+            setAuthStatus(`${tNext("legacyAuth.manualKey", "Manual key")}: ${payload.manual_key}`, "info");
+            const code = window.prompt(tNext("legacyAuth.authenticatorCode", "Authenticator code"));
+            payload = await authJson("/api/next/auth/legacy/mfa/setup/verify", {
+              method: "POST",
+              body: JSON.stringify({flow_token: payload.flow_token, code})
+            });
+          } else if (payload.stage === "mfa_challenge") {
+            const code = window.prompt(tNext("legacyAuth.authenticatorCode", "Authenticator code"));
+            payload = await authJson("/api/next/auth/legacy/mfa/verify", {
+              method: "POST",
+              body: JSON.stringify({flow_token: payload.flow_token, code})
+            });
+          } else if (payload.stage === "recovery_codes") {
+            setAuthStatus((payload.recovery_codes || []).join("  "), "info");
+            if (!window.confirm(tNext("legacyAuth.recoveryAck", "I saved these recovery codes."))) return;
+            payload = await authJson("/api/next/auth/legacy/recovery-codes/ack", {
+              method: "POST",
+              body: JSON.stringify({flow_token: payload.flow_token, acknowledged: true})
+            });
+          } else {
+            throw new Error(tNext("legacyAuth.failed", "Password sign-in failed."));
+          }
+        }
         if (payload.callback_url || payload.callbackUrl) {
           window.location.href = payload.callback_url || payload.callbackUrl;
           return;
