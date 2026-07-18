@@ -392,20 +392,37 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
 
-    def test_movie_artwork_action_sheet_supports_primary_share_and_hide(self):
+    def test_movie_artwork_action_sheet_supports_hide_unhide_share_and_delete(self):
         self.assertIn("function bindMovieArtworkLongPressMenus()", self.source)
         self.assertIn('element.addEventListener("contextmenu"', self.source)
         self.assertIn('if (!["Enter", " "].includes(event.key)) return;', self.source)
         self.assertIn("await navigator.share({title: movieTitle", self.source)
         self.assertIn("await copyArtworkUrl(url);", self.source)
-        self.assertIn(
-            'method: "DELETE"',
-            self.source,
-        )
+        hide_start = self.source.index("async function hideMovieArtwork")
+        hide_end = self.source.index("async function unhideMovieArtwork", hide_start)
+        hide_source = self.source[hide_start:hide_end]
+        self.assertIn("/hide`", hide_source)
+        self.assertIn('method: "POST"', hide_source)
+        self.assertNotIn('method: "DELETE"', hide_source)
+        delete_start = self.source.index("async function deleteDetailArtwork")
+        delete_end = self.source.index("\n    function ", delete_start)
+        self.assertIn('method: "DELETE"', self.source[delete_start:delete_end])
         self.assertIn('tNext("movieDetail.setPrimary", "Set primary")', self.source)
         self.assertIn('tNext("common.share", "Share")', self.source)
         self.assertIn('tNext("common.hide", "Hide")', self.source)
+        self.assertIn('tNext("common.unhide", "Unhide")', self.source)
+        self.assertIn('tNext("movieDetail.deleteArtwork", "Delete")', self.source)
         self.assertIn('tNext("movieDetail.artworkHidden", "Artwork hidden.")', self.source)
+        self.assertIn('tNext("movieDetail.artworkUnhidden", "Artwork unhidden.")', self.source)
+
+    def test_hidden_artwork_is_filtered_by_default_and_revealed_dimmed(self):
+        self.assertIn("const movieArtworkHiddenKinds = new Set();", self.source)
+        self.assertIn("const visibleAssets = kindAssets.filter((asset) => !asset.hidden);", self.source)
+        self.assertIn("const hiddenAssets = kindAssets.filter((asset) => asset.hidden);", self.source)
+        self.assertIn('tNext("movieDetail.showHidden", "Show hidden ({count})")', self.source)
+        self.assertIn('tNext("movieDetail.hideAgain", "Hide again")', self.source)
+        self.assertIn('data-artwork-hidden="${asset.hidden ? "true" : "false"}"', self.source)
+        self.assertIn(".movie-art-option.is-hidden .art-option-preview", self.source)
 
 
 if __name__ == "__main__":

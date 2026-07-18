@@ -3,6 +3,7 @@ import sys
 import tempfile
 import types
 import unittest
+import uuid
 from pathlib import Path
 from unittest import mock
 
@@ -27,6 +28,7 @@ from app.backend.next_metadata import _clean_scanned_title
 from app.backend.next_metadata import _parse_import_country
 from app.backend.next_metadata import external_metadata_barcode
 from app.backend.next_metadata import filter_locked_artwork_updates
+from app.backend.next_metadata import filter_hidden_artwork_updates
 from app.backend.next_metadata import metadata_field_decisions_with_write_state
 from app.backend.next_metadata import metadata_fetch_audit_payload
 from app.backend.next_metadata import metadata_source_policy_result
@@ -45,6 +47,31 @@ from app.backend.next_metadata import summarize_metadata_execution
 from app.backend.next_plugins.bluray_com import plugin as bluray_com_plugin
 from app.backend.next_plugins.tmdb import plugin as tmdb_plugin
 
+
+class _HiddenArtworkCursor:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, _query, _params):
+        return None
+
+    def fetchall(self):
+        return [
+            {
+                "id": "hidden-poster",
+                "kind": "poster",
+                "source_url": "https://example.test/hidden.jpg",
+            }
+        ]
+
+
+class _HiddenArtworkConnection:
+    def cursor(self):
+        return _HiddenArtworkCursor()
+
 try:
     from bs4 import BeautifulSoup
 except Exception:  # pragma: no cover
@@ -52,6 +79,32 @@ except Exception:  # pragma: no cover
 
 
 class NextScannedTitleTests(unittest.TestCase):
+    def test_hidden_artwork_cannot_be_reselected_by_metadata_refresh(self):
+        with mock.patch("app.backend.next_metadata.table_exists", return_value=True):
+            metadata, media = filter_hidden_artwork_updates(
+                _HiddenArtworkConnection(),
+                uuid.UUID("00000000-0000-0000-0000-000000000001"),
+                {
+                    "poster_url": "https://example.test/hidden.jpg",
+                    "overview": "Keep me",
+                },
+                {
+                    "poster": {
+                        "sourceUrl": "https://example.test/hidden.jpg",
+                        "providerId": "unit",
+                    },
+                    "backdrop": {
+                        "sourceUrl": "https://example.test/backdrop.jpg",
+                        "providerId": "unit",
+                    },
+                },
+            )
+
+        self.assertNotIn("poster_url", metadata)
+        self.assertEqual(metadata["overview"], "Keep me")
+        self.assertNotIn("poster", media)
+        self.assertIn("backdrop", media)
+
     def test_bluray_movie_title_from_release_title_strips_format_and_country(self):
         cleaner = bluray_com_plugin._movie_title_from_release_title
         self.assertEqual(

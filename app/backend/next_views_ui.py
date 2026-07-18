@@ -7458,6 +7458,15 @@ def ui_preview_html(
     #movieDetailPage .movie-art-option:focus-visible .art-option-preview {
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 68%, transparent);
     }
+    #movieDetailPage .movie-art-option.is-hidden .art-option-preview {
+      opacity: .48;
+      filter: grayscale(.45);
+      transition: opacity .16s ease, filter .16s ease;
+    }
+    #movieDetailPage .movie-art-option.is-hidden:hover .art-option-preview,
+    #movieDetailPage .movie-art-option.is-hidden:focus-visible .art-option-preview {
+      opacity: .64;
+    }
     #movieDetailPage .movie-art-option .art-option-source,
     #movieDetailPage .movie-art-option .art-option-meta,
     #movieDetailPage .movie-art-option .art-option-actions {
@@ -7505,6 +7514,22 @@ def ui_preview_html(
       left: auto;
       right: 6px;
       background: color-mix(in srgb, var(--accent) 72%, rgba(10, 12, 16, .62));
+    }
+    .art-option-badge.hidden-artwork {
+      left: auto;
+      right: 6px;
+    }
+    .hidden-artwork-toggle {
+      display: block;
+      margin: 10px auto 0;
+    }
+    .hidden-artwork-toggle.hidden {
+      display: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #movieDetailPage .movie-art-option.is-hidden .art-option-preview {
+        transition: none;
+      }
     }
     .art-option-source,
     .art-option-meta {
@@ -12126,6 +12151,7 @@ def ui_preview_html(
               <div class="artwork-manager-status hidden" id="movieArtworkManagerStatus"></div>
               <div class="art-option-grid" id="movieDetailPosterArtwork"></div>
               <button type="button" class="responsive-more-button hidden" id="movieDetailPosterMore" data-next-i18n="common.more">More</button>
+              <button type="button" class="responsive-more-button hidden hidden-artwork-toggle" id="movieDetailPosterHiddenToggle" aria-pressed="false"></button>
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="moviePosterUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="poster" data-input="moviePosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
@@ -12135,6 +12161,7 @@ def ui_preview_html(
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaBackdrops">
               <div class="art-option-grid backdrops" id="movieDetailBackdropArtwork"></div>
               <button type="button" class="responsive-more-button hidden" id="movieDetailBackdropMore" data-next-i18n="common.more">More</button>
+              <button type="button" class="responsive-more-button hidden hidden-artwork-toggle" id="movieDetailBackdropHiddenToggle" aria-pressed="false"></button>
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="movieBackdropUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="backdrop" data-input="movieBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
@@ -13697,6 +13724,7 @@ def ui_preview_html(
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
+    const movieArtworkHiddenKinds = new Set();
     let dvMissingContributionReportData = null;
     let activeContainerId = "";
     let activeContainerPayload = null;
@@ -20912,8 +20940,8 @@ def ui_preview_html(
     function mediaAssetImage(assets, kind) {
       const rows = Array.isArray(assets) ? assets : [];
       const ordered = [
-        ...rows.filter((asset) => asset.kind === kind && asset.is_primary),
-        ...rows.filter((asset) => asset.kind === kind && !asset.is_primary)
+        ...rows.filter((asset) => asset.kind === kind && asset.is_primary && !asset.hidden),
+        ...rows.filter((asset) => asset.kind === kind && !asset.is_primary && !asset.hidden)
       ];
       for (const asset of ordered) {
         const url = mediaAssetUrl(asset);
@@ -21474,7 +21502,12 @@ def ui_preview_html(
       `;
     }
     function artworkOptionsHtml(detail, kind, emptyKey) {
-      const assets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
+      const kindAssets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
+      const visibleAssets = kindAssets.filter((asset) => !asset.hidden);
+      const hiddenAssets = kindAssets.filter((asset) => asset.hidden);
+      const assets = movieArtworkHiddenKinds.has(kind)
+        ? [...visibleAssets, ...hiddenAssets]
+        : visibleAssets;
       const className = kind === "backdrop"
         ? "art-option backdrop movie-art-option responsive-grid-item"
         : "art-option movie-art-option responsive-grid-item";
@@ -21492,16 +21525,56 @@ def ui_preview_html(
         const preview = url ? `
           <img src="${escapeHtml(url)}" alt="" draggable="false">
           ${asset.is_primary ? `<span class="art-option-badge">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
-          ${artworkLockBadgeHtml(asset, kind, metadata)}
+          ${asset.hidden ? `<span class="art-option-badge hidden-artwork">${escapeHtml(tNext("movieDetail.hiddenArtwork", "Hidden"))}</span>` : ""}
+          ${asset.hidden ? "" : artworkLockBadgeHtml(asset, kind, metadata)}
         ` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
         return `
-          <div class="${className}" tabindex="0" role="button" aria-haspopup="dialog" aria-label="${escapeHtml(actionLabel)}"
+          <div class="${className}${asset.hidden ? " is-hidden" : ""}" tabindex="0" role="button" aria-haspopup="dialog" aria-label="${escapeHtml(actionLabel)}"
                data-movie-artwork-menu="${escapeHtml(asset.id || "")}" data-kind="${escapeHtml(kind)}"
-               data-artwork-url="${escapeHtml(url)}" data-artwork-primary="${asset.is_primary ? "true" : "false"}">
+               data-artwork-url="${escapeHtml(url)}" data-artwork-primary="${asset.is_primary ? "true" : "false"}"
+               data-artwork-hidden="${asset.hidden ? "true" : "false"}">
             <div class="art-option-preview">${preview}</div>
           </div>
         `;
       }).join("");
+    }
+    function renderMovieArtworkGallery(detail, kind) {
+      const suffix = kind === "backdrop" ? "Backdrop" : "Poster";
+      const grid = document.getElementById(`movieDetail${suffix}Artwork`);
+      const toggle = document.getElementById(`movieDetail${suffix}HiddenToggle`);
+      const hiddenCount = (detail.mediaAssets || []).filter((asset) => asset.kind === kind && asset.hidden).length;
+      if (!hiddenCount) movieArtworkHiddenKinds.delete(kind);
+      if (grid) {
+        grid.innerHTML = artworkOptionsHtml(
+          detail,
+          kind,
+          kind === "backdrop" ? "movieDetail.noBackdrops" : "movieDetail.noPosters"
+        );
+      }
+      if (toggle) {
+        const showing = movieArtworkHiddenKinds.has(kind);
+        toggle.classList.toggle("hidden", hiddenCount === 0);
+        toggle.setAttribute("aria-pressed", showing ? "true" : "false");
+        toggle.textContent = showing
+          ? tNext("movieDetail.hideAgain", "Hide again")
+          : tNext("movieDetail.showHidden", "Show hidden ({count})").replace("{count}", formatNumber(hiddenCount));
+        toggle.onclick = () => {
+          if (movieArtworkHiddenKinds.has(kind)) movieArtworkHiddenKinds.delete(kind);
+          else movieArtworkHiddenKinds.add(kind);
+          renderMovieArtworkGallery(activeDetailPayload || detail, kind);
+          configureResponsiveGridLimit(
+            `movieDetail${suffix}Artwork`,
+            `movieDetail${suffix}More`,
+            {mobileRows: 4, desktopRows: 2}
+          );
+          const refreshedGrid = document.getElementById(`movieDetail${suffix}Artwork`);
+          if (refreshedGrid && movieArtworkHiddenKinds.has(kind)) {
+            refreshedGrid.dataset.expanded = "true";
+            updateResponsiveGridLimit(refreshedGrid);
+          }
+          bindMovieArtworkLongPressMenus();
+        };
+      }
     }
     let responsiveGridResizeObserver = null;
     function updateResponsiveGridLimit(grid) {
@@ -22877,8 +22950,8 @@ def ui_preview_html(
           openAppContainerDetail(decodeURIComponent(match[1]));
         });
       });
-      document.getElementById("movieDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
-      document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      renderMovieArtworkGallery(detail, "poster");
+      renderMovieArtworkGallery(detail, "backdrop");
       renderMovieArtworkManagerStatus(detail);
       reflectArtworkLockButtons(detail, "movie");
       document.getElementById("movieDetailVideos").innerHTML = videoCardsHtml(movieVideoItems(movie, metadata));
@@ -22898,6 +22971,15 @@ def ui_preview_html(
       configureResponsiveGridLimit("movieDetailCrew", "movieDetailCrewMore", {mobileRows: 4, desktopRows: 4});
       configureResponsiveGridLimit("movieDetailPosterArtwork", "movieDetailPosterMore", {mobileRows: 4, desktopRows: 2});
       configureResponsiveGridLimit("movieDetailBackdropArtwork", "movieDetailBackdropMore", {mobileRows: 4, desktopRows: 2});
+      ["poster", "backdrop"].forEach((kind) => {
+        if (!movieArtworkHiddenKinds.has(kind)) return;
+        const suffix = kind === "backdrop" ? "Backdrop" : "Poster";
+        const grid = document.getElementById(`movieDetail${suffix}Artwork`);
+        if (grid) {
+          grid.dataset.expanded = "true";
+          updateResponsiveGridLimit(grid);
+        }
+      });
       configureResponsiveGridLimit("movieDetailVideos", "movieDetailVideoMore", {mobileRows: 4, desktopRows: 2});
       bindMovieArtworkLongPressMenus();
       setMovieDetailMessage("");
@@ -22906,6 +22988,7 @@ def ui_preview_html(
     function showMovieDetailLoading(movieId) {
       activeDetailMovieId = movieId || "";
       activeDetailPayload = null;
+      movieArtworkHiddenKinds.clear();
       movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
       setMovieEditPanelVisible(false);
       activateDetailTab("movieSections", "movieDetailReleasePanel");
@@ -22930,6 +23013,8 @@ def ui_preview_html(
       document.getElementById("movieDetailRelationships").innerHTML = "";
       document.getElementById("movieDetailPosterArtwork").innerHTML = "";
       document.getElementById("movieDetailBackdropArtwork").innerHTML = "";
+      document.getElementById("movieDetailPosterHiddenToggle")?.classList.add("hidden");
+      document.getElementById("movieDetailBackdropHiddenToggle")?.classList.add("hidden");
       document.getElementById("movieArtworkManagerStatus").innerHTML = "";
       document.getElementById("movieDetailVideos").innerHTML = "";
       document.getElementById("movieDetailCast").innerHTML = "";
@@ -31989,15 +32074,34 @@ def ui_preview_html(
     }
     async function hideMovieArtwork(mediaId, kind) {
       if (!activeDetailMovieId || !mediaId || !hasPermission("collection.edit_all")) return;
-      setMovieDetailMessage(tNext("movieDetail.deletingArtwork", "Deleting artwork..."));
+      setMovieDetailMessage(tNext("movieDetail.hidingArtwork", "Hiding artwork..."));
       try {
-        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/media/${encodeURIComponent(mediaId)}?kind=${encodeURIComponent(kind || "")}`, {
-          method: "DELETE"
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/media/${encodeURIComponent(mediaId)}/hide`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({kind})
         });
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
         renderMovieDetail(payload.detail || {});
         await loadAppSnapshot();
         setMovieDetailMessage(tNext("movieDetail.artworkHidden", "Artwork hidden."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function unhideMovieArtwork(mediaId, kind) {
+      if (!activeDetailMovieId || !mediaId || !hasPermission("collection.edit_all")) return;
+      setMovieDetailMessage(tNext("movieDetail.unhidingArtwork", "Unhiding artwork..."));
+      try {
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/media/${encodeURIComponent(mediaId)}/unhide`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({kind})
+        });
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
+        renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMovieDetailMessage(tNext("movieDetail.artworkUnhidden", "Artwork unhidden."), "good");
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
       }
@@ -32008,9 +32112,15 @@ def ui_preview_html(
       const url = tile?.dataset?.artworkUrl || "";
       if (!mediaId || !["poster", "backdrop"].includes(kind)) return;
       const canEdit = hasPermission("collection.edit_all");
-      const isPrimary = tile.dataset.artworkPrimary === "true";
+      const isHidden = tile.dataset.artworkHidden === "true";
       const actions = [];
-      if (canEdit && !isPrimary) {
+      if (canEdit && isHidden) {
+        actions.push({
+          label: tNext("common.unhide", "Unhide"),
+          run: () => unhideMovieArtwork(mediaId, kind)
+        });
+      }
+      if (canEdit && !isHidden) {
         actions.push({
           label: tNext("movieDetail.setPrimary", "Set primary"),
           run: () => setPrimaryArtwork("movie", mediaId, kind)
@@ -32023,10 +32133,16 @@ def ui_preview_html(
         });
       }
       if (canEdit) {
+        if (!isHidden) {
+          actions.push({
+            label: tNext("common.hide", "Hide"),
+            run: () => hideMovieArtwork(mediaId, kind)
+          });
+        }
         actions.push({
-          label: tNext("common.hide", "Hide"),
+          label: tNext("movieDetail.deleteArtwork", "Delete"),
           tone: "danger",
-          run: () => hideMovieArtwork(mediaId, kind)
+          run: () => deleteDetailArtwork("movie", mediaId, kind)
         });
       }
       if (!actions.length) return;

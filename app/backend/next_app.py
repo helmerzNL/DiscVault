@@ -4207,6 +4207,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -4218,6 +4219,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -4430,6 +4432,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     WHERE em.entity_type='container'
                       AND em.entity_id=c.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -4441,6 +4444,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     WHERE em.entity_type='container'
                       AND em.entity_id=c.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -7834,6 +7838,7 @@ def visible_media_asset_count(conn, actor: dict[str, Any] | None) -> int:
             LEFT JOIN movies m ON em.entity_type='movie' AND m.id = em.entity_id
             LEFT JOIN containers c ON em.entity_type='container' AND c.id = em.entity_id
             WHERE em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND (
                     (em.entity_type='movie' AND {movie_where})
                  OR (em.entity_type='container' AND {container_where})
@@ -10778,6 +10783,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind='poster'
                 ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                 LIMIT 1
@@ -10789,6 +10795,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind='backdrop'
                 ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                 LIMIT 1
@@ -11121,6 +11128,7 @@ def media_group_movie_entities(
                     WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -11132,6 +11140,7 @@ def media_group_movie_entities(
                     WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -11332,12 +11341,19 @@ def movievault_v2_poster_media_asset_entity(conn, media_id: UUID) -> dict[str, A
         return asset if cur.fetchone() else None
 
 
-def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list[dict[str, Any]]:
+def entity_media_asset_entities(
+    conn,
+    entity_type: str,
+    entity_id: UUID,
+    *,
+    include_hidden: bool = False,
+) -> list[dict[str, Any]]:
     if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
         return []
+    hidden_filter = "" if include_hidden else "AND em.hidden_at IS NULL"
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
                 ma.id,
                 ma.kind,
@@ -11354,11 +11370,13 @@ def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list
                 ma.metadata,
                 em.role,
                 em.is_primary,
-                em.sort_order
+                em.sort_order,
+                em.hidden_at
             FROM entity_media em
             JOIN media_assets ma ON ma.id = em.media_id
             WHERE em.entity_type=%s AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              {hidden_filter}
             ORDER BY em.role, em.sort_order, ma.kind
             """,
             (entity_type, entity_id),
@@ -11366,6 +11384,7 @@ def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list
         rows = cur.fetchall()
     for row in rows:
         row["url"] = media_asset_public_url(row)
+        row["hidden"] = bool(row.get("hidden_at"))
     return rows
 
 
@@ -11638,7 +11657,9 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "credits": movie_credit_entities(conn, movie_id),
         "containers": movie_container_entities(conn, movie_id),
         "mediaGroups": movie_media_group_entities(conn, movie_id),
-        "mediaAssets": entity_media_asset_entities(conn, "movie", movie_id),
+        "mediaAssets": entity_media_asset_entities(
+            conn, "movie", movie_id, include_hidden=True
+        ),
         "digitalItems": movie_digital_item_entities(conn, movie_id),
         "metadataDebug": metadata_debug,
     }
@@ -12294,6 +12315,7 @@ def set_primary_movie_media_asset(
               AND em.entity_id=%s
               AND em.media_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind=%s
             """,
             (movie_id, media_id, kind),
@@ -12311,6 +12333,7 @@ def set_primary_movie_media_asset(
               AND em.entity_type='movie'
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind=%s
               AND em.is_primary=true
             """,
@@ -12325,6 +12348,7 @@ def set_primary_movie_media_asset(
               AND entity_id=%s
               AND media_id=%s
               AND deleted_at IS NULL
+              AND hidden_at IS NULL
             """,
             (movie_id, media_id),
         )
@@ -12410,6 +12434,7 @@ def set_primary_person_media_asset(
               AND em.entity_id=%s
               AND em.media_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind='profile'
             """,
             (person_id, media_id),
@@ -12427,6 +12452,7 @@ def set_primary_person_media_asset(
               AND em.entity_type='person'
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind='profile'
               AND em.is_primary=true
             """,
@@ -12441,6 +12467,7 @@ def set_primary_person_media_asset(
               AND entity_id=%s
               AND media_id=%s
               AND deleted_at IS NULL
+              AND hidden_at IS NULL
             """,
             (person_id, media_id),
         )
@@ -12866,6 +12893,7 @@ def create_uploaded_movie_media_asset(
                 WHERE em.entity_type='movie'
                   AND em.entity_id=%s
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind=%s
                 """,
                 (movie_id, kind),
@@ -12890,6 +12918,7 @@ def create_uploaded_movie_media_asset(
                 deleted_at=NULL,
                 deleted_by=NULL,
                 purge_after=NULL,
+                hidden_at=NULL,
                 restore_metadata='{}'::jsonb
             """,
             (movie_id, media["id"], kind, primary, sort_order),
@@ -12976,6 +13005,7 @@ def set_primary_container_media_asset(
               AND em.entity_type='container'
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind=%s
               AND em.is_primary=true
             """,
@@ -13142,6 +13172,7 @@ def create_uploaded_container_media_asset(
                 WHERE em.entity_type='container'
                   AND em.entity_id=%s
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind=%s
                 """,
                 (container_id, kind),
@@ -13356,6 +13387,220 @@ def artwork_trash_entries(conn, *, limit: int = 200) -> dict[str, Any]:
     return {"items": items, "settings": settings, "purge": purge}
 
 
+def set_movie_artwork_hidden_state(
+    conn,
+    *,
+    movie_id: UUID,
+    media_id: UUID,
+    kind: str,
+    hidden: bool,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if kind not in MOVIE_ARTWORK_KINDS:
+        raise NextApiError("kind must be poster or backdrop", 400)
+    if not table_exists(conn, "movies") or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, metadata FROM movies WHERE id=%s", (movie_id,))
+        movie = cur.fetchone()
+        if not movie:
+            raise NextApiError("Movie not found", 404)
+        cur.execute(
+            """
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                em.role,
+                em.is_primary,
+                em.sort_order,
+                em.hidden_at
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type='movie'
+              AND em.entity_id=%s
+              AND em.media_id=%s
+              AND em.role=%s
+              AND ma.kind=%s
+              AND em.deleted_at IS NULL
+            """,
+            (movie_id, media_id, kind, kind),
+        )
+        media = cur.fetchone()
+        if not media or (hidden and media.get("hidden_at")) or (not hidden and not media.get("hidden_at")):
+            state = "visible" if hidden else "hidden"
+            raise NextApiError(f"{state.capitalize()} artwork was not found", 404)
+
+        was_primary = bool(media.get("is_primary"))
+        replacement = None
+        if hidden:
+            cur.execute(
+                """
+                UPDATE entity_media
+                SET hidden_at=now(),
+                    is_primary=false
+                WHERE entity_type='movie'
+                  AND entity_id=%s
+                  AND media_id=%s
+                  AND role=%s
+                  AND deleted_at IS NULL
+                  AND hidden_at IS NULL
+                RETURNING hidden_at
+                """,
+                (movie_id, media_id, kind),
+            )
+            hidden_row = cur.fetchone()
+            if not hidden_row:
+                raise NextApiError("Visible artwork was not found", 404)
+            media["hidden_at"] = hidden_row.get("hidden_at")
+            media["is_primary"] = False
+
+            hidden_urls = {
+                value
+                for value in (media_asset_public_url(media), clean_text(media.get("source_url")))
+                if value
+            }
+            movie_metadata = movie.get("metadata") if isinstance(movie, dict) else {}
+            movie_metadata = movie_metadata if isinstance(movie_metadata, dict) else {}
+            metadata_values = [
+                movie_metadata.get(kind),
+                movie_metadata.get(f"{kind}_url"),
+                movie_metadata.get(f"{kind}Url"),
+            ]
+            canonical_references_hidden = any(
+                clean_text(value) in hidden_urls for value in metadata_values
+            )
+            if was_primary or canonical_references_hidden:
+                cur.execute(
+                    """
+                    SELECT
+                        ma.id,
+                        ma.kind,
+                        ma.variant,
+                        ma.storage_backend,
+                        ma.storage_key,
+                        ma.source_url,
+                        ma.provider_id,
+                        ma.content_type,
+                        ma.width,
+                        ma.height,
+                        ma.size_bytes,
+                        ma.sha256,
+                        ma.metadata,
+                        em.role,
+                        em.is_primary,
+                        em.sort_order
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=%s
+                      AND em.role=%s
+                      AND ma.kind=%s
+                      AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                    """,
+                    (movie_id, kind, kind),
+                )
+                replacement = cur.fetchone()
+                if replacement:
+                    cur.execute(
+                        """
+                        UPDATE entity_media
+                        SET is_primary=true,
+                            sort_order=0
+                        WHERE entity_type='movie'
+                          AND entity_id=%s
+                          AND media_id=%s
+                          AND role=%s
+                          AND deleted_at IS NULL
+                          AND hidden_at IS NULL
+                        """,
+                        (movie_id, replacement["id"], kind),
+                    )
+                    replacement["is_primary"] = True
+                    replacement["sort_order"] = 0
+                    replacement["url"] = media_asset_public_url(replacement)
+
+                metadata_patch: dict[str, Any] = {
+                    f"{kind}_url": replacement.get("url") if replacement else None,
+                    f"{kind}_locked": bool(replacement),
+                }
+                for key in (kind, f"{kind}Url"):
+                    if clean_text(movie_metadata.get(key)) in hidden_urls:
+                        metadata_patch[key] = None
+                list_keys = ("posters",) if kind == "poster" else ("backdrop_urls", "backdropUrls", "backdrops")
+                for key in list_keys:
+                    values = movie_metadata.get(key)
+                    if isinstance(values, list) and any(clean_text(value) in hidden_urls for value in values):
+                        metadata_patch[key] = [
+                            value for value in values if clean_text(value) not in hidden_urls
+                        ]
+                cur.execute(
+                    "UPDATE movies SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+                    (Jsonb(json_ready(metadata_patch)), movie_id),
+                )
+            else:
+                cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+            operation = "movie.media_hidden"
+        else:
+            cur.execute(
+                """
+                UPDATE entity_media
+                SET hidden_at=NULL,
+                    is_primary=false
+                WHERE entity_type='movie'
+                  AND entity_id=%s
+                  AND media_id=%s
+                  AND role=%s
+                  AND deleted_at IS NULL
+                  AND hidden_at IS NOT NULL
+                """,
+                (movie_id, media_id, kind),
+            )
+            media["hidden_at"] = None
+            media["is_primary"] = False
+            cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+            operation = "movie.media_unhidden"
+
+    revision = record_sync_change(
+        conn,
+        movie_id,
+        {
+            "movieId": str(movie_id),
+            "operation": operation,
+            "kind": kind,
+            "mediaId": str(media_id),
+            "wasPrimary": was_primary,
+            "replacementMediaId": str(replacement["id"]) if replacement else None,
+            "actor": actor_job_payload(actor or {}) if actor else None,
+        },
+    )
+    media["url"] = media_asset_public_url(media)
+    media["hidden"] = hidden
+    return {
+        "movieId": str(movie_id),
+        "kind": kind,
+        "mediaId": str(media_id),
+        "media": media,
+        "hidden": hidden,
+        "replacement": replacement,
+        "revision": revision,
+    }
+
+
 def delete_entity_artwork_media_asset(
     conn,
     *,
@@ -13395,7 +13640,8 @@ def delete_entity_artwork_media_asset(
                 ma.metadata,
                 em.role,
                 em.is_primary,
-                em.sort_order
+                em.sort_order,
+                em.hidden_at
             FROM entity_media em
             JOIN media_assets ma ON ma.id = em.media_id
             WHERE em.entity_type=%s
@@ -13411,6 +13657,7 @@ def delete_entity_artwork_media_asset(
         if not deleted_media:
             raise NextApiError("Media asset is not linked to this item", 404)
         was_primary = bool(deleted_media.get("is_primary"))
+        was_hidden = bool(deleted_media.get("hidden_at"))
         settings = artwork_trash_settings(conn)
         actor_id = actor.get("id") if actor else None
         cur.execute(
@@ -13420,6 +13667,7 @@ def delete_entity_artwork_media_asset(
                 deleted_by=%s,
                 purge_after=CASE WHEN %s THEN now() + (%s)::interval ELSE NULL END,
                 is_primary=false,
+                hidden_at=NULL,
                 restore_metadata=%s
             WHERE entity_type=%s
               AND entity_id=%s
@@ -13472,6 +13720,7 @@ def delete_entity_artwork_media_asset(
                   AND em.role=%s
                   AND ma.kind=%s
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                 ORDER BY em.sort_order, ma.created_at
                 LIMIT 1
                 """,
@@ -13512,6 +13761,7 @@ def delete_entity_artwork_media_asset(
         "kind": kind,
         "mediaId": str(media_id),
         "wasPrimary": was_primary,
+        "wasHidden": was_hidden,
         "replacementMediaId": str(replacement["id"]) if replacement else None,
         "purgeEnabled": settings["purgeEnabled"],
         "purgeAfter": trash_row.get("purge_after"),
@@ -13592,6 +13842,7 @@ def restore_entity_artwork_media_asset(
             WHERE em.entity_type=%s
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND em.is_primary=true
               AND ma.kind=%s
             """,
@@ -13606,6 +13857,7 @@ def restore_entity_artwork_media_asset(
             SET deleted_at=NULL,
                 deleted_by=NULL,
                 purge_after=NULL,
+                hidden_at=NULL,
                 is_primary=%s,
                 sort_order=%s,
                 restore_metadata='{}'::jsonb
@@ -13643,6 +13895,8 @@ def restore_entity_artwork_media_asset(
     media["url"] = media_asset_public_url(media)
     media["is_primary"] = make_primary
     media["sort_order"] = 0 if make_primary else sort_order
+    media["hidden_at"] = None
+    media["hidden"] = False
     return {
         f"{entity_type}Id": str(entity_id),
         "kind": kind,
@@ -13858,6 +14112,7 @@ def container_aggregate_movie_entities(
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -13869,6 +14124,7 @@ def container_aggregate_movie_entities(
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -13999,6 +14255,7 @@ def container_aggregate_media_asset_entities(conn, movies: list[dict[str, Any]])
                 WHERE em.entity_type='movie'
                   AND em.entity_id = ANY(%s)
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind IN ('poster', 'backdrop')
                 ORDER BY lower(m.title), ma.kind, em.is_primary DESC, em.sort_order, ma.created_at
                 """,
@@ -14154,6 +14411,7 @@ def link_container_media_option(
                 WHERE em.entity_type='container'
                   AND em.entity_id=%s
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND em.is_primary=true
                   AND ma.kind=%s
                 """,
@@ -16003,6 +16261,7 @@ def admin_operations_artwork_summary(conn) -> dict[str, Any]:
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                     """
                 )
                 row = cur.fetchone() or {}
@@ -16018,6 +16277,7 @@ def admin_operations_artwork_summary(conn) -> dict[str, Any]:
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='container'
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                     """
                 )
                 row = cur.fetchone() or {}
@@ -16175,6 +16435,7 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                 )
             """
@@ -16186,6 +16447,7 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                 )
             """
@@ -16249,6 +16511,7 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
                     WHERE em.entity_type='container'
                       AND em.entity_id=c.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                 )
             """
@@ -20959,6 +21222,7 @@ def register_routes(flask_app: Flask) -> None:
                             WHERE em.entity_type='movie'
                               AND em.entity_id=m.id
                               AND em.deleted_at IS NULL
+                              AND em.hidden_at IS NULL
                               AND ma.kind='poster'
                             ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                             LIMIT 1
@@ -20970,6 +21234,7 @@ def register_routes(flask_app: Flask) -> None:
                             WHERE em.entity_type='movie'
                               AND em.entity_id=m.id
                               AND em.deleted_at IS NULL
+                              AND em.hidden_at IS NULL
                               AND ma.kind='backdrop'
                             ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                             LIMIT 1
@@ -23914,6 +24179,74 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="movie",
                     target_id=movie_uuid,
                     summary="Deleted movie artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
+                )
+        return response({"status": "ok", **result})
+
+    @flask_app.post("/api/next/movies/<movie_id>/media/<media_id>/hide")
+    def movie_media_hide(movie_id: str, media_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        media_uuid = parse_uuid(media_id, "mediaId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Artwork hide body must be an object", 400)
+        kind = clean_text(body.get("kind") or request.args.get("kind")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            movie = movie_entity(conn, movie_uuid)
+            if not movie or not actor_can_edit_visible_movie(conn, actor, movie):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                result = set_movie_artwork_hidden_state(
+                    conn,
+                    movie_id=movie_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    hidden=True,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="movie.media_hidden",
+                    category="admin",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Hid movie artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
+                )
+        return response({"status": "ok", **result})
+
+    @flask_app.post("/api/next/movies/<movie_id>/media/<media_id>/unhide")
+    def movie_media_unhide(movie_id: str, media_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        media_uuid = parse_uuid(media_id, "mediaId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Artwork unhide body must be an object", 400)
+        kind = clean_text(body.get("kind") or request.args.get("kind")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            movie = movie_entity(conn, movie_uuid)
+            if not movie or not actor_can_edit_visible_movie(conn, actor, movie):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                result = set_movie_artwork_hidden_state(
+                    conn,
+                    movie_id=movie_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    hidden=False,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="movie.media_unhidden",
+                    category="admin",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Unhid movie artwork",
                     metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
                 )
         return response({"status": "ok", **result})
