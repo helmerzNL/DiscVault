@@ -22,6 +22,15 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+try:
+    from .next_genres import map_legacy_genre_text
+    from .next_genres import normalize_genre_keys
+    from .next_ownership import actor_or_instance_owner_id
+except ImportError:  # pragma: no cover - supports direct script execution
+    from next_genres import map_legacy_genre_text
+    from next_genres import normalize_genre_keys
+    from next_ownership import actor_or_instance_owner_id
+
 
 IMPORT_NAMESPACE = uuid.UUID("7c76309b-063d-4c63-b925-2f49fdad332c")
 LOCALIZED_LANGS = ("nl", "fr", "de", "es", "pt", "it", "sv", "da", "no", "fi")
@@ -876,7 +885,6 @@ class NextImporter:
                     "actor",
                     "producer",
                     "studios",
-                    "genre",
                     "audience_rating",
                     "extras",
                     "box_set",
@@ -986,6 +994,7 @@ class NextImporter:
                 )
                 self.insert_movie_identifiers(cur, movie_id, row)
                 self.insert_movie_localizations(cur, movie_id, row)
+                self.import_legacy_genres(cur, movie_id, row)
                 cur.execute(
                     """
                     INSERT INTO movie_technical_specs (
@@ -1025,6 +1034,62 @@ class NextImporter:
             if self.import_media:
                 self.link_movie_media(conn, movie_id, row)
             self.summary.counters["movies"] += 1
+
+    def import_legacy_genres(self, cur, movie_id: uuid.UUID, row: sqlite3.Row) -> None:
+        """Migrate the legacy scalar genre column into movie_genres.
+
+        Mirrors migration 037's alias-mapping behavior for movies that are
+        migrated straight from a v25 SQLite database rather than an
+        already-upgraded v26 Postgres one: split, alias-map, dedupe, and
+        keep the raw text plus unmapped tokens in the audit table.
+        """
+        raw_genre = clean_text(row["genre"]) if "genre" in row.keys() else ""
+        if not raw_genre:
+            return
+        cur.execute(
+            """
+            SELECT
+                EXISTS (
+                    SELECT 1
+                    FROM movie_genres
+                    WHERE movie_id = %s
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM movie_genre_migration_audit
+                    WHERE movie_id = %s
+                )
+            """,
+            (movie_id, movie_id),
+        )
+        if bool(cur.fetchone()[0]):
+            return
+        matched_keys, unmatched_parts = map_legacy_genre_text(raw_genre)
+        matched_keys = normalize_genre_keys(matched_keys)
+        for genre_key in matched_keys:
+            cur.execute(
+                """
+                INSERT INTO movie_genres (movie_id, genre_key)
+                VALUES (%s, %s)
+                ON CONFLICT (movie_id, genre_key) DO NOTHING
+                """,
+                (movie_id, genre_key),
+            )
+        cur.execute(
+            """
+            INSERT INTO movie_genre_migration_audit (
+                movie_id, raw_value, matched_keys, unmatched_parts
+            )
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (movie_id) DO NOTHING
+            """,
+            (
+                movie_id,
+                raw_genre,
+                self.Jsonb(matched_keys),
+                self.Jsonb(unmatched_parts),
+            ),
+        )
 
     def insert_movie_identifiers(self, cur, movie_id: uuid.UUID, row: sqlite3.Row) -> None:
         identifiers = (
@@ -1163,12 +1228,13 @@ class NextImporter:
                         year,
                         description,
                         primary_movie_id,
+                        owner_id,
                         metadata,
                         created_at,
                         updated_at
                     )
                     VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                         COALESCE(%s, now()), COALESCE(%s, now())
                     )
                     ON CONFLICT (public_id) DO UPDATE SET
@@ -1191,6 +1257,7 @@ class NextImporter:
                         clean_text(row["year"]) if "year" in row.keys() else None,
                         clean_text(row["description"]) if "description" in row.keys() else None,
                         primary_movie_id,
+                        actor_or_instance_owner_id(conn),
                         self.Jsonb(metadata),
                         clean_text(row["created_at"]) if "created_at" in row.keys() else None,
                         clean_text(row["updated_at"]) if "updated_at" in row.keys() else None,

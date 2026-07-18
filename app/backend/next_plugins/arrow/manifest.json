@@ -1,11 +1,14 @@
 {
   "id": "arrow",
   "name": "Arrow",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["price_provider"],
   "capabilities": ["price_check"],
+  "priceProvider": {
+    "hostPatterns": ["arrowfilms.", "arrow-video."]
+  },
   "requiresSecrets": false,
   "settingsSchemaVersion": 1,
   "settingsSchema": {
@@ -34,4 +37,3 @@
     "source_use": "price_provider.arrow.use"
   }
 }
-

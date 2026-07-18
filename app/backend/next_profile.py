@@ -41,7 +41,7 @@ try:  # pragma: no cover - exercised indirectly by both layouts
         next_auth_current_user,
         next_create_api_token_value,
         next_generate_recovery_codes,
-        next_recovery_code_hash,
+        next_replace_recovery_codes,
     )
     from .next_common import NextApiError, parse_uuid, response, table_exists
     from .next_import import clean_text
@@ -65,7 +65,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         next_auth_current_user,
         next_create_api_token_value,
         next_generate_recovery_codes,
-        next_recovery_code_hash,
+        next_replace_recovery_codes,
     )
     from next_common import NextApiError, parse_uuid, response, table_exists
     from next_import import clean_text
@@ -84,6 +84,15 @@ def _next_app():
     except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         import next_app
     return next_app
+
+
+def _profile_role_display_name(conn, role_key: str | None) -> str | None:
+    if not role_key or not table_exists(conn, "roles"):
+        return role_key
+    with conn.cursor() as cur:
+        cur.execute("SELECT name FROM roles WHERE key=%s", (role_key,))
+        row = cur.fetchone()
+    return row["name"] if row and row.get("name") else role_key
 
 
 def next_profile_user_payload(conn, user: dict[str, Any]) -> dict[str, Any]:
@@ -146,6 +155,8 @@ def next_profile_user_payload(conn, user: dict[str, Any]) -> dict[str, Any]:
                 }
     avatar_url = next_app.media_asset_public_url(avatar)
     display_name = fresh_user.get("display_name") or fresh_user.get("username")
+    role_key = fresh_user.get("role") or next_app.next_user_primary_role(conn, user_id)
+    role_display_name = _profile_role_display_name(conn, role_key)
     return {
         "id": fresh_user.get("id"),
         "username": fresh_user.get("username"),
@@ -153,7 +164,9 @@ def next_profile_user_payload(conn, user: dict[str, Any]) -> dict[str, Any]:
         "display_name": display_name,
         "first_name": fresh_user.get("first_name"),
         "last_name": fresh_user.get("last_name"),
-        "role": fresh_user.get("role") or next_app.next_user_primary_role(conn, user_id),
+        "role": role_key,
+        "roleDisplayName": role_display_name,
+        "role_display_name": role_display_name,
         "avatarAssetId": fresh_user.get("avatar_asset_id"),
         "avatar_asset_id": fresh_user.get("avatar_asset_id"),
         "avatarUrl": avatar_url,
@@ -708,23 +721,7 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
             codes = next_generate_recovery_codes(count)
             with conn.transaction():
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE recovery_codes
-                        SET used_at=COALESCE(used_at, now())
-                        WHERE user_id=%s
-                          AND used_at IS NULL
-                        """,
-                        (user["id"],),
-                    )
-                    for index, code in enumerate(codes, start=1):
-                        cur.execute(
-                            """
-                            INSERT INTO recovery_codes (user_id, code_hash, label, created_at)
-                            VALUES (%s, %s, %s, now())
-                            """,
-                            (user["id"], next_recovery_code_hash(code), f"Recovery code {index}"),
-                        )
+                    next_replace_recovery_codes(cur, user["id"], codes)
             return response(
                 {
                     "status": "ok",

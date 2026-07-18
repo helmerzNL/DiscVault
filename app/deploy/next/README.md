@@ -73,6 +73,31 @@ RP_ORIGINS=https://discvault.example.com
 comma-separated list of allowed origins. Browsers require a secure context for
 passkeys, so use HTTPS for non-localhost deployments.
 
+## Optional Legacy password authentication
+
+Set `LEGACY_AUTH_ENABLED=true` only when password + TOTP login is required.
+This environment value exposes the capability but does not enable password
+login on an existing installation. An Owner or Admin must accept the warning in
+**Users & roles** and approve activation with a fresh passkey assertion.
+
+A brand-new instance with no users or credentials may use the setup wizard's
+Legacy option for its first Owner. It requires a policy-compliant password,
+mandatory TOTP enrollment, and recovery-code acknowledgement before the first
+session; no passkey is required for that one atomic bootstrap. Later activation
+never receives this exception. Disabling the environment value immediately
+hides and rejects all password endpoints.
+
+User-account backups retain Argon2id hashes and Legacy policy, but omit TOTP
+secrets, recovery material, and active flows. MFA-enabled users enroll a new
+authenticator after restore.
+
+When both `LEGACY_AUTH_ENABLED=true` and the existing `REVIEW_LOGIN_*`
+configuration are present, startup idempotently reconciles the review identity
+as an ordinary `media_viewer` password user with MFA disabled and the configured
+expiry. The old review-login endpoint is retained only as a compatibility alias
+to the shared Legacy flow, including mobile PKCE continuation. New deployments
+should use the normal Legacy login endpoint and UI.
+
 Auth status:
 
 ```bash

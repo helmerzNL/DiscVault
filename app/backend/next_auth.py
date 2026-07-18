@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import struct
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 from urllib.parse import urlencode
@@ -24,7 +25,63 @@ from cryptography.hazmat.primitives.asymmetric.ec import (
 )
 from cryptography.hazmat.primitives.hashes import SHA256
 from flask import Flask, jsonify, make_response, redirect, request
+from psycopg import Error as PsycopgError
 from psycopg.types.json import Jsonb
+
+try:
+    from .next_legacy_auth import (
+        FLOW_TTL_SECONDS,
+        LEGACY_AUTH_SETTING,
+        PASSWORD_HASH_VERSION,
+        PasswordPolicyError,
+        attempt_is_throttled,
+        constant_time_text_equal,
+        decrypt_totp_secret,
+        encrypt_totp_secret,
+        flow_token_hash,
+        failed_attempt_state,
+        generate_flow_token,
+        generate_totp_secret,
+        hash_password,
+        hash_recovery_code,
+        identity_digest,
+        ip_digest,
+        legacy_auth_env_enabled,
+        safe_audit_metadata,
+        totp_qr_data_uri,
+        totp_uri,
+        validate_password,
+        verify_password,
+        verify_recovery_code,
+        verify_totp,
+    )
+except ImportError:  # pragma: no cover - direct module execution compatibility
+    from next_legacy_auth import (
+        FLOW_TTL_SECONDS,
+        LEGACY_AUTH_SETTING,
+        PASSWORD_HASH_VERSION,
+        PasswordPolicyError,
+        attempt_is_throttled,
+        constant_time_text_equal,
+        decrypt_totp_secret,
+        encrypt_totp_secret,
+        flow_token_hash,
+        failed_attempt_state,
+        generate_flow_token,
+        generate_totp_secret,
+        hash_password,
+        hash_recovery_code,
+        identity_digest,
+        ip_digest,
+        legacy_auth_env_enabled,
+        safe_audit_metadata,
+        totp_qr_data_uri,
+        totp_uri,
+        validate_password,
+        verify_password,
+        verify_recovery_code,
+        verify_totp,
+    )
 
 
 ConnectFactory = Callable[[], Any]
@@ -120,6 +177,74 @@ def next_generate_recovery_codes(count: int = 8) -> list[str]:
         if code not in codes:
             codes.append(code)
     return codes
+
+
+def next_replace_recovery_codes(cur, user_id: UUID | str, codes: list[str]) -> None:
+    cur.execute(
+        """
+        UPDATE recovery_codes
+        SET used_at=COALESCE(used_at, now())
+        WHERE user_id=%s
+          AND used_at IS NULL
+        """,
+        (user_id,),
+    )
+    for index, code in enumerate(codes, start=1):
+        cur.execute(
+            """
+            INSERT INTO recovery_codes (
+                user_id, code_hash, legacy_code_hash, label, created_at
+            )
+            VALUES (%s, %s, %s, %s, now())
+            """,
+            (
+                user_id,
+                next_recovery_code_hash(code),
+                hash_recovery_code(code),
+                f"Recovery code {index}",
+            ),
+        )
+
+
+def next_consume_recovery_code(cur, user_id: UUID | str, code: Any) -> bool:
+    normalized = next_normalize_recovery_code(code)
+    if not normalized:
+        return False
+    deterministic_hash = next_recovery_code_hash(normalized)
+    cur.execute(
+        """
+        SELECT id, code_hash, legacy_code_hash
+        FROM recovery_codes
+        WHERE user_id=%s
+          AND used_at IS NULL
+          AND (expires_at IS NULL OR expires_at > now())
+        FOR UPDATE
+        """,
+        (user_id,),
+    )
+    matched_id = None
+    for row in cur.fetchall():
+        deterministic_match = secrets.compare_digest(
+            str(row.get("code_hash") or ""),
+            deterministic_hash,
+        )
+        legacy_hash = row.get("legacy_code_hash")
+        if deterministic_match or (
+            legacy_hash and verify_recovery_code(legacy_hash, normalized)
+        ):
+            matched_id = row["id"]
+            break
+    if not matched_id:
+        return False
+    cur.execute(
+        """
+        UPDATE recovery_codes
+        SET used_at=now()
+        WHERE id=%s AND used_at IS NULL
+        """,
+        (matched_id,),
+    )
+    return cur.rowcount == 1
 
 
 def _jwt_secret() -> str:
@@ -288,10 +413,12 @@ def next_auth_configured_enabled(conn, table_exists: TableExists) -> bool:
 
 
 def next_auth_ready(conn, table_exists: TableExists) -> bool:
-    return (
-        next_auth_count_table(conn, table_exists, "users") > 0
-        and next_auth_count_table(conn, table_exists, "passkey_credentials") > 0
-    )
+    credential_count = next_auth_count_table(conn, table_exists, "passkey_credentials")
+    # A stored password credential keeps the global auth wall active even when
+    # the ENV capability is turned off. Otherwise disabling Legacy auth on a
+    # password-only install would accidentally expose protected APIs.
+    credential_count += next_auth_count_table(conn, table_exists, "legacy_password_credentials")
+    return next_auth_count_table(conn, table_exists, "users") > 0 and credential_count > 0
 
 
 def next_auth_effective_enabled(conn, table_exists: TableExists) -> bool:
@@ -786,10 +913,424 @@ def register_next_auth_routes(
         return bool(setting_value(conn, "auth_enabled", False))
 
     def auth_ready(conn) -> bool:
-        return count_table(conn, "users") > 0 and count_table(conn, "passkey_credentials") > 0
+        credential_count = count_table(conn, "passkey_credentials")
+        credential_count += count_table(conn, "legacy_password_credentials")
+        return count_table(conn, "users") > 0 and credential_count > 0
 
     def auth_enabled(conn) -> bool:
         return configured_auth_enabled(conn) and auth_ready(conn)
+
+    def legacy_tables_available(conn) -> bool:
+        return all(
+            table_exists(conn, table_name)
+            for table_name in (
+                "legacy_password_credentials",
+                "legacy_totp_credentials",
+                "legacy_mfa_recovery_codes",
+                "legacy_auth_flows",
+                "legacy_auth_attempts",
+            )
+        )
+
+    def legacy_db_enabled(conn) -> bool:
+        return bool(setting_value(conn, LEGACY_AUTH_SETTING, False))
+
+    def legacy_effective_enabled(conn) -> bool:
+        return legacy_auth_env_enabled() and legacy_tables_available(conn) and legacy_db_enabled(conn)
+
+    def require_legacy_enabled(conn) -> None:
+        if not legacy_auth_env_enabled():
+            raise next_api_error("Password login is unavailable", 404)
+        if not legacy_tables_available(conn):
+            raise next_api_error("Legacy authentication tables are not available", 503)
+        if not legacy_db_enabled(conn):
+            raise next_api_error("Password login is unavailable", 404)
+
+    def passkey_registration_allowed(conn, user_id: UUID | str) -> bool:
+        if not table_exists(conn, "legacy_password_credentials"):
+            return True
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT passkey_registration_allowed
+                FROM legacy_password_credentials
+                WHERE user_id=%s
+                """,
+                (user_id,),
+            )
+            row = cur.fetchone()
+        return bool(row["passkey_registration_allowed"]) if row else True
+
+    def request_ip_address() -> str:
+        return (
+            request.headers.get("X-Forwarded-For", request.remote_addr or "")
+            .split(",", 1)[0]
+            .strip()
+        )
+
+    def issue_legacy_flow(
+        conn,
+        flow_type: str,
+        *,
+        user_id: UUID | str | None = None,
+        payload: dict[str, Any] | None = None,
+        seconds: int = FLOW_TTL_SECONDS,
+    ) -> str:
+        token = generate_flow_token()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM legacy_auth_flows WHERE expires_at < now() OR used_at IS NOT NULL")
+            cur.execute(
+                """
+                INSERT INTO legacy_auth_flows (token_hash, flow_type, user_id, payload, expires_at)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    flow_token_hash(token),
+                    flow_type,
+                    user_id,
+                    Jsonb(payload or {}),
+                    _utcnow() + timedelta(seconds=seconds),
+                ),
+            )
+        return token
+
+    def get_legacy_flow(
+        conn,
+        token: Any,
+        *,
+        flow_types: set[str],
+        consume: bool = False,
+    ) -> dict[str, Any]:
+        token_value = str(token or "").strip()
+        if not token_value:
+            raise next_api_error("Authentication flow is expired or already used", 400)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, flow_type, user_id, payload, expires_at
+                FROM legacy_auth_flows
+                WHERE token_hash=%s AND used_at IS NULL AND expires_at > now()
+                FOR UPDATE
+                """,
+                (flow_token_hash(token_value),),
+            )
+            flow = cur.fetchone()
+            if not flow or flow["flow_type"] not in flow_types:
+                raise next_api_error("Authentication flow is expired or already used", 400)
+            if consume:
+                cur.execute(
+                    "UPDATE legacy_auth_flows SET used_at=now() WHERE id=%s AND used_at IS NULL",
+                    (flow["id"],),
+                )
+                if cur.rowcount != 1:
+                    raise next_api_error("Authentication flow is expired or already used", 400)
+        flow["payload"] = flow.get("payload") or {}
+        return flow
+
+    def legacy_client_context(body: dict[str, Any]) -> dict[str, Any]:
+        mobile_flow_raw = body.get("mobile_flow") or body.get("mobileFlow")
+        mobile_flow = _parse_uuid(mobile_flow_raw)
+        if mobile_flow_raw and not mobile_flow:
+            raise next_api_error("mobile_flow is invalid", 400)
+        client_kind = str(body.get("client_kind") or body.get("clientKind") or "").strip().lower()
+        return {
+            "mobileFlow": str(mobile_flow) if mobile_flow else None,
+            "clientKind": client_kind if client_kind == "ios" else "",
+        }
+
+    def legacy_complete_login(
+        conn,
+        *,
+        user: dict[str, Any],
+        context: dict[str, Any],
+        method: str,
+    ):
+        mobile_flow = _parse_uuid(context.get("mobileFlow"))
+        actor = {
+            "id": user["id"],
+            "username": user["username"],
+            "role": primary_role(conn, user["id"]),
+        }
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE legacy_password_credentials
+                SET last_login_at=now(), failed_attempt_count=0, first_failed_at=NULL,
+                    locked_until=NULL, updated_at=now()
+                WHERE user_id=%s
+                """,
+                (user["id"],),
+            )
+        audit_event(
+            conn,
+            event_type="auth.legacy_login",
+            category="security",
+            actor=actor,
+            target_type="user",
+            target_id=user["id"],
+            summary=f"{user['username']} completed password login",
+            metadata=safe_audit_metadata(
+                {"method": method, "mobileFlow": bool(mobile_flow), "clientKind": context.get("clientKind")}
+            ),
+        )
+        if mobile_flow:
+            mobile_code = create_mobile_auth_code(
+                conn,
+                mobile_flow_id=mobile_flow,
+                user_id=user["id"],
+            )
+            return response(
+                {
+                    "status": "ok",
+                    "stage": "complete",
+                    "callback_url": mobile_code["callbackUrl"],
+                    "callbackUrl": mobile_code["callbackUrl"],
+                    "state": mobile_code.get("state"),
+                }
+            )
+        if context.get("clientKind") == "ios":
+            return response(
+                native_login_response(
+                    conn,
+                    user_id=user["id"],
+                    username=user["username"],
+                    display_name=user.get("display_name"),
+                )
+            )
+        token = _create_token(str(user["id"]), user["username"])
+        return cookie_response(
+            {
+                "status": "ok",
+                "stage": "complete",
+                "token": token,
+                "username": user["username"],
+            },
+            token,
+        )
+
+    def issue_mfa_enrollment(conn, user: dict[str, Any], context: dict[str, Any]):
+        secret_value = generate_totp_secret()
+        nonce, ciphertext = encrypt_totp_secret(secret_value)
+        flow_token = issue_legacy_flow(
+            conn,
+            "mfa_enrollment",
+            user_id=user["id"],
+            payload={
+                **context,
+                "nonce": _b64url_encode(nonce),
+                "encryptedSecret": _b64url_encode(ciphertext),
+            },
+        )
+        return response(
+            {
+                "status": "ok",
+                "stage": "mfa_enrollment",
+                "flow_token": flow_token,
+                "manual_key": secret_value,
+                "otpauth_uri": totp_uri(secret_value, user["username"]),
+                "qr_data_uri": totp_qr_data_uri(totp_uri(secret_value, user["username"])),
+            }
+        )
+
+    def legacy_next_stage(
+        conn,
+        *,
+        user: dict[str, Any],
+        credential: dict[str, Any],
+        context: dict[str, Any],
+    ):
+        if credential.get("must_change_password"):
+            token = issue_legacy_flow(
+                conn,
+                "password_change",
+                user_id=user["id"],
+                payload=context,
+            )
+            return response({"status": "ok", "stage": "password_change", "flow_token": token})
+        if credential.get("mfa_required"):
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT confirmed_at
+                    FROM legacy_totp_credentials
+                    WHERE user_id=%s
+                    """,
+                    (user["id"],),
+                )
+                totp_row = cur.fetchone()
+            if not totp_row or not totp_row.get("confirmed_at"):
+                return issue_mfa_enrollment(conn, user, context)
+            token = issue_legacy_flow(
+                conn,
+                "mfa_challenge",
+                user_id=user["id"],
+                payload=context,
+            )
+            return response({"status": "ok", "stage": "mfa_challenge", "flow_token": token})
+        return legacy_complete_login(conn, user=user, context=context, method="password")
+
+    def legacy_user_row(conn, user_id: UUID | str) -> dict[str, Any]:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, username, display_name, status
+                FROM users
+                WHERE id=%s
+                """,
+                (user_id,),
+            )
+            user = cur.fetchone()
+        if not user or user.get("status") != "active":
+            raise next_api_error("Invalid username or password", 401)
+        return user
+
+    def recent_legacy_attempts(conn, username: str) -> tuple[int, int, str, str]:
+        identity_hash = identity_digest(username)
+        ip_hash = ip_digest(request_ip_address())
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) FILTER (WHERE identity_digest=%s AND NOT succeeded)::int AS identity_failures,
+                    COUNT(*) FILTER (WHERE ip_digest=%s AND NOT succeeded)::int AS ip_failures
+                FROM legacy_auth_attempts
+                WHERE occurred_at >= now() - interval '15 minutes'
+                """,
+                (identity_hash, ip_hash),
+            )
+            row = cur.fetchone() or {}
+        return (
+            int(row.get("identity_failures") or 0),
+            int(row.get("ip_failures") or 0),
+            identity_hash,
+            ip_hash,
+        )
+
+    def record_legacy_attempt(conn, identity_hash: str, ip_hash: str, *, succeeded: bool) -> None:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO legacy_auth_attempts (identity_digest, ip_digest, succeeded)
+                VALUES (%s, %s, %s)
+                """,
+                (identity_hash, ip_hash, succeeded),
+            )
+            cur.execute(
+                """
+                DELETE FROM legacy_auth_attempts
+                WHERE occurred_at < now() - interval '24 hours'
+                """
+            )
+
+    def reconcile_review_legacy_user(conn) -> None:
+        if not (
+            legacy_auth_env_enabled()
+            and _env_flag("REVIEW_LOGIN_ENABLED", default=False)
+            and legacy_tables_available(conn)
+        ):
+            return
+        configured_username = str(os.environ.get("REVIEW_LOGIN_USERNAME") or "").strip()
+        configured_password = str(os.environ.get("REVIEW_LOGIN_PASSWORD") or "")
+        if not configured_username or not configured_password or not role_exists(conn, "media_viewer"):
+            return
+        username = _normalize_username(
+            os.environ.get("REVIEW_LOGIN_USER") or configured_username
+        )
+        expires_at = _review_login_expires_at()
+        changed = False
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        u.id, u.username, u.status,
+                        c.password_hash, c.mfa_required, c.passkey_registration_allowed,
+                        c.credential_expires_at
+                    FROM users u
+                    LEFT JOIN legacy_password_credentials c ON c.user_id=u.id
+                    WHERE lower(u.username)=lower(%s)
+                    FOR UPDATE OF u
+                    """,
+                    (username,),
+                )
+                reviewer = cur.fetchone()
+                if not reviewer:
+                    reviewer_id = uuid4()
+                    cur.execute(
+                        """
+                        INSERT INTO users (id, username, display_name, status, created_at, updated_at)
+                        VALUES (%s, %s, 'App Store Reviewer', 'active', now(), now())
+                        """,
+                        (reviewer_id, username),
+                    )
+                    reviewer = {"id": reviewer_id, "username": username, "password_hash": None}
+                    changed = True
+                elif reviewer.get("status") != "active":
+                    cur.execute(
+                        "UPDATE users SET status='active', updated_at=now() WHERE id=%s",
+                        (reviewer["id"],),
+                    )
+                    changed = True
+                password_matches = verify_password(
+                    reviewer.get("password_hash"), configured_password
+                ).valid
+                cur.execute(
+                    """
+                    INSERT INTO legacy_password_credentials (
+                        user_id, password_hash, hash_version, must_change_password,
+                        mfa_required, passkey_registration_allowed, credential_expires_at
+                    )
+                    VALUES (%s, %s, %s, false, false, true, %s)
+                    ON CONFLICT (user_id) DO UPDATE SET
+                        password_hash=CASE
+                            WHEN %s THEN legacy_password_credentials.password_hash
+                            ELSE EXCLUDED.password_hash
+                        END,
+                        hash_version=EXCLUDED.hash_version,
+                        must_change_password=false,
+                        mfa_required=false,
+                        passkey_registration_allowed=true,
+                        credential_expires_at=EXCLUDED.credential_expires_at,
+                        failed_attempt_count=0,
+                        first_failed_at=NULL,
+                        locked_until=NULL,
+                        updated_at=now()
+                    """,
+                    (
+                        reviewer["id"],
+                        reviewer.get("password_hash")
+                        if password_matches
+                        else hash_password(configured_password),
+                        PASSWORD_HASH_VERSION,
+                        expires_at,
+                        password_matches,
+                    ),
+                )
+                cur.execute("DELETE FROM legacy_mfa_recovery_codes WHERE user_id=%s", (reviewer["id"],))
+                cur.execute("DELETE FROM legacy_totp_credentials WHERE user_id=%s", (reviewer["id"],))
+                cur.execute(
+                    """
+                    DELETE FROM user_roles
+                    WHERE user_id=%s AND scope_type='global' AND scope_id=''
+                      AND role_id NOT IN (SELECT id FROM roles WHERE key='media_viewer')
+                    """,
+                    (reviewer["id"],),
+                )
+            assign_role(conn, reviewer["id"], "media_viewer")
+            if changed or not password_matches:
+                audit_event(
+                    conn,
+                    event_type="auth.review_user_migrated",
+                    actor={"id": reviewer["id"], "username": username, "role": "media_viewer"},
+                    target_type="user",
+                    target_id=reviewer["id"],
+                    summary="Reconciled App Store Review as a password user",
+                    metadata={
+                        "mfaRequired": False,
+                        "passkeyRegistrationAllowed": True,
+                        "expiresAt": expires_at.isoformat() if expires_at else None,
+                    },
+                )
 
     def registration_enabled(conn) -> bool:
         return bool(setting_value(conn, "registration_enabled", True))
@@ -926,6 +1467,22 @@ def register_next_auth_routes(
             row = cur.fetchone()
         return int(row["count"] if row else 0)
 
+    def active_owner_passkey_count(conn) -> int:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COUNT(DISTINCT u.id) AS count
+                FROM users u
+                JOIN user_roles ur ON ur.user_id = u.id
+                JOIN roles r ON r.id = ur.role_id
+                JOIN passkey_credentials c ON c.user_id = u.id
+                WHERE u.status = 'active'
+                  AND r.key = 'owner'
+                """
+            )
+            row = cur.fetchone()
+        return int(row["count"] if row else 0)
+
     def user_admin_row(conn, user_id: UUID | str) -> dict[str, Any] | None:
         with conn.cursor() as cur:
             cur.execute(
@@ -940,9 +1497,18 @@ def register_next_auth_routes(
                     u.created_at,
                     u.updated_at,
                     COUNT(c.id)::int AS credential_count,
-                    MAX(c.last_used_at) AS last_credential_used_at
+                    MAX(c.last_used_at) AS last_credential_used_at,
+                    COUNT(DISTINCT lc.user_id)::int AS legacy_credential_count,
+                    COALESCE(bool_or(lc.must_change_password), false) AS legacy_must_change_password,
+                    COALESCE(bool_or(lc.mfa_required), false) AS legacy_mfa_required,
+                    COALESCE(bool_or(lc.passkey_registration_allowed), true) AS passkey_registration_allowed,
+                    EXISTS (
+                        SELECT 1 FROM legacy_totp_credentials lt
+                        WHERE lt.user_id=u.id AND lt.confirmed_at IS NOT NULL
+                    ) AS legacy_mfa_enrolled
                 FROM users u
                 LEFT JOIN passkey_credentials c ON c.user_id = u.id
+                LEFT JOIN legacy_password_credentials lc ON lc.user_id = u.id
                 WHERE u.id=%s
                 GROUP BY u.id
                 """,
@@ -1149,6 +1715,12 @@ def register_next_auth_routes(
         user["role"] = role
         return user
 
+    def require_authenticated_admin(conn) -> dict[str, Any]:
+        user = require_admin(conn)
+        if user.get("id") is None:
+            raise next_api_error("An authenticated Owner or Admin is required", 401)
+        return user
+
     def require_owner(conn) -> dict[str, Any]:
         user = current_user(conn)
         if not user:
@@ -1297,22 +1869,19 @@ def register_next_auth_routes(
     def auth_status_payload(conn) -> dict[str, Any]:
         user_count = count_table(conn, "users")
         credential_count = count_table(conn, "passkey_credentials")
+        legacy_credential_count = count_table(conn, "legacy_password_credentials")
         is_configured_auth_enabled = configured_auth_enabled(conn)
-        is_auth_ready = user_count > 0 and credential_count > 0
+        is_auth_ready = auth_ready(conn)
         user = current_user(conn)
         role = primary_role(conn, user["id"]) if user else None
         review_expires_at: datetime | None = None
-        review_login_available = False
+        legacy_available = legacy_auth_env_enabled() and legacy_tables_available(conn)
+        effective_legacy = legacy_effective_enabled(conn)
+        review_login_available = effective_legacy
         try:
             review_expires_at = _review_login_expires_at()
-            review_login_available = bool(
-                _env_flag("REVIEW_LOGIN_ENABLED", default=False)
-                and str(os.environ.get("REVIEW_LOGIN_USERNAME") or "").strip()
-                and str(os.environ.get("REVIEW_LOGIN_PASSWORD") or "").strip()
-                and (review_expires_at is None or _utcnow() < review_expires_at)
-            )
-        except Exception:
-            review_login_available = False
+        except ValueError:
+            review_expires_at = None
         return {
             "auth_enabled": is_configured_auth_enabled and is_auth_ready,
             "configured_auth_enabled": is_configured_auth_enabled,
@@ -1323,6 +1892,19 @@ def register_next_auth_routes(
             "has_credentials": credential_count > 0,
             "user_count": user_count,
             "credential_count": credential_count,
+            "legacy_credential_count": legacy_credential_count,
+            "legacy_auth_available": legacy_available,
+            "legacy_auth_enabled": effective_legacy,
+            "legacy_auth_database_enabled": legacy_db_enabled(conn)
+            if legacy_tables_available(conn)
+            else False,
+            "legacy_bootstrap_available": bool(
+                legacy_available
+                and not is_auth_ready
+                and user_count == 0
+                and credential_count == 0
+                and legacy_credential_count == 0
+            ),
             "rp_id": _rp_id(),
             "rp_name": _rp_name(),
             "rp_origins": _rp_origins(),
@@ -1352,6 +1934,7 @@ def register_next_auth_routes(
     @route("/api/next/auth/status", "/api/auth/status", methods=["GET"])
     def auth_status():
         with connect() as conn:
+            reconcile_review_legacy_user(conn)
             return response({"status": "ok", **auth_status_payload(conn)})
 
     @route("/api/next/auth/me", "/api/auth/me", methods=["GET"])
@@ -1412,6 +1995,8 @@ def register_next_auth_routes(
                     (user_id,),
                 )
                 existing_credentials = cur.fetchall()
+            if user and not passkey_registration_allowed(conn, user_id):
+                raise next_api_error("Passkey registration is disabled for this user", 403)
             if (
                 has_users
                 and has_credentials
@@ -1494,6 +2079,8 @@ def register_next_auth_routes(
                 with conn.cursor() as cur:
                     cur.execute("SELECT id FROM users WHERE id=%s", (user_id,))
                     existing_user = cur.fetchone()
+                if existing_user and not passkey_registration_allowed(conn, user_id):
+                    raise next_api_error("Passkey registration is disabled for this user", 403)
                 if (
                     existing_user
                     and has_users
@@ -1666,8 +2253,633 @@ def register_next_auth_routes(
         target = f"/?{urlencode({'mobile_flow': flow_id_str})}"
         return redirect(target, code=302)
 
+    @route(
+        "/api/next/auth/legacy/bootstrap/start",
+        "/api/auth/legacy/bootstrap/start",
+        methods=["POST"],
+    )
+    def legacy_bootstrap_start():
+        if not legacy_auth_env_enabled():
+            raise next_api_error("Password onboarding is unavailable", 404)
+        body = request.get_json(silent=True) or {}
+        if body.get("password_risk_accepted") is not True:
+            raise next_api_error("Password risk acknowledgement is required", 400)
+        try:
+            username = _normalize_username(body.get("username"))
+            password = validate_password(body.get("password"), username)
+        except (ValueError, PasswordPolicyError) as exc:
+            raise next_api_error(str(exc), 400) from exc
+        display_name = str(body.get("display_name") or username).strip() or username
+        with connect() as conn:
+            if not legacy_tables_available(conn):
+                raise next_api_error("Legacy authentication tables are not available", 503)
+            if (
+                count_table(conn, "users")
+                or count_table(conn, "passkey_credentials")
+                or count_table(conn, "legacy_password_credentials")
+                or auth_ready(conn)
+            ):
+                raise next_api_error("First-owner password onboarding is no longer available", 409)
+            secret_value = generate_totp_secret()
+            nonce, ciphertext = encrypt_totp_secret(secret_value)
+            with conn.transaction():
+                token = issue_legacy_flow(
+                    conn,
+                    "bootstrap_totp",
+                    payload={
+                        "username": username,
+                        "displayName": display_name,
+                        "passwordHash": hash_password(password),
+                        "nonce": _b64url_encode(nonce),
+                        "encryptedSecret": _b64url_encode(ciphertext),
+                    },
+                )
+        return response(
+            {
+                "status": "ok",
+                "stage": "bootstrap_totp",
+                "flow_token": token,
+                "manual_key": secret_value,
+                "otpauth_uri": totp_uri(secret_value, username),
+                "qr_data_uri": totp_qr_data_uri(totp_uri(secret_value, username)),
+            }
+        )
+
+    @route(
+        "/api/next/auth/legacy/bootstrap/verify",
+        "/api/auth/legacy/bootstrap/verify",
+        methods=["POST"],
+    )
+    def legacy_bootstrap_verify():
+        if not legacy_auth_env_enabled():
+            raise next_api_error("Password onboarding is unavailable", 404)
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            if not legacy_tables_available(conn):
+                raise next_api_error("Legacy authentication tables are not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("SELECT pg_advisory_xact_lock(hashtext('discvault-legacy-bootstrap'))")
+                flow = get_legacy_flow(
+                    conn,
+                    body.get("flow_token"),
+                    flow_types={"bootstrap_totp"},
+                    consume=True,
+                )
+                if (
+                    count_table(conn, "users")
+                    or count_table(conn, "passkey_credentials")
+                    or count_table(conn, "legacy_password_credentials")
+                    or auth_ready(conn)
+                ):
+                    raise next_api_error("First-owner password onboarding is no longer available", 409)
+                payload = flow["payload"]
+                secret_value = decrypt_totp_secret(
+                    _b64url_decode(payload["nonce"]),
+                    _b64url_decode(payload["encryptedSecret"]),
+                )
+                accepted_step = verify_totp(secret_value, body.get("code"))
+                if accepted_step is None:
+                    record_legacy_attempt(
+                        conn,
+                        identity_digest(payload["username"]),
+                        ip_digest(request_ip_address()),
+                        succeeded=False,
+                    )
+                    return response(
+                        {"status": "error", "error": "Invalid authentication code"},
+                        400,
+                    )
+                user_id = uuid4()
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO users (id, username, display_name, status, created_at, updated_at)
+                        VALUES (%s, %s, %s, 'active', now(), now())
+                        """,
+                        (user_id, payload["username"], payload["displayName"]),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO legacy_password_credentials (
+                            user_id, password_hash, hash_version, must_change_password,
+                            mfa_required, passkey_registration_allowed
+                        )
+                        VALUES (%s, %s, %s, false, true, true)
+                        """,
+                        (user_id, payload["passwordHash"], PASSWORD_HASH_VERSION),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO legacy_totp_credentials (
+                            user_id, encrypted_secret, nonce, confirmed_at, last_accepted_step
+                        )
+                        VALUES (%s, %s, %s, NULL, %s)
+                        """,
+                        (user_id, _b64url_decode(payload["encryptedSecret"]), _b64url_decode(payload["nonce"]), accepted_step),
+                    )
+                assign_role(conn, user_id, "owner")
+                recovery_codes = next_generate_recovery_codes()
+                with conn.cursor() as cur:
+                    next_replace_recovery_codes(cur, user_id, recovery_codes)
+                set_setting(conn, LEGACY_AUTH_SETTING, True)
+                set_setting(conn, "auth_enabled", True)
+                ack_token = issue_legacy_flow(
+                    conn,
+                    "bootstrap_recovery_ack",
+                    user_id=user_id,
+                )
+                audit_event(
+                    conn,
+                    event_type="auth.legacy_owner_bootstrapped",
+                    actor={"id": user_id, "username": payload["username"], "role": "owner"},
+                    target_type="user",
+                    target_id=user_id,
+                    summary="Created the first Owner with password and TOTP",
+                    metadata={"mfaRequired": True, "passkeyRegistrationAllowed": True},
+                )
+        return response(
+            {
+                "status": "ok",
+                "stage": "recovery_codes",
+                "recovery_codes": recovery_codes,
+                "flow_token": ack_token,
+            }
+        )
+
+    @route(
+        "/api/next/auth/legacy/recovery-codes/ack",
+        "/api/auth/legacy/recovery-codes/ack",
+        methods=["POST"],
+    )
+    def legacy_recovery_codes_ack():
+        body = request.get_json(silent=True) or {}
+        if body.get("acknowledged") is not True:
+            raise next_api_error("Recovery-code acknowledgement is required", 400)
+        with connect() as conn:
+            require_legacy_enabled(conn)
+            with conn.transaction():
+                flow = get_legacy_flow(
+                    conn,
+                    body.get("flow_token"),
+                    flow_types={"bootstrap_recovery_ack", "mfa_recovery_ack"},
+                    consume=True,
+                )
+                user = legacy_user_row(conn, flow["user_id"])
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE legacy_totp_credentials
+                        SET confirmed_at=now(), updated_at=now()
+                        WHERE user_id=%s
+                        """,
+                        (user["id"],),
+                    )
+                return legacy_complete_login(
+                    conn,
+                    user=user,
+                    context=flow["payload"],
+                    method="totp_enrollment",
+                )
+
+    @route("/api/next/auth/legacy/login", "/api/auth/legacy/login", methods=["POST"])
+    def legacy_login():
+        body = request.get_json(silent=True) or {}
+        username = str(body.get("username") or "").strip()
+        password = str(body.get("password") or "")
+        if not username or not password:
+            raise next_api_error("Invalid username or password", 401)
+        context = legacy_client_context(body)
+        database_username = username
+        configured_review_username = str(
+            os.environ.get("REVIEW_LOGIN_USERNAME") or ""
+        ).strip()
+        if (
+            _env_flag("REVIEW_LOGIN_ENABLED", default=False)
+            and configured_review_username
+            and constant_time_text_equal(username, configured_review_username)
+        ):
+            database_username = str(
+                os.environ.get("REVIEW_LOGIN_USER") or configured_review_username
+            ).strip()
+        with connect() as conn:
+            require_legacy_enabled(conn)
+            with nullcontext():
+                identity_failures, ip_failures, identity_hash, ip_hash = recent_legacy_attempts(conn, username)
+                if attempt_is_throttled(identity_failures, ip_failures):
+                    record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=False)
+                    conn.commit()
+                    raise next_api_error("Invalid username or password", 401)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            u.id, u.username, u.display_name, u.status,
+                            c.password_hash, c.hash_version, c.must_change_password,
+                            c.mfa_required, c.passkey_registration_allowed,
+                            c.failed_attempt_count, c.first_failed_at, c.locked_until,
+                            c.credential_expires_at
+                        FROM users u
+                        JOIN legacy_password_credentials c ON c.user_id=u.id
+                        WHERE lower(u.username)=lower(%s)
+                        FOR UPDATE
+                        """,
+                        (database_username,),
+                    )
+                    credential = cur.fetchone()
+                if not credential:
+                    # Argon2 work keeps the unknown-user path close to a known-user failure.
+                    verify_password(hash_password("unknown-user-padding-value"), password)
+                    record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=False)
+                    conn.commit()
+                    raise next_api_error("Invalid username or password", 401)
+                now = _utcnow()
+                expired = bool(
+                    credential.get("credential_expires_at")
+                    and credential["credential_expires_at"] <= now
+                )
+                locked = bool(credential.get("locked_until") and credential["locked_until"] > now)
+                verification = verify_password(credential["password_hash"], password)
+                if (
+                    credential.get("status") != "active"
+                    or expired
+                    or locked
+                    or not verification.valid
+                ):
+                    failed_count, first_failed_at, new_locked_until = failed_attempt_state(
+                        int(credential.get("failed_attempt_count") or 0),
+                        credential.get("first_failed_at"),
+                        now,
+                    )
+                    locked_until = new_locked_until or credential.get("locked_until")
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE legacy_password_credentials
+                            SET failed_attempt_count=%s, first_failed_at=%s,
+                                locked_until=%s, updated_at=now()
+                            WHERE user_id=%s
+                            """,
+                            (failed_count, first_failed_at, locked_until, credential["id"]),
+                        )
+                    record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=False)
+                    conn.commit()
+                    raise next_api_error("Invalid username or password", 401)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE legacy_password_credentials
+                        SET failed_attempt_count=0, first_failed_at=NULL, locked_until=NULL,
+                            password_hash=CASE WHEN %s THEN %s ELSE password_hash END,
+                            hash_version=%s, updated_at=now()
+                        WHERE user_id=%s
+                        """,
+                        (
+                            verification.needs_rehash,
+                            hash_password(password) if verification.needs_rehash else credential["password_hash"],
+                            PASSWORD_HASH_VERSION,
+                            credential["id"],
+                        ),
+                    )
+                record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=True)
+                user = {
+                    "id": credential["id"],
+                    "username": credential["username"],
+                    "display_name": credential.get("display_name"),
+                    "status": credential["status"],
+                }
+                return legacy_next_stage(
+                    conn,
+                    user=user,
+                    credential=credential,
+                    context=context,
+                )
+
+    @route(
+        "/api/next/auth/legacy/password/change",
+        "/api/auth/legacy/password/change",
+        methods=["POST"],
+    )
+    def legacy_password_change():
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            require_legacy_enabled(conn)
+            with conn.transaction():
+                flow_token = body.get("flow_token")
+                if flow_token:
+                    flow = get_legacy_flow(
+                        conn,
+                        flow_token,
+                        flow_types={"password_change"},
+                        consume=True,
+                    )
+                    user = legacy_user_row(conn, flow["user_id"])
+                    context = flow["payload"]
+                else:
+                    user = current_user(conn)
+                    if not user:
+                        raise next_api_error("Unauthorized", 401)
+                    context = {}
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT *
+                        FROM legacy_password_credentials
+                        WHERE user_id=%s
+                        FOR UPDATE
+                        """,
+                        (user["id"],),
+                    )
+                    credential = cur.fetchone()
+                if not credential:
+                    raise next_api_error("Password credential not found", 404)
+                if not flow_token and not verify_password(
+                    credential["password_hash"], body.get("current_password")
+                ).valid:
+                    raise next_api_error("Current password is invalid", 401)
+                try:
+                    new_password = validate_password(body.get("new_password"), user["username"])
+                except PasswordPolicyError as exc:
+                    raise next_api_error(str(exc), 400) from exc
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE legacy_password_credentials
+                        SET password_hash=%s, hash_version=%s, must_change_password=false,
+                            password_changed_at=now(), failed_attempt_count=0,
+                            first_failed_at=NULL, locked_until=NULL, updated_at=now()
+                        WHERE user_id=%s
+                        """,
+                        (hash_password(new_password), PASSWORD_HASH_VERSION, user["id"]),
+                    )
+                audit_event(
+                    conn,
+                    event_type="auth.legacy_password_changed",
+                    actor={
+                        "id": user["id"],
+                        "username": user["username"],
+                        "role": primary_role(conn, user["id"]),
+                    },
+                    target_type="user",
+                    target_id=user["id"],
+                    summary=f"Changed password for {user['username']}",
+                    metadata={"forcedChange": bool(flow_token)},
+                )
+                credential["must_change_password"] = False
+                if flow_token:
+                    return legacy_next_stage(
+                        conn,
+                        user=user,
+                        credential=credential,
+                        context=context,
+                    )
+        return response({"status": "ok", "stage": "complete"})
+
+    @route("/api/next/auth/legacy/me", "/api/auth/legacy/me", methods=["GET"])
+    def legacy_me():
+        with connect() as conn:
+            user = current_user(conn)
+            if not user:
+                raise next_api_error("Unauthorized", 401)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        c.must_change_password, c.mfa_required,
+                        c.passkey_registration_allowed, c.password_changed_at,
+                        c.last_login_at,
+                        EXISTS (
+                            SELECT 1 FROM legacy_totp_credentials t
+                            WHERE t.user_id=c.user_id AND t.confirmed_at IS NOT NULL
+                        ) AS mfa_enrolled,
+                        (
+                            SELECT COUNT(*) FROM recovery_codes r
+                            WHERE r.user_id=c.user_id
+                              AND r.used_at IS NULL
+                              AND (r.expires_at IS NULL OR r.expires_at > now())
+                        )::int AS active_recovery_codes
+                    FROM legacy_password_credentials c
+                    WHERE c.user_id=%s
+                    """,
+                    (user["id"],),
+                )
+                credential = cur.fetchone()
+        return response(
+            {
+                "status": "ok",
+                "has_credential": bool(credential),
+                "credential": credential,
+            }
+        )
+
+    @route("/api/next/auth/legacy/mfa/setup", "/api/auth/legacy/mfa/setup", methods=["POST"])
+    def legacy_mfa_setup():
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            require_legacy_enabled(conn)
+            flow = get_legacy_flow(
+                conn,
+                body.get("flow_token"),
+                flow_types={"mfa_enrollment"},
+            )
+            user = legacy_user_row(conn, flow["user_id"])
+            secret_value = decrypt_totp_secret(
+                _b64url_decode(flow["payload"]["nonce"]),
+                _b64url_decode(flow["payload"]["encryptedSecret"]),
+            )
+        return response(
+            {
+                "status": "ok",
+                "stage": "mfa_enrollment",
+                "manual_key": secret_value,
+                "otpauth_uri": totp_uri(secret_value, user["username"]),
+                "qr_data_uri": totp_qr_data_uri(totp_uri(secret_value, user["username"])),
+            }
+        )
+
+    @route(
+        "/api/next/auth/legacy/mfa/setup/verify",
+        "/api/auth/legacy/mfa/setup/verify",
+        methods=["POST"],
+    )
+    def legacy_mfa_setup_verify():
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            require_legacy_enabled(conn)
+            with conn.transaction():
+                flow = get_legacy_flow(
+                    conn,
+                    body.get("flow_token"),
+                    flow_types={"mfa_enrollment"},
+                    consume=True,
+                )
+                user = legacy_user_row(conn, flow["user_id"])
+                nonce = _b64url_decode(flow["payload"]["nonce"])
+                ciphertext = _b64url_decode(flow["payload"]["encryptedSecret"])
+                secret_value = decrypt_totp_secret(nonce, ciphertext)
+                accepted_step = verify_totp(secret_value, body.get("code"))
+                if accepted_step is None:
+                    record_legacy_attempt(
+                        conn,
+                        identity_digest(user["username"]),
+                        ip_digest(request_ip_address()),
+                        succeeded=False,
+                    )
+                    return response(
+                        {"status": "error", "error": "Invalid authentication code"},
+                        400,
+                    )
+                recovery_codes = next_generate_recovery_codes()
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO legacy_totp_credentials (
+                            user_id, encrypted_secret, nonce, confirmed_at, last_accepted_step
+                        )
+                        VALUES (%s, %s, %s, NULL, %s)
+                        ON CONFLICT (user_id) DO UPDATE SET
+                            encrypted_secret=EXCLUDED.encrypted_secret,
+                            nonce=EXCLUDED.nonce,
+                            confirmed_at=NULL,
+                            last_accepted_step=EXCLUDED.last_accepted_step,
+                            updated_at=now()
+                        """,
+                        (user["id"], ciphertext, nonce, accepted_step),
+                    )
+                    next_replace_recovery_codes(cur, user["id"], recovery_codes)
+                ack_token = issue_legacy_flow(
+                    conn,
+                    "mfa_recovery_ack",
+                    user_id=user["id"],
+                    payload={
+                        "mobileFlow": flow["payload"].get("mobileFlow"),
+                        "clientKind": flow["payload"].get("clientKind"),
+                    },
+                )
+                audit_event(
+                    conn,
+                    event_type="auth.legacy_mfa_enrolled",
+                    actor={
+                        "id": user["id"],
+                        "username": user["username"],
+                        "role": primary_role(conn, user["id"]),
+                    },
+                    target_type="user",
+                    target_id=user["id"],
+                    summary=f"Enrolled TOTP for {user['username']}",
+                    metadata={"recoveryCodeCount": len(recovery_codes)},
+                )
+        return response(
+            {
+                "status": "ok",
+                "stage": "recovery_codes",
+                "recovery_codes": recovery_codes,
+                "flow_token": ack_token,
+            }
+        )
+
+    @route("/api/next/auth/legacy/mfa/verify", "/api/auth/legacy/mfa/verify", methods=["POST"])
+    def legacy_mfa_verify():
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            require_legacy_enabled(conn)
+            with conn.transaction():
+                flow = get_legacy_flow(
+                    conn,
+                    body.get("flow_token"),
+                    flow_types={"mfa_challenge"},
+                    consume=True,
+                )
+                user = legacy_user_row(conn, flow["user_id"])
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT encrypted_secret, nonce, last_accepted_step
+                        FROM legacy_totp_credentials
+                        WHERE user_id=%s AND confirmed_at IS NOT NULL
+                        FOR UPDATE
+                        """,
+                        (user["id"],),
+                    )
+                    totp_row = cur.fetchone()
+                if not totp_row:
+                    return response(
+                        {"status": "error", "error": "Invalid authentication code"},
+                        400,
+                    )
+                accepted_step = verify_totp(
+                    decrypt_totp_secret(totp_row["nonce"], totp_row["encrypted_secret"]),
+                    body.get("code"),
+                    last_accepted_step=totp_row.get("last_accepted_step"),
+                )
+                if accepted_step is None:
+                    record_legacy_attempt(
+                        conn,
+                        identity_digest(user["username"]),
+                        ip_digest(request_ip_address()),
+                        succeeded=False,
+                    )
+                    return response(
+                        {"status": "error", "error": "Invalid authentication code"},
+                        401,
+                    )
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE legacy_totp_credentials
+                        SET last_accepted_step=%s, updated_at=now()
+                        WHERE user_id=%s
+                        """,
+                        (accepted_step, user["id"]),
+                    )
+                return legacy_complete_login(
+                    conn,
+                    user=user,
+                    context=flow["payload"],
+                    method="totp",
+                )
+
+    @route("/api/next/auth/legacy/mfa/recovery", "/api/auth/legacy/mfa/recovery", methods=["POST"])
+    def legacy_mfa_recovery():
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            require_legacy_enabled(conn)
+            with conn.transaction():
+                flow = get_legacy_flow(
+                    conn,
+                    body.get("flow_token"),
+                    flow_types={"mfa_challenge"},
+                    consume=True,
+                )
+                user = legacy_user_row(conn, flow["user_id"])
+                with conn.cursor() as cur:
+                    matched = next_consume_recovery_code(
+                        cur,
+                        user["id"],
+                        body.get("recovery_code"),
+                    )
+                if not matched:
+                    record_legacy_attempt(
+                        conn,
+                        identity_digest(user["username"]),
+                        ip_digest(request_ip_address()),
+                        succeeded=False,
+                    )
+                    return response(
+                        {"status": "error", "error": "Invalid authentication code"},
+                        401,
+                    )
+                return legacy_complete_login(
+                    conn,
+                    user=user,
+                    context=flow["payload"],
+                    method="recovery_code",
+                )
+
     @route("/api/next/auth/review/login", "/api/auth/review/login", methods=["POST"])
     def review_login():
+        if legacy_auth_env_enabled():
+            return legacy_login()
         if not _env_flag("REVIEW_LOGIN_ENABLED", default=False):
             raise next_api_error("Review login is disabled", 404)
 
@@ -1695,8 +2907,8 @@ def register_next_auth_routes(
         if not username or not password:
             raise next_api_error("username and password are required", 400)
         if not (
-            secrets.compare_digest(username, configured_username)
-            and secrets.compare_digest(password, configured_password)
+            constant_time_text_equal(username, configured_username)
+            and constant_time_text_equal(password, configured_password)
         ):
             raise next_api_error("Invalid credentials", 401)
 
@@ -2157,8 +3369,6 @@ def register_next_auth_routes(
         mobile_flow = _parse_uuid(mobile_flow_raw)
         if mobile_flow_raw and not mobile_flow:
             raise next_api_error("mobile_flow is invalid", 400)
-        code_hash = next_recovery_code_hash(recovery_code)
-
         with connect() as conn:
             if not table_exists(conn, "users") or not table_exists(conn, "recovery_codes"):
                 raise next_api_error("Recovery is not available yet", 503)
@@ -2166,29 +3376,19 @@ def register_next_auth_routes(
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        SELECT rc.id AS recovery_code_id, u.id AS user_id, u.username, u.status AS user_status
-                        FROM recovery_codes rc
-                        JOIN users u ON u.id = rc.user_id
+                        SELECT u.id AS user_id, u.username, u.status AS user_status
+                        FROM users u
                         WHERE u.username=%s
-                          AND rc.code_hash=%s
-                          AND rc.used_at IS NULL
-                          AND (rc.expires_at IS NULL OR rc.expires_at > now())
                         """,
-                        (username, code_hash),
+                        (username,),
                     )
                     row = cur.fetchone()
                     if not row:
                         raise next_api_error("Invalid username or recovery code", 401)
                     if row["user_status"] != "active":
                         raise next_api_error("User is disabled", 403)
-                    cur.execute(
-                        """
-                        UPDATE recovery_codes
-                        SET used_at=now()
-                        WHERE id=%s
-                        """,
-                        (row["recovery_code_id"],),
-                    )
+                    if not next_consume_recovery_code(cur, row["user_id"], recovery_code):
+                        raise next_api_error("Invalid username or recovery code", 401)
                     cur.execute(
                         """
                         SELECT COUNT(*) AS count
@@ -2588,6 +3788,117 @@ def register_next_auth_routes(
                 )
             return response({"status": "deleted"})
 
+    @route(
+        "/api/next/auth/legacy/settings",
+        "/api/auth/legacy/settings",
+        methods=["GET", "PATCH"],
+    )
+    def legacy_settings():
+        with connect() as conn:
+            admin = require_authenticated_admin(conn)
+            if request.method == "PATCH":
+                if not legacy_auth_env_enabled():
+                    raise next_api_error("Password login is unavailable", 404)
+                body = request.get_json(silent=True) or {}
+                enabled = bool(body.get("enabled"))
+                if enabled:
+                    raise next_api_error("Use fresh passkey confirmation to enable password login", 400)
+                if active_owner_passkey_count(conn) == 0:
+                    raise next_api_error(
+                        "An active Owner must have a passkey before password login can be disabled",
+                        400,
+                    )
+                with conn.transaction():
+                    set_setting(conn, LEGACY_AUTH_SETTING, False)
+                    audit_event(
+                        conn,
+                        event_type="auth.legacy_disabled",
+                        actor=admin,
+                        target_type="setting",
+                        target_id=LEGACY_AUTH_SETTING,
+                        summary="Disabled password login",
+                        metadata={"enabled": False},
+                    )
+            payload = {
+                "available": legacy_auth_env_enabled() and legacy_tables_available(conn),
+                "database_enabled": legacy_db_enabled(conn)
+                if legacy_tables_available(conn)
+                else False,
+                "effective_enabled": legacy_effective_enabled(conn),
+            }
+        return response({"status": "ok", "legacy_auth": payload})
+
+    @route(
+        "/api/next/auth/legacy/settings/enable/options",
+        "/api/auth/legacy/settings/enable/options",
+        methods=["POST"],
+    )
+    def legacy_settings_enable_options():
+        with connect() as conn:
+            if not legacy_auth_env_enabled():
+                raise next_api_error("Password login is unavailable", 404)
+            admin = require_authenticated_admin(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM passkey_credentials WHERE user_id=%s ORDER BY created_at",
+                    (admin["id"],),
+                )
+                credentials = cur.fetchall()
+            if not credentials:
+                raise next_api_error("A passkey is required to enable password login", 400)
+            challenge = _make_challenge()
+            with conn.transaction():
+                store_challenge(conn, f"legacy_enable:{admin['id']}", challenge)
+        options = {
+            "challenge": _b64url_encode(challenge),
+            "timeout": 60000,
+            "rpId": _rp_id(),
+            "allowCredentials": [
+                {"type": "public-key", "id": row["id"]} for row in credentials
+            ],
+            "userVerification": "required",
+        }
+        return response({"status": "ok", "options": options})
+
+    @route(
+        "/api/next/auth/legacy/settings/enable/verify",
+        "/api/auth/legacy/settings/enable/verify",
+        methods=["POST"],
+    )
+    def legacy_settings_enable_verify():
+        if not legacy_auth_env_enabled():
+            raise next_api_error("Password login is unavailable", 404)
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            admin = require_authenticated_admin(conn)
+            with conn.transaction():
+                stored = verify_step_up_assertion(
+                    conn,
+                    challenge_key=f"legacy_enable:{admin['id']}",
+                    expected_user_id=admin["id"],
+                    credential=body.get("credential") or {},
+                )
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE passkey_credentials
+                        SET sign_count=%s, last_used_at=now()
+                        WHERE id=%s
+                        """,
+                        (stored["new_sign_count"], stored["id"]),
+                    )
+                set_setting(conn, LEGACY_AUTH_SETTING, True)
+                audit_event(
+                    conn,
+                    event_type="auth.legacy_enabled",
+                    actor=admin,
+                    target_type="setting",
+                    target_id=LEGACY_AUTH_SETTING,
+                    summary="Enabled password login after passkey confirmation",
+                    metadata={"enabled": True, "stepUp": "passkey"},
+                )
+        return response({"status": "ok", "legacy_auth_enabled": True})
+
     @route("/api/next/auth/users", "/api/auth/users", methods=["GET"])
     def users():
         with connect() as conn:
@@ -2607,9 +3918,18 @@ def register_next_auth_routes(
                         u.created_at,
                         u.updated_at,
                         COUNT(c.id)::int AS credential_count,
-                        MAX(c.last_used_at) AS last_credential_used_at
+                        MAX(c.last_used_at) AS last_credential_used_at,
+                        COUNT(DISTINCT lc.user_id)::int AS legacy_credential_count,
+                        COALESCE(bool_or(lc.must_change_password), false) AS legacy_must_change_password,
+                        COALESCE(bool_or(lc.mfa_required), false) AS legacy_mfa_required,
+                        COALESCE(bool_or(lc.passkey_registration_allowed), true) AS passkey_registration_allowed,
+                        EXISTS (
+                            SELECT 1 FROM legacy_totp_credentials lt
+                            WHERE lt.user_id=u.id AND lt.confirmed_at IS NOT NULL
+                        ) AS legacy_mfa_enrolled
                     FROM users u
                     LEFT JOIN passkey_credentials c ON c.user_id = u.id
+                    LEFT JOIN legacy_password_credentials lc ON lc.user_id = u.id
                     GROUP BY u.id
                     ORDER BY lower(u.username)
                     """
@@ -2621,6 +3941,88 @@ def register_next_auth_routes(
                 row["permissions"] = user_permissions(conn, row["id"])
             return response({"status": "ok", "users": rows, "roles": managed_roles(conn)})
 
+    @route("/api/next/auth/users", "/api/auth/users", methods=["POST"])
+    def create_legacy_user():
+        body = request.get_json(silent=True) or {}
+        try:
+            username = _normalize_username(body.get("username"))
+            password = validate_password(
+                body.get("temporary_password") or body.get("password"),
+                username,
+            )
+        except (ValueError, PasswordPolicyError) as exc:
+            raise next_api_error(str(exc), 400) from exc
+        display_name = str(body.get("display_name") or username).strip() or username
+        raw_roles = body.get("roles")
+        role_keys = (
+            normalize_role_key_list(raw_roles)
+            if raw_roles is not None
+            else [normalize_role_key(body.get("role") or "media_viewer")]
+        )
+        mfa_required = bool(body.get("mfa_required", True))
+        passkey_allowed = bool(body.get("passkey_registration_allowed", True))
+        with connect() as conn:
+            if not legacy_auth_env_enabled():
+                raise next_api_error("Password credentials are unavailable", 404)
+            if not legacy_tables_available(conn):
+                raise next_api_error("Legacy authentication tables are not available", 503)
+            admin = require_authenticated_admin(conn)
+            if "owner" in role_keys:
+                raise next_api_error("Owner accounts must use the ownership transfer flow", 400)
+            for role_key in role_keys:
+                if not role_exists(conn, role_key) or not role_assignable(
+                    conn, role_key, admin.get("role")
+                ):
+                    raise next_api_error(f"Role is not assignable: {role_key}", 400)
+            user_id = uuid4()
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM users WHERE lower(username)=lower(%s)", (username,))
+                    if cur.fetchone():
+                        raise next_api_error("User already exists", 409)
+                    cur.execute(
+                        """
+                        INSERT INTO users (id, username, display_name, status, created_at, updated_at)
+                        VALUES (%s, %s, %s, 'active', now(), now())
+                        """,
+                        (user_id, username, display_name),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO legacy_password_credentials (
+                            user_id, password_hash, hash_version, must_change_password,
+                            mfa_required, passkey_registration_allowed, created_by
+                        )
+                        VALUES (%s, %s, %s, true, %s, %s, %s)
+                        """,
+                        (
+                            user_id,
+                            hash_password(password),
+                            PASSWORD_HASH_VERSION,
+                            mfa_required,
+                            passkey_allowed,
+                            admin.get("id"),
+                        ),
+                    )
+                for role_key in role_keys:
+                    assign_role(conn, user_id, role_key)
+                audit_event(
+                    conn,
+                    event_type="auth.legacy_user_created",
+                    actor=admin,
+                    target_type="user",
+                    target_id=user_id,
+                    summary=f"Created password user {username}",
+                    metadata={
+                        "roles": role_keys,
+                        "mfaRequired": mfa_required,
+                        "passkeyRegistrationAllowed": passkey_allowed,
+                        "temporaryPassword": True,
+                    },
+                )
+            created = user_admin_row(conn, user_id)
+        return response({"status": "ok", "user": created}, 201)
+
     @route("/api/next/auth/users/<user_id>", "/api/auth/users/<user_id>", methods=["PATCH"])
     def update_user(user_id: str):
         user_uuid = _parse_uuid(user_id)
@@ -2631,7 +4033,7 @@ def register_next_auth_routes(
         display_name = body.get("display_name")
 
         with connect() as conn:
-            admin = require_admin(conn)
+            admin = require_authenticated_admin(conn)
             target = user_admin_row(conn, user_uuid)
             if not target:
                 raise next_api_error("User not found", 404)
@@ -2730,7 +4132,7 @@ def register_next_auth_routes(
         if not user_uuid:
             raise next_api_error("Invalid user id", 400)
         with connect() as conn:
-            admin = require_admin(conn)
+            admin = require_authenticated_admin(conn)
             target = user_admin_row(conn, user_uuid)
             if not target:
                 raise next_api_error("User not found", 404)
@@ -2755,6 +4157,174 @@ def register_next_auth_routes(
                     metadata={"username": target["username"], "role": target_role},
                 )
         return response({"status": "deleted"})
+
+    @route(
+        "/api/next/auth/users/<user_id>/legacy-credential",
+        "/api/auth/users/<user_id>/legacy-credential",
+        methods=["GET", "PUT", "PATCH", "DELETE"],
+    )
+    def manage_legacy_credential(user_id: str):
+        user_uuid = _parse_uuid(user_id)
+        if not user_uuid:
+            raise next_api_error("Invalid user id", 400)
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            if not legacy_auth_env_enabled():
+                raise next_api_error("Password credentials are unavailable", 404)
+            if not legacy_tables_available(conn):
+                raise next_api_error("Legacy authentication tables are not available", 503)
+            admin = require_authenticated_admin(conn)
+            target = user_admin_row(conn, user_uuid)
+            if not target:
+                raise next_api_error("User not found", 404)
+            if target.get("role") == "owner" and admin.get("role") != "owner":
+                raise next_api_error("Only owners can modify owner credentials", 403)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT user_id, must_change_password, mfa_required,
+                           passkey_registration_allowed, credential_expires_at,
+                           password_changed_at, last_login_at, locked_until
+                    FROM legacy_password_credentials
+                    WHERE user_id=%s
+                    """,
+                    (user_uuid,),
+                )
+                credential = cur.fetchone()
+            if request.method == "GET":
+                return response({"status": "ok", "credential": credential})
+            if request.method == "DELETE":
+                if not credential:
+                    raise next_api_error("Password credential not found", 404)
+                if str(admin.get("id")) == str(user_uuid):
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT COUNT(*) AS count FROM passkey_credentials WHERE user_id=%s",
+                            (user_uuid,),
+                        )
+                        passkey_count = int(cur.fetchone()["count"])
+                    if passkey_count == 0:
+                        raise next_api_error(
+                            "Add a passkey before removing your own password credential",
+                            400,
+                        )
+                with conn.transaction():
+                    with conn.cursor() as cur:
+                        cur.execute("DELETE FROM legacy_auth_flows WHERE user_id=%s", (user_uuid,))
+                        cur.execute("DELETE FROM legacy_mfa_recovery_codes WHERE user_id=%s", (user_uuid,))
+                        cur.execute("DELETE FROM legacy_totp_credentials WHERE user_id=%s", (user_uuid,))
+                        cur.execute("DELETE FROM legacy_password_credentials WHERE user_id=%s", (user_uuid,))
+                    audit_event(
+                        conn,
+                        event_type="auth.legacy_credential_removed",
+                        actor=admin,
+                        target_type="user",
+                        target_id=user_uuid,
+                        summary=f"Removed password credential for {target['username']}",
+                        metadata={},
+                    )
+                return response({"status": "deleted"})
+
+            mfa_required = bool(
+                body.get(
+                    "mfa_required",
+                    credential.get("mfa_required") if credential else True,
+                )
+            )
+            passkey_allowed = bool(
+                body.get(
+                    "passkey_registration_allowed",
+                    credential.get("passkey_registration_allowed") if credential else True,
+                )
+            )
+            if request.method == "PUT":
+                try:
+                    password = validate_password(
+                        body.get("temporary_password") or body.get("password"),
+                        target["username"],
+                    )
+                except PasswordPolicyError as exc:
+                    raise next_api_error(str(exc), 400) from exc
+                with conn.transaction():
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            INSERT INTO legacy_password_credentials (
+                                user_id, password_hash, hash_version, must_change_password,
+                                mfa_required, passkey_registration_allowed, created_by,
+                                password_changed_at, updated_at
+                            )
+                            VALUES (%s, %s, %s, true, %s, %s, %s, now(), now())
+                            ON CONFLICT (user_id) DO UPDATE SET
+                                password_hash=EXCLUDED.password_hash,
+                                hash_version=EXCLUDED.hash_version,
+                                must_change_password=true,
+                                mfa_required=EXCLUDED.mfa_required,
+                                passkey_registration_allowed=EXCLUDED.passkey_registration_allowed,
+                                failed_attempt_count=0,
+                                first_failed_at=NULL,
+                                locked_until=NULL,
+                                credential_expires_at=NULL,
+                                password_changed_at=now(),
+                                updated_at=now()
+                            """,
+                            (
+                                user_uuid,
+                                hash_password(password),
+                                PASSWORD_HASH_VERSION,
+                                mfa_required,
+                                passkey_allowed,
+                                admin.get("id"),
+                            ),
+                        )
+                        cur.execute("DELETE FROM legacy_auth_flows WHERE user_id=%s", (user_uuid,))
+                        if not mfa_required:
+                            cur.execute("DELETE FROM legacy_mfa_recovery_codes WHERE user_id=%s", (user_uuid,))
+                            cur.execute("DELETE FROM legacy_totp_credentials WHERE user_id=%s", (user_uuid,))
+                    audit_event(
+                        conn,
+                        event_type="auth.legacy_credential_reset",
+                        actor=admin,
+                        target_type="user",
+                        target_id=user_uuid,
+                        summary=f"Set a temporary password for {target['username']}",
+                        metadata={
+                            "mfaRequired": mfa_required,
+                            "passkeyRegistrationAllowed": passkey_allowed,
+                        },
+                    )
+            else:
+                if not credential:
+                    raise next_api_error("Password credential not found", 404)
+                previous_mfa = bool(credential.get("mfa_required"))
+                with conn.transaction():
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE legacy_password_credentials
+                            SET mfa_required=%s, passkey_registration_allowed=%s, updated_at=now()
+                            WHERE user_id=%s
+                            """,
+                            (mfa_required, passkey_allowed, user_uuid),
+                        )
+                        if previous_mfa != mfa_required:
+                            cur.execute("DELETE FROM legacy_auth_flows WHERE user_id=%s", (user_uuid,))
+                            cur.execute("DELETE FROM legacy_mfa_recovery_codes WHERE user_id=%s", (user_uuid,))
+                            cur.execute("DELETE FROM legacy_totp_credentials WHERE user_id=%s", (user_uuid,))
+                    audit_event(
+                        conn,
+                        event_type="auth.legacy_policy_changed",
+                        actor=admin,
+                        target_type="user",
+                        target_id=user_uuid,
+                        summary=f"Changed password policy for {target['username']}",
+                        metadata={
+                            "mfaRequired": mfa_required,
+                            "passkeyRegistrationAllowed": passkey_allowed,
+                        },
+                    )
+            updated = user_admin_row(conn, user_uuid)
+        return response({"status": "ok", "user": updated})
 
     @route("/api/next/auth/credentials", "/api/auth/credentials", methods=["GET"])
     def credentials():
@@ -2984,3 +4554,10 @@ def register_next_auth_routes(
                     metadata={},
                 )
         return response({"status": "deleted"})
+
+    if legacy_auth_env_enabled() and _env_flag("REVIEW_LOGIN_ENABLED", default=False):
+        try:
+            with connect() as startup_conn:
+                reconcile_review_legacy_user(startup_conn)
+        except (PsycopgError, RuntimeError, ValueError) as exc:
+            app.logger.warning("Legacy review-user reconciliation deferred: %s", exc)

@@ -40,6 +40,47 @@ FORBIDDEN_CONTRIBUTION_KEYS = {
     "watchHistory",
     "watchlist",
 }
+PERSON_CONTRIBUTION_KEYS = {
+    "actor",
+    "actors",
+    "cast",
+    "castAndCrew",
+    "cast_and_crew",
+    "character",
+    "credits",
+    "crew",
+    "department",
+    "director",
+    "directors",
+    "job",
+    "moviePeople",
+    "movie_people",
+    "people",
+    "person",
+    "personId",
+    "person_id",
+    "personImdbId",
+    "person_imdb_id",
+    "personTmdbId",
+    "person_tmdb_id",
+    "persons",
+    "producer",
+    "producers",
+}
+_FORBIDDEN_CONTRIBUTION_KEYS_LOWER = {
+    key.lower() for key in FORBIDDEN_CONTRIBUTION_KEYS | PERSON_CONTRIBUTION_KEYS
+}
+_PERSON_CONTRIBUTION_PREFIXES = (
+    "actor",
+    "cast",
+    "credit",
+    "crew",
+    "director",
+    "moviepeople",
+    "people",
+    "person",
+    "producer",
+)
 _TEMPLATE_CACHE = {}
 
 CLIENT_VERSION_UNSUPPORTED_CODE = "client_version_unsupported"
@@ -529,6 +570,23 @@ def _v3_movie_item(envelope):
     if not isinstance(movie, dict):
         return {}
     movie = dict(movie)
+    release = movie.get("release")
+    if isinstance(release, dict):
+        for key in (
+            "format",
+            "edition",
+            "distributor",
+            "hdr",
+            "audioTracks",
+            "subtitles",
+            "regions",
+            "screenRatios",
+            "technicalSpecs",
+            "country",
+            "language",
+        ):
+            if movie.get(key) in (None, "", [], {}) and release.get(key) not in (None, "", [], {}):
+                movie[key] = release[key]
     if not movie.get("posterUrl"):
         posters = movie.get("posterUrls") or []
         if posters:
@@ -537,36 +595,7 @@ def _v3_movie_item(envelope):
         backs = movie.get("backdropUrls") or []
         if backs:
             movie["backdropUrl"] = backs[0]
-    if not movie.get("director"):
-        crew = movie.get("crew") or []
-        directors = [
-            member.get("name")
-            for member in crew
-            if isinstance(member, dict) and _text(member.get("job")).casefold() == "director" and member.get("name")
-        ]
-        if directors:
-            movie["director"] = directors
     return movie
-
-
-def _is_movievault_person_id(value):
-    text = _text(value)
-    return text.startswith("pp_") or text.startswith("mv_person_")
-
-
-def _v3_person_item(envelope):
-    match = envelope.get("match") if isinstance(envelope, dict) else None
-    person = match.get("person") if isinstance(match, dict) else None
-    if not isinstance(person, dict):
-        return {}
-    person = dict(person)
-    dept = _text(person.get("knownForDepartment"))
-    if dept or isinstance(person.get("knownFor"), list):
-        person["knownFor"] = dept
-    gallery = [url for url in (person.get("profileUrls") or []) if _text(url).lower().startswith("https://")]
-    if gallery:
-        person["profiles"] = list(dict.fromkeys([*(person.get("profiles") or []), *gallery]))
-    return person
 
 
 def _items(payload):
@@ -657,10 +686,6 @@ def _movie_payload(item):
         "releaseDate": _text(item.get("releaseDate") or item.get("release_date")),
         "overview": _text(item.get("overview") or item.get("plot") or item.get("description")),
         "runtimeMinutes": item.get("runtime") or item.get("runtimeMinutes"),
-        "genre": _text(item.get("genre") or item.get("genres")),
-        "director": _names_text(item.get("director") or item.get("directors")),
-        "actor": _names_text(item.get("actor") or item.get("actors") or item.get("cast")),
-        "producer": _names_text(item.get("producer") or item.get("producers")),
         "studios": _text(item.get("studios") or item.get("studio")),
         "format": _reconcile_release_format(
             item.get("format") or item.get("mediaType") or item.get("media_type"),
@@ -670,122 +695,18 @@ def _movie_payload(item):
             item.get("name"),
         ),
         "edition": _text(item.get("edition")),
+        "distributor": _text(item.get("distributor") or item.get("publisher")),
         "country": _text(item.get("country")),
         "language": _text(item.get("language")),
-        "rating": _text(item.get("rating") or item.get("imdbRating")),
+        "rating": _text(item.get("rating") or item.get("imdbRating") or item.get("voteAverage")),
         "posterUrl": _text(item.get("posterUrl") or item.get("poster_url") or item.get("poster")),
+        "posters": item.get("posterUrls") or item.get("poster_urls") or item.get("posters") or [],
         "backdropUrl": _text(item.get("backdropUrl") or item.get("backdrop_url") or item.get("backdrop")),
         "backdropUrls": item.get("backdropUrls") or item.get("backdrop_urls") or [],
         "trailerUrl": _text(item.get("trailerUrl") or item.get("trailer_url")),
         "videos": item.get("videos") or [],
         "audienceRating": _text(item.get("audienceRating") or item.get("audience_rating")),
     }
-
-
-_PERSON_NAME_KEYS = ("name", "personName", "person_name", "displayName", "display_name")
-
-
-def _names_text(value):
-    """Join person names from a flat string or a list of names/dicts.
-
-    Some MovieVault responses expose cast/crew as a structured list of person
-    objects rather than a comma-joined string. Plain ``str()`` on such a list
-    would leak dict reprs into the flat display field, so extract the names and
-    join them the way flat providers do.
-    """
-    if isinstance(value, (list, tuple)):
-        names = []
-        for item in value:
-            if isinstance(item, dict):
-                name = ""
-                for key in _PERSON_NAME_KEYS:
-                    name = _text(item.get(key))
-                    if name:
-                        break
-            else:
-                name = _text(item)
-            if name:
-                names.append(name)
-        return ", ".join(dict.fromkeys(names))
-    return _text(value)
-
-
-def _person_name(item):
-    for key in _PERSON_NAME_KEYS:
-        name = _text(item.get(key))
-        if name:
-            return name
-    return ""
-
-
-def _credit_entry(element, default_role):
-    if not isinstance(element, dict):
-        return {}
-    name = _person_name(element)
-    if not name:
-        return {}
-    role = _text(_first_value(element, "role", "creditType", "credit_type")) or default_role
-    character = _text(_first_value(element, "character", "as"))
-    job = _text(_first_value(element, "job", "department"))
-    if not role:
-        if character:
-            role = "actor"
-        elif job:
-            role = "crew"
-    entry = {"role": role or "credit", "name": name}
-    tmdb_id = _text(_first_value(element, "tmdbId", "tmdb_id", "personTmdbId", "person_tmdb_id"))
-    if tmdb_id:
-        entry["tmdbId"] = tmdb_id
-    imdb_id = _text(_first_value(element, "imdbId", "imdb_id"))
-    if imdb_id:
-        entry["imdbId"] = imdb_id
-    if character:
-        entry["character"] = character
-    if job:
-        entry["job"] = job
-    sort_order = _first_value(element, "sortOrder", "sort_order", "order")
-    if sort_order not in ("", None):
-        entry["sortOrder"] = sort_order
-    return entry
-
-
-def _movie_credits(item):
-    """Extract structured cast/crew (with tmdbId) from a MovieVault movie item.
-
-    Returns entries in the shape the DiscVault backend's ``normalize_credit_entries``
-    understands so people are created and linked on tmdbId. Only returns a list
-    when the source carries real structure (tmdbId/character/job); plain name
-    strings are left to the backend's flat-field fallback to keep dedup centralized.
-    """
-    if not isinstance(item, dict):
-        return []
-    entries = []
-    primary = None
-    for key in ("credits", "people", "moviePeople", "movie_people", "castAndCrew", "cast_and_crew"):
-        value = item.get(key)
-        if isinstance(value, (list, tuple)) and any(isinstance(element, dict) for element in value):
-            primary = value
-            break
-    if primary is not None:
-        for element in primary:
-            entry = _credit_entry(element, "")
-            if entry:
-                entries.append(entry)
-    else:
-        cast = item.get("cast")
-        if isinstance(cast, (list, tuple)):
-            for element in cast:
-                entry = _credit_entry(element, "actor")
-                if entry:
-                    entries.append(entry)
-        crew = item.get("crew")
-        if isinstance(crew, (list, tuple)):
-            for element in crew:
-                entry = _credit_entry(element, "crew")
-                if entry:
-                    entries.append(entry)
-    structured = any(entry.get("tmdbId") or entry.get("character") or entry.get("job") for entry in entries)
-    return entries if structured else []
 
 
 _BOX_SET_DIRECT_KEYS = (
@@ -1099,8 +1020,6 @@ def _normalize_member(item, index):
         "runtime": _first_value(source, "runtime", "runtimeMinutes", "runtime_minutes") or movie.get("runtimeMinutes"),
         "format": _text(_first_value(source, "format", "mediaType", "media_type") or movie.get("format")),
         "genre": _text(_first_value(source, "genre", "genres") or movie.get("genre")),
-        "director": _names_text(_first_value(source, "director", "directors") or movie.get("director")),
-        "actor": _names_text(_first_value(source, "actor", "actors", "cast") or movie.get("actor")),
         "poster": poster,
         "posterUrl": poster,
         "poster_url": poster,
@@ -1280,8 +1199,6 @@ def _merge_member_enrichment(member, enrichment, expected_format=""):
         "runtime": ("runtime_minutes", "runtimeMinutes", "runtime"),
         "format": ("format",),
         "genre": ("genre",),
-        "director": ("director",),
-        "actor": ("actor",),
     }
     for target, keys in mappings.items():
         if enriched.get(target):
@@ -1626,15 +1543,44 @@ def member_intelligence(payload, context=None):
 def _technical_payload(item):
     if not isinstance(item, dict):
         return {}
+    raw_specs = item.get("technicalSpecs") or item.get("technical_specs")
+    specs = raw_specs if isinstance(raw_specs, dict) else {}
     return {
-        "format": _text(item.get("format") or item.get("mediaType") or item.get("media_type")),
-        "hdr": _text(item.get("hdr") or item.get("hdrFormat") or item.get("hdr_format")),
-        "packaging": _text(item.get("packaging")),
-        "screenRatios": _text(item.get("screenRatios") or item.get("screen_ratios")),
-        "audioTracks": item.get("audioTracks") or item.get("audio_tracks") or [],
-        "subtitles": item.get("subtitles") or [],
-        "regions": item.get("regions") or [],
-        "contentRatings": item.get("contentRatings") or item.get("content_ratings") or {},
+        "format": _text(
+            item.get("format")
+            or item.get("mediaType")
+            or item.get("media_type")
+            or specs.get("format")
+        ),
+        "hdr": _text(
+            item.get("hdr")
+            or item.get("hdrFormat")
+            or item.get("hdr_format")
+            or specs.get("hdr")
+        ),
+        "packaging": _text(item.get("packaging") or specs.get("packaging")),
+        "screenRatios": _text(
+            item.get("screenRatios")
+            or item.get("screen_ratios")
+            or specs.get("screenRatios")
+            or specs.get("screen_ratios")
+        ),
+        "audioTracks": (
+            item.get("audioTracks")
+            or item.get("audio_tracks")
+            or specs.get("audioTracks")
+            or specs.get("audio_tracks")
+            or []
+        ),
+        "subtitles": item.get("subtitles") or specs.get("subtitles") or [],
+        "regions": item.get("regions") or specs.get("regions") or [],
+        "contentRatings": (
+            item.get("contentRatings")
+            or item.get("content_ratings")
+            or specs.get("contentRatings")
+            or specs.get("content_ratings")
+            or []
+        ),
     }
 
 
@@ -1857,6 +1803,14 @@ def _normalize_result(payload, *, source_ref=""):
         return {"status": "miss", "provider": "movievault_26"}
 
     source_item = first_item or (sources[0] if sources else {})
+    best_release = source_item.get("release") if isinstance(source_item.get("release"), dict) else {}
+    releases = [
+        dict(item)
+        for item in (source_item.get("releases") or [])
+        if isinstance(item, dict)
+    ]
+    if not best_release and releases:
+        best_release = releases[0]
     localizations = []
     for candidate_source in ([source_item] + list(sources)):
         localizations = _ingest_localizations(candidate_source)
@@ -1868,17 +1822,29 @@ def _normalize_result(payload, *, source_ref=""):
         "sourceLabel": "MovieVault 26",
         "sourceRef": source_ref or _text(source_item.get("id") or source_item.get("movieVaultId") or source_item.get("movievault_id")),
         "movie": first_movie,
-        "technicalSpecs": _technical_payload(source_item),
+        "technicalSpecs": {
+            **{
+                key: value
+                for key, value in _technical_payload(source_item).items()
+                if value not in (None, "", [], {})
+            },
+            **{
+                key: value
+                for key, value in _technical_payload(best_release).items()
+                if value not in (None, "", [], {})
+            },
+        },
         "tmdbId": _text(source_item.get("tmdbId") or source_item.get("tmdb_id")),
         "imdbId": _text(source_item.get("imdbId") or source_item.get("imdb_id")),
         "items": candidates,
         "candidates": candidates,
     }
+    if best_release:
+        result["release"] = dict(best_release)
+    if releases:
+        result["releases"] = releases
     if localizations:
         result["localizations"] = localizations
-    movie_credits = _movie_credits(first_item) or _movie_credits(source_item)
-    if movie_credits:
-        result["credits"] = movie_credits
     # Surface the MovieVault catalog id as a persistable identifier so the
     # enrichment write path stores the movievault_26 link in movie_identifiers
     # (and emits the matching sync delta). Without this the link only ever
@@ -2085,77 +2051,33 @@ def search_title(payload, context=None):
     return {"status": "hit" if items else "miss", "provider": "movievault_26", "items": items}
 
 
-def _barcode_movie_id(barcode, context):
-    """Resolve the catalogue ``movieVaultId`` for a scanned public barcode.
-
-    ``/api/v3/barcodes/{barcode}`` carries the matched movie object (with its
-    ``movieVaultId``/``id``) but no cast/crew, so this returns the id that
-    ``/api/v3/movies/{id}`` — the sole credits-bearing endpoint — needs.
-    """
-    if not _is_public_barcode(barcode):
-        return ""
-    match = _v3_barcode_match(_get(context or {}, f"/api/v3/barcodes/{quote(barcode)}"))
-    movie = match.get("movie") if isinstance(match, dict) else None
-    if not isinstance(movie, dict):
-        return ""
-    return _text(movie.get("movieVaultId") or movie.get("id"))
-
-
-def _enrich_barcode_credits(result, payload, barcode, context):
-    """Attach cast/crew from ``/api/v3/movies/{id}`` to a barcode-matched hit.
-
-    The barcode endpoint resolves the precise scanned release — its
-    format/technical/edition fields are authoritative and must be preserved —
-    but never carries credits. Only ``/api/v3/movies/{id}`` serves cast/crew, so
-    when the barcode hit lacks them we resolve the catalogue ``movieVaultId``
-    (from the barcode match first, then the tmdbId/imdbId search fallback) and
-    merge in ONLY the credits, leaving every field the barcode match produced
-    untouched. Any missing id, empty detail, or transport failure simply leaves
-    the barcode result unchanged so credit enrichment never regresses a hit.
-    """
-    if not isinstance(result, dict) or result.get("status") != "hit":
-        return result
-    if result.get("credits"):
-        return result
-    try:
-        movie_id = _barcode_movie_id(barcode, context)
-        if not movie_id:
-            payload = payload or {}
-            tmdb_id = _text(payload.get("tmdbId") or payload.get("tmdb_id"))
-            imdb_id = _text(payload.get("imdbId") or payload.get("imdb_id"))
-            if tmdb_id or imdb_id:
-                films = _v3_search_films(
-                    _get(context or {}, "/api/v3/search", tmdbId=tmdb_id, imdbId=imdb_id, type="movie")
-                )
-                movie_id = _text(films[0].get("movieVaultId") or films[0].get("id")) if films else ""
-        if not movie_id:
-            return result
-        detail = _get(context or {}, f"/api/v3/movies/{quote(movie_id)}")
-        credits = _movie_credits(_v3_movie_item(detail))
-        if credits:
-            return {**result, "credits": credits}
-    except MovieVaultUnavailable:
-        return result
-    return result
-
-
 def movie_details(payload, context=None):
+    payload = payload or {}
+    direct_id = _text(
+        payload.get("movieVaultId")
+        or payload.get("movievaultId")
+        or payload.get("movievault_id")
+        or payload.get("releaseId")
+        or payload.get("release_id")
+    )
     barcode = str((payload or {}).get("barcode") or "").strip()
     title = str((payload or {}).get("title") or "").strip()
     year = str((payload or {}).get("year") or "").strip()
     tmdb_id = _text((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id"))
     imdb_id = _text((payload or {}).get("imdbId") or (payload or {}).get("imdb_id"))
+    if direct_id:
+        movie_item = _v3_movie_item(_get(context or {}, f"/api/v3/movies/{quote(direct_id)}"))
+        if movie_item.get("title"):
+            return _normalize_result(movie_item, source_ref=f"movievault:{direct_id}")
+        return {"status": "miss", "provider": PROVIDER_ID}
     if _is_public_barcode(barcode):
         result = search_barcode(payload, context)
         if result.get("status") == "hit":
-            return _enrich_barcode_credits(result, payload, barcode, context)
+            return result
     if not title and not (tmdb_id or imdb_id):
         return {"status": "skipped", "provider": PROVIDER_ID}
-    # Resolve the catalogue movie by external id first: /api/v3/search performs an
-    # unambiguous tmdbId/imdbId lookup that returns the movieVaultId directly, which
-    # is the only reliable way to reach /api/v3/movies/{id} (the sole endpoint that
-    # serves cast/crew). Fuzzy title/year matching misses long, punctuated titles
-    # and is used only as a fallback.
+    # Resolve the catalogue movie by external id first. Fuzzy title/year matching
+    # misses long, punctuated titles and is used only as a fallback.
     films = []
     if tmdb_id or imdb_id:
         films = _v3_search_films(_get(context or {}, "/api/v3/search", tmdbId=tmdb_id, imdbId=imdb_id, type="movie"))
@@ -2215,199 +2137,6 @@ def box_set_candidates(payload, context=None):
     }
 
 
-def _person_results(payload):
-    """Normalize the people read-API response into a list of person objects.
-
-    The signed ``/api/v3/people`` search returns ``{"results": [...]}`` (body identical to the
-    legacy v1 twin) while ``/api/v3/people/{id}`` returns a single object (or a
-    ``{"error": ...}`` envelope on 404).
-    """
-    if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
-    if isinstance(payload, dict):
-        results = payload.get("results")
-        if isinstance(results, list):
-            return [item for item in results if isinstance(item, dict)]
-        if payload.get("error"):
-            return []
-        if payload.get("id") or payload.get("movieVaultId") or payload.get("movievault_id") or payload.get("name"):
-            return [payload]
-    return []
-
-
-def _person_localizations(item):
-    """Lift ``biography_<iso639-1>`` keys into localization rows."""
-    rows = []
-    seen = set()
-    for key, value in (item or {}).items():
-        if not isinstance(key, str):
-            continue
-        lowered = key.lower()
-        if not lowered.startswith("biography_"):
-            continue
-        lang = key[len("biography_"):].strip()
-        biography = _text(value)
-        if not lang or not biography:
-            continue
-        norm = lang.lower()
-        if norm in seen:
-            continue
-        seen.add(norm)
-        rows.append({"lang": lang, "biography": biography, "source": PROVIDER_ID})
-    return rows
-
-
-def _person_profiles(item):
-    """Public https-only, de-duplicated profile image URLs (cap 12)."""
-    urls = []
-    seen = set()
-    for value in (item.get("profiles") or []):
-        text = _text(value)
-        if not text.lower().startswith("https://"):
-            continue
-        if text in seen:
-            continue
-        seen.add(text)
-        urls.append(text)
-    return urls[:12]
-
-
-def _person_award_year(value):
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    text = _text(value)
-    return int(text) if text.isdigit() else None
-
-
-def _person_award_tmdb_id(value):
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    text = _text(value)
-    return int(text) if text.isdigit() else None
-
-
-def _person_awards(item):
-    """Normalize MovieVault person awards to the shared award schema."""
-    awards = []
-    for entry in (item.get("awards") or []):
-        if not isinstance(entry, dict):
-            continue
-        award = _text(entry.get("award"))
-        award_qid = _text(entry.get("awardWikidataId") or entry.get("award_wikidata_id"))
-        if not award and not award_qid:
-            continue
-        result = _text(entry.get("result")).lower()
-        awards.append(
-            {
-                "award": award or award_qid,
-                "awardWikidataId": award_qid,
-                "category": _text(entry.get("category")),
-                "year": _person_award_year(entry.get("year")),
-                "work": _text(entry.get("work")),
-                "workWikidataId": _text(entry.get("workWikidataId") or entry.get("work_wikidata_id")),
-                "workTmdbId": _person_award_tmdb_id(entry.get("workTmdbId") or entry.get("work_tmdb_id")),
-                "result": "won" if result == "won" else "nominated",
-                "source": _text(entry.get("source")) or PROVIDER_ID,
-                "sourceRef": _text(entry.get("sourceRef") or entry.get("source_ref")),
-            }
-        )
-    return awards
-
-
-def _person_payload(item, *, language="", source_ref=""):
-    name = _text(item.get("name"))
-    if not name:
-        return {"status": "miss", "provider": PROVIDER_ID, "reason": "not_found"}
-    localizations = _person_localizations(item)
-    configured = str(language or "").strip().lower()
-    bios_by_lang = {row["lang"].lower(): row["biography"] for row in localizations}
-    biography = _text(item.get("biography"))
-    preferred = bios_by_lang.get(configured) or next(
-        (bio for lang_key, bio in bios_by_lang.items() if lang_key.split("-")[0] == configured.split("-")[0]),
-        "",
-    )
-    if preferred:
-        biography = preferred
-    elif not biography and localizations:
-        biography = localizations[0]["biography"]
-    profile_url = _image_url(item.get("profileUrl") or item.get("profile_url"))
-    profiles = _person_profiles(item)
-    if profile_url and profile_url.lower().startswith("https://") and profile_url not in profiles:
-        profiles.insert(0, profile_url)
-    aliases = [_text(alias) for alias in (item.get("alsoKnownAs") or item.get("also_known_as") or []) if _text(alias)]
-    movievault_id = _text(item.get("id") or item.get("movieVaultId") or item.get("movievault_id"))
-    return {
-        "status": "hit",
-        "provider": PROVIDER_ID,
-        "sourceLabel": PROVIDER_LABEL,
-        "sourceRef": source_ref or (f"movievault:person:{movievault_id}" if movievault_id else ""),
-        "movieVaultId": movievault_id,
-        "tmdbId": _text(item.get("tmdbId") or item.get("tmdb_id")),
-        "imdbId": _text(item.get("imdbId") or item.get("imdb_id")),
-        "name": name,
-        "biography": biography,
-        "birthday": _text(item.get("birthday") or item.get("birthDate") or item.get("birth_date")),
-        "deathday": _text(item.get("deathday") or item.get("deathDate") or item.get("death_date")),
-        "placeOfBirth": _text(item.get("placeOfBirth") or item.get("place_of_birth")),
-        "knownFor": _text(item.get("knownFor") or item.get("known_for")),
-        "alsoKnownAs": aliases,
-        "profileUrl": profile_url,
-        "profiles": profiles,
-        "awards": _person_awards(item),
-        "localizations": localizations,
-        "language": _text(language),
-    }
-
-
-def person_details(payload, context=None):
-    payload = payload or {}
-    if not _movievault_enabled(context):
-        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "disabled"}
-    tmdb_id = _text(payload.get("tmdbId") or payload.get("tmdb_id"))
-    imdb_id = _text(payload.get("imdbId") or payload.get("imdb_id"))
-    movievault_id = _text(
-        payload.get("movieVaultId")
-        or payload.get("movievaultId")
-        or payload.get("movievault_id")
-        or payload.get("personId")
-        or payload.get("id")
-    )
-    name = _text(payload.get("name") or payload.get("q"))
-    language = _text(_settings(context).get("language")) or "en-US"
-    item = {}
-    source_ref = ""
-    if _is_movievault_person_id(movievault_id):
-        detail = _get(context or {}, f"/api/v3/people/{quote(movievault_id)}")
-        person = _v3_person_item(detail)
-        if person:
-            item = person
-            source_ref = f"movievault:person:{movievault_id}"
-    if not item and (tmdb_id or imdb_id or name):
-        # Wave 2: signed v3 people search (body identical to v1 /people: {"results": [...]}).
-        data = _get(
-            context or {},
-            "/api/v3/people",
-            tmdbId=tmdb_id,
-            imdbId=imdb_id,
-            q="" if (tmdb_id or imdb_id) else name,
-        )
-        results = _person_results(data)
-        if results:
-            item = results[0]
-            if tmdb_id:
-                source_ref = f"movievault:person:tmdb:{tmdb_id}"
-            elif imdb_id:
-                source_ref = f"movievault:person:imdb:{imdb_id}"
-    if not item:
-        return {"status": "miss", "provider": PROVIDER_ID, "reason": "not_found"}
-    # Wave 2: /api/v3/people/{id}/filmography is not wired yet; DiscVault has no consumer for it.
-    return _person_payload(item, language=language, source_ref=source_ref)
-
-
 def _safe_contribution_value(value):
     if isinstance(value, dict):
         clean = {}
@@ -2415,7 +2144,11 @@ def _safe_contribution_value(value):
             key_text = _text(key)
             if not key_text:
                 continue
-            if key_text in FORBIDDEN_CONTRIBUTION_KEYS or key_text.lower() in {item.lower() for item in FORBIDDEN_CONTRIBUTION_KEYS}:
+            compact_key = re.sub(r"[^a-z0-9]", "", key_text.lower())
+            if (
+                key_text.lower() in _FORBIDDEN_CONTRIBUTION_KEYS_LOWER
+                or compact_key.startswith(_PERSON_CONTRIBUTION_PREFIXES)
+            ):
                 continue
             safe = _safe_contribution_value(item)
             if safe not in (None, "", [], {}):
@@ -2897,7 +2630,7 @@ def _with_release_title_mapping(entity_type, safe_payload):
 
 def _contribution_payload(payload, template):
     entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
-    if entity_type not in {"movie", "release", "box_set", "person"}:
+    if entity_type not in {"movie", "release", "box_set"}:
         return entity_type, {}
     raw_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
     if not raw_payload:
@@ -2941,6 +2674,9 @@ def _validation_error(response_payload):
 def receive_metadata(payload, context=None):
     context = context or {}
     payload = payload if isinstance(payload, dict) else {}
+    entity_type = _text(payload.get("entityType") or payload.get("entity_type") or "movie")
+    if entity_type == "person":
+        return {"status": "skipped", "provider": PROVIDER_ID, "reason": "person_data_not_supported"}
     if not _movievault_enabled(context):
         return {"status": "skipped", "provider": PROVIDER_ID, "reason": "disabled"}
     if not _contribution_enabled(context):

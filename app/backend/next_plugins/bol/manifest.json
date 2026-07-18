@@ -1,0 +1,39 @@
+{
+  "id": "bol",
+  "name": "bol.com",
+  "version": "1.0.1",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": ["price_provider"],
+  "capabilities": ["price_check"],
+  "priceProvider": {
+    "hostPatterns": ["bol.com"]
+  },
+  "requiresSecrets": false,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "currency",
+        "label": "Fallback currency",
+        "type": "text",
+        "required": false,
+        "placeholder": "EUR",
+        "description": "Fallback currency when the shop page does not expose one."
+      },
+      {
+        "name": "timeoutSeconds",
+        "label": "HTTP timeout (seconds)",
+        "type": "number",
+        "required": false,
+        "placeholder": "20",
+        "description": "Request timeout used when fetching bol.com product pages."
+      }
+    ]
+  },
+  "defaultEnabled": false,
+  "orderIndex": 210,
+  "entitlements": {
+    "source_use": "price_provider.bol.use"
+  }
+}

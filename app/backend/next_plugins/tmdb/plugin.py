@@ -157,7 +157,13 @@ def _person_localizations(data):
 
 
 def _normalize_details(data):
-    genres = [item.get("name") for item in data.get("genres") or [] if item.get("name")]
+    # TMDB genre ids are the source of truth for the canonical genre catalog
+    # (see next_genres.py). Returning ids here -- instead of localized names
+    # -- keeps the stored association independent of the TMDB request
+    # language. `genres` is always present on a /movie/{id} response (it can
+    # be an empty list), so its presence signals an authoritative genre
+    # answer that should replace any existing associations.
+    genre_ids = [item.get("id") for item in data.get("genres") or [] if item.get("id") is not None]
     studios = [item.get("name") for item in data.get("production_companies") or [] if item.get("name")]
     crew = (data.get("credits") or {}).get("crew") or []
     cast = (data.get("credits") or {}).get("cast") or []
@@ -196,7 +202,6 @@ def _normalize_details(data):
             "overview": data.get("overview") or "",
             "runtimeMinutes": data.get("runtime"),
             "rating": str(data.get("vote_average") or "")[:4],
-            "genre": ", ".join(genres),
             "director": ", ".join(directors),
             "actor": ", ".join(actors),
             "producer": ", ".join(producers),
@@ -214,6 +219,11 @@ def _normalize_details(data):
         },
         "localizations": _localizations(data),
         "credits": _credits(data),
+        # Authoritative TMDB genre ids (see next_genres.py for the id -> key
+        # mapping). This lives outside `movie` on purpose: `movie` fields
+        # flow through the generic free-text metadata merge policy, while
+        # genres are a relational, always-replace-on-hit association.
+        "genreIds": genre_ids,
         "tmdbId": data.get("id"),
         "imdbId": imdb_id,
     }

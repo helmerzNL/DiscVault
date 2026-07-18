@@ -403,6 +403,7 @@ def person_credit_entities(
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -414,6 +415,7 @@ def person_credit_entities(
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -552,6 +554,7 @@ def person_digital_credit_entities(
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -563,6 +566,7 @@ def person_digital_credit_entities(
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1

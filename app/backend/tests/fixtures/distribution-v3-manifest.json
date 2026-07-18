@@ -1,0 +1,1 @@
+{"bucketPathTemplate":"/v3/bucket/{prefix}","bucketPrefixLength":4,"contractVersion":"distribution-3","currentCursor":"distribution-3-cursor-000045","currentRevision":45,"datasetChecksum":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","deltaPath":"/v3/index/delta","hashAlgorithm":"sha256"}

@@ -5,6 +5,7 @@ gunicorn==22.0.0
 PyJWT==2.13.0
 cbor2==5.9.0
 cryptography==48.0.1
+argon2-cffi==25.1.0
 Pillow==12.2.0
 beautifulsoup4==4.12.3
 pywebpush==2.0.0

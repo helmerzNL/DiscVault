@@ -1,9 +1,210 @@
 # DiscVault Release Notes
 
-## 26.4.54 - Restore the stable production line
+## 26.4.70 - Modern Library, Legacy authentication, MovieVault posters, and owned containers
 
-- Reverts the accidental merge of PR #280 into `main`; MovieVault
-  `distribution-3` remains beta-only until its dedicated beta PR is accepted.
+This release promotes the complete `release/v26-beta` feature train from
+DiscVault 26.4.54 to 26.4.70. It introduces a redesigned Library and movie
+detail experience, optional password and TOTP authentication, secure MovieVault
+poster distribution, reversible artwork hiding, and more flexible Member Group
+and container management.
+
+### Highlights
+
+- **Modern responsive Library.** The Library is now a sortable table with
+  responsive desktop and compact layouts, richer metadata columns, persistent
+  watched and Watchlist filters, and improved director fallbacks.
+  ([#288](https://github.com/helmerzNL/DiscVault/pull/288),
+  [#289](https://github.com/helmerzNL/DiscVault/pull/289),
+  [#290](https://github.com/helmerzNL/DiscVault/pull/290))
+- **iOS-inspired movie details.** Movie pages now use a full-bleed mobile hero,
+  streamlined management controls, redesigned personal-list actions, dated
+  rewatch logging, searchable colour-coded tags, and responsive cast, crew,
+  artwork, and video galleries.
+  ([#281](https://github.com/helmerzNL/DiscVault/pull/281),
+  [#282](https://github.com/helmerzNL/DiscVault/pull/282),
+  [#284](https://github.com/helmerzNL/DiscVault/pull/284))
+- **Optional Legacy authentication.** Administrators can enable Argon2id
+  username/password authentication with TOTP, temporary passwords, unified
+  single-use recovery codes, per-user passkey policy, Owner bootstrap, and
+  expanded Users & Roles management.
+  ([#297](https://github.com/helmerzNL/DiscVault/pull/297),
+  [#298](https://github.com/helmerzNL/DiscVault/pull/298),
+  [#302](https://github.com/helmerzNL/DiscVault/pull/302))
+- **MovieVault distribution 3 and 4.** DiscVault adds strict,
+  checksum-verified local-index synchronization, exact box-set editions, richer
+  release metadata, and secure background caching of MovieVault posters.
+  ([#287](https://github.com/helmerzNL/DiscVault/pull/287),
+  [#295](https://github.com/helmerzNL/DiscVault/pull/295),
+  [#301](https://github.com/helmerzNL/DiscVault/pull/301))
+- **Member Groups and owned containers.** Group-shared movies now expose their
+  containing box sets and vaults. Group owners can rename eligible groups,
+  remove empty groups, and convert owned box sets into vaults or vaults into
+  box sets without losing container data.
+  ([#305](https://github.com/helmerzNL/DiscVault/pull/305))
+
+### Movie details, artwork, and metadata
+
+- Personal Lists now provide dedicated **Log rewatch** and **Watchlist**
+  actions, quick date choices, a native date picker, and a searchable tag
+  picker.
+- Cast and crew use responsive portrait cards with age-at-release information,
+  while media galleries use localized **More** controls and accessible artwork
+  actions.
+- Hidden posters and backdrops can be reviewed, restored, or permanently
+  deleted. Hidden artwork remains excluded from primary-artwork selection and
+  metadata refreshes, and its state is retained in backups.
+  ([#304](https://github.com/helmerzNL/DiscVault/pull/304))
+- Country flags and age classifications now appear consistently in the movie
+  header. Metadata refreshes update unlocked ratings while preserving manually
+  locked values.
+  ([#291](https://github.com/helmerzNL/DiscVault/pull/291),
+  [#292](https://github.com/helmerzNL/DiscVault/pull/292))
+- Audio and subtitle editing fields have been expanded for multi-line values.
+  ([#294](https://github.com/helmerzNL/DiscVault/pull/294))
+- Metadata comparison and artwork diagnostics are now restricted to Debug
+  mode. ([#283](https://github.com/helmerzNL/DiscVault/pull/283))
+
+### MovieVault and privacy
+
+- Distribution 3 introduces atomic full generations, transactional deltas,
+  strict digest validation, nullable studio/distributor/runtime metadata, and
+  ordered exact-edition box sets.
+- Distribution 4 adds secure poster metadata and bounded background caching.
+  Downloads are validated for media type, size, checksum, and decoded image
+  dimensions before activation.
+- Cached MovieVault posters are served only through authenticated local
+  DiscVault URLs with private cache semantics; MovieVault origins and
+  credentials are never exposed to clients.
+- Failed poster replacements retain the previous valid image and report an
+  explicit degraded, pending, or error state.
+- Person profiles and filmographies now come exclusively from TMDb. Stored
+  MovieVault-derived person data is migrated or rebuilt where appropriate.
+  ([#296](https://github.com/helmerzNL/DiscVault/pull/296))
+
+### Member Groups and container ownership
+
+- Members can discover the box sets and vaults that contain movies shared with
+  their Member Groups.
+- Member Group owners can rename groups and delete a group once no other
+  members remain.
+- Containers now have durable ownership across creation, synchronization,
+  import, background workers, backup, and restore.
+- Authorized owners can convert a box set into a vault, or a vault into a box
+  set, from the existing editor while preserving movies, ordering, artwork,
+  metadata, identifiers, barcode, location, cover, public identity, and
+  collection references.
+
+### Additional improvements
+
+- Accessibility, keyboard focus restoration, compact layouts, and responsive
+  controls have been improved throughout the Library and movie-detail
+  interfaces.
+- New and changed user-facing flows include complete translations across all
+  29 supported locales.
+- Backup and restore coverage now includes Legacy authentication, hidden
+  artwork, and container ownership.
+
+### Upgrade notes
+
+- MovieVault distribution 4 remains inactive until the installed
+  `movievault_v2` plugin explicitly advertises distribution-4 compatibility.
+- Enabling Legacy authentication requires the corresponding deployment and
+  environment configuration; existing passkey authentication remains
+  supported.
+- Database migrations run automatically during the normal upgrade process.
+
+## 26.4.66 - Authenticated MovieVault poster media
+
+- Serves cached MovieVault v2 posters only through a dedicated authenticated
+  local route with private browser-cache semantics.
+- Blocks the same poster assets on the generic public media route while
+  preserving existing intentionally public non-MovieVault media assets.
+
+## 26.4.62 - MovieVault distribution-4 poster caching CI fix
+
+- Fixes the PostgreSQL smoke-test poster-cache tests that assumed the default
+  legacy data directory was writable in CI; they now isolate an explicit
+  temporary `DISCVAULT_LEGACY_DATA_DIR` like the existing cleanup tests, so the
+  cache job can atomically activate the fetched poster bytes and the local
+  media-asset route serves them with a `200` instead of a storage-error
+  `failed` outcome.
+- Fixes a poster-cache-failure regression test that unintentionally sent the
+  correct checksum for the fetched bytes, which no longer exercises the
+  intended checksum-mismatch/corrupted-download failure path.
+
+## 26.4.61 - MovieVault distribution-4 poster caching
+
+- Consumes the strict `distribution-4` contract (required-nullable `poster` on
+  release and box-set upserts) while retaining full `distribution-2`/`-3`
+  compatibility and exact box-set member editions.
+- Fetches every changed selected poster anonymously and in the background as
+  part of index sync only, keyed by asset ID, variant, and checksum; item
+  views never trigger a remote fetch.
+- Validates HTTP status, exact media type, byte limit, SHA-256, and decoded
+  image dimensions before atomically activating a cached poster; failed
+  replacements keep the prior valid poster and report an explicit
+  degraded/pending/error cache status instead of leaving partial bytes.
+- Serves cached posters only through an authenticated, checksum/ETag-backed
+  local DiscVault route; release, box-set, search, add, detail, and PWA
+  responses map to that local URL, never to a MovieVault origin, token, or
+  raw remote payload.
+- Adds bounded cleanup for unreferenced cached poster bytes and rows on the
+  existing retention convention, independent of collection membership and
+  without retaining MovieVault request telemetry.
+
+## 26.4.57 - MovieVault distribution-3 local index
+
+- Negotiates `distribution-3` only with compatible `movievault_v2` plugins while
+  retaining strict `distribution-2` support for existing installations.
+- Verifies both `X-Content-SHA256` and `Content-Digest`, then applies v3 full
+  generations atomically and deltas transactionally.
+- Maps nullable studio, distributor, and runtime metadata while preserving
+  hash-only lookup indexes and exact ordered box-set editions.
+- Ships the deterministic `movievault_v2` 1.1.0 feature package with an explicit
+  supported contract range.
+
+## 26.4.50 - MovieVault v2 preview lookup dispatch
+
+- Executes the standalone `movievault_v2` source during preview barcode, title,
+  and box-set identification through its synchronized local index.
+- Keeps legacy MovieVault authentication, contribution, and metadata receiver
+  bridges isolated from the MovieVault v2 adapter.
+
+## 26.4.49 - MovieVault v2 full-snapshot revision ordering
+
+- Accepts deterministic full snapshots ordered by entity identity while still
+  requiring every revision to be unique and within the manifest revision.
+- Keeps delta artifacts strictly revision-ordered and preserves full-snapshot
+  entity, operation, digest, and atomic rollback validation.
+
+## 26.4.48 - MovieVault v2 full-sync checksum correction
+
+- Validates full distribution artifacts against their own
+  `X-Content-SHA256` response digest instead of comparing their bytes with the
+  separate approved lookup-hash dataset checksum.
+- Preserves strict manifest, cursor, revision, atomic generation, and rollback
+  validation for initial and cursor-recovery full synchronization.
+
+## 26.4.44 - Automatic MovieVault v2 configuration
+
+- Resolves and displays typed plugin manifest defaults while preserving every
+  explicit operator override across registry refreshes and upgrades.
+- Repairs the plugin configuration form with native boolean/number controls and
+  adjacent saving, success, and error feedback.
+- Validates the MovieVault v2 root origin and queues one duplicate-safe initial
+  index synchronization when the disabled plugin is first enabled.
+
+## 26.4.43 - MovieVault v2 anonymous local index bridge
+
+- Adds a checksum-verified `distribution-2` synchronizer with atomic full
+  generations, transactional deltas, tombstones, cursor recovery, and
+  privacy-safe failure codes.
+- Stores only SHA-256 lookup hashes and MovieVault-owned release/box-set facts,
+  including ordered exact-edition members.
+- Exposes narrow local lookup, sync, bucket-fallback, and status callbacks to
+  the separately installable `movievault_v2` metadata-source plugin.
+- Adds duplicate-safe manual and scheduled `sync_index` jobs while leaving
+  `movievault_26` and its attributed contribution transport unchanged.
 
 ## 26.4.33 — Wishlist price deal alerts, responsive Library, and mobile poster carousel
 

@@ -130,6 +130,19 @@ RP_ID=discvault.example.com
 RP_ORIGIN=https://discvault.example.com
 ```
 
+### Optional password + TOTP authentication
+
+Passkeys remain the preferred sign-in method. To expose Legacy password
+authentication, set `LEGACY_AUTH_ENABLED=true` and use a long, stable
+`JWT_SECRET`. Existing installations must then enable password login in
+**Users & roles** and confirm the warning with a fresh passkey assertion.
+
+On a completely fresh installation (no users or credentials), the setup wizard
+may instead create the first Owner with a 15+ character password and mandatory
+TOTP. This no-passkey bootstrap is atomic and single-use. TOTP secrets and
+recovery codes are never included in backups; restored MFA-enabled password
+users are prompted to enroll TOTP again.
+
 ## Install DiscVault 26 Production / Stable
 
 Use the production channel for stable deployments. When DiscVault 26 is promoted
@@ -154,6 +167,43 @@ Before updating production:
 - Create a backup from the admin tools or copy the persistent data directory while the container is stopped.
 - Keep the same `/data` volume mapping so posters, backdrops, uploads, users, passkeys, and settings remain available.
 - Review release notes before moving between beta and production channels.
+
+## Install the standalone MovieVault v2 plugin
+
+DiscVault `26.4.44` and newer provide the local anonymous synchronization
+bridge used by the separately released `movievault_v2` plugin. Download the
+plugin ZIP and checksum from
+[helmerzNL/DiscVault-Plugins](https://github.com/helmerzNL/DiscVault-Plugins),
+verify the SHA-256 checksum, and extract its `movievault_v2/` root folder into
+`DISCVAULT_PLUGIN_INSTALL_DIR` (normally `/data/plugins` in the persistent
+volume).
+
+Restart DiscVault or refresh its plugin registry. The plugin supplies the
+standard `https://movies2.vaultstack.eu` origin and safe operational defaults
+while remaining disabled. Review or override those settings, then enable the
+plugin; DiscVault queues the first synchronization automatically. Normal barcode,
+title, release, and box-set queries then use the derived PostgreSQL index. The
+existing `movievault_26` plugin remains independently available for MovieVault
+Next. Its attributed contribution connection is not used for MovieVault v2
+anonymous reads.
+
+DiscVault `26.4.57` adds negotiated `distribution-3` support. The matching
+deterministic `movievault_v2` 1.1.0 feature package is also available under
+`dist/plugins/` for staged installation. Older plugins continue to use
+`distribution-2`; v3 is selected only when both the plugin manifest and core
+declare support.
+
+DiscVault `26.4.61` adds core consumer support for `distribution-4` (a
+strict `distribution-3` superset that adds a required-nullable primary
+`poster` on release and box-set upserts, with bounded anonymous background
+caching and authenticated local poster URLs). Distribution-4 is negotiated
+only when both the installed plugin manifest and DiscVault core declare
+support, so it stays **inactive by default** until the matching
+`movievault_v2` plugin release advertises `distribution-4` in its
+`distributionContractRange`; that plugin change ships separately from
+[helmerzNL/DiscVault-Plugins](https://github.com/helmerzNL/DiscVault-Plugins)
+and is not part of this repository. Existing `distribution-2`/`distribution-3`
+installations are unaffected.
 
 ## Repository Structure
 

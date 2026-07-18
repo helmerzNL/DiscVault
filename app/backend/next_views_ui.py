@@ -2305,6 +2305,22 @@ def ui_preview_html(
       color: var(--danger);
       background: color-mix(in srgb, var(--danger) 8%, transparent);
     }
+    .preview-empty.warn {
+      border-color: color-mix(in srgb, var(--warn) 46%, var(--line-strong));
+      color: var(--text);
+      background: color-mix(in srgb, var(--warn) 8%, transparent);
+    }
+    .import-tmdb-guidance {
+      display: grid;
+      gap: 10px;
+    }
+    .import-tmdb-guidance span {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .import-tmdb-guidance .button-row {
+      justify-content: flex-start;
+    }
     .library-view {
       display: grid;
       gap: 18px;
@@ -2986,6 +3002,13 @@ def ui_preview_html(
       font-weight: 700;
       overflow-wrap: anywhere;
     }
+    .lists-modal-shop-main a {
+      color: var(--accent);
+      font-size: .8rem;
+      overflow-wrap: anywhere;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
     .lists-modal-shop-main span {
       font-size: .8rem;
       color: var(--muted);
@@ -3553,6 +3576,308 @@ def ui_preview_html(
       gap: 5px;
       margin-top: 3px;
     }
+    .library-list-surface {
+      display: block;
+      min-width: 0;
+    }
+    .library-list-scroll {
+      min-width: 0;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+      box-shadow: var(--shadow-soft);
+    }
+    .library-list-table {
+      width: 100%;
+      min-width: 1000px;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+      color: var(--text);
+    }
+    .library-list-table th,
+    .library-list-table td {
+      min-width: 0;
+      padding: 10px 8px;
+      vertical-align: middle;
+      text-align: left;
+    }
+    .library-list-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: color-mix(in srgb, var(--bg-solid) 94%, transparent);
+      border-bottom: 1px solid var(--line);
+      color: var(--muted-strong);
+      font-size: .72rem;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .library-list-table thead th:first-child {
+      border-radius: 17px 0 0 0;
+    }
+    .library-list-table thead th:last-child {
+      border-radius: 0 17px 0 0;
+    }
+    .library-list-table tbody td {
+      border-top: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+      font-size: .84rem;
+    }
+    .library-list-table tbody tr:first-child td {
+      border-top: 0;
+    }
+    .library-list-table tbody tr:hover td {
+      background: color-mix(in srgb, var(--accent) 7%, transparent);
+    }
+    .library-list-table tbody tr.bulk-selected td {
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+    }
+    .library-list-poster-column {
+      width: 64px;
+    }
+    .library-list-title-column {
+      width: 19%;
+    }
+    .library-list-director-column {
+      width: 13%;
+    }
+    .library-list-actors-column {
+      width: 18%;
+    }
+    .library-list-studio-column {
+      width: 13%;
+    }
+    .library-list-rating-column {
+      width: 10%;
+    }
+    .library-list-tags-column {
+      width: 14%;
+    }
+    .library-list-behavior-column {
+      width: 13%;
+    }
+    .library-list-format-column {
+      width: 92px;
+    }
+    .library-list-sort-button {
+      width: 100%;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      padding: 2px 0;
+      font: inherit;
+      font-weight: inherit;
+      text-align: left;
+      text-transform: inherit;
+      letter-spacing: inherit;
+      cursor: pointer;
+    }
+    .library-list-sort-button:hover,
+    .library-list-sort-button.active {
+      color: var(--accent);
+    }
+    .library-list-sort-button svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+      flex: 0 0 auto;
+    }
+    .library-list-poster-target {
+      width: 48px;
+      aspect-ratio: 2 / 3;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 7px;
+      overflow: hidden;
+      background: linear-gradient(145deg, #30343c, #181a1f);
+      color: rgba(255,255,255,.72);
+      padding: 0;
+      cursor: pointer;
+    }
+    .library-list-poster-target img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .library-list-poster-placeholder {
+      font-size: .65rem;
+      font-weight: 800;
+      text-align: center;
+    }
+    .library-list-title-target {
+      max-width: 100%;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 5px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      padding: 3px 0;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .library-list-title-target strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .library-list-title-target:hover strong,
+    .library-list-title-target:focus-visible strong {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .library-list-year {
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .library-list-lines {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .library-list-line,
+    .library-list-person {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--muted-strong);
+      font-size: .8rem;
+      line-height: 1.3;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    button.library-list-person {
+      width: fit-content;
+      max-width: 100%;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    button.library-list-person:hover,
+    button.library-list-person:focus-visible {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .library-list-format-badges,
+    .library-list-behavior {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+    }
+    .library-list-format-badges .physical-format-badge {
+      position: static;
+      max-width: 100%;
+      transform: none;
+    }
+    .library-list-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .library-list-tag-swatch {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: var(--library-tag-color, var(--accent));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--library-tag-color, var(--accent)) 22%, transparent);
+    }
+    .library-list-behavior-icon {
+      width: 24px;
+      height: 24px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 13%, transparent);
+      color: var(--accent);
+    }
+    .library-list-behavior-icon.watchlist {
+      background: color-mix(in srgb, #f5b942 18%, transparent);
+      color: #b87500;
+    }
+    .library-list-behavior-icon svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+    }
+    .library-list-watched-date {
+      width: 100%;
+      color: var(--muted);
+      font-size: .74rem;
+    }
+    .library-list-empty-value {
+      color: var(--muted);
+    }
+    @media (max-width: 1024px) {
+      .library-list-table {
+        min-width: 0;
+        max-width: 100%;
+      }
+      .library-list-desktop-column {
+        display: none;
+      }
+      .library-list-poster-column {
+        width: 52px;
+      }
+      .library-list-title-column {
+        width: auto;
+        overflow: hidden;
+      }
+      .library-list-title-target {
+        width: 100%;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .library-list-title-target strong,
+      .library-list-sort-button span {
+        min-width: 0;
+      }
+      .library-list-sort-button span {
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+      .library-list-format-column {
+        width: 72px;
+      }
+      .library-list-behavior-column {
+        width: 52px;
+      }
+      .library-list-table th,
+      .library-list-table td {
+        padding: 8px 4px;
+      }
+      .library-list-table thead th {
+        overflow-wrap: anywhere;
+        font-size: .64rem;
+        line-height: 1.15;
+      }
+      .library-list-poster-target {
+        width: 40px;
+      }
+      .library-list-behavior {
+        justify-content: center;
+      }
+      .library-list-behavior-icon {
+        width: 22px;
+        height: 22px;
+      }
+      .library-list-watched-date {
+        display: none;
+      }
+    }
     .mode-detail-table {
       min-width: 820px;
       display: grid;
@@ -3792,12 +4117,80 @@ def ui_preview_html(
       display: grid;
       gap: 12px;
     }
-    .movie-list-actions {
+    .movie-list-primary-actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 12px;
       align-items: center;
-      justify-content: flex-end;
+    }
+    .movie-list-primary-action {
+      min-height: 42px;
+      max-width: 100%;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 9px 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font: inherit;
+      font-size: .92rem;
+      font-weight: 760;
+      line-height: 1.15;
+      text-align: center;
+      white-space: normal;
+      cursor: pointer;
+      transition: transform .15s ease, filter .15s ease, background .15s ease;
+    }
+    .movie-list-primary-action:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+    .movie-list-primary-action:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 48%, transparent);
+      outline-offset: 3px;
+    }
+    .movie-list-primary-action svg {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+      fill: currentColor;
+    }
+    .movie-list-primary-action.rewatch {
+      background: #28c95b;
+      border-color: #28c95b;
+      color: #fff;
+    }
+    .movie-list-primary-action.watchlist {
+      background: color-mix(in srgb, #1264d8 24%, var(--bg-solid));
+      border-color: color-mix(in srgb, #2f80ed 38%, transparent);
+      color: #5a97f5;
+    }
+    .movie-list-primary-action.watchlist.active {
+      background: color-mix(in srgb, #1264d8 34%, var(--bg-solid));
+      border-color: color-mix(in srgb, #5a97f5 68%, transparent);
+      color: #7aabff;
+    }
+    .movie-rewatch-date {
+      display: grid;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .movie-rewatch-date span {
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 700;
+    }
+    .movie-rewatch-date input {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 85%, transparent);
+      color: var(--text);
+      padding: 0 12px;
+      box-sizing: border-box;
+      font: inherit;
     }
     .list-pill-button {
       min-height: 38px;
@@ -3813,36 +4206,6 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
       background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
       color: var(--accent);
-    }
-    .watch-date-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
-    }
-    .watch-date-row input {
-      min-height: 38px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: var(--bg-solid);
-      color: var(--text);
-      padding: 0 12px;
-      font: inherit;
-    }
-    .watch-date-row .segmented {
-      flex: 1 1 320px;
-    }
-    .watch-custom-date {
-      display: inline-flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      justify-content: flex-end;
     }
     .watch-history-pills {
       display: flex;
@@ -3889,6 +4252,27 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 8px;
     }
+    .movie-tag-add-button {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      color: var(--text);
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+      cursor: pointer;
+    }
+    .movie-tag-add-button:hover {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      color: var(--accent);
+    }
+    .movie-tag-add-button svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
     .movie-tag-chip {
       display: inline-flex;
       align-items: center;
@@ -3911,14 +4295,97 @@ def ui_preview_html(
       color: var(--muted);
       cursor: pointer;
     }
-    .movie-tag-add,
+    .movie-tag-picker-search {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 86%, transparent);
+      color: var(--text);
+      padding: 0 16px;
+      box-sizing: border-box;
+      font: inherit;
+    }
+    .movie-tag-picker-results {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .movie-tag-picker-option,
+    .movie-tag-picker-create {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 84%, transparent);
+      color: var(--text);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      font: inherit;
+      font-weight: 680;
+      cursor: pointer;
+    }
+    .movie-tag-picker-option:hover,
+    .movie-tag-picker-create:hover {
+      border-color: color-mix(in srgb, var(--accent) 56%, var(--line));
+      background: color-mix(in srgb, var(--accent) 13%, var(--bg-solid));
+    }
+    .movie-tag-picker-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--tag-color, var(--muted));
+      flex: 0 0 auto;
+    }
+    .movie-tag-create-section {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .movie-tag-color-label {
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 700;
+    }
+    .movie-tag-color-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .movie-tag-color-option {
+      width: 34px;
+      height: 34px;
+      border: 2px solid transparent;
+      border-radius: 50%;
+      background: var(--tag-color, color-mix(in srgb, var(--muted) 24%, transparent));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent);
+      padding: 0;
+      position: relative;
+      cursor: pointer;
+    }
+    .movie-tag-color-option[aria-checked="true"] {
+      border-color: var(--text);
+      box-shadow: 0 0 0 2px var(--bg-solid), 0 0 0 4px var(--accent);
+    }
+    .movie-tag-color-option.none::after {
+      content: "";
+      position: absolute;
+      inset: 15px 5px;
+      height: 2px;
+      background: var(--muted);
+      transform: rotate(45deg);
+    }
     .movie-loan-add {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
     }
-    .movie-tag-add input,
     .movie-loan-add input {
       flex: 1 1 160px;
       min-width: 0;
@@ -4013,6 +4480,9 @@ def ui_preview_html(
       display: grid;
       gap: 16px;
       min-width: 0;
+    }
+    #movieDetailPage {
+      gap: 8px;
     }
     .profile-view {
       display: grid;
@@ -5438,6 +5908,70 @@ def ui_preview_html(
       font-weight: 700;
       line-height: 1;
     }
+    .movie-detail-back,
+    .movie-detail-icon-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .movie-detail-back svg,
+    .movie-detail-icon-action svg {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+      fill: currentColor;
+    }
+    .movie-detail-hero-actions {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 4;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      max-width: calc(100% - 130px);
+    }
+    .movie-detail-icon-action {
+      min-height: 40px;
+      border: 1px solid rgba(255,255,255,.24);
+      border-radius: 999px;
+      padding: 0 14px;
+      color: #fff;
+      background: rgba(0,0,0,.42);
+      box-shadow: 0 8px 24px rgba(0,0,0,.22);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
+      backdrop-filter: blur(18px) saturate(150%);
+      cursor: pointer;
+      font: inherit;
+      font-size: .88rem;
+      font-weight: 700;
+      line-height: 1;
+      transition: background .15s ease, border-color .15s ease, transform .06s ease;
+    }
+    .movie-detail-icon-action:hover {
+      background: rgba(20,20,24,.72);
+      border-color: rgba(255,255,255,.38);
+    }
+    .movie-detail-icon-action:active {
+      transform: scale(.96);
+    }
+    .movie-detail-icon-action.metadata {
+      color: color-mix(in srgb, var(--accent-bright) 78%, #fff);
+      border-color: color-mix(in srgb, var(--accent-bright) 48%, rgba(255,255,255,.20));
+    }
+    .movie-detail-icon-action.danger {
+      color: #ff7d88;
+      border-color: rgba(255,92,108,.48);
+    }
+    .movie-detail-status {
+      min-height: 0;
+      margin: 8px 14px 0;
+    }
+    .movie-detail-status:empty {
+      display: none;
+    }
     .movie-detail-summary {
       position: relative;
       z-index: 2;
@@ -5550,6 +6084,30 @@ def ui_preview_html(
       gap: 16px;
       padding: 18px;
       background: var(--bg);
+    }
+    .movie-detail-section-tabs,
+    .movie-detail-section-panel {
+      grid-column: 1 / -1;
+    }
+    .movie-detail-section-tabs {
+      justify-self: start;
+    }
+    .responsive-grid-item.is-overflow-item {
+      display: none !important;
+    }
+    .responsive-more-button {
+      min-height: 44px;
+      margin: 10px auto 0;
+      border: 0;
+      padding: 0 18px;
+      background: transparent;
+      color: var(--accent-bright);
+      cursor: pointer;
+      font: inherit;
+      font-weight: 760;
+    }
+    .responsive-more-button:hover {
+      text-decoration: underline;
     }
     .movie-detail-page .movie-detail-body {
       border: 1px solid var(--line);
@@ -6498,28 +7056,34 @@ def ui_preview_html(
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .movie-people-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+      gap: 12px 18px;
+    }
     .person-card {
       min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--bg-solid);
+      min-height: 96px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
       color: inherit;
       cursor: pointer;
       display: grid;
-      grid-template-columns: 46px minmax(0, 1fr);
-      gap: 10px;
-      align-items: center;
-      padding: 9px;
+      grid-template-columns: 64px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 4px;
       text-align: left;
       font: inherit;
     }
     .person-card:hover {
-      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      background: color-mix(in srgb, var(--accent) 9%, transparent);
     }
     .person-avatar {
-      width: 46px;
-      height: 46px;
-      border-radius: 999px;
+      width: 64px;
+      aspect-ratio: 2 / 3;
+      border-radius: 10px;
       overflow: hidden;
       display: grid;
       place-items: center;
@@ -6538,13 +7102,16 @@ def ui_preview_html(
       display: grid;
       gap: 4px;
       min-width: 0;
+      padding-top: 2px;
     }
     .person-card-copy strong {
       overflow-wrap: anywhere;
+      font-size: .98rem;
+      line-height: 1.22;
     }
     .person-card-copy span {
       color: var(--muted);
-      font-size: .82rem;
+      font-size: .88rem;
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
@@ -6862,6 +7429,12 @@ def ui_preview_html(
     .art-option-grid.backdrops {
       grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     }
+    #movieDetailPosterArtwork {
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    }
+    #movieDetailBackdropArtwork {
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
     .art-option {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -6870,6 +7443,34 @@ def ui_preview_html(
       display: grid;
       gap: 7px;
       min-width: 0;
+    }
+    #movieDetailPage .movie-art-option {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
+      gap: 0;
+      cursor: pointer;
+      outline: none;
+      -webkit-touch-callout: none;
+      user-select: none;
+    }
+    #movieDetailPage .movie-art-option:focus-visible .art-option-preview {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 68%, transparent);
+    }
+    #movieDetailPage .movie-art-option.is-hidden .art-option-preview {
+      opacity: .48;
+      filter: grayscale(.45);
+      transition: opacity .16s ease, filter .16s ease;
+    }
+    #movieDetailPage .movie-art-option.is-hidden:hover .art-option-preview,
+    #movieDetailPage .movie-art-option.is-hidden:focus-visible .art-option-preview {
+      opacity: .64;
+    }
+    #movieDetailPage .movie-art-option .art-option-source,
+    #movieDetailPage .movie-art-option .art-option-meta,
+    #movieDetailPage .movie-art-option .art-option-actions {
+      display: none;
     }
     .art-option-preview {
       aspect-ratio: 2 / 3;
@@ -6913,6 +7514,22 @@ def ui_preview_html(
       left: auto;
       right: 6px;
       background: color-mix(in srgb, var(--accent) 72%, rgba(10, 12, 16, .62));
+    }
+    .art-option-badge.hidden-artwork {
+      left: auto;
+      right: 6px;
+    }
+    .hidden-artwork-toggle {
+      display: block;
+      margin: 10px auto 0;
+    }
+    .hidden-artwork-toggle.hidden {
+      display: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #movieDetailPage .movie-art-option.is-hidden .art-option-preview {
+        transition: none;
+      }
     }
     .art-option-source,
     .art-option-meta {
@@ -6990,6 +7607,16 @@ def ui_preview_html(
       min-width: 0;
       color: inherit;
       text-decoration: none;
+    }
+    .movie-media-video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 300px));
+      justify-content: start;
+      gap: 12px;
+    }
+    .movie-media-video-grid .video-card {
+      width: 100%;
+      max-width: 300px;
     }
     .video-card strong,
     .video-card span {
@@ -7160,6 +7787,19 @@ def ui_preview_html(
       gap: 14px;
       align-items: start;
       min-width: 0;
+    }
+    .profile-security-grid {
+      gap: 12px;
+    }
+    .profile-security-column {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+      min-width: 0;
+    }
+    .profile-security-grid .profile-section-box {
+      gap: 10px;
+      padding: 12px;
     }
     .member-group-list {
       display: grid;
@@ -7530,6 +8170,76 @@ def ui_preview_html(
       width: 16px;
       height: 16px;
       accent-color: var(--accent);
+    }
+    label.legacy-checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      min-height: 44px;
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: .86rem;
+      font-weight: 650;
+      line-height: 1.35;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    label.legacy-checkbox-row:hover {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      background: color-mix(in srgb, var(--accent) 7%, var(--bg-solid));
+    }
+    label.legacy-checkbox-row input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      position: relative;
+      flex: 0 0 18px;
+      width: 18px;
+      min-width: 18px;
+      max-width: 18px;
+      height: 18px;
+      min-height: 18px;
+      margin: 0;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      background: var(--bg-solid);
+      padding: 0;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    }
+    label.legacy-checkbox-row input[type="checkbox"]::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 8px;
+      height: 4px;
+      border-bottom: 2px solid #fff;
+      border-left: 2px solid #fff;
+      transform: rotate(-45deg) scale(0);
+      transform-origin: center;
+      transition: transform .12s ease;
+    }
+    label.legacy-checkbox-row input[type="checkbox"]:checked {
+      border-color: var(--accent);
+      background: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+    }
+    label.legacy-checkbox-row input[type="checkbox"]:checked::after {
+      transform: rotate(-45deg) scale(1);
+    }
+    label.legacy-checkbox-row input[type="checkbox"]:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 38%, transparent);
+      outline-offset: 2px;
+    }
+    label.legacy-checkbox-row:has(input:disabled) {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    label.legacy-checkbox-row input[type="checkbox"]:disabled {
+      cursor: not-allowed;
     }
     .profile-scope-fieldset {
       display: grid;
@@ -9127,10 +9837,10 @@ def ui_preview_html(
         border-bottom: 0;
       }
       .mobile-shell-logo {
+        display: none;
         justify-self: center;
         width: max-content;
         max-width: calc(100vw - 32px);
-        display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
@@ -9383,9 +10093,148 @@ def ui_preview_html(
       .movie-detail-action-strip .detail-message {
         text-align: left;
       }
+      #movieDetailPage .movie-detail-hero {
+        width: calc(100% + 24px);
+        min-height: 0;
+        margin-inline: -12px;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: #080a0f;
+        box-shadow: none;
+      }
+      #movieDetailPage .movie-detail-hero > #movieDetailBackdrop,
+      #movieDetailPage .movie-detail-hero::before {
+        bottom: auto;
+        height: 330px;
+      }
+      #movieDetailPage .movie-detail-hero > #movieDetailBackdrop {
+        opacity: 1;
+        object-position: center center;
+      }
+      #movieDetailPage .movie-detail-hero::before {
+        background:
+          linear-gradient(90deg, rgba(0,0,0,.16), rgba(0,0,0,.02) 58%, rgba(0,0,0,.12)),
+          linear-gradient(0deg, rgba(0,0,0,.88), rgba(0,0,0,.02) 64%);
+      }
+      #movieDetailPage .movie-detail-summary {
+        grid-template-columns: 104px minmax(0, 1fr);
+        gap: 10px 14px;
+        align-items: end;
+        margin-top: 174px;
+        padding: 0 14px 20px;
+      }
+      #movieDetailPage .movie-detail-poster {
+        width: 104px;
+        border-radius: 11px;
+        border-color: rgba(255,255,255,.34);
+        box-shadow: 0 14px 36px rgba(0,0,0,.52);
+      }
+      #movieDetailPage .movie-detail-summary .eyebrow {
+        display: none;
+      }
+      #movieDetailPage .movie-detail-title {
+        margin: 0 0 4px;
+        font-size: clamp(1.55rem, 8vw, 2.25rem);
+        line-height: 1;
+      }
+      #movieDetailPage .hero-meta {
+        gap: 5px;
+        margin-bottom: 0;
+      }
+      #movieDetailPage .hero-meta .pill {
+        min-height: 25px;
+        padding: 0 8px;
+        font-size: .7rem;
+      }
+      #movieDetailPage .movie-detail-overview {
+        max-height: none;
+        overflow: visible;
+        padding: 18px 0 0;
+        margin-top: 0;
+        color: rgba(255,255,255,.9);
+        font-size: .94rem;
+        line-height: 1.52;
+        scrollbar-gutter: auto;
+      }
+      #movieDetailPage .movie-detail-back,
+      #movieDetailPage .movie-detail-icon-action {
+        width: 42px;
+        min-width: 42px;
+        min-height: 42px;
+        padding: 0;
+        border-radius: 50%;
+      }
+      #movieDetailPage .movie-detail-back .button-label,
+      #movieDetailPage .movie-detail-icon-action .button-label {
+        display: none;
+      }
+      #movieDetailPage .movie-detail-back svg,
+      #movieDetailPage .movie-detail-icon-action svg {
+        width: 21px;
+        height: 21px;
+      }
+      #movieDetailPage .movie-detail-hero-actions {
+        max-width: calc(100% - 80px);
+      }
+      #movieDetailPage .movie-detail-status {
+        margin-inline: 0;
+      }
+      #movieDetailPage {
+        gap: 0;
+      }
+      .movie-list-primary-actions {
+        gap: 8px;
+      }
+      .movie-list-primary-action {
+        min-height: 38px;
+        padding: 7px 14px;
+        gap: 7px;
+        font-size: .85rem;
+      }
+      .movie-list-primary-action svg {
+        width: 18px;
+        height: 18px;
+      }
       .movie-detail-body {
         grid-template-columns: 1fr;
         padding: 12px;
+      }
+      .movie-people-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 8px;
+      }
+      .person-card {
+        min-height: 80px;
+        grid-template-columns: 52px minmax(0, 1fr);
+        gap: 8px;
+        padding: 2px;
+      }
+      .person-avatar {
+        width: 52px;
+        border-radius: 8px;
+      }
+      .person-card-copy strong {
+        font-size: .9rem;
+      }
+      .person-card-copy span {
+        font-size: .78rem;
+      }
+      #movieDetailPosterArtwork {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 7px;
+      }
+      #movieDetailBackdropArtwork,
+      .movie-media-video-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+      .movie-media-video-grid .video-card {
+        max-width: none;
+        padding: 8px;
+      }
+      .movie-media-video-grid .video-card-copy {
+        font-size: .8rem;
       }
       .container-detail-submenu {
         position: static;
@@ -9414,6 +10263,10 @@ def ui_preview_html(
       .detail-card-head {
         align-items: stretch;
         flex-direction: column;
+      }
+      .movie-tags-section .detail-card-head.compact {
+        align-items: center;
+        flex-direction: row;
       }
       .detail-submenu {
         width: 100%;
@@ -9966,22 +10819,57 @@ def ui_preview_html(
         <select id="authLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </div>
       <div class="login-actions">
-        <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.signIn">Sign in</button>
-        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
+        <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.loginDescription">Sign in with passkey</button>
+        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
       <form class="recovery-login-panel hidden" id="appReviewForm">
+        <p data-next-i18n="legacyAuth.warning">Passwords are less phishing-resistant than passkeys.</p>
+        <div id="appLegacyCredentials">
         <label for="appReviewUsername">
-          <span>Username</span>
+          <span data-next-i18n="auth.username">Username</span>
           <input id="appReviewUsername" autocomplete="username">
         </label>
         <label for="appReviewPassword">
           <span data-next-i18n="auth.password">Password</span>
           <input id="appReviewPassword" type="password" autocomplete="current-password">
         </label>
+        </div>
+        <div class="hidden" id="appLegacyPasswordChange">
+          <label for="appLegacyNewPassword">
+            <span data-next-i18n="legacyAuth.newPassword">New password</span>
+            <input id="appLegacyNewPassword" type="password" minlength="15" autocomplete="new-password">
+          </label>
+          <label for="appLegacyConfirmPassword">
+            <span data-next-i18n="legacyAuth.confirmPassword">Confirm password</span>
+            <input id="appLegacyConfirmPassword" type="password" minlength="15" autocomplete="new-password">
+          </label>
+        </div>
+        <div class="hidden" id="appLegacyMfa">
+          <p id="appLegacyMfaHelp" data-next-i18n="legacyAuth.totpPrompt">Enter the six-digit code from your authenticator app.</p>
+          <img class="hidden" id="appLegacyQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
+          <code class="admin-code hidden" id="appLegacyManualKey"></code>
+          <label for="appLegacyTotpCode">
+            <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
+            <input id="appLegacyTotpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+          </label>
+          <label for="appLegacyRecoveryCode">
+            <span data-next-i18n="legacyAuth.recoveryCodeOptional">Recovery code (instead)</span>
+            <input id="appLegacyRecoveryCode" autocomplete="one-time-code">
+          </label>
+        </div>
+        <div class="recovery-codes hidden" id="appLegacyRecoveryCodes"></div>
+        <div class="profile-action-row hidden" id="appLegacyRecoveryActions">
+          <button type="button" class="secondary-button" id="appLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
+          <button type="button" class="secondary-button" id="appLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
+        </div>
+        <label class="legacy-checkbox-row hidden" id="appLegacyRecoveryAckLabel">
+          <input id="appLegacyRecoveryAck" type="checkbox">
+          <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
+        </label>
         <div class="profile-form-actions">
-          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
+          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
         </div>
       </form>
       <form class="recovery-login-panel hidden" id="appInviteForm">
@@ -10040,9 +10928,36 @@ def ui_preview_html(
           <span data-next-i18n="auth.username">Username</span>
           <input id="startupOwnerUsernameInput" autocomplete="username" maxlength="80" data-next-i18n-placeholder="auth.ownerUsernamePlaceholder" placeholder="Choose your username">
         </label>
+        <div class="hidden" id="startupLegacyFields">
+          <p data-next-i18n="legacyAuth.bootstrapWarning">Password onboarding is less phishing-resistant. TOTP is mandatory.</p>
+          <label for="startupLegacyPassword">
+            <span data-next-i18n="auth.password">Password</span>
+            <input id="startupLegacyPassword" type="password" minlength="15" autocomplete="new-password">
+          </label>
+          <label class="legacy-checkbox-row">
+            <input id="startupLegacyRiskAccepted" type="checkbox">
+            <span data-next-i18n="legacyAuth.acceptRisk">I understand and accept the password risk.</span>
+          </label>
+          <img class="hidden" id="startupLegacyQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
+          <code class="admin-code hidden" id="startupLegacyManualKey"></code>
+          <label class="hidden" id="startupLegacyCodeLabel">
+            <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
+            <input id="startupLegacyCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+          </label>
+          <div class="recovery-codes hidden" id="startupLegacyRecoveryCodes"></div>
+          <div class="profile-action-row hidden" id="startupLegacyRecoveryActions">
+            <button type="button" class="secondary-button" id="startupLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
+            <button type="button" class="secondary-button" id="startupLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
+          </div>
+          <label class="legacy-checkbox-row hidden" id="startupLegacyAckLabel">
+            <input id="startupLegacyAck" type="checkbox">
+            <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
+          </label>
+        </div>
       </div>
       <div class="startup-actions">
         <button type="button" class="primary-button hidden" id="startupOwnerPasskeyButton" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
+        <button type="button" class="secondary-button hidden" id="startupLegacyButton" data-next-i18n="legacyAuth.setupOwner">Set up password + TOTP</button>
         <a class="primary-button" id="startupMigrationLink" href="/api/next/migration" data-next-i18n="startup.openMigrationGuide">Open migration guide</a>
         <button type="button" class="secondary-button" id="startupRefreshButton" data-next-i18n="common.refresh">Refresh</button>
         <button type="button" class="secondary-button" id="startupLogoutButton" data-next-i18n="auth.signOut">Sign out</button>
@@ -10135,6 +11050,19 @@ def ui_preview_html(
                     <span class="filter-section-title" data-next-i18n="collection.filterLocation">Location</span>
                     <select id="collectionLocationSelect" aria-label="Location filter" data-next-i18n-aria="collection.filterLocation"></select>
                   </label>
+                </div>
+                <div class="filter-section">
+                  <span class="filter-section-title" data-next-i18n="collection.behaviorColumn">Watch activity</span>
+                  <div class="filter-switch-list">
+                    <label class="filter-toggle-row">
+                      <span data-next-i18n="collection.hideWatchlist">Hide Watchlist</span>
+                      <input type="checkbox" role="switch" data-hide-watchlist-switch>
+                    </label>
+                    <label class="filter-toggle-row">
+                      <span data-next-i18n="collection.hideWatched">Hide watched</span>
+                      <input type="checkbox" role="switch" data-hide-watched-switch>
+                    </label>
+                  </div>
                 </div>
                 <div class="filter-section filter-section-containers hidden" id="collectionContainersSection">
                   <label class="filter-toggle-row">
@@ -10348,10 +11276,6 @@ def ui_preview_html(
       </section>
       <section class="preview-layout">
         <div class="preview-panel">
-          <div class="panel-head">
-            <h2 id="libraryPanelTitle" data-next-i18n="uiPreview.recentlyAdded">Recently added</h2>
-            <span id="shownCount">""" + h(min(len(movies), 24)) + """</span>
-          </div>
           <div class="poster-rail" id="posterRail">""" + movie_cards + """</div>
         </div>
       </section>
@@ -10925,7 +11849,28 @@ def ui_preview_html(
       <section class="movie-detail-page hidden" id="movieDetailPage" aria-labelledby="movieDetailTitle">
         <section class="movie-detail-hero" id="movieDetailHero">
           <img id="movieDetailBackdrop" alt="">
-          <button type="button" class="movie-detail-back" id="movieDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
+          <button type="button" class="movie-detail-back" id="movieDetailBackButton" aria-label="Back" title="Back" data-next-i18n-aria="movieDetail.backToLibrary" data-next-i18n-title="movieDetail.backToLibrary">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 16.58 10.83 12 15.41 7.41 14 6 8 12 14 18 15.41 16.58Z"></path></svg>
+            <span class="button-label" data-next-i18n="movieDetail.backToLibrary">Back</span>
+          </button>
+          <div class="movie-detail-hero-actions" aria-label="Movie actions" data-next-i18n-aria="movieDetail.title">
+            <button type="button" class="movie-detail-icon-action hidden" id="movieEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path id="movieEditToggleIcon" data-edit-path="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z" data-save-path="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3M19 19H5V5H16.17L19 7.83V19M12 6C10.34 6 9 7.34 9 9S10.34 12 12 12 15 10.66 15 9 13.66 6 12 6M6 14H18V18H6V14Z" d="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z"></path></svg>
+              <span class="button-label" id="movieEditToggleLabel" data-next-i18n="common.edit">Edit</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action hidden" id="movieEditCancelTopButton" aria-label="Cancel" title="Cancel" data-next-i18n-aria="common.cancel" data-next-i18n-title="common.cancel">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"></path></svg>
+              <span class="button-label" data-next-i18n="common.cancel">Cancel</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action metadata" id="movieMetadataApplyButton" aria-label="Refresh metadata" title="Refresh metadata" data-next-i18n-aria="movieDetail.applyMetadata" data-next-i18n-title="movieDetail.applyMetadata">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4 7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18 8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"></path></svg>
+              <span class="button-label" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action danger hidden" id="movieDeleteButton" aria-label="Delete movie" title="Delete movie" data-next-i18n-aria="movieDetail.deleteMovie" data-next-i18n-title="movieDetail.deleteMovie">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
+              <span class="button-label" data-next-i18n="movieDetail.deleteMovie">Delete movie</span>
+            </button>
+          </div>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
             <div class="movie-detail-copy">
@@ -10936,20 +11881,7 @@ def ui_preview_html(
             </div>
           </div>
         </section>
-        <div class="movie-detail-action-strip">
-          <div class="movie-detail-actions">
-            <button type="button" class="action secondary hidden" id="movieEditToggleButton" data-next-i18n="common.edit">Edit</button>
-            <button type="button" class="action secondary hidden" id="movieEditCancelTopButton" data-next-i18n="common.cancel">Cancel</button>
-            <button type="button" class="action secondary" id="movieMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
-            <div class="movie-metadata-option hidden" id="movieMetadataPeopleOption">
-              <button type="button" class="switch" id="movieMetadataPeopleToggle" aria-pressed="false" aria-label="Refresh cast & crew people" data-next-i18n-aria="movieDetail.refreshPeople"></button>
-              <span data-next-i18n="movieDetail.refreshPeople">Refresh cast & crew people</span>
-            </div>
-            <button type="button" class="secondary-button" id="movieMetadataJobsButton" data-next-i18n="movieDetail.jobs">Refresh history</button>
-            <button type="button" class="action danger hidden" id="movieDeleteButton" data-next-i18n="movieDetail.deleteMovie">Delete movie</button>
-          </div>
-          <div class="detail-message" id="movieDetailMessage"></div>
-        </div>
+        <div class="detail-message movie-detail-status" id="movieDetailMessage"></div>
         <section class="movie-detail-body">
           <div class="detail-card full hidden" id="movieEditPanel">
             <div class="detail-card-head">
@@ -11004,10 +11936,6 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.director">Director</span>
                       <input id="movieEditDirector" name="director" maxlength="300" autocomplete="off">
                     </label>
-                    <label for="movieEditGenre">
-                      <span data-next-i18n="movieDetail.genre">Genre</span>
-                      <input id="movieEditGenre" name="genre" maxlength="300" autocomplete="off">
-                    </label>
                     <label for="movieEditStudios">
                       <span data-next-i18n="movieDetail.studios">Studios</span>
                       <input id="movieEditStudios" name="studios" maxlength="300" autocomplete="off">
@@ -11035,11 +11963,11 @@ def ui_preview_html(
                     </label>
                     <label for="movieEditAudioTracks">
                       <span data-next-i18n="movieDetail.audio">Audio</span>
-                      <input id="movieEditAudioTracks" name="audio_tracks" maxlength="400" autocomplete="off">
+                      <textarea id="movieEditAudioTracks" name="audio_tracks" rows="5" maxlength="400" autocomplete="off"></textarea>
                     </label>
                     <label for="movieEditSubtitles">
                       <span data-next-i18n="movieDetail.subtitles">Subtitles</span>
-                      <input id="movieEditSubtitles" name="subtitles" maxlength="400" autocomplete="off">
+                      <textarea id="movieEditSubtitles" name="subtitles" rows="5" maxlength="400" autocomplete="off"></textarea>
                     </label>
                   </div>
                 </div>
@@ -11084,37 +12012,52 @@ def ui_preview_html(
               </div>
             </form>
           </div>
+          <nav class="detail-submenu movie-detail-section-tabs" role="tablist" aria-label="Movie details" data-next-i18n-aria="movieDetail.title">
+            <button type="button" class="active" id="movieDetailReleaseTab" role="tab" aria-controls="movieDetailReleasePanel" aria-selected="true" data-detail-tab="movieSections" data-detail-panel="movieDetailReleasePanel" data-next-i18n="movieDetail.release">Release</button>
+            <button type="button" id="movieDetailTechnicalTab" role="tab" aria-controls="movieDetailTechnicalPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailTechnicalPanel" data-next-i18n="movieDetail.technical">Technical</button>
+            <button type="button" id="movieDetailCollectorsTab" role="tab" aria-controls="movieDetailCollectorsPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailCollectorsPanel" data-next-i18n="movieDetail.collectors">Collectors</button>
+          </nav>
+          <div class="detail-card full detail-subpanel movie-detail-section-panel" id="movieDetailReleasePanel" role="tabpanel" aria-labelledby="movieDetailReleaseTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.release">Release</h3>
+            <div class="detail-fields" id="movieDetailRelease"></div>
+          </div>
+          <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailTechnicalPanel" role="tabpanel" aria-labelledby="movieDetailTechnicalTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h3>
+            <div class="detail-fields" id="movieDetailTechnical"></div>
+          </div>
+          <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailCollectorsPanel" role="tabpanel" aria-labelledby="movieDetailCollectorsTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.collectors">Collectors</h3>
+            <div class="detail-fields" id="movieDetailCollectors"></div>
+          </div>
           <div class="detail-card full movie-list-card" id="movieListStateCard">
             <div class="detail-card-head">
               <div>
                 <h3 data-next-i18n="lists.personalTitle">Personal lists</h3>
                 <p class="import-source-meta" id="movieListStateSummary" data-next-i18n="lists.personalHelp">Save this film for later or mark when you watched it.</p>
               </div>
-              <div class="movie-list-actions">
-                <button type="button" class="list-pill-button" id="movieWatchlistToggleButton" data-next-i18n="lists.addToWatchlist">Add to Watchlist</button>
-              </div>
             </div>
-            <div class="watch-date-row">
-              <div class="segmented compact" role="group" aria-label="Watched date" data-next-i18n-aria="lists.watchedDate">
-                <button type="button" id="movieWatchedTodayButton" data-watch-date-choice="today" data-next-i18n="lists.markWatchedToday">Today</button>
-                <button type="button" id="movieWatchedYesterdayButton" data-watch-date-choice="yesterday" data-next-i18n="lists.markWatchedYesterday">Yesterday</button>
-                <button type="button" id="movieWatchedChooseDateButton" data-watch-date-choice="choose" data-next-i18n="lists.chooseWatchedDate">Choose a date</button>
-              </div>
-              <div class="watch-custom-date hidden" id="movieWatchedCustomDateControls">
-                <input type="date" id="movieWatchedDateInput" aria-label="Watched date" data-next-i18n-aria="lists.watchedDate">
-                <button type="button" class="secondary-button" id="movieWatchedDateButton" data-next-i18n="lists.markWatchedDate">Add date</button>
-              </div>
+            <div class="movie-list-primary-actions">
+              <button type="button" class="movie-list-primary-action rewatch" id="movieLogRewatchButton" aria-haspopup="dialog">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M10.2 16.2 6.5 12.5l1.4-1.4 2.3 2.3 5.9-5.9 1.4 1.4z" fill="#28c95b"></path>
+                </svg>
+                <span data-next-i18n="lists.logRewatch">Log rewatch</span>
+              </button>
+              <button type="button" class="movie-list-primary-action watchlist" id="movieWatchlistToggleButton" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"></path></svg>
+                <span id="movieWatchlistToggleLabel" data-next-i18n="lists.addToWatchlist">Add to Watchlist</span>
+              </button>
             </div>
             <div class="watch-history-pills" id="movieWatchHistoryPills"></div>
             <div class="movie-tags-section" id="movieTagsSection">
               <div class="detail-card-head compact">
                 <h4 data-next-i18n="lists.tagsTitle">Tags</h4>
+                <button type="button" class="movie-tag-add-button" id="movieTagAddButton" aria-label="Add tag" title="Add tag" data-next-i18n-aria="lists.tagAdd" data-next-i18n-title="lists.tagAdd">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5H13V11H19V13H13V19H11V13H5V11H11V5Z"></path></svg>
+                </button>
               </div>
               <div class="movie-tags-chips" id="movieTagsChips"></div>
-              <form class="movie-tag-add" id="movieTagAddForm" autocomplete="off">
-                <input type="text" id="movieTagAddInput" data-next-i18n-placeholder="lists.tagAddPlaceholder" placeholder="Add a tag">
-                <button type="submit" class="secondary-button" data-next-i18n="lists.tagAdd">Add tag</button>
-              </form>
             </div>
             <div class="movie-loan-section" id="movieLoanSection">
               <div class="detail-card-head compact">
@@ -11142,15 +12085,7 @@ def ui_preview_html(
               <p class="form-message" id="movieLoanMessage"></p>
             </div>
           </div>
-          <div class="detail-card">
-            <h3 data-next-i18n="movieDetail.release">Release</h3>
-            <div class="detail-fields" id="movieDetailRelease"></div>
-          </div>
-          <div class="detail-card">
-            <h3 data-next-i18n="movieDetail.technical">Technical</h3>
-            <div class="detail-subsections" id="movieDetailTechnical"></div>
-          </div>
-          <div class="detail-card full">
+          <div class="detail-card full debug-card hidden" id="movieMetadataCompareCard">
             <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.metadataCompare">Metadata compare</h3>
               <div class="button-row compact">
@@ -11188,6 +12123,23 @@ def ui_preview_html(
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
+              <h3 data-next-i18n="movieDetail.castCrew">Cast &amp; crew</h3>
+              <div class="detail-submenu" role="tablist" aria-label="Cast & crew" data-next-i18n-aria="movieDetail.castCrew">
+                <button type="button" class="active" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCast" data-next-i18n="movieDetail.cast">Cast</button>
+                <button type="button" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCrew" data-next-i18n="movieDetail.crew">Crew</button>
+              </div>
+            </div>
+            <div class="detail-subpanel" data-detail-panel-group="moviePeople" id="moviePeopleCast">
+              <div class="movie-people-grid" id="movieDetailCast"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailCastMore" data-next-i18n="common.more">More</button>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
+              <div class="movie-people-grid" id="movieDetailCrew"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailCrewMore" data-next-i18n="common.more">More</button>
+            </div>
+          </div>
+          <div class="detail-card full">
+            <div class="detail-card-head">
               <h3 data-next-i18n="movieDetail.media">Media</h3>
               <div class="detail-submenu" role="tablist" aria-label="Media" data-next-i18n-aria="movieDetail.media">
                 <button type="button" class="active" data-detail-tab="movieMedia" data-detail-panel="movieMediaPosters" data-next-i18n="movieDetail.posters">Posters</button>
@@ -11196,8 +12148,10 @@ def ui_preview_html(
               </div>
             </div>
             <div class="detail-subpanel" data-detail-panel-group="movieMedia" id="movieMediaPosters">
-              <div class="artwork-manager-status" id="movieArtworkManagerStatus"></div>
+              <div class="artwork-manager-status hidden" id="movieArtworkManagerStatus"></div>
               <div class="art-option-grid" id="movieDetailPosterArtwork"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailPosterMore" data-next-i18n="common.more">More</button>
+              <button type="button" class="responsive-more-button hidden hidden-artwork-toggle" id="movieDetailPosterHiddenToggle" aria-pressed="false"></button>
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="moviePosterUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="poster" data-input="moviePosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
@@ -11206,6 +12160,8 @@ def ui_preview_html(
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaBackdrops">
               <div class="art-option-grid backdrops" id="movieDetailBackdropArtwork"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailBackdropMore" data-next-i18n="common.more">More</button>
+              <button type="button" class="responsive-more-button hidden hidden-artwork-toggle" id="movieDetailBackdropHiddenToggle" aria-pressed="false"></button>
               <div class="art-upload-row" data-art-upload-row>
                 <input type="file" id="movieBackdropUploadInput" accept="image/*">
                 <button type="button" class="secondary-button" data-upload-artwork="movie" data-kind="backdrop" data-input="movieBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
@@ -11213,25 +12169,8 @@ def ui_preview_html(
               </div>
             </div>
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
-              <div class="detail-grid" id="movieDetailVideos"></div>
-            </div>
-          </div>
-          <div class="detail-card full">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="movieDetail.people">People</h3>
-              <div class="detail-submenu" role="tablist" aria-label="People" data-next-i18n-aria="movieDetail.people">
-                <button type="button" class="active" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCast" data-next-i18n="movieDetail.cast">Cast</button>
-                <button type="button" data-detail-tab="moviePeople" data-detail-panel="moviePeopleCrew" data-next-i18n="movieDetail.crew">Crew</button>
-              </div>
-            </div>
-            <div class="detail-subpanel" data-detail-panel-group="moviePeople" id="moviePeopleCast">
-              <div class="detail-grid" id="movieDetailCast"></div>
-            </div>
-            <div class="detail-subpanel hidden" data-detail-panel-group="moviePeople" id="moviePeopleCrew">
-              <div class="button-row compact person-refresh-row">
-                <button type="button" class="secondary-button hidden" id="movieCrewRefreshButton" data-next-i18n="movieDetail.refreshCrewPeople">Refresh crew people</button>
-              </div>
-              <div class="detail-grid" id="movieDetailCrew"></div>
+              <div class="movie-media-video-grid" id="movieDetailVideos"></div>
+              <button type="button" class="responsive-more-button hidden" id="movieDetailVideoMore" data-next-i18n="common.more">More</button>
             </div>
           </div>
         </section>
@@ -11594,6 +12533,19 @@ def ui_preview_html(
                       <select id="locationCollectionLocationSelect" aria-label="Location filter" data-next-i18n-aria="collection.filterLocation"></select>
                     </label>
                   </div>
+                  <div class="filter-section">
+                    <span class="filter-section-title" data-next-i18n="collection.behaviorColumn">Watch activity</span>
+                    <div class="filter-switch-list">
+                      <label class="filter-toggle-row">
+                        <span data-next-i18n="collection.hideWatchlist">Hide Watchlist</span>
+                        <input type="checkbox" role="switch" data-hide-watchlist-switch>
+                      </label>
+                      <label class="filter-toggle-row">
+                        <span data-next-i18n="collection.hideWatched">Hide watched</span>
+                        <input type="checkbox" role="switch" data-hide-watched-switch>
+                      </label>
+                    </div>
+                  </div>
                   <div class="filter-section filter-section-containers hidden" id="locationCollectionContainersSection">
                     <label class="filter-toggle-row">
                       <span data-next-i18n="collection.onlyContainers">Only show Containers</span>
@@ -11896,42 +12848,63 @@ def ui_preview_html(
               </div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="security">
-              <div class="profile-section-grid">
-                <section class="profile-section-box">
-                  <div class="detail-card-head compact">
-                    <div>
-                      <h4 data-next-i18n="profile.security">Security</h4>
-                      <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+              <div class="profile-section-grid profile-security-grid">
+                <div class="profile-security-column">
+                  <section class="profile-section-box">
+                    <div class="detail-card-head compact">
+                      <div>
+                        <h4 data-next-i18n="profile.security">Security</h4>
+                        <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+                      </div>
+                      <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
                     </div>
-                    <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
-                  </div>
-                  <div class="profile-passkey-list" id="profilePasskeyList"></div>
-                  <div class="profile-add-passkey">
-                    <input id="profileNewPasskeyNameInput" maxlength="80" autocomplete="off" data-next-i18n-placeholder="profile.newPasskeyName" placeholder="New passkey name">
-                    <button type="button" class="secondary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
-                  </div>
-                  <div class="login-message" id="profileSecurityMessage"></div>
-                </section>
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.recoveryTitle">Account recovery</h4>
-                  <p data-next-i18n="profile.recoveryHelp">Recovery options will let you regain access if all passkeys are lost.</p>
-                  <div class="profile-meta">
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.recoveryActiveCodes">Active codes</span>
-                      <strong id="profileRecoveryActiveCount">-</strong>
+                    <div class="profile-passkey-list" id="profilePasskeyList"></div>
+                    <div class="profile-add-passkey">
+                      <input id="profileNewPasskeyNameInput" maxlength="80" autocomplete="off" data-next-i18n-placeholder="profile.newPasskeyName" placeholder="New passkey name">
+                      <button type="button" class="secondary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
                     </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.recoveryLastGenerated">Last generated</span>
-                      <strong id="profileRecoveryLastGenerated">-</strong>
+                    <div class="login-message" id="profileSecurityMessage"></div>
+                  </section>
+                  <section class="profile-section-box" id="profileLegacySecurity">
+                    <h4 data-next-i18n="legacyAuth.passwordSecurity">Legacy security</h4>
+                    <p data-next-i18n="legacyAuth.passwordChangeHelp">Change your Legacy password. Use at least 15 characters.</p>
+                    <div class="profile-meta">
+                      <div class="profile-meta-row"><span data-next-i18n="legacyAuth.mfaStatus">2FA status</span><strong id="profileLegacyMfaStatus">-</strong></div>
                     </div>
-                  </div>
-                  <div class="recovery-codes hidden" id="profileRecoveryCodes"></div>
-                  <div class="profile-action-row">
-                    <button type="button" class="secondary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
-                    <button type="button" class="secondary-button" id="profileRevokeRecoveryButton" data-next-i18n="profile.revokeRecoveryCodes">Revoke active codes</button>
-                  </div>
-                  <div class="login-message" id="profileRecoveryMessage"></div>
-                </section>
+                    <form class="profile-form" id="profileLegacyPasswordForm">
+                      <label for="profileLegacyCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
+                        <input id="profileLegacyCurrentPassword" type="password" autocomplete="current-password">
+                      </label>
+                      <label for="profileLegacyNewPassword"><span data-next-i18n="legacyAuth.newPassword">New password</span>
+                        <input id="profileLegacyNewPassword" type="password" minlength="15" autocomplete="new-password">
+                      </label>
+                      <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.changePassword">Change password</button>
+                    </form>
+                    <div class="login-message" id="profileLegacyMessage"></div>
+                  </section>
+                </div>
+                <div class="profile-security-column">
+                  <section class="profile-section-box">
+                    <h4 data-next-i18n="profile.recoveryTitle">Account recovery</h4>
+                    <p data-next-i18n="profile.recoveryHelp">Recovery codes let you regain access when your usual sign-in methods are unavailable.</p>
+                    <div class="profile-meta">
+                      <div class="profile-meta-row">
+                        <span data-next-i18n="profile.recoveryActiveCodes">Active codes</span>
+                        <strong id="profileRecoveryActiveCount">-</strong>
+                      </div>
+                      <div class="profile-meta-row">
+                        <span data-next-i18n="profile.recoveryLastGenerated">Last generated</span>
+                        <strong id="profileRecoveryLastGenerated">-</strong>
+                      </div>
+                    </div>
+                    <div class="recovery-codes hidden" id="profileRecoveryCodes"></div>
+                    <div class="profile-action-row">
+                      <button type="button" class="secondary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
+                      <button type="button" class="secondary-button" id="profileRevokeRecoveryButton" data-next-i18n="profile.revokeRecoveryCodes">Revoke active codes</button>
+                    </div>
+                    <div class="login-message" id="profileRecoveryMessage"></div>
+                  </section>
+                </div>
               </div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="api">
@@ -12148,6 +13121,28 @@ def ui_preview_html(
         </section>
         <section class="app-admin-panel" data-app-admin-panel="users">
           <section class="profile-grid">
+            <div class="detail-card profile-card full" id="appAdminLegacyCard">
+              <h3 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h3>
+              <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
+              <div class="profile-meta-row"><span data-next-i18n="legacyAuth.status">Status</span><strong id="appAdminLegacyStatus">-</strong></div>
+              <div class="profile-action-row">
+                <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
+                <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
+              </div>
+              <div class="login-message" id="appAdminLegacyMessage"></div>
+            </div>
+            <div class="detail-card profile-card full" id="appAdminLegacyCreateCard">
+              <h3 data-next-i18n="legacyAuth.createUser">Create password user</h3>
+              <form class="profile-form" id="appAdminLegacyUserForm">
+                <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
+                <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
+                <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
+                <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
+                <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
+                <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
+                <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
+              </form>
+            </div>
             <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h3>
               <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
@@ -12697,6 +13692,7 @@ def ui_preview_html(
     let locations = state.locations || [];
     let containerMembership = state.containerMembership || [];
     let mediaGroups = state.mediaGroups || [];
+    let priceDisplay = state.priceDisplay || {};
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
     let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
     let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
@@ -12711,10 +13707,12 @@ def ui_preview_html(
     let collectionTypeFilter = localStorage.getItem("dv_next_collection_type") || "all";
     let collectionGenreFilter = localStorage.getItem("dv_next_collection_genre") || "";
     let collectionLocationFilter = localStorage.getItem("dv_next_collection_location") || "";
+    let hideWatchlist = localStorage.getItem("dv_next_hide_watchlist") === "true";
+    let hideWatched = localStorage.getItem("dv_next_hide_watched") === "true";
     let collectionItemFilter = localStorage.getItem("dv_next_collection_item_filter") || "all";
     let activeCollectionGroupFilter = localStorage.getItem("dv_next_collection_group_filter") || "";
     let libraryViewMode = normalizeLibraryViewMode(localStorage.getItem("dv_next_library_view_mode"));
-    let libraryDetailSort = JSON.parse(localStorage.getItem("dv_next_library_detail_sort") || '{"key":"title","direction":"asc"}');
+    let libraryDetailSort = parseLocalJson("dv_next_library_detail_sort", {key: "title", direction: "asc"});
     let advancedSearchOpen = localStorage.getItem("dv_next_advanced_search_open") === "true";
     let advancedSearch = parseLocalJson("dv_next_advanced_search", {});
     let smartFilters = parseLocalJson("dv_next_smart_filters", []);
@@ -12726,8 +13724,8 @@ def ui_preview_html(
     let selectionMode = false;
     let activeDetailMovieId = "";
     let activeDetailPayload = null;
+    const movieArtworkHiddenKinds = new Set();
     let dvMissingContributionReportData = null;
-    let movieMetadataRefreshPeople = localStorage.getItem("dv_next_movie_metadata_refresh_people") === "true";
     let activeContainerId = "";
     let activeContainerPayload = null;
     let activePersonId = "";
@@ -12756,8 +13754,15 @@ def ui_preview_html(
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
     let currentStartup = {};
     let currentAuthStatus = {};
+    let legacyFlowToken = "";
+    let legacyStage = "";
+    let legacyRecoveryCodes = [];
+    let startupLegacyFlowToken = "";
+    let startupLegacyStage = "";
+    let startupLegacyRecoveryCodes = [];
     let profileCredentials = [];
     let profileRecovery = {};
+    let profileLegacy = {};
     let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
     let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all", category: "all", search: "", diagnostics: null, error: "", lastUrl: ""};
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
@@ -12778,6 +13783,7 @@ def ui_preview_html(
       digitalSources: [],
       groups: [],
       invites: [],
+      pluginConfigMessages: {},
       pluginConfigs: {},
       pluginExecutions: {},
       pluginHealth: {},
@@ -12937,25 +13943,6 @@ def ui_preview_html(
       return pluginId
         .replace(/[_-]+/g, " ")
         .replace(/\\b\\w/g, (char) => char.toUpperCase());
-    }
-    function setMovieMetadataRefreshPeople(enabled) {
-      movieMetadataRefreshPeople = !!enabled;
-      localStorage.setItem("dv_next_movie_metadata_refresh_people", movieMetadataRefreshPeople ? "true" : "false");
-      const toggle = document.getElementById("movieMetadataPeopleToggle");
-      if (toggle) {
-        toggle.classList.toggle("on", movieMetadataRefreshPeople);
-        toggle.setAttribute("aria-pressed", movieMetadataRefreshPeople ? "true" : "false");
-      }
-    }
-    function movieMetadataPeopleRefreshMessage(personRefresh) {
-      if (!personRefresh || !personRefresh.requested) return "";
-      return " " + tNext("movieDetail.peopleRefreshSummary", "People: {previewed} previewed, {refreshed} refreshed, {skipped} skipped.")
-        .replace("{previewed}", formatNumber(personRefresh.previewed || 0))
-        .replace("{refreshed}", formatNumber(personRefresh.refreshed || 0))
-        .replace("{skipped}", formatNumber(personRefresh.skipped || 0));
-    }
-    function normalizedPersonRefreshScope(scope) {
-      return String(scope || "all").toLowerCase() === "crew" ? "crew" : "all";
     }
     function flagCodeForLocale(value) {
       const raw = String(value || "").replace("_", "-").toLowerCase();
@@ -13662,7 +14649,7 @@ def ui_preview_html(
         : tNext("appAdmin.inviteOnly", "Invite-only login");
     }
     function renderAppAdminVisibility() {
-      const allowed = canUseAppAdmin();
+      const allowed = isNativeAdminUser() && canUseAppAdmin();
       document.getElementById("profileOpenAdminButton")?.classList.toggle("hidden", !allowed);
     }
     function applyAppPermissionVisibility() {
@@ -13702,13 +14689,10 @@ def ui_preview_html(
       document.querySelectorAll("#movieMetadataDryRunButton, #movieMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       });
-      setElementVisible(document.getElementById("movieMetadataPeopleOption"), hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
-      setElementVisible(document.getElementById("movieCrewRefreshButton"), hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh));
       document.querySelectorAll("#containerMetadataDryRunButton, #containerMetadataApplyButton").forEach((button) => {
         button.classList.toggle("hidden", !(collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.metadataRefresh)));
       });
       setElementVisible(document.getElementById("appAdminArtworkTrashCard"), hasActualPermission("metadata.manage_artwork_trash"));
-      setElementVisible(document.getElementById("movieMetadataJobsButton"), hasAnyPermission(["admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"]));
       const canEditMovies = hasAnyPermission(["collection.edit_all", "collection.edit_own", "collection.edit_group"]);
       setElementVisible(document.getElementById("movieEditToggleButton"), canEditMovies);
       if (!canEditMovies) setMovieEditPanelVisible(false);
@@ -13756,13 +14740,22 @@ def ui_preview_html(
     function renderAppRegistrationMode(auth) {
       if (auth) currentAuthStatus = auth || {};
       const publicRegistration = !!currentAuthStatus.registration_enabled;
-      const reviewLoginAvailable = !!currentAuthStatus.review_login_available;
+      const reviewLoginAvailable = !!currentAuthStatus.legacy_auth_enabled;
+      const loginButton = document.getElementById("appLoginButton");
       const toggleButton = document.getElementById("appInviteToggleButton");
       const reviewToggleButton = document.getElementById("appReviewToggleButton");
       const codeLabel = document.getElementById("appInviteCodeLabel");
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
       const reviewForm = document.getElementById("appReviewForm");
+      if (loginButton) {
+        const key = reviewLoginAvailable ? "legacyAuth.passkeyRecommended" : "auth.loginDescription";
+        loginButton.dataset.nextI18n = key;
+        loginButton.textContent = tNext(
+          key,
+          reviewLoginAvailable ? "Sign in with passkey (recommended)" : "Sign in with passkey"
+        );
+      }
       if (toggleButton) {
         const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
         toggleButton.dataset.nextI18n = key;
@@ -13770,6 +14763,7 @@ def ui_preview_html(
       }
       if (reviewToggleButton) reviewToggleButton.classList.toggle("hidden", !reviewLoginAvailable);
       if (!reviewLoginAvailable) reviewForm?.classList.add("hidden");
+      document.getElementById("profileLegacySecurity")?.classList.toggle("hidden", !currentAuthStatus.legacy_auth_enabled);
       if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
       if (codeInput) {
         codeInput.required = !publicRegistration;
@@ -13872,7 +14866,12 @@ def ui_preview_html(
       ].join(" / ");
     }
     function appAdminPluginNeedsConfiguration(plugin) {
-      return !!(plugin && plugin.enabled && plugin.requiresSecrets && !plugin.secretsConfigured);
+      if (!plugin || !plugin.enabled) return false;
+      const hasRequiredSettings = appAdminPluginSchemaItems(plugin, "settings").some((field) => field.required);
+      return !!(
+        (plugin.requiresSecrets && !plugin.secretsConfigured)
+        || (hasRequiredSettings && !plugin.settingsConfigured)
+      );
     }
     function appAdminPluginHealthState(plugin) {
       const health = appAdmin.pluginHealth[plugin.id] || {};
@@ -13916,7 +14915,7 @@ def ui_preview_html(
       }
       const activeJobs = jobs.filter((job) => ["pending", "running"].includes(String(job.status || "")));
       const failedJobs = jobs.filter((job) => String(job.status || "") === "failed");
-      const executablePlugins = plugins.filter((plugin) => appAdminCanExecutePlugin(plugin, "health_check") || (plugin.capabilities || []).some((capability) => ["discover_library", "sync_library", "sync_personal_lists", "inspect_source"].includes(capability)));
+      const executablePlugins = plugins.filter((plugin) => appAdminCanExecutePlugin(plugin, "health_check") || (plugin.capabilities || []).some((capability) => ["discover_library", "sync_library", "sync_index", "sync_personal_lists", "inspect_source"].includes(capability)));
       node.innerHTML = `
         <section class="plugin-operation-grid">
           <div class="plugin-operation-row">
@@ -14187,14 +15186,30 @@ def ui_preview_html(
       }
       const currentSettings = (config && config.settings) || {};
       const secretNames = new Set((config && config.secretNames) || []);
+      const feedback = (appAdmin.pluginConfigMessages || {})[plugin.id] || {};
       const settingFields = settings.map((field) => {
         const name = field.name || field.key;
         const value = currentSettings[name];
-        const display = Array.isArray(value) ? value.join(", ") : (value || "");
+        const display = Array.isArray(value) ? value.join(", ") : (value === null || value === undefined ? "" : value);
+        const required = field.required ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.required", "Required"))}</span>` : "";
+        const description = field.description ? `<small>${escapeHtml(field.description)}</small>` : "";
+        if (field.type === "boolean") {
+          return `
+            <label>
+              <span>${escapeHtml(field.label || name)} ${required}</span>
+              <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="boolean" type="checkbox" ${value === true ? "checked" : ""}>
+              ${description}
+            </label>
+          `;
+        }
+        const minimum = field.minimum !== undefined ? `min="${escapeHtml(field.minimum)}"` : "";
+        const maximum = field.maximum !== undefined ? `max="${escapeHtml(field.maximum)}"` : "";
+        const step = field.type === "number" ? `step="${escapeHtml(field.step || 1)}"` : "";
         return `
           <label>
-            <span>${escapeHtml(field.label || name)} ${field.required ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.required", "Required"))}</span>` : ""}</span>
-            <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(appAdminPluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}" ${field.required ? "required" : ""}>
+            <span>${escapeHtml(field.label || name)} ${required}</span>
+            <input data-app-admin-plugin-setting="${escapeHtml(name)}" data-value-type="${escapeHtml(field.type || "text")}" type="${escapeHtml(appAdminPluginInputType(field))}" value="${escapeHtml(display)}" placeholder="${escapeHtml(field.placeholder || "")}" ${minimum} ${maximum} ${step} ${field.required ? "required" : ""}>
+            ${description}
           </label>
         `;
       }).join("");
@@ -14209,14 +15224,17 @@ def ui_preview_html(
         `;
       }).join("");
       return `
-        <div class="profile-passkey-meta">${escapeHtml(appAdminPluginConfigStatus(plugin, config))}</div>
-        <div class="app-admin-plugin-config">
-          ${settingFields}
-          ${secretFields}
-        </div>
-        <div class="app-admin-plugin-actions">
-          <button type="button" class="secondary-button" data-app-admin-plugin-save="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.savePluginConfig", "Save config"))}</button>
-        </div>
+        <form data-app-admin-plugin-config-form="${escapeHtml(plugin.id)}">
+          <div class="profile-passkey-meta">${escapeHtml(appAdminPluginConfigStatus(plugin, config))}</div>
+          <div class="app-admin-plugin-config">
+            ${settingFields}
+            ${secretFields}
+          </div>
+          <div class="app-admin-plugin-actions">
+            <button type="submit" class="secondary-button" ${feedback.state === "saving" ? "disabled" : ""}>${escapeHtml(tNext("appAdmin.savePluginConfig", "Save config"))}</button>
+          </div>
+          <div class="login-message ${feedback.state === "error" ? "bad" : feedback.state === "success" ? "good" : ""}" role="status" aria-live="polite">${escapeHtml(feedback.message || "")}</div>
+        </form>
       `;
     }
     function renderAppAdminPluginCard(plugin, sectionPlugins = [], sectionCategory = "") {
@@ -14227,7 +15245,7 @@ def ui_preview_html(
       const digitalSource = (appAdmin.digitalSources || []).find((source) => source.plugin_id === plugin.id);
       const runtime = plugin.runtime || {};
       const capabilities = plugin.capabilities || [];
-      const needsConfig = plugin.requiresSecrets && !plugin.secretsConfigured;
+      const needsConfig = appAdminPluginNeedsConfiguration(plugin);
       const runtimeState = health.state || (runtime.loaded ? "loaded" : "not_loaded");
       const orderedSection = [...(sectionPlugins || [])].sort(appAdminPluginSort);
       const pluginIndex = orderedSection.findIndex((item) => item.id === plugin.id);
@@ -14277,6 +15295,7 @@ def ui_preview_html(
             ${capabilities.includes("discover_library") && appAdminCanExecutePlugin(plugin, "discover_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="discover_library">${escapeHtml(tNext("appAdmin.discover", "Discover"))}</button>` : ""}
             ${capabilities.includes("inspect_source") && appAdminCanExecutePlugin(plugin, "inspect_source") ? `<button type="button" class="secondary-button" data-app-admin-plugin-execute="${escapeHtml(plugin.id)}" data-entrypoint="inspect_source">${escapeHtml(tNext("appAdmin.inspectSource", "Inspect source"))}</button>` : ""}
             ${capabilities.includes("sync_library") && appAdminCanExecutePlugin(plugin, "sync_library") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_library">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
+            ${capabilities.includes("sync_index") && appAdminCanExecutePlugin(plugin, "sync_index") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_index">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
             ${capabilities.includes("sync_personal_lists") && appAdminCanExecutePlugin(plugin, "sync_personal_lists") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_personal_lists">${escapeHtml(tNext("appAdmin.queuePersonalListSync", "Queue list sync"))}</button>` : ""}
           </div>
           ${renderAppAdminMovieVaultConnection(plugin)}
@@ -15866,6 +16885,18 @@ def ui_preview_html(
       document.getElementById("appAdminRegistrationMode").textContent = appRegistrationModeLabel();
       document.getElementById("appAdminUserCount").textContent = String((appAdmin.users || []).length || currentAuthStatus.user_count || "-");
       document.getElementById("appAdminCredentialCount").textContent = String(currentAuthStatus.credential_count ?? (appAdmin.credentials || []).length ?? "-");
+      const legacy = appAdmin.legacy || {};
+      const legacyStatus = document.getElementById("appAdminLegacyStatus");
+      if (legacyStatus) legacyStatus.textContent = legacy.effective_enabled
+        ? tNext("legacyAuth.enabled", "Enabled")
+        : legacy.available
+          ? tNext("legacyAuth.disabled", "Disabled")
+          : tNext("legacyAuth.unavailable", "Unavailable");
+      document.getElementById("appAdminLegacyEnable")?.classList.toggle("hidden", !legacy.available || legacy.effective_enabled);
+      document.getElementById("appAdminLegacyDisable")?.classList.toggle("hidden", !legacy.effective_enabled);
+      document.getElementById("appAdminLegacyCreateCard")?.classList.toggle("hidden", !legacy.available);
+      const legacyRoleSelect = document.getElementById("appAdminLegacyRole");
+      if (legacyRoleSelect) legacyRoleSelect.innerHTML = appAdminRoleOptions("media_viewer");
       const canManageRegistration = isNativeAdminUser() && hasActualPermission("security.manage_invite_only");
       const canInviteUsers = isNativeAdminUser() && hasActualPermission("users.invite");
       const canViewPasskeys = isNativeAdminUser() && hasActualPermission("users.manage_passkeys");
@@ -15907,12 +16938,22 @@ def ui_preview_html(
                   ${escapeHtml(user.status || "active")}
                   &middot;
                   ${escapeHtml(tNext("profile.credentials", "Passkeys"))}: ${escapeHtml(user.credential_count ?? 0)}
+                  &middot;
+                  ${escapeHtml(tNext("legacyAuth.password", "Password"))}: ${user.legacy_credential_count ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}
                 </div>
               </div>
               <div class="profile-passkey-actions">
                 ${canAssignRoles ? `<select data-app-admin-user-role="${escapeHtml(user.id)}" ${roleLocked ? "disabled" : ""}>${appAdminRoleOptions(user.role)}</select>` : ""}
                 ${roleLocked || !canDisableUsers ? "" : `<button type="button" class="secondary-button" data-app-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${escapeHtml(disabled ? tNext("appAdmin.enableUser", "Enable") : tNext("appAdmin.disableUser", "Disable"))}</button>`}
               </div>
+              ${legacy.available ? `<div class="profile-add-passkey">
+                <input type="password" minlength="15" autocomplete="new-password" data-app-admin-legacy-password="${escapeHtml(user.id)}" placeholder="${escapeHtml(tNext("legacyAuth.temporaryPassword", "Temporary password"))}">
+                <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-mfa="${escapeHtml(user.id)}" ${user.legacy_mfa_required !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.requireMfa", "Require TOTP MFA"))}</label>
+                <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
+                <button type="button" class="secondary-button" data-app-admin-legacy-save="${escapeHtml(user.id)}">${escapeHtml(user.legacy_credential_count ? tNext("legacyAuth.resetPassword", "Reset password") : tNext("legacyAuth.addPassword", "Add password"))}</button>
+                ${user.legacy_credential_count ? `<button type="button" class="secondary-button" data-app-admin-legacy-policy="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.savePolicy", "Save policy"))}</button>` : ""}
+                ${user.legacy_credential_count ? `<button type="button" class="secondary-button danger" data-app-admin-legacy-remove="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.removePassword", "Remove password"))}</button>` : ""}
+              </div>` : ""}
             </div>
           `;
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noUsers", "No users found."))}</div>`;
@@ -16051,6 +17092,9 @@ def ui_preview_html(
         appAdmin.auditEvents = auditPayload.events || [];
         appAdmin.contributionEvents = (contributionPayload.events || []).filter((event) => event.eventType === "metadata.receiver_pushed");
         appAdmin.operations = operationsPayload.operations || null;
+        appAdmin.legacy = canLoadUsers
+          ? (await authApiJson("/api/next/auth/legacy/settings").catch(() => ({legacy_auth: {available: false}}))).legacy_auth || {}
+          : {};
         const configPayloads = canLoadPlugins ? await Promise.all(appAdmin.plugins.map((plugin) =>
           authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
             .catch(() => ({plugin, config: {}}))
@@ -16078,6 +17122,128 @@ def ui_preview_html(
         setAppAdminMessage("appAdminOperationsMessage", operationsPayload.error || "", operationsPayload.error ? "bad" : "");
       } catch (error) {
         setAppAdminMessage("appAdminSecurityMessage", error.message || String(error), "bad");
+      }
+    }
+    async function enableAppAdminLegacy() {
+      if (!window.confirm(tNext("legacyAuth.enableConfirm", "Enable password login? Passkeys remain recommended."))) return;
+      const button = document.getElementById("appAdminLegacyEnable");
+      if (button) button.disabled = true;
+      try {
+        const optionsPayload = await authApiJson("/api/next/auth/legacy/settings/enable/options", {method: "POST"});
+        const options = optionsPayload.options || {};
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.allowCredentials = (options.allowCredentials || []).map((item) => ({...item, id: base64urlToBuffer(item.id)}));
+        const assertion = await navigator.credentials.get({publicKey: options});
+        const credential = {
+          id: assertion.id,
+          rawId: bufferToBase64url(assertion.rawId),
+          type: assertion.type,
+          response: {
+            authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+            clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+            signature: bufferToBase64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null
+          }
+        };
+        await authApiJson("/api/next/auth/legacy/settings/enable/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({credential})
+        });
+        currentAuthStatus = await authApiJson("/api/next/auth/status");
+        renderAppRegistrationMode(currentAuthStatus);
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminLegacyMessage", tNext("legacyAuth.enabled", "Enabled"), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminLegacyMessage", error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function disableAppAdminLegacy() {
+      if (!window.confirm(tNext("legacyAuth.disableConfirm", "Disable password login immediately?"))) return;
+      try {
+        await authApiJson("/api/next/auth/legacy/settings", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({enabled: false})
+        });
+        currentAuthStatus = await authApiJson("/api/next/auth/status");
+        renderAppRegistrationMode(currentAuthStatus);
+        await loadAppAdmin();
+      } catch (error) {
+        setAppAdminMessage("appAdminLegacyMessage", error.message || String(error), "bad");
+      }
+    }
+    async function createAppAdminLegacyUser(event) {
+      event?.preventDefault();
+      try {
+        await authApiJson("/api/next/auth/users", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            username: String(document.getElementById("appAdminLegacyUsername")?.value || "").trim(),
+            display_name: String(document.getElementById("appAdminLegacyDisplayName")?.value || "").trim(),
+            temporary_password: String(document.getElementById("appAdminLegacyPassword")?.value || ""),
+            role: document.getElementById("appAdminLegacyRole")?.value || "media_viewer",
+            mfa_required: !!document.getElementById("appAdminLegacyMfa")?.checked,
+            passkey_registration_allowed: !!document.getElementById("appAdminLegacyPasskeys")?.checked
+          })
+        });
+        document.getElementById("appAdminLegacyUserForm")?.reset();
+        document.getElementById("appAdminLegacyMfa").checked = true;
+        document.getElementById("appAdminLegacyPasskeys").checked = true;
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminLegacyMessage", tNext("legacyAuth.userCreated", "Password user created."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminLegacyMessage", error.message || String(error), "bad");
+      }
+    }
+    async function saveAppAdminLegacyCredential(userId) {
+      const password = String(document.querySelector(`[data-app-admin-legacy-password="${CSS.escape(userId)}"]`)?.value || "");
+      const mfaRequired = !!document.querySelector(`[data-app-admin-legacy-mfa="${CSS.escape(userId)}"]`)?.checked;
+      const passkeysAllowed = !!document.querySelector(`[data-app-admin-legacy-passkeys="${CSS.escape(userId)}"]`)?.checked;
+      try {
+        await authApiJson(`/api/next/auth/users/${encodeURIComponent(userId)}/legacy-credential`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            temporary_password: password,
+            mfa_required: mfaRequired,
+            passkey_registration_allowed: passkeysAllowed
+          })
+        });
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminUsersMessage", tNext("legacyAuth.credentialSaved", "Password credential saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminUsersMessage", error.message || String(error), "bad");
+      }
+    }
+    async function removeAppAdminLegacyCredential(userId) {
+      if (!window.confirm(tNext("legacyAuth.removeConfirm", "Remove this password credential?"))) return;
+      try {
+        await authApiJson(`/api/next/auth/users/${encodeURIComponent(userId)}/legacy-credential`, {method: "DELETE"});
+        await loadAppAdmin();
+      } catch (error) {
+        setAppAdminMessage("appAdminUsersMessage", error.message || String(error), "bad");
+      }
+    }
+    async function saveAppAdminLegacyPolicy(userId) {
+      const mfaRequired = !!document.querySelector(`[data-app-admin-legacy-mfa="${CSS.escape(userId)}"]`)?.checked;
+      const passkeysAllowed = !!document.querySelector(`[data-app-admin-legacy-passkeys="${CSS.escape(userId)}"]`)?.checked;
+      try {
+        await authApiJson(`/api/next/auth/users/${encodeURIComponent(userId)}/legacy-credential`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            mfa_required: mfaRequired,
+            passkey_registration_allowed: passkeysAllowed
+          })
+        });
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminUsersMessage", tNext("legacyAuth.policySaved", "Policy saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminUsersMessage", error.message || String(error), "bad");
       }
     }
     async function setAppAdminRegistrationMode(mode) {
@@ -16321,8 +17487,13 @@ def ui_preview_html(
           body: JSON.stringify({enabled})
         });
         appAdmin.plugins = (payload.registry && payload.registry.plugins) || appAdmin.plugins;
+        if (payload.initialSync && payload.initialSync.job) {
+          upsertAppAdminPluginJob(payload.initialSync.job);
+        }
         renderAppAdminPlugins();
-        setAppAdminMessage("appAdminPluginsMessage", enabled ? tNext("appAdmin.pluginEnabled", "Plugin enabled.") : tNext("appAdmin.pluginDisabled", "Plugin disabled."), "good");
+        const enabledMessage = enabled ? tNext("appAdmin.pluginEnabled", "Plugin enabled.") : tNext("appAdmin.pluginDisabled", "Plugin disabled.");
+        const syncMessage = payload.initialSync && payload.initialSync.job ? ` ${tNext("appAdmin.pluginJobQueued", "Plugin job queued.")}` : "";
+        setAppAdminMessage("appAdminPluginsMessage", `${enabledMessage}${syncMessage}`, "good");
       } catch (error) {
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
@@ -16580,7 +17751,9 @@ def ui_preview_html(
       if (!pluginId || !row) return;
       const plugin = (appAdmin.plugins || []).find((item) => item.id === pluginId) || {};
       if (!appAdminCanConfigurePlugin(plugin)) return;
-      const missingRequired = Array.from(row.querySelectorAll("[required]")).filter((input) => !String(input.value || "").trim());
+      const missingRequired = Array.from(row.querySelectorAll("[required]")).filter((input) =>
+        input.type === "checkbox" ? !input.checked : !String(input.value || "").trim()
+      );
       if (missingRequired.length) {
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.fillRequiredPluginFields", "Fill the required plugin fields first."), "bad");
         return;
@@ -16588,12 +17761,20 @@ def ui_preview_html(
       const settings = {};
       const secrets = {};
       row.querySelectorAll("[data-app-admin-plugin-setting]").forEach((input) => {
-        settings[input.dataset.appAdminPluginSetting] = coerceAppAdminPluginValue(input.value, input.dataset.valueType || "text");
+        const type = input.dataset.valueType || "text";
+        settings[input.dataset.appAdminPluginSetting] = coerceAppAdminPluginValue(
+          type === "boolean" ? input.checked : input.value,
+          type
+        );
       });
       row.querySelectorAll("[data-app-admin-plugin-secret]").forEach((input) => {
         if (input.value) secrets[input.dataset.appAdminPluginSecret] = input.value;
       });
-      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.savingPluginConfig", "Saving plugin configuration..."));
+      appAdmin.pluginConfigMessages[pluginId] = {
+        state: "saving",
+        message: tNext("appAdmin.savingPluginConfig", "Saving plugin configuration...")
+      };
+      renderAppAdminPlugins();
       try {
         const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/config`, {
           method: "PATCH",
@@ -16604,9 +17785,18 @@ def ui_preview_html(
         if (payload.plugin) {
           appAdmin.plugins = appAdmin.plugins.map((plugin) => plugin.id === pluginId ? payload.plugin : plugin);
         }
+        appAdmin.pluginConfigMessages[pluginId] = {
+          state: "success",
+          message: tNext("appAdmin.pluginConfigSaved", "Plugin configuration saved.")
+        };
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginConfigSaved", "Plugin configuration saved."), "good");
       } catch (error) {
+        appAdmin.pluginConfigMessages[pluginId] = {
+          state: "error",
+          message: error.message || String(error)
+        };
+        renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
     }
@@ -17263,6 +18453,108 @@ def ui_preview_html(
         if (button) button.disabled = false;
       }
     }
+    async function copyLegacyCodes(codes) {
+      const value = (codes || []).join("\\n");
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const input = document.createElement("textarea");
+        input.value = value;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        input.remove();
+      }
+      setLoginMessage(tNext("legacyAuth.codesCopied", "Recovery codes copied."), "good");
+    }
+    function downloadLegacyCodes(codes) {
+      const blob = new Blob([(codes || []).join("\\n") + "\\n"], {type: "text/plain"});
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "discvault-recovery-codes.txt";
+      anchor.click();
+      URL.revokeObjectURL(url);
+    }
+    async function runStartupLegacyBootstrap() {
+      const fields = document.getElementById("startupLegacyFields");
+      const button = document.getElementById("startupLegacyButton");
+      if (fields?.classList.contains("hidden")) {
+        fields.classList.remove("hidden");
+        button.textContent = tNext("legacyAuth.continue", "Continue");
+        document.getElementById("startupLegacyPassword")?.focus();
+        return;
+      }
+      if (button) button.disabled = true;
+      try {
+        let url = "/api/next/auth/legacy/bootstrap/start";
+        let body = {};
+        if (!startupLegacyStage) {
+          body = {
+            username: String(document.getElementById("startupOwnerUsernameInput")?.value || "").trim(),
+            password: String(document.getElementById("startupLegacyPassword")?.value || ""),
+            password_risk_accepted: !!document.getElementById("startupLegacyRiskAccepted")?.checked
+          };
+        } else if (startupLegacyStage === "bootstrap_totp") {
+          url = "/api/next/auth/legacy/bootstrap/verify";
+          body = {
+            flow_token: startupLegacyFlowToken,
+            code: String(document.getElementById("startupLegacyCode")?.value || "").trim()
+          };
+        } else if (startupLegacyStage === "recovery_codes") {
+          if (!document.getElementById("startupLegacyAck")?.checked) throw new Error(tNext("legacyAuth.saveCodesFirst", "Save and acknowledge the recovery codes first."));
+          url = "/api/next/auth/legacy/recovery-codes/ack";
+          body = {flow_token: startupLegacyFlowToken, acknowledged: true};
+        }
+        const payload = await apiJson(url, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        startupLegacyFlowToken = payload.flow_token || startupLegacyFlowToken;
+        startupLegacyStage = payload.stage || "";
+        if (payload.stage === "bootstrap_totp") {
+          const qr = document.getElementById("startupLegacyQr");
+          if (qr) {
+            qr.src = payload.qr_data_uri || "";
+            qr.alt = tNext("legacyAuth.qrAlt", "QR code for authenticator enrollment");
+            qr.classList.toggle("hidden", !payload.qr_data_uri);
+          }
+          const manual = document.getElementById("startupLegacyManualKey");
+          if (manual) {
+            manual.textContent = payload.manual_key || "";
+            manual.classList.remove("hidden");
+          }
+          document.getElementById("startupLegacyCodeLabel")?.classList.remove("hidden");
+          if (button) button.textContent = tNext("legacyAuth.verifyTotp", "Verify authenticator");
+        } else if (payload.stage === "recovery_codes") {
+          startupLegacyRecoveryCodes = payload.recovery_codes || [];
+          const codes = document.getElementById("startupLegacyRecoveryCodes");
+          if (codes) {
+            codes.innerHTML = startupLegacyRecoveryCodes.map((code) => `<code>${escapeHtml(code)}</code>`).join("");
+            codes.classList.remove("hidden");
+          }
+          document.getElementById("startupLegacyRecoveryActions")?.classList.remove("hidden");
+          document.getElementById("startupLegacyAckLabel")?.classList.remove("hidden");
+          if (button) button.textContent = tNext("legacyAuth.finishSetup", "Finish setup");
+        } else if (payload.stage === "complete") {
+          if (payload.token) localStorage.setItem("dv_next_token", payload.token);
+          startupLegacyFlowToken = "";
+          startupLegacyStage = "";
+          await refreshAppFlow();
+        }
+      } catch (error) {
+        if (startupLegacyStage === "bootstrap_totp") {
+          startupLegacyStage = "";
+          startupLegacyFlowToken = "";
+          document.getElementById("startupLegacyCodeLabel")?.classList.add("hidden");
+          if (button) button.textContent = tNext("legacyAuth.continue", "Continue");
+        }
+        setStartupGateMessage(error.message || tNext("legacyAuth.bootstrapFailed", "Password onboarding failed."), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
     function toggleInviteLogin() {
       const panel = document.getElementById("appInviteForm");
       const recoveryPanel = document.getElementById("appRecoveryForm");
@@ -17361,53 +18653,121 @@ def ui_preview_html(
       panel?.classList.toggle("hidden");
       setLoginMessage("");
     }
+    function renderLegacyLoginStage(payload = {}) {
+      legacyStage = payload.stage || legacyStage || "";
+      legacyFlowToken = payload.flow_token || legacyFlowToken || "";
+      const credentials = document.getElementById("appLegacyCredentials");
+      const passwordChange = document.getElementById("appLegacyPasswordChange");
+      const mfa = document.getElementById("appLegacyMfa");
+      const recoveryCodes = document.getElementById("appLegacyRecoveryCodes");
+      const ackLabel = document.getElementById("appLegacyRecoveryAckLabel");
+      const submit = document.getElementById("appReviewLoginButton");
+      credentials?.classList.toggle("hidden", !!legacyStage);
+      passwordChange?.classList.toggle("hidden", legacyStage !== "password_change");
+      mfa?.classList.toggle("hidden", !["mfa_enrollment", "mfa_challenge"].includes(legacyStage));
+      recoveryCodes?.classList.toggle("hidden", legacyStage !== "recovery_codes");
+      document.getElementById("appLegacyRecoveryActions")?.classList.toggle("hidden", legacyStage !== "recovery_codes");
+      ackLabel?.classList.toggle("hidden", legacyStage !== "recovery_codes");
+      const qr = document.getElementById("appLegacyQr");
+      const manual = document.getElementById("appLegacyManualKey");
+      if (legacyStage === "mfa_enrollment") {
+        if (qr) {
+          qr.src = payload.qr_data_uri || "";
+          qr.alt = tNext("legacyAuth.qrAlt", "QR code for authenticator enrollment");
+          qr.classList.toggle("hidden", !payload.qr_data_uri);
+        }
+        if (manual) {
+          manual.textContent = payload.manual_key || "";
+          manual.classList.toggle("hidden", !payload.manual_key);
+        }
+        document.getElementById("appLegacyMfaHelp").textContent = tNext("legacyAuth.enrollTotp", "Scan the QR code, then enter the six-digit code.");
+      } else if (legacyStage === "mfa_challenge") {
+        qr?.classList.add("hidden");
+        manual?.classList.add("hidden");
+        document.getElementById("appLegacyMfaHelp").textContent = tNext("legacyAuth.totpPrompt", "Enter the six-digit code from your authenticator app.");
+      }
+      if (legacyStage === "recovery_codes" && recoveryCodes) {
+        legacyRecoveryCodes = payload.recovery_codes || legacyRecoveryCodes;
+        recoveryCodes.innerHTML = legacyRecoveryCodes.map((code) => `<code>${escapeHtml(code)}</code>`).join("");
+      }
+      const labels = {
+        password_change: tNext("legacyAuth.changePassword", "Change password"),
+        mfa_enrollment: tNext("legacyAuth.verifyTotp", "Verify authenticator"),
+        mfa_challenge: tNext("legacyAuth.verifyTotp", "Verify authenticator"),
+        recovery_codes: tNext("legacyAuth.continue", "Continue")
+      };
+      if (submit) submit.textContent = labels[legacyStage] || tNext("legacyAuth.signIn", "Sign in with password");
+    }
+    async function completeLegacyLogin(payload) {
+      if (payload.callback_url || payload.callbackUrl) {
+        window.location.href = payload.callback_url || payload.callbackUrl;
+        return;
+      }
+      if (payload.token) localStorage.setItem("dv_next_token", payload.token);
+      legacyFlowToken = "";
+      legacyStage = "";
+      renderLegacyLoginStage({});
+      document.getElementById("appReviewForm")?.reset();
+      setLoginMessage(tNext("auth.signedIn", "Signed in."), "good");
+      await refreshAppFlow();
+    }
     async function loginReviewPassword(event) {
       if (event) event.preventDefault();
-      if (!currentAuthStatus.review_login_available) {
-        setLoginMessage("Username/password review login is not available.", "bad");
+      if (!currentAuthStatus.legacy_auth_enabled) {
+        setLoginMessage(tNext("legacyAuth.unavailable", "Password login is not available."), "bad");
         return;
       }
-      const username = String(document.getElementById("appReviewUsername")?.value || "").trim();
-      const password = String(document.getElementById("appReviewPassword")?.value || "");
       const button = document.getElementById("appReviewLoginButton");
-      if (!username || !password) {
-        setLoginMessage("Enter username and password.", "bad");
-        return;
-      }
       if (button) button.disabled = true;
-      setLoginMessage("Signing in with username/password...");
+      setLoginMessage(tNext("legacyAuth.signingIn", "Signing in..."));
       try {
-        const reviewBody = {username, password};
-        const mobileFlow = currentMobileAuthFlow();
-        if (mobileFlow) reviewBody.mobile_flow = mobileFlow;
-        const payload = await apiJson("/api/next/auth/review/login", {
+        let url = "/api/next/auth/legacy/login";
+        let body = {};
+        if (!legacyStage) {
+          body.username = String(document.getElementById("appReviewUsername")?.value || "").trim();
+          body.password = String(document.getElementById("appReviewPassword")?.value || "");
+          if (!body.username || !body.password) throw new Error(tNext("legacyAuth.credentialsRequired", "Enter username and password."));
+          const mobileFlow = currentMobileAuthFlow();
+          if (mobileFlow) body.mobile_flow = mobileFlow;
+        } else if (legacyStage === "password_change") {
+          const newPassword = String(document.getElementById("appLegacyNewPassword")?.value || "");
+          const confirmation = String(document.getElementById("appLegacyConfirmPassword")?.value || "");
+          if (newPassword !== confirmation) throw new Error(tNext("legacyAuth.passwordMismatch", "Passwords do not match."));
+          url = "/api/next/auth/legacy/password/change";
+          body = {flow_token: legacyFlowToken, new_password: newPassword};
+        } else if (legacyStage === "mfa_enrollment") {
+          url = "/api/next/auth/legacy/mfa/setup/verify";
+          body = {flow_token: legacyFlowToken, code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim()};
+        } else if (legacyStage === "mfa_challenge") {
+          const recoveryCode = String(document.getElementById("appLegacyRecoveryCode")?.value || "").trim();
+          url = recoveryCode ? "/api/next/auth/legacy/mfa/recovery" : "/api/next/auth/legacy/mfa/verify";
+          body = {
+            flow_token: legacyFlowToken,
+            code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim(),
+            recovery_code: recoveryCode
+          };
+        } else if (legacyStage === "recovery_codes") {
+          if (!document.getElementById("appLegacyRecoveryAck")?.checked) throw new Error(tNext("legacyAuth.saveCodesFirst", "Save and acknowledge the recovery codes first."));
+          url = "/api/next/auth/legacy/recovery-codes/ack";
+          body = {flow_token: legacyFlowToken, acknowledged: true};
+        }
+        const payload = await apiJson(url, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(reviewBody)
+          body: JSON.stringify(body)
         });
-        if (payload.callback_url || payload.callbackUrl) {
-          window.location.href = payload.callback_url || payload.callbackUrl;
-          return;
-        }
-        if (payload.token) {
-          localStorage.setItem("dv_next_token", payload.token);
-          currentAuthStatus = Object.assign(currentAuthStatus || {}, {
-            authenticated: true,
-            username: payload.username,
-            role: payload.role,
-            display_name: payload.display_name
-          });
-        }
-        const passwordInput = document.getElementById("appReviewPassword");
-        if (passwordInput) passwordInput.value = "";
-        setLoginMessage("Signed in.", "good");
-        if (appMode) {
-          showLibraryPage();
-        } else {
-          await refreshAppFlow();
+        if (!payload.stage || payload.stage === "complete") await completeLegacyLogin(payload);
+        else {
+          renderLegacyLoginStage(payload);
+          setLoginMessage(tNext(`legacyAuth.stage.${payload.stage}`, "Complete the next security step."), "info");
         }
       } catch (error) {
-        setLoginMessage(error.message || "Username/password sign-in failed.", "bad");
+        if (["mfa_enrollment", "mfa_challenge"].includes(legacyStage)) {
+          legacyStage = "";
+          legacyFlowToken = "";
+          renderLegacyLoginStage({});
+        }
+        setLoginMessage(error.message || tNext("legacyAuth.failed", "Password sign-in failed."), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -17646,6 +19006,15 @@ def ui_preview_html(
         button.classList.toggle("active", active);
         button.setAttribute("aria-checked", active ? "true" : "false");
       });
+      const mainLibraryListActive = libraryViewMode === "list" && !locationDetailPageVisible();
+      const sortTrigger = document.getElementById("collectionSortTrigger");
+      const sortMenu = document.getElementById("collectionSortMenu");
+      if (sortTrigger) {
+        sortTrigger.disabled = mainLibraryListActive;
+        sortTrigger.setAttribute("aria-disabled", mainLibraryListActive ? "true" : "false");
+      }
+      if (sortMenu) sortMenu.classList.toggle("is-disabled", mainLibraryListActive);
+      if (mainLibraryListActive) closeCollectionMenu("collectionSortMenu");
       renderCollectionFilterMenu();
       syncAdvancedSearchControls();
       syncSelectModeButton();
@@ -17656,18 +19025,24 @@ def ui_preview_html(
       if (collectionTypeFilter && collectionTypeFilter !== "all") count += 1;
       if (collectionGenreFilter) count += 1;
       if (collectionLocationFilter) count += 1;
+      if (hideWatchlist) count += 1;
+      if (hideWatched) count += 1;
       if (collectorsModeEnabled() && collectionItemFilter === "containers") count += 1;
       return count;
     }
+    function genreLabel(key) {
+      const normalized = String(key || "").trim();
+      if (!normalized) return "";
+      return tNext(`genre.${normalized}`, GENRE_FALLBACK_LABELS[normalized] || normalized);
+    }
     function collectionGenreOptionValues() {
-      const seen = new Map();
+      const seen = new Set();
       (movies || []).forEach((movie) => {
-        movieGenreValues(movie).forEach((value) => {
-          const key = value.toLowerCase();
-          if (!seen.has(key)) seen.set(key, value);
-        });
+        movieGenreValues(movie).forEach((key) => seen.add(key));
       });
-      return [...seen.values()].sort((a, b) => a.localeCompare(b, localeState.locale || undefined, {sensitivity: "base"}));
+      return [...seen]
+        .map((key) => ({key, label: genreLabel(key)}))
+        .sort((a, b) => a.label.localeCompare(b.label, localeState.locale || undefined, {sensitivity: "base"}));
     }
     function collectionLocationOptionValues() {
       const seen = new Map();
@@ -17708,13 +19083,13 @@ def ui_preview_html(
       const applyGenreOptions = (genreSelect) => {
         if (!genreSelect) return;
         const options = collectionGenreOptionValues();
-        if (collectionGenreFilter && !options.some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase())) {
+        if (collectionGenreFilter && !options.some((option) => option.key === collectionGenreFilter)) {
           collectionGenreFilter = "";
           localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
         }
         const anyLabel = tNext("common.all", "All");
         genreSelect.innerHTML = [`<option value="">${escapeHtml(anyLabel)}</option>`]
-          .concat(options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
+          .concat(options.map((option) => `<option value="${escapeHtml(option.key)}">${escapeHtml(option.label)}</option>`))
           .join("");
         genreSelect.value = collectionGenreFilter;
       };
@@ -17743,6 +19118,12 @@ def ui_preview_html(
       };
       syncContainerToggle("collectionContainersSection", "collectionContainersSwitch");
       syncContainerToggle("locationCollectionContainersSection", "locationCollectionContainersSwitch");
+      document.querySelectorAll("[data-hide-watchlist-switch]").forEach((toggle) => {
+        toggle.checked = hideWatchlist;
+      });
+      document.querySelectorAll("[data-hide-watched-switch]").forEach((toggle) => {
+        toggle.checked = hideWatched;
+      });
       const badge = document.getElementById("collectionFilterBadge");
       const locationDetailBadge = document.getElementById("locationDetailFilterBadge");
       const count = collectionFilterActiveCount();
@@ -17766,6 +19147,25 @@ def ui_preview_html(
     }
     function persistCollectionFormatFilters() {
       localStorage.setItem("dv_next_collection_formats", JSON.stringify([...collectionFormatFilters]));
+    }
+    function persistCollectionBehaviorFilters() {
+      localStorage.setItem("dv_next_hide_watchlist", hideWatchlist ? "true" : "false");
+      localStorage.setItem("dv_next_hide_watched", hideWatched ? "true" : "false");
+    }
+    function resetCollectionFilters() {
+      collectionFormatFilters.clear();
+      persistCollectionFormatFilters();
+      collectionTypeFilter = "all";
+      collectionGenreFilter = "";
+      collectionLocationFilter = "";
+      hideWatchlist = false;
+      hideWatched = false;
+      if (collectionItemFilter === "containers") collectionItemFilter = "all";
+      localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
+      localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
+      localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
+      localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+      persistCollectionBehaviorFilters();
     }
     const COLLECTION_MENUS = [
       {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
@@ -18252,8 +19652,15 @@ def ui_preview_html(
     function collectorsModeEnabled() {
       return preferences.collectors_mode === true;
     }
+    function memberGroupLibrarySelected() {
+      const selected = effectiveCollectionGroupFilter();
+      return Boolean(selected && !String(selected).startsWith("__"));
+    }
+    function containerGroupingEnabled() {
+      return memberGroupLibrarySelected() || collectorsModeEnabled();
+    }
     function mergeEditionsAsTitleEnabled() {
-      return collectorsModeEnabled() && preferences.merge_editions_as_title === true;
+      return memberGroupLibrarySelected() || (collectorsModeEnabled() && preferences.merge_editions_as_title === true);
     }
     function containerMembershipRows() {
       return Array.isArray(containerMembership) ? containerMembership : [];
@@ -18310,6 +19717,11 @@ def ui_preview_html(
       const search = activeCollectionSearchInput();
       return search ? search.value.trim().toLowerCase() : "";
     }
+    function movieGenreSearchText(movie) {
+      const keys = movieGenreValues(movie);
+      if (!keys.length) return "";
+      return [movie?.genre_search || "", ...keys.map(genreLabel)].join(" ");
+    }
     function movieMatchesSearch(movie) {
       const query = activeSearchQuery();
       if (!query) return true;
@@ -18322,6 +19734,7 @@ def ui_preview_html(
         movie.barcode,
         movie.metadata_search,
         movie.search_credits,
+        movieGenreSearchText(movie),
         groups
       ].join(" ").toLowerCase();
       return haystack.includes(query);
@@ -18337,6 +19750,7 @@ def ui_preview_html(
         movie?.barcode,
         movie?.metadata_search,
         movie?.search_credits,
+        movieGenreSearchText(movie),
         movie?.metadata?.actor,
         movie?.metadata?.director,
         movie?.metadata?.producer,
@@ -18374,7 +19788,12 @@ def ui_preview_html(
       return movie?.backdrop_url || movie?.metadata?.backdrop_url || movie?.metadata?.backdrop || movie?.backdrop || "";
     }
     function movieIsWatched(movie) {
-      return !!(movie?.watched || movie?.is_watched || movie?.watched_count || movie?.last_watched_at || movie?.user_state?.watched);
+      return !!(movie?.watched || movie?.is_watched || movie?.watched_count || movie?.last_watched || movie?.last_watched_at || movie?.user_state?.watched);
+    }
+    function movieMatchesBehaviorExclusions(movie) {
+      if (hideWatchlist && movie?.on_watchlist) return false;
+      if (hideWatched && movieIsWatched(movie)) return false;
+      return true;
     }
     function movieMatchesAdvancedSearch(movie, filters = effectiveAdvancedSearchFilters()) {
       const year = movieYearNumber(movie);
@@ -18402,7 +19821,7 @@ def ui_preview_html(
       return true;
     }
     function containerMatchesGroup(container) {
-      if (!collectorsModeEnabled()) return false;
+      if (!containerGroupingEnabled()) return false;
       const selected = effectiveCollectionGroupFilter();
       if (!selected) return true;
       const memberMovies = containerMemberMovies(container.id);
@@ -18410,7 +19829,7 @@ def ui_preview_html(
       return memberMovies.some((movie) => movieMatchesGroup(movie));
     }
     function containerMatchesSearch(container) {
-      if (!collectorsModeEnabled()) return false;
+      if (!containerGroupingEnabled()) return false;
       const query = activeSearchQuery();
       if (!query) return true;
       const memberText = containerMemberMovies(container.id).map((movie) => [
@@ -18420,7 +19839,8 @@ def ui_preview_html(
         movie.format,
         movie.barcode,
         movie.metadata_search,
-        movie.search_credits
+        movie.search_credits,
+        movieGenreSearchText(movie)
       ].filter(Boolean).join(" ")).join(" ");
       const haystack = [
         container.title,
@@ -18439,7 +19859,7 @@ def ui_preview_html(
       return container?.backdrop_url || container?.metadata?.backdrop_url || container?.metadata?.backdrop || container?.backdrop || "";
     }
     function containerMatchesAdvancedSearch(container, filters = effectiveAdvancedSearchFilters()) {
-      if (!collectorsModeEnabled()) return false;
+      if (!containerGroupingEnabled()) return false;
       const type = String(container?.container_type || "");
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
@@ -18483,15 +19903,11 @@ def ui_preview_html(
       return false;
     }
     function movieGenreValues(movie) {
-      const raw = movie?.genre || movie?.metadata?.genre || "";
-      return String(raw)
-        .split(/[,/|]/)
-        .map((value) => value.trim())
-        .filter(Boolean);
+      return Array.isArray(movie?.genres) ? movie.genres.filter(Boolean) : [];
     }
     function movieMatchesGenre(movie) {
       if (!collectionGenreFilter) return true;
-      return movieGenreValues(movie).some((value) => value.toLowerCase() === collectionGenreFilter.toLowerCase());
+      return movieGenreValues(movie).includes(collectionGenreFilter);
     }
     function movieLocationValue(movie) {
       const direct = movie?.location;
@@ -18515,7 +19931,7 @@ def ui_preview_html(
       return true;
     }
     function containerMatchesFormat(container) {
-      if (!collectorsModeEnabled()) return false;
+      if (!containerGroupingEnabled()) return false;
       if (!collectionFormatFilters || collectionFormatFilters.size === 0) return true;
       return containerMemberMovies(container.id).some((movie) => movieMatchesFormat(movie));
     }
@@ -18551,62 +19967,45 @@ def ui_preview_html(
         return mode === "title_desc" ? -diff : diff;
       });
     }
-    function visibleContainerItems(visibleMovieIds = null, filters = effectiveAdvancedSearchFilters()) {
-      if (!collectorsModeEnabled()) return [];
+    function visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters = effectiveAdvancedSearchFilters()) {
+      if (!containerGroupingEnabled()) return [];
       const visibleItems = (containers || [])
         .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters))
-        .filter((container) => {
-          if (!visibleMovieIds) return true;
-          const memberIds = movieIdSetForContainer(container.id);
-          if (!memberIds.size) return activeSearchQuery();
-          return [...memberIds].some((movieId) => visibleMovieIds.has(String(movieId)));
+        .map((container) => {
+          const allowedIds = containerMatchesSearch(container) ? eligibleMovieIds : visibleMovieIds;
+          const visibleMovies = containerMemberMovies(container.id)
+            .filter((movie) => allowedIds.has(String(movie.id || "")));
+          return {kind: "container", container, visibleMovies, title: container.title || ""};
         })
-        .map((container) => ({kind: "container", container, title: container.title || ""}));
+        .filter((item) => item.visibleMovies.length > 0);
       const visibleContainerIds = new Set(visibleItems.map((item) => String(item.container?.id || "")).filter(Boolean));
       return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
     function libraryDisplayItems(filters = effectiveAdvancedSearchFilters()) {
-      const visibleMovies = (movies || []).filter((movie) => (
+      const eligibleMovies = (movies || []).filter((movie) => (
         movieMatchesGroup(movie)
-        && movieMatchesSearch(movie)
         && movieMatchesFormat(movie)
         && movieMatchesType(movie)
         && movieMatchesGenre(movie)
         && movieMatchesLocation(movie)
+        && movieMatchesBehaviorExclusions(movie)
         && movieMatchesAdvancedSearch(movie, filters)
         && !["container", "box_set", "collection", "vault"].includes(filters.itemType)
       ));
+      const visibleMovies = eligibleMovies.filter((movie) => movieMatchesSearch(movie));
+      const eligibleMovieIds = new Set(eligibleMovies.map((movie) => String(movie.id || "")));
+      const visibleMovieIds = new Set(visibleMovies.map((movie) => String(movie.id || "")));
       if (collectionItemFilter === "containers") {
-        return sortLibraryItems(visibleContainerItems(null, filters));
+        return sortLibraryItems(visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters));
       }
       if (!mergeEditionsAsTitleEnabled()) {
         return sortLibraryItems(visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""})));
       }
-      const visibleMovieIds = new Set(visibleMovies.map((movie) => String(movie.id || "")));
-      const visibleContainerIds = new Set();
-      containerMembershipRows().forEach((row) => {
-        if (visibleMovieIds.has(String(row.movie_id || ""))) {
-          visibleContainerIds.add(String(row.container_id || ""));
-        }
-      });
-      (containers || []).forEach((container) => {
-        const memberIds = movieIdSetForContainer(container.id);
-        if (!memberIds.size && !activeSearchQuery()) return;
-        if (containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters)) {
-          visibleContainerIds.add(String(container.id || ""));
-        }
-      });
-      [...visibleContainerIds].forEach((containerId) => {
-        if (containerIsNestedChild(containerId, visibleContainerIds)) visibleContainerIds.delete(containerId);
-      });
       const representedMovieIds = new Set();
-      const containerItems = (containers || [])
-        .filter((container) => visibleContainerIds.has(String(container.id || "")))
-        .filter((container) => containerMatchesGroup(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters) && (containerMatchesSearch(container) || containerMemberMovies(container.id).some((movie) => visibleMovieIds.has(String(movie.id || "")))))
-        .map((container) => {
-          movieIdSetForContainer(container.id).forEach((movieId) => representedMovieIds.add(movieId));
-          return {kind: "container", container, title: container.title || ""};
-        });
+      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters);
+      containerItems.forEach((item) => {
+        item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
+      });
       const movieItems = visibleMovies
         .filter((movie) => !representedMovieIds.has(String(movie.id || "")))
         .map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
@@ -18616,7 +20015,9 @@ def ui_preview_html(
       const ids = new Set();
       (items || []).forEach((item) => {
         if (item.kind === "movie") ids.add(String(item.movie?.id || ""));
-        if (item.kind === "container") movieIdSetForContainer(item.container?.id).forEach((movieId) => ids.add(movieId));
+        if (item.kind === "container") {
+          itemMovieRows(item).forEach((movie) => ids.add(String(movie?.id || "")));
+        }
       });
       return ids.size;
     }
@@ -18654,7 +20055,10 @@ def ui_preview_html(
     }
     function itemMovieRows(item) {
       if (item?.kind === "movie") return item.movie ? [item.movie] : [];
-      if (item?.kind === "container") return containerMemberMovies(item.container?.id);
+      if (item?.kind === "container") {
+        if (Array.isArray(item.visibleMovies)) return item.visibleMovies;
+        return containerMemberMovies(item.container?.id);
+      }
       return [];
     }
     function itemDirectorCredits(item) {
@@ -18678,7 +20082,7 @@ def ui_preview_html(
       moviesForItem.forEach((movie) => {
         moviePreviewCredits(movie).actors.forEach((credit) => {
           const key = String(credit.id || credit.name || "").toLowerCase();
-          if (!key || seen.has(key) || result.length >= 6) return;
+          if (!key || seen.has(key) || result.length >= 5) return;
           seen.add(key);
           result.push(credit);
         });
@@ -18755,6 +20159,279 @@ def ui_preview_html(
             ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
           </span>
         </article>
+      `;
+    }
+    function libraryListCompactMode() {
+      return typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1024px)").matches;
+    }
+    function normalizeLibraryDetailSort(value, compact = libraryListCompactMode()) {
+      const allowed = compact
+        ? new Set(["title", "format", "behavior"])
+        : new Set(["title", "director", "actors", "studios", "rating", "tags", "behavior"]);
+      const key = allowed.has(value?.key) ? value.key : "title";
+      return {
+        key,
+        direction: value?.direction === "desc" ? "desc" : "asc"
+      };
+    }
+    function libraryListTextValues(value) {
+      if (Array.isArray(value)) return value.flatMap((item) => libraryListTextValues(item));
+      if (value && typeof value === "object") {
+        return libraryListTextValues(value.name || value.title || value.label || "");
+      }
+      const text = String(value || "").trim();
+      if (!text) return [];
+      if (text.startsWith("[") && text.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) return libraryListTextValues(parsed);
+        } catch (error) {}
+      }
+      return text.split(/\\s*(?:,|;|\\|)\\s*/).map((item) => item.trim()).filter(Boolean);
+    }
+    function uniqueLibraryValues(values) {
+      const seen = new Set();
+      const result = [];
+      (values || []).forEach((value) => {
+        const text = String(value || "").trim();
+        const key = text.toLocaleLowerCase(localeState.locale || undefined);
+        if (!text || seen.has(key)) return;
+        seen.add(key);
+        result.push(text);
+      });
+      return result;
+    }
+    function itemFormatValues(item) {
+      const seen = new Set();
+      const result = [];
+      itemMovieRows(item).forEach((movie) => {
+        const value = normalizedMovieFormat(movie);
+        const label = physicalFormatBadgeLabel(value);
+        const key = label.toLocaleLowerCase(localeState.locale || undefined);
+        if (!label || seen.has(key)) return;
+        seen.add(key);
+        result.push({value, label});
+      });
+      return result;
+    }
+    function itemStudioValues(item) {
+      return uniqueLibraryValues(itemMovieRows(item).flatMap((movie) => (
+        libraryListTextValues(movie?.studios || movie?.metadata?.studios)
+      )));
+    }
+    function itemTagValues(item) {
+      const seen = new Set();
+      const result = [];
+      itemMovieRows(item).forEach((movie) => {
+        const tags = Array.isArray(movie?.tags) ? movie.tags : [];
+        tags.forEach((tag) => {
+          const name = String(tag?.name || "").trim();
+          const key = String(tag?.id || name).toLocaleLowerCase(localeState.locale || undefined);
+          if (!name || seen.has(key)) return;
+          seen.add(key);
+          result.push({id: tag?.id || "", name, color: tag?.color || ""});
+        });
+      });
+      return result.sort((a, b) => a.name.localeCompare(b.name, localeState.locale || undefined, {sensitivity: "base"}));
+    }
+    function itemRatingValues(item) {
+      return uniqueLibraryValues(itemMovieRows(item).flatMap((movie) => {
+        const info = preferredContentRatingInfo(movie);
+        return info.unknown ? [] : [contentRatingValueText(info)];
+      }));
+    }
+    function itemWatchActivity(item) {
+      const rows = itemMovieRows(item);
+      let watchedAt = "";
+      let watchedTime = 0;
+      let watchlistAddedAt = "";
+      let watchlistTime = 0;
+      let watched = false;
+      let onWatchlist = false;
+      rows.forEach((movie) => {
+        watched = watched || movieIsWatched(movie);
+        onWatchlist = onWatchlist || !!movie?.on_watchlist;
+        const movieWatchedTime = Date.parse(movie?.last_watched || movie?.last_watched_at || "");
+        if (Number.isFinite(movieWatchedTime) && movieWatchedTime >= watchedTime) {
+          watchedTime = movieWatchedTime;
+          watchedAt = movie?.last_watched || movie?.last_watched_at || "";
+        }
+        const movieWatchlistTime = Date.parse(movie?.watchlist_added_at || "");
+        if (Number.isFinite(movieWatchlistTime) && movieWatchlistTime >= watchlistTime) {
+          watchlistTime = movieWatchlistTime;
+          watchlistAddedAt = movie?.watchlist_added_at || "";
+        }
+      });
+      return {watched, watchedAt, watchedTime, onWatchlist, watchlistAddedAt, watchlistTime};
+    }
+    function libraryListEmptyValueHtml() {
+      return `<span class="library-list-empty-value">${escapeHtml(tNext("common.none", "None"))}</span>`;
+    }
+    function libraryListValueLinesHtml(values) {
+      if (!values?.length) return libraryListEmptyValueHtml();
+      return `<span class="library-list-lines">${values.map((value) => `<span class="library-list-line">${escapeHtml(value)}</span>`).join("")}</span>`;
+    }
+    function libraryListPeopleHtml(credits) {
+      const rows = (credits || []).filter((credit) => credit.name);
+      if (!rows.length) return libraryListEmptyValueHtml();
+      return `<span class="library-list-lines">${rows.map((credit) => {
+        const personId = credit.id || credit.person_id || "";
+        return collectorsModeEnabled() && personId
+          ? `<button type="button" class="library-list-person" data-person-link="${escapeHtml(personId)}">${escapeHtml(credit.name)}</button>`
+          : `<span class="library-list-person">${escapeHtml(credit.name)}</span>`;
+      }).join("")}</span>`;
+    }
+    function libraryListFormatsHtml(item) {
+      const formats = itemFormatValues(item);
+      if (!formats.length) return libraryListEmptyValueHtml();
+      return `<span class="library-list-format-badges">${formats.map((format) => physicalFormatBadgeHtml(format.value)).join("")}</span>`;
+    }
+    function safeLibraryTagColor(value) {
+      const color = String(value || "").trim();
+      return /^#[0-9a-f]{6}$/i.test(color) ? color : "";
+    }
+    function libraryListTagsHtml(item) {
+      const tags = itemTagValues(item);
+      if (!tags.length) return libraryListEmptyValueHtml();
+      return `<span class="library-list-lines">${tags.map((tag) => {
+        const color = safeLibraryTagColor(tag.color);
+        const style = color ? ` style="--library-tag-color:${escapeHtml(color)}"` : "";
+        return `<span class="library-list-line library-list-tag"><span class="library-list-tag-swatch"${style}></span><span>${escapeHtml(tag.name)}</span></span>`;
+      }).join("")}</span>`;
+    }
+    function libraryListBehaviorHtml(item) {
+      const activity = itemWatchActivity(item);
+      if (!activity.watched && !activity.onWatchlist) return libraryListEmptyValueHtml();
+      const watchedLabel = tNext("lists.watched", "Watched");
+      const watchlistLabel = tNext("lists.watchlist", "Watchlist");
+      return `
+        <span class="library-list-behavior">
+          ${activity.watched ? `
+            <span class="library-list-behavior-icon watched" title="${escapeHtml(watchedLabel)}" aria-label="${escapeHtml(watchedLabel)}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5m0 13c-3.04 0-5.5-2.46-5.5-5.5S8.96 6.5 12 6.5s5.5 2.46 5.5 5.5-2.46 5.5-5.5 5.5m-1-2.17-2.59-2.58 1.42-1.42L11 12.5l3.17-3.17 1.42 1.42L11 15.33Z"/></svg>
+            </span>
+          ` : ""}
+          ${activity.onWatchlist ? `
+            <span class="library-list-behavior-icon watchlist" title="${escapeHtml(watchlistLabel)}" aria-label="${escapeHtml(watchlistLabel)}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2m0 15-5-2.18L7 18V5h10v13Z"/></svg>
+            </span>
+          ` : ""}
+          ${activity.watchedAt ? `<span class="library-list-watched-date">${escapeHtml(formatAppDate(activity.watchedAt))}</span>` : ""}
+        </span>
+      `;
+    }
+    function libraryListSortValue(item, key) {
+      if (key === "format") return itemFormatValues(item).map((format) => format.label).join(" ").toLowerCase();
+      if (key === "director") return creditText(itemDirectorCredits(item)).toLowerCase();
+      if (key === "actors") return creditText(itemActorCredits(item)).toLowerCase();
+      if (key === "studios") return itemStudioValues(item).join(" ").toLowerCase();
+      if (key === "rating") return itemRatingValues(item).join(" ").toLowerCase();
+      if (key === "tags") return itemTagValues(item).map((tag) => tag.name).join(" ").toLowerCase();
+      return itemTitleValue(item).toLowerCase();
+    }
+    function compareLibraryBehavior(leftItem, rightItem) {
+      const left = itemWatchActivity(leftItem);
+      const right = itemWatchActivity(rightItem);
+      return (left.watchedTime - right.watchedTime)
+        || (Number(left.watched) - Number(right.watched))
+        || (left.watchlistTime - right.watchlistTime)
+        || (Number(left.onWatchlist) - Number(right.onWatchlist));
+    }
+    function sortLibraryListItems(items, sortState = libraryDetailSort) {
+      const state = normalizeLibraryDetailSort(sortState);
+      return [...(items || [])].sort((a, b) => {
+        const diff = state.key === "behavior"
+          ? compareLibraryBehavior(a, b)
+          : String(libraryListSortValue(a, state.key)).localeCompare(
+              String(libraryListSortValue(b, state.key)),
+              localeState.locale || undefined,
+              {sensitivity: "base", numeric: true}
+            );
+        if (diff) return state.direction === "desc" ? -diff : diff;
+        return itemTitleValue(a).localeCompare(itemTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+      });
+    }
+    function libraryListSortIconHtml(direction) {
+      const path = direction === "desc"
+        ? "M7 10l5 5 5-5H7Z"
+        : "M7 14l5-5 5 5H7Z";
+      return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`;
+    }
+    function libraryListSortHeaderHtml(key, label, sortState, className = "") {
+      const active = sortState.key === key;
+      const ariaSort = active ? ` aria-sort="${sortState.direction === "desc" ? "descending" : "ascending"}"` : "";
+      const classes = className ? ` ${className}` : "";
+      return `
+        <th scope="col" class="${classes.trim()}"${ariaSort}>
+          <button type="button" class="library-list-sort-button${active ? " active" : ""}" data-detail-sort-scope="library" data-detail-sort-key="${escapeHtml(key)}">
+            <span>${escapeHtml(label)}</span>
+            ${active ? libraryListSortIconHtml(sortState.direction) : ""}
+          </button>
+        </th>
+      `;
+    }
+    function libraryListTableHtml(items) {
+      const normalizedSort = normalizeLibraryDetailSort(libraryDetailSort);
+      if (normalizedSort.key !== libraryDetailSort?.key || normalizedSort.direction !== libraryDetailSort?.direction) {
+        libraryDetailSort = normalizedSort;
+        localStorage.setItem("dv_next_library_detail_sort", JSON.stringify(normalizedSort));
+      }
+      const sorted = sortLibraryListItems(items, normalizedSort).slice(0, 80);
+      return `
+        <div class="library-list-scroll">
+          <table class="library-list-table" aria-label="${escapeHtml(tNext("collection.viewList", "List"))}">
+            <thead>
+              <tr>
+                <th scope="col" class="library-list-poster-column"><span class="visually-hidden">${escapeHtml(tNext("collection.posterColumn", "Poster"))}</span></th>
+                ${libraryListSortHeaderHtml("title", tNext("collection.titleColumn", "Title"), normalizedSort, "library-list-title-column")}
+                ${libraryListSortHeaderHtml("format", tNext("movieDetail.format", "Format"), normalizedSort, "library-list-format-column")}
+                ${libraryListSortHeaderHtml("director", tNext("movieDetail.director", "Director"), normalizedSort, "library-list-director-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("actors", tNext("movieDetail.actors", "Actors"), normalizedSort, "library-list-actors-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("studios", tNext("collection.studioColumn", "Studio"), normalizedSort, "library-list-studio-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("rating", tNext("movieDetail.contentRating", "Content rating"), normalizedSort, "library-list-rating-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("tags", tNext("lists.tags", "Tags"), normalizedSort, "library-list-tags-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("behavior", tNext("collection.behaviorColumn", "Watch activity"), normalizedSort, "library-list-behavior-column")}
+              </tr>
+            </thead>
+            <tbody>
+              ${sorted.map((item) => {
+                const isContainer = item.kind === "container";
+                const title = itemTitleValue(item);
+                const year = itemYearLabel(item);
+                const poster = itemPosterUrl(item);
+                const targetAttr = isContainer
+                  ? `data-preview-container="${escapeHtml(item.container?.id)}"`
+                  : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
+                const selected = isContainer
+                  ? selectedContainerIds.has(String(item.container?.id || ""))
+                  : selectedMovieIds.has(String(item.movie?.id || ""));
+                return `
+                  <tr class="${isContainer ? "container-row " : ""}${selected ? "bulk-selected" : ""}">
+                    <td class="library-list-poster-column">
+                      <button type="button" class="library-list-poster-target" ${targetAttr} aria-label="${escapeHtml(title)}">
+                        ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span class="library-list-poster-placeholder" aria-hidden="true">&mdash;</span>`}
+                      </button>
+                    </td>
+                    <td class="library-list-title-column">
+                      <button type="button" class="library-list-title-target" ${targetAttr}>
+                        <strong>${escapeHtml(title)}</strong>
+                        ${year ? `<span class="library-list-year">(${escapeHtml(year)})</span>` : ""}
+                      </button>
+                      ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
+                    </td>
+                    <td class="library-list-format-column">${libraryListFormatsHtml(item)}</td>
+                    <td class="library-list-director-column library-list-desktop-column">${libraryListPeopleHtml(itemDirectorCredits(item))}</td>
+                    <td class="library-list-actors-column library-list-desktop-column">${libraryListPeopleHtml(itemActorCredits(item))}</td>
+                    <td class="library-list-studio-column library-list-desktop-column">${libraryListValueLinesHtml(itemStudioValues(item))}</td>
+                    <td class="library-list-rating-column library-list-desktop-column">${libraryListValueLinesHtml(itemRatingValues(item))}</td>
+                    <td class="library-list-tags-column library-list-desktop-column">${libraryListTagsHtml(item)}</td>
+                    <td class="library-list-behavior-column">${libraryListBehaviorHtml(item)}</td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
       `;
     }
     function detailSortValue(item, key) {
@@ -19270,8 +20947,8 @@ def ui_preview_html(
     function mediaAssetImage(assets, kind) {
       const rows = Array.isArray(assets) ? assets : [];
       const ordered = [
-        ...rows.filter((asset) => asset.kind === kind && asset.is_primary),
-        ...rows.filter((asset) => asset.kind === kind && !asset.is_primary)
+        ...rows.filter((asset) => asset.kind === kind && asset.is_primary && !asset.hidden),
+        ...rows.filter((asset) => asset.kind === kind && !asset.is_primary && !asset.hidden)
       ];
       for (const asset of ordered) {
         const url = mediaAssetUrl(asset);
@@ -19405,18 +21082,37 @@ def ui_preview_html(
     function personImageUrl(credit) {
       return usableImage(credit?.profile_url || credit?.profileUrl || "");
     }
-    function personCardHtml(credit, subtitle) {
+    function personAgeAtMovieRelease(credit, movie) {
+      const birthValue = credit?.birth_date || credit?.birthDate || credit?.person_metadata?.birth_date || credit?.person_metadata?.birthday || "";
+      const birthMatch = String(birthValue).match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+      if (!birthMatch) return null;
+      const releaseMatch = String(movie?.release_date || "").match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+      const releaseYear = releaseMatch ? Number(releaseMatch[1]) : Number(movie?.year || 0);
+      if (!releaseYear) return null;
+      let age = releaseYear - Number(birthMatch[1]);
+      if (releaseMatch) {
+        const releaseMonthDay = Number(releaseMatch[2]) * 100 + Number(releaseMatch[3]);
+        const birthMonthDay = Number(birthMatch[2]) * 100 + Number(birthMatch[3]);
+        if (releaseMonthDay < birthMonthDay) age -= 1;
+      }
+      return age >= 0 && age <= 130 ? age : null;
+    }
+    function personCardHtml(credit, subtitle, movie) {
       const image = personImageUrl(credit);
       const name = credit.name || tNext("common.untitled", "Untitled");
+      const age = personAgeAtMovieRelease(credit, movie);
+      const displayName = age == null ? name : `${name} (${age})`;
+      const role = subtitle || credit.character || credit.job || credit.credit_type || "";
+      const roleText = role ? `${tNext("discover.castAs", "as")} ${role}` : "";
       const avatar = image
         ? `<img src="${escapeHtml(image)}" alt="">`
         : escapeHtml(initialsFromName(name));
       return `
-        <button type="button" class="person-card" data-open-person="${escapeHtml(credit.person_id || "")}">
+        <button type="button" class="person-card responsive-grid-item" data-open-person="${escapeHtml(credit.person_id || "")}">
           <span class="person-avatar">${avatar}</span>
           <span class="person-card-copy">
-            <strong>${escapeHtml(name)}</strong>
-            <span>${escapeHtml(subtitle || credit.character || credit.job || credit.credit_type || "")}</span>
+            <strong>${escapeHtml(displayName)}</strong>
+            <span>${escapeHtml(roleText)}</span>
             ${debugIdHtml(credit.person_id || credit.id, "Person ID")}
           </span>
         </button>
@@ -19565,6 +21261,9 @@ def ui_preview_html(
       document.querySelectorAll("[data-detail-panel-group]").forEach((panel) => {
         if (panel.dataset.detailPanelGroup !== group) return;
         panel.classList.toggle("hidden", panel.id !== panelId);
+      });
+      window.requestAnimationFrame(() => {
+        document.getElementById(panelId)?.querySelectorAll("[data-more-button]").forEach(updateResponsiveGridLimit);
       });
     }
     function activeDetailPanel(group, fallbackPanelId = "") {
@@ -19810,34 +21509,132 @@ def ui_preview_html(
       `;
     }
     function artworkOptionsHtml(detail, kind, emptyKey) {
-      const assets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
-      const className = kind === "backdrop" ? "art-option backdrop" : "art-option";
+      const kindAssets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind);
+      const visibleAssets = kindAssets.filter((asset) => !asset.hidden);
+      const hiddenAssets = kindAssets.filter((asset) => asset.hidden);
+      const assets = movieArtworkHiddenKinds.has(kind)
+        ? [...visibleAssets, ...hiddenAssets]
+        : visibleAssets;
+      const className = kind === "backdrop"
+        ? "art-option backdrop movie-art-option responsive-grid-item"
+        : "art-option movie-art-option responsive-grid-item";
       if (!assets.length) {
         return `<div class="preview-empty">${escapeHtml(tNext(emptyKey || "movieDetail.noArtwork", "No artwork options yet."))}</div>`;
       }
       return assets.map((asset) => {
         const url = mediaAssetUrl(asset);
-        const metaLine = mediaAssetMetaLine(asset);
         const source = mediaAssetSourceLabel(asset);
         const metadata = (detail.movie || {}).metadata || {};
+        const kindLabel = kind === "backdrop"
+          ? tNext("movieDetail.backdrops", "Backdrops")
+          : tNext("movieDetail.posters", "Posters");
+        const actionLabel = `${kindLabel}: ${source || tNext("common.actions", "Actions")}`;
         const preview = url ? `
-          <img src="${escapeHtml(url)}" alt="">
+          <img src="${escapeHtml(url)}" alt="" draggable="false">
           ${asset.is_primary ? `<span class="art-option-badge">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
-          ${artworkLockBadgeHtml(asset, kind, metadata)}
+          ${asset.hidden ? `<span class="art-option-badge hidden-artwork">${escapeHtml(tNext("movieDetail.hiddenArtwork", "Hidden"))}</span>` : ""}
+          ${asset.hidden ? "" : artworkLockBadgeHtml(asset, kind, metadata)}
         ` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
         return `
-          <div class="${className}">
+          <div class="${className}${asset.hidden ? " is-hidden" : ""}" tabindex="0" role="button" aria-haspopup="dialog" aria-label="${escapeHtml(actionLabel)}"
+               data-movie-artwork-menu="${escapeHtml(asset.id || "")}" data-kind="${escapeHtml(kind)}"
+               data-artwork-url="${escapeHtml(url)}" data-artwork-primary="${asset.is_primary ? "true" : "false"}"
+               data-artwork-hidden="${asset.hidden ? "true" : "false"}">
             <div class="art-option-preview">${preview}</div>
-            <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source)}</div>
-            ${metaLine ? `<div class="art-option-meta">${escapeHtml(metaLine)}</div>` : ""}
-            ${artworkOptionActionsHtml({asset, entity: "movie", kind, canDelete: true})}
           </div>
         `;
       }).join("");
     }
+    function renderMovieArtworkGallery(detail, kind) {
+      const suffix = kind === "backdrop" ? "Backdrop" : "Poster";
+      const grid = document.getElementById(`movieDetail${suffix}Artwork`);
+      const toggle = document.getElementById(`movieDetail${suffix}HiddenToggle`);
+      const hiddenCount = (detail.mediaAssets || []).filter((asset) => asset.kind === kind && asset.hidden).length;
+      if (!hiddenCount) movieArtworkHiddenKinds.delete(kind);
+      if (grid) {
+        grid.innerHTML = artworkOptionsHtml(
+          detail,
+          kind,
+          kind === "backdrop" ? "movieDetail.noBackdrops" : "movieDetail.noPosters"
+        );
+      }
+      if (toggle) {
+        const showing = movieArtworkHiddenKinds.has(kind);
+        toggle.classList.toggle("hidden", hiddenCount === 0);
+        toggle.setAttribute("aria-pressed", showing ? "true" : "false");
+        toggle.textContent = showing
+          ? tNext("movieDetail.hideAgain", "Hide again")
+          : tNext("movieDetail.showHidden", "Show hidden ({count})").replace("{count}", formatNumber(hiddenCount));
+        toggle.onclick = () => {
+          if (movieArtworkHiddenKinds.has(kind)) movieArtworkHiddenKinds.delete(kind);
+          else movieArtworkHiddenKinds.add(kind);
+          renderMovieArtworkGallery(activeDetailPayload || detail, kind);
+          configureResponsiveGridLimit(
+            `movieDetail${suffix}Artwork`,
+            `movieDetail${suffix}More`,
+            {mobileRows: 4, desktopRows: 2}
+          );
+          const refreshedGrid = document.getElementById(`movieDetail${suffix}Artwork`);
+          if (refreshedGrid && movieArtworkHiddenKinds.has(kind)) {
+            refreshedGrid.dataset.expanded = "true";
+            updateResponsiveGridLimit(refreshedGrid);
+          }
+          bindMovieArtworkLongPressMenus();
+        };
+      }
+    }
+    let responsiveGridResizeObserver = null;
+    function updateResponsiveGridLimit(grid) {
+      if (!grid) return;
+      const button = document.getElementById(grid.dataset.moreButton || "");
+      if (!button || !grid.clientWidth) {
+        if (button) button.classList.add("hidden");
+        return;
+      }
+      const items = Array.from(grid.querySelectorAll(":scope > .responsive-grid-item"));
+      const columnsValue = window.getComputedStyle(grid).gridTemplateColumns;
+      const columns = Math.max(1, columnsValue === "none" ? 1 : columnsValue.split(" ").filter(Boolean).length);
+      const mobile = window.matchMedia("(max-width: 760px)").matches;
+      const rows = Number(mobile ? grid.dataset.mobileRows : grid.dataset.desktopRows) || 1;
+      const visibleCount = columns * rows;
+      const expanded = grid.dataset.expanded === "true";
+      items.forEach((item, index) => item.classList.toggle("is-overflow-item", !expanded && index >= visibleCount));
+      button.classList.toggle("hidden", expanded || items.length <= visibleCount);
+    }
+    function configureResponsiveGridLimit(gridId, buttonId, {mobileRows, desktopRows}) {
+      const grid = document.getElementById(gridId);
+      const button = document.getElementById(buttonId);
+      if (!grid || !button) return;
+      grid.dataset.moreButton = buttonId;
+      grid.dataset.mobileRows = String(mobileRows);
+      grid.dataset.desktopRows = String(desktopRows);
+      grid.dataset.expanded = "false";
+      if (button.dataset.gridLimitBound !== "1") {
+        button.dataset.gridLimitBound = "1";
+        button.addEventListener("click", () => {
+          grid.dataset.expanded = "true";
+          updateResponsiveGridLimit(grid);
+        });
+      }
+      if (!responsiveGridResizeObserver && "ResizeObserver" in window) {
+        responsiveGridResizeObserver = new ResizeObserver((entries) => {
+          entries.forEach((entry) => updateResponsiveGridLimit(entry.target));
+        });
+      }
+      if (responsiveGridResizeObserver && grid.dataset.gridLimitObserved !== "1") {
+        grid.dataset.gridLimitObserved = "1";
+        responsiveGridResizeObserver.observe(grid);
+      }
+      window.requestAnimationFrame(() => updateResponsiveGridLimit(grid));
+    }
     function renderMovieArtworkManagerStatus(detail) {
       const node = document.getElementById("movieArtworkManagerStatus");
       if (!node) return;
+      node.classList.toggle("hidden", !appDebugMode);
+      if (!appDebugMode) {
+        node.innerHTML = "";
+        return;
+      }
       const assets = detail.mediaAssets || [];
       const posters = assets.filter((asset) => asset.kind === "poster");
       const backdrops = assets.filter((asset) => asset.kind === "backdrop");
@@ -19884,7 +21681,7 @@ def ui_preview_html(
       "movie:rating": ["movieDetail.rating", "Rating"],
       "movie:runtime_minutes": ["movieDetail.runtime", "Runtime"],
       "metadata:director": ["movieDetail.director", "Director"],
-      "metadata:genre": ["movieDetail.genre", "Genre"],
+      "genre:genre": ["movieDetail.genre", "Genre"],
       "metadata:studios": ["movieDetail.studios", "Studios"],
       "metadata:distributor": ["movieDetail.distributor", "Distributor"],
       "metadata:packaging": ["movieDetail.packaging", "Packaging"],
@@ -19909,6 +21706,12 @@ def ui_preview_html(
     function renderMovieMetadataCompare(detail) {
       const node = document.getElementById("movieMetadataComparePanel");
       if (!node) return;
+      const card = document.getElementById("movieMetadataCompareCard");
+      if (card) card.classList.toggle("hidden", !appDebugMode);
+      if (!appDebugMode) {
+        node.innerHTML = "";
+        return;
+      }
       const button = document.getElementById("movieMetadataCompareButton");
       if (button) {
         const canCompare = hasPermission("metadata.refresh_one");
@@ -20125,7 +21928,7 @@ def ui_preview_html(
       const embedUrl = youtubeEmbedUrl(url);
       if (embedUrl) {
         return `
-          <article class="video-card embedded">
+          <article class="video-card embedded responsive-grid-item">
             <div class="video-embed">
               <iframe src="${escapeHtml(embedUrl)}" title="${escapeHtml(title)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
             </div>
@@ -20138,7 +21941,7 @@ def ui_preview_html(
         `;
       }
       return `
-        <a class="video-card" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+        <a class="video-card responsive-grid-item" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
           <strong>${escapeHtml(title)}</strong>
           <span>${escapeHtml(meta)}</span>
         </a>
@@ -20274,18 +22077,29 @@ def ui_preview_html(
       const node = document.getElementById("movieDetailMessage");
       if (!node) return;
       node.textContent = message || "";
-      node.className = `detail-message ${tone || ""}`.trim();
+      node.className = `detail-message movie-detail-status ${tone || ""}`.trim();
     }
     function setMovieEditPanelVisible(show) {
       const panel = document.getElementById("movieEditPanel");
       const editButton = document.getElementById("movieEditToggleButton");
+      const editLabel = document.getElementById("movieEditToggleLabel");
+      const editIcon = document.getElementById("movieEditToggleIcon");
       const cancelButton = document.getElementById("movieEditCancelTopButton");
       if (!panel) return;
       panel.classList.toggle("hidden", !show);
       if (editButton) {
-        editButton.dataset.nextI18n = show ? "common.save" : "common.edit";
-        editButton.textContent = show ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
-        editButton.classList.toggle("secondary", !show);
+        const labelKey = show ? "common.save" : "common.edit";
+        const label = show ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
+        editButton.dataset.nextI18nAria = labelKey;
+        editButton.dataset.nextI18nTitle = labelKey;
+        editButton.setAttribute("aria-label", label);
+        editButton.setAttribute("title", label);
+        editButton.classList.toggle("is-editing", show);
+        if (editLabel) {
+          editLabel.dataset.nextI18n = labelKey;
+          editLabel.textContent = label;
+        }
+        if (editIcon) editIcon.setAttribute("d", show ? editIcon.dataset.savePath : editIcon.dataset.editPath);
       }
       if (cancelButton) cancelButton.classList.toggle("hidden", !show);
       if (show) document.getElementById("movieEditTitle")?.focus();
@@ -20314,6 +22128,23 @@ def ui_preview_html(
       {value: "4K UHD", collectorOnly: false},
       {value: "VCD/SVCD", collectorOnly: true}
     ];
+    // The 19 canonical TMDB movie genre keys. English reference labels are
+    // only a fallback for genreLabel() before the active locale's
+    // genre.<key> i18n catalog entry resolves; genres are otherwise always
+    // shown in the caller's locale.
+    const GENRE_KEYS = [
+      "action", "adventure", "animation", "comedy", "crime", "documentary",
+      "drama", "family", "fantasy", "history", "horror", "music", "mystery",
+      "romance", "science_fiction", "tv_movie", "thriller", "war", "western"
+    ];
+    const GENRE_FALLBACK_LABELS = {
+      action: "Action", adventure: "Adventure", animation: "Animation",
+      comedy: "Comedy", crime: "Crime", documentary: "Documentary",
+      drama: "Drama", family: "Family", fantasy: "Fantasy",
+      history: "History", horror: "Horror", music: "Music", mystery: "Mystery",
+      romance: "Romance", science_fiction: "Science Fiction", tv_movie: "TV Movie",
+      thriller: "Thriller", war: "War", western: "Western"
+    };
     function normalizedMovieFormatValue(value) {
       const text = String(value || "").trim();
       const lower = text.toLowerCase();
@@ -20397,7 +22228,6 @@ def ui_preview_html(
       movieEditNotes: "notes",
       movieEditRuntime: "runtime_minutes",
       movieEditDirector: "director",
-      movieEditGenre: "genre",
       movieEditStudios: "studios",
       movieEditContentRating: "content_ratings",
       movieEditHdr: "hdr",
@@ -20464,9 +22294,8 @@ def ui_preview_html(
         movieEditLocation: typeof movie.location === "string" ? movie.location : "",
         movieEditRuntime: movie.runtime_minutes || "",
         movieEditDirector: valueText(metadata.director),
-        movieEditGenre: valueText(metadata.genre),
         movieEditStudios: valueText(metadata.studios),
-        movieEditContentRating: contentRatingInfo.rating || "",
+        movieEditContentRating: contentRatingInfo.unknown ? "" : (contentRatingInfo.rating || ""),
         movieEditHdr: valueText(specs.hdr || metadata.hdr),
         movieEditScreenRatio: valueText(specs.screen_ratios || metadata.screen_ratios),
         movieEditAudioTracks: valueText(specs.audio_tracks || metadata.audio_tracks),
@@ -20494,10 +22323,7 @@ def ui_preview_html(
     function renderMovieListState(detail) {
       const state = detail.userState || {};
       const watchButton = document.getElementById("movieWatchlistToggleButton");
-      const watchedButton = document.getElementById("movieWatchedTodayButton");
-      const yesterdayButton = document.getElementById("movieWatchedYesterdayButton");
-      const chooseDateButton = document.getElementById("movieWatchedChooseDateButton");
-      const customDateControls = document.getElementById("movieWatchedCustomDateControls");
+      const watchButtonLabel = document.getElementById("movieWatchlistToggleLabel");
       const summary = document.getElementById("movieListStateSummary");
       const historyNode = document.getElementById("movieWatchHistoryPills");
       const canUseLists = hasPermission("watchlist.manage");
@@ -20505,16 +22331,13 @@ def ui_preview_html(
       if (!canUseLists) return;
       if (watchButton) {
         watchButton.classList.toggle("active", !!state.onWatchlist);
-        watchButton.textContent = state.onWatchlist
+        watchButton.setAttribute("aria-pressed", state.onWatchlist ? "true" : "false");
+      }
+      if (watchButtonLabel) {
+        watchButtonLabel.textContent = state.onWatchlist
           ? tNext("lists.inWatchlist", "In Watchlist")
           : tNext("lists.addToWatchlist", "Add to Watchlist");
       }
-      if (watchedButton) {
-        watchedButton.classList.toggle("active", sameLocalDate(state.lastWatched, localDateString(0)));
-      }
-      if (yesterdayButton) yesterdayButton.classList.toggle("active", sameLocalDate(state.lastWatched, localDateString(-1)));
-      if (chooseDateButton) chooseDateButton.classList.remove("active");
-      if (customDateControls) customDateControls.classList.add("hidden");
       const lastWatched = state.lastWatched ? formatAppDate(state.lastWatched) : "";
       if (summary) {
         summary.textContent = lastWatched
@@ -20629,24 +22452,124 @@ def ui_preview_html(
       }
       if (requestForm) requestForm.classList.toggle("hidden", pending || approved);
     }
-    async function attachActiveMovieTag(name) {
+    async function attachActiveMovieTag(tag) {
       if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
-      const clean = String(name || "").trim();
-      if (!clean) return;
+      const source = typeof tag === "string" ? {name: tag} : (tag || {});
+      const tagId = String(source.tagId || source.id || "").trim();
+      const name = String(source.name || "").trim();
+      if (!tagId && !name) return false;
+      const body = tagId ? {tagId} : {name, color: source.color || null};
       setMovieDetailMessage(tNext("lists.tagAdding", "Adding tag..."));
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/tags`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({name: clean})
+          body: JSON.stringify(body)
         });
         activeDetailPayload.userState = payload.userState || {};
+        libraryTagsLoaded = false;
+        listsState.loaded = false;
         renderMovieListState(activeDetailPayload);
-        const input = document.getElementById("movieTagAddInput");
-        if (input) input.value = "";
         setMovieDetailMessage(tNext("lists.tagAdded", "Tag added."), "good");
+        return true;
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
+        return false;
+      }
+    }
+    async function openMovieTagPicker() {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      const { overlay, panel } = listsCreateOverlay("lists-tag-picker");
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-modal", "true");
+      panel.setAttribute("aria-labelledby", "movieTagPickerTitle");
+      panel.innerHTML = `
+        <header class="lists-modal-head"><h3 id="movieTagPickerTitle">${escapeHtml(tNext("lists.tagAdd", "Add tag"))}</h3></header>
+        <input type="search" class="movie-tag-picker-search" data-tag-search maxlength="60" placeholder="${escapeHtml(tNext("lists.tagAddPlaceholder", "Add a tag"))}" aria-label="${escapeHtml(tNext("lists.tagAdd", "Add tag"))}">
+        <div class="movie-tag-picker-results" data-tag-results>
+          <p class="lists-modal-message">${escapeHtml(tNext("common.loading", "Loading..."))}</p>
+        </div>
+        <div data-tag-create></div>
+        <p class="lists-modal-message" data-message></p>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+        </footer>
+      `;
+      const searchInput = panel.querySelector("[data-tag-search]");
+      const resultsNode = panel.querySelector("[data-tag-results]");
+      const createNode = panel.querySelector("[data-tag-create]");
+      const messageNode = panel.querySelector("[data-message]");
+      const attachedIds = new Set(((activeDetailPayload?.userState || {}).tags || []).map((tag) => String(tag.id)));
+      const colorOptions = ["", "#e5484d", "#f97316", "#f5b942", "#35a66f", "#1aa790", "#139dc2", "#3478d4", "#5b5bd6", "#8f46d5", "#d33f92", "#8b8f99"];
+      let tags = [];
+      let selectedColor = "#e5484d";
+      const setMessage = (text, tone = "") => {
+        messageNode.textContent = text || "";
+        messageNode.className = "lists-modal-message" + (tone ? " " + tone : "");
+      };
+      const attachAndClose = async (tagInput) => {
+        setMessage(tNext("lists.tagAdding", "Adding tag..."));
+        if (await attachActiveMovieTag(tagInput)) listsCloseOverlay(overlay);
+      };
+      const renderOptions = () => {
+        const query = String(searchInput.value || "").trim();
+        const normalizedQuery = query.toLocaleLowerCase();
+        const matching = tags.filter((tag) => {
+          if (attachedIds.has(String(tag.id))) return false;
+          const name = String(tag.name || tag.slug || "");
+          return !normalizedQuery || name.toLocaleLowerCase().includes(normalizedQuery);
+        });
+        resultsNode.innerHTML = matching.length
+          ? matching.map((tag) => `
+              <button type="button" class="movie-tag-picker-option" data-tag-id="${escapeHtml(tag.id)}"${tag.color ? ` style="--tag-color:${escapeHtml(tag.color)}"` : ""}>
+                <span class="movie-tag-picker-swatch" aria-hidden="true"></span>
+                <span>${escapeHtml(tag.name || tag.slug || "")}</span>
+              </button>
+            `).join("")
+          : `<p class="lists-modal-message">${escapeHtml(tNext("bulk.tagsEmpty", "No tags found."))}</p>`;
+        resultsNode.querySelectorAll("[data-tag-id]").forEach((button) => {
+          button.addEventListener("click", () => attachAndClose({tagId: button.dataset.tagId}));
+        });
+        const exactMatch = tags.some((tag) => String(tag.name || tag.slug || "").trim().toLocaleLowerCase() === normalizedQuery);
+        if (!query || exactMatch) {
+          createNode.innerHTML = "";
+          return;
+        }
+        const colorButtons = colorOptions.map((color) => {
+          const active = color === selectedColor;
+          const style = color ? ` style="--tag-color:${escapeHtml(color)}"` : "";
+          return `<button type="button" class="movie-tag-color-option${color ? "" : " none"}" role="radio" aria-checked="${active ? "true" : "false"}" aria-label="${escapeHtml(color || tNext("common.none", "None"))}" data-tag-color="${escapeHtml(color)}"${style}></button>`;
+        }).join("");
+        createNode.innerHTML = `
+          <div class="movie-tag-create-section">
+            <button type="button" class="movie-tag-picker-create" data-create-tag>
+              <span aria-hidden="true">+</span>
+              <span>${escapeHtml(tNext("lists.tagCreateSubmit", "Create"))} "${escapeHtml(query)}"</span>
+            </button>
+            <span class="movie-tag-color-label">${escapeHtml(tNext("lists.tagColorLabel", "Colour"))}</span>
+            <div class="movie-tag-color-options" role="radiogroup">${colorButtons}</div>
+          </div>
+        `;
+        createNode.querySelectorAll("[data-tag-color]").forEach((button) => {
+          button.addEventListener("click", () => {
+            selectedColor = button.dataset.tagColor || "";
+            renderOptions();
+          });
+        });
+        createNode.querySelector("[data-create-tag]")?.addEventListener("click", () => attachAndClose({name: query, color: selectedColor}));
+      };
+      panel.querySelector("[data-secondary]")?.addEventListener("click", () => listsCloseOverlay(overlay));
+      searchInput.addEventListener("input", renderOptions);
+      searchInput.focus();
+      try {
+        const payload = await authApiJson("/api/next/tags");
+        tags = Array.isArray(payload.tags) ? payload.tags : [];
+        libraryTags = tags.slice();
+        libraryTagsLoaded = true;
+        renderOptions();
+      } catch (error) {
+        resultsNode.innerHTML = "";
+        setMessage(error.message || String(error), "bad");
       }
     }
     async function detachActiveMovieTag(tagId) {
@@ -20771,10 +22694,20 @@ def ui_preview_html(
     function updateMovieListCache(movieId, userState) {
       movies = (movies || []).map((movie) => {
         if (String(movie.id) !== String(movieId)) return movie;
+        const tags = Array.isArray(userState?.tags)
+          ? userState.tags.map((tag) => ({
+              id: tag?.id || "",
+              name: tag?.name || "",
+              slug: tag?.slug || "",
+              color: tag?.color || ""
+            }))
+          : (Array.isArray(movie.tags) ? movie.tags : []);
         return Object.assign({}, movie, {
           on_watchlist: !!userState?.onWatchlist,
           watchlist_added_at: userState?.watchlistAddedAt || null,
-          last_watched: userState?.lastWatched || null
+          last_watched: userState?.lastWatched || null,
+          has_tags: tags.length > 0,
+          tags
         });
       });
       listsState.loaded = false;
@@ -20791,10 +22724,6 @@ def ui_preview_html(
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
       return `${year}-${month}-${day}`;
-    }
-    function sameLocalDate(value, dateText) {
-      if (!value || !dateText) return false;
-      return String(value).slice(0, 10) === dateText;
     }
     async function toggleActiveMovieWatchlist() {
       if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
@@ -20830,22 +22759,64 @@ def ui_preview_html(
         setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
-    function handleWatchedDateChoice(choice) {
-      if (choice === "today") {
-        markActiveMovieWatched(localDateString(0));
-        return;
-      }
-      if (choice === "yesterday") {
-        markActiveMovieWatched(localDateString(-1));
-        return;
-      }
-      const controls = document.getElementById("movieWatchedCustomDateControls");
-      const input = document.getElementById("movieWatchedDateInput");
-      const chooseButton = document.getElementById("movieWatchedChooseDateButton");
-      if (controls) controls.classList.remove("hidden");
-      if (chooseButton) chooseButton.classList.add("active");
-      if (input && !input.value) input.value = localDateString(0);
-      input?.focus();
+    function openMovieRewatchDialog() {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet movie-rewatch-sheet");
+      panel.setAttribute("role", "dialog");
+      panel.setAttribute("aria-modal", "true");
+      panel.setAttribute("aria-labelledby", "movieRewatchDialogTitle");
+      panel.innerHTML = `
+        <header class="lists-modal-head">
+          <h3 id="movieRewatchDialogTitle">${escapeHtml(tNext("lists.logRewatch", "Log rewatch"))}</h3>
+        </header>
+        <div class="lists-actionsheet-list">
+          <button type="button" class="lists-actionsheet-btn" data-rewatch-date="today">${escapeHtml(tNext("lists.watchedToday", "Watched today"))}</button>
+          <button type="button" class="lists-actionsheet-btn" data-rewatch-date="yesterday">${escapeHtml(tNext("lists.watchedYesterday", "Watched yesterday"))}</button>
+          <button type="button" class="lists-actionsheet-btn" data-rewatch-date="choose">${escapeHtml(tNext("lists.chooseWatchedDate", "Choose a date"))}</button>
+        </div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]")?.addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-rewatch-date]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const choice = button.dataset.rewatchDate;
+          if (choice === "choose") {
+            openMovieRewatchDatePicker(overlay, panel);
+            return;
+          }
+          listsCloseOverlay(overlay);
+          markActiveMovieWatched(localDateString(choice === "yesterday" ? -1 : 0));
+        });
+      });
+      panel.querySelector("[data-rewatch-date]")?.focus();
+    }
+    function openMovieRewatchDatePicker(overlay, panel) {
+      panel.innerHTML = `
+        <header class="lists-modal-head">
+          <h3 id="movieRewatchDialogTitle">${escapeHtml(tNext("lists.chooseWatchedDate", "Choose a date"))}</h3>
+        </header>
+        <form id="movieRewatchDateForm">
+          <label class="movie-rewatch-date">
+            <span>${escapeHtml(tNext("lists.watchedDate", "Watched date"))}</span>
+            <input type="date" id="movieRewatchDateInput" value="${escapeHtml(localDateString(0))}" required>
+          </label>
+          <footer class="lists-modal-actions">
+            <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+            <button type="submit">${escapeHtml(tNext("lists.markWatchedDate", "Add date"))}</button>
+          </footer>
+        </form>
+      `;
+      panel.querySelector("[data-secondary]")?.addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelector("#movieRewatchDateForm")?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const value = panel.querySelector("#movieRewatchDateInput")?.value || "";
+        if (!value) return;
+        listsCloseOverlay(overlay);
+        markActiveMovieWatched(value);
+      });
+      panel.querySelector("#movieRewatchDateInput")?.focus();
     }
     async function deleteActiveMovieWatchedEntry(entryId) {
       if (!activeDetailMovieId || !entryId || !hasPermission("watchlist.manage")) return;
@@ -20883,12 +22854,12 @@ def ui_preview_html(
       document.getElementById("movieDetailOverview").textContent = localizedMovieOverview(movie, detail.localizations) || tNext("movieDetail.noOverview", "No overview imported yet.");
       const contentRatingInfo = preferredContentRatingInfo(movie, specs);
       const contentRating = contentRatingInfo.rating;
-      const heroContentRatingTag = contentRatingBadgeHtml(contentRatingInfo);
+      const heroContentRatingHtml = contentRatingValueHtml(contentRatingInfo);
       document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
         movie.year,
         movie.format,
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
-        heroContentRatingTag ? {html: heroContentRatingTag} : contentRatingSummaryText(contentRatingInfo),
+        heroContentRatingHtml ? {html: heroContentRatingHtml} : contentRatingSummaryText(contentRatingInfo),
         movieScoreLabel(movie),
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
         (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : "",
@@ -20910,25 +22881,25 @@ def ui_preview_html(
         [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
         [tNext("movieDetail.director", "Director"), metadata.director],
-        [tNext("movieDetail.genre", "Genre"), metadata.genre],
+        [tNext("movieDetail.genre", "Genre"), movieGenreValues(movie).map(genreLabel).join(", ")],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
         [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
         ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
       ]);
-      const audioVideoSubsection = detailFieldSubsection(tNext("movieDetail.audioVideo", "Audio & Video"), [
+      const audioVideoFields = [
         ["HDR", specs.hdr || metadata.hdr],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
         [tNext("movieDetail.format", "Format"), movie.format || specs.format || metadata.format],
         [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
         [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
         [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles]
-      ]);
+      ];
       const releaseLocationText = typeof movie.location === "string" ? movie.location : "";
       const storageLocationLabel = movie.location && typeof movie.location === "object"
         ? movie.location.pathLabel || movie.location.name || ""
         : "";
       const storageLocationHtml = storageLocationLabel ? locationRouteLinkHtml(movie.location, storageLocationLabel) : "";
-      const collectorsSubsection = detailFieldSubsection(tNext("movieDetail.collectors", "Collectors"), [
+      const collectorsFields = [
         [tNext("movieDetail.edition", "Edition"), movie.edition],
         [tNext("movieDetail.packaging", "Packaging"), releasePackaging],
         [tNext("movieDetail.location", "Location"), releaseLocationText],
@@ -20936,10 +22907,10 @@ def ui_preview_html(
         [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
         [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
         ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
-      ]);
-      document.getElementById("movieDetailTechnical").innerHTML = (audioVideoSubsection + collectorsSubsection)
-        || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noData", "No data imported yet."))}</div>`;
-      bindContainerDetailLinks("movieDetailTechnical");
+      ];
+      document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
+      document.getElementById("movieDetailCollectors").innerHTML = detailFieldRows(collectorsFields);
+      bindContainerDetailLinks("movieDetailCollectors");
       renderMovieMetadataCompare(detail);
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
@@ -20986,34 +22957,54 @@ def ui_preview_html(
           openAppContainerDetail(decodeURIComponent(match[1]));
         });
       });
-      document.getElementById("movieDetailPosterArtwork").innerHTML = artworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
-      document.getElementById("movieDetailBackdropArtwork").innerHTML = artworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      renderMovieArtworkGallery(detail, "poster");
+      renderMovieArtworkGallery(detail, "backdrop");
       renderMovieArtworkManagerStatus(detail);
       reflectArtworkLockButtons(detail, "movie");
-      document.getElementById("movieDetailVideos").innerHTML = movieVideoGroupsHtml(movieVideoItems(movie, metadata));
+      document.getElementById("movieDetailVideos").innerHTML = videoCardsHtml(movieVideoItems(movie, metadata));
       const castCredits = (detail.credits || []).filter((credit) => ["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       const crewCredits = (detail.credits || []).filter((credit) => !["actor", "cast"].includes(String(credit.credit_type || "").toLowerCase()));
       document.getElementById("movieDetailCast").innerHTML = castCredits.slice(0, 64).map((credit) => personCardHtml(
         credit,
-        credit.character || credit.job || credit.credit_type || ""
+        credit.character || credit.job || credit.credit_type || "",
+        movie
       )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCast", "No cast imported yet."))}</div>`;
       document.getElementById("movieDetailCrew").innerHTML = crewCredits.slice(0, 64).map((credit) => personCardHtml(
         credit,
-        credit.job || credit.character || credit.credit_type || ""
+        credit.job || credit.character || credit.credit_type || "",
+        movie
       )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCrew", "No crew imported yet."))}</div>`;
+      configureResponsiveGridLimit("movieDetailCast", "movieDetailCastMore", {mobileRows: 4, desktopRows: 4});
+      configureResponsiveGridLimit("movieDetailCrew", "movieDetailCrewMore", {mobileRows: 4, desktopRows: 4});
+      configureResponsiveGridLimit("movieDetailPosterArtwork", "movieDetailPosterMore", {mobileRows: 4, desktopRows: 2});
+      configureResponsiveGridLimit("movieDetailBackdropArtwork", "movieDetailBackdropMore", {mobileRows: 4, desktopRows: 2});
+      ["poster", "backdrop"].forEach((kind) => {
+        if (!movieArtworkHiddenKinds.has(kind)) return;
+        const suffix = kind === "backdrop" ? "Backdrop" : "Poster";
+        const grid = document.getElementById(`movieDetail${suffix}Artwork`);
+        if (grid) {
+          grid.dataset.expanded = "true";
+          updateResponsiveGridLimit(grid);
+        }
+      });
+      configureResponsiveGridLimit("movieDetailVideos", "movieDetailVideoMore", {mobileRows: 4, desktopRows: 2});
+      bindMovieArtworkLongPressMenus();
       setMovieDetailMessage("");
       applyAppPermissionVisibility();
     }
     function showMovieDetailLoading(movieId) {
       activeDetailMovieId = movieId || "";
       activeDetailPayload = null;
+      movieArtworkHiddenKinds.clear();
       movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
       setMovieEditPanelVisible(false);
+      activateDetailTab("movieSections", "movieDetailReleasePanel");
       document.getElementById("movieDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("movieDetailOverview").textContent = "";
       document.getElementById("movieDetailTags").innerHTML = "";
       document.getElementById("movieDetailRelease").innerHTML = "";
       document.getElementById("movieDetailTechnical").innerHTML = "";
+      document.getElementById("movieDetailCollectors").innerHTML = "";
       document.getElementById("movieMetadataComparePanel").innerHTML = "";
       document.getElementById("movieListStateSummary").textContent = "";
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
@@ -21029,6 +23020,8 @@ def ui_preview_html(
       document.getElementById("movieDetailRelationships").innerHTML = "";
       document.getElementById("movieDetailPosterArtwork").innerHTML = "";
       document.getElementById("movieDetailBackdropArtwork").innerHTML = "";
+      document.getElementById("movieDetailPosterHiddenToggle")?.classList.add("hidden");
+      document.getElementById("movieDetailBackdropHiddenToggle")?.classList.add("hidden");
       document.getElementById("movieArtworkManagerStatus").innerHTML = "";
       document.getElementById("movieDetailVideos").innerHTML = "";
       document.getElementById("movieDetailCast").innerHTML = "";
@@ -21161,7 +23154,13 @@ def ui_preview_html(
       });
       if (typeInput) {
         typeInput.value = container.container_type || "collection";
-        typeInput.disabled = true;
+        const canConvert = !!((detail.actions || {}).canConvert);
+        Array.from(typeInput.options || []).forEach((option) => {
+          const conversionType = ["box_set", "vault"].includes(option.value);
+          option.disabled = canConvert && !conversionType;
+          option.hidden = canConvert && !conversionType;
+        });
+        typeInput.disabled = !canConvert;
       }
       const locationSelect = document.getElementById("containerEditLocationSelect");
       if (locationSelect && document.activeElement !== locationSelect) {
@@ -21992,9 +23991,24 @@ def ui_preview_html(
     async function saveContainerDetails(event) {
       event.preventDefault();
       if (!activeContainerId) return;
-      setContainerDetailMessage(tNext("containerDetail.saving", "Saving container..."));
+      const currentContainer = activeContainer();
+      const requestedType = document.getElementById("containerEditType")?.value || currentContainer.container_type || "";
+      const converting = !!(
+        requestedType
+        && currentContainer.container_type
+        && requestedType !== currentContainer.container_type
+      );
+      if (converting && !window.confirm(tNext(
+        "containerDetail.convertConfirm",
+        "Convert this container? Movies, artwork, metadata and collection links will be preserved."
+      ))) return;
+      setContainerDetailMessage(tNext(
+        converting ? "containerDetail.converting" : "containerDetail.saving",
+        converting ? "Converting container..." : "Saving container..."
+      ));
       const body = {
         title: formTextValue("containerEditTitle"),
+        containerType: requestedType,
         year: formTextValue("containerEditYear"),
         barcode: formTextValue("containerEditBarcode"),
         badgeLabel: formTextValue("containerEditBadge"),
@@ -22010,9 +24024,19 @@ def ui_preview_html(
         renderContainerDetail(payload.detail || {});
         await loadAppSnapshot();
         setContainerEditPanelVisible(false);
-        setContainerDetailMessage(tNext("containerDetail.saved", "Container saved."), "good");
+        setContainerDetailMessage(tNext(
+          payload.converted ? "containerDetail.converted" : "containerDetail.saved",
+          payload.converted ? "Container converted." : "Container saved."
+        ), "good");
       } catch (error) {
-        setContainerDetailMessage(error.message || String(error), "bad");
+        const rawMessage = error.message || String(error);
+        let message = rawMessage;
+        if (rawMessage.includes("box-set with this barcode")) {
+          message = tNext("containerDetail.convertBarcodeConflict", "Another box-set already uses this barcode.");
+        } else if (rawMessage.includes("container owner") || rawMessage.includes("instance owner/admin")) {
+          message = tNext("containerDetail.convertPermissionDenied", "Only the container owner or an instance owner/admin can convert it.");
+        }
+        setContainerDetailMessage(message, "bad");
       }
     }
     async function addContainerMovie(event) {
@@ -22834,7 +24858,6 @@ def ui_preview_html(
       ["overview", "Plot"],
       ["director", "Director"],
       ["actor", "Actors"],
-      ["genre", "Genre"],
       ["imdbId", "IMDb ID"],
       ["tmdbId", "TMDb ID"],
       ["poster", "Poster"],
@@ -25312,6 +27335,19 @@ def ui_preview_html(
       }
       const metadata = payload.metadata || payload;
       const results = metadata.results || metadata.sources || metadata.matches || [];
+      const tmdbEnrichment = metadata?.enrichment?.tmdb || {};
+      const tmdbNeedsConfiguration = tmdbEnrichment.configured === false
+        && tmdbEnrichment.state === "needs_configuration";
+      const tmdbGuidance = tmdbNeedsConfiguration ? `
+        <div class="preview-empty warn import-tmdb-guidance" role="status">
+          <strong>${escapeHtml(tNext("importCenter.tmdbKeyRequiredTitle", "Add a free TMDb API key for full metadata"))}</strong>
+          <span>${escapeHtml(tNext("importCenter.tmdbKeyRequiredHelp", "You can still add this movie, but plot, cast and crew, artwork, and trailers will be limited until a TMDb API key is configured."))}</span>
+          <div class="button-row compact">
+            <a class="secondary-button" href="${escapeHtml(tmdbEnrichment.requestKeyUrl || "https://www.themoviedb.org/settings/api")}" target="_blank" rel="noopener noreferrer">${escapeHtml(tNext("importCenter.requestTmdbKey", "Request free TMDb key"))}</a>
+            ${canUseAppAdmin() ? `<button type="button" class="secondary-button" data-import-configure-tmdb="1">${escapeHtml(tNext("importCenter.configureTmdbKey", "Configure TMDb key"))}</button>` : ""}
+          </div>
+        </div>
+      ` : "";
       const boxSetProposals = barcodeBoxSetProposals();
       const movieResultCards = lookupMovieCandidates();
       const addableBoxSetProposal = boxSetProposals.find((item) => {
@@ -25692,13 +27728,13 @@ def ui_preview_html(
       `;
       if (!Array.isArray(results) || !results.length) {
         if (proposalCard || boxSetCard) {
-          list.innerHTML = directResultCard + boxSetCard + proposalCard + lookupActionFooter;
+          list.innerHTML = directResultCard + tmdbGuidance + boxSetCard + proposalCard + lookupActionFooter;
         } else {
-          list.innerHTML = directResultCard + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>` + lookupActionFooter;
+          list.innerHTML = directResultCard + tmdbGuidance + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>` + lookupActionFooter;
         }
         return;
       }
-      list.innerHTML = directResultCard + boxSetCard + proposalCard + sourceGrid + lookupActionFooter;
+      list.innerHTML = directResultCard + tmdbGuidance + boxSetCard + proposalCard + sourceGrid + lookupActionFooter;
     }
     function renderImportCenter() {
       renderImportTabs();
@@ -26430,13 +28466,13 @@ def ui_preview_html(
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       const meta = [item.year, physicalFormatLabel(item.format) || item.format].filter(Boolean).join(" / ");
       const acquired = !!item.acquiredAt;
-      const activeMonitor = !!item.alertEnabled && item.targetPrice != null;
+      const activeMonitor = priceMonitoringEnabled() && !!item.alertEnabled && item.targetPrice != null;
       const priceCurrency = String(item.priceCurrency || "EUR").trim().toUpperCase() || "EUR";
       const currentBadge = activeMonitor && item.lastSeenPrice != null
-        ? `<span class="lists-price-badge current" title="${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19H2V5H4V17H20V19H4ZM6 15.4L11 10.4L14 13.4L19.6 7.8L21 9.2L14 16.2L11 13.2L7.4 16.8L6 15.4Z"/></svg></span>${escapeHtml(formatStatsPrice(item.lastSeenPrice, priceCurrency))}</span>`
+        ? `<span class="lists-price-badge current" title="${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19H2V5H4V17H20V19H4ZM6 15.4L11 10.4L14 13.4L19.6 7.8L21 9.2L14 16.2L11 13.2L7.4 16.8L6 15.4Z"/></svg></span>${escapeHtml(formatWishlistPrice(item.lastSeenPrice, priceCurrency))}</span>`
         : "";
       const targetBadge = activeMonitor
-        ? `<span class="lists-price-badge target" title="${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none"></circle><circle cx="12" cy="12" r="4" fill="none"></circle><circle cx="12" cy="12" r="1.8"></circle></svg></span>${escapeHtml(formatStatsPrice(item.targetPrice, priceCurrency))}</span>`
+        ? `<span class="lists-price-badge target" title="${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}"><span class="lists-price-badge-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none"></circle><circle cx="12" cy="12" r="4" fill="none"></circle><circle cx="12" cy="12" r="1.8"></circle></svg></span>${escapeHtml(formatWishlistPrice(item.targetPrice, priceCurrency))}</span>`
         : "";
       return `
         <div class="preview-poster lists-static-poster" data-wishlist-card="${escapeHtml(item.id)}">
@@ -26501,8 +28537,9 @@ def ui_preview_html(
     }
     function wishlistRenderRows(rows, mode) {
       const all = rows || [];
-      const monitored = all.filter((item) => !item.acquiredAt && !!item.alertEnabled && item.targetPrice != null);
-      const pending = all.filter((item) => !item.acquiredAt && !(!!item.alertEnabled && item.targetPrice != null));
+      const monitoringEnabled = priceMonitoringEnabled();
+      const monitored = monitoringEnabled ? all.filter((item) => !item.acquiredAt && !!item.alertEnabled && item.targetPrice != null) : [];
+      const pending = all.filter((item) => !item.acquiredAt && (!monitoringEnabled || !(!!item.alertEnabled && item.targetPrice != null)));
       const acquired = all.filter((item) => !!item.acquiredAt);
       const renderGroup = (groupRows) => {
         if (mode === "detail") return wishlistDetailTableHtml(groupRows);
@@ -26521,7 +28558,7 @@ def ui_preview_html(
             : `<p class="wishlist-section-empty">${escapeHtml(tNext("lists.wishlistSectionEmpty", "Nothing here yet."))}</p>`}
         </section>
       `;
-      return section(tNext("appAdmin.featurePriceAlerts", "Price alerts"), monitored)
+      return (monitoringEnabled ? section(tNext("appAdmin.featurePriceAlerts", "Price alerts"), monitored) : "")
         + section(tNext("lists.wishlistSectionPending", "On wishlist"), pending)
         + section(tNext("lists.wishlistSectionAcquired", "Acquired"), acquired);
     }
@@ -26849,7 +28886,7 @@ def ui_preview_html(
       const candidate = (state.candidates || []).find((c) => c.candidateKey === candidateKey);
       if (!candidate) return;
       try {
-        await authApiJson("/api/next/lists/wishlist", {
+        const payload = await authApiJson("/api/next/lists/wishlist", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -26862,9 +28899,12 @@ def ui_preview_html(
             note: candidate.editionLabel || null
           })
         });
-        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        const message = payload && (payload.alreadyExists || payload.state === "already_exists")
+          ? tNext("lists.wishlistSectionPending", "On wishlist")
+          : tNext("lists.wishlistAdded", "Added to wishlist.");
+        setWishlistSearchMessage(message, "good");
         closeWishlistSearch();
-        setWishlistSearchMessage(tNext("lists.wishlistAdded", "Added to wishlist."), "good");
+        setWishlistSearchMessage(message, "good");
         await loadListsView(true);
       } catch (err) {
         setWishlistSearchMessage((err && err.message) || tNext("lists.wishlistSearchError", "Search failed. Please try again."), "error");
@@ -27282,15 +29322,26 @@ def ui_preview_html(
       });
     }
     function listsCloseOverlay(overlay) {
-      if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (!overlay) return;
+      const returnFocus = overlay.returnFocusElement;
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (returnFocus && document.contains(returnFocus) && typeof returnFocus.focus === "function") returnFocus.focus();
     }
     function listsCreateOverlay(className) {
+      const returnFocus = document.activeElement;
       const overlay = document.createElement("div");
       overlay.className = "lists-modal-overlay";
+      overlay.returnFocusElement = returnFocus;
       const panel = document.createElement("div");
       panel.className = "lists-modal " + (className || "");
       overlay.appendChild(panel);
       overlay.addEventListener("mousedown", (event) => { if (event.target === overlay) listsCloseOverlay(overlay); });
+      overlay.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        event.stopPropagation();
+        listsCloseOverlay(overlay);
+      });
       document.body.appendChild(overlay);
       return { overlay, panel };
     }
@@ -27313,21 +29364,61 @@ def ui_preview_html(
       let shops = normalizeShops(item.shops);
       let shopEditor = null;
       let shopProvidersState = {loaded: false, loading: false, options: []};
-      const providerDomainHints = [
-        { matchers: [/zavvi\\./], providerTokens: ["zavvi"] },
-        { matchers: [/arrowfilms\\./, /arrow-video\\./], providerTokens: ["arrow", "arrowfilms", "arrow_films"] },
+      const AMAZON_ASIN_PATTERNS = [
+        /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/i,
+        /\/gp\/product\/([A-Z0-9]{10})(?:[/?]|$)/i,
+        /[?&]asin=([A-Z0-9]{10})(?:[&#]|$)/i,
       ];
+      const extractAmazonAsinFromUrl = (value) => {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        for (const pattern of AMAZON_ASIN_PATTERNS) {
+          const match = text.match(pattern);
+          if (match && match[1]) return String(match[1]).toUpperCase();
+        }
+        return "";
+      };
+      const providerOption = (providerId) => (
+        shopProvidersState.options.find((option) => option.id === String(providerId || "").trim()) || null
+      );
+      const providerProductRefType = (providerId) => providerOption(providerId)?.productRef?.type || "";
+      const isAmazonAsinProvider = (providerId) => providerProductRefType(providerId) === "amazon_asin";
+      const syncProviderProductRefFromUrl = () => {
+        if (!shopEditor) return;
+        if (!isAmazonAsinProvider(shopEditor.providerId)) return;
+        const asin = extractAmazonAsinFromUrl(shopEditor.url);
+        if (asin) shopEditor.providerProductRef = asin;
+      };
       const normalizeProviderOptions = (payload) => {
         const providers = Array.isArray(payload?.providers) ? payload.providers : [];
         return providers
-          .filter((provider) => provider && provider.installed !== false && provider.enabled !== false)
+          .filter((provider) => provider && provider.usable !== false)
           .map((provider) => {
             const providerId = String(provider.id || provider.pluginId || "").trim();
             if (!providerId) return null;
-            return { id: providerId, label: pluginDisplayName(provider, providerId) };
+            const metadata = provider.priceProvider && typeof provider.priceProvider === "object"
+              ? provider.priceProvider
+              : {};
+            return {
+              id: providerId,
+              label: pluginDisplayName(provider, providerId),
+              orderIndex: Number(provider.orderIndex || 100),
+              hostPatterns: Array.isArray(metadata.hostPatterns) ? metadata.hostPatterns : [],
+              productRef: metadata.productRef && typeof metadata.productRef === "object" ? metadata.productRef : null,
+            };
           })
           .filter(Boolean)
-          .sort((a, b) => String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+          .sort((a, b) => a.orderIndex - b.orderIndex
+            || String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { sensitivity: "base" }));
+      };
+      const providerHostMatches = (host, rawPattern) => {
+        const pattern = String(rawPattern || "").trim().toLowerCase();
+        if (!pattern) return false;
+        if (pattern.endsWith(".")) {
+          const token = pattern.slice(0, -1);
+          return !!token && (host.startsWith(`${token}.`) || host.includes(`.${token}.`));
+        }
+        return host === pattern || host.endsWith(`.${pattern}`);
       };
       const detectProviderFromUrl = (value) => {
         const text = String(value || "").trim();
@@ -27339,14 +29430,8 @@ def ui_preview_html(
           return "";
         }
         const available = Array.isArray(shopProvidersState.options) ? shopProvidersState.options : [];
-        for (const hint of providerDomainHints) {
-          if (!hint.matchers.some((matcher) => matcher.test(host))) continue;
-          for (const token of hint.providerTokens) {
-            const exact = available.find((option) => option.id === token);
-            if (exact) return exact.id;
-            const contains = available.find((option) => option.id.includes(token));
-            if (contains) return contains.id;
-          }
+        for (const option of available) {
+          if (option.hostPatterns.some((pattern) => providerHostMatches(host, pattern))) return option.id;
         }
         return "";
       };
@@ -27356,6 +29441,7 @@ def ui_preview_html(
         if (!detected) return false;
         shopEditor.providerId = detected;
         shopEditor.detectedFromUrl = true;
+        syncProviderProductRefFromUrl();
         return true;
       };
       const ensureShopProvidersLoaded = async () => {
@@ -27380,9 +29466,22 @@ def ui_preview_html(
       const formatShopPrice = (shop) => {
         const value = shop && shop.lastSeenPrice;
         if (value == null) return "—";
-        return `${escapeHtml(String(value))} ${escapeHtml((shop && shop.priceCurrency) || "EUR")}`;
+        return escapeHtml(formatWishlistPrice(value, (shop && shop.priceCurrency) || "EUR"));
+      };
+      const shopVisitLink = (shop) => {
+        const value = String(shop?.priceUrl || "").trim();
+        if (!value) return "";
+        try {
+          const parsed = new URL(value);
+          if (!["http:", "https:"].includes(parsed.protocol)) return "";
+          const label = parsed.hostname.replace(/^www\./i, "") || value;
+          return `<a href="${escapeHtml(parsed.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
+        } catch (_) {
+          return "";
+        }
       };
       const render = () => {
+        const monitoringEnabled = priceMonitoringEnabled();
         const posterPreview = posterUrl
           ? `<img src="${escapeHtml(posterUrl)}" alt="">`
           : `<span class="lists-modal-poster-empty">${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -27413,94 +29512,97 @@ def ui_preview_html(
                 <span data-read>${escapeHtml(item.note || "")}</span>
                 <textarea data-edit data-field="note" rows="2">${escapeHtml(item.note || "")}</textarea></label>
               <div class="lists-modal-section-divider">${escapeHtml(tNext("lists.wishlistPriceDropAlert", "Price drop alert"))}</div>
-              <label class="lists-modal-field lists-modal-field-check">
-                <span>${escapeHtml(tNext("lists.wishlistAlertEnabled", "Alert on price drop"))}</span>
-                <span data-read>${item.alertEnabled ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}</span>
-                <input data-edit data-field="alertEnabled" type="checkbox"${item.alertEnabled ? " checked" : ""}>
-              </label>
-              <label class="lists-modal-field">
-                <span>${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}</span>
-                <span data-read>${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : "—"}</span>
-                <input data-edit data-field="targetPrice" type="number" min="0" step="0.01" value="${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : ""}">
-              </label>
-              <label class="lists-modal-field">
-                <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
-                <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
-                <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
-              </label>
-              <div class="lists-modal-shop-list-wrap">
-                <div class="lists-modal-shop-head">
-                  <span>${escapeHtml(tNext("lists.wishlistShopsTitle", "Shops"))}</span>
-                  ${shops.length < 10 ? `<button type="button" class="ghost" data-shop-add>${escapeHtml(tNext("lists.wishlistShopAdd", "Add shop"))}</button>` : ""}
-                </div>
-                ${shops.length
-                  ? `<div class="lists-modal-shop-list">${
-                      shops.map((shop) => `
-                        <div class="lists-modal-shop-row">
-                          <div class="lists-modal-shop-main">
-                            <strong>${escapeHtml(shop.shopName || "")}</strong>
-                            <span>${formatShopPrice(shop)}</span>
-                          </div>
-                          <button type="button" class="ghost" data-shop-edit="${escapeHtml(String(shop.id || ""))}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
-                        </div>
-                      `).join("")
-                    }</div>`
-                  : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistNoShops", "No shops added yet."))}</p>`
-                }
-                ${shopEditor ? `
-                  <div class="lists-modal-shop-editor">
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistShopName", "Shop name"))}</span>
-                      <input data-shop-field="name" type="text" value="${escapeHtml(shopEditor.name || "")}" maxlength="80">
-                    </label>
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
-                      <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
-                    </label>
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistShopProvider", "Price provider"))}</span>
-                      <select data-shop-field="providerId">
-                        <option value="">${escapeHtml(shopProvidersState.loading ? tNext("lists.wishlistShopProviderLoading", "Loading providers...") : tNext("lists.wishlistShopProviderAuto", "Auto-detect from URL"))}</option>
-                        ${(() => {
-                          const options = Array.isArray(shopProvidersState.options) ? shopProvidersState.options.slice() : [];
-                          const selectedProviderId = String(shopEditor.providerId || "").trim();
-                          if (selectedProviderId && !options.some((option) => option.id === selectedProviderId)) {
-                            options.push({ id: selectedProviderId, label: pluginDisplayName(selectedProviderId, selectedProviderId) });
-                          }
-                          return options
-                            .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selectedProviderId ? " selected" : ""}>${escapeHtml(option.label || option.id)}</option>`)
-                            .join("");
-                        })()}
-                      </select>
-                      ${shopEditor.detectedFromUrl ? `<span data-static>${escapeHtml(tNext("lists.wishlistShopProviderDetected", "Provider detected from URL."))}</span>` : ""}
-                    </label>
-                    <label class="lists-modal-field">
-                      <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
-                      <input data-shop-field="currency" type="text" maxlength="3" value="${escapeHtml(shopEditor.currency || "EUR")}">
-                    </label>
-                    <details class="lists-modal-shop-advanced">
-                      <summary>${escapeHtml(tNext("lists.wishlistShopAdvancedSelector", "Advanced price selector"))}</summary>
-                      <label class="lists-modal-field">
-                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorType", "Selector type"))}</span>
-                        <select data-shop-field="selectorType">
-                          <option value="">${escapeHtml(tNext("common.none", "None"))}</option>
-                          <option value="css_text"${shopEditor.selectorType === "css_text" ? " selected" : ""}>css_text</option>
-                          <option value="regex_capture"${shopEditor.selectorType === "regex_capture" ? " selected" : ""}>regex_capture</option>
-                        </select>
-                      </label>
-                      <label class="lists-modal-field">
-                        <span>${escapeHtml(tNext("lists.wishlistShopSelectorValue", "Selector value"))}</span>
-                        <input data-shop-field="selectorValue" type="text" value="${escapeHtml(shopEditor.selectorValue || "")}" placeholder=".price, #our-price, regex...">
-                      </label>
-                    </details>
-                    <div class="lists-modal-shop-editor-actions">
-                      <button type="button" data-shop-save>${escapeHtml(tNext("common.save", "Save"))}</button>
-                      <button type="button" class="ghost" data-shop-cancel>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
-                    </div>
+              ${monitoringEnabled ? `
+                <label class="lists-modal-field lists-modal-field-check">
+                  <span>${escapeHtml(tNext("lists.wishlistAlertEnabled", "Alert on price drop"))}</span>
+                  <span data-read>${item.alertEnabled ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}</span>
+                  <input data-edit data-field="alertEnabled" type="checkbox"${item.alertEnabled ? " checked" : ""}>
+                </label>
+                <label class="lists-modal-field">
+                  <span>${escapeHtml(tNext("lists.wishlistTargetPrice", "Target price"))}</span>
+                  <span data-read>${item.targetPrice != null ? escapeHtml(formatWishlistPrice(item.targetPrice, item.priceCurrency || "EUR")) : "—"}</span>
+                  <input data-edit data-field="targetPrice" type="number" min="0" step="0.01" value="${item.targetPrice != null ? escapeHtml(String(item.targetPrice)) : ""}">
+                </label>
+                <label class="lists-modal-field">
+                  <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                  <span data-read>${escapeHtml(item.priceCurrency || "EUR")}</span>
+                  <input data-edit data-field="priceCurrency" type="text" maxlength="3" value="${escapeHtml(item.priceCurrency || "EUR")}">
+                </label>
+                <div class="lists-modal-shop-list-wrap">
+                  <div class="lists-modal-shop-head">
+                    <span>${escapeHtml(tNext("lists.wishlistShopsTitle", "Shops"))}</span>
+                    ${shops.length < 10 ? `<button type="button" class="ghost" data-shop-add>${escapeHtml(tNext("lists.wishlistShopAdd", "Add shop"))}</button>` : ""}
                   </div>
-                ` : ""}
-              </div>
-              ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(String(item.lastSeenPrice))} ${escapeHtml(item.priceCurrency || "EUR")}</span></div>` : ""}
+                  ${shops.length
+                    ? `<div class="lists-modal-shop-list">${
+                        shops.map((shop) => `
+                          <div class="lists-modal-shop-row">
+                            <div class="lists-modal-shop-main">
+                              <strong>${escapeHtml(shop.shopName || "")}</strong>
+                              ${shopVisitLink(shop)}
+                              <span>${formatShopPrice(shop)}</span>
+                            </div>
+                            <button type="button" class="ghost" data-shop-edit="${escapeHtml(String(shop.id || ""))}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+                          </div>
+                        `).join("")
+                      }</div>`
+                    : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistNoShops", "No shops added yet."))}</p>`
+                  }
+                  ${shopEditor ? `
+                    <div class="lists-modal-shop-editor">
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopName", "Shop name"))}</span>
+                        <input data-shop-field="name" type="text" value="${escapeHtml(shopEditor.name || "")}" maxlength="80">
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistPriceUrl", "Shop URL"))}</span>
+                        <input data-shop-field="url" type="url" value="${escapeHtml(shopEditor.url || "")}" placeholder="${escapeHtml(tNext("lists.wishlistPriceUrlPlaceholder", "https://shop.example.com/product"))}">
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistShopProvider", "Price provider"))}</span>
+                        <select data-shop-field="providerId">
+                          <option value="">${escapeHtml(shopProvidersState.loading ? tNext("lists.wishlistShopProviderLoading", "Loading providers...") : tNext("lists.wishlistShopProviderAuto", "Auto-detect from URL"))}</option>
+                          ${(() => {
+                            const options = Array.isArray(shopProvidersState.options) ? shopProvidersState.options.slice() : [];
+                            const selectedProviderId = String(shopEditor.providerId || "").trim();
+                            if (selectedProviderId && !options.some((option) => option.id === selectedProviderId)) {
+                              options.push({ id: selectedProviderId, label: pluginDisplayName(selectedProviderId, selectedProviderId) });
+                            }
+                            return options
+                              .map((option) => `<option value="${escapeHtml(option.id)}"${option.id === selectedProviderId ? " selected" : ""}>${escapeHtml(option.label || option.id)}</option>`)
+                              .join("");
+                          })()}
+                        </select>
+                        ${shopEditor.detectedFromUrl ? `<span data-static>${escapeHtml(tNext("lists.wishlistShopProviderDetected", "Provider detected from URL."))}</span>` : ""}
+                      </label>
+                      <label class="lists-modal-field">
+                        <span>${escapeHtml(tNext("lists.wishlistPriceCurrency", "Currency"))}</span>
+                        <input data-shop-field="currency" type="text" maxlength="3" value="${escapeHtml(shopEditor.currency || "EUR")}">
+                      </label>
+                      <details class="lists-modal-shop-advanced">
+                        <summary>${escapeHtml(tNext("lists.wishlistShopAdvancedSelector", "Advanced price selector"))}</summary>
+                        <label class="lists-modal-field">
+                          <span>${escapeHtml(tNext("lists.wishlistShopSelectorType", "Selector type"))}</span>
+                          <select data-shop-field="selectorType">
+                            <option value="">${escapeHtml(tNext("common.none", "None"))}</option>
+                            <option value="css_text"${shopEditor.selectorType === "css_text" ? " selected" : ""}>css_text</option>
+                            <option value="regex_capture"${shopEditor.selectorType === "regex_capture" ? " selected" : ""}>regex_capture</option>
+                          </select>
+                        </label>
+                        <label class="lists-modal-field">
+                          <span>${escapeHtml(tNext("lists.wishlistShopSelectorValue", "Selector value"))}</span>
+                          <input data-shop-field="selectorValue" type="text" value="${escapeHtml(shopEditor.selectorValue || "")}" placeholder=".price, #our-price, regex...">
+                        </label>
+                      </details>
+                      <div class="lists-modal-shop-editor-actions">
+                        <button type="button" data-shop-save>${escapeHtml(tNext("common.save", "Save"))}</button>
+                        <button type="button" class="ghost" data-shop-cancel>${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+                      </div>
+                    </div>
+                  ` : ""}
+                </div>
+                ${item.lastSeenPrice != null ? `<div class="lists-modal-field"><span>${escapeHtml(tNext("lists.wishlistLastSeenPrice", "Last seen price"))}</span><span data-static>${escapeHtml(formatWishlistPrice(item.lastSeenPrice, item.priceCurrency || "EUR"))}</span></div>` : ""}
+              ` : `<p class="lists-modal-shop-empty">${escapeHtml(tNext("lists.wishlistPriceMonitoringDisabled", "Price monitoring is disabled in Settings."))}</p>`}
             </div>
           </div>
           <p class="lists-modal-message" data-message></p>
@@ -27567,6 +29669,7 @@ def ui_preview_html(
               name: current.shopName || "",
               url: current.priceUrl || "",
               providerId: current.providerId || "",
+              providerProductRef: current.providerProductRef || "",
               providerTouched: !!current.providerId,
               detectedFromUrl: false,
               currency: (current.priceCurrency || item.priceCurrency || "EUR").toUpperCase(),
@@ -27587,6 +29690,7 @@ def ui_preview_html(
             name: "",
             url: "",
             providerId: "",
+            providerProductRef: "",
             providerTouched: false,
             detectedFromUrl: false,
             currency: (item.priceCurrency || "EUR").toUpperCase(),
@@ -27604,6 +29708,7 @@ def ui_preview_html(
           if (!shopEditor) return;
           const nextUrl = (event.target.value || "").trim();
           shopEditor.url = nextUrl;
+          syncProviderProductRefFromUrl();
           if (applyProviderAutodetect(nextUrl)) render();
         });
         panel.querySelector('[data-shop-field="providerId"]')?.addEventListener("change", (event) => {
@@ -27611,12 +29716,20 @@ def ui_preview_html(
           shopEditor.providerId = String(event.target.value || "").trim();
           shopEditor.providerTouched = true;
           shopEditor.detectedFromUrl = false;
+          syncProviderProductRefFromUrl();
         });
         panel.querySelector("[data-shop-save]")?.addEventListener("click", async () => {
           if (!shopEditor) return;
           const name = (panel.querySelector('[data-shop-field="name"]').value || "").trim();
-          const url = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
+          const rawUrl = (panel.querySelector('[data-shop-field="url"]').value || "").trim();
           const providerId = String(panel.querySelector('[data-shop-field="providerId"]')?.value || "").trim();
+          const asinOnlyMatch = rawUrl.match(/^[A-Z0-9]{10}$/i);
+          const url = (isAmazonAsinProvider(providerId) && asinOnlyMatch)
+            ? `https://www.amazon.nl/dp/${String(asinOnlyMatch[0]).toUpperCase()}`
+            : rawUrl;
+          const providerProductRef = isAmazonAsinProvider(providerId)
+            ? (extractAmazonAsinFromUrl(url) || String(shopEditor.providerProductRef || "").trim().toUpperCase() || null)
+            : (String(shopEditor.providerProductRef || "").trim() || null);
           const currency = (panel.querySelector('[data-shop-field="currency"]').value || "").trim().toUpperCase() || "EUR";
           const selectorType = (panel.querySelector('[data-shop-field="selectorType"]')?.value || "").trim();
           const selectorValue = (panel.querySelector('[data-shop-field="selectorValue"]')?.value || "").trim();
@@ -27645,6 +29758,7 @@ def ui_preview_html(
                   shopName: name,
                   priceUrl: url,
                   providerId: providerId || null,
+                  providerProductRef,
                   priceCurrency: currency,
                   priceSelector: selectorType ? { type: selectorType, value: selectorValue } : null
                 }),
@@ -27663,8 +29777,9 @@ def ui_preview_html(
                 "Shop saved. Current price: {price} {currency}."
               );
               const priceMessage = messageTemplate
-                .replace("{price}", String(fetchedPrice))
-                .replace("{currency}", fetchedCurrency);
+                .replace("{price}", formatWishlistPrice(fetchedPrice, fetchedCurrency))
+                .replace("{currency}", "")
+                .replace(/\s+\./g, ".");
               setMessage(priceMessage, "good");
             } else {
               setMessage(
@@ -28066,7 +30181,7 @@ def ui_preview_html(
           return `
             <div class="stats-bar-row">
               <div class="stats-bar-head">
-                <span>${escapeHtml(row.label || tNext("common.untitled", "Unknown"))}</span>
+                <span>${escapeHtml(row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown")))}</span>
                 <span>${escapeHtml(row.count || 0)}</span>
               </div>
               <div class="stats-bar-track"><div class="stats-bar-fill" style="width:${pct}%"></div></div>
@@ -28084,6 +30199,34 @@ def ui_preview_html(
       } catch (error) {
         return `${numeric.toFixed(2)} ${code}`;
       }
+    }
+    function priceMonitoringEnabled() {
+      return preferences.price_monitoring_enabled !== false;
+    }
+    function preferredPriceCurrency() {
+      return String(preferences.preferred_price_currency || "").trim().toUpperCase();
+    }
+    function convertPriceAmount(value, fromCurrency, toCurrency) {
+      const numeric = Number(value);
+      const from = String(fromCurrency || "").trim().toUpperCase();
+      const to = String(toCurrency || "").trim().toUpperCase();
+      if (!Number.isFinite(numeric) || !from || !to) return null;
+      if (from === to) return numeric;
+      const rates = priceDisplay && typeof priceDisplay.exchangeRates === "object" ? priceDisplay.exchangeRates : {};
+      const fromRate = Number(rates[from]);
+      const toRate = Number(rates[to]);
+      if (!Number.isFinite(fromRate) || fromRate <= 0 || !Number.isFinite(toRate) || toRate <= 0) return null;
+      return (numeric / fromRate) * toRate;
+    }
+    function formatWishlistPrice(value, currency = "EUR") {
+      const original = formatStatsPrice(value, currency);
+      if (original === "—") return original;
+      const preferred = preferredPriceCurrency();
+      const source = String(currency || "EUR").trim().toUpperCase() || "EUR";
+      if (!preferred || preferred === source) return original;
+      const converted = convertPriceAmount(value, source, preferred);
+      if (converted == null) return original;
+      return `${original} (${formatStatsPrice(converted, preferred)})`;
     }
     function statsPriceChangeClass(value) {
       const numeric = Number(value);
@@ -28785,6 +30928,7 @@ def ui_preview_html(
       if (route !== "import" && importScanner.running) {
         stopImportBarcodeScanner();
       }
+      if (route !== "profile") clearProfileRecoveryCodes();
       if (route !== "statistics") {
         document.getElementById("statisticsView")?.classList.add("hidden");
       }
@@ -29641,7 +31785,6 @@ def ui_preview_html(
         locationId: document.getElementById("movieEditLocationSelect")?.value || null,
         runtimeMinutes: formTextValue("movieEditRuntime"),
         director: formTextValue("movieEditDirector"),
-        genre: formTextValue("movieEditGenre"),
         studios: formTextValue("movieEditStudios"),
         contentRating: formTextValue("movieEditContentRating"),
         ratingCountry,
@@ -29686,7 +31829,6 @@ def ui_preview_html(
       switch (field) {
         case "runtime_minutes": return valueText(movie.runtime_minutes);
         case "director": return valueText(metadata.director);
-        case "genre": return valueText(metadata.genre);
         case "studios": return valueText(metadata.studios);
         case "distributor": return valueText(metadata.distributor);
         case "hdr": return valueText(specs.hdr || metadata.hdr);
@@ -29694,32 +31836,26 @@ def ui_preview_html(
         case "audio_tracks": return valueText(specs.audio_tracks || metadata.audio_tracks);
         case "subtitles": return valueText(specs.subtitles || metadata.subtitles);
         case "packaging": return valueText(specs.packaging || metadata.packaging || movie.edition_type);
-        case "content_ratings": return valueText(preferredContentRatingInfo(movie, specs).rating);
+        case "content_ratings": {
+          const contentRatingInfo = preferredContentRatingInfo(movie, specs);
+          return contentRatingInfo.unknown ? "" : valueText(contentRatingInfo.rating);
+        }
         default: return valueText(movie[field]);
       }
     }
-    async function refreshActiveMovieMetadata(dryRun, personRefreshScope = "all", forceRefreshPeople = false) {
+    async function refreshActiveMovieMetadata(dryRun) {
       if (!hasPermission("metadata.refresh_one")) return;
       if (!activeDetailMovieId) return;
-      const scope = normalizedPersonRefreshScope(personRefreshScope);
-      const refreshPeople = forceRefreshPeople || movieMetadataRefreshPeople;
-      const refreshingCrewOnly = refreshPeople && scope === "crew";
-      setMovieDetailMessage(
-        refreshingCrewOnly
-          ? tNext("movieDetail.refreshingCrewPeople", "Refreshing crew people...")
-          : (dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata changes...") : tNext("movieDetail.applyingMetadata", "Refreshing metadata..."))
-      );
+      setMovieDetailMessage(dryRun ? tNext("movieDetail.previewingMetadata", "Previewing metadata changes...") : tNext("movieDetail.applyingMetadata", "Refreshing metadata..."));
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/metadata/refresh`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({dryRun, refreshPeople, personRefreshScope: scope})
+          body: JSON.stringify({dryRun, refreshPeople: false, personRefreshScope: "all"})
         });
-        const personRefresh = (payload.metadata || {}).personRefresh || null;
-        const successMessage = (refreshingCrewOnly
-          ? tNext("movieDetail.crewPeopleRefreshed", "Crew people refreshed.")
-          : (dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.")))
-          + movieMetadataPeopleRefreshMessage(personRefresh);
+        const successMessage = dryRun
+          ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.")
+          : tNext("movieDetail.applied", "Metadata refreshed.");
         if (!dryRun) {
           const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
           renderMovieDetail(refreshed.detail || {});
@@ -29787,18 +31923,6 @@ def ui_preview_html(
         if (summary) summary.textContent = tNext("containerDetail.deleted", "Container deleted.");
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
-      }
-    }
-    async function loadActiveMovieJobs() {
-      if (!activeDetailMovieId) return;
-      setMovieDetailMessage(tNext("movieDetail.loadingJobs", "Loading refresh history..."));
-      try {
-        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/metadata/jobs`);
-        const jobs = payload.jobs || [];
-        setMovieDetailMessage(jobs.length ? `${jobs.length} ${tNext("movieDetail.jobs", "refresh history").toLowerCase()}: ${jobs[0].status}` : tNext("movieDetail.noJobs", "No metadata refreshes yet."), "good");
-        console.log("movie metadata jobs", payload);
-      } catch (error) {
-        setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
     async function setPrimaryArtwork(entity, mediaId, kind) {
@@ -29969,6 +32093,124 @@ def ui_preview_html(
         setMessage(error.message || String(error), "bad");
       }
     }
+    async function shareMovieArtwork(url, kind) {
+      if (!url) return;
+      const movieTitle = activeDetailPayload?.movie?.title || tNext("movieDetail.title", "Movie details");
+      const kindLabel = kind === "backdrop"
+        ? tNext("movieDetail.backdrops", "Backdrops")
+        : tNext("movieDetail.posters", "Posters");
+      try {
+        if (navigator.share) {
+          await navigator.share({title: movieTitle, text: `${movieTitle} - ${kindLabel}`, url});
+          return;
+        }
+        await copyArtworkUrl(url);
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function hideMovieArtwork(mediaId, kind) {
+      if (!activeDetailMovieId || !mediaId || !hasPermission("collection.edit_all")) return;
+      setMovieDetailMessage(tNext("movieDetail.hidingArtwork", "Hiding artwork..."));
+      try {
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/media/${encodeURIComponent(mediaId)}/hide`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({kind})
+        });
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
+        renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMovieDetailMessage(tNext("movieDetail.artworkHidden", "Artwork hidden."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function unhideMovieArtwork(mediaId, kind) {
+      if (!activeDetailMovieId || !mediaId || !hasPermission("collection.edit_all")) return;
+      setMovieDetailMessage(tNext("movieDetail.unhidingArtwork", "Unhiding artwork..."));
+      try {
+        await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/media/${encodeURIComponent(mediaId)}/unhide`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({kind})
+        });
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
+        renderMovieDetail(payload.detail || {});
+        await loadAppSnapshot();
+        setMovieDetailMessage(tNext("movieDetail.artworkUnhidden", "Artwork unhidden."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function openMovieArtworkActionsMenu(tile) {
+      const mediaId = tile?.dataset?.movieArtworkMenu || "";
+      const kind = tile?.dataset?.kind || "";
+      const url = tile?.dataset?.artworkUrl || "";
+      if (!mediaId || !["poster", "backdrop"].includes(kind)) return;
+      const canEdit = hasPermission("collection.edit_all");
+      const isHidden = tile.dataset.artworkHidden === "true";
+      const actions = [];
+      if (canEdit && isHidden) {
+        actions.push({
+          label: tNext("common.unhide", "Unhide"),
+          run: () => unhideMovieArtwork(mediaId, kind)
+        });
+      }
+      if (canEdit && !isHidden) {
+        actions.push({
+          label: tNext("movieDetail.setPrimary", "Set primary"),
+          run: () => setPrimaryArtwork("movie", mediaId, kind)
+        });
+      }
+      if (url) {
+        actions.push({
+          label: tNext("common.share", "Share"),
+          run: () => shareMovieArtwork(url, kind)
+        });
+      }
+      if (canEdit) {
+        if (!isHidden) {
+          actions.push({
+            label: tNext("common.hide", "Hide"),
+            run: () => hideMovieArtwork(mediaId, kind)
+          });
+        }
+        actions.push({
+          label: tNext("movieDetail.deleteArtwork", "Delete"),
+          tone: "danger",
+          run: () => deleteDetailArtwork("movie", mediaId, kind)
+        });
+      }
+      if (!actions.length) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      overlay.returnFocusElement = tile;
+      const kindLabel = kind === "backdrop"
+        ? tNext("movieDetail.backdrops", "Backdrops")
+        : tNext("movieDetail.posters", "Posters");
+      panel.innerHTML = `
+        <header class="lists-modal-head">
+          <h3>${escapeHtml(kindLabel)}</h3>
+          <span class="muted">${escapeHtml(tNext("common.actions", "Actions"))}</span>
+        </header>
+        <div class="lists-actionsheet-list">
+          ${actions.map((action, index) => `<button type="button" class="lists-actionsheet-btn${action.tone === "danger" ? " danger" : ""}" data-action-index="${index}">${escapeHtml(action.label)}</button>`).join("")}
+        </div>
+        <footer class="lists-modal-actions">
+          <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
+        </footer>
+      `;
+      panel.querySelector("[data-secondary]")?.addEventListener("click", () => listsCloseOverlay(overlay));
+      panel.querySelectorAll("[data-action-index]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const action = actions[Number(button.dataset.actionIndex)];
+          listsCloseOverlay(overlay);
+          if (action?.run) action.run();
+        });
+      });
+      panel.querySelector("[data-action-index]")?.focus();
+    }
     const LONG_PRESS_DURATION_MS = 500;
     const LONG_PRESS_MOVE_TOLERANCE = 10;
     const LONG_PRESS_CLICK_SUPPRESS_MS = 700;
@@ -30018,9 +32260,70 @@ def ui_preview_html(
         if (timer || longPressActive()) event.preventDefault();
       });
     }
+    function bindLongPressActionMenu(element, onOpen) {
+      if (!element || element.dataset.longPressMenuBound === "1") return;
+      element.dataset.longPressMenuBound = "1";
+      let timer = null;
+      let startX = 0;
+      let startY = 0;
+      let suppressClickUntil = 0;
+      const clear = () => {
+        if (!timer) return;
+        window.clearTimeout(timer);
+        timer = null;
+      };
+      const open = () => {
+        clear();
+        if (navigator.vibrate) navigator.vibrate(10);
+        onOpen();
+      };
+      element.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        startX = event.clientX;
+        startY = event.clientY;
+        clear();
+        timer = window.setTimeout(() => {
+          suppressClickUntil = Date.now() + LONG_PRESS_CLICK_SUPPRESS_MS;
+          open();
+        }, LONG_PRESS_DURATION_MS);
+      });
+      element.addEventListener("pointermove", (event) => {
+        if (!timer) return;
+        if (Math.abs(event.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE
+          || Math.abs(event.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) {
+          clear();
+        }
+      });
+      element.addEventListener("pointerup", clear);
+      element.addEventListener("pointercancel", clear);
+      element.addEventListener("pointerleave", clear);
+      element.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (Date.now() < suppressClickUntil) return;
+        open();
+      });
+      element.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        if (Date.now() < suppressClickUntil) return;
+        suppressClickUntil = Date.now() + LONG_PRESS_CLICK_SUPPRESS_MS;
+        open();
+      });
+      element.addEventListener("keydown", (event) => {
+        if (!["Enter", " "].includes(event.key)) return;
+        event.preventDefault();
+        open();
+      });
+    }
+    function bindMovieArtworkLongPressMenus() {
+      document.querySelectorAll("#movieDetailPage [data-movie-artwork-menu]").forEach((tile) => {
+        bindLongPressActionMenu(tile, () => openMovieArtworkActionsMenu(tile));
+      });
+    }
     function bindCollectionCardInteractions(root = document) {
       root.querySelectorAll("[data-preview-movie]").forEach((button) => {
-        button.classList.toggle("bulk-selected", selectedMovieIds.has(button.dataset.previewMovie));
+        const selected = selectedMovieIds.has(button.dataset.previewMovie);
+        button.classList.toggle("bulk-selected", selected);
+        button.closest("tr")?.classList.toggle("bulk-selected", selected);
         bindLongPressSelection(button, () => {
           if (!selectionMode) toggleSelectMode(true);
           toggleMovieSelection(button.dataset.previewMovie);
@@ -30040,7 +32343,9 @@ def ui_preview_html(
         });
       });
       root.querySelectorAll("[data-preview-container]").forEach((button) => {
-        button.classList.toggle("bulk-selected", selectedContainerIds.has(button.dataset.previewContainer));
+        const selected = selectedContainerIds.has(button.dataset.previewContainer);
+        button.classList.toggle("bulk-selected", selected);
+        button.closest("tr")?.classList.toggle("bulk-selected", selected);
         bindLongPressSelection(button, () => {
           if (!selectionMode) toggleSelectMode(true);
           toggleContainerSelection(button.dataset.previewContainer);
@@ -30183,29 +32488,24 @@ def ui_preview_html(
       if (shuffleButton) shuffleButton.classList.remove("hidden");
       const rail = document.getElementById("posterRail");
       if (rail) {
-        rail.classList.toggle("mode-list-grid", libraryViewMode === "list");
+        rail.classList.remove("mode-list-grid");
         rail.classList.remove("mode-detail-grid");
+        rail.classList.toggle("library-list-surface", libraryViewMode === "list");
         rail.classList.toggle("poster-rail", libraryViewMode === "poster");
         rail.innerHTML = displayItems.length
-          ? displayItems.slice(0, 80).map((item, index) => (
+          ? (
               libraryViewMode === "list"
-                ? libraryListItemHtml(item)
-                : (
-              item.kind === "container"
-                ? containerPosterCardHtml(item.container, index)
-                : posterCardHtml(item.movie, index)
-                )
-            )).join("")
+                ? libraryListTableHtml(displayItems)
+                : displayItems.slice(0, 80).map((item, index) => (
+                    item.kind === "container"
+                      ? containerPosterCardHtml(item.container, index)
+                      : posterCardHtml(item.movie, index)
+                  )).join("")
+            )
           : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
       }
       bindCollectionCardInteractions(document.getElementById("libraryView") || document);
       bindViewModeInteractions(document.getElementById("libraryView") || document);
-      const shownCount = document.getElementById("shownCount");
-      if (shownCount) shownCount.textContent = String(displayItems.length);
-      const panelTitle = document.getElementById("libraryPanelTitle");
-      if (panelTitle) {
-        panelTitle.textContent = tNext("uiPreview.recentlyAdded", "Recently added");
-      }
       const summary = document.getElementById("librarySummary");
       if (summary) {
         const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
@@ -30221,7 +32521,7 @@ def ui_preview_html(
       if (navMovieCount) navMovieCount.textContent = String(movies.length);
       if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
-      const firstItem = displayItems[0];
+      const firstItem = libraryViewMode === "list" ? sortLibraryListItems(displayItems)[0] : displayItems[0];
       if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
       if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
       updateBulkBar();
@@ -30256,7 +32556,9 @@ def ui_preview_html(
       else selectedMovieIds.add(movieId);
       document.querySelectorAll("[data-preview-movie]").forEach((node) => {
         if (String(node.dataset.previewMovie) === String(movieId)) {
-          node.classList.toggle("bulk-selected", selectedMovieIds.has(movieId));
+          const selected = selectedMovieIds.has(movieId);
+          node.classList.toggle("bulk-selected", selected);
+          node.closest("tr")?.classList.toggle("bulk-selected", selected);
         }
       });
       updateBulkBar();
@@ -30268,7 +32570,9 @@ def ui_preview_html(
       else selectedContainerIds.add(value);
       document.querySelectorAll("[data-preview-container]").forEach((node) => {
         if (String(node.dataset.previewContainer) === value) {
-          node.classList.toggle("bulk-selected", selectedContainerIds.has(value));
+          const selected = selectedContainerIds.has(value);
+          node.classList.toggle("bulk-selected", selected);
+          node.closest("tr")?.classList.toggle("bulk-selected", selected);
         }
       });
       updateBulkBar();
@@ -30288,10 +32592,14 @@ def ui_preview_html(
         });
       }
       document.querySelectorAll("[data-preview-movie]").forEach((node) => {
-        node.classList.toggle("bulk-selected", selectedMovieIds.has(String(node.dataset.previewMovie || "")));
+        const selected = selectedMovieIds.has(String(node.dataset.previewMovie || ""));
+        node.classList.toggle("bulk-selected", selected);
+        node.closest("tr")?.classList.toggle("bulk-selected", selected);
       });
       document.querySelectorAll("[data-preview-container]").forEach((node) => {
-        node.classList.toggle("bulk-selected", selectedContainerIds.has(String(node.dataset.previewContainer || "")));
+        const selected = selectedContainerIds.has(String(node.dataset.previewContainer || ""));
+        node.classList.toggle("bulk-selected", selected);
+        node.closest("tr")?.classList.toggle("bulk-selected", selected);
       });
       updateBulkBar();
     }
@@ -30631,6 +32939,8 @@ def ui_preview_html(
       ["rating_country", "preferences.ratingCountry", "preferences.ratingCountryHelp"],
       ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"],
       ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"],
+      ["price_monitoring_enabled", "preferences.priceMonitoringEnabled", "preferences.priceMonitoringEnabledHelp"],
+      ["preferred_price_currency", "preferences.preferredPriceCurrency", "preferences.preferredPriceCurrencyHelp", "price_monitoring_enabled"],
       ["delete_container_members_with_container", "preferences.deleteContainerMembersWithContainer", "preferences.deleteContainerMembersWithContainerHelp"]
     ];
     const preferenceCollectorLabels = [
@@ -30641,6 +32951,7 @@ def ui_preview_html(
       ["show_metadata_jobs", "preferences.showMetadataJobs", "preferences.showMetadataJobsHelp"]
     ];
     const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
+    const DEFAULT_PRICE_DISPLAY_CURRENCIES = ["EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY"];
     function ratingCountryPickerHtml(disabled = false) {
       const selected = String(preferences.rating_country || "NL").toUpperCase();
       const active = RATING_COUNTRIES_ORDER.includes(selected) ? selected : "NL";
@@ -30656,6 +32967,27 @@ def ui_preview_html(
         </div>
       `;
     }
+    function preferredPriceCurrencyPickerHtml(disabled = false) {
+      const selected = preferredPriceCurrency();
+      const seen = new Set();
+      const currencies = [];
+      const available = Array.isArray(priceDisplay?.supportedCurrencies) ? priceDisplay.supportedCurrencies : [];
+      [...available, ...DEFAULT_PRICE_DISPLAY_CURRENCIES, selected].forEach((value) => {
+        const code = String(value || "").trim().toUpperCase();
+        if (!code || seen.has(code)) return;
+        seen.add(code);
+        currencies.push(code);
+      });
+      const options = [
+        `<option value="">${escapeHtml(tNext("preferences.preferredPriceCurrencyNone", "Website currency only"))}</option>`,
+        ...currencies.map((code) => `<option value="${escapeHtml(code)}"${code === selected ? " selected" : ""}>${escapeHtml(code)}</option>`)
+      ].join("");
+      return `
+        <select data-preference-choice-select="preferred_price_currency" aria-label="${escapeHtml(tNext("preferences.preferredPriceCurrency", "Preferred price currency"))}" ${disabled ? "disabled" : ""}>
+          ${options}
+        </select>
+      `;
+    }
     function preferenceRowsHtml(items) {
       return items.map(([key, labelKey, helpKey, requiresKey]) => {
         const disabled = requiresKey && !preferences[requiresKey];
@@ -30668,6 +33000,19 @@ def ui_preview_html(
               </span>
               <div class="country-picker" data-preference-country-picker="${escapeHtml(key)}">
                 ${ratingCountryPickerHtml(disabled)}
+              </div>
+            </div>
+          `;
+        }
+        if (key === "preferred_price_currency") {
+          return `
+            <div class="preference-control-row ${disabled ? "disabled" : ""}">
+              <span>
+                <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+                <span>${escapeHtml(tNext(helpKey, ""))}</span>
+              </span>
+              <div class="country-picker" data-preference-choice-picker="${escapeHtml(key)}">
+                ${preferredPriceCurrencyPickerHtml(disabled)}
               </div>
             </div>
           `;
@@ -30703,6 +33048,12 @@ def ui_preview_html(
           updatePreference("rating_country", select.value);
         });
       });
+      list.querySelectorAll("[data-preference-choice-select]").forEach((select) => {
+        select.addEventListener("change", () => {
+          if (select.disabled) return;
+          updatePreference(select.dataset.preferenceChoiceSelect, select.value);
+        });
+      });
     }
     function setPreferenceTab(tab) {
       let selected = tab || "appearance";
@@ -30735,6 +33086,7 @@ def ui_preview_html(
     function setProfileTab(tab) {
       let selected = tab || "account";
       if (!canUseProfileTab(selected)) selected = "account";
+      if (selected !== "security") clearProfileRecoveryCodes();
       activeProfileTab = selected;
       localStorage.setItem("dv_next_profile_tab", selected);
       document.querySelectorAll("[data-profile-tab]").forEach((button) => {
@@ -30841,7 +33193,9 @@ def ui_preview_html(
     }
     function memberRoleForCurrentUser(group) {
       const userId = currentUserId();
-      if (!userId) return "";
+      if (!userId) {
+        return currentAuthStatus.auth_enabled === false && currentRole() === "owner" ? "owner" : "";
+      }
       const members = Array.isArray(group?.members) ? group.members : [];
       const member = members.find((item) => String(item.user_id || item.userId || "") === String(userId));
       if (member?.role) return String(member.role);
@@ -30875,6 +33229,9 @@ def ui_preview_html(
       const members = Array.isArray(group.members) ? group.members : [];
       const role = memberRoleForCurrentUser(group);
       const canInvite = canManageMemberGroup(group);
+      const isOwner = role === "owner";
+      const isSystemOwner = isOwner && !currentUserId() && currentAuthStatus.auth_enabled === false;
+      const canDelete = isOwner && (isSystemOwner ? members.length === 0 : members.length === 1);
       const owner = group.created_by_display_name || group.created_by_username || "";
       const currentId = String(currentUserId() || "");
       const memberRows = members.length
@@ -30907,6 +33264,10 @@ def ui_preview_html(
           </div>
           <div class="container-manager-actions member-group-actions">
             <button type="button" class="secondary-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
+            ${isOwner ? `
+              <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+              ${canDelete ? `<button type="button" class="danger-button" data-member-group-delete="${id}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
+            ` : ""}
             ${canInvite ? `
               <input data-member-group-invite="${id}" maxlength="120" autocomplete="username" placeholder="${escapeHtml(tNext("groups.inviteUsername", "Username"))}" aria-label="${escapeHtml(tNext("groups.inviteUsername", "Username"))}">
               <button type="button" class="secondary-button" data-member-group-invite-send="${id}">${escapeHtml(tNext("groups.invite", "Invite"))}</button>
@@ -30955,6 +33316,59 @@ def ui_preview_html(
         renderGroupFilter();
         renderMemberGroups();
         setMemberGroupMessage(tNext("groups.created", "Group created."), "good");
+      } catch (error) {
+        setMemberGroupMessage(error.message || String(error), "bad");
+      }
+    }
+    async function renameMemberGroup(groupId) {
+      const group = mediaGroups.find((item) => String(item.id) === String(groupId));
+      if (!group || memberRoleForCurrentUser(group) !== "owner") return;
+      const nextName = window.prompt(tNext("groups.renamePrompt", "New group name"), group.name || "");
+      if (nextName === null) return;
+      const name = String(nextName || "").trim();
+      if (!name) {
+        setMemberGroupMessage(tNext("groups.nameRequired", "Enter a group name first."), "bad");
+        return;
+      }
+      setMemberGroupMessage(tNext("common.saving", "Saving…"));
+      try {
+        const payload = await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name})
+        });
+        if (payload.group) {
+          mediaGroups = mediaGroups.map((item) => String(item.id) === String(groupId) ? payload.group : item);
+        }
+        renderGroupFilter();
+        renderMemberGroups();
+        renderCollectionSurface();
+        setMemberGroupMessage(tNext("groups.renamed", "Group renamed."), "good");
+      } catch (error) {
+        setMemberGroupMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteMemberGroup(groupId) {
+      const group = mediaGroups.find((item) => String(item.id) === String(groupId));
+      const members = Array.isArray(group?.members) ? group.members : [];
+      const isSystemOwner = !currentUserId() && currentAuthStatus.auth_enabled === false;
+      const canDelete = memberRoleForCurrentUser(group) === "owner"
+        && (isSystemOwner ? members.length === 0 : members.length === 1);
+      if (!group || !canDelete) return;
+      const confirmed = window.confirm(
+        tNext("groups.deleteConfirm", "Delete '{name}'? Shared movie links and pending invites will also be removed.")
+          .replace("{name}", group.name || "")
+      );
+      if (!confirmed) return;
+      setMemberGroupMessage(tNext("common.saving", "Saving…"));
+      try {
+        await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}`, {method: "DELETE"});
+        if (String(activeCollectionGroupFilter) === String(groupId)) {
+          activeCollectionGroupFilter = "";
+          localStorage.removeItem("dv_next_collection_group_filter");
+        }
+        await loadAppSnapshot();
+        setMemberGroupMessage(tNext("groups.deleted", "Group deleted."), "good");
       } catch (error) {
         setMemberGroupMessage(error.message || String(error), "bad");
       }
@@ -31032,8 +33446,13 @@ def ui_preview_html(
           body: JSON.stringify({preferences: patch})
         });
         preferences = Object.assign({}, preferences, payload.preferences || {});
+        const refreshSnapshot = key === "price_monitoring_enabled" || key === "preferred_price_currency";
+        if (refreshSnapshot) {
+          await loadAppSnapshot();
+        }
         renderPreferences();
         renderCollectionSurface();
+        if (listsState.loaded) renderListsView();
         if (activeDetailPayload) renderMovieDetail(activeDetailPayload);
         if (message) message.textContent = tNext("preferences.saved", "Saved.");
       } catch (error) {
@@ -31581,7 +34000,11 @@ def ui_preview_html(
         ownerPasskeyButton.disabled = !!ownerPasskeyUnavailable;
       }
       const ownerFields = document.getElementById("startupOwnerFields");
-      if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner);
+      const legacyBootstrap = !!currentAuthStatus.legacy_bootstrap_available && !!startup.canCreateOwner;
+      const legacyButton = document.getElementById("startupLegacyButton");
+      if (legacyButton) legacyButton.classList.toggle("hidden", !legacyBootstrap);
+      if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner && !legacyBootstrap);
+      if (!legacyBootstrap && !startupLegacyStage) document.getElementById("startupLegacyFields")?.classList.add("hidden");
       const message = document.getElementById("startupMessage");
       if (message) {
         message.textContent = ownerPasskeyUnavailable || startup.message || "";
@@ -31591,6 +34014,7 @@ def ui_preview_html(
     async function loadAppSnapshot() {
       const payload = await apiJson("/api/next/app/snapshot", {headers: authHeaders()});
       state = payload.snapshot || {};
+      priceDisplay = state.priceDisplay || {};
       movies = state.movies || [];
       containers = state.containers || [];
       locations = state.locations || locations || [];
@@ -31620,10 +34044,11 @@ def ui_preview_html(
       const auth = currentStartup.auth || {};
       const user = Object.assign({}, state.user || {});
       const name = user.displayName || user.display_name || auth.displayName || auth.username || user.username || "DiscVault";
+      const roleKey = user.role || auth.role || "-";
       return {
         name,
         username: user.username || auth.username || "-",
-        role: user.role || auth.role || "-",
+        role: user.roleDisplayName || user.role_display_name || roleKey,
         avatarUrl: user.avatarUrl || user.avatar_url || "",
         userCount: (state.counts && state.counts.users) || auth.userCount || 0,
         credentialCount: profileCredentials.length || auth.credentialCount || 0
@@ -31905,6 +34330,12 @@ def ui_preview_html(
       if (!node) return;
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
+    }
+    function clearProfileRecoveryCodes() {
+      const codesNode = document.getElementById("profileRecoveryCodes");
+      if (!codesNode) return;
+      codesNode.replaceChildren();
+      codesNode.classList.add("hidden");
     }
     function renderProfileRecovery(codes) {
       const activeCount = document.getElementById("profileRecoveryActiveCount");
@@ -32250,6 +34681,14 @@ def ui_preview_html(
         profileCredentials = payload.credentials || [];
         profileRecovery = payload.recovery || {};
         profileApiAccess = payload.apiAccess || profileApiAccess;
+        if (currentAuthStatus.legacy_auth_enabled) {
+          profileLegacy = await authApiJson("/api/next/auth/legacy/me").catch(() => ({}));
+          const credential = profileLegacy.credential || {};
+          const mfaStatus = document.getElementById("profileLegacyMfaStatus");
+          if (mfaStatus) mfaStatus.textContent = credential.mfa_required
+            ? (credential.mfa_enrolled ? tNext("legacyAuth.enabled", "Enabled") : tNext("legacyAuth.setupRequired", "Setup required"))
+            : tNext("legacyAuth.disabled", "Disabled");
+        }
         renderProfile();
       } catch (error) {
         setProfileSecurityMessage(error.message || String(error), "bad");
@@ -32314,6 +34753,29 @@ def ui_preview_html(
         if (button) button.disabled = false;
       }
     }
+    async function changeProfileLegacyPassword(event) {
+      event?.preventDefault();
+      const message = document.getElementById("profileLegacyMessage");
+      const currentPassword = String(document.getElementById("profileLegacyCurrentPassword")?.value || "");
+      const newPassword = String(document.getElementById("profileLegacyNewPassword")?.value || "");
+      try {
+        await authApiJson("/api/next/auth/legacy/password/change", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({current_password: currentPassword, new_password: newPassword})
+        });
+        document.getElementById("profileLegacyPasswordForm")?.reset();
+        if (message) {
+          message.textContent = tNext("legacyAuth.passwordChanged", "Password changed.");
+          message.className = "login-message good";
+        }
+      } catch (error) {
+        if (message) {
+          message.textContent = error.message || String(error);
+          message.className = "login-message bad";
+        }
+      }
+    }
     async function saveProfilePasskey(credentialId) {
       const input = Array.from(document.querySelectorAll("[data-profile-passkey-name]")).find((node) => String(node.dataset.profilePasskeyName) === String(credentialId));
       const name = String(input?.value || "").trim();
@@ -32370,7 +34832,7 @@ def ui_preview_html(
         renderProfileRecovery(payload.codes || []);
         setProfileRecoveryMessage(tNext("profile.recoveryCodesReady", "Recovery codes generated. Save them now."), "good");
       } catch (error) {
-        if (codesNode) codesNode.classList.add("hidden");
+        clearProfileRecoveryCodes();
         setProfileRecoveryMessage(error.message || String(error), "bad");
       } finally {
         if (button) button.disabled = false;
@@ -32385,10 +34847,7 @@ def ui_preview_html(
       try {
         const payload = await authApiJson("/api/next/profile/recovery/codes", {method: "DELETE"});
         profileRecovery = payload.recovery || {};
-        if (codesNode) {
-          codesNode.classList.add("hidden");
-          codesNode.innerHTML = "";
-        }
+        clearProfileRecoveryCodes();
         renderProfileRecovery();
         setProfileRecoveryMessage(tNext("profile.recoveryCodesRevoked", "Active recovery codes revoked."), "good");
       } catch (error) {
@@ -32724,6 +35183,15 @@ def ui_preview_html(
           renderCollectionSurface();
         });
       });
+      const libraryListMediaQuery = window.matchMedia("(max-width: 1024px)");
+      const handleLibraryListBreakpoint = () => {
+        if (libraryViewMode === "list" && !locationDetailPageVisible()) renderLibrary();
+      };
+      if (typeof libraryListMediaQuery.addEventListener === "function") {
+        libraryListMediaQuery.addEventListener("change", handleLibraryListBreakpoint);
+      } else if (typeof libraryListMediaQuery.addListener === "function") {
+        libraryListMediaQuery.addListener(handleLibraryListBreakpoint);
+      }
       document.querySelectorAll("[data-container-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
           const mode = normalizeViewMode(button.dataset.containerViewMode);
@@ -32794,17 +35262,22 @@ def ui_preview_html(
         localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
         renderCollectionSurface();
       });
+      document.querySelectorAll("[data-hide-watchlist-switch]").forEach((toggle) => {
+        toggle.addEventListener("change", (event) => {
+          hideWatchlist = !!event.target.checked;
+          persistCollectionBehaviorFilters();
+          renderCollectionSurface();
+        });
+      });
+      document.querySelectorAll("[data-hide-watched-switch]").forEach((toggle) => {
+        toggle.addEventListener("change", (event) => {
+          hideWatched = !!event.target.checked;
+          persistCollectionBehaviorFilters();
+          renderCollectionSurface();
+        });
+      });
       document.getElementById("collectionFilterResetButton")?.addEventListener("click", () => {
-        collectionFormatFilters.clear();
-        persistCollectionFormatFilters();
-        collectionTypeFilter = "all";
-        collectionGenreFilter = "";
-        collectionLocationFilter = "";
-        if (collectionItemFilter === "containers") collectionItemFilter = "all";
-        localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
-        localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
-        localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
-        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+        resetCollectionFilters();
         renderCollectionSurface();
       });
       document.getElementById("locationCollectionFormatSwitches")?.addEventListener("change", (event) => {
@@ -32817,16 +35290,7 @@ def ui_preview_html(
         renderCollectionSurface();
       });
       const resetLocationCollectionFilters = () => {
-        collectionFormatFilters.clear();
-        persistCollectionFormatFilters();
-        collectionTypeFilter = "all";
-        collectionGenreFilter = "";
-        collectionLocationFilter = "";
-        if (collectionItemFilter === "containers") collectionItemFilter = "all";
-        localStorage.setItem("dv_next_collection_type", collectionTypeFilter);
-        localStorage.setItem("dv_next_collection_genre", collectionGenreFilter);
-        localStorage.setItem("dv_next_collection_location", collectionLocationFilter);
-        localStorage.setItem("dv_next_collection_item_filter", collectionItemFilter);
+        resetCollectionFilters();
         renderCollectionSurface();
       };
       document.getElementById("locationCollectionFilterResetButton")?.addEventListener("click", resetLocationCollectionFilters);
@@ -32947,6 +35411,16 @@ def ui_preview_html(
       setProfileTab(activeProfileTab);
       document.getElementById("memberGroupCreateForm")?.addEventListener("submit", (event) => createMemberGroup(event));
       document.getElementById("memberGroupList")?.addEventListener("click", (event) => {
+        const renameButton = event.target.closest("[data-member-group-rename]");
+        if (renameButton) {
+          renameMemberGroup(renameButton.dataset.memberGroupRename);
+          return;
+        }
+        const deleteButton = event.target.closest("[data-member-group-delete]");
+        if (deleteButton) {
+          deleteMemberGroup(deleteButton.dataset.memberGroupDelete);
+          return;
+        }
         const removeButton = event.target.closest("[data-member-group-remove-user]");
         if (removeButton) {
           removeMemberGroupUser(removeButton.dataset.memberGroupRemoveUser, removeButton.dataset.memberGroupUserId);
@@ -33000,6 +35474,9 @@ def ui_preview_html(
         button.addEventListener("click", () => setAppAdminRegistrationMode(button.dataset.appAdminRegistrationMode));
       });
       document.getElementById("appAdminInviteForm")?.addEventListener("submit", (event) => createAppAdminInvite(event));
+      document.getElementById("appAdminLegacyEnable")?.addEventListener("click", () => enableAppAdminLegacy());
+      document.getElementById("appAdminLegacyDisable")?.addEventListener("click", () => disableAppAdminLegacy());
+      document.getElementById("appAdminLegacyUserForm")?.addEventListener("submit", (event) => createAppAdminLegacyUser(event));
       document.getElementById("appAdminGroupForm")?.addEventListener("submit", (event) => createAppAdminGroup(event));
       document.querySelectorAll("[data-app-admin-rbac-mode]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminRbacMode(button.dataset.appAdminRbacMode));
@@ -33031,7 +35508,13 @@ def ui_preview_html(
       });
       document.getElementById("appAdminUsersList")?.addEventListener("click", (event) => {
         const statusButton = event.target.closest("[data-app-admin-user-status]");
+        const legacySave = event.target.closest("[data-app-admin-legacy-save]");
+        const legacyPolicy = event.target.closest("[data-app-admin-legacy-policy]");
+        const legacyRemove = event.target.closest("[data-app-admin-legacy-remove]");
         if (statusButton) updateAppAdminUserStatus(statusButton.dataset.appAdminUserStatus, statusButton.dataset.status);
+        if (legacySave) saveAppAdminLegacyCredential(legacySave.dataset.appAdminLegacySave);
+        if (legacyPolicy) saveAppAdminLegacyPolicy(legacyPolicy.dataset.appAdminLegacyPolicy);
+        if (legacyRemove) removeAppAdminLegacyCredential(legacyRemove.dataset.appAdminLegacyRemove);
       });
       document.getElementById("appAdminGroupsList")?.addEventListener("click", (event) => {
         const addButton = event.target.closest("[data-app-admin-group-add]");
@@ -33117,7 +35600,6 @@ def ui_preview_html(
       document.getElementById("appAdminPluginsList")?.addEventListener("click", (event) => {
         const enableButton = event.target.closest("[data-app-admin-plugin-enable]");
         const healthButton = event.target.closest("[data-app-admin-plugin-health]");
-        const saveButton = event.target.closest("[data-app-admin-plugin-save]");
         const executeButton = event.target.closest("[data-app-admin-plugin-execute]");
         const jobButton = event.target.closest("[data-app-admin-plugin-job]");
         const moveButton = event.target.closest("[data-app-admin-plugin-move]");
@@ -33129,7 +35611,6 @@ def ui_preview_html(
         const movieVaultResetButton = event.target.closest("[data-app-admin-movievault-reset]");
         if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
         if (healthButton) checkAppAdminPluginHealth(healthButton.dataset.appAdminPluginHealth);
-        if (saveButton) saveAppAdminPluginConfig(saveButton.dataset.appAdminPluginSave, saveButton.closest(".profile-passkey"));
         if (executeButton) executeAppAdminPlugin(executeButton.dataset.appAdminPluginExecute, executeButton.dataset.entrypoint);
         if (jobButton) queueAppAdminPluginJob(jobButton.dataset.appAdminPluginJob, jobButton.dataset.entrypoint);
         if (moveButton) moveAppAdminPlugin(moveButton.dataset.appAdminPluginMove, moveButton.dataset.direction || "down", moveButton.dataset.sectionCategory || "");
@@ -33139,6 +35620,12 @@ def ui_preview_html(
         if (rollbackButton) rollbackAppAdminPlugin(rollbackButton.dataset.appAdminPluginRollback);
         if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(movieVaultRefreshButton.dataset.appAdminMovievaultRefresh || "movievault", false);
         if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(movieVaultResetButton.dataset.appAdminMovievaultReset || "movievault", true);
+      });
+      document.getElementById("appAdminPluginsList")?.addEventListener("submit", (event) => {
+        const form = event.target.closest("[data-app-admin-plugin-config-form]");
+        if (!form) return;
+        event.preventDefault();
+        saveAppAdminPluginConfig(form.dataset.appAdminPluginConfigForm, form);
       });
       document.getElementById("profileEditForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
@@ -33346,6 +35833,7 @@ def ui_preview_html(
         previewImportBatchBarcode(barcode);
       });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
+        const configureTmdbButton = event.target.closest("[data-import-configure-tmdb]");
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
         const movieCandidateButton = event.target.closest("[data-movie-candidate-key]");
         const proposalButton = event.target.closest(".import-proposal-select[data-box-set-proposal-key]");
@@ -33356,6 +35844,14 @@ def ui_preview_html(
         const containerButton = event.target.closest("[data-import-open-container]");
         const movieButton = event.target.closest("[data-open-movie]");
         const metadataButton = event.target.closest("[data-import-metadata-refresh]");
+        if (configureTmdbButton) {
+          event.preventDefault();
+          showAdminPage(true);
+          setAppAdminTab("plugins");
+          setAppAdminPluginTab("registry");
+          setAppAdminPluginTypeTab("metadata_source");
+          return;
+        }
         if (addLookupButton) {
           event.preventDefault();
           event.stopPropagation();
@@ -33483,6 +35979,7 @@ def ui_preview_html(
         if (saveButton) saveProfilePasskey(saveButton.dataset.profilePasskeySave);
         if (deleteButton) deleteProfilePasskey(deleteButton.dataset.profilePasskeyDelete);
       });
+      document.getElementById("profileLegacyPasswordForm")?.addEventListener("submit", (event) => changeProfileLegacyPassword(event));
       document.getElementById("preferencesCloseButton")?.addEventListener("click", () => {
         document.getElementById("preferencesBackdrop")?.classList.add("hidden");
       });
@@ -33501,6 +35998,8 @@ def ui_preview_html(
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
       document.getElementById("appReviewToggleButton")?.addEventListener("click", () => toggleReviewLogin());
       document.getElementById("appReviewForm")?.addEventListener("submit", (event) => loginReviewPassword(event));
+      document.getElementById("appLegacyCopyCodes")?.addEventListener("click", () => copyLegacyCodes(legacyRecoveryCodes));
+      document.getElementById("appLegacyDownloadCodes")?.addEventListener("click", () => downloadLegacyCodes(legacyRecoveryCodes));
       document.getElementById("appInviteToggleButton")?.addEventListener("click", () => toggleInviteLogin());
       document.getElementById("appInviteForm")?.addEventListener("submit", (event) => registerInviteAccount(event));
       document.getElementById("appRecoveryToggleButton")?.addEventListener("click", () => toggleRecoveryLogin());
@@ -33510,6 +36009,9 @@ def ui_preview_html(
         setStartupGateMessage(error.message || String(error), "bad");
       }));
       document.getElementById("startupOwnerPasskeyButton")?.addEventListener("click", () => registerStartupOwnerPasskey());
+      document.getElementById("startupLegacyButton")?.addEventListener("click", () => runStartupLegacyBootstrap());
+      document.getElementById("startupLegacyCopyCodes")?.addEventListener("click", () => copyLegacyCodes(startupLegacyRecoveryCodes));
+      document.getElementById("startupLegacyDownloadCodes")?.addEventListener("click", () => downloadLegacyCodes(startupLegacyRecoveryCodes));
       document.getElementById("startupLogoutButton")?.addEventListener("click", () => logoutApp());
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -33593,21 +36095,12 @@ def ui_preview_html(
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
       document.getElementById("movieDeleteButton")?.addEventListener("click", () => deleteActiveMovie());
       document.getElementById("movieWatchlistToggleButton")?.addEventListener("click", () => toggleActiveMovieWatchlist());
-      document.querySelectorAll("[data-watch-date-choice]").forEach((button) => {
-        button.addEventListener("click", () => handleWatchedDateChoice(button.dataset.watchDateChoice || "today"));
-      });
-      document.getElementById("movieWatchedDateButton")?.addEventListener("click", () => {
-        const value = document.getElementById("movieWatchedDateInput")?.value || "";
-        if (value) markActiveMovieWatched(value);
-      });
+      document.getElementById("movieLogRewatchButton")?.addEventListener("click", () => openMovieRewatchDialog());
       document.getElementById("movieWatchHistoryPills")?.addEventListener("click", (event) => {
         const deleteButton = event.target.closest("[data-delete-watch-history]");
         if (deleteButton) deleteActiveMovieWatchedEntry(deleteButton.dataset.deleteWatchHistory);
       });
-      document.getElementById("movieTagAddForm")?.addEventListener("submit", (event) => {
-        event.preventDefault();
-        attachActiveMovieTag(document.getElementById("movieTagAddInput")?.value || "");
-      });
+      document.getElementById("movieTagAddButton")?.addEventListener("click", () => openMovieTagPicker());
       document.getElementById("movieTagsChips")?.addEventListener("click", (event) => {
         const removeButton = event.target.closest("[data-detach-tag]");
         if (removeButton) detachActiveMovieTag(removeButton.dataset.detachTag);
@@ -33756,10 +36249,6 @@ def ui_preview_html(
       });
       document.getElementById("movieMetadataDryRunButton")?.addEventListener("click", () => refreshActiveMovieMetadata(true));
       document.getElementById("movieMetadataApplyButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false));
-      document.getElementById("movieCrewRefreshButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false, "crew", true));
-      document.getElementById("movieMetadataPeopleToggle")?.addEventListener("click", () => setMovieMetadataRefreshPeople(!movieMetadataRefreshPeople));
-      setMovieMetadataRefreshPeople(movieMetadataRefreshPeople);
-      document.getElementById("movieMetadataJobsButton")?.addEventListener("click", () => loadActiveMovieJobs());
       document.getElementById("movieMetadataCompareButton")?.addEventListener("click", () => loadMovieMetadataComparison());
       document.getElementById("shuffleButton")?.addEventListener("click", () => {
         const items = libraryDisplayItems();

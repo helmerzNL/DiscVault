@@ -56,6 +56,59 @@ class NextI18nCompletenessTests(unittest.TestCase):
     def test_source_catalog_includes_sidebar_toggle_key(self):
         self.assertIn("uiPreview.toggleSidebar", self.source)
 
+    def test_source_catalog_includes_tmdb_configuration_guidance(self):
+        self.assertIn("importCenter.tmdbKeyRequiredTitle", self.source)
+        self.assertIn("importCenter.tmdbKeyRequiredHelp", self.source)
+        self.assertIn("importCenter.requestTmdbKey", self.source)
+        self.assertIn("importCenter.configureTmdbKey", self.source)
+
+    def test_source_catalog_includes_movie_detail_section_tabs(self):
+        self.assertIn("movieDetail.release", self.source)
+        self.assertIn("movieDetail.technical", self.source)
+        self.assertIn("movieDetail.collectors", self.source)
+        self.assertIn("movieDetail.castCrew", self.source)
+
+    def test_source_catalog_includes_container_conversion_messages(self):
+        for key in (
+            "containerDetail.convertBarcodeConflict",
+            "containerDetail.convertConfirm",
+            "containerDetail.converted",
+            "containerDetail.converting",
+            "containerDetail.convertPermissionDenied",
+        ):
+            self.assertIn(key, self.source)
+
+    def test_source_catalog_includes_rewatch_action_sheet(self):
+        self.assertIn("lists.logRewatch", self.source)
+        self.assertIn("lists.watchedToday", self.source)
+        self.assertIn("lists.watchedYesterday", self.source)
+
+    def test_source_catalog_includes_responsive_media_actions(self):
+        for key in (
+            "common.more",
+            "common.share",
+            "common.hide",
+            "common.unhide",
+            "movieDetail.artworkHidden",
+            "movieDetail.artworkUnhidden",
+            "movieDetail.hiddenArtwork",
+            "movieDetail.hideAgain",
+            "movieDetail.hidingArtwork",
+            "movieDetail.showHidden",
+            "movieDetail.unhidingArtwork",
+        ):
+            self.assertIn(key, self.source)
+
+    def test_source_catalog_includes_library_list_labels(self):
+        for key in (
+            "collection.behaviorColumn",
+            "collection.hideWatched",
+            "collection.hideWatchlist",
+            "collection.posterColumn",
+            "collection.studioColumn",
+        ):
+            self.assertIn(key, self.source)
+
     def test_locale_files_discovered(self):
         self.assertGreater(len(self.locale_files), 0)
 
@@ -93,6 +146,28 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn('id="sidebarCollapseToggle"', source)
         self.assertIn('data-next-i18n-aria="uiPreview.toggleSidebar"', source)
         self.assertIn('data-next-i18n-title="uiPreview.toggleSidebar"', source)
+
+    def test_container_editor_confirms_authorized_type_conversion(self):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("const canConvert = !!((detail.actions || {}).canConvert);", source)
+        self.assertIn('"containerDetail.convertConfirm"', source)
+        self.assertIn("containerType: requestedType", source)
+
+    def test_plugin_config_uses_submit_feedback_and_typed_boolean_control(self):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn('data-app-admin-plugin-config-form=', source)
+        self.assertIn('data-value-type="boolean" type="checkbox"', source)
+        self.assertIn('addEventListener("submit", (event) => {', source)
+        self.assertIn('role="status" aria-live="polite"', source)
+
+    def test_import_lookup_surfaces_non_blocking_tmdb_key_guidance(self):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            source = handle.read()
+        self.assertIn("metadata?.enrichment?.tmdb", source)
+        self.assertIn('data-import-configure-tmdb="1"', source)
+        self.assertIn("https://www.themoviedb.org/settings/api", source)
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ import tempfile
 import time
 import uuid
 import zipfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -46,6 +46,7 @@ try:
     from .next_import import CLIENT_SYNC_SETTING_KEYS
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
+    from .next_ownership import actor_or_instance_owner_id
     from .next_plugin_runtime import plugin_registry_snapshot
     from .next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from .next_plugin_runtime import PLUGIN_ID_PATTERN
@@ -62,6 +63,11 @@ try:
     from .next_plugin_runtime import plugin_update_state
     from .next_plugin_runtime import unconfigured_integration_plugins
     from .next_plugin_runtime import validate_manifest_compatibility
+    from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from .next_plugin_runtime import validate_plugin_settings
+    from .next_price_provider_detection import detect_price_provider
+    from .next_price_provider_detection import derive_provider_product_ref
+    from .next_price_provider_detection import price_provider_entity
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
@@ -81,8 +87,12 @@ try:
     from .next_metadata import refresh_movie_metadata
     from .next_metadata import normalize_movie_field_locks
     from .next_metadata import movie_locked_fields
+    from .next_metadata import movie_genre_keys
     from .next_metadata import MOVIE_LOCKABLE_FIELDS
     from .next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from .next_genres import GENRE_KEYS
+    from .next_genres import GENRE_KEY_TO_LABEL
+    from .next_genres import map_legacy_genre_text
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import backup_restore_plan
@@ -115,6 +125,10 @@ try:
     from .next_movievault_connection import movievault_connection_status
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_connection import refresh_movievault_connection
+    from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from .next_movievault_v2 import MovieVaultV2Error
+    from .next_movievault_v2 import movievault_v2_plugin_context
+    from .next_movievault_v2 import normalize_origin as normalize_movievault_v2_origin
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
     from .next_common import NextApiError
@@ -199,6 +213,7 @@ try:
     from .next_preferences import mobile_endpoint_contract_payload
     from .next_preferences import mobile_feature_capabilities
     from .next_preferences import normalized_app_preference_key
+    from .next_preferences import price_display_context
     from .next_preferences import register_next_preferences_routes
     from .next_preferences import set_app_user_preferences
     from .next_preferences import validate_app_preference
@@ -236,6 +251,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import CLIENT_SYNC_SETTING_KEYS
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
+    from next_ownership import actor_or_instance_owner_id
     from next_plugin_runtime import plugin_registry_snapshot
     from next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from next_plugin_runtime import PLUGIN_ID_PATTERN
@@ -252,6 +268,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import plugin_update_state
     from next_plugin_runtime import unconfigured_integration_plugins
     from next_plugin_runtime import validate_manifest_compatibility
+    from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from next_plugin_runtime import validate_plugin_settings
+    from next_price_provider_detection import detect_price_provider
+    from next_price_provider_detection import derive_provider_product_ref
+    from next_price_provider_detection import price_provider_entity
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
@@ -271,8 +292,12 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import refresh_movie_metadata
     from next_metadata import normalize_movie_field_locks
     from next_metadata import movie_locked_fields
+    from next_metadata import movie_genre_keys
     from next_metadata import MOVIE_LOCKABLE_FIELDS
     from next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from next_genres import GENRE_KEYS
+    from next_genres import GENRE_KEY_TO_LABEL
+    from next_genres import map_legacy_genre_text
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import backup_restore_plan
@@ -305,6 +330,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import movievault_connection_status
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_connection import refresh_movievault_connection
+    from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from next_movievault_v2 import MovieVaultV2Error
+    from next_movievault_v2 import movievault_v2_plugin_context
+    from next_movievault_v2 import normalize_origin as normalize_movievault_v2_origin
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
     from next_common import NextApiError
@@ -428,6 +457,7 @@ MIGRATION_LEGACY_AUTH_CHALLENGE_KEY = "migration:legacy-auth"
 MIGRATION_LEGACY_AUTH_GRANT_PREFIX = "migration:legacy-grant:"
 MIGRATION_LEGACY_AUTH_GRANT_SECONDS = 30 * 60
 PLUGIN_EXECUTION_JOB_TYPE = "plugin.execute"
+MOVIEVAULT_V2_JOB_LOCK_KEY = 2_026_262
 ARTWORK_TRASH_RETENTION_OPTIONS = {
     "1h": {"seconds": 3600, "interval": "1 hour"},
     "1d": {"seconds": 86400, "interval": "1 day"},
@@ -595,6 +625,8 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_digital_badge_on_tiles": True,
     "delete_container_members_with_container": False,
     "show_metadata_jobs": True,
+    "price_monitoring_enabled": True,
+    "preferred_price_currency": "",
     "rating_country": "NL",
     "default_media_group_id": "",
 }
@@ -614,9 +646,11 @@ APP_BOOLEAN_PREFERENCES = {
     "show_digital_badge_on_tiles",
     "delete_container_members_with_container",
     "show_metadata_jobs",
+    "price_monitoring_enabled",
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
+    "preferred_price_currency": {"", "EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY"},
     "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"},
 }
 APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
@@ -628,6 +662,8 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_local_title",
         "show_extended_people_pages",
         "show_digital_badge_on_tiles",
+        "price_monitoring_enabled",
+        "preferred_price_currency",
         "rating_country",
         "default_media_group_id",
     ),
@@ -640,6 +676,18 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_metadata_jobs",
     ),
 }
+
+PRICE_DISPLAY_SUPPORTED_CURRENCIES: tuple[str, ...] = ("EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY")
+PRICE_DISPLAY_FALLBACK_RATES: dict[str, float] = {
+    "EUR": 1.0,
+    "USD": 1.08,
+    "GBP": 0.86,
+    "CAD": 1.47,
+    "AUD": 1.66,
+    "CHF": 0.94,
+    "JPY": 173.0,
+}
+_PRICE_DISPLAY_RATE_CACHE: dict[str, Any] = {"expires_at": None, "payload": None}
 
 
 def create_app() -> Flask:
@@ -3239,7 +3287,6 @@ def normalize_import_column_mapping(value: Any) -> dict[str, str]:
         "rating",
         "director",
         "actor",
-        "genre",
         "imdbId",
         "tmdbId",
         "poster",
@@ -4126,8 +4173,10 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     m.format,
                     m.edition,
                     m.location,
-                    m.metadata->>'genre' AS genre,
                     m.metadata->>'audience_rating' AS audience_rating,
+                    m.metadata->>'studios' AS studios,
+                    m.metadata->>'director' AS director,
+                    m.metadata->>'actor' AS actor,
                     m.rating,
                     mts.content_ratings,
                     concat_ws(' ',
@@ -4135,7 +4184,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                         m.metadata->>'director',
                         m.metadata->>'producer',
                         m.metadata->>'writer',
-                        m.metadata->>'genre',
                         m.metadata->>'studios'
                     ) AS metadata_search,
                     COALESCE(m.metadata->>'poster_url', poster_asset.source_url) AS poster_url,
@@ -4161,6 +4209,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -4172,6 +4221,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -4182,11 +4232,14 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 """,
                 (*visibility_params, limit),
             )
-            return attach_movie_search_credits(
+            return attach_movie_genres(
                 conn,
-                attach_media_group_availability(
+                attach_movie_search_credits(
                     conn,
-                    attach_digital_availability(conn, attach_location_summaries(conn, [with_preview_media_urls(row) for row in cur.fetchall()])),
+                    attach_media_group_availability(
+                        conn,
+                        attach_digital_availability(conn, attach_location_summaries(conn, [with_preview_media_urls(row) for row in cur.fetchall()])),
+                    ),
                 ),
             )
     with conn.cursor() as cur:
@@ -4203,8 +4256,10 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 m.format,
                 m.edition,
                 m.location,
-                m.metadata->>'genre' AS genre,
                 m.metadata->>'audience_rating' AS audience_rating,
+                m.metadata->>'studios' AS studios,
+                m.metadata->>'director' AS director,
+                m.metadata->>'actor' AS actor,
                 m.rating,
                 NULL::jsonb AS content_ratings,
                 concat_ws(' ',
@@ -4212,7 +4267,6 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     m.metadata->>'director',
                     m.metadata->>'producer',
                     m.metadata->>'writer',
-                    m.metadata->>'genre',
                     m.metadata->>'studios'
                 ) AS metadata_search,
                 m.metadata->>'poster_url' AS poster_url,
@@ -4228,10 +4282,53 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
             """,
             (*visibility_params, limit),
         )
-        return attach_movie_search_credits(
+        return attach_movie_genres(
             conn,
-            attach_media_group_availability(conn, attach_digital_availability(conn, attach_location_summaries(conn, cur.fetchall()))),
+            attach_movie_search_credits(
+                conn,
+                attach_media_group_availability(conn, attach_digital_availability(conn, attach_location_summaries(conn, cur.fetchall()))),
+            ),
         )
+
+
+def attach_movie_genres(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach canonical genre keys (movie["genres"]) from movie_genres.
+
+    Also populates movie["genre_search"] with the movie's genre keys plus
+    their English reference labels, so free-text search can match genres
+    without depending on the caller's locale.
+    """
+    if not movies or not table_exists(conn, "movie_genres"):
+        for movie in movies:
+            movie["genres"] = []
+            movie["genre_search"] = ""
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    genres_by_movie: dict[str, list[str]] = {str(movie_id): [] for movie_id in movie_ids}
+    if movie_ids:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mg.movie_id, mg.genre_key
+                FROM movie_genres mg
+                LEFT JOIN genres g ON g.key = mg.genre_key
+                WHERE mg.movie_id = ANY(%s)
+                ORDER BY mg.movie_id, g.sort_order NULLS LAST, mg.genre_key
+                """,
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                key = str(row.get("movie_id"))
+                values = genres_by_movie.get(key)
+                if values is not None:
+                    values.append(str(row.get("genre_key")))
+    for movie in movies:
+        keys = genres_by_movie.get(str(movie.get("id")), [])
+        movie["genres"] = keys
+        movie["genre_search"] = " ".join(
+            f"{key} {GENRE_KEY_TO_LABEL.get(key, key)}" for key in keys
+        )
+    return movies
 
 
 def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -4317,6 +4414,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     c.badge_label,
                     c.year,
                     c.description,
+                    c.owner_id,
                     c.metadata,
                     poster_asset.id AS poster_asset_id,
                     poster_asset.storage_backend AS poster_asset_storage_backend,
@@ -4337,6 +4435,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     WHERE em.entity_type='container'
                       AND em.entity_id=c.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -4348,6 +4447,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     WHERE em.entity_type='container'
                       AND em.entity_id=c.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -4504,6 +4604,7 @@ def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
 
 def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> dict[str, Any]:
     user_id = user.get("id") if user else None
+    preferences = app_effective_preferences(conn, user_id)
     counts = {
         "movies": visible_movie_count(conn, user) if user else count_table(conn, "movies"),
         "people": visible_people_count(conn, user) if user else count_table(conn, "people"),
@@ -4528,7 +4629,8 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "locations": location_list_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
-        "preferences": app_effective_preferences(conn, user_id),
+        "preferences": preferences,
+        "priceDisplay": price_display_context(preferences),
         "instanceSettings": {
             "loansSystemEnabled": loans_system_enabled(conn),
         },
@@ -4559,6 +4661,7 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "mediaGroups": [],
         "plugins": [],
         "preferences": dict(APP_PREFERENCE_DEFAULTS),
+        "priceDisplay": price_display_context(dict(APP_PREFERENCE_DEFAULTS)),
         "instanceSettings": {
             "loansSystemEnabled": False,
         },
@@ -4894,6 +4997,59 @@ def can_manage_media_group_members(conn, group_id: UUID, actor: dict[str, Any]) 
     return bool(member and member.get("role") in {"owner", "manager"})
 
 
+def media_group_owner_state(
+    conn,
+    group_id: UUID,
+    actor: dict[str, Any],
+    *,
+    lock: bool = False,
+) -> dict[str, Any] | None:
+    actor_id = actor.get("id")
+    system_owner = not actor_id and actor.get("role") == "owner"
+    if not actor_id and not system_owner:
+        return None
+    if lock and not lock_media_group_row(conn, group_id):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                mg.id,
+                mg.name,
+                member.role AS actor_role,
+                (
+                    SELECT COUNT(*)::int
+                    FROM media_group_members member_count
+                    WHERE member_count.group_id=mg.id
+                ) AS member_count
+            FROM media_groups mg
+            LEFT JOIN media_group_members member
+              ON member.group_id=mg.id
+             AND member.user_id=%s
+            WHERE mg.id=%s
+            """,
+            (actor_id, group_id),
+        )
+        state = cur.fetchone()
+    if state and system_owner:
+        state = dict(state)
+        state["actor_role"] = "owner"
+    return state
+
+
+def lock_media_group_row(conn, group_id: UUID) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM media_groups WHERE id=%s FOR UPDATE", (group_id,))
+        return bool(cur.fetchone())
+
+
+def media_group_owner_can_delete(actor: dict[str, Any], owner_state: dict[str, Any]) -> bool:
+    member_count = int(owner_state.get("member_count") or 0)
+    if not actor.get("id") and actor.get("role") == "owner":
+        return member_count == 0
+    return member_count == 1
+
+
 def require_existing_movie_ids(conn, movie_ids: list[UUID]) -> None:
     if not movie_ids:
         return
@@ -4918,13 +5074,22 @@ def container_type_for_id(conn, container_id: UUID) -> str:
     return str(row["container_type"] or "")
 
 
-def container_types_for_ids(conn, container_ids: list[UUID]) -> dict[UUID, str]:
+def container_types_for_ids(
+    conn,
+    container_ids: list[UUID],
+    *,
+    lock: bool = False,
+) -> dict[UUID, str]:
     if not container_ids:
         return {}
     if not table_exists(conn, "containers"):
         raise NextApiError("Container table is not available", 503)
     with conn.cursor() as cur:
-        cur.execute("SELECT id, container_type FROM containers WHERE id = ANY(%s)", (container_ids,))
+        lock_clause = " ORDER BY id FOR UPDATE" if lock else ""
+        cur.execute(
+            f"SELECT id, container_type FROM containers WHERE id = ANY(%s){lock_clause}",
+            (container_ids,),
+        )
         rows = cur.fetchall()
     found = {row["id"]: str(row["container_type"] or "") for row in rows}
     missing = [str(item) for item in container_ids if item not in found]
@@ -4938,6 +5103,36 @@ def normalize_container_type(value: Any) -> str:
     if container_type not in {"box_set", "collection", "vault"}:
         raise NextApiError("containerType must be box_set, collection or vault", 400)
     return container_type
+
+
+def container_type_change(current_type: Any, requested_type: Any) -> tuple[str, bool]:
+    current = normalize_container_type(current_type)
+    requested = normalize_container_type(requested_type)
+    if requested == current:
+        return current, False
+    if {current, requested} != {"box_set", "vault"}:
+        raise NextApiError("Only box-sets and vaults can be converted into each other", 400)
+    return requested, True
+
+
+def actor_can_convert_container(container: dict[str, Any], actor: dict[str, Any] | None) -> bool:
+    if str(container.get("container_type") or "") not in {"box_set", "vault"} or not actor:
+        return False
+    if not actor_effective_has_permission(actor, "containers.edit"):
+        return False
+    if str(actor.get("role") or "") in {"owner", "admin"}:
+        return True
+    actor_id = actor.get("id")
+    owner_id = container.get("owner_id")
+    return bool(actor_id and owner_id and str(actor_id) == str(owner_id))
+
+
+def lock_box_set_barcode(conn, barcode: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            (barcode,),
+        )
 
 
 def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -6826,7 +7021,7 @@ def validate_app_preference(key: str, value: Any) -> Any:
         return parse_bool_value(value, default=bool(APP_PREFERENCE_DEFAULTS[key]))
     if key in APP_CHOICE_PREFERENCES:
         text = str(value or APP_PREFERENCE_DEFAULTS[key]).strip()
-        text = text.upper() if key == "rating_country" else text.lower()
+        text = text.upper() if key in {"rating_country", "preferred_price_currency"} else text.lower()
         if text not in APP_CHOICE_PREFERENCES[key]:
             raise NextApiError(f"Invalid value for preference {key}", 400)
         return text
@@ -6875,6 +7070,73 @@ def app_effective_preferences(conn, user_id: UUID | str | None = None) -> dict[s
     values = app_global_preferences(conn)
     values.update(app_user_preferences(conn, user_id))
     return values
+
+
+def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    cached = _PRICE_DISPLAY_RATE_CACHE.get("payload")
+    expires_at = _PRICE_DISPLAY_RATE_CACHE.get("expires_at")
+    if cached and isinstance(expires_at, datetime) and expires_at > now:
+        return cached
+
+    symbols = ",".join(code for code in PRICE_DISPLAY_SUPPORTED_CURRENCIES if code != "EUR")
+    try:
+        response = http_requests.get(
+            f"https://api.frankfurter.app/latest?from=EUR&to={symbols}",
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json() or {}
+        raw_rates = payload.get("rates") if isinstance(payload, dict) else {}
+        rates = {"EUR": 1.0}
+        for code in PRICE_DISPLAY_SUPPORTED_CURRENCIES:
+            if code == "EUR":
+                continue
+            raw_value = raw_rates.get(code) if isinstance(raw_rates, dict) else None
+            try:
+                rates[code] = float(raw_value)
+            except (TypeError, ValueError):
+                rates[code] = PRICE_DISPLAY_FALLBACK_RATES[code]
+        result = {
+            "base": "EUR",
+            "exchangeRates": rates,
+            "updatedAt": payload.get("date") if isinstance(payload, dict) else None,
+            "source": "frankfurter",
+        }
+        _PRICE_DISPLAY_RATE_CACHE["payload"] = result
+        _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + timedelta(hours=12)
+        return result
+    except Exception:
+        if cached:
+            return cached
+        return {
+            "base": "EUR",
+            "exchangeRates": dict(PRICE_DISPLAY_FALLBACK_RATES),
+            "updatedAt": None,
+            "source": "fallback",
+        }
+
+
+def price_display_context(preferences: dict[str, Any] | None = None) -> dict[str, Any]:
+    prefs = preferences or {}
+    monitoring_enabled = bool(prefs.get("price_monitoring_enabled", APP_PREFERENCE_DEFAULTS["price_monitoring_enabled"]))
+    preferred_currency = str(prefs.get("preferred_price_currency") or "").strip().upper()
+    if preferred_currency not in APP_CHOICE_PREFERENCES["preferred_price_currency"]:
+        preferred_currency = ""
+    payload = {
+        "monitoringEnabled": monitoring_enabled,
+        "preferredCurrency": preferred_currency or None,
+        "supportedCurrencies": list(PRICE_DISPLAY_SUPPORTED_CURRENCIES),
+        "exchangeRates": {},
+        "updatedAt": None,
+        "source": None,
+    }
+    if monitoring_enabled and preferred_currency:
+        rates = price_display_exchange_rates()
+        payload["exchangeRates"] = dict(rates.get("exchangeRates") or {})
+        payload["updatedAt"] = rates.get("updatedAt")
+        payload["source"] = rates.get("source")
+    return payload
 
 
 def actor_delete_container_members_enabled(conn, actor: dict[str, Any] | None) -> bool:
@@ -7671,6 +7933,7 @@ def visible_media_asset_count(conn, actor: dict[str, Any] | None) -> int:
             LEFT JOIN movies m ON em.entity_type='movie' AND m.id = em.entity_id
             LEFT JOIN containers c ON em.entity_type='container' AND c.id = em.entity_id
             WHERE em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND (
                     (em.entity_type='movie' AND {movie_where})
                  OR (em.entity_type='container' AND {container_where})
@@ -8016,7 +8279,11 @@ def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink", "describe_payload", "activity_summary"}:
         return False
-    if is_movievault_plugin(str(plugin.get("id") or "")):
+    plugin_id = str(plugin.get("id") or "")
+    if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
+        settings = config.get("settings")
+        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+    if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
@@ -8049,41 +8316,35 @@ def plugin_is_metadata(categories: Any) -> bool:
     return bool({"metadata_source", "metadata_receiver"}.intersection(values))
 
 
-def plugin_config_payload(settings: Any, secrets_ref: Any) -> dict[str, Any]:
-    safe_settings = settings if isinstance(settings, dict) else {}
-    refs = secrets_ref if isinstance(secrets_ref, dict) else {}
-    safe_refs: dict[str, dict[str, Any]] = {}
-    for name, ref in refs.items():
-        if not PLUGIN_SECRET_NAME_PATTERN.match(str(name)):
-            continue
-        key = ref.get("key") if isinstance(ref, dict) else ref
-        item: dict[str, Any] = {"configured": True}
-        if key:
-            item["key"] = str(key)
-        safe_refs[str(name)] = item
-    return {
-        "settings": safe_settings,
-        "settingsConfigured": bool(safe_settings),
-        "secretNames": sorted(safe_refs),
-        "secretsConfigured": bool(safe_refs),
-        "secretsRef": safe_refs,
+def plugin_config_payload(settings_schema: Any, settings: Any, secrets_ref: Any) -> dict[str, Any]:
+    payload = resolved_plugin_config_payload(settings_schema, settings, secrets_ref)
+    safe_refs = {
+        str(name): ref
+        for name, ref in (payload.get("secretsRef") or {}).items()
+        if PLUGIN_SECRET_NAME_PATTERN.match(str(name))
     }
+    payload["secretNames"] = sorted(safe_refs)
+    payload["secretsConfigured"] = bool(safe_refs)
+    payload["secretsRef"] = safe_refs
+    return payload
 
 
 def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
     if not table_exists(conn, "plugin_settings"):
-        return plugin_config_payload({}, {})
+        return plugin_config_payload({}, {}, {})
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT settings, secrets_ref
-            FROM plugin_settings
-            WHERE plugin_id=%s
+            SELECT p.settings_schema, s.settings, s.secrets_ref
+            FROM plugins AS p
+            LEFT JOIN plugin_settings AS s ON s.plugin_id = p.id
+            WHERE p.id=%s
             """,
             (plugin_id,),
         )
         row = cur.fetchone()
     return plugin_config_payload(
+        row.get("settings_schema") if row else {},
         row.get("settings") if row else {},
         row.get("secrets_ref") if row else {},
     )
@@ -8132,6 +8393,7 @@ def plugin_execution_context(
         "enabled": bool(plugin.get("enabled")),
         "categories": plugin.get("categories") or manifest.get("categories") or [],
         "capabilities": plugin.get("capabilities") or manifest.get("capabilities") or [],
+        "distributionContractRange": manifest.get("distributionContractRange"),
         "settings": config.get("settings") or {},
         "secrets": plugin_secret_values(conn, config),
         "settingsConfigured": bool(config.get("settingsConfigured")),
@@ -8143,12 +8405,19 @@ def plugin_execution_context(
             "role": actor.get("role") if actor else None,
         },
     }
-    return movievault_plugin_context(
+    plugin_id = str(plugin.get("id") or "")
+    context = movievault_plugin_context(
         conn,
-        str(plugin.get("id") or ""),
+        plugin_id,
         context,
         ensure_token=ensure_movievault_token,
         actor_id=actor.get("id") if actor else None,
+    )
+    return movievault_v2_plugin_context(
+        conn,
+        plugin_id,
+        context,
+        connection_factory=connect,
     )
 
 
@@ -8197,10 +8466,22 @@ def update_plugin_config(
         )
         existing = cur.fetchone()
 
+    with conn.cursor() as cur:
+        cur.execute("SELECT settings_schema FROM plugins WHERE id=%s", (plugin_id,))
+        plugin_row = cur.fetchone()
+    settings_schema = plugin_row.get("settings_schema") if plugin_row else {}
     settings = dict(existing.get("settings") or {}) if existing else {}
     secrets_ref = dict(existing.get("secrets_ref") or {}) if existing else {}
     if settings_provided:
-        settings = dict(settings_value or {})
+        try:
+            settings = validate_plugin_settings(settings_schema, settings_value or {})
+        except ValueError as exc:
+            raise NextApiError(str(exc), 400) from exc
+        if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
+            try:
+                settings["origin"] = normalize_movievault_v2_origin(settings.get("origin"))
+            except MovieVaultV2Error as exc:
+                raise NextApiError("MovieVault v2 origin must be a root HTTP(S) origin", 400) from exc
 
     with conn.transaction():
         with conn.cursor() as cur:
@@ -8427,7 +8708,6 @@ def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int |
 def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
     aliases = {
         "director": ("director",),
-        "genre": ("genre",),
         "studios": ("studios", "studio"),
         "distributor": ("distributor",),
     }
@@ -8686,12 +8966,13 @@ def movie_edit_receiver_proposal(
         else:
             metadata_updates[field] = new_value
 
-    # Editable metadata fields stored on movies.metadata (director, genre,
-    # studios, distributor). A non-empty supplement/change becomes a
-    # contribution; locked fields are never forwarded.
+    # Editable metadata fields stored on movies.metadata (director, studios,
+    # distributor). A non-empty supplement/change becomes a contribution;
+    # locked fields are never forwarded. Genre is intentionally absent: it
+    # is read-only and sourced only from TMDB.
     existing_meta = existing.get("metadata") if isinstance(existing.get("metadata"), dict) else {}
     metadata_edits = payload.get("metadata_edits") or {}
-    for field in ("director", "genre", "studios", "distributor"):
+    for field in ("director", "studios", "distributor"):
         if field not in metadata_edits or field in locked:
             continue
         new_value = comparable(metadata_edits.get(field))
@@ -8779,6 +9060,8 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
             (movie_id,),
         )
         row = cur.fetchone()
+    if row is not None:
+        row["genres"] = movie_genre_keys(conn, movie_id)
     return row
 
 
@@ -8888,6 +9171,7 @@ def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict
                 p.id AS person_id,
                 p.public_id AS person_public_id,
                 p.name,
+                p.birth_date,
                 p.known_for,
                 p.profile_asset_id,
                 p.metadata AS person_metadata,
@@ -9215,7 +9499,31 @@ def attach_personal_list_state(conn, rows: list[dict[str, Any]], user_id: UUID |
             )
             loaned_movies = {row["movie_id"] for row in cur.fetchall()}
     tagged_movies: set[Any] = set()
-    if table_exists(conn, "movie_tags"):
+    tags_by_movie: dict[Any, list[dict[str, Any]]] = {}
+    if table_exists(conn, "movie_tags") and table_exists(conn, "tags"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT mt.movie_id, t.id, t.name, t.slug, t.color
+                FROM movie_tags mt
+                JOIN tags t ON t.id = mt.tag_id
+                WHERE mt.user_id=%s AND mt.movie_id = ANY(%s)
+                ORDER BY mt.movie_id, lower(t.name), t.id
+                """,
+                (user_id, ids),
+            )
+            for tag_row in cur.fetchall():
+                movie_id = tag_row.get("movie_id")
+                tagged_movies.add(movie_id)
+                tags_by_movie.setdefault(movie_id, []).append(
+                    {
+                        "id": str(tag_row.get("id")),
+                        "name": tag_row.get("name"),
+                        "slug": tag_row.get("slug"),
+                        "color": tag_row.get("color"),
+                    }
+                )
+    elif table_exists(conn, "movie_tags"):
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -9233,6 +9541,7 @@ def attach_personal_list_state(conn, rows: list[dict[str, Any]], user_id: UUID |
         row["last_watched"] = watched_by_movie.get(movie_id)
         row["on_loan"] = movie_id in loaned_movies
         row["has_tags"] = movie_id in tagged_movies
+        row["tags"] = tags_by_movie.get(movie_id, [])
     return rows
 
 
@@ -9895,6 +10204,110 @@ def all_wishlist_sync_entities(conn, user_id) -> list[dict[str, Any]]:
     return _attach_wishlist_shops(conn, user_id, entities)
 
 
+def _wishlist_existing_identity_id(conn, user_id, fields: dict[str, Any]):
+    movievault_id = fields.get("movievault_id")
+    tmdb_id = fields.get("tmdb_id")
+    if movievault_id:
+        query = """
+            SELECT id
+            FROM wishlist_items
+            WHERE user_id=%s AND movievault_id=%s
+            ORDER BY added_at, id
+            LIMIT 1
+        """
+        params = (user_id, movievault_id)
+    elif tmdb_id:
+        query = """
+            SELECT id
+            FROM wishlist_items
+            WHERE user_id=%s
+              AND snapshot->>'tmdb_id' = %s
+              AND COALESCE(NULLIF(snapshot->>'tmdb_media_type', ''), 'movie') = %s
+            ORDER BY added_at, id
+            LIMIT 1
+        """
+        params = (user_id, tmdb_id, fields.get("tmdb_media_type") or "movie")
+    else:
+        return None
+
+    with conn.cursor() as cur:
+        cur.execute(query, params)
+        row = cur.fetchone()
+    return (row or {}).get("id")
+
+
+def _insert_wishlist_item_once(
+    conn,
+    *,
+    user_id,
+    created_by_user_id,
+    fields: dict[str, Any],
+    snapshot: dict[str, Any],
+):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO wishlist_items
+                (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot, created_by_user_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+            RETURNING id
+            """,
+            (
+                user_id,
+                fields["title"],
+                fields["year"],
+                fields["barcode"],
+                fields["format"],
+                fields["movievault_id"],
+                fields["poster_url"],
+                fields["note"],
+                Jsonb(snapshot),
+                created_by_user_id,
+            ),
+        )
+        inserted = cur.fetchone()
+    item_id = (inserted or {}).get("id")
+    if item_id is not None:
+        return item_id, True
+
+    item_id = _wishlist_existing_identity_id(conn, user_id, fields)
+    if item_id is None:
+        raise NextApiError("Wishlist item could not be created", 409)
+    return item_id, False
+
+
+def _create_wishlist_item_record(
+    conn,
+    *,
+    actor: dict[str, Any],
+    fields: dict[str, Any],
+    snapshot: dict[str, Any],
+):
+    user_id = actor.get("id")
+    with conn.transaction():
+        item_id, created = _insert_wishlist_item_once(
+            conn,
+            user_id=user_id,
+            created_by_user_id=actor.get("id"),
+            fields=fields,
+            snapshot=snapshot,
+        )
+        if created:
+            emit_wishlist_change(conn, user_id, item_id, operation="upsert")
+            audit_event(
+                conn,
+                event_type="wishlist.added",
+                category="personal",
+                actor=actor,
+                target_type="wishlist_item",
+                target_id=item_id,
+                summary="Added wishlist entry",
+                metadata={"title": fields["title"]},
+            )
+    return item_id, created
+
+
 def emit_wishlist_change(conn, user_id, item_id, *, operation: str) -> int:
     entity_id = str(item_id)
     payload: dict[str, Any] = {"id": entity_id}
@@ -10465,6 +10878,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind='poster'
                 ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                 LIMIT 1
@@ -10476,6 +10890,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind='backdrop'
                 ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                 LIMIT 1
@@ -10808,6 +11223,7 @@ def media_group_movie_entities(
                     WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -10819,6 +11235,7 @@ def media_group_movie_entities(
                     WHERE em.entity_type='movie'
                   AND em.entity_id=m.id
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -10994,12 +11411,44 @@ def media_asset_entity(conn, media_id: UUID) -> dict[str, Any] | None:
         return cur.fetchone()
 
 
-def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list[dict[str, Any]]:
-    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
-        return []
+def is_movievault_v2_poster_media_asset(asset: dict[str, Any]) -> bool:
+    provider_id = str(asset.get("provider_id") or "")
+    return asset.get("kind") == "poster" and provider_id.startswith("movievault_v2:")
+
+
+def movievault_v2_poster_media_asset_entity(conn, media_id: UUID) -> dict[str, Any] | None:
+    if not table_exists(conn, "media_assets") or not table_exists(conn, "movievault_v2_poster_cache"):
+        return None
+    asset = media_asset_entity(conn, media_id)
+    if not asset or not is_movievault_v2_poster_media_asset(asset):
+        return None
     with conn.cursor() as cur:
         cur.execute(
             """
+            SELECT 1
+            FROM movievault_v2_poster_cache
+            WHERE media_asset_id = %s
+              AND status IN ('ready', 'degraded')
+            LIMIT 1
+            """,
+            (media_id,),
+        )
+        return asset if cur.fetchone() else None
+
+
+def entity_media_asset_entities(
+    conn,
+    entity_type: str,
+    entity_id: UUID,
+    *,
+    include_hidden: bool = False,
+) -> list[dict[str, Any]]:
+    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        return []
+    hidden_filter = "" if include_hidden else "AND em.hidden_at IS NULL"
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
             SELECT
                 ma.id,
                 ma.kind,
@@ -11016,11 +11465,13 @@ def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list
                 ma.metadata,
                 em.role,
                 em.is_primary,
-                em.sort_order
+                em.sort_order,
+                em.hidden_at
             FROM entity_media em
             JOIN media_assets ma ON ma.id = em.media_id
             WHERE em.entity_type=%s AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              {hidden_filter}
             ORDER BY em.role, em.sort_order, ma.kind
             """,
             (entity_type, entity_id),
@@ -11028,6 +11479,7 @@ def entity_media_asset_entities(conn, entity_type: str, entity_id: UUID) -> list
         rows = cur.fetchall()
     for row in rows:
         row["url"] = media_asset_public_url(row)
+        row["hidden"] = bool(row.get("hidden_at"))
     return rows
 
 
@@ -11300,7 +11752,9 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "credits": movie_credit_entities(conn, movie_id),
         "containers": movie_container_entities(conn, movie_id),
         "mediaGroups": movie_media_group_entities(conn, movie_id),
-        "mediaAssets": entity_media_asset_entities(conn, "movie", movie_id),
+        "mediaAssets": entity_media_asset_entities(
+            conn, "movie", movie_id, include_hidden=True
+        ),
         "digitalItems": movie_digital_item_entities(conn, movie_id),
         "metadataDebug": metadata_debug,
     }
@@ -11308,18 +11762,15 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
 
 
 def person_metadata_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
-    """Person metadata sources in the shared provider priority order.
-
-    Mirrors ``metadata_source_plugins`` for movies/containers: installed
-    ``metadata_source`` plugins that expose a ``person_details`` entrypoint,
-    ordered by ``order_index`` so the highest-priority provider wins on conflicts.
-    """
+    """Return TMDb when it is installed and exposes person details."""
     if not table_exists(conn, "plugins"):
         return []
     sync_metadata_plugin_registry(conn)
     registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
     plugins: list[dict[str, Any]] = []
     for plugin in registry.get("plugins") or []:
+        if str(plugin.get("id") or "").strip().lower() != "tmdb":
+            continue
         if not plugin.get("installed"):
             continue
         if not include_disabled and not plugin.get("enabled"):
@@ -11333,13 +11784,15 @@ def person_metadata_source_plugins(conn, *, include_disabled: bool = False) -> l
 
 
 def person_filmography_source_plugins(conn, *, include_disabled: bool = False) -> list[dict[str, Any]]:
-    """Filmography sources in the shared provider priority order."""
+    """Return TMDb when it is installed and exposes person filmography."""
     if not table_exists(conn, "plugins"):
         return []
     sync_metadata_plugin_registry(conn)
     registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
     plugins: list[dict[str, Any]] = []
     for plugin in registry.get("plugins") or []:
+        if str(plugin.get("id") or "").strip().lower() != "tmdb":
+            continue
         if not plugin.get("installed"):
             continue
         if not include_disabled and not plugin.get("enabled"):
@@ -11543,128 +11996,6 @@ def sync_person_profile_media(
     }
 
 
-def merge_person_awards(*award_lists: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Merge award lists from multiple providers with the shared dedupe rules.
-
-    De-duplicates on ``(awardWikidataId or award, year, workWikidataId or work)``
-    and collapses a nomination into a win when both share that key. Earlier lists
-    take precedence on otherwise-identical (same-result) duplicates.
-    """
-    deduped: dict[tuple, dict[str, Any]] = {}
-    order: list[tuple] = []
-    for awards in award_lists:
-        for entry in awards or []:
-            if not isinstance(entry, dict):
-                continue
-            award = clean_text(entry.get("award"))
-            award_qid = clean_text(entry.get("awardWikidataId"))
-            if not award and not award_qid:
-                continue
-            work = clean_text(entry.get("work"))
-            work_qid = clean_text(entry.get("workWikidataId"))
-            year = entry.get("year")
-            result = clean_text(entry.get("result")).lower()
-            result = "won" if result == "won" else "nominated"
-            normalized = {
-                "award": award or award_qid,
-                "awardWikidataId": award_qid,
-                "category": clean_text(entry.get("category")),
-                "year": year,
-                "work": work,
-                "workWikidataId": work_qid,
-                "workTmdbId": entry.get("workTmdbId"),
-                "result": result,
-                "source": clean_text(entry.get("source")),
-                "sourceRef": clean_text(entry.get("sourceRef")),
-            }
-            key = (award_qid or award, year, work_qid or work)
-            existing = deduped.get(key)
-            if existing is None:
-                deduped[key] = normalized
-                order.append(key)
-            elif existing.get("result") == "nominated" and result == "won":
-                deduped[key] = normalized
-    return [deduped[key] for key in order]
-
-
-def group_person_awards(awards: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Group a flat award list by award name for display (mirrors wikidata_awards)."""
-    groups: dict[str, dict[str, Any]] = {}
-    order: list[str] = []
-    for award in awards or []:
-        key = clean_text(award.get("awardWikidataId")) or clean_text(award.get("award"))
-        if not key:
-            continue
-        if key not in groups:
-            groups[key] = {
-                "award": award.get("award") or "",
-                "awardWikidataId": award.get("awardWikidataId") or "",
-                "items": [],
-            }
-            order.append(key)
-        groups[key]["items"].append(award)
-    result = []
-    for key in order:
-        group = groups[key]
-        group["items"].sort(key=lambda item: -(item.get("year") or 0))
-        group["wins"] = sum(1 for item in group["items"] if item.get("result") == "won")
-        group["nominations"] = sum(1 for item in group["items"] if item.get("result") == "nominated")
-        result.append(group)
-    return result
-
-
-def person_receiver_contribution_payload(
-    *,
-    person_id: UUID | str,
-    person: dict[str, Any],
-    tmdb_id: str,
-    updates: dict[str, Any],
-    localizations: list[dict[str, Any]],
-    source_providers: list[str],
-) -> dict[str, Any]:
-    """Build a person contribution envelope mirroring the movie receiver payload."""
-    tmdb_text = str(tmdb_id) if tmdb_id else ""
-    public: dict[str, Any] = {
-        "name": updates.get("name") or clean_text(person.get("name")),
-        "tmdbId": tmdb_text,
-        "biography": updates.get("biography"),
-        "birthday": updates.get("birth_date"),
-        "deathday": updates.get("death_date"),
-        "placeOfBirth": updates.get("place_of_birth"),
-        "knownFor": updates.get("known_for"),
-        "profileUrl": updates.get("profile_url"),
-        "photoUrl": updates.get("profile_url"),
-    }
-    for localization in localizations or []:
-        lang = clean_text(localization.get("lang"))
-        biography = clean_text(localization.get("biography"))
-        if not lang or not biography:
-            continue
-        public[f"biography_{lang.lower()}"] = biography
-        short = lang.lower().split("-")[0]
-        if short:
-            public.setdefault(f"biography_{short}", biography)
-    public = {key: value for key, value in public.items() if value not in (None, "", [], {})}
-    identity = str(person.get("public_id") or person_id)
-    return {
-        "entityType": "person",
-        "identity": identity,
-        "sourceRef": identity,
-        "sourceReference": {
-            "type": "discvault_person",
-            "key": str(person_id),
-            "publicId": person.get("public_id"),
-            "tmdbId": tmdb_text,
-        },
-        "payload": public,
-        "metadata": {
-            "personId": str(person_id),
-            "sourceProviders": sorted({str(item) for item in (source_providers or []) if item}),
-            "tmdbId": tmdb_text,
-        },
-    }
-
-
 def refresh_person_metadata(
     conn,
     person_id: UUID,
@@ -11679,12 +12010,16 @@ def refresh_person_metadata(
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
 
-    candidates = person_metadata_source_plugins(conn, include_disabled=True)
+    candidates = [
+        plugin
+        for plugin in person_metadata_source_plugins(conn, include_disabled=True)
+        if str(plugin.get("id") or "").strip().lower() == "tmdb"
+    ]
     if not candidates:
-        raise NextApiError("No enabled person metadata plugin is available", 503)
+        raise NextApiError("TMDb person metadata plugin is not available", 503)
     enabled_candidates = [plugin for plugin in candidates if plugin.get("enabled")]
     if not enabled_candidates:
-        raise NextApiError("Person metadata plugin must be enabled before refreshing person metadata", 409)
+        raise NextApiError("TMDb must be enabled before refreshing person metadata", 409)
     top_config = plugin_config_from_db(conn, str(enabled_candidates[0]["id"]))
     if plugin_requires_config_for_entrypoint(enabled_candidates[0], top_config, "person_details"):
         raise NextApiError("Person metadata plugin configuration is incomplete", 409)
@@ -11695,7 +12030,6 @@ def refresh_person_metadata(
     merged_aliases: list[str] = []
     merged_imdb = ""
     merged_profiles: list[Any] = []
-    provider_source_awards: list[dict[str, Any]] = []
     primary_plugin: dict[str, Any] | None = None
     primary_execution: dict[str, Any] = {}
     primary_result: dict[str, Any] = {}
@@ -11739,14 +12073,12 @@ def refresh_person_metadata(
         provider_imdb = clean_text(result.get("imdbId") or result.get("imdb_id"))
         provider_profiles = list(result.get("profiles") or [])
         provider_localizations = result.get("localizations") or []
-        provider_awards = [item for item in (result.get("awards") or []) if isinstance(item, dict)]
         if not (
             any(normalized.values())
             or provider_aliases
             or provider_imdb
             or provider_profiles
             or provider_localizations
-            or provider_awards
         ):
             continue
         if primary_plugin is None:
@@ -11765,8 +12097,6 @@ def refresh_person_metadata(
             merged_imdb = provider_imdb
         if not merged_profiles and provider_profiles:
             merged_profiles = provider_profiles
-        if provider_awards:
-            provider_source_awards.extend(provider_awards)
         provider_language = clean_text(result.get("language")) or primary_language or "en-US"
         for localization in provider_localizations:
             lang = clean_text(localization.get("lang"))
@@ -11836,16 +12166,6 @@ def refresh_person_metadata(
         )
         awards_status = "error"
 
-    # Fold awards that arrived inline from metadata-source providers (e.g. MovieVault
-    # person_details) into the Wikidata substep output, de-duplicated with the shared
-    # won>nominated rules. Only engage the merge when a provider actually supplied
-    # awards so the single-source Wikidata behaviour stays byte-identical otherwise.
-    if provider_source_awards:
-        merged_awards = merge_person_awards(awards, provider_source_awards)
-        awards = merged_awards
-        award_groups = group_person_awards(merged_awards)
-        awards_hit = bool(merged_awards)
-
     preview_detail = json_ready(detail)
     preview_person = preview_detail.get("person") if isinstance(preview_detail.get("person"), dict) else {}
     preview_metadata = preview_person.get("metadata") if isinstance(preview_person.get("metadata"), dict) else {}
@@ -11884,7 +12204,6 @@ def refresh_person_metadata(
     if localizations:
         preview_detail["localizations"] = [dict(item) for item in localizations]
 
-    receiver_summary: dict[str, Any] | None = None
     if not dry_run:
         with conn.cursor() as cur:
             cur.execute(
@@ -11932,39 +12251,6 @@ def refresh_person_metadata(
                 "Person profile media sync failed for %s", person_id, exc_info=True
             )
         detail = person_detail_entity(conn, person_id) or preview_detail
-        if source_providers:
-            receiver_payload = person_receiver_contribution_payload(
-                person_id=person_id,
-                person=detail.get("person") if isinstance(detail.get("person"), dict) else {},
-                tmdb_id=tmdb_id,
-                updates=updates,
-                localizations=localizations,
-                source_providers=source_providers,
-            )
-            if receiver_payload.get("payload"):
-                try:
-                    receiver_summary = push_receiver_payload_to_receivers(conn, payload=receiver_payload, actor=actor)
-                except Exception as exc:  # noqa: BLE001 - contribution must never break the refresh
-                    current_app.logger.warning(
-                        "Person receiver contribution failed for %s", person_id, exc_info=True
-                    )
-                    receiver_summary = {"status": "error", "error": str(exc)}
-                audit_event(
-                    conn,
-                    event_type="metadata.receiver_pushed",
-                    category="metadata",
-                    actor=actor,
-                    target_type="person",
-                    target_id=person_id,
-                    summary=f"Pushed person metadata to receiver plugins for {updates.get('name') or tmdb_id}",
-                    metadata={
-                        "personId": str(person_id),
-                        "tmdbId": str(tmdb_id),
-                        "sourceProviders": sorted({str(item) for item in source_providers if item}),
-                        "fields": sorted((receiver_payload.get("payload") or {}).keys()),
-                        "receiverSummary": receiver_summary,
-                    },
-                )
     else:
         if profile_urls:
             existing_media = preview_detail.get("personMedia") if isinstance(preview_detail.get("personMedia"), list) else []
@@ -12004,7 +12290,7 @@ def refresh_person_metadata(
             "groups": len(award_groups),
         },
         "result": primary_result,
-        "receivers": receiver_summary,
+        "receivers": None,
         "detail": detail,
     }
 
@@ -12124,6 +12410,7 @@ def set_primary_movie_media_asset(
               AND em.entity_id=%s
               AND em.media_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind=%s
             """,
             (movie_id, media_id, kind),
@@ -12141,6 +12428,7 @@ def set_primary_movie_media_asset(
               AND em.entity_type='movie'
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind=%s
               AND em.is_primary=true
             """,
@@ -12155,6 +12443,7 @@ def set_primary_movie_media_asset(
               AND entity_id=%s
               AND media_id=%s
               AND deleted_at IS NULL
+              AND hidden_at IS NULL
             """,
             (movie_id, media_id),
         )
@@ -12240,6 +12529,7 @@ def set_primary_person_media_asset(
               AND em.entity_id=%s
               AND em.media_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind='profile'
             """,
             (person_id, media_id),
@@ -12257,6 +12547,7 @@ def set_primary_person_media_asset(
               AND em.entity_type='person'
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind='profile'
               AND em.is_primary=true
             """,
@@ -12271,6 +12562,7 @@ def set_primary_person_media_asset(
               AND entity_id=%s
               AND media_id=%s
               AND deleted_at IS NULL
+              AND hidden_at IS NULL
             """,
             (person_id, media_id),
         )
@@ -12696,6 +12988,7 @@ def create_uploaded_movie_media_asset(
                 WHERE em.entity_type='movie'
                   AND em.entity_id=%s
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind=%s
                 """,
                 (movie_id, kind),
@@ -12720,6 +13013,7 @@ def create_uploaded_movie_media_asset(
                 deleted_at=NULL,
                 deleted_by=NULL,
                 purge_after=NULL,
+                hidden_at=NULL,
                 restore_metadata='{}'::jsonb
             """,
             (movie_id, media["id"], kind, primary, sort_order),
@@ -12806,6 +13100,7 @@ def set_primary_container_media_asset(
               AND em.entity_type='container'
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND ma.kind=%s
               AND em.is_primary=true
             """,
@@ -12972,6 +13267,7 @@ def create_uploaded_container_media_asset(
                 WHERE em.entity_type='container'
                   AND em.entity_id=%s
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind=%s
                 """,
                 (container_id, kind),
@@ -13186,6 +13482,220 @@ def artwork_trash_entries(conn, *, limit: int = 200) -> dict[str, Any]:
     return {"items": items, "settings": settings, "purge": purge}
 
 
+def set_movie_artwork_hidden_state(
+    conn,
+    *,
+    movie_id: UUID,
+    media_id: UUID,
+    kind: str,
+    hidden: bool,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if kind not in MOVIE_ARTWORK_KINDS:
+        raise NextApiError("kind must be poster or backdrop", 400)
+    if not table_exists(conn, "movies") or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, metadata FROM movies WHERE id=%s", (movie_id,))
+        movie = cur.fetchone()
+        if not movie:
+            raise NextApiError("Movie not found", 404)
+        cur.execute(
+            """
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.variant,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                ma.metadata,
+                em.role,
+                em.is_primary,
+                em.sort_order,
+                em.hidden_at
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type='movie'
+              AND em.entity_id=%s
+              AND em.media_id=%s
+              AND em.role=%s
+              AND ma.kind=%s
+              AND em.deleted_at IS NULL
+            """,
+            (movie_id, media_id, kind, kind),
+        )
+        media = cur.fetchone()
+        if not media or (hidden and media.get("hidden_at")) or (not hidden and not media.get("hidden_at")):
+            state = "visible" if hidden else "hidden"
+            raise NextApiError(f"{state.capitalize()} artwork was not found", 404)
+
+        was_primary = bool(media.get("is_primary"))
+        replacement = None
+        if hidden:
+            cur.execute(
+                """
+                UPDATE entity_media
+                SET hidden_at=now(),
+                    is_primary=false
+                WHERE entity_type='movie'
+                  AND entity_id=%s
+                  AND media_id=%s
+                  AND role=%s
+                  AND deleted_at IS NULL
+                  AND hidden_at IS NULL
+                RETURNING hidden_at
+                """,
+                (movie_id, media_id, kind),
+            )
+            hidden_row = cur.fetchone()
+            if not hidden_row:
+                raise NextApiError("Visible artwork was not found", 404)
+            media["hidden_at"] = hidden_row.get("hidden_at")
+            media["is_primary"] = False
+
+            hidden_urls = {
+                value
+                for value in (media_asset_public_url(media), clean_text(media.get("source_url")))
+                if value
+            }
+            movie_metadata = movie.get("metadata") if isinstance(movie, dict) else {}
+            movie_metadata = movie_metadata if isinstance(movie_metadata, dict) else {}
+            metadata_values = [
+                movie_metadata.get(kind),
+                movie_metadata.get(f"{kind}_url"),
+                movie_metadata.get(f"{kind}Url"),
+            ]
+            canonical_references_hidden = any(
+                clean_text(value) in hidden_urls for value in metadata_values
+            )
+            if was_primary or canonical_references_hidden:
+                cur.execute(
+                    """
+                    SELECT
+                        ma.id,
+                        ma.kind,
+                        ma.variant,
+                        ma.storage_backend,
+                        ma.storage_key,
+                        ma.source_url,
+                        ma.provider_id,
+                        ma.content_type,
+                        ma.width,
+                        ma.height,
+                        ma.size_bytes,
+                        ma.sha256,
+                        ma.metadata,
+                        em.role,
+                        em.is_primary,
+                        em.sort_order
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='movie'
+                      AND em.entity_id=%s
+                      AND em.role=%s
+                      AND ma.kind=%s
+                      AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                    """,
+                    (movie_id, kind, kind),
+                )
+                replacement = cur.fetchone()
+                if replacement:
+                    cur.execute(
+                        """
+                        UPDATE entity_media
+                        SET is_primary=true,
+                            sort_order=0
+                        WHERE entity_type='movie'
+                          AND entity_id=%s
+                          AND media_id=%s
+                          AND role=%s
+                          AND deleted_at IS NULL
+                          AND hidden_at IS NULL
+                        """,
+                        (movie_id, replacement["id"], kind),
+                    )
+                    replacement["is_primary"] = True
+                    replacement["sort_order"] = 0
+                    replacement["url"] = media_asset_public_url(replacement)
+
+                metadata_patch: dict[str, Any] = {
+                    f"{kind}_url": replacement.get("url") if replacement else None,
+                    f"{kind}_locked": bool(replacement),
+                }
+                for key in (kind, f"{kind}Url"):
+                    if clean_text(movie_metadata.get(key)) in hidden_urls:
+                        metadata_patch[key] = None
+                list_keys = ("posters",) if kind == "poster" else ("backdrop_urls", "backdropUrls", "backdrops")
+                for key in list_keys:
+                    values = movie_metadata.get(key)
+                    if isinstance(values, list) and any(clean_text(value) in hidden_urls for value in values):
+                        metadata_patch[key] = [
+                            value for value in values if clean_text(value) not in hidden_urls
+                        ]
+                cur.execute(
+                    "UPDATE movies SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+                    (Jsonb(json_ready(metadata_patch)), movie_id),
+                )
+            else:
+                cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+            operation = "movie.media_hidden"
+        else:
+            cur.execute(
+                """
+                UPDATE entity_media
+                SET hidden_at=NULL,
+                    is_primary=false
+                WHERE entity_type='movie'
+                  AND entity_id=%s
+                  AND media_id=%s
+                  AND role=%s
+                  AND deleted_at IS NULL
+                  AND hidden_at IS NOT NULL
+                """,
+                (movie_id, media_id, kind),
+            )
+            media["hidden_at"] = None
+            media["is_primary"] = False
+            cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+            operation = "movie.media_unhidden"
+
+    revision = record_sync_change(
+        conn,
+        movie_id,
+        {
+            "movieId": str(movie_id),
+            "operation": operation,
+            "kind": kind,
+            "mediaId": str(media_id),
+            "wasPrimary": was_primary,
+            "replacementMediaId": str(replacement["id"]) if replacement else None,
+            "actor": actor_job_payload(actor or {}) if actor else None,
+        },
+    )
+    media["url"] = media_asset_public_url(media)
+    media["hidden"] = hidden
+    return {
+        "movieId": str(movie_id),
+        "kind": kind,
+        "mediaId": str(media_id),
+        "media": media,
+        "hidden": hidden,
+        "replacement": replacement,
+        "revision": revision,
+    }
+
+
 def delete_entity_artwork_media_asset(
     conn,
     *,
@@ -13225,7 +13735,8 @@ def delete_entity_artwork_media_asset(
                 ma.metadata,
                 em.role,
                 em.is_primary,
-                em.sort_order
+                em.sort_order,
+                em.hidden_at
             FROM entity_media em
             JOIN media_assets ma ON ma.id = em.media_id
             WHERE em.entity_type=%s
@@ -13241,6 +13752,7 @@ def delete_entity_artwork_media_asset(
         if not deleted_media:
             raise NextApiError("Media asset is not linked to this item", 404)
         was_primary = bool(deleted_media.get("is_primary"))
+        was_hidden = bool(deleted_media.get("hidden_at"))
         settings = artwork_trash_settings(conn)
         actor_id = actor.get("id") if actor else None
         cur.execute(
@@ -13250,6 +13762,7 @@ def delete_entity_artwork_media_asset(
                 deleted_by=%s,
                 purge_after=CASE WHEN %s THEN now() + (%s)::interval ELSE NULL END,
                 is_primary=false,
+                hidden_at=NULL,
                 restore_metadata=%s
             WHERE entity_type=%s
               AND entity_id=%s
@@ -13302,6 +13815,7 @@ def delete_entity_artwork_media_asset(
                   AND em.role=%s
                   AND ma.kind=%s
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                 ORDER BY em.sort_order, ma.created_at
                 LIMIT 1
                 """,
@@ -13342,6 +13856,7 @@ def delete_entity_artwork_media_asset(
         "kind": kind,
         "mediaId": str(media_id),
         "wasPrimary": was_primary,
+        "wasHidden": was_hidden,
         "replacementMediaId": str(replacement["id"]) if replacement else None,
         "purgeEnabled": settings["purgeEnabled"],
         "purgeAfter": trash_row.get("purge_after"),
@@ -13422,6 +13937,7 @@ def restore_entity_artwork_media_asset(
             WHERE em.entity_type=%s
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
+              AND em.hidden_at IS NULL
               AND em.is_primary=true
               AND ma.kind=%s
             """,
@@ -13436,6 +13952,7 @@ def restore_entity_artwork_media_asset(
             SET deleted_at=NULL,
                 deleted_by=NULL,
                 purge_after=NULL,
+                hidden_at=NULL,
                 is_primary=%s,
                 sort_order=%s,
                 restore_metadata='{}'::jsonb
@@ -13473,6 +13990,8 @@ def restore_entity_artwork_media_asset(
     media["url"] = media_asset_public_url(media)
     media["is_primary"] = make_primary
     media["sort_order"] = 0 if make_primary else sort_order
+    media["hidden_at"] = None
+    media["hidden"] = False
     return {
         f"{entity_type}Id": str(entity_id),
         "kind": kind,
@@ -13501,6 +14020,7 @@ def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
                 description,
                 primary_movie_id,
                 location_id,
+                owner_id,
                 metadata,
                 created_at,
                 updated_at
@@ -13688,6 +14208,7 @@ def container_aggregate_movie_entities(
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -13699,6 +14220,7 @@ def container_aggregate_movie_entities(
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
@@ -13829,6 +14351,7 @@ def container_aggregate_media_asset_entities(conn, movies: list[dict[str, Any]])
                 WHERE em.entity_type='movie'
                   AND em.entity_id = ANY(%s)
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND ma.kind IN ('poster', 'backdrop')
                 ORDER BY lower(m.title), ma.kind, em.is_primary DESC, em.sort_order, ma.created_at
                 """,
@@ -13984,6 +14507,7 @@ def link_container_media_option(
                 WHERE em.entity_type='container'
                   AND em.entity_id=%s
                   AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
                   AND em.is_primary=true
                   AND ma.kind=%s
                 """,
@@ -14418,7 +14942,9 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
         return None
     if isinstance(container, dict):
         primary_movie_id = container.get("primary_movie_id")
+        owner_id = container.get("owner_id")
         container["primaryMovieId"] = str(primary_movie_id) if primary_movie_id else None
+        container["ownerId"] = str(owner_id) if owner_id else None
     attach_location_summaries(conn, [container])
     aggregate_movies = container_aggregate_movie_entities(conn, container_id, actor=actor)
     aggregate_assets = container_aggregate_media_asset_entities(conn, aggregate_movies)
@@ -14439,6 +14965,9 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
         "aggregateVideos": aggregate_videos,
         "aggregateSummary": container_aggregate_summary(aggregate_movies, aggregate_assets, aggregate_videos),
         "metadataDebug": metadata_debug,
+        "actions": {
+            "canConvert": actor_can_convert_container(container, actor),
+        },
     }
 
 
@@ -14480,7 +15009,7 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             """,
             (*visibility_params, limit),
         )
-        return cur.fetchall()
+        return attach_movie_genres(conn, cur.fetchall())
 
 
 def all_movie_credit_entities(
@@ -14614,6 +15143,7 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.badge_label,
                 c.year,
                 c.description,
+                c.owner_id,
                 c.metadata,
                 c.created_at,
                 c.updated_at
@@ -14998,6 +15528,7 @@ def apply_container_upsert(
     client_id: str,
     idem_key: str,
     mutation: dict[str, Any],
+    actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = mutation.get("payload")
     if not isinstance(payload, dict):
@@ -15033,9 +15564,9 @@ def apply_container_upsert(
         cur.execute(
             """
             INSERT INTO containers (
-                id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, metadata, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=COALESCE(EXCLUDED.title, containers.title),
                 barcode=EXCLUDED.barcode,
@@ -15054,6 +15585,7 @@ def apply_container_upsert(
                 fields["badge_label"],
                 fields["year"],
                 fields["description"],
+                actor_or_instance_owner_id(conn, actor),
                 Jsonb(json_ready(fields["metadata"])),
             ),
         )
@@ -15251,6 +15783,7 @@ def apply_sync_mutation(
     client_id: str,
     mutation: dict[str, Any],
     batch_ctx: "SyncBatchContext | None" = None,
+    actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not isinstance(mutation, dict):
         raise NextApiError("Each mutation must be an object", 400)
@@ -15273,7 +15806,13 @@ def apply_sync_mutation(
     elif entity_type == "movie" and operation == "delete":
         result = apply_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "container" and operation == "upsert":
-        result = apply_container_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
+        result = apply_container_upsert(
+            conn,
+            client_id=client_id,
+            idem_key=key,
+            mutation=mutation,
+            actor=actor,
+        )
     elif entity_type == "container" and operation == "delete":
         result = apply_container_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "containerMovie" and operation == "upsert":
@@ -15353,8 +15892,11 @@ def migration_overview(conn) -> dict[str, Any]:
 def plugin_row(row: dict[str, Any]) -> dict[str, Any]:
     manifest = row.get("manifest") or {}
     settings_schema = row.get("settings_schema") or {}
-    settings = row.get("settings") or {}
-    secrets_ref = row.get("secrets_ref") or {}
+    config = plugin_config_payload(
+        settings_schema,
+        row.get("settings"),
+        row.get("secrets_ref"),
+    )
     categories = manifest.get("categories", []) if isinstance(manifest, dict) else []
     capabilities = manifest.get("capabilities", []) if isinstance(manifest, dict) else []
     entitlements = manifest.get("entitlements", {}) if isinstance(manifest, dict) else {}
@@ -15373,8 +15915,8 @@ def plugin_row(row: dict[str, Any]) -> dict[str, Any]:
         "manifest": manifest,
         "requiresSecrets": bool(manifest.get("requiresSecrets", False)) if isinstance(manifest, dict) else False,
         "settingsSchema": settings_schema,
-        "settingsConfigured": bool(settings),
-        "secretsConfigured": bool(secrets_ref),
+        "settingsConfigured": config["settingsConfigured"],
+        "secretsConfigured": config["secretsConfigured"],
         "premiumFeatureKey": row.get("premium_feature_key"),
         "runtime": runtime,
         "updatedAt": row.get("updated_at"),
@@ -15428,6 +15970,75 @@ def actor_job_payload(actor: dict[str, Any]) -> dict[str, Any]:
         "username": actor.get("username"),
         "role": actor.get("role"),
     }
+
+
+def queue_movievault_v2_sync_job(
+    conn,
+    *,
+    actor: dict[str, Any],
+    source: str,
+    skip_when_indexed: bool = False,
+) -> tuple[dict[str, Any] | None, bool, bool]:
+    if not table_exists(conn, "background_jobs"):
+        raise NextApiError("Background job table is not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (MOVIEVAULT_V2_JOB_LOCK_KEY,))
+        if skip_when_indexed and table_exists(conn, "movievault_v2_sync_state"):
+            cur.execute(
+                """
+                SELECT active_generation
+                FROM movievault_v2_sync_state
+                WHERE plugin_id=%s
+                """,
+                (MOVIEVAULT_V2_PLUGIN_ID,),
+            )
+            state = cur.fetchone()
+            if state and state.get("active_generation"):
+                return None, False, True
+        cur.execute(
+            """
+            SELECT
+                id, job_type, status, requested_by, payload, result,
+                error, created_at, started_at, finished_at
+            FROM background_jobs
+            WHERE job_type = %s
+              AND status IN ('pending', 'running')
+              AND payload ->> 'pluginId' = %s
+              AND payload ->> 'entrypoint' = 'sync_index'
+            ORDER BY created_at
+            LIMIT 1
+            """,
+            (PLUGIN_EXECUTION_JOB_TYPE, MOVIEVAULT_V2_PLUGIN_ID),
+        )
+        existing = cur.fetchone()
+    if existing:
+        return job_row(existing), True, False
+    job = create_background_job(
+        conn,
+        job_type=PLUGIN_EXECUTION_JOB_TYPE,
+        payload={
+            "pluginId": MOVIEVAULT_V2_PLUGIN_ID,
+            "entrypoint": "sync_index",
+            "payload": {},
+            "requestedBy": actor_job_payload(actor),
+            "source": source,
+        },
+    )
+    audit_event(
+        conn,
+        event_type="plugin.job_queued",
+        category="plugins",
+        actor=actor,
+        target_type="background_job",
+        target_id=job.get("id"),
+        summary=f"Queued {MOVIEVAULT_V2_PLUGIN_ID}.sync_index",
+        metadata={
+            "pluginId": MOVIEVAULT_V2_PLUGIN_ID,
+            "entrypoint": "sync_index",
+            "source": source,
+        },
+    )
+    return job, False, False
 
 
 def queue_movie_metadata_refresh_job(
@@ -15761,6 +16372,7 @@ def admin_operations_artwork_summary(conn) -> dict[str, Any]:
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='movie'
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                     """
                 )
                 row = cur.fetchone() or {}
@@ -15776,6 +16388,7 @@ def admin_operations_artwork_summary(conn) -> dict[str, Any]:
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='container'
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                     """
                 )
                 row = cur.fetchone() or {}
@@ -15933,6 +16546,7 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                 )
             """
@@ -15944,6 +16558,7 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
                     WHERE em.entity_type='movie'
                       AND em.entity_id=m.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='backdrop'
                 )
             """
@@ -16007,6 +16622,7 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
                     WHERE em.entity_type='container'
                       AND em.entity_id=c.id
                       AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
                       AND ma.kind='poster'
                 )
             """
@@ -17021,6 +17637,80 @@ def register_routes(flask_app: Flask) -> None:
             detail = media_group_detail_entity(conn, group_uuid)
         return response({"status": "ok", "group": detail}, 201)
 
+    @flask_app.patch("/api/next/media-groups/<group_id>")
+    def rename_media_group(group_id: str):
+        group_uuid = parse_uuid(group_id, "groupId")
+        if not group_uuid:
+            raise NextApiError("groupId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media group request body must be an object", 400)
+        name = clean_text(body.get("name")) or ""
+        if not name:
+            raise NextApiError("Group name is required", 400)
+        if len(name) > 120:
+            raise NextApiError("Group name must be 120 characters or fewer", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.view")
+            if not table_exists(conn, "media_groups") or not table_exists(conn, "media_group_members"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.transaction():
+                owner_state = media_group_owner_state(conn, group_uuid, actor, lock=True)
+                if not owner_state:
+                    raise NextApiError("Media group not found", 404)
+                if owner_state.get("actor_role") != "owner":
+                    raise NextApiError("Only the group owner can rename this media group", 403)
+                previous_name = str(owner_state.get("name") or "")
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE media_groups SET name=%s, updated_at=now() WHERE id=%s",
+                        (name, group_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="group.renamed",
+                    category="group",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary=f"Renamed media group {previous_name} to {name}",
+                    metadata={"previousName": previous_name, "name": name},
+                )
+            detail = media_group_detail_entity(conn, group_uuid, actor=actor)
+        return response({"status": "ok", "group": detail})
+
+    @flask_app.delete("/api/next/media-groups/<group_id>")
+    def delete_media_group(group_id: str):
+        group_uuid = parse_uuid(group_id, "groupId")
+        if not group_uuid:
+            raise NextApiError("groupId is required", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "groups.view")
+            if not table_exists(conn, "media_groups") or not table_exists(conn, "media_group_members"):
+                raise NextApiError("Media groups are not available yet", 503)
+            with conn.transaction():
+                owner_state = media_group_owner_state(conn, group_uuid, actor, lock=True)
+                if not owner_state:
+                    raise NextApiError("Media group not found", 404)
+                if owner_state.get("actor_role") != "owner":
+                    raise NextApiError("Only the group owner can delete this media group", 403)
+                if not media_group_owner_can_delete(actor, owner_state):
+                    raise NextApiError("Remove all other members before deleting this media group", 409)
+                group_name = str(owner_state.get("name") or "")
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM media_groups WHERE id=%s", (group_uuid,))
+                audit_event(
+                    conn,
+                    event_type="group.deleted",
+                    category="group",
+                    actor=actor,
+                    target_type="media_group",
+                    target_id=group_uuid,
+                    summary=f"Deleted media group {group_name}",
+                    metadata={"name": group_name},
+                )
+        return response({"status": "deleted", "groupId": group_uuid})
+
     @flask_app.put("/api/next/media-groups/<group_id>/members/<user_id>")
     @flask_app.patch("/api/next/media-groups/<group_id>/members/<user_id>")
     def upsert_media_group_member(group_id: str, user_id: str):
@@ -17036,35 +17726,33 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_members") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
+            with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
                     raise NextApiError("Media group not found", 404)
                 if not can_manage_media_group_members(conn, group_uuid, actor):
                     raise NextApiError("Media group manager access required", 403)
                 if actor.get("role") not in {"owner", "admin"} and role == "owner":
                     raise NextApiError("Only admins can assign group owners", 403)
-                cur.execute("SELECT id FROM users WHERE id=%s", (user_uuid,))
-                if not cur.fetchone():
-                    raise NextApiError("User not found", 404)
-                cur.execute(
-                    "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
-                    (group_uuid, user_uuid),
-                )
-                existing_member = cur.fetchone()
-                if existing_member and existing_member.get("role") == "owner" and role != "owner":
-                    cur.execute(
-                        """
-                        SELECT COUNT(*)::int AS count
-                        FROM media_group_members
-                        WHERE group_id=%s AND role='owner'
-                        """,
-                        (group_uuid,),
-                    )
-                    if int(cur.fetchone()["count"]) <= 1:
-                        raise NextApiError("The last group owner cannot be demoted", 400)
-            with conn.transaction():
                 with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM users WHERE id=%s", (user_uuid,))
+                    if not cur.fetchone():
+                        raise NextApiError("User not found", 404)
+                    cur.execute(
+                        "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
+                        (group_uuid, user_uuid),
+                    )
+                    existing_member = cur.fetchone()
+                    if existing_member and existing_member.get("role") == "owner" and role != "owner":
+                        cur.execute(
+                            """
+                            SELECT COUNT(*)::int AS count
+                            FROM media_group_members
+                            WHERE group_id=%s AND role='owner'
+                            """,
+                            (group_uuid,),
+                        )
+                        if int(cur.fetchone()["count"]) <= 1:
+                            raise NextApiError("The last group owner cannot be demoted", 400)
                     cur.execute(
                         """
                         INSERT INTO media_group_members (group_id, user_id, role, created_at)
@@ -17242,26 +17930,36 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Media group invites are not available yet", 503)
             with conn.cursor() as cur:
                 cur.execute(
-                    """
-                    SELECT id, group_id, invitee_id, status, metadata
-                    FROM media_group_invites
-                    WHERE id=%s
-                    """,
+                    "SELECT group_id FROM media_group_invites WHERE id=%s",
                     (invite_uuid,),
                 )
                 invite = cur.fetchone()
                 if not invite:
                     raise NextApiError("Invite not found", 404)
-                if str(invite.get("invitee_id")) != str(actor.get("id")):
-                    raise NextApiError("This invite belongs to another user", 403)
-                if invite.get("status") != "pending":
-                    raise NextApiError("Invite is no longer pending", 409)
-                role = normalize_media_group_member_role((invite.get("metadata") or {}).get("role"))
-                if role == "owner":
-                    role = "member"
             group_uuid = invite["group_id"]
             with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
+                    raise NextApiError("Media group not found", 404)
                 with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, group_id, invitee_id, status, metadata
+                        FROM media_group_invites
+                        WHERE id=%s
+                        FOR UPDATE
+                        """,
+                        (invite_uuid,),
+                    )
+                    invite = cur.fetchone()
+                    if not invite:
+                        raise NextApiError("Invite not found", 404)
+                    if str(invite.get("invitee_id")) != str(actor.get("id")):
+                        raise NextApiError("This invite belongs to another user", 403)
+                    if invite.get("status") != "pending":
+                        raise NextApiError("Invite is no longer pending", 409)
+                    role = normalize_media_group_member_role((invite.get("metadata") or {}).get("role"))
+                    if role == "owner":
+                        role = "member"
                     cur.execute(
                         """
                         INSERT INTO media_group_members (group_id, user_id, role, created_at)
@@ -17302,25 +18000,25 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_authenticated_user(conn)
             if not table_exists(conn, "media_group_invites"):
                 raise NextApiError("Media group invites are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT id, group_id, invitee_id, status
-                    FROM media_group_invites
-                    WHERE id=%s
-                    """,
-                    (invite_uuid,),
-                )
-                invite = cur.fetchone()
-                if not invite:
-                    raise NextApiError("Invite not found", 404)
-                if str(invite.get("invitee_id")) != str(actor.get("id")):
-                    raise NextApiError("This invite belongs to another user", 403)
-                if invite.get("status") != "pending":
-                    raise NextApiError("Invite is no longer pending", 409)
-            group_uuid = invite["group_id"]
             with conn.transaction():
                 with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, group_id, invitee_id, status
+                        FROM media_group_invites
+                        WHERE id=%s
+                        FOR UPDATE
+                        """,
+                        (invite_uuid,),
+                    )
+                    invite = cur.fetchone()
+                    if not invite:
+                        raise NextApiError("Invite not found", 404)
+                    if str(invite.get("invitee_id")) != str(actor.get("id")):
+                        raise NextApiError("This invite belongs to another user", 403)
+                    if invite.get("status") != "pending":
+                        raise NextApiError("Invite is no longer pending", 409)
+                    group_uuid = invite["group_id"]
                     cur.execute(
                         """
                         UPDATE media_group_invites
@@ -17352,34 +18050,32 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_members") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
+            with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
                     raise NextApiError("Media group not found", 404)
                 if not can_manage_media_group_members(conn, group_uuid, actor):
                     raise NextApiError("Media group manager access required", 403)
-                cur.execute(
-                    "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
-                    (group_uuid, user_uuid),
-                )
-                member = cur.fetchone()
-                if not member:
-                    raise NextApiError("Media group member not found", 404)
-                if member.get("role") == "owner":
-                    if actor.get("role") not in {"owner", "admin"}:
-                        raise NextApiError("Only admins can remove group owners", 403)
-                    cur.execute(
-                        """
-                        SELECT COUNT(*)::int AS count
-                        FROM media_group_members
-                        WHERE group_id=%s AND role='owner'
-                        """,
-                        (group_uuid,),
-                    )
-                    if int(cur.fetchone()["count"]) <= 1:
-                        raise NextApiError("The last group owner cannot be removed", 400)
-            with conn.transaction():
                 with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT role FROM media_group_members WHERE group_id=%s AND user_id=%s",
+                        (group_uuid, user_uuid),
+                    )
+                    member = cur.fetchone()
+                    if not member:
+                        raise NextApiError("Media group member not found", 404)
+                    if member.get("role") == "owner":
+                        if actor.get("role") not in {"owner", "admin"}:
+                            raise NextApiError("Only admins can remove group owners", 403)
+                        cur.execute(
+                            """
+                            SELECT COUNT(*)::int AS count
+                            FROM media_group_members
+                            WHERE group_id=%s AND role='owner'
+                            """,
+                            (group_uuid,),
+                        )
+                        if int(cur.fetchone()["count"]) <= 1:
+                            raise NextApiError("The last group owner cannot be removed", 400)
                     cur.execute(
                         "DELETE FROM media_group_members WHERE group_id=%s AND user_id=%s",
                         (group_uuid, user_uuid),
@@ -17416,15 +18112,13 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
-                    raise NextApiError("Media group not found", 404)
-            if not can_manage_media_group_members(conn, group_uuid, actor):
-                raise NextApiError("Media group manager access required", 403)
             require_existing_movie_ids(conn, movie_ids)
             changed = 0
             with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
+                    raise NextApiError("Media group not found", 404)
+                if not can_manage_media_group_members(conn, group_uuid, actor):
+                    raise NextApiError("Media group manager access required", 403)
                 with conn.cursor() as cur:
                     if operation == "remove":
                         cur.execute(
@@ -17862,15 +18556,13 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
-                    raise NextApiError("Media group not found", 404)
-            if not can_manage_media_group_members(conn, group_uuid, actor):
-                raise NextApiError("Media group manager access required", 403)
             require_existing_movie_ids(conn, [movie_uuid])
             changed = 0
             with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
+                    raise NextApiError("Media group not found", 404)
+                if not can_manage_media_group_members(conn, group_uuid, actor):
+                    raise NextApiError("Media group manager access required", 403)
                 with conn.cursor() as cur:
                     actor_id = actor.get("id")
                     cur.execute(
@@ -17923,14 +18615,12 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "groups.invite")
             if not table_exists(conn, "media_group_movies") or not table_exists(conn, "media_groups"):
                 raise NextApiError("Media groups are not available yet", 503)
-            with conn.cursor() as cur:
-                cur.execute("SELECT id FROM media_groups WHERE id=%s", (group_uuid,))
-                if not cur.fetchone():
-                    raise NextApiError("Media group not found", 404)
-            if not can_manage_media_group_members(conn, group_uuid, actor):
-                raise NextApiError("Media group manager access required", 403)
             changed = 0
             with conn.transaction():
+                if not lock_media_group_row(conn, group_uuid):
+                    raise NextApiError("Media group not found", 404)
+                if not can_manage_media_group_members(conn, group_uuid, actor):
+                    raise NextApiError("Media group manager access required", 403)
                 with conn.cursor() as cur:
                     cur.execute(
                         "DELETE FROM media_group_movies WHERE group_id=%s AND movie_id=%s",
@@ -17981,6 +18671,7 @@ def register_routes(flask_app: Flask) -> None:
                     if cur.fetchone():
                         raise NextApiError("A container with this public id already exists", 409)
                     if container_type == "box_set" and payload["barcode"]:
+                        lock_box_set_barcode(conn, payload["barcode"])
                         cur.execute(
                             "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set' LIMIT 1",
                             (payload["barcode"],),
@@ -17990,9 +18681,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -18004,6 +18695,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["year"],
                             payload["description"],
                             payload["location_id"],
+                            actor_or_instance_owner_id(conn, actor),
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -18025,7 +18717,7 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 )
                 emit_container_change(conn, container_uuid, operation="upsert")
-            detail = container_detail_entity(conn, container_uuid)
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
         return response({"status": "ok", "detail": detail}, 201)
 
     @flask_app.patch("/api/next/containers/<container_id>")
@@ -18042,6 +18734,12 @@ def register_routes(flask_app: Flask) -> None:
             if not existing:
                 raise NextApiError("Container not found", 404)
             payload = container_payload(body, existing=existing)
+            type_provided = "containerType" in body or "container_type" in body
+            requested_type = body.get("containerType", body.get("container_type")) if type_provided else None
+            target_type, type_changed = container_type_change(
+                existing.get("container_type"),
+                requested_type if type_provided else existing.get("container_type"),
+            )
             primary_provided = "primaryMovieId" in body or "primary_movie_id" in body
             primary_movie_uuid = None
             if primary_provided:
@@ -18061,10 +18759,46 @@ def register_routes(flask_app: Flask) -> None:
                         )
                         if not cur.fetchone():
                             raise NextApiError("Cover movie must be a member of this box-set", 400)
-            receiver_payload = container_receiver_payload(conn, existing, payload)
+            receiver_payload = None
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
+            collection_references_updated = 0
             with conn.transaction():
                 with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT * FROM containers WHERE id=%s FOR UPDATE",
+                        (container_uuid,),
+                    )
+                    locked = cur.fetchone()
+                if not locked:
+                    raise NextApiError("Container not found", 404)
+                payload = container_payload(body, existing=locked)
+                target_type, type_changed = container_type_change(
+                    locked.get("container_type"),
+                    requested_type if type_provided else locked.get("container_type"),
+                )
+                if type_changed and not actor_can_convert_container(locked, actor):
+                    raise NextApiError("Only the container owner or an instance owner/admin can convert it", 403)
+                receiver_payload = (
+                    container_receiver_payload(conn, locked, payload)
+                    if target_type == "box_set" and not type_changed
+                    else None
+                )
+                with conn.cursor() as cur:
+                    if target_type == "box_set" and payload["barcode"]:
+                        lock_box_set_barcode(conn, payload["barcode"])
+                        cur.execute(
+                            """
+                            SELECT id
+                            FROM containers
+                            WHERE container_type='box_set'
+                              AND barcode=%s
+                              AND id<>%s
+                            LIMIT 1
+                            """,
+                            (payload["barcode"], container_uuid),
+                        )
+                        if cur.fetchone():
+                            raise NextApiError("A box-set with this barcode already exists", 409)
                     cur.execute(
                         """
                         UPDATE containers
@@ -18074,6 +18808,7 @@ def register_routes(flask_app: Flask) -> None:
                             year=%s,
                             description=%s,
                             location_id=%s,
+                            container_type=%s,
                             metadata=%s,
                             updated_at=now()
                         WHERE id=%s
@@ -18085,10 +18820,48 @@ def register_routes(flask_app: Flask) -> None:
                             payload["year"],
                             payload["description"],
                             payload["location_id"],
+                            target_type,
                             Jsonb(json_ready(payload["metadata"])),
                             container_uuid,
                         ),
                     )
+                    if type_changed and table_exists(conn, "collection_items"):
+                        previous_type = str(locked.get("container_type"))
+                        cur.execute(
+                            """
+                            UPDATE collection_items target
+                            SET sort_order=LEAST(target.sort_order, source.sort_order)
+                            FROM collection_items source
+                            WHERE source.collection_id=target.collection_id
+                              AND source.item_id=target.item_id
+                              AND source.item_id=%s
+                              AND source.item_type=%s
+                              AND target.item_type=%s
+                            """,
+                            (container_uuid, previous_type, target_type),
+                        )
+                        cur.execute(
+                            """
+                            DELETE FROM collection_items source
+                            USING collection_items target
+                            WHERE source.collection_id=target.collection_id
+                              AND source.item_id=target.item_id
+                              AND source.item_id=%s
+                              AND source.item_type=%s
+                              AND target.item_type=%s
+                            """,
+                            (container_uuid, previous_type, target_type),
+                        )
+                        collection_references_updated += int(cur.rowcount or 0)
+                        cur.execute(
+                            """
+                            UPDATE collection_items
+                            SET item_type=%s
+                            WHERE item_id=%s AND item_type=%s
+                            """,
+                            (target_type, container_uuid, previous_type),
+                        )
+                        collection_references_updated += int(cur.rowcount or 0)
                 if primary_provided:
                     with conn.cursor() as cur:
                         cur.execute(
@@ -18097,19 +18870,26 @@ def register_routes(flask_app: Flask) -> None:
                         )
                 audit_event(
                     conn,
-                    event_type="container.updated",
+                    event_type="container.converted" if type_changed else "container.updated",
                     category="admin",
                     actor=actor,
                     target_type="container",
                     target_id=container_uuid,
-                    summary=f"Updated container {payload['title']}",
+                    summary=(
+                        f"Converted {locked.get('container_type')} {payload['title']} to {target_type}"
+                        if type_changed
+                        else f"Updated container {payload['title']}"
+                    ),
                     metadata={
-                        "containerType": existing.get("container_type"),
-                        "publicId": existing.get("public_id"),
+                        "containerType": target_type,
+                        "previousContainerType": locked.get("container_type"),
+                        "converted": type_changed,
+                        "collectionReferencesUpdated": collection_references_updated,
+                        "publicId": locked.get("public_id"),
                         "title": payload["title"],
-                        "previousTitle": existing.get("title"),
+                        "previousTitle": locked.get("title"),
                         "barcode": payload["barcode"],
-                        "previousBarcode": existing.get("barcode"),
+                        "previousBarcode": locked.get("barcode"),
                         "year": payload["year"],
                         "badgeLabel": payload["badge_label"],
                     },
@@ -18128,7 +18908,7 @@ def register_routes(flask_app: Flask) -> None:
                         target_id=container_uuid,
                         summary=f"Pushed box-set edit to receiver plugins for {payload['title']}",
                         metadata={
-                            "containerType": existing.get("container_type"),
+                            "containerType": locked.get("container_type"),
                             "title": payload["title"],
                             "barcode": payload["barcode"],
                             "changedFields": (receiver_payload.get("metadata") or {}).get("changedFields") or [],
@@ -18136,8 +18916,15 @@ def register_routes(flask_app: Flask) -> None:
                         },
                     )
                 emit_container_change(conn, container_uuid, operation="upsert")
-            detail = container_detail_entity(conn, container_uuid)
-        return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
+        return response(
+            {
+                "status": "ok",
+                "detail": detail,
+                "converted": type_changed,
+                "receiverSummary": receiver_summary,
+            }
+        )
 
     @flask_app.put("/api/next/containers/<container_id>/artwork-locks")
     def set_container_artwork_locks(container_id: str):
@@ -18565,13 +19352,13 @@ def register_routes(flask_app: Flask) -> None:
             if target_type != "collection":
                 raise NextApiError("Target container must be a collection", 400)
             require_existing_movie_ids(conn, movie_ids)
-            container_types = container_types_for_ids(conn, container_ids)
-            allowed_container_ids = [
-                item for item in container_ids if container_types.get(item) in {"box_set", "vault", "collection"}
-            ]
             changed = 0
-            requested = len(movie_ids) + len(allowed_container_ids)
             with conn.transaction():
+                container_types = container_types_for_ids(conn, container_ids, lock=True)
+                allowed_container_ids = [
+                    item for item in container_ids if container_types.get(item) in {"box_set", "vault", "collection"}
+                ]
+                requested = len(movie_ids) + len(allowed_container_ids)
                 with conn.cursor() as cur:
                     if operation == "remove":
                         if movie_ids:
@@ -18966,16 +19753,42 @@ def register_routes(flask_app: Flask) -> None:
                 return response({"status": "ok", "items": [], "limit": limit, "offset": offset})
             filters = []
             params: list[Any] = []
+            has_movie_genres = table_exists(conn, "movie_genres")
             if query:
+                genre_query_clause = ""
+                genre_query_params: list[Any] = []
+                if has_movie_genres:
+                    genre_query_clause = """
+                        OR EXISTS (
+                            SELECT 1
+                            FROM movie_genres mg
+                            WHERE mg.movie_id = m.id
+                              AND lower(replace(mg.genre_key, '_', ' ')) LIKE lower(%s)
+                        )
+                    """
+                    genre_query_params.append(f"%{query}%")
+                    genre_query_keys, _unmatched = map_legacy_genre_text(query)
+                    if genre_query_keys:
+                        genre_query_clause += """
+                            OR EXISTS (
+                                SELECT 1
+                                FROM movie_genres mg
+                                WHERE mg.movie_id = m.id
+                                  AND mg.genre_key = ANY(%s)
+                            )
+                        """
+                        genre_query_params.append(genre_query_keys)
                 filters.append(
-                    """(
+                    f"""(
                         lower(m.title) LIKE lower(%s)
                         OR lower(COALESCE(m.original_title, '')) LIKE lower(%s)
                         OR m.barcode=%s
                         OR lower(COALESCE(m.metadata::text, '')) LIKE lower(%s)
+                        {genre_query_clause}
                     )"""
                 )
                 params.extend([f"%{query}%", f"%{query}%", query, f"%{query}%"])
+                params.extend(genre_query_params)
             if media_format:
                 filters.append("m.format=%s")
                 params.append(media_format)
@@ -19012,7 +19825,9 @@ def register_routes(flask_app: Flask) -> None:
                     """,
                     (*params, limit, offset),
                 )
-                items = cur.fetchall()
+                items = attach_movie_genres(conn, cur.fetchall())
+                for item in items:
+                    item.pop("genre_search", None)
             audit_api_interaction(
                 conn,
                 actor,
@@ -19291,6 +20106,7 @@ def register_routes(flask_app: Flask) -> None:
                     if cur.fetchone():
                         raise NextApiError("A container with this public id already exists", 409)
                     if container_type == "box_set" and payload["barcode"]:
+                        lock_box_set_barcode(conn, payload["barcode"])
                         cur.execute(
                             "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set' LIMIT 1",
                             (payload["barcode"],),
@@ -19300,9 +20116,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -19314,6 +20130,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["year"],
                             payload["description"],
                             payload["location_id"],
+                            actor_or_instance_owner_id(conn, actor),
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -19640,25 +20457,51 @@ def register_routes(flask_app: Flask) -> None:
         capabilities = {str(item) for item in (plugin.get("capabilities") or [])}
         return "price_provider" in categories or "price_check" in capabilities
 
+    def _price_provider_entities(conn, *, sync_registry: bool) -> list[dict[str, Any]]:
+        if sync_registry:
+            if table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
+            else:
+                sync_plugin_registry(conn, table_exists, Jsonb)
+        registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+        providers = [
+            plugin
+            for plugin in (registry.get("plugins") or [])
+            if _is_price_provider_plugin(plugin)
+        ]
+        for provider in providers:
+            config = plugin_config_from_db(conn, str(provider.get("id") or ""))
+            provider["config"] = {
+                "settingsConfigured": bool(config.get("settingsConfigured")),
+                "secretNames": config.get("secretNames") or [],
+                "secretsConfigured": bool(config.get("secretsConfigured")),
+            }
+        return [price_provider_entity(provider) for provider in providers]
+
+    def _resolve_shop_price_provider(
+        conn,
+        price_url: str,
+        provider_plugin_id: str | None,
+        provider_product_ref: str | None,
+    ) -> tuple[str | None, str | None]:
+        providers = _price_provider_entities(conn, sync_registry=False)
+        if provider_plugin_id:
+            provider = next(
+                (item for item in providers if item.get("id") == provider_plugin_id),
+                None,
+            )
+            if provider and not provider_product_ref:
+                provider_product_ref = derive_provider_product_ref(price_url, provider)
+            return provider_plugin_id, provider_product_ref
+        return detect_price_provider(price_url, providers)
+
     @flask_app.get("/api/next/price-providers")
     def list_price_providers():
         with connect() as conn:
             require_any_next_permission(conn, ("watchlist.manage", "metadata.manage_plugins", "admin.view_settings"))
             if not table_exists(conn, "plugins"):
                 return response({"status": "ok", "providers": []})
-            if table_exists(conn, "metadata_plugins"):
-                sync_metadata_plugin_registry(conn)
-            else:
-                sync_plugin_registry(conn, table_exists, Jsonb)
-            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            providers = [plugin for plugin in (registry.get("plugins") or []) if _is_price_provider_plugin(plugin)]
-            for provider in providers:
-                config = plugin_config_from_db(conn, str(provider.get("id") or ""))
-                provider["config"] = {
-                    "settingsConfigured": bool(config.get("settingsConfigured")),
-                    "secretNames": config.get("secretNames") or [],
-                    "secretsConfigured": bool(config.get("secretsConfigured")),
-                }
+            providers = _price_provider_entities(conn, sync_registry=True)
         return response({"status": "ok", "providers": providers})
 
     @flask_app.patch("/api/next/admin/price-providers/<provider_id>/enabled")
@@ -20105,7 +20948,7 @@ def register_routes(flask_app: Flask) -> None:
 
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id, categories FROM plugins WHERE id=%s",
+                    "SELECT id, categories, enabled FROM plugins WHERE id=%s",
                     (plugin_id,),
                 )
                 plugin = cur.fetchone()
@@ -20117,7 +20960,27 @@ def register_routes(flask_app: Flask) -> None:
             is_metadata_plugin = bool(
                 {"metadata_source", "metadata_receiver"}.intersection(set(categories))
             )
+            queue_initial_sync = bool(
+                has_enabled
+                and enabled
+                and not bool(plugin.get("enabled"))
+                and plugin_id == MOVIEVAULT_V2_PLUGIN_ID
+            )
+            if queue_initial_sync:
+                config = plugin_config_from_db(conn, plugin_id)
+                if not config["settingsConfigured"]:
+                    raise NextApiError("Plugin configuration is incomplete", 409)
+                try:
+                    normalize_movievault_v2_origin(config["settings"].get("origin"))
+                except MovieVaultV2Error as exc:
+                    raise NextApiError(
+                        "MovieVault v2 origin must be a root HTTP(S) origin",
+                        409,
+                    ) from exc
 
+            initial_job = None
+            initial_duplicate = False
+            initial_skipped_current = False
             with conn.transaction():
                 with conn.cursor() as cur:
                     if is_metadata_plugin and table_exists(conn, "metadata_plugins"):
@@ -20170,12 +21033,36 @@ def register_routes(flask_app: Flask) -> None:
                         "categories": categories,
                     },
                 )
+                if queue_initial_sync:
+                    (
+                        initial_job,
+                        initial_duplicate,
+                        initial_skipped_current,
+                    ) = queue_movievault_v2_sync_job(
+                        conn,
+                        actor=actor,
+                        source="enable",
+                        skip_when_indexed=True,
+                    )
 
             if table_exists(conn, "metadata_plugins"):
                 sync_metadata_plugin_registry(conn)
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
             updated = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
-        return response({"status": "ok", "plugin": updated, "registry": registry})
+        return response(
+            {
+                "status": "ok",
+                "plugin": updated,
+                "registry": registry,
+                "initialSync": {
+                    "job": initial_job,
+                    "duplicate": initial_duplicate,
+                    "skippedCurrent": initial_skipped_current,
+                }
+                if queue_initial_sync
+                else None,
+            }
+        )
 
     @flask_app.get("/api/next/plugins/<plugin_id>/config")
     def plugin_config(plugin_id: str):
@@ -20442,6 +21329,8 @@ def register_routes(flask_app: Flask) -> None:
             if not plugin:
                 raise NextApiError("Plugin not found", 404)
             entrypoint, payload = validate_plugin_execution_request(plugin, body)
+            if entrypoint == "sync_index":
+                raise NextApiError("Queue sync_index through the plugin jobs endpoint", 409)
             actor = require_plugin_action_permission(conn, plugin, entrypoint)
             config = plugin_config_from_db(conn, plugin_id)
             if plugin_requires_config_for_entrypoint(plugin, config, entrypoint):
@@ -20501,19 +21390,35 @@ def register_routes(flask_app: Flask) -> None:
                     "role": actor.get("role"),
                 },
             }
+            duplicate = False
             with conn.transaction():
-                job = create_background_job(conn, job_type=PLUGIN_EXECUTION_JOB_TYPE, payload=job_payload)
-                audit_event(
-                    conn,
-                    event_type="plugin.job_queued",
-                    category="plugins",
-                    actor=actor,
-                    target_type="background_job",
-                    target_id=job.get("id"),
-                    summary=f"Queued {plugin_id}.{entrypoint}",
-                    metadata={"pluginId": plugin_id, "entrypoint": entrypoint, "payload": payload},
-                )
-        return response({"status": "ok", "plugin": plugin, "job": job}, 201)
+                job = None
+                if plugin_id == MOVIEVAULT_V2_PLUGIN_ID and entrypoint == "sync_index":
+                    job, duplicate, _skipped_current = queue_movievault_v2_sync_job(
+                        conn,
+                        actor=actor,
+                        source="manual",
+                    )
+                if job is None:
+                    job = create_background_job(
+                        conn,
+                        job_type=PLUGIN_EXECUTION_JOB_TYPE,
+                        payload=job_payload,
+                    )
+                    audit_event(
+                        conn,
+                        event_type="plugin.job_queued",
+                        category="plugins",
+                        actor=actor,
+                        target_type="background_job",
+                        target_id=job.get("id"),
+                        summary=f"Queued {plugin_id}.{entrypoint}",
+                        metadata={"pluginId": plugin_id, "entrypoint": entrypoint, "payload": payload},
+                    )
+        return response(
+            {"status": "ok", "plugin": plugin, "job": job, "duplicate": duplicate},
+            200 if duplicate else 201,
+        )
 
     @flask_app.get("/api/next/metadata/plugins")
     def metadata_plugins():
@@ -20601,6 +21506,7 @@ def register_routes(flask_app: Flask) -> None:
                             WHERE em.entity_type='movie'
                               AND em.entity_id=m.id
                               AND em.deleted_at IS NULL
+                              AND em.hidden_at IS NULL
                               AND ma.kind='poster'
                             ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                             LIMIT 1
@@ -20612,6 +21518,7 @@ def register_routes(flask_app: Flask) -> None:
                             WHERE em.entity_type='movie'
                               AND em.entity_id=m.id
                               AND em.deleted_at IS NULL
+                              AND em.hidden_at IS NULL
                               AND ma.kind='backdrop'
                             ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                             LIMIT 1
@@ -21233,77 +22140,22 @@ def register_routes(flask_app: Flask) -> None:
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             user_id = actor.get("id")
-            if fields["source"] == "discover" and fields["tmdb_id"]:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        SELECT id
-                        FROM wishlist_items
-                        WHERE user_id=%s
-                          AND snapshot->>'tmdb_id' = %s
-                          AND COALESCE(snapshot->>'tmdb_media_type', 'movie') = %s
-                        ORDER BY added_at ASC
-                        LIMIT 1
-                        """,
-                        (user_id, fields["tmdb_id"], fields["tmdb_media_type"] or "movie"),
-                    )
-                    existing = cur.fetchone()
-                existing_id = (existing or {}).get("id")
-                if existing_id is not None:
-                    return response(
-                        {
-                            "status": "ok",
-                            "state": "already_exists",
-                            "alreadyExists": True,
-                            "entry": wishlist_sync_entity(conn, user_id, existing_id),
-                            "counts": personal_list_counts(conn, user_id),
-                        }
-                    )
             snapshot = _wishlist_snapshot(fields)
-            with conn.transaction():
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO wishlist_items
-                            (user_id, title, year, barcode, format, movievault_id, poster_url, note, snapshot, created_by_user_id)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        RETURNING id
-                        """,
-                        (
-                            user_id,
-                            fields["title"],
-                            fields["year"],
-                            fields["barcode"],
-                            fields["format"],
-                            fields["movievault_id"],
-                            fields["poster_url"],
-                            fields["note"],
-                            Jsonb(snapshot),
-                            actor.get("id"),
-                        ),
-                    )
-                    item_id = (cur.fetchone() or {}).get("id")
-                if item_id is not None:
-                    emit_wishlist_change(conn, user_id, item_id, operation="upsert")
-                audit_event(
-                    conn,
-                    event_type="wishlist.added",
-                    category="personal",
-                    actor=actor,
-                    target_type="wishlist_item",
-                    target_id=item_id,
-                    summary="Added wishlist entry",
-                    metadata={"title": title},
-                )
+            item_id, created = _create_wishlist_item_record(
+                conn,
+                actor=actor,
+                fields=fields,
+                snapshot=snapshot,
+            )
             return response(
                 {
                     "status": "ok",
-                    "state": "created",
-                    "alreadyExists": False,
-                    "entry": wishlist_sync_entity(conn, user_id, item_id) if item_id is not None else None,
+                    "state": "created" if created else "already_exists",
+                    "alreadyExists": not created,
+                    "entry": wishlist_sync_entity(conn, user_id, item_id),
                     "counts": personal_list_counts(conn, user_id),
                 },
-                201,
+                201 if created else 200,
             )
 
     @flask_app.delete("/api/next/lists/wishlist/<item_id>")
@@ -21561,6 +22413,12 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
                 raise NextApiError("Wishlist shop table is not available", 503)
+            provider_plugin_id, provider_product_ref = _resolve_shop_price_provider(
+                conn,
+                price_url,
+                provider_plugin_id,
+                provider_product_ref,
+            )
             user_id = actor.get("id")
             with conn.cursor() as cur:
                 cur.execute(
@@ -21586,14 +22444,62 @@ def register_routes(flask_app: Flask) -> None:
             if total >= _WISHLIST_MAX_SHOPS and not existing_shop.get("id"):
                 raise NextApiError("A wishlist item can have at most 10 shops", 400)
 
-            from next_price_alerts import extract_price_from_url_with_source
+            from next_price_alerts import _run_price_provider_check, extract_price_from_url_with_source
 
-            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
-                price_url,
-                selector_type=selector_type,
-                selector_value=selector_value,
-                selector_options=selector_options,
-            )
+            current_price = None
+            detected_currency = None
+            extraction_source = None
+            provider_status: str | None = None
+            provider_error: str | None = None
+            if provider_plugin_id:
+                try:
+                    (
+                        current_price,
+                        detected_currency,
+                        extraction_source,
+                        provider_status,
+                        provider_error,
+                        _source_detail,
+                        _confidence,
+                    ) = _run_price_provider_check(
+                        provider_plugin_id,
+                        item_id=item_uuid,
+                        movievault_id=None,
+                        shop={
+                            "id": None,
+                            "shop_name": shop_name,
+                            "price_url": price_url,
+                            "price_currency": price_currency,
+                            "provider_product_ref": provider_product_ref,
+                        },
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    provider_status = "error"
+                    provider_error = str(exc)
+                    current_app.logger.warning(
+                        "wishlist_shop_provider_check_exception item=%s provider=%s url=%s error=%s",
+                        item_uuid,
+                        provider_plugin_id,
+                        price_url,
+                        provider_error,
+                    )
+            if current_price is None:
+                current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                    price_url,
+                    selector_type=selector_type,
+                    selector_value=selector_value,
+                    selector_options=selector_options,
+                )
+            if current_price is None:
+                current_app.logger.warning(
+                    "wishlist_shop_price_missing item=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    item_uuid,
+                    provider_plugin_id,
+                    price_url,
+                    provider_status,
+                    provider_error,
+                    extraction_source,
+                )
             effective_currency = _normalise_shop_currency(detected_currency or price_currency)
 
             with conn.transaction():
@@ -21632,8 +22538,8 @@ def register_routes(flask_app: Flask) -> None:
                             Jsonb(selector_options),
                             provider_plugin_id,
                             provider_product_ref,
-                            "ok" if current_price is not None else "no_match",
-                            None,
+                            provider_status or ("ok" if current_price is not None else "no_match"),
+                            provider_error,
                             current_price,
                         ),
                     )
@@ -21674,6 +22580,8 @@ def register_routes(flask_app: Flask) -> None:
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "fetchedPrice": float(current_price) if current_price is not None else None,
                     "fetchedCurrency": effective_currency,
+                    "fetchedSource": extraction_source,
+                    "fetchedError": provider_error if current_price is None else None,
                 },
                 201 if shop_created else 200,
             )
@@ -21701,6 +22609,12 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
                 raise NextApiError("Wishlist shop table is not available", 503)
+            provider_plugin_id, provider_product_ref = _resolve_shop_price_provider(
+                conn,
+                price_url,
+                provider_plugin_id,
+                provider_product_ref,
+            )
             user_id = actor.get("id")
             with conn.cursor() as cur:
                 cur.execute(
@@ -21714,14 +22628,64 @@ def register_routes(flask_app: Flask) -> None:
                 if not cur.fetchone():
                     raise NextApiError("Wishlist shop not found", 404)
 
-            from next_price_alerts import extract_price_from_url_with_source
+            from next_price_alerts import _run_price_provider_check, extract_price_from_url_with_source
 
-            current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
-                price_url,
-                selector_type=selector_type,
-                selector_value=selector_value,
-                selector_options=selector_options,
-            )
+            current_price = None
+            detected_currency = None
+            extraction_source = None
+            provider_status: str | None = None
+            provider_error: str | None = None
+            if provider_plugin_id:
+                try:
+                    (
+                        current_price,
+                        detected_currency,
+                        extraction_source,
+                        provider_status,
+                        provider_error,
+                        _source_detail,
+                        _confidence,
+                    ) = _run_price_provider_check(
+                        provider_plugin_id,
+                        item_id=item_uuid,
+                        movievault_id=None,
+                        shop={
+                            "id": shop_uuid,
+                            "shop_name": shop_name,
+                            "price_url": price_url,
+                            "price_currency": price_currency,
+                            "provider_product_ref": provider_product_ref,
+                        },
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    provider_status = "error"
+                    provider_error = str(exc)
+                    current_app.logger.warning(
+                        "wishlist_shop_provider_check_exception item=%s shop=%s provider=%s url=%s error=%s",
+                        item_uuid,
+                        shop_uuid,
+                        provider_plugin_id,
+                        price_url,
+                        provider_error,
+                    )
+            if current_price is None:
+                current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
+                    price_url,
+                    selector_type=selector_type,
+                    selector_value=selector_value,
+                    selector_options=selector_options,
+                )
+            if current_price is None:
+                current_app.logger.warning(
+                    "wishlist_shop_price_missing item=%s shop=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    item_uuid,
+                    shop_uuid,
+                    provider_plugin_id,
+                    price_url,
+                    provider_status,
+                    provider_error,
+                    extraction_source,
+                )
             effective_currency = _normalise_shop_currency(detected_currency or price_currency)
 
             with conn.transaction():
@@ -21753,8 +22717,8 @@ def register_routes(flask_app: Flask) -> None:
                             Jsonb(selector_options),
                             provider_plugin_id,
                             provider_product_ref,
-                            "ok" if current_price is not None else "no_match",
-                            None,
+                            provider_status or ("ok" if current_price is not None else "no_match"),
+                            provider_error,
                             current_price,
                             shop_uuid,
                             user_id,
@@ -21795,6 +22759,8 @@ def register_routes(flask_app: Flask) -> None:
                     "entry": wishlist_sync_entity(conn, user_id, item_uuid),
                     "fetchedPrice": float(current_price) if current_price is not None else None,
                     "fetchedCurrency": effective_currency,
+                    "fetchedSource": extraction_source,
+                    "fetchedError": provider_error if current_price is None else None,
                 }
             )
 
@@ -23002,26 +23968,40 @@ def register_routes(flask_app: Flask) -> None:
             genre_counts: dict[str, int] = {}
             for row in _bucket_rows(
                 f"""
-                SELECT COALESCE(NULLIF(TRIM(m.metadata->>'genre'), ''), '') AS genre,
-                       COUNT(*)::int AS count
+                SELECT mg.genre_key AS genre, COUNT(DISTINCT m.id)::int AS count
+                FROM movies m
+                JOIN movie_genres mg ON mg.movie_id = m.id
+                WHERE {where}
+                GROUP BY mg.genre_key
+                """
+                if table_exists(conn, "movie_genres")
+                else f"SELECT NULL AS genre, 0 AS count FROM movies m WHERE {where} LIMIT 0"
+            ):
+                key = clean_text(row.get("genre"))
+                count = int(row.get("count") or 0)
+                if key in GENRE_KEYS:
+                    genre_counts[key] = genre_counts.get(key, 0) + count
+            unknown_genre_sql = (
+                f"""
+                SELECT COUNT(*)::int AS count
                 FROM movies m
                 WHERE {where}
-                GROUP BY 1
+                  AND NOT EXISTS (SELECT 1 FROM movie_genres mg WHERE mg.movie_id = m.id)
                 """
-            ):
-                raw = (row.get("genre") or "").strip()
-                count = int(row.get("count") or 0)
-                if not raw:
-                    genre_counts["Unknown"] = genre_counts.get("Unknown", 0) + count
-                    continue
-                for part in re.split(r"[,/|]", raw):
-                    label = part.strip()
-                    if label:
-                        genre_counts[label] = genre_counts.get(label, 0) + count
+                if table_exists(conn, "movie_genres")
+                else f"SELECT COUNT(*)::int AS count FROM movies m WHERE {where}"
+            )
+            unknown_rows = _bucket_rows(unknown_genre_sql)
+            unknown_count = int(unknown_rows[0].get("count") or 0) if unknown_rows else 0
             by_genre = sorted(
-                [{"label": k, "count": v} for k, v in genre_counts.items()],
+                [
+                    {"label": GENRE_KEY_TO_LABEL.get(key, key), "i18nKey": f"genre.{key}", "count": count}
+                    for key, count in genre_counts.items()
+                ],
                 key=lambda item: (-item["count"], item["label"]),
             )[:20]
+            if unknown_count:
+                by_genre.append({"label": "Unknown", "count": unknown_count})
 
             watch = {"total": 0, "thisYear": 0, "distinctMovies": 0, "topMovies": []}
             if table_exists(conn, "watch_history"):
@@ -23483,6 +24463,74 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="movie",
                     target_id=movie_uuid,
                     summary="Deleted movie artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
+                )
+        return response({"status": "ok", **result})
+
+    @flask_app.post("/api/next/movies/<movie_id>/media/<media_id>/hide")
+    def movie_media_hide(movie_id: str, media_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        media_uuid = parse_uuid(media_id, "mediaId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Artwork hide body must be an object", 400)
+        kind = clean_text(body.get("kind") or request.args.get("kind")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            movie = movie_entity(conn, movie_uuid)
+            if not movie or not actor_can_edit_visible_movie(conn, actor, movie):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                result = set_movie_artwork_hidden_state(
+                    conn,
+                    movie_id=movie_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    hidden=True,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="movie.media_hidden",
+                    category="admin",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Hid movie artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
+                )
+        return response({"status": "ok", **result})
+
+    @flask_app.post("/api/next/movies/<movie_id>/media/<media_id>/unhide")
+    def movie_media_unhide(movie_id: str, media_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        media_uuid = parse_uuid(media_id, "mediaId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Artwork unhide body must be an object", 400)
+        kind = clean_text(body.get("kind") or request.args.get("kind")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            movie = movie_entity(conn, movie_uuid)
+            if not movie or not actor_can_edit_visible_movie(conn, actor, movie):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                result = set_movie_artwork_hidden_state(
+                    conn,
+                    movie_id=movie_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    hidden=False,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="movie.media_unhidden",
+                    category="admin",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Unhid movie artwork",
                     metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
                 )
         return response({"status": "ok", **result})
@@ -24049,7 +25097,6 @@ def register_routes(flask_app: Flask) -> None:
         fill("release_date", movie_updates.get("release_date"), metadata_updates.get("release_date"))
         fill("runtimeMinutes", movie_updates.get("runtime_minutes"), metadata_updates.get("runtime_minutes"))
         fill("runtime", movie_updates.get("runtime_minutes"), metadata_updates.get("runtime_minutes"))
-        fill("genre", metadata_updates.get("genre"))
         fill("director", metadata_updates.get("director"))
         fill("actor", metadata_updates.get("actor"))
         fill("producer", metadata_updates.get("producer"))
@@ -24132,7 +25179,6 @@ def register_routes(flask_app: Flask) -> None:
     def box_set_member_import_payload(member: dict[str, Any], *, box_set_title: str, fallback_format: str, barcode: str) -> dict[str, Any]:
         metadata = {}
         for key in (
-            "genre",
             "director",
             "actor",
             "producer",
@@ -24175,7 +25221,6 @@ def register_routes(flask_app: Flask) -> None:
             movie_updates["format"] = member_format
         metadata_updates = {}
         for source, target in (
-            ("genre", "genre"),
             ("director", "director"),
             ("actor", "actor"),
             ("producer", "producer"),
@@ -24277,6 +25322,8 @@ def register_routes(flask_app: Flask) -> None:
             "backdrop_urls": proposal.get("backdrop_urls") or proposal.get("backdropUrls") or [],
         }
         existing_container = None
+        if barcode:
+            lock_box_set_barcode(conn, barcode)
         with conn.cursor() as cur:
             if barcode:
                 cur.execute(
@@ -24336,9 +25383,9 @@ def register_routes(flask_app: Flask) -> None:
                 cur.execute(
                     """
                     INSERT INTO containers (
-                        id, public_id, container_type, title, barcode, badge_label, year, description, metadata, created_at, updated_at
+                        id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, metadata, created_at, updated_at
                     )
-                    VALUES (%s, %s, 'box_set', %s, %s, NULL, %s, %s, %s, now(), now())
+                    VALUES (%s, %s, 'box_set', %s, %s, NULL, %s, %s, %s, %s, now(), now())
                     """,
                     (
                         container_uuid,
@@ -24347,6 +25394,7 @@ def register_routes(flask_app: Flask) -> None:
                         barcode or None,
                         clean_text(proposal.get("year") or proposal.get("year_range")),
                         clean_text(proposal.get("description")),
+                        actor_or_instance_owner_id(conn, actor),
                         Jsonb(json_ready(container_metadata)),
                     ),
                 )
@@ -25635,7 +26683,7 @@ def register_routes(flask_app: Flask) -> None:
         media_uuid = parse_uuid(media_id, "mediaId")
         with connect() as conn:
             asset = media_asset_entity(conn, media_uuid)
-        if not asset:
+        if not asset or is_movievault_v2_poster_media_asset(asset):
             raise NextApiError("Media asset not found", 404)
         path = local_media_asset_path(asset.get("storage_key"))
         if not path:
@@ -25643,6 +26691,21 @@ def register_routes(flask_app: Flask) -> None:
         mimetype = asset.get("content_type") or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         result = send_file(path, mimetype=mimetype, conditional=True, max_age=86400)
         result.headers["Cache-Control"] = "public, max-age=86400"
+        return result
+
+    @flask_app.get("/api/next/movievault-v2/posters/<media_id>")
+    def movievault_v2_poster_media_asset(media_id: str):
+        media_uuid = parse_uuid(media_id, "mediaId")
+        with connect() as conn:
+            asset = movievault_v2_poster_media_asset_entity(conn, media_uuid)
+        if not asset:
+            raise NextApiError("MovieVault poster not found", 404)
+        path = local_media_asset_path(asset.get("storage_key"))
+        if not path:
+            raise NextApiError("Local media file not found", 404)
+        mimetype = asset.get("content_type") or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        result = send_file(path, mimetype=mimetype, conditional=True)
+        result.headers["Cache-Control"] = "private, no-store"
         return result
 
     @flask_app.get("/api/next/jobs")
@@ -26807,6 +27870,7 @@ def register_routes(flask_app: Flask) -> None:
         results = []
         batch_ctx = SyncBatchContext()
         with connect() as conn:
+            actor = require_next_authenticated_user(conn)
             ensure_sync_state(conn)
             for mutation in mutations:
                 client_mutation_id = None
@@ -26820,6 +27884,7 @@ def register_routes(flask_app: Flask) -> None:
                                 client_id=client_id,
                                 mutation=mutation,
                                 batch_ctx=batch_ctx,
+                                actor=actor,
                             )
                         )
                 except NextApiError as exc:

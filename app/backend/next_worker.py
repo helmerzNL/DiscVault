@@ -29,9 +29,13 @@ try:
     from .next_import import ImportError as NextImportError
     from .next_import import NextImporter
     from .next_import import clean_text
+    from .next_ownership import actor_or_instance_owner_id
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import is_movievault_plugin
     from .next_movievault_connection import movievault_plugin_context
+    from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from .next_movievault_v2 import movievault_v2_plugin_context
+    from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import lookup_metadata_sources
@@ -41,13 +45,21 @@ try:
     from .next_backup import restore_functional_backup
     from .next_price_alerts import PRICE_ALERT_JOB_TYPE
     from .next_price_alerts import run_price_alert_sweep
+    from .next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
+    from .next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
+    from .next_movievault_v2_posters import run_poster_cache_job
+    from .next_movievault_v2_posters import run_poster_cleanup
 except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
     from next_import import clean_text
+    from next_ownership import actor_or_instance_owner_id
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import is_movievault_plugin
     from next_movievault_connection import movievault_plugin_context
+    from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from next_movievault_v2 import movievault_v2_plugin_context
+    from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from next_plugin_runtime import run_plugin_entrypoint
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import lookup_metadata_sources
@@ -57,9 +69,15 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_backup import restore_functional_backup
     from next_price_alerts import PRICE_ALERT_JOB_TYPE
     from next_price_alerts import run_price_alert_sweep
+    from next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
+    from next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
+    from next_movievault_v2_posters import run_poster_cache_job
+    from next_movievault_v2_posters import run_poster_cleanup
 
 
 STOP = False
+MOVIEVAULT_V2_SCHEDULER_LOCK_KEY = 2_026_262
+PERSON_METADATA_REFRESH_JOB_TYPE = "metadata.refresh_person"
 
 
 class JobFailure(RuntimeError):
@@ -173,39 +191,22 @@ def import_container_release_key(
     return (type_key, "title", title_key)
 
 
-def plugin_config_payload(settings: Any, secrets_ref: Any) -> dict[str, Any]:
-    safe_settings = settings if isinstance(settings, dict) else {}
-    refs = secrets_ref if isinstance(secrets_ref, dict) else {}
-    safe_refs: dict[str, dict[str, Any]] = {}
-    for name, ref in refs.items():
-        key = ref.get("key") if isinstance(ref, dict) else ref
-        item: dict[str, Any] = {"configured": True}
-        if key:
-            item["key"] = str(key)
-        safe_refs[str(name)] = item
-    return {
-        "settings": safe_settings,
-        "settingsConfigured": bool(safe_settings),
-        "secretNames": sorted(safe_refs),
-        "secretsConfigured": bool(safe_refs),
-        "secretsRef": safe_refs,
-    }
-
-
 def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
     if not table_exists(conn, "plugin_settings"):
-        return plugin_config_payload({}, {})
+        return resolved_plugin_config_payload({}, {}, {})
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT settings, secrets_ref
-            FROM plugin_settings
-            WHERE plugin_id=%s
+            SELECT p.settings_schema, s.settings, s.secrets_ref
+            FROM plugins AS p
+            LEFT JOIN plugin_settings AS s ON s.plugin_id = p.id
+            WHERE p.id=%s
             """,
             (plugin_id,),
         )
         row = cur.fetchone()
-    return plugin_config_payload(
+    return resolved_plugin_config_payload(
+        row.get("settings_schema") if row else {},
         row.get("settings") if row else {},
         row.get("secrets_ref") if row else {},
     )
@@ -267,7 +268,11 @@ def plugin_record(conn, plugin_id: str) -> dict[str, Any]:
 def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink"}:
         return False
-    if is_movievault_plugin(str(plugin.get("id") or "")):
+    plugin_id = str(plugin.get("id") or "")
+    if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
+        settings = config.get("settings")
+        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+    if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
@@ -292,6 +297,7 @@ def plugin_execution_context_from_db(
         "enabled": bool(plugin.get("enabled")),
         "categories": plugin.get("categories") or manifest.get("categories") or [],
         "capabilities": plugin.get("capabilities") or manifest.get("capabilities") or [],
+        "distributionContractRange": manifest.get("distributionContractRange"),
         "settings": config.get("settings") or {},
         "secrets": plugin_secret_values(conn, config),
         "settingsConfigured": bool(config.get("settingsConfigured")),
@@ -299,12 +305,18 @@ def plugin_execution_context_from_db(
         "secretsConfigured": bool(config.get("secretsConfigured")),
         "actor": queued_actor or {"id": None, "username": None, "role": None},
     }
-    return movievault_plugin_context(
+    context = movievault_plugin_context(
         conn,
         plugin_id,
         context,
         ensure_token=is_movievault_plugin(plugin_id) and entrypoint != "health_check",
         actor_id=(queued_actor or {}).get("id") if queued_actor else None,
+    )
+    return movievault_v2_plugin_context(
+        conn,
+        plugin_id,
+        context,
+        connection_factory=connect,
     )
 
 
@@ -399,11 +411,20 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == METADATA_REFRESH_JOB_TYPE:
         return process_metadata_refresh(payload, worker_id)
 
+    if job_type == PERSON_METADATA_REFRESH_JOB_TYPE:
+        return process_person_metadata_refresh(payload, worker_id)
+
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
     if job_type == PRICE_ALERT_JOB_TYPE:
         return process_price_alert_sweep(payload, worker_id)
+
+    if job_type == POSTER_CACHE_JOB_TYPE:
+        return process_movievault_v2_poster_cache(payload, worker_id)
+
+    if job_type == POSTER_CLEANUP_JOB_TYPE:
+        return process_movievault_v2_poster_cleanup(payload, worker_id)
 
     raise RuntimeError(f"Unsupported job type: {job_type}")
 
@@ -442,6 +463,32 @@ def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[st
         "dryRun": dry_run,
         "refreshPeople": refresh_people,
         "personRefreshScope": person_refresh_scope,
+        "result": result,
+    }
+
+
+def process_person_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    person_id = clean_text(payload.get("personId") or payload.get("person_id"))
+    if not person_id:
+        raise RuntimeError("personId is required for person metadata refresh jobs")
+    actor = payload.get("requestedBy") or payload.get("requested_by") or {}
+    if not isinstance(actor, dict):
+        actor = {}
+    try:
+        person_uuid = UUID(person_id)
+    except ValueError as exc:
+        raise RuntimeError("personId must be a valid UUID") from exc
+    try:
+        from .next_app import refresh_person_metadata
+    except ImportError:  # pragma: no cover - supports python next_worker.py
+        from next_app import refresh_person_metadata
+    with connect() as conn:
+        result = refresh_person_metadata(conn, person_uuid, dry_run=False, actor=actor)
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": PERSON_METADATA_REFRESH_JOB_TYPE,
+        "personId": person_id,
         "result": result,
     }
 
@@ -488,6 +535,27 @@ def process_price_alert_sweep(payload: dict[str, Any], worker_id: str) -> dict[s
         "workerId": worker_id,
         "handled": True,
         "jobType": PRICE_ALERT_JOB_TYPE,
+        **summary,
+    }
+
+
+def process_movievault_v2_poster_cache(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    with connect() as conn:
+        summary = run_poster_cache_job(conn, payload)
+    return {
+        "workerId": worker_id,
+        "jobType": POSTER_CACHE_JOB_TYPE,
+        **summary,
+    }
+
+
+def process_movievault_v2_poster_cleanup(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    limit = int(payload.get("limit") or 200)
+    with connect() as conn:
+        summary = run_poster_cleanup(conn, limit=limit)
+    return {
+        "workerId": worker_id,
+        "jobType": POSTER_CLEANUP_JOB_TYPE,
         **summary,
     }
 
@@ -796,7 +864,6 @@ def import_movie_metadata(item: dict[str, Any], plugin_id: str) -> dict[str, Any
         "source_provider": item.get("sourceProvider") or plugin_id,
         "source_file": item.get("sourceFile"),
         "source_url": item.get("sourceUrl"),
-        "genre": item.get("genre"),
         "director": item.get("director"),
         "actor": item.get("actor"),
         "poster_url": item.get("posterUrl") or item.get("poster_url"),
@@ -1069,6 +1136,7 @@ def upsert_import_container(
     source_kind: str,
     barcode: str = "",
     metadata_extra: dict[str, Any] | None = None,
+    actor: dict[str, Any] | None = None,
 ) -> tuple[UUID, bool]:
     metadata_extra = metadata_extra if isinstance(metadata_extra, dict) else {}
     incoming_format = clean_text(metadata_extra.get("format") or metadata_extra.get("media_format"))
@@ -1129,12 +1197,13 @@ def upsert_import_container(
             "source_hash": source_hash,
         }
         metadata.update({key: value for key, value in metadata_extra.items() if value not in (None, "", [], {})})
+        owner_id = actor_or_instance_owner_id(conn, actor)
         cur.execute(
             """
             INSERT INTO containers (
-                id, public_id, container_type, title, barcode, metadata, created_at, updated_at
+                id, public_id, container_type, title, barcode, owner_id, metadata, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=EXCLUDED.title,
                 barcode=COALESCE(NULLIF(containers.barcode, ''), EXCLUDED.barcode),
@@ -1147,6 +1216,7 @@ def upsert_import_container(
                 container_type,
                 title,
                 barcode or None,
+                owner_id,
                 Jsonb(
                     json_ready(
                         metadata
@@ -1359,6 +1429,7 @@ def persist_import_box_set_item(
     item: dict[str, Any],
     detection: dict[str, Any],
     index: int,
+    actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     proposal = detection.get("proposal") if isinstance(detection.get("proposal"), dict) else {}
     barcode = clean_text(detection.get("barcode") or item.get("barcode") or proposal.get("barcode"))
@@ -1388,6 +1459,7 @@ def persist_import_box_set_item(
             "member_count": len(members),
             "import_detected_box_set": True,
         },
+        actor=actor,
     )
     imported_members: list[dict[str, Any]] = []
     movie_ids: list[str] = []
@@ -1537,6 +1609,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                                 item=item,
                                 detection=box_set_detection,
                                 index=index,
+                                actor=actor,
                             )
                         imported += 1
                         created += int(box_set_result.get("created") or 0)
@@ -1620,6 +1693,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                                                 "member_count": spec.get("memberCount") or len(item.get("boxSetMembers") or []),
                                                 "members_are_explicit": spec.get("membersAreExplicit") or bool(item.get("boxSetMembers")),
                                             },
+                                            actor=actor,
                                         )
                                         local_container_cache[key] = spec_container_id
                                         if was_container_created:
@@ -1675,6 +1749,7 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                                             "member_count": spec.get("memberCount"),
                                             "members_are_explicit": spec.get("membersAreExplicit"),
                                         },
+                                        actor=actor,
                                     )
                                     local_container_cache[key] = spec_container_id
                                     if was_container_created:
@@ -2341,9 +2416,108 @@ def _maybe_enqueue_price_sweep(worker_id: str) -> None:
         pass
 
 
+def _maybe_enqueue_movievault_v2_sync(worker_id: str) -> None:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    to_regclass('public.plugins') AS plugins,
+                    to_regclass('public.plugin_settings') AS plugin_settings,
+                    to_regclass('public.background_jobs') AS background_jobs,
+                    to_regclass('public.movievault_v2_sync_state') AS sync_state
+                """
+            )
+            tables = cur.fetchone()
+            if not tables or not all(tables.values()):
+                return
+            cur.execute(
+                "SELECT pg_try_advisory_xact_lock(%s) AS acquired",
+                (MOVIEVAULT_V2_SCHEDULER_LOCK_KEY,),
+            )
+            lock_row = cur.fetchone()
+            if not bool(lock_row and lock_row.get("acquired")):
+                return
+            cur.execute(
+                """
+                SELECT ps.settings, state.last_success_at, state.last_attempt_at
+                FROM plugins AS plugin
+                JOIN plugin_settings AS ps ON ps.plugin_id = plugin.id
+                LEFT JOIN movievault_v2_sync_state AS state
+                    ON state.plugin_id = plugin.id
+                WHERE plugin.id = %s
+                  AND plugin.installed = true
+                  AND plugin.enabled = true
+                """,
+                (MOVIEVAULT_V2_PLUGIN_ID,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return
+            settings = row.get("settings")
+            if not isinstance(settings, dict) or not clean_text(settings.get("origin")):
+                return
+            interval_hours = _movievault_v2_sync_interval(settings)
+            attempts = [
+                value
+                for value in (row.get("last_success_at"), row.get("last_attempt_at"))
+                if isinstance(value, datetime)
+            ]
+            if attempts:
+                latest_attempt = max(attempts)
+                age_seconds = (
+                    datetime.now(timezone.utc) - latest_attempt.astimezone(timezone.utc)
+                ).total_seconds()
+                if age_seconds < interval_hours * 3600:
+                    return
+            cur.execute(
+                """
+                SELECT 1
+                FROM background_jobs
+                WHERE job_type = 'plugin.execute'
+                  AND status IN ('pending', 'running')
+                  AND payload ->> 'pluginId' = %s
+                  AND payload ->> 'entrypoint' = 'sync_index'
+                LIMIT 1
+                """,
+                (MOVIEVAULT_V2_PLUGIN_ID,),
+            )
+            if cur.fetchone():
+                return
+            cur.execute(
+                """
+                INSERT INTO background_jobs (job_type, payload)
+                VALUES ('plugin.execute', %s)
+                """,
+                (
+                    Jsonb(
+                        {
+                            "pluginId": MOVIEVAULT_V2_PLUGIN_ID,
+                            "entrypoint": "sync_index",
+                            "payload": {},
+                            "source": "scheduler",
+                            "workerId": worker_id,
+                        }
+                    ),
+                ),
+            )
+
+
+def _movievault_v2_sync_interval(settings: dict[str, Any]) -> int:
+    value = settings.get("syncIntervalHours")
+    if value is None or value == "" or isinstance(value, bool):
+        return 6
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 6
+    return min(max(parsed, 1), 168)
+
+
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
         _maybe_enqueue_price_sweep(worker_id)
+        _maybe_enqueue_movievault_v2_sync(worker_id)
         run_once(worker_id, quiet_idle=True)
         if STOP:
             break
