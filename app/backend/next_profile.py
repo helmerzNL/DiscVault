@@ -41,7 +41,7 @@ try:  # pragma: no cover - exercised indirectly by both layouts
         next_auth_current_user,
         next_create_api_token_value,
         next_generate_recovery_codes,
-        next_recovery_code_hash,
+        next_replace_recovery_codes,
     )
     from .next_common import NextApiError, parse_uuid, response, table_exists
     from .next_import import clean_text
@@ -65,7 +65,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         next_auth_current_user,
         next_create_api_token_value,
         next_generate_recovery_codes,
-        next_recovery_code_hash,
+        next_replace_recovery_codes,
     )
     from next_common import NextApiError, parse_uuid, response, table_exists
     from next_import import clean_text
@@ -708,23 +708,7 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
             codes = next_generate_recovery_codes(count)
             with conn.transaction():
                 with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE recovery_codes
-                        SET used_at=COALESCE(used_at, now())
-                        WHERE user_id=%s
-                          AND used_at IS NULL
-                        """,
-                        (user["id"],),
-                    )
-                    for index, code in enumerate(codes, start=1):
-                        cur.execute(
-                            """
-                            INSERT INTO recovery_codes (user_id, code_hash, label, created_at)
-                            VALUES (%s, %s, %s, now())
-                            """,
-                            (user["id"], next_recovery_code_hash(code), f"Recovery code {index}"),
-                        )
+                    next_replace_recovery_codes(cur, user["id"], codes)
             return response(
                 {
                     "status": "ok",

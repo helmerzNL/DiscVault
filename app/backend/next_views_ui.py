@@ -7763,6 +7763,19 @@ def ui_preview_html(
       align-items: start;
       min-width: 0;
     }
+    .profile-security-grid {
+      gap: 12px;
+    }
+    .profile-security-column {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+      min-width: 0;
+    }
+    .profile-security-grid .profile-section-box {
+      gap: 10px;
+      padding: 12px;
+    }
     .member-group-list {
       display: grid;
       gap: 10px;
@@ -8132,6 +8145,76 @@ def ui_preview_html(
       width: 16px;
       height: 16px;
       accent-color: var(--accent);
+    }
+    label.legacy-checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      min-height: 44px;
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: .86rem;
+      font-weight: 650;
+      line-height: 1.35;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    label.legacy-checkbox-row:hover {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      background: color-mix(in srgb, var(--accent) 7%, var(--bg-solid));
+    }
+    label.legacy-checkbox-row input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      position: relative;
+      flex: 0 0 18px;
+      width: 18px;
+      min-width: 18px;
+      max-width: 18px;
+      height: 18px;
+      min-height: 18px;
+      margin: 0;
+      border: 1px solid var(--line-strong);
+      border-radius: 5px;
+      background: var(--bg-solid);
+      padding: 0;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    }
+    label.legacy-checkbox-row input[type="checkbox"]::after {
+      content: "";
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 8px;
+      height: 4px;
+      border-bottom: 2px solid #fff;
+      border-left: 2px solid #fff;
+      transform: rotate(-45deg) scale(0);
+      transform-origin: center;
+      transition: transform .12s ease;
+    }
+    label.legacy-checkbox-row input[type="checkbox"]:checked {
+      border-color: var(--accent);
+      background: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+    }
+    label.legacy-checkbox-row input[type="checkbox"]:checked::after {
+      transform: rotate(-45deg) scale(1);
+    }
+    label.legacy-checkbox-row input[type="checkbox"]:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 38%, transparent);
+      outline-offset: 2px;
+    }
+    label.legacy-checkbox-row:has(input:disabled) {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    label.legacy-checkbox-row input[type="checkbox"]:disabled {
+      cursor: not-allowed;
     }
     .profile-scope-fieldset {
       display: grid;
@@ -10756,7 +10839,7 @@ def ui_preview_html(
           <button type="button" class="secondary-button" id="appLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
           <button type="button" class="secondary-button" id="appLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
         </div>
-        <label class="hidden" id="appLegacyRecoveryAckLabel">
+        <label class="legacy-checkbox-row hidden" id="appLegacyRecoveryAckLabel">
           <input id="appLegacyRecoveryAck" type="checkbox">
           <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
         </label>
@@ -10826,7 +10909,7 @@ def ui_preview_html(
             <span data-next-i18n="auth.password">Password</span>
             <input id="startupLegacyPassword" type="password" minlength="15" autocomplete="new-password">
           </label>
-          <label>
+          <label class="legacy-checkbox-row">
             <input id="startupLegacyRiskAccepted" type="checkbox">
             <span data-next-i18n="legacyAuth.acceptRisk">I understand and accept the password risk.</span>
           </label>
@@ -10841,7 +10924,7 @@ def ui_preview_html(
             <button type="button" class="secondary-button" id="startupLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
             <button type="button" class="secondary-button" id="startupLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
           </div>
-          <label class="hidden" id="startupLegacyAckLabel">
+          <label class="legacy-checkbox-row hidden" id="startupLegacyAckLabel">
             <input id="startupLegacyAck" type="checkbox">
             <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
           </label>
@@ -12738,60 +12821,63 @@ def ui_preview_html(
               </div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="security">
-              <div class="profile-section-grid">
-                <section class="profile-section-box">
-                  <div class="detail-card-head compact">
-                    <div>
-                      <h4 data-next-i18n="profile.security">Security</h4>
-                      <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+              <div class="profile-section-grid profile-security-grid">
+                <div class="profile-security-column">
+                  <section class="profile-section-box">
+                    <div class="detail-card-head compact">
+                      <div>
+                        <h4 data-next-i18n="profile.security">Security</h4>
+                        <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+                      </div>
+                      <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
                     </div>
-                    <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
-                  </div>
-                  <div class="profile-passkey-list" id="profilePasskeyList"></div>
-                  <div class="profile-add-passkey">
-                    <input id="profileNewPasskeyNameInput" maxlength="80" autocomplete="off" data-next-i18n-placeholder="profile.newPasskeyName" placeholder="New passkey name">
-                    <button type="button" class="secondary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
-                  </div>
-                  <div class="login-message" id="profileSecurityMessage"></div>
-                </section>
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.recoveryTitle">Account recovery</h4>
-                  <p data-next-i18n="profile.recoveryHelp">Recovery options will let you regain access if all passkeys are lost.</p>
-                  <div class="profile-meta">
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.recoveryActiveCodes">Active codes</span>
-                      <strong id="profileRecoveryActiveCount">-</strong>
+                    <div class="profile-passkey-list" id="profilePasskeyList"></div>
+                    <div class="profile-add-passkey">
+                      <input id="profileNewPasskeyNameInput" maxlength="80" autocomplete="off" data-next-i18n-placeholder="profile.newPasskeyName" placeholder="New passkey name">
+                      <button type="button" class="secondary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
                     </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.recoveryLastGenerated">Last generated</span>
-                      <strong id="profileRecoveryLastGenerated">-</strong>
+                    <div class="login-message" id="profileSecurityMessage"></div>
+                  </section>
+                  <section class="profile-section-box" id="profileLegacySecurity">
+                    <h4 data-next-i18n="legacyAuth.passwordSecurity">Legacy security</h4>
+                    <p data-next-i18n="legacyAuth.passwordChangeHelp">Change your Legacy password. Use at least 15 characters.</p>
+                    <div class="profile-meta">
+                      <div class="profile-meta-row"><span data-next-i18n="legacyAuth.mfaStatus">2FA status</span><strong id="profileLegacyMfaStatus">-</strong></div>
                     </div>
-                  </div>
-                  <div class="recovery-codes hidden" id="profileRecoveryCodes"></div>
-                  <div class="profile-action-row">
-                    <button type="button" class="secondary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
-                    <button type="button" class="secondary-button" id="profileRevokeRecoveryButton" data-next-i18n="profile.revokeRecoveryCodes">Revoke active codes</button>
-                  </div>
-                  <div class="login-message" id="profileRecoveryMessage"></div>
-                </section>
-                <section class="profile-section-box" id="profileLegacySecurity">
-                  <h4 data-next-i18n="legacyAuth.passwordSecurity">Password security</h4>
-                  <p data-next-i18n="legacyAuth.passwordChangeHelp">Change your Legacy password. Use at least 15 characters.</p>
-                  <div class="profile-meta">
-                    <div class="profile-meta-row"><span data-next-i18n="legacyAuth.mfaStatus">TOTP status</span><strong id="profileLegacyMfaStatus">-</strong></div>
-                    <div class="profile-meta-row"><span data-next-i18n="legacyAuth.recoveryCodesActive">Active recovery codes</span><strong id="profileLegacyRecoveryCount">-</strong></div>
-                  </div>
-                  <form class="profile-form" id="profileLegacyPasswordForm">
-                    <label for="profileLegacyCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
-                      <input id="profileLegacyCurrentPassword" type="password" autocomplete="current-password">
-                    </label>
-                    <label for="profileLegacyNewPassword"><span data-next-i18n="legacyAuth.newPassword">New password</span>
-                      <input id="profileLegacyNewPassword" type="password" minlength="15" autocomplete="new-password">
-                    </label>
-                    <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.changePassword">Change password</button>
-                  </form>
-                  <div class="login-message" id="profileLegacyMessage"></div>
-                </section>
+                    <form class="profile-form" id="profileLegacyPasswordForm">
+                      <label for="profileLegacyCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
+                        <input id="profileLegacyCurrentPassword" type="password" autocomplete="current-password">
+                      </label>
+                      <label for="profileLegacyNewPassword"><span data-next-i18n="legacyAuth.newPassword">New password</span>
+                        <input id="profileLegacyNewPassword" type="password" minlength="15" autocomplete="new-password">
+                      </label>
+                      <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.changePassword">Change password</button>
+                    </form>
+                    <div class="login-message" id="profileLegacyMessage"></div>
+                  </section>
+                </div>
+                <div class="profile-security-column">
+                  <section class="profile-section-box">
+                    <h4 data-next-i18n="profile.recoveryTitle">Account recovery</h4>
+                    <p data-next-i18n="profile.recoveryHelp">Recovery codes let you regain access when your usual sign-in methods are unavailable.</p>
+                    <div class="profile-meta">
+                      <div class="profile-meta-row">
+                        <span data-next-i18n="profile.recoveryActiveCodes">Active codes</span>
+                        <strong id="profileRecoveryActiveCount">-</strong>
+                      </div>
+                      <div class="profile-meta-row">
+                        <span data-next-i18n="profile.recoveryLastGenerated">Last generated</span>
+                        <strong id="profileRecoveryLastGenerated">-</strong>
+                      </div>
+                    </div>
+                    <div class="recovery-codes hidden" id="profileRecoveryCodes"></div>
+                    <div class="profile-action-row">
+                      <button type="button" class="secondary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
+                      <button type="button" class="secondary-button" id="profileRevokeRecoveryButton" data-next-i18n="profile.revokeRecoveryCodes">Revoke active codes</button>
+                    </div>
+                    <div class="login-message" id="profileRecoveryMessage"></div>
+                  </section>
+                </div>
               </div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="api">
@@ -13025,8 +13111,8 @@ def ui_preview_html(
                 <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
                 <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
                 <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
-                <label><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
-                <label><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
+                <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
+                <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
                 <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
               </form>
             </div>
@@ -14535,7 +14621,7 @@ def ui_preview_html(
         : tNext("appAdmin.inviteOnly", "Invite-only login");
     }
     function renderAppAdminVisibility() {
-      const allowed = canUseAppAdmin();
+      const allowed = isNativeAdminUser() && canUseAppAdmin();
       document.getElementById("profileOpenAdminButton")?.classList.toggle("hidden", !allowed);
     }
     function applyAppPermissionVisibility() {
@@ -16825,8 +16911,8 @@ def ui_preview_html(
               </div>
               ${legacy.available ? `<div class="profile-add-passkey">
                 <input type="password" minlength="15" autocomplete="new-password" data-app-admin-legacy-password="${escapeHtml(user.id)}" placeholder="${escapeHtml(tNext("legacyAuth.temporaryPassword", "Temporary password"))}">
-                <label><input type="checkbox" data-app-admin-legacy-mfa="${escapeHtml(user.id)}" ${user.legacy_mfa_required !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.requireMfa", "Require TOTP MFA"))}</label>
-                <label><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
+                <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-mfa="${escapeHtml(user.id)}" ${user.legacy_mfa_required !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.requireMfa", "Require TOTP MFA"))}</label>
+                <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
                 <button type="button" class="secondary-button" data-app-admin-legacy-save="${escapeHtml(user.id)}">${escapeHtml(user.legacy_credential_count ? tNext("legacyAuth.resetPassword", "Reset password") : tNext("legacyAuth.addPassword", "Add password"))}</button>
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button" data-app-admin-legacy-policy="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.savePolicy", "Save policy"))}</button>` : ""}
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button danger" data-app-admin-legacy-remove="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.removePassword", "Remove password"))}</button>` : ""}
@@ -30710,6 +30796,7 @@ def ui_preview_html(
       if (route !== "import" && importScanner.running) {
         stopImportBarcodeScanner();
       }
+      if (route !== "profile") clearProfileRecoveryCodes();
       if (route !== "statistics") {
         document.getElementById("statisticsView")?.classList.add("hidden");
       }
@@ -32836,6 +32923,7 @@ def ui_preview_html(
     function setProfileTab(tab) {
       let selected = tab || "account";
       if (!canUseProfileTab(selected)) selected = "account";
+      if (selected !== "security") clearProfileRecoveryCodes();
       activeProfileTab = selected;
       localStorage.setItem("dv_next_profile_tab", selected);
       document.querySelectorAll("[data-profile-tab]").forEach((button) => {
@@ -34017,6 +34105,12 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function clearProfileRecoveryCodes() {
+      const codesNode = document.getElementById("profileRecoveryCodes");
+      if (!codesNode) return;
+      codesNode.replaceChildren();
+      codesNode.classList.add("hidden");
+    }
     function renderProfileRecovery(codes) {
       const activeCount = document.getElementById("profileRecoveryActiveCount");
       const lastGenerated = document.getElementById("profileRecoveryLastGenerated");
@@ -34365,11 +34459,9 @@ def ui_preview_html(
           profileLegacy = await authApiJson("/api/next/auth/legacy/me").catch(() => ({}));
           const credential = profileLegacy.credential || {};
           const mfaStatus = document.getElementById("profileLegacyMfaStatus");
-          const recoveryCount = document.getElementById("profileLegacyRecoveryCount");
           if (mfaStatus) mfaStatus.textContent = credential.mfa_required
             ? (credential.mfa_enrolled ? tNext("legacyAuth.enabled", "Enabled") : tNext("legacyAuth.setupRequired", "Setup required"))
             : tNext("legacyAuth.disabled", "Disabled");
-          if (recoveryCount) recoveryCount.textContent = String(credential.active_recovery_codes ?? 0);
         }
         renderProfile();
       } catch (error) {
@@ -34514,7 +34606,7 @@ def ui_preview_html(
         renderProfileRecovery(payload.codes || []);
         setProfileRecoveryMessage(tNext("profile.recoveryCodesReady", "Recovery codes generated. Save them now."), "good");
       } catch (error) {
-        if (codesNode) codesNode.classList.add("hidden");
+        clearProfileRecoveryCodes();
         setProfileRecoveryMessage(error.message || String(error), "bad");
       } finally {
         if (button) button.disabled = false;
@@ -34529,10 +34621,7 @@ def ui_preview_html(
       try {
         const payload = await authApiJson("/api/next/profile/recovery/codes", {method: "DELETE"});
         profileRecovery = payload.recovery || {};
-        if (codesNode) {
-          codesNode.classList.add("hidden");
-          codesNode.innerHTML = "";
-        }
+        clearProfileRecoveryCodes();
         renderProfileRecovery();
         setProfileRecoveryMessage(tNext("profile.recoveryCodesRevoked", "Active recovery codes revoked."), "good");
       } catch (error) {
