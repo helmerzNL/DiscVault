@@ -35,7 +35,7 @@ class NextMigrationContractTests(unittest.TestCase):
         migration = (
             Path(__file__).resolve().parents[1]
             / "migrations_next"
-            / "039_remove_movievault_person_data.sql"
+            / "040_remove_movievault_person_data.sql"
         ).read_text(encoding="utf-8")
 
         self.assertIn("lower(movievault_identifier.provider_id) IN ('movievault', 'movievault_26')", migration)

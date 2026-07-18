@@ -10711,22 +10711,57 @@ def ui_preview_html(
         <select id="authLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </div>
       <div class="login-actions">
-        <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.signIn">Sign in</button>
-        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
+        <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="legacyAuth.passkeyRecommended">Sign in with passkey (recommended)</button>
+        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
       <form class="recovery-login-panel hidden" id="appReviewForm">
+        <p data-next-i18n="legacyAuth.warning">Passwords are less phishing-resistant than passkeys.</p>
+        <div id="appLegacyCredentials">
         <label for="appReviewUsername">
-          <span>Username</span>
+          <span data-next-i18n="auth.username">Username</span>
           <input id="appReviewUsername" autocomplete="username">
         </label>
         <label for="appReviewPassword">
           <span data-next-i18n="auth.password">Password</span>
           <input id="appReviewPassword" type="password" autocomplete="current-password">
         </label>
+        </div>
+        <div class="hidden" id="appLegacyPasswordChange">
+          <label for="appLegacyNewPassword">
+            <span data-next-i18n="legacyAuth.newPassword">New password</span>
+            <input id="appLegacyNewPassword" type="password" minlength="15" autocomplete="new-password">
+          </label>
+          <label for="appLegacyConfirmPassword">
+            <span data-next-i18n="legacyAuth.confirmPassword">Confirm password</span>
+            <input id="appLegacyConfirmPassword" type="password" minlength="15" autocomplete="new-password">
+          </label>
+        </div>
+        <div class="hidden" id="appLegacyMfa">
+          <p id="appLegacyMfaHelp" data-next-i18n="legacyAuth.totpPrompt">Enter the six-digit code from your authenticator app.</p>
+          <img class="hidden" id="appLegacyQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
+          <code class="admin-code hidden" id="appLegacyManualKey"></code>
+          <label for="appLegacyTotpCode">
+            <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
+            <input id="appLegacyTotpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+          </label>
+          <label for="appLegacyRecoveryCode">
+            <span data-next-i18n="legacyAuth.recoveryCodeOptional">Recovery code (instead)</span>
+            <input id="appLegacyRecoveryCode" autocomplete="one-time-code">
+          </label>
+        </div>
+        <div class="recovery-codes hidden" id="appLegacyRecoveryCodes"></div>
+        <div class="profile-action-row hidden" id="appLegacyRecoveryActions">
+          <button type="button" class="secondary-button" id="appLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
+          <button type="button" class="secondary-button" id="appLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
+        </div>
+        <label class="hidden" id="appLegacyRecoveryAckLabel">
+          <input id="appLegacyRecoveryAck" type="checkbox">
+          <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
+        </label>
         <div class="profile-form-actions">
-          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
+          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
         </div>
       </form>
       <form class="recovery-login-panel hidden" id="appInviteForm">
@@ -10785,9 +10820,36 @@ def ui_preview_html(
           <span data-next-i18n="auth.username">Username</span>
           <input id="startupOwnerUsernameInput" autocomplete="username" maxlength="80" data-next-i18n-placeholder="auth.ownerUsernamePlaceholder" placeholder="Choose your username">
         </label>
+        <div class="hidden" id="startupLegacyFields">
+          <p data-next-i18n="legacyAuth.bootstrapWarning">Password onboarding is less phishing-resistant. TOTP is mandatory.</p>
+          <label for="startupLegacyPassword">
+            <span data-next-i18n="auth.password">Password</span>
+            <input id="startupLegacyPassword" type="password" minlength="15" autocomplete="new-password">
+          </label>
+          <label>
+            <input id="startupLegacyRiskAccepted" type="checkbox">
+            <span data-next-i18n="legacyAuth.acceptRisk">I understand and accept the password risk.</span>
+          </label>
+          <img class="hidden" id="startupLegacyQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
+          <code class="admin-code hidden" id="startupLegacyManualKey"></code>
+          <label class="hidden" id="startupLegacyCodeLabel">
+            <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
+            <input id="startupLegacyCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+          </label>
+          <div class="recovery-codes hidden" id="startupLegacyRecoveryCodes"></div>
+          <div class="profile-action-row hidden" id="startupLegacyRecoveryActions">
+            <button type="button" class="secondary-button" id="startupLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
+            <button type="button" class="secondary-button" id="startupLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
+          </div>
+          <label class="hidden" id="startupLegacyAckLabel">
+            <input id="startupLegacyAck" type="checkbox">
+            <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
+          </label>
+        </div>
       </div>
       <div class="startup-actions">
         <button type="button" class="primary-button hidden" id="startupOwnerPasskeyButton" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
+        <button type="button" class="secondary-button hidden" id="startupLegacyButton" data-next-i18n="legacyAuth.setupOwner">Set up password + TOTP</button>
         <a class="primary-button" id="startupMigrationLink" href="/api/next/migration" data-next-i18n="startup.openMigrationGuide">Open migration guide</a>
         <button type="button" class="secondary-button" id="startupRefreshButton" data-next-i18n="common.refresh">Refresh</button>
         <button type="button" class="secondary-button" id="startupLogoutButton" data-next-i18n="auth.signOut">Sign out</button>
@@ -12712,6 +12774,24 @@ def ui_preview_html(
                   </div>
                   <div class="login-message" id="profileRecoveryMessage"></div>
                 </section>
+                <section class="profile-section-box" id="profileLegacySecurity">
+                  <h4 data-next-i18n="legacyAuth.passwordSecurity">Password security</h4>
+                  <p data-next-i18n="legacyAuth.passwordChangeHelp">Change your Legacy password. Use at least 15 characters.</p>
+                  <div class="profile-meta">
+                    <div class="profile-meta-row"><span data-next-i18n="legacyAuth.mfaStatus">TOTP status</span><strong id="profileLegacyMfaStatus">-</strong></div>
+                    <div class="profile-meta-row"><span data-next-i18n="legacyAuth.recoveryCodesActive">Active recovery codes</span><strong id="profileLegacyRecoveryCount">-</strong></div>
+                  </div>
+                  <form class="profile-form" id="profileLegacyPasswordForm">
+                    <label for="profileLegacyCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
+                      <input id="profileLegacyCurrentPassword" type="password" autocomplete="current-password">
+                    </label>
+                    <label for="profileLegacyNewPassword"><span data-next-i18n="legacyAuth.newPassword">New password</span>
+                      <input id="profileLegacyNewPassword" type="password" minlength="15" autocomplete="new-password">
+                    </label>
+                    <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.changePassword">Change password</button>
+                  </form>
+                  <div class="login-message" id="profileLegacyMessage"></div>
+                </section>
               </div>
             </div>
             <div class="detail-subpanel profile-panel hidden" data-profile-panel="api">
@@ -12928,6 +13008,28 @@ def ui_preview_html(
         </section>
         <section class="app-admin-panel" data-app-admin-panel="users">
           <section class="profile-grid">
+            <div class="detail-card profile-card full" id="appAdminLegacyCard">
+              <h3 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h3>
+              <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
+              <div class="profile-meta-row"><span data-next-i18n="legacyAuth.status">Status</span><strong id="appAdminLegacyStatus">-</strong></div>
+              <div class="profile-action-row">
+                <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
+                <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
+              </div>
+              <div class="login-message" id="appAdminLegacyMessage"></div>
+            </div>
+            <div class="detail-card profile-card full" id="appAdminLegacyCreateCard">
+              <h3 data-next-i18n="legacyAuth.createUser">Create password user</h3>
+              <form class="profile-form" id="appAdminLegacyUserForm">
+                <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
+                <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
+                <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
+                <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
+                <label><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
+                <label><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
+                <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
+              </form>
+            </div>
             <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h3>
               <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
@@ -13538,8 +13640,15 @@ def ui_preview_html(
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
     let currentStartup = {};
     let currentAuthStatus = {};
+    let legacyFlowToken = "";
+    let legacyStage = "";
+    let legacyRecoveryCodes = [];
+    let startupLegacyFlowToken = "";
+    let startupLegacyStage = "";
+    let startupLegacyRecoveryCodes = [];
     let profileCredentials = [];
     let profileRecovery = {};
+    let profileLegacy = {};
     let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
     let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all", category: "all", search: "", diagnostics: null, error: "", lastUrl: ""};
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
@@ -14517,7 +14626,7 @@ def ui_preview_html(
     function renderAppRegistrationMode(auth) {
       if (auth) currentAuthStatus = auth || {};
       const publicRegistration = !!currentAuthStatus.registration_enabled;
-      const reviewLoginAvailable = !!currentAuthStatus.review_login_available;
+      const reviewLoginAvailable = !!currentAuthStatus.legacy_auth_enabled;
       const toggleButton = document.getElementById("appInviteToggleButton");
       const reviewToggleButton = document.getElementById("appReviewToggleButton");
       const codeLabel = document.getElementById("appInviteCodeLabel");
@@ -14531,6 +14640,7 @@ def ui_preview_html(
       }
       if (reviewToggleButton) reviewToggleButton.classList.toggle("hidden", !reviewLoginAvailable);
       if (!reviewLoginAvailable) reviewForm?.classList.add("hidden");
+      document.getElementById("profileLegacySecurity")?.classList.toggle("hidden", !currentAuthStatus.legacy_auth_enabled);
       if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
       if (codeInput) {
         codeInput.required = !publicRegistration;
@@ -16652,6 +16762,18 @@ def ui_preview_html(
       document.getElementById("appAdminRegistrationMode").textContent = appRegistrationModeLabel();
       document.getElementById("appAdminUserCount").textContent = String((appAdmin.users || []).length || currentAuthStatus.user_count || "-");
       document.getElementById("appAdminCredentialCount").textContent = String(currentAuthStatus.credential_count ?? (appAdmin.credentials || []).length ?? "-");
+      const legacy = appAdmin.legacy || {};
+      const legacyStatus = document.getElementById("appAdminLegacyStatus");
+      if (legacyStatus) legacyStatus.textContent = legacy.effective_enabled
+        ? tNext("legacyAuth.enabled", "Enabled")
+        : legacy.available
+          ? tNext("legacyAuth.disabled", "Disabled")
+          : tNext("legacyAuth.unavailable", "Unavailable");
+      document.getElementById("appAdminLegacyEnable")?.classList.toggle("hidden", !legacy.available || legacy.effective_enabled);
+      document.getElementById("appAdminLegacyDisable")?.classList.toggle("hidden", !legacy.effective_enabled);
+      document.getElementById("appAdminLegacyCreateCard")?.classList.toggle("hidden", !legacy.available);
+      const legacyRoleSelect = document.getElementById("appAdminLegacyRole");
+      if (legacyRoleSelect) legacyRoleSelect.innerHTML = appAdminRoleOptions("media_viewer");
       const canManageRegistration = isNativeAdminUser() && hasActualPermission("security.manage_invite_only");
       const canInviteUsers = isNativeAdminUser() && hasActualPermission("users.invite");
       const canViewPasskeys = isNativeAdminUser() && hasActualPermission("users.manage_passkeys");
@@ -16693,12 +16815,22 @@ def ui_preview_html(
                   ${escapeHtml(user.status || "active")}
                   &middot;
                   ${escapeHtml(tNext("profile.credentials", "Passkeys"))}: ${escapeHtml(user.credential_count ?? 0)}
+                  &middot;
+                  ${escapeHtml(tNext("legacyAuth.password", "Password"))}: ${user.legacy_credential_count ? escapeHtml(tNext("common.yes", "Yes")) : escapeHtml(tNext("common.no", "No"))}
                 </div>
               </div>
               <div class="profile-passkey-actions">
                 ${canAssignRoles ? `<select data-app-admin-user-role="${escapeHtml(user.id)}" ${roleLocked ? "disabled" : ""}>${appAdminRoleOptions(user.role)}</select>` : ""}
                 ${roleLocked || !canDisableUsers ? "" : `<button type="button" class="secondary-button" data-app-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${escapeHtml(disabled ? tNext("appAdmin.enableUser", "Enable") : tNext("appAdmin.disableUser", "Disable"))}</button>`}
               </div>
+              ${legacy.available ? `<div class="profile-add-passkey">
+                <input type="password" minlength="15" autocomplete="new-password" data-app-admin-legacy-password="${escapeHtml(user.id)}" placeholder="${escapeHtml(tNext("legacyAuth.temporaryPassword", "Temporary password"))}">
+                <label><input type="checkbox" data-app-admin-legacy-mfa="${escapeHtml(user.id)}" ${user.legacy_mfa_required !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.requireMfa", "Require TOTP MFA"))}</label>
+                <label><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
+                <button type="button" class="secondary-button" data-app-admin-legacy-save="${escapeHtml(user.id)}">${escapeHtml(user.legacy_credential_count ? tNext("legacyAuth.resetPassword", "Reset password") : tNext("legacyAuth.addPassword", "Add password"))}</button>
+                ${user.legacy_credential_count ? `<button type="button" class="secondary-button" data-app-admin-legacy-policy="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.savePolicy", "Save policy"))}</button>` : ""}
+                ${user.legacy_credential_count ? `<button type="button" class="secondary-button danger" data-app-admin-legacy-remove="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.removePassword", "Remove password"))}</button>` : ""}
+              </div>` : ""}
             </div>
           `;
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noUsers", "No users found."))}</div>`;
@@ -16837,6 +16969,9 @@ def ui_preview_html(
         appAdmin.auditEvents = auditPayload.events || [];
         appAdmin.contributionEvents = (contributionPayload.events || []).filter((event) => event.eventType === "metadata.receiver_pushed");
         appAdmin.operations = operationsPayload.operations || null;
+        appAdmin.legacy = canLoadUsers
+          ? (await authApiJson("/api/next/auth/legacy/settings").catch(() => ({legacy_auth: {available: false}}))).legacy_auth || {}
+          : {};
         const configPayloads = canLoadPlugins ? await Promise.all(appAdmin.plugins.map((plugin) =>
           authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
             .catch(() => ({plugin, config: {}}))
@@ -16864,6 +16999,128 @@ def ui_preview_html(
         setAppAdminMessage("appAdminOperationsMessage", operationsPayload.error || "", operationsPayload.error ? "bad" : "");
       } catch (error) {
         setAppAdminMessage("appAdminSecurityMessage", error.message || String(error), "bad");
+      }
+    }
+    async function enableAppAdminLegacy() {
+      if (!window.confirm(tNext("legacyAuth.enableConfirm", "Enable password login? Passkeys remain recommended."))) return;
+      const button = document.getElementById("appAdminLegacyEnable");
+      if (button) button.disabled = true;
+      try {
+        const optionsPayload = await authApiJson("/api/next/auth/legacy/settings/enable/options", {method: "POST"});
+        const options = optionsPayload.options || {};
+        options.challenge = base64urlToBuffer(options.challenge);
+        options.allowCredentials = (options.allowCredentials || []).map((item) => ({...item, id: base64urlToBuffer(item.id)}));
+        const assertion = await navigator.credentials.get({publicKey: options});
+        const credential = {
+          id: assertion.id,
+          rawId: bufferToBase64url(assertion.rawId),
+          type: assertion.type,
+          response: {
+            authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+            clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+            signature: bufferToBase64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null
+          }
+        };
+        await authApiJson("/api/next/auth/legacy/settings/enable/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({credential})
+        });
+        currentAuthStatus = await authApiJson("/api/next/auth/status");
+        renderAppRegistrationMode(currentAuthStatus);
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminLegacyMessage", tNext("legacyAuth.enabled", "Enabled"), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminLegacyMessage", error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+    async function disableAppAdminLegacy() {
+      if (!window.confirm(tNext("legacyAuth.disableConfirm", "Disable password login immediately?"))) return;
+      try {
+        await authApiJson("/api/next/auth/legacy/settings", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({enabled: false})
+        });
+        currentAuthStatus = await authApiJson("/api/next/auth/status");
+        renderAppRegistrationMode(currentAuthStatus);
+        await loadAppAdmin();
+      } catch (error) {
+        setAppAdminMessage("appAdminLegacyMessage", error.message || String(error), "bad");
+      }
+    }
+    async function createAppAdminLegacyUser(event) {
+      event?.preventDefault();
+      try {
+        await authApiJson("/api/next/auth/users", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            username: String(document.getElementById("appAdminLegacyUsername")?.value || "").trim(),
+            display_name: String(document.getElementById("appAdminLegacyDisplayName")?.value || "").trim(),
+            temporary_password: String(document.getElementById("appAdminLegacyPassword")?.value || ""),
+            role: document.getElementById("appAdminLegacyRole")?.value || "media_viewer",
+            mfa_required: !!document.getElementById("appAdminLegacyMfa")?.checked,
+            passkey_registration_allowed: !!document.getElementById("appAdminLegacyPasskeys")?.checked
+          })
+        });
+        document.getElementById("appAdminLegacyUserForm")?.reset();
+        document.getElementById("appAdminLegacyMfa").checked = true;
+        document.getElementById("appAdminLegacyPasskeys").checked = true;
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminLegacyMessage", tNext("legacyAuth.userCreated", "Password user created."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminLegacyMessage", error.message || String(error), "bad");
+      }
+    }
+    async function saveAppAdminLegacyCredential(userId) {
+      const password = String(document.querySelector(`[data-app-admin-legacy-password="${CSS.escape(userId)}"]`)?.value || "");
+      const mfaRequired = !!document.querySelector(`[data-app-admin-legacy-mfa="${CSS.escape(userId)}"]`)?.checked;
+      const passkeysAllowed = !!document.querySelector(`[data-app-admin-legacy-passkeys="${CSS.escape(userId)}"]`)?.checked;
+      try {
+        await authApiJson(`/api/next/auth/users/${encodeURIComponent(userId)}/legacy-credential`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            temporary_password: password,
+            mfa_required: mfaRequired,
+            passkey_registration_allowed: passkeysAllowed
+          })
+        });
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminUsersMessage", tNext("legacyAuth.credentialSaved", "Password credential saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminUsersMessage", error.message || String(error), "bad");
+      }
+    }
+    async function removeAppAdminLegacyCredential(userId) {
+      if (!window.confirm(tNext("legacyAuth.removeConfirm", "Remove this password credential?"))) return;
+      try {
+        await authApiJson(`/api/next/auth/users/${encodeURIComponent(userId)}/legacy-credential`, {method: "DELETE"});
+        await loadAppAdmin();
+      } catch (error) {
+        setAppAdminMessage("appAdminUsersMessage", error.message || String(error), "bad");
+      }
+    }
+    async function saveAppAdminLegacyPolicy(userId) {
+      const mfaRequired = !!document.querySelector(`[data-app-admin-legacy-mfa="${CSS.escape(userId)}"]`)?.checked;
+      const passkeysAllowed = !!document.querySelector(`[data-app-admin-legacy-passkeys="${CSS.escape(userId)}"]`)?.checked;
+      try {
+        await authApiJson(`/api/next/auth/users/${encodeURIComponent(userId)}/legacy-credential`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            mfa_required: mfaRequired,
+            passkey_registration_allowed: passkeysAllowed
+          })
+        });
+        await loadAppAdmin();
+        setAppAdminMessage("appAdminUsersMessage", tNext("legacyAuth.policySaved", "Policy saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminUsersMessage", error.message || String(error), "bad");
       }
     }
     async function setAppAdminRegistrationMode(mode) {
@@ -18073,6 +18330,108 @@ def ui_preview_html(
         if (button) button.disabled = false;
       }
     }
+    async function copyLegacyCodes(codes) {
+      const value = (codes || []).join("\\n");
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const input = document.createElement("textarea");
+        input.value = value;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        input.remove();
+      }
+      setLoginMessage(tNext("legacyAuth.codesCopied", "Recovery codes copied."), "good");
+    }
+    function downloadLegacyCodes(codes) {
+      const blob = new Blob([(codes || []).join("\\n") + "\\n"], {type: "text/plain"});
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "discvault-recovery-codes.txt";
+      anchor.click();
+      URL.revokeObjectURL(url);
+    }
+    async function runStartupLegacyBootstrap() {
+      const fields = document.getElementById("startupLegacyFields");
+      const button = document.getElementById("startupLegacyButton");
+      if (fields?.classList.contains("hidden")) {
+        fields.classList.remove("hidden");
+        button.textContent = tNext("legacyAuth.continue", "Continue");
+        document.getElementById("startupLegacyPassword")?.focus();
+        return;
+      }
+      if (button) button.disabled = true;
+      try {
+        let url = "/api/next/auth/legacy/bootstrap/start";
+        let body = {};
+        if (!startupLegacyStage) {
+          body = {
+            username: String(document.getElementById("startupOwnerUsernameInput")?.value || "").trim(),
+            password: String(document.getElementById("startupLegacyPassword")?.value || ""),
+            password_risk_accepted: !!document.getElementById("startupLegacyRiskAccepted")?.checked
+          };
+        } else if (startupLegacyStage === "bootstrap_totp") {
+          url = "/api/next/auth/legacy/bootstrap/verify";
+          body = {
+            flow_token: startupLegacyFlowToken,
+            code: String(document.getElementById("startupLegacyCode")?.value || "").trim()
+          };
+        } else if (startupLegacyStage === "recovery_codes") {
+          if (!document.getElementById("startupLegacyAck")?.checked) throw new Error(tNext("legacyAuth.saveCodesFirst", "Save and acknowledge the recovery codes first."));
+          url = "/api/next/auth/legacy/recovery-codes/ack";
+          body = {flow_token: startupLegacyFlowToken, acknowledged: true};
+        }
+        const payload = await apiJson(url, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        startupLegacyFlowToken = payload.flow_token || startupLegacyFlowToken;
+        startupLegacyStage = payload.stage || "";
+        if (payload.stage === "bootstrap_totp") {
+          const qr = document.getElementById("startupLegacyQr");
+          if (qr) {
+            qr.src = payload.qr_data_uri || "";
+            qr.alt = tNext("legacyAuth.qrAlt", "QR code for authenticator enrollment");
+            qr.classList.toggle("hidden", !payload.qr_data_uri);
+          }
+          const manual = document.getElementById("startupLegacyManualKey");
+          if (manual) {
+            manual.textContent = payload.manual_key || "";
+            manual.classList.remove("hidden");
+          }
+          document.getElementById("startupLegacyCodeLabel")?.classList.remove("hidden");
+          if (button) button.textContent = tNext("legacyAuth.verifyTotp", "Verify authenticator");
+        } else if (payload.stage === "recovery_codes") {
+          startupLegacyRecoveryCodes = payload.recovery_codes || [];
+          const codes = document.getElementById("startupLegacyRecoveryCodes");
+          if (codes) {
+            codes.innerHTML = startupLegacyRecoveryCodes.map((code) => `<code>${escapeHtml(code)}</code>`).join("");
+            codes.classList.remove("hidden");
+          }
+          document.getElementById("startupLegacyRecoveryActions")?.classList.remove("hidden");
+          document.getElementById("startupLegacyAckLabel")?.classList.remove("hidden");
+          if (button) button.textContent = tNext("legacyAuth.finishSetup", "Finish setup");
+        } else if (payload.stage === "complete") {
+          if (payload.token) localStorage.setItem("dv_next_token", payload.token);
+          startupLegacyFlowToken = "";
+          startupLegacyStage = "";
+          await refreshAppFlow();
+        }
+      } catch (error) {
+        if (startupLegacyStage === "bootstrap_totp") {
+          startupLegacyStage = "";
+          startupLegacyFlowToken = "";
+          document.getElementById("startupLegacyCodeLabel")?.classList.add("hidden");
+          if (button) button.textContent = tNext("legacyAuth.continue", "Continue");
+        }
+        setStartupGateMessage(error.message || tNext("legacyAuth.bootstrapFailed", "Password onboarding failed."), "bad");
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
     function toggleInviteLogin() {
       const panel = document.getElementById("appInviteForm");
       const recoveryPanel = document.getElementById("appRecoveryForm");
@@ -18171,53 +18530,121 @@ def ui_preview_html(
       panel?.classList.toggle("hidden");
       setLoginMessage("");
     }
+    function renderLegacyLoginStage(payload = {}) {
+      legacyStage = payload.stage || legacyStage || "";
+      legacyFlowToken = payload.flow_token || legacyFlowToken || "";
+      const credentials = document.getElementById("appLegacyCredentials");
+      const passwordChange = document.getElementById("appLegacyPasswordChange");
+      const mfa = document.getElementById("appLegacyMfa");
+      const recoveryCodes = document.getElementById("appLegacyRecoveryCodes");
+      const ackLabel = document.getElementById("appLegacyRecoveryAckLabel");
+      const submit = document.getElementById("appReviewLoginButton");
+      credentials?.classList.toggle("hidden", !!legacyStage);
+      passwordChange?.classList.toggle("hidden", legacyStage !== "password_change");
+      mfa?.classList.toggle("hidden", !["mfa_enrollment", "mfa_challenge"].includes(legacyStage));
+      recoveryCodes?.classList.toggle("hidden", legacyStage !== "recovery_codes");
+      document.getElementById("appLegacyRecoveryActions")?.classList.toggle("hidden", legacyStage !== "recovery_codes");
+      ackLabel?.classList.toggle("hidden", legacyStage !== "recovery_codes");
+      const qr = document.getElementById("appLegacyQr");
+      const manual = document.getElementById("appLegacyManualKey");
+      if (legacyStage === "mfa_enrollment") {
+        if (qr) {
+          qr.src = payload.qr_data_uri || "";
+          qr.alt = tNext("legacyAuth.qrAlt", "QR code for authenticator enrollment");
+          qr.classList.toggle("hidden", !payload.qr_data_uri);
+        }
+        if (manual) {
+          manual.textContent = payload.manual_key || "";
+          manual.classList.toggle("hidden", !payload.manual_key);
+        }
+        document.getElementById("appLegacyMfaHelp").textContent = tNext("legacyAuth.enrollTotp", "Scan the QR code, then enter the six-digit code.");
+      } else if (legacyStage === "mfa_challenge") {
+        qr?.classList.add("hidden");
+        manual?.classList.add("hidden");
+        document.getElementById("appLegacyMfaHelp").textContent = tNext("legacyAuth.totpPrompt", "Enter the six-digit code from your authenticator app.");
+      }
+      if (legacyStage === "recovery_codes" && recoveryCodes) {
+        legacyRecoveryCodes = payload.recovery_codes || legacyRecoveryCodes;
+        recoveryCodes.innerHTML = legacyRecoveryCodes.map((code) => `<code>${escapeHtml(code)}</code>`).join("");
+      }
+      const labels = {
+        password_change: tNext("legacyAuth.changePassword", "Change password"),
+        mfa_enrollment: tNext("legacyAuth.verifyTotp", "Verify authenticator"),
+        mfa_challenge: tNext("legacyAuth.verifyTotp", "Verify authenticator"),
+        recovery_codes: tNext("legacyAuth.continue", "Continue")
+      };
+      if (submit) submit.textContent = labels[legacyStage] || tNext("legacyAuth.signIn", "Sign in with password");
+    }
+    async function completeLegacyLogin(payload) {
+      if (payload.callback_url || payload.callbackUrl) {
+        window.location.href = payload.callback_url || payload.callbackUrl;
+        return;
+      }
+      if (payload.token) localStorage.setItem("dv_next_token", payload.token);
+      legacyFlowToken = "";
+      legacyStage = "";
+      renderLegacyLoginStage({});
+      document.getElementById("appReviewForm")?.reset();
+      setLoginMessage(tNext("auth.signedIn", "Signed in."), "good");
+      await refreshAppFlow();
+    }
     async function loginReviewPassword(event) {
       if (event) event.preventDefault();
-      if (!currentAuthStatus.review_login_available) {
-        setLoginMessage("Username/password review login is not available.", "bad");
+      if (!currentAuthStatus.legacy_auth_enabled) {
+        setLoginMessage(tNext("legacyAuth.unavailable", "Password login is not available."), "bad");
         return;
       }
-      const username = String(document.getElementById("appReviewUsername")?.value || "").trim();
-      const password = String(document.getElementById("appReviewPassword")?.value || "");
       const button = document.getElementById("appReviewLoginButton");
-      if (!username || !password) {
-        setLoginMessage("Enter username and password.", "bad");
-        return;
-      }
       if (button) button.disabled = true;
-      setLoginMessage("Signing in with username/password...");
+      setLoginMessage(tNext("legacyAuth.signingIn", "Signing in..."));
       try {
-        const reviewBody = {username, password};
-        const mobileFlow = currentMobileAuthFlow();
-        if (mobileFlow) reviewBody.mobile_flow = mobileFlow;
-        const payload = await apiJson("/api/next/auth/review/login", {
+        let url = "/api/next/auth/legacy/login";
+        let body = {};
+        if (!legacyStage) {
+          body.username = String(document.getElementById("appReviewUsername")?.value || "").trim();
+          body.password = String(document.getElementById("appReviewPassword")?.value || "");
+          if (!body.username || !body.password) throw new Error(tNext("legacyAuth.credentialsRequired", "Enter username and password."));
+          const mobileFlow = currentMobileAuthFlow();
+          if (mobileFlow) body.mobile_flow = mobileFlow;
+        } else if (legacyStage === "password_change") {
+          const newPassword = String(document.getElementById("appLegacyNewPassword")?.value || "");
+          const confirmation = String(document.getElementById("appLegacyConfirmPassword")?.value || "");
+          if (newPassword !== confirmation) throw new Error(tNext("legacyAuth.passwordMismatch", "Passwords do not match."));
+          url = "/api/next/auth/legacy/password/change";
+          body = {flow_token: legacyFlowToken, new_password: newPassword};
+        } else if (legacyStage === "mfa_enrollment") {
+          url = "/api/next/auth/legacy/mfa/setup/verify";
+          body = {flow_token: legacyFlowToken, code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim()};
+        } else if (legacyStage === "mfa_challenge") {
+          const recoveryCode = String(document.getElementById("appLegacyRecoveryCode")?.value || "").trim();
+          url = recoveryCode ? "/api/next/auth/legacy/mfa/recovery" : "/api/next/auth/legacy/mfa/verify";
+          body = {
+            flow_token: legacyFlowToken,
+            code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim(),
+            recovery_code: recoveryCode
+          };
+        } else if (legacyStage === "recovery_codes") {
+          if (!document.getElementById("appLegacyRecoveryAck")?.checked) throw new Error(tNext("legacyAuth.saveCodesFirst", "Save and acknowledge the recovery codes first."));
+          url = "/api/next/auth/legacy/recovery-codes/ack";
+          body = {flow_token: legacyFlowToken, acknowledged: true};
+        }
+        const payload = await apiJson(url, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(reviewBody)
+          body: JSON.stringify(body)
         });
-        if (payload.callback_url || payload.callbackUrl) {
-          window.location.href = payload.callback_url || payload.callbackUrl;
-          return;
-        }
-        if (payload.token) {
-          localStorage.setItem("dv_next_token", payload.token);
-          currentAuthStatus = Object.assign(currentAuthStatus || {}, {
-            authenticated: true,
-            username: payload.username,
-            role: payload.role,
-            display_name: payload.display_name
-          });
-        }
-        const passwordInput = document.getElementById("appReviewPassword");
-        if (passwordInput) passwordInput.value = "";
-        setLoginMessage("Signed in.", "good");
-        if (appMode) {
-          showLibraryPage();
-        } else {
-          await refreshAppFlow();
+        if (!payload.stage || payload.stage === "complete") await completeLegacyLogin(payload);
+        else {
+          renderLegacyLoginStage(payload);
+          setLoginMessage(tNext(`legacyAuth.stage.${payload.stage}`, "Complete the next security step."), "info");
         }
       } catch (error) {
-        setLoginMessage(error.message || "Username/password sign-in failed.", "bad");
+        if (["mfa_enrollment", "mfa_challenge"].includes(legacyStage)) {
+          legacyStage = "";
+          legacyFlowToken = "";
+          renderLegacyLoginStage({});
+        }
+        setLoginMessage(error.message || tNext("legacyAuth.failed", "Password sign-in failed."), "bad");
       } finally {
         if (button) button.disabled = false;
       }
@@ -33260,7 +33687,11 @@ def ui_preview_html(
         ownerPasskeyButton.disabled = !!ownerPasskeyUnavailable;
       }
       const ownerFields = document.getElementById("startupOwnerFields");
-      if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner);
+      const legacyBootstrap = !!currentAuthStatus.legacy_bootstrap_available && !!startup.canCreateOwner;
+      const legacyButton = document.getElementById("startupLegacyButton");
+      if (legacyButton) legacyButton.classList.toggle("hidden", !legacyBootstrap);
+      if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner && !legacyBootstrap);
+      if (!legacyBootstrap && !startupLegacyStage) document.getElementById("startupLegacyFields")?.classList.add("hidden");
       const message = document.getElementById("startupMessage");
       if (message) {
         message.textContent = ownerPasskeyUnavailable || startup.message || "";
@@ -33930,6 +34361,16 @@ def ui_preview_html(
         profileCredentials = payload.credentials || [];
         profileRecovery = payload.recovery || {};
         profileApiAccess = payload.apiAccess || profileApiAccess;
+        if (currentAuthStatus.legacy_auth_enabled) {
+          profileLegacy = await authApiJson("/api/next/auth/legacy/me").catch(() => ({}));
+          const credential = profileLegacy.credential || {};
+          const mfaStatus = document.getElementById("profileLegacyMfaStatus");
+          const recoveryCount = document.getElementById("profileLegacyRecoveryCount");
+          if (mfaStatus) mfaStatus.textContent = credential.mfa_required
+            ? (credential.mfa_enrolled ? tNext("legacyAuth.enabled", "Enabled") : tNext("legacyAuth.setupRequired", "Setup required"))
+            : tNext("legacyAuth.disabled", "Disabled");
+          if (recoveryCount) recoveryCount.textContent = String(credential.active_recovery_codes ?? 0);
+        }
         renderProfile();
       } catch (error) {
         setProfileSecurityMessage(error.message || String(error), "bad");
@@ -33992,6 +34433,29 @@ def ui_preview_html(
         setProfileSecurityMessage(passkeyClientErrorMessage(error, tNext("auth.passkeyCancelled", "Passkey prompt was cancelled."), tNext("auth.passkeyUnavailable", "This browser does not support passkeys.")), "bad");
       } finally {
         if (button) button.disabled = false;
+      }
+    }
+    async function changeProfileLegacyPassword(event) {
+      event?.preventDefault();
+      const message = document.getElementById("profileLegacyMessage");
+      const currentPassword = String(document.getElementById("profileLegacyCurrentPassword")?.value || "");
+      const newPassword = String(document.getElementById("profileLegacyNewPassword")?.value || "");
+      try {
+        await authApiJson("/api/next/auth/legacy/password/change", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({current_password: currentPassword, new_password: newPassword})
+        });
+        document.getElementById("profileLegacyPasswordForm")?.reset();
+        if (message) {
+          message.textContent = tNext("legacyAuth.passwordChanged", "Password changed.");
+          message.className = "login-message good";
+        }
+      } catch (error) {
+        if (message) {
+          message.textContent = error.message || String(error);
+          message.className = "login-message bad";
+        }
       }
     }
     async function saveProfilePasskey(credentialId) {
@@ -34685,6 +35149,9 @@ def ui_preview_html(
         button.addEventListener("click", () => setAppAdminRegistrationMode(button.dataset.appAdminRegistrationMode));
       });
       document.getElementById("appAdminInviteForm")?.addEventListener("submit", (event) => createAppAdminInvite(event));
+      document.getElementById("appAdminLegacyEnable")?.addEventListener("click", () => enableAppAdminLegacy());
+      document.getElementById("appAdminLegacyDisable")?.addEventListener("click", () => disableAppAdminLegacy());
+      document.getElementById("appAdminLegacyUserForm")?.addEventListener("submit", (event) => createAppAdminLegacyUser(event));
       document.getElementById("appAdminGroupForm")?.addEventListener("submit", (event) => createAppAdminGroup(event));
       document.querySelectorAll("[data-app-admin-rbac-mode]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminRbacMode(button.dataset.appAdminRbacMode));
@@ -34716,7 +35183,13 @@ def ui_preview_html(
       });
       document.getElementById("appAdminUsersList")?.addEventListener("click", (event) => {
         const statusButton = event.target.closest("[data-app-admin-user-status]");
+        const legacySave = event.target.closest("[data-app-admin-legacy-save]");
+        const legacyPolicy = event.target.closest("[data-app-admin-legacy-policy]");
+        const legacyRemove = event.target.closest("[data-app-admin-legacy-remove]");
         if (statusButton) updateAppAdminUserStatus(statusButton.dataset.appAdminUserStatus, statusButton.dataset.status);
+        if (legacySave) saveAppAdminLegacyCredential(legacySave.dataset.appAdminLegacySave);
+        if (legacyPolicy) saveAppAdminLegacyPolicy(legacyPolicy.dataset.appAdminLegacyPolicy);
+        if (legacyRemove) removeAppAdminLegacyCredential(legacyRemove.dataset.appAdminLegacyRemove);
       });
       document.getElementById("appAdminGroupsList")?.addEventListener("click", (event) => {
         const addButton = event.target.closest("[data-app-admin-group-add]");
@@ -35181,6 +35654,7 @@ def ui_preview_html(
         if (saveButton) saveProfilePasskey(saveButton.dataset.profilePasskeySave);
         if (deleteButton) deleteProfilePasskey(deleteButton.dataset.profilePasskeyDelete);
       });
+      document.getElementById("profileLegacyPasswordForm")?.addEventListener("submit", (event) => changeProfileLegacyPassword(event));
       document.getElementById("preferencesCloseButton")?.addEventListener("click", () => {
         document.getElementById("preferencesBackdrop")?.classList.add("hidden");
       });
@@ -35199,6 +35673,8 @@ def ui_preview_html(
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
       document.getElementById("appReviewToggleButton")?.addEventListener("click", () => toggleReviewLogin());
       document.getElementById("appReviewForm")?.addEventListener("submit", (event) => loginReviewPassword(event));
+      document.getElementById("appLegacyCopyCodes")?.addEventListener("click", () => copyLegacyCodes(legacyRecoveryCodes));
+      document.getElementById("appLegacyDownloadCodes")?.addEventListener("click", () => downloadLegacyCodes(legacyRecoveryCodes));
       document.getElementById("appInviteToggleButton")?.addEventListener("click", () => toggleInviteLogin());
       document.getElementById("appInviteForm")?.addEventListener("submit", (event) => registerInviteAccount(event));
       document.getElementById("appRecoveryToggleButton")?.addEventListener("click", () => toggleRecoveryLogin());
@@ -35208,6 +35684,9 @@ def ui_preview_html(
         setStartupGateMessage(error.message || String(error), "bad");
       }));
       document.getElementById("startupOwnerPasskeyButton")?.addEventListener("click", () => registerStartupOwnerPasskey());
+      document.getElementById("startupLegacyButton")?.addEventListener("click", () => runStartupLegacyBootstrap());
+      document.getElementById("startupLegacyCopyCodes")?.addEventListener("click", () => copyLegacyCodes(startupLegacyRecoveryCodes));
+      document.getElementById("startupLegacyDownloadCodes")?.addEventListener("click", () => downloadLegacyCodes(startupLegacyRecoveryCodes));
       document.getElementById("startupLogoutButton")?.addEventListener("click", () => logoutApp());
       document.querySelectorAll("[data-bulk-action]").forEach((button) => {
         button.addEventListener("click", () => {
