@@ -22452,10 +22452,10 @@ def register_routes(flask_app: Flask) -> None:
         validated_price_url = None
         if price_url_supplied:
             validated_price_url = clean_text(body.get("priceUrl") or body.get("price_url"))
-            if validated_price_url:
-                _validate_wishlist_price_url(validated_price_url)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            if validated_price_url:
+                _validate_wishlist_price_url(validated_price_url)
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             user_id = actor.get("id")
@@ -22605,18 +22605,18 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Shop request body must be an object", 400)
-        (
-            shop_name,
-            price_url,
-            price_currency,
-            selector_type,
-            selector_value,
-            selector_options,
-            provider_plugin_id,
-            provider_product_ref,
-        ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            (
+                shop_name,
+                price_url,
+                price_currency,
+                selector_type,
+                selector_value,
+                selector_options,
+                provider_plugin_id,
+                provider_product_ref,
+            ) = _validated_shop_payload(body)
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
@@ -22804,18 +22804,18 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Shop request body must be an object", 400)
-        (
-            shop_name,
-            price_url,
-            price_currency,
-            selector_type,
-            selector_value,
-            selector_options,
-            provider_plugin_id,
-            provider_product_ref,
-        ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            (
+                shop_name,
+                price_url,
+                price_currency,
+                selector_type,
+                selector_value,
+                selector_options,
+                provider_plugin_id,
+                provider_product_ref,
+            ) = _validated_shop_payload(body)
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
