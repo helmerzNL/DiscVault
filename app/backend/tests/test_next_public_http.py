@@ -22,6 +22,7 @@ from app.backend.next_public_http import ResolvedAddress
 from app.backend.next_public_http import _PinnedHttpConnection
 from app.backend.next_public_http import _PinnedHttpsConnection
 from app.backend.next_public_http import fetch_public_text
+from app.backend.next_public_http import request_public_text
 from app.backend.next_public_http import resolve_public_addresses
 from app.backend.next_public_http import validate_public_url
 
@@ -96,11 +97,12 @@ class _Connection:
         self.sock = _Socket()
         self.closed = False
 
-    def request(self, method, path, headers=None):
+    def request(self, method, path, body=None, headers=None):
         self._request_log.append(
             {
                 "method": method,
                 "path": path,
+                "body": body,
                 "headers": dict(headers or {}),
                 "target": self._target,
                 "address": self._address,
@@ -295,6 +297,118 @@ class PublicHttpTransportTests(unittest.TestCase):
         self.assertEqual(value, "ok")
         self.assertEqual(resolved, [("shop.example", 443), ("shop.example", 443)])
         self.assertEqual([item["path"] for item in requests], ["/old", "/new"])
+
+    def test_post_transmits_bounded_body_and_safe_headers(self):
+        requests = []
+        body = b'{"source":"discvault"}'
+
+        value = request_public_text(
+            "https://api.example/v2/jobs",
+            method="POST",
+            body=body,
+            headers={
+                "Authorization": "secret",
+                "Content-Type": "application/json",
+                "Content-Length": "999",
+                "Host": "internal.example",
+            },
+            maximum_redirects=0,
+            resolver=_resolver,
+            connection_factory=_factory([_Response(b'{"ok":true}')], requests),
+        )
+
+        self.assertEqual(value, '{"ok":true}')
+        self.assertEqual(requests[0]["method"], "POST")
+        self.assertEqual(requests[0]["body"], body)
+        self.assertEqual(requests[0]["headers"]["Authorization"], "secret")
+        self.assertEqual(requests[0]["headers"]["Content-Type"], "application/json")
+        self.assertEqual(requests[0]["headers"]["Host"], "api.example")
+        self.assertNotIn("Content-Length", requests[0]["headers"])
+
+    def test_post_rejects_redirect_without_replaying_body_or_credentials(self):
+        requests = []
+
+        with self.assertRaisesRegex(PublicHttpError, "^redirect_limit$"):
+            request_public_text(
+                "https://api.example/v2/jobs",
+                method="POST",
+                body=b'{"secret":"value"}',
+                headers={"Authorization": "secret"},
+                maximum_redirects=0,
+                resolver=_resolver,
+                connection_factory=_factory(
+                    [_Response(status=307, headers={"Location": "https://other.example/jobs"})],
+                    requests,
+                ),
+            )
+
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0]["target"].hostname, "api.example")
+
+    def test_post_is_not_retried_across_multiple_addresses(self):
+        attempts = []
+
+        def resolver(_hostname, port):
+            first = _address(PUBLIC_IPV4)
+            second = _address(PUBLIC_IPV6)
+            return (
+                ResolvedAddress(
+                    first.family,
+                    first.socket_type,
+                    first.protocol,
+                    (first.ip, port),
+                    first.ip,
+                ),
+                ResolvedAddress(
+                    second.family,
+                    second.socket_type,
+                    second.protocol,
+                    (second.ip, port, 0, 0),
+                    second.ip,
+                ),
+            )
+
+        def connection_factory(_target, address, _timeout):
+            attempts.append(address.ip)
+            raise OSError("ambiguous delivery")
+
+        with self.assertRaisesRegex(PublicHttpError, "^network_error$"):
+            request_public_text(
+                "https://api.example/v2/jobs",
+                method="POST",
+                body=b"{}",
+                maximum_redirects=0,
+                resolver=resolver,
+                connection_factory=connection_factory,
+            )
+
+        self.assertEqual(attempts, [PUBLIC_IPV4])
+
+    def test_request_rejects_unsupported_method_body_and_post_redirect_policy(self):
+        invalid_requests = (
+            {"method": "DELETE"},
+            {"method": "GET", "body": b"unexpected"},
+            {"method": "POST", "body": b"{}", "maximum_redirects": 1},
+        )
+        for options in invalid_requests:
+            with self.subTest(options=options):
+                with self.assertRaisesRegex(PublicHttpError, "^configuration_invalid$"):
+                    request_public_text("https://api.example/jobs", **options)
+
+    def test_request_body_limit_is_enforced_before_resolution(self):
+        resolver = MagicMock()
+
+        with self.assertRaisesRegex(PublicHttpError, "^request_too_large$"):
+            request_public_text(
+                "https://api.example/jobs",
+                method="POST",
+                body=b"12345",
+                maximum_redirects=0,
+                maximum_request_bytes=4,
+                resolver=resolver,
+            )
+
+        resolver.assert_not_called()
 
     def test_redirect_to_private_target_is_blocked_before_second_connection(self):
         requests = []

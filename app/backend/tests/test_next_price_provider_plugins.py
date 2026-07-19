@@ -1,7 +1,9 @@
+import json
 import os
 import sys
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -13,6 +15,7 @@ from app.backend.next_plugins.arrow import plugin as arrow_plugin
 from app.backend.next_plugins.amazon import plugin as amazon_plugin
 from app.backend.next_plugins.bol import plugin as bol_plugin
 from app.backend.next_plugins.keepa import plugin as keepa_plugin
+from app.backend.next_plugins.priceapi import plugin as priceapi_plugin
 from app.backend.next_plugins.zavvi import plugin as zavvi_plugin
 from app.backend.next_public_http import PublicHttpError
 
@@ -26,20 +29,6 @@ class _Response:
     def raise_for_status(self):
         if self.status_code >= 400:
             raise RuntimeError("http error")
-
-
-class _JsonResponse:
-    def __init__(self, payload, status_code: int = 200):
-        self._payload = payload
-        self.status_code = status_code
-        self.content = b'{"ok":true}'
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise RuntimeError("http error")
-
-    def json(self):
-        return self._payload
 
 
 class TestZavviProviderPlugin(unittest.TestCase):
@@ -189,9 +178,9 @@ class TestKeepaProviderPlugin(unittest.TestCase):
 
     def test_price_check_extracts_asin_from_url(self):
         with patch(
-            "app.backend.next_plugins.keepa.plugin.requests.get",
-            return_value=_JsonResponse({"products": [{"buyBoxPrice": 1234}]}),
-        ):
+            "app.backend.next_plugins.keepa.plugin.fetch_public_text",
+            return_value=json.dumps({"products": [{"buyBoxPrice": 1234}]}),
+        ) as fetch:
             result = keepa_plugin.price_check(
                 {"url": "https://www.amazon.nl/dp/B09G9HD5XW?tag=test"},
                 {"secrets": {"apiKey": "live_key"}, "settings": {"domainId": "4"}},
@@ -199,6 +188,107 @@ class TestKeepaProviderPlugin(unittest.TestCase):
         self.assertEqual(result.get("status"), "ok")
         self.assertEqual(result.get("providerProductRef"), "B09G9HD5XW")
         self.assertAlmostEqual(result.get("price"), 12.34)
+        endpoint = urlsplit(fetch.call_args.args[0])
+        self.assertEqual(endpoint.hostname, "api.keepa.com")
+        self.assertEqual(
+            parse_qs(endpoint.query),
+            {
+                "key": ["live_key"],
+                "domain": ["4"],
+                "asin": ["B09G9HD5XW"],
+                "buybox": ["1"],
+                "history": ["0"],
+                "stats": ["0"],
+            },
+        )
+        self.assertEqual(fetch.call_args.kwargs["maximum_redirects"], 0)
+
+    def test_public_http_failure_returns_stable_error(self):
+        with patch(
+            "app.backend.next_plugins.keepa.plugin.fetch_public_text",
+            side_effect=PublicHttpError("url_blocked"),
+        ):
+            result = keepa_plugin.price_check(
+                {"providerProductRef": "B09G9HD5XW"},
+                {"secrets": {"apiKey": "live_key"}},
+            )
+        self.assertEqual(result, {"status": "error", "error": "url_blocked"})
+
+    def test_test_mode_does_not_open_network(self):
+        with patch("app.backend.next_plugins.keepa.plugin.fetch_public_text") as fetch:
+            result = keepa_plugin.price_check(
+                {"providerProductRef": "B09G9HD5XW"},
+                {"secrets": {"apiKey": "test_keepa"}},
+            )
+        self.assertEqual(result.get("status"), "ok")
+        fetch.assert_not_called()
+
+
+class TestPriceApiProviderPlugin(unittest.TestCase):
+    def test_health_check_needs_configuration_without_key(self):
+        result = priceapi_plugin.health_check({})
+        self.assertEqual(result.get("status"), "needs_configuration")
+
+    def test_price_check_posts_existing_payload_to_public_custom_endpoint(self):
+        endpoint = "https://prices.example/v2/jobs"
+        with patch(
+            "app.backend.next_plugins.priceapi.plugin.request_public_text",
+            return_value=json.dumps({"price": "24,99", "currency": "eur"}),
+        ) as request:
+            result = priceapi_plugin.price_check(
+                {
+                    "providerProductRef": "sku-123",
+                    "url": "https://shop.example/product",
+                },
+                {
+                    "secrets": {"apiKey": "live_key"},
+                    "settings": {"endpoint": endpoint, "country": "de"},
+                },
+            )
+
+        self.assertEqual(result.get("status"), "ok")
+        self.assertEqual(result.get("price"), 24.99)
+        self.assertEqual(result.get("currency"), "EUR")
+        self.assertEqual(request.call_args.args[0], endpoint)
+        self.assertEqual(request.call_args.kwargs["method"], "POST")
+        self.assertEqual(request.call_args.kwargs["maximum_redirects"], 0)
+        self.assertEqual(
+            json.loads(request.call_args.kwargs["body"]),
+            {
+                "source": "discvault",
+                "country": "de",
+                "product_ref": "sku-123",
+                "url": "https://shop.example/product",
+                "include_history": False,
+            },
+        )
+        self.assertEqual(
+            request.call_args.kwargs["headers"]["Content-Type"],
+            "application/json",
+        )
+
+    def test_public_http_failure_returns_stable_error(self):
+        with patch(
+            "app.backend.next_plugins.priceapi.plugin.request_public_text",
+            side_effect=PublicHttpError("url_blocked"),
+        ):
+            result = priceapi_plugin.price_check(
+                {"providerProductRef": "sku-123"},
+                {
+                    "secrets": {"apiKey": "live_key"},
+                    "settings": {"endpoint": "http://127.0.0.1/jobs"},
+                },
+            )
+        self.assertEqual(result, {"status": "error", "error": "url_blocked"})
+
+    def test_test_mode_does_not_open_network(self):
+        with patch("app.backend.next_plugins.priceapi.plugin.request_public_text") as request:
+            result = priceapi_plugin.price_check(
+                {"providerProductRef": "sku-123"},
+                {"secrets": {"apiKey": "test_priceapi"}},
+            )
+        self.assertEqual(result.get("status"), "ok")
+        request.assert_not_called()
 
 
 if __name__ == "__main__":

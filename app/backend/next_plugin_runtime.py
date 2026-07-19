@@ -33,13 +33,15 @@ _DEFAULT_PLUGIN_UPGRADE_DONE: set[str] = set()
 # Optional in-process override of the auto-update preference, set by the app
 # layer from the database setting. ``None`` falls back to env/marker/default.
 _plugin_auto_update_override: bool | None = None
-# These bundled versions route user-controlled shop URLs through the pinned
-# public-network transport. Retaining or restoring an older copy would reopen
-# wishlist SSRF, so these floors override the routine auto-update preference.
+# These bundled versions route outbound provider requests through the pinned
+# public-network transport. Older copies would reopen SSRF paths, so these
+# floors override the routine auto-update preference.
 SECURITY_MINIMUM_BUNDLED_PLUGIN_VERSIONS = {
     "amazon": "1.0.2",
     "arrow": "1.0.2",
     "bol": "1.0.2",
+    "keepa": "1.0.2",
+    "priceapi": "1.0.1",
     "zavvi": "1.0.2",
 }
 VALID_CATEGORIES = {

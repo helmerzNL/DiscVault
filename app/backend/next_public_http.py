@@ -20,9 +20,11 @@ import dns.resolver
 
 DEFAULT_TIMEOUT_SECONDS = 10.0
 DEFAULT_MAX_REDIRECTS = 5
+DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024
 DEFAULT_MAX_WIRE_BYTES = 8 * 1024 * 1024
 DEFAULT_MAX_DECODED_BYTES = 16 * 1024 * 1024
 _READ_CHUNK_BYTES = 64 * 1024
+_ALLOWED_METHODS = frozenset({"GET", "POST"})
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 _BLOCKED_REQUEST_HEADERS = frozenset({"connection", "content-length", "host", "transfer-encoding"})
 PUBLIC_HTTP_FAILURE_CODES = frozenset(
@@ -35,6 +37,7 @@ PUBLIC_HTTP_FAILURE_CODES = frozenset(
         "redirect_invalid",
         "redirect_limit",
         "redirect_loop",
+        "request_too_large",
         "response_too_large",
         "timeout",
         "url_blocked",
@@ -441,31 +444,35 @@ def _decode_content(value: bytes, encoding: str, maximum_bytes: int) -> bytes:
 def _perform_request(
     target: PublicUrlTarget,
     *,
+    method: str,
+    body: bytes | None,
     headers: Mapping[str, str] | None,
     deadline: float,
     maximum_bytes: int,
     connection_factory: ConnectionFactory,
 ) -> tuple[int, bytes, Mapping[str, str], str | None]:
     last_error: BaseException | None = None
-    for address in target.addresses:
+    addresses = target.addresses if method == "GET" else target.addresses[:1]
+    for address in addresses:
         connection: http.client.HTTPConnection | None = None
         try:
             connection = connection_factory(target, address, _remaining_seconds(deadline))
             connection.request(
-                "GET",
+                method,
                 target.request_target,
+                body=body,
                 headers=_request_headers(headers, target.host_header),
             )
             response = connection.getresponse()
             response_headers = {key.lower(): value for key, value in response.headers.items()}
             charset = response.headers.get_content_charset()
-            body = _read_wire_body(
+            response_body = _read_wire_body(
                 response,
                 connection,
                 deadline=deadline,
                 maximum_bytes=maximum_bytes,
             )
-            return int(response.status), body, response_headers, charset
+            return int(response.status), response_body, response_headers, charset
         except PublicHttpError:
             raise
         except (OSError, TimeoutError, http.client.HTTPException, ssl.SSLError) as exc:
@@ -478,28 +485,45 @@ def _perform_request(
     raise PublicHttpError("network_error") from last_error
 
 
-def fetch_public_text(
+def request_public_text(
     url: str,
     *,
+    method: str = "GET",
+    body: bytes | None = None,
     headers: Mapping[str, str] | None = None,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     maximum_redirects: int = DEFAULT_MAX_REDIRECTS,
+    maximum_request_bytes: int = DEFAULT_MAX_REQUEST_BYTES,
     maximum_wire_bytes: int = DEFAULT_MAX_WIRE_BYTES,
     maximum_decoded_bytes: int = DEFAULT_MAX_DECODED_BYTES,
     resolver: Resolver | None = None,
     connection_factory: ConnectionFactory | None = None,
 ) -> str:
-    """Fetch text from a public URL using DNS-pinned connections."""
+    """Request text from a public URL using DNS-pinned connections."""
 
     try:
         timeout = float(timeout_seconds)
         redirect_limit = int(maximum_redirects)
+        request_limit = int(maximum_request_bytes)
         wire_limit = int(maximum_wire_bytes)
         decoded_limit = int(maximum_decoded_bytes)
     except (TypeError, ValueError) as exc:
         raise PublicHttpError("configuration_invalid") from exc
-    if timeout <= 0 or redirect_limit < 0 or wire_limit <= 0 or decoded_limit <= 0:
+    normalized_method = str(method or "").strip().upper()
+    if (
+        timeout <= 0
+        or redirect_limit < 0
+        or request_limit <= 0
+        or wire_limit <= 0
+        or decoded_limit <= 0
+        or normalized_method not in _ALLOWED_METHODS
+        or (body is not None and not isinstance(body, bytes))
+        or (normalized_method == "GET" and body is not None)
+        or (normalized_method == "POST" and redirect_limit != 0)
+    ):
         raise PublicHttpError("configuration_invalid")
+    if body is not None and len(body) > request_limit:
+        raise PublicHttpError("request_too_large")
 
     resolve = resolver or resolve_public_addresses
     connect = connection_factory or _connection_for_target
@@ -518,6 +542,8 @@ def fetch_public_text(
 
         status, wire_body, response_headers, charset = _perform_request(
             target,
+            method=normalized_method,
+            body=body,
             headers=headers,
             deadline=deadline,
             maximum_bytes=wire_limit,
@@ -545,3 +571,28 @@ def fetch_public_text(
             raise PublicHttpError("content_decode_failed") from exc
 
     raise PublicHttpError("redirect_limit")
+
+
+def fetch_public_text(
+    url: str,
+    *,
+    headers: Mapping[str, str] | None = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    maximum_redirects: int = DEFAULT_MAX_REDIRECTS,
+    maximum_wire_bytes: int = DEFAULT_MAX_WIRE_BYTES,
+    maximum_decoded_bytes: int = DEFAULT_MAX_DECODED_BYTES,
+    resolver: Resolver | None = None,
+    connection_factory: ConnectionFactory | None = None,
+) -> str:
+    """Fetch text from a public URL using a DNS-pinned GET request."""
+
+    return request_public_text(
+        url,
+        headers=headers,
+        timeout_seconds=timeout_seconds,
+        maximum_redirects=maximum_redirects,
+        maximum_wire_bytes=maximum_wire_bytes,
+        maximum_decoded_bytes=maximum_decoded_bytes,
+        resolver=resolver,
+        connection_factory=connection_factory,
+    )
