@@ -11,11 +11,14 @@ in-memory store and stubbing the HTTP sender.
 """
 
 import base64
+import hashlib
 import json
 import os
 import sys
 import unittest
 from pathlib import Path
+
+from cryptography.fernet import Fernet
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if repo_root not in sys.path:
@@ -108,6 +111,55 @@ class MovieVaultV3ClientTests(unittest.TestCase):
     def test_decrypt_passes_through_legacy_plaintext(self):
         self.assertEqual(mv._decrypt_secret_value("legacy-plaintext"), "legacy-plaintext")
         self.assertFalse(mv._is_encrypted_secret("legacy-plaintext"))
+
+    def test_legacy_database_encrypted_key_requires_visible_reset(self):
+        database_url = "postgresql://legacy:secret@db/discvault"
+        legacy_material = hashlib.sha256(
+            ("discvault-next-kek:" + database_url).encode("utf-8")
+        ).hexdigest()
+        legacy_key = base64.urlsafe_b64encode(
+            hashlib.sha256(legacy_material.encode("utf-8")).digest()
+        )
+        legacy_ciphertext = Fernet(legacy_key).encrypt(b"legacy-private-key").decode("ascii")
+        self.store[mv.INSTANCE_PRIVATE_KEY_KEY] = (mv.SECRET_ENC_PREFIX + legacy_ciphertext, True)
+        self.store[mv.INSTANCE_PUBLIC_KEY_KEY] = ("legacy-public-key", False)
+        self.store[mv.INSTANCE_PUBLIC_KEY_ID_KEY] = ("legacy-key-id", False)
+        self.store[mv.V3_API_TOKEN_KEY] = (
+            mv.SECRET_ENC_PREFIX
+            + Fernet(legacy_key).encrypt(b"legacy-v3-token").decode("ascii"),
+            True,
+        )
+        for key in (
+            mv.V3_KEY_ID_KEY,
+            mv.V3_INSTANCE_ID_KEY,
+            mv.V3_TOKEN_PREFIX_KEY,
+            mv.V3_SCOPES_KEY,
+            mv.V3_LAST_BOOTSTRAP_AT_KEY,
+        ):
+            self.store[key] = ("legacy-v3-state", False)
+
+        status = mv.movievault_connection_status(None)
+
+        self.assertTrue(status["privateKeySet"])
+        self.assertTrue(status["requiresReset"])
+
+        mv.reset_movievault_connection(None)
+
+        for key in (
+            mv.INSTANCE_PRIVATE_KEY_KEY,
+            mv.INSTANCE_PUBLIC_KEY_KEY,
+            mv.INSTANCE_PUBLIC_KEY_ID_KEY,
+            mv.V3_API_TOKEN_KEY,
+            mv.V3_KEY_ID_KEY,
+            mv.V3_INSTANCE_ID_KEY,
+            mv.V3_TOKEN_PREFIX_KEY,
+            mv.V3_SCOPES_KEY,
+            mv.V3_LAST_BOOTSTRAP_AT_KEY,
+        ):
+            self.assertNotIn(key, self.store)
+        reset_status = mv.movievault_connection_status(None)
+        self.assertFalse(reset_status["privateKeySet"])
+        self.assertFalse(reset_status["requiresReset"])
 
     def test_instance_key_stored_encrypted_and_legacy_migrated(self):
         # Fresh keypair is persisted encrypted.

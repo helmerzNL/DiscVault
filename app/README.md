@@ -35,12 +35,13 @@ app/
 cp .env.example .env
 ```
 
-Required for realistic local auth behavior:
+Required:
 
 ```env
 RP_ID=localhost
 RP_ORIGIN=http://localhost:6080
 TZ=Europe/Amsterdam
+JWT_SECRET=<stable value generated with: openssl rand -base64 48>
 ```
 
 Optional:
@@ -48,7 +49,6 @@ Optional:
 ```env
 OMDB_API_KEY=...
 TMDB_API_KEY=...
-JWT_SECRET=...
 MCP_API_KEY=...
 ```
 
@@ -56,6 +56,16 @@ MCP_API_KEY=...
 
 ```bash
 docker compose -f docker-compose.next.yml up -d --build
+```
+
+### Run backend tests
+
+The test package supplies an explicit test-only secret, so production configuration
+is not required:
+
+```bash
+cd backend
+python -m unittest discover -s tests -t . -p "test_*.py"
 ```
 
 Services:

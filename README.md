@@ -107,6 +107,12 @@ migration, and then opens the new DiscVault 26 app.
 
 Use the beta channel to try DiscVault 26 while it is still being finalized.
 Create a backup before moving an existing library between stable and beta.
+Generate `JWT_SECRET` once, store it securely, and reuse the same value for every
+container recreation:
+
+```bash
+export JWT_SECRET="$(openssl rand -base64 48)"
+```
 
 ```bash
 docker run -d \
@@ -116,6 +122,7 @@ docker run -d \
   -e TZ=Europe/Amsterdam \
   -e RP_ID=localhost \
   -e RP_ORIGIN=http://localhost:6080 \
+  -e JWT_SECRET="$JWT_SECRET" \
   -v /mnt/user/appdata/discvault:/data \
   ghcr.io/helmerznl/discvault:beta
 ```
@@ -128,13 +135,18 @@ hostname:
 ```text
 RP_ID=discvault.example.com
 RP_ORIGIN=https://discvault.example.com
+JWT_SECRET=<stable value generated with: openssl rand -base64 48>
 ```
+
+`JWT_SECRET` is required for every deployment and must remain unchanged across
+container restarts. DiscVault stops during startup when it is missing rather than
+deriving a predictable value from the database configuration.
 
 ### Optional password + TOTP authentication
 
 Passkeys remain the preferred sign-in method. To expose Legacy password
-authentication, set `LEGACY_AUTH_ENABLED=true` and use a long, stable
-`JWT_SECRET`. Existing installations must then enable password login in
+authentication, set `LEGACY_AUTH_ENABLED=true`. Existing installations must then
+enable password login in
 **Users & roles** and confirm the warning with a fresh passkey assertion.
 
 On a completely fresh installation (no users or credentials), the setup wizard
@@ -147,6 +159,7 @@ users are prompted to enroll TOTP again.
 
 Use the production channel for stable deployments. When DiscVault 26 is promoted
 from beta to production, this is the channel to run.
+Set `JWT_SECRET` to the same securely stored value used by the existing instance.
 
 ```bash
 docker run -d \
@@ -156,6 +169,7 @@ docker run -d \
   -e TZ=Europe/Amsterdam \
   -e RP_ID=localhost \
   -e RP_ORIGIN=http://localhost:6080 \
+  -e JWT_SECRET="$JWT_SECRET" \
   -v /mnt/user/appdata/discvault:/data \
   ghcr.io/helmerznl/discvault:latest
 ```

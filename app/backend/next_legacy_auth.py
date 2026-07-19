@@ -27,6 +27,11 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 import segno
 
+try:
+    from .next_runtime_secrets import jwt_secret
+except ImportError:  # pragma: no cover - direct module execution compatibility
+    from next_runtime_secrets import jwt_secret
+
 
 LEGACY_AUTH_SETTING = "legacy_password_login_enabled"
 PASSWORD_HASH_VERSION = 1
@@ -160,13 +165,7 @@ def verify_password(password_hash: Any, password: Any) -> PasswordVerification:
 
 
 def _secret_material(secret: Any | None = None) -> bytes:
-    configured = str(
-        secret
-        if secret is not None
-        else os.environ.get("DISCVAULT_NEXT_JWT_SECRET")
-        or os.environ.get("JWT_SECRET")
-        or ""
-    ).encode("utf-8")
+    configured = str(secret if secret is not None else jwt_secret()).encode("utf-8")
     if not configured:
         raise RuntimeError("JWT_SECRET is required for Legacy authentication")
     return configured

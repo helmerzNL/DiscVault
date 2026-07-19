@@ -45,6 +45,7 @@ try:
     from .next_backup import restore_functional_backup
     from .next_price_alerts import PRICE_ALERT_JOB_TYPE
     from .next_price_alerts import run_price_alert_sweep
+    from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
     from .next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
     from .next_movievault_v2_posters import run_poster_cache_job
@@ -69,6 +70,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_backup import restore_functional_backup
     from next_price_alerts import PRICE_ALERT_JOB_TYPE
     from next_price_alerts import run_price_alert_sweep
+    from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
     from next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
     from next_movievault_v2_posters import run_poster_cache_job
@@ -2549,6 +2551,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
+    validate_runtime_secrets()
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
     if args.command == "run-once":

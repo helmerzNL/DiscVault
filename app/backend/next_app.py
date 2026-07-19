@@ -118,6 +118,7 @@ try:
     from .next_auth import _rp_id
     from .next_auth import _rp_origins
     from .next_auth import _verify_signature
+    from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import MovieVaultConnectionError
     from .next_movievault_connection import MovieVaultInstanceRevoked
@@ -323,6 +324,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_auth import _rp_id
     from next_auth import _rp_origins
     from next_auth import _verify_signature
+    from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import MovieVaultConnectionError
     from next_movievault_connection import MovieVaultInstanceRevoked
@@ -691,6 +693,7 @@ _PRICE_DISPLAY_RATE_CACHE: dict[str, Any] = {"expires_at": None, "payload": None
 
 
 def create_app() -> Flask:
+    validate_runtime_secrets()
     flask_app = Flask(__name__)
     CORS(flask_app, supports_credentials=True)
     register_routes(flask_app)

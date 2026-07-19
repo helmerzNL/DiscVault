@@ -32,7 +32,7 @@
 
   <Config Name="RP_ID" Target="RP_ID" Default="localhost" Mode="" Description="WebAuthn relying party ID (domain only, no protocol/port)." Type="Variable" Display="advanced" Required="false" Mask="false">localhost</Config>
   <Config Name="RP_ORIGIN" Target="RP_ORIGIN" Default="http://localhost:6080" Mode="" Description="WebAuthn relying party origin (full URL used by clients)." Type="Variable" Display="advanced" Required="false" Mask="false">http://localhost:6080</Config>
-  <Config Name="JWT Secret" Target="JWT_SECRET" Default="" Mode="" Description="JWT signing secret. Leave empty to auto-generate once, or set explicitly." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="JWT Secret" Target="JWT_SECRET" Default="" Mode="" Description="Required stable signing secret. Generate once with: openssl rand -base64 48" Type="Variable" Display="always" Required="true" Mask="true"></Config>
   <Config Name="Legacy password authentication" Target="LEGACY_AUTH_ENABLED" Default="false" Mode="" Description="Opt-in password and TOTP capability. Existing installs must also enable it in Users &amp; roles with a fresh passkey." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
   <Config Name="MCP API Key" Target="MCP_API_KEY" Default="" Mode="" Description="Optional API key for MCP authentication." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
 </Container>
