@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profila izvēlne",
+  "preferences.profileMenuStyleHelp": "Izvēlieties, vai profila izvēlnē lielos ekrānos rādīt etiķetes. Tālruņos vienmēr tiek rādītas tikai ikonas.",
+  "preferences.profileMenuIconOnly": "Tikai ikonas",
+  "preferences.profileMenuIconText": "Ikonas un teksts",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

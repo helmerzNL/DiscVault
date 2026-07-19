@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Меню на профила",
+  "preferences.profileMenuStyleHelp": "Изберете дали менюто на профила да показва етикети на големи екрани. На телефоните винаги се показват само икони.",
+  "preferences.profileMenuIconOnly": "Само икони",
+  "preferences.profileMenuIconText": "Икони и текст",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

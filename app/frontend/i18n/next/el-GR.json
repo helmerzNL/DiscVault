@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Μενού προφίλ",
+  "preferences.profileMenuStyleHelp": "Επιλέξτε αν το μενού προφίλ θα εμφανίζει ετικέτες σε μεγάλες οθόνες. Στα τηλέφωνα εμφανίζονται πάντα μόνο εικονίδια.",
+  "preferences.profileMenuIconOnly": "Μόνο εικονίδια",
+  "preferences.profileMenuIconText": "Εικονίδια και κείμενο",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

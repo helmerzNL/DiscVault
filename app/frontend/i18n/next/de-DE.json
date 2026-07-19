@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profilmenü",
+  "preferences.profileMenuStyleHelp": "Wähle, ob das Profilmenü auf großen Bildschirmen Beschriftungen anzeigt. Auf Smartphones werden immer nur Symbole angezeigt.",
+  "preferences.profileMenuIconOnly": "Nur Symbole",
+  "preferences.profileMenuIconText": "Symbole und Text",
   "appAdmin.activeInvites": "Aktive Einladungen",
   "appAdmin.addMember": "Mitglied hinzuf?gen",
   "appAdmin.advancedMode": "Advanced",

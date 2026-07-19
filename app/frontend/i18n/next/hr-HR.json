@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Izbornik profila",
+  "preferences.profileMenuStyleHelp": "Odaberite prikazuje li izbornik profila oznake na velikim zaslonima. Na telefonima se uvijek prikazuju samo ikone.",
+  "preferences.profileMenuIconOnly": "Samo ikone",
+  "preferences.profileMenuIconText": "Ikone i tekst",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

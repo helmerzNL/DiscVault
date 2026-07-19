@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Меню профілю",
+  "preferences.profileMenuStyleHelp": "Виберіть, чи показувати підписи в меню профілю на великих екранах. На телефонах завжди відображаються лише піктограми.",
+  "preferences.profileMenuIconOnly": "Лише піктограми",
+  "preferences.profileMenuIconText": "Піктограми й текст",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

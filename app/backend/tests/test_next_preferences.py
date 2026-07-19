@@ -59,6 +59,20 @@ class NextPreferencesModuleTests(unittest.TestCase):
         self.assertEqual(next_preferences.validate_app_preference("preferred_price_currency", ""), "")
         self.assertEqual(next_preferences.validate_app_preference("preferred_price_currency", "usd"), "USD")
 
+    def test_profile_menu_style_defaults_to_labels_and_validates_choices(self):
+        self.assertEqual(next_preferences.APP_PREFERENCE_DEFAULTS["profile_menu_style"], "icon_text")
+        self.assertIn("profile_menu_style", next_preferences.APP_PREFERENCE_SECTIONS["appearance"])
+        self.assertEqual(
+            next_preferences.validate_app_preference("profile_menu_style", "icon_only"),
+            "icon_only",
+        )
+        with self.assertRaises(next_preferences.NextApiError):
+            next_preferences.validate_app_preference("profile_menu_style", "mobile_labels")
+        for invalid_value in (None, "", False):
+            with self.subTest(invalid_value=invalid_value):
+                with self.assertRaises(next_preferences.NextApiError):
+                    next_preferences.validate_app_preference("profile_menu_style", invalid_value)
+
     def test_price_display_context_skips_rates_without_preferred_currency(self):
         payload = next_preferences.price_display_context({"price_monitoring_enabled": True, "preferred_price_currency": ""})
         self.assertTrue(payload["monitoringEnabled"])

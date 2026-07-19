@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Menu do perfil",
+  "preferences.profileMenuStyleHelp": "Escolha se o menu do perfil mostra etiquetas em ecrãs grandes. Nos telemóveis são sempre apresentados apenas ícones.",
+  "preferences.profileMenuIconOnly": "Apenas ícones",
+  "preferences.profileMenuIconText": "Ícones e texto",
   "appAdmin.activeInvites": "Convites ativos",
   "appAdmin.addMember": "Adicionar membro",
   "appAdmin.advancedMode": "Advanced",

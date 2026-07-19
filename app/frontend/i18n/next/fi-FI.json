@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profiilivalikko",
+  "preferences.profileMenuStyleHelp": "Valitse, näyttääkö profiilivalikko tekstit suurilla näytöillä. Puhelimissa näytetään aina vain kuvakkeet.",
+  "preferences.profileMenuIconOnly": "Vain kuvakkeet",
+  "preferences.profileMenuIconText": "Kuvakkeet ja teksti",
   "appAdmin.activeInvites": "Aktiiviset kutsut",
   "appAdmin.addMember": "Lis?? j?sen",
   "appAdmin.advancedMode": "Advanced",
