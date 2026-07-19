@@ -227,6 +227,18 @@ class NextProfileUiTests(unittest.TestCase):
             self.assertIn(f'id="profilePanel{suffix}"', self.html)
             self.assertIn(f'aria-labelledby="profileTab{suffix}"', self.html)
 
+    def test_profile_navigation_uses_canonical_mdi_icons(self):
+        expected_paths = {
+            "preferences": "M8 13C6.14 13 4.59 14.28 4.14 16H2V18H4.14",
+            "notification_settings": "M22.72 19.5C22.74 19.33 22.75 19.17 22.75 19",
+            "structure": "M12 13H7V18H12V20H5V10H7V11H12V13",
+            "api": "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9",
+        }
+        for icon_name, path_start in expected_paths.items():
+            with self.subTest(icon_name=icon_name):
+                self.assertIn(f'class="nav-symbol {icon_name}"', self.html)
+                self.assertIn(f'<path d="{path_start}', self.html)
+
     def test_profile_navigation_has_desktop_preference_and_mobile_icon_override(self):
         self.assertIn('data-profile-menu-style-choice="icon_text"', self.html)
         self.assertIn('data-profile-menu-style-choice="icon_only"', self.html)
