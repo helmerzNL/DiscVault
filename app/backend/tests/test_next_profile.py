@@ -314,6 +314,49 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertNotIn('id="legacyPreferenceList"', self.html)
         self.assertNotIn("legacyList", self.html)
 
+    def test_notifications_dashboard_groups_status_preferences_and_devices(self):
+        for card in ("status", "devices"):
+            self.assertIn(f'data-notification-settings-card="{card}"', self.html)
+        for group in ("system", "library", "sharing"):
+            self.assertIn(f'data-push-preference-card="{group}"', self.html)
+            self.assertIn(f'data-push-preference-group="{group}"', self.html)
+
+        for element_id in (
+            "pushBrowserState",
+            "pushDeviceState",
+            "pushEnableButton",
+            "pushDisableButton",
+            "pushRefreshButton",
+            "pushTestButton",
+            "pushPriceCheckButton",
+            "pushPreferenceList",
+            "pushDeviceList",
+            "pushProfileMessage",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="pushProfileMessage" aria-live="polite"', self.html)
+        self.assertIn("const pushPreferenceGroups = {", self.html)
+        self.assertIn(
+            'system: [\n'
+            '        ["app_updates", "notifications.prefAppUpdates", '
+            '"notifications.prefAppUpdatesHelp"],\n'
+            '        ["security", "notifications.prefSecurity", '
+            '"notifications.prefSecurityHelp"]',
+            self.html,
+        )
+        self.assertIn(
+            'sharing: [\n'
+            '        ["group_invites", "notifications.prefGroupInvites", '
+            '"notifications.prefGroupInvitesHelp"]',
+            self.html,
+        )
+        self.assertIn('aria-label="${escapeHtml(label)}"', self.html)
+        self.assertIn('enableButton.classList.toggle("hidden", pushProfile.subscribed);', self.html)
+        self.assertIn('disableButton.classList.toggle("hidden", !pushProfile.subscribed);', self.html)
+        self.assertIn('class="push-device-row ${item.current ? "current" : ""}"', self.html)
+        self.assertIn(".notification-overview-grid,\n      .notification-preference-grid {", self.html)
+
     def test_account_dashboard_preserves_existing_profile_bindings(self):
         self.assertIn('class="account-dashboard"', self.html)
         self.assertIn('id="profileAccountDisplayName"', self.html)

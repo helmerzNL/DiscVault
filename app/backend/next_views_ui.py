@@ -134,6 +134,7 @@ def ui_preview_html(
         "groups": "M12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5M5.5 7C6.88 7 8 8.12 8 9.5S6.88 12 5.5 12 3 10.88 3 9.5 4.12 7 5.5 7M18.5 7C19.88 7 21 8.12 21 9.5S19.88 12 18.5 12 16 10.88 16 9.5 17.12 7 18.5 7M12 13C15.31 13 18 14.79 18 17V20H6V17C6 14.79 8.69 13 12 13M5.5 14C3.57 14 2 15.12 2 16.5V19H4V17C4 15.9 4.45 14.87 5.22 14.03L5.5 14M18.5 14L18.78 14.03C19.55 14.87 20 15.9 20 17V19H22V16.5C22 15.12 20.43 14 18.5 14Z",
         "structure": "M12 13H7V18H12V20H5V10H7V11H12V13M8 4V6H4V4H8M10 2H2V8H10V2M20 11V13H16V11H20M22 9H14V15H22V9M20 18V20H16V18H20M22 16H14V22H22V16Z",
         "security": "M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1M12 5C13.66 5 15 6.34 15 8V10H16V16H8V10H9V8C9 6.34 10.34 5 12 5M12 7C11.45 7 11 7.45 11 8V10H13V8C13 7.45 12.55 7 12 7Z",
+        "devices": "M4 6H22V18H4V6M22 4H4C2.89 4 2 4.89 2 6V18C2 19.11 2.9 20 4 20H11V22H7V24H19V22H15V20H22C23.11 20 24 19.1 24 18V6C24 4.89 23.1 4 22 4Z",
         "api": "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z",
         "about": "M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
@@ -4519,6 +4520,166 @@ def ui_preview_html(
       display: grid;
       gap: 8px;
     }
+    .notification-settings-dashboard {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .notification-overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+      gap: 14px;
+      align-items: stretch;
+      min-width: 0;
+    }
+    .notification-settings-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .notification-settings-card.status {
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .notification-settings-card-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+    .notification-settings-card-head > div {
+      min-width: 0;
+    }
+    .notification-settings-card-head .nav-symbol {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 12px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+    .notification-settings-card-head .nav-symbol svg {
+      width: 22px;
+      height: 22px;
+    }
+    .notification-settings-card-head h4,
+    .notification-settings-card-head h5 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+    .notification-settings-card-head h4 {
+      font-size: 1.05rem;
+    }
+    .notification-settings-card-head h5 {
+      font-size: .95rem;
+    }
+    .notification-settings-card-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .notification-status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+    .notification-status-fact {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .notification-status-fact > span {
+      color: var(--muted);
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .notification-state-pill {
+      width: max-content;
+      max-width: 100%;
+      padding: 5px 9px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--muted) 12%, transparent);
+      font-size: .78rem;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .notification-state-pill.good {
+      color: var(--success);
+      background: color-mix(in srgb, var(--success) 14%, transparent);
+    }
+    .notification-state-pill.bad {
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 13%, transparent);
+    }
+    .notification-status-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .notification-status-actions .debug-only {
+      margin-left: auto;
+    }
+    .notification-preferences-section {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .notification-preferences-heading {
+      display: grid;
+      gap: 3px;
+      padding: 2px 2px 0;
+    }
+    .notification-preferences-heading h4 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
+    }
+    .notification-preferences-heading p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .notification-preference-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      min-width: 0;
+    }
+    .notification-preference-card {
+      padding: 0;
+      overflow: hidden;
+    }
+    .notification-preference-card .notification-settings-card-head {
+      padding: 14px 14px 11px;
+    }
+    .notification-preference-card .preference-control-row {
+      min-height: 72px;
+      padding: 11px 14px;
+      border-top: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 58%, transparent);
+    }
+    .notification-preference-card .preference-control-row:first-child {
+      border-top: 0;
+    }
     .push-device-row {
       display: flex;
       align-items: center;
@@ -4528,6 +4689,10 @@ def ui_preview_html(
       border-radius: 14px;
       padding: 10px 12px;
       background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .push-device-row.current {
+      border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+      background: color-mix(in srgb, var(--accent) 7%, var(--bg-solid));
     }
     body.debug-mode .debug-only { display: inline-flex !important; }
     .movie-detail-page {
@@ -10797,6 +10962,10 @@ def ui_preview_html(
       .profile-section-grid {
         grid-template-columns: 1fr;
       }
+      .notification-overview-grid,
+      .notification-preference-grid {
+        grid-template-columns: 1fr;
+      }
       .account-fact-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -10940,6 +11109,17 @@ def ui_preview_html(
       .app-admin-plugin-import .primary-button {
         width: 100%;
       }
+      .notification-status-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .notification-status-actions .secondary-button,
+      .notification-status-actions .primary-button {
+        width: 100%;
+      }
+      .notification-status-actions .debug-only {
+        margin-left: 0;
+      }
     }
     @media (max-width: 560px) {
       body,
@@ -11027,6 +11207,15 @@ def ui_preview_html(
       .preferences-setting-card .preference-control-row.dependent {
         margin-left: 12px;
         padding-left: 11px;
+      }
+      .notification-settings-card {
+        padding: 13px;
+      }
+      .notification-preference-card {
+        padding: 0;
+      }
+      .notification-status-grid {
+        grid-template-columns: 1fr;
       }
       .profile-form-actions,
       .profile-action-row,
@@ -13192,40 +13381,85 @@ def ui_preview_html(
               </div>
             </div>
                 <div id="profilePanelNotifications" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabNotifications" tabindex="0" data-profile-panel="notifications">
-              <div class="detail-card-head compact">
-                <div>
-                  <h4 data-next-i18n="notifications.pushTitle">Push notifications</h4>
-                  <p data-next-i18n="notifications.pushHelp">Enable native PWA notifications on this device and choose which messages you want to receive.</p>
-                </div>
-                <div class="profile-form-actions">
-                  <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
-                  <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
-                  <button type="button" class="secondary-button debug-only hidden" id="pushPriceCheckButton" data-next-i18n="notifications.priceCheck">Price Check</button>
-                </div>
-              </div>
-              <div class="profile-section-grid">
-                <section class="profile-section-box">
-                  <div class="profile-meta">
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="notifications.browserState">Browser</span>
-                      <strong id="pushBrowserState">-</strong>
+              <div class="notification-settings-dashboard">
+                <div class="notification-overview-grid">
+                  <section class="notification-settings-card status" data-notification-settings-card="status">
+                    <div class="notification-settings-card-head">
+                      """ + nav_icon("notification_settings") + """
+                      <div>
+                        <h4 data-next-i18n="notifications.pushTitle">Push notifications</h4>
+                        <p data-next-i18n="notifications.pushHelp">Enable native PWA notifications on this device and choose which messages you want to receive.</p>
+                      </div>
                     </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="notifications.deviceState">This device</span>
-                      <strong id="pushDeviceState">-</strong>
+                    <div class="notification-status-grid">
+                      <div class="notification-status-fact">
+                        <span data-next-i18n="notifications.browserState">Browser</span>
+                        <strong class="notification-state-pill" id="pushBrowserState">-</strong>
+                      </div>
+                      <div class="notification-status-fact">
+                        <span data-next-i18n="notifications.deviceState">This device</span>
+                        <strong class="notification-state-pill" id="pushDeviceState">-</strong>
+                      </div>
                     </div>
+                    <div class="notification-status-actions">
+                      <button type="button" class="primary-button" id="pushEnableButton" data-next-i18n="notifications.enablePush">Enable notifications</button>
+                      <button type="button" class="secondary-button hidden" id="pushDisableButton" data-next-i18n="notifications.disablePush">Disable on this device</button>
+                      <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+                      <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
+                      <button type="button" class="secondary-button debug-only hidden" id="pushPriceCheckButton" data-next-i18n="notifications.priceCheck">Price Check</button>
+                    </div>
+                  </section>
+                  <section class="notification-settings-card" data-notification-settings-card="devices">
+                    <div class="notification-settings-card-head">
+                      """ + nav_icon("devices") + """
+                      <div>
+                        <h4 data-next-i18n="notifications.devicesTitle">Connected devices</h4>
+                        <p data-next-i18n="notifications.devicesHelp">Devices currently registered for push notifications.</p>
+                      </div>
+                    </div>
+                    <div class="push-device-list" id="pushDeviceList"></div>
+                  </section>
+                </div>
+                <section class="notification-preferences-section" aria-labelledby="notificationCategoriesTitle">
+                  <div class="notification-preferences-heading">
+                    <h4 id="notificationCategoriesTitle" data-next-i18n="notifications.categoriesTitle">Notification categories</h4>
+                    <p data-next-i18n="notifications.categoriesHelp">Choose which updates can reach your devices.</p>
                   </div>
-                  <div class="profile-action-row">
-                    <button type="button" class="secondary-button" id="pushEnableButton" data-next-i18n="notifications.enablePush">Enable notifications</button>
-                    <button type="button" class="secondary-button" id="pushDisableButton" data-next-i18n="notifications.disablePush">Disable on this device</button>
+                  <div class="notification-preference-grid" id="pushPreferenceList">
+                    <section class="notification-settings-card notification-preference-card" data-push-preference-card="system">
+                      <div class="notification-settings-card-head">
+                        """ + nav_icon("security") + """
+                        <div>
+                          <h5 data-next-i18n="notifications.systemSecurityTitle">System &amp; security</h5>
+                          <p data-next-i18n="notifications.systemSecurityHelp">Important DiscVault and account updates.</p>
+                        </div>
+                      </div>
+                      <div class="preference-control-list" data-push-preference-group="system"></div>
+                    </section>
+                    <section class="notification-settings-card notification-preference-card" data-push-preference-card="library">
+                      <div class="notification-settings-card-head">
+                        """ + nav_icon("library") + """
+                        <div>
+                          <h5 data-next-i18n="notifications.libraryActivityTitle">Library activity</h5>
+                          <p data-next-i18n="notifications.libraryActivityHelp">Background work and wishlist price changes.</p>
+                        </div>
+                      </div>
+                      <div class="preference-control-list" data-push-preference-group="library"></div>
+                    </section>
+                    <section class="notification-settings-card notification-preference-card" data-push-preference-card="sharing">
+                      <div class="notification-settings-card-head">
+                        """ + nav_icon("groups") + """
+                        <div>
+                          <h5 data-next-i18n="notifications.sharingTitle">Sharing</h5>
+                          <p data-next-i18n="notifications.sharingHelp">Groups, invitations and shared activity.</p>
+                        </div>
+                      </div>
+                      <div class="preference-control-list" data-push-preference-group="sharing"></div>
+                    </section>
                   </div>
                 </section>
-                <section class="profile-section-box">
-                  <div class="preference-control-list" id="pushPreferenceList"></div>
-                  <div class="push-device-list" id="pushDeviceList"></div>
-                </section>
+                <div class="login-message" id="pushProfileMessage" aria-live="polite"></div>
               </div>
-              <div class="login-message" id="pushProfileMessage"></div>
             </div>
                 <div id="profilePanelGroups" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabGroups" tabindex="0" data-profile-panel="groups">
               <div class="detail-card-head compact">
@@ -31189,24 +31423,31 @@ def ui_preview_html(
       const registration = await navigator.serviceWorker.ready;
       return registration.pushManager.getSubscription();
     }
-    function pushPreferenceRowsHtml(preferencesMap) {
-      const rows = [
+    const pushPreferenceGroups = {
+      system: [
         ["app_updates", "notifications.prefAppUpdates", "notifications.prefAppUpdatesHelp"],
+        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"]
+      ],
+      library: [
         ["imports", "notifications.prefImports", "notifications.prefImportsHelp"],
         ["metadata_jobs", "notifications.prefMetadataJobs", "notifications.prefMetadataJobsHelp"],
-        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"],
-        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"],
         ["price_alerts", "notifications.pref.price_alerts", "notifications.prefPriceAlertsHelp"]
-      ];
-      return rows.map(([key, labelKey, helpKey]) => {
+      ],
+      sharing: [
+        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"]
+      ]
+    };
+    function pushPreferenceRowsHtml(preferencesMap, rows) {
+      return (rows || []).map(([key, labelKey, helpKey]) => {
         const enabled = preferencesMap[key] !== false;
+        const label = tNext(labelKey, key);
         return `
           <div class="preference-control-row">
             <span>
-              <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+              <strong>${escapeHtml(label)}</strong>
               <span>${escapeHtml(tNext(helpKey, ""))}</span>
             </span>
-            <button type="button" class="switch ${enabled ? "on" : ""}" data-push-pref="${escapeHtml(key)}" aria-pressed="${enabled ? "true" : "false"}"></button>
+            <button type="button" class="switch ${enabled ? "on" : ""}" data-push-pref="${escapeHtml(key)}" aria-label="${escapeHtml(label)}" aria-pressed="${enabled ? "true" : "false"}"></button>
           </div>
         `;
       }).join("");
@@ -31225,21 +31466,32 @@ def ui_preview_html(
         browserState.textContent = supported
           ? (permission === "granted" ? tNext("notifications.permissionGranted", "Allowed") : permission === "denied" ? tNext("notifications.permissionDenied", "Blocked") : tNext("notifications.permissionDefault", "Not asked"))
           : tNext("notifications.unsupported", "Unsupported");
+        browserState.className = `notification-state-pill ${!supported || permission === "denied" ? "bad" : permission === "granted" ? "good" : ""}`.trim();
       }
       if (deviceState) {
         deviceState.textContent = pushProfile.subscribed
           ? tNext("notifications.deviceEnabled", "Enabled")
           : tNext("notifications.deviceDisabled", "Disabled");
+        deviceState.className = `notification-state-pill ${pushProfile.subscribed ? "good" : ""}`.trim();
       }
       if (enableButton) enableButton.disabled = !supported || pushProfile.subscribed || permission === "denied";
       if (disableButton) disableButton.disabled = !pushProfile.subscribed;
       if (testButton) testButton.disabled = !pushProfile.subscribed;
-      if (prefList) prefList.innerHTML = pushPreferenceRowsHtml(pushProfile.preferences || {});
+      if (enableButton) enableButton.classList.toggle("hidden", pushProfile.subscribed);
+      if (disableButton) disableButton.classList.toggle("hidden", !pushProfile.subscribed);
+      if (prefList) {
+        prefList.querySelectorAll("[data-push-preference-group]").forEach((group) => {
+          group.innerHTML = pushPreferenceRowsHtml(
+            pushProfile.preferences || {},
+            pushPreferenceGroups[group.dataset.pushPreferenceGroup] || []
+          );
+        });
+      }
       if (deviceList) {
         const subscriptions = pushProfile.subscriptions || [];
         deviceList.innerHTML = subscriptions.length
           ? subscriptions.map((item) => `
-              <div class="push-device-row">
+              <div class="push-device-row ${item.current ? "current" : ""}">
                 <span>
                   <strong>${escapeHtml(item.deviceLabel || tNext("notifications.device", "Device"))}</strong>
                   <span class="notification-meta">${escapeHtml(item.current ? tNext("notifications.currentDevice", "Current device") : tNext("notifications.otherDevice", "Other device"))}</span>
