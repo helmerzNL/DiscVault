@@ -129,11 +129,12 @@ def ui_preview_html(
         "notifications": "M12 22A2.5 2.5 0 0 0 14.5 19.5H9.5A2.5 2.5 0 0 0 12 22M18 16V11A6 6 0 0 0 13 5.1V4A1 1 0 0 0 11 4V5.1A6 6 0 0 0 6 11V16L4 18V19H20V18L18 16Z",
         "profile": "M12 4A4 4 0 1 1 8 8A4 4 0 0 1 12 4M12 14C16.42 14 20 15.79 20 18V20H4V18C4 15.79 7.58 14 12 14Z",
         "account": "M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2M12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5M12 19.2C9.5 19.2 7.29 17.92 6 16C6.03 14 10 12.9 12 12.9S17.97 14 18 16C16.71 17.92 14.5 19.2 12 19.2Z",
-        "preferences": "M3 17V19H9V17H3M3 5V7H13V5H3M15 17V19H21V17H15M11 9V11H21V9H11M11 3V9H13V7H15V5H13V3H11M7 11V15H9V13H11V11H7M17 11V15H19V13H21V11H17Z",
+        "preferences": "M8 13C6.14 13 4.59 14.28 4.14 16H2V18H4.14C4.59 19.72 6.14 21 8 21S11.41 19.72 11.86 18H22V16H11.86C11.41 14.28 9.86 13 8 13M8 19C6.9 19 6 18.1 6 17C6 15.9 6.9 15 8 15S10 15.9 10 17C10 18.1 9.1 19 8 19M19.86 6C19.41 4.28 17.86 3 16 3S12.59 4.28 12.14 6H2V8H12.14C12.59 9.72 14.14 11 16 11S19.41 9.72 19.86 8H22V6H19.86M16 9C14.9 9 14 8.1 14 7C14 5.9 14.9 5 16 5S18 5.9 18 7C18 8.1 17.1 9 16 9Z",
+        "notification_settings": "M22.72 19.5C22.74 19.33 22.75 19.17 22.75 19S22.74 18.67 22.72 18.5L23.77 17.68C23.87 17.61 23.89 17.5 23.83 17.36L22.83 15.64C22.77 15.53 22.64 15.5 22.53 15.53L21.28 16C21 15.83 20.75 15.66 20.44 15.54L20.25 14.21C20.23 14.09 20.13 14 20 14H18C17.88 14 17.77 14.09 17.75 14.21L17.57 15.54C17.25 15.66 17 15.83 16.72 16L15.5 15.53C15.37 15.5 15.23 15.53 15.17 15.64L14.17 17.36C14.11 17.5 14.14 17.61 14.23 17.68L15.29 18.5C15.27 18.67 15.25 18.84 15.25 19S15.27 19.33 15.29 19.5L14.23 20.32C14.14 20.39 14.11 20.53 14.17 20.64L15.17 22.37C15.23 22.5 15.37 22.5 15.5 22.5L16.72 21.97C17 22.17 17.25 22.34 17.57 22.47L17.75 23.79C17.77 23.91 17.88 24 18 24H20C20.13 24 20.23 23.91 20.25 23.79L20.44 22.47C20.75 22.34 21 22.17 21.28 21.97L22.53 22.5C22.64 22.5 22.77 22.5 22.83 22.37L23.83 20.64C23.89 20.53 23.87 20.39 23.77 20.32L22.72 19.5M19 20.75C18.04 20.75 17.25 19.97 17.25 19S18.04 17.25 19 17.25 20.75 18.03 20.75 19 19.97 20.75 19 20.75M12.08 20H3V19L5 17V11C5 7.9 7 5.2 10 4.3V4C10 2.9 10.9 2 12 2S14 2.9 14 4V4.3C17 5.2 19 7.9 19 11V12C18.31 12 17.63 12.11 17 12.29V11C17 8.2 14.8 6 12 6S7 8.2 7 11V18H12.08C12.03 18.33 12 18.66 12 19C12 19.34 12.03 19.67 12.08 20M12.3 21C12.5 21.6 12.74 22.17 13.06 22.69C12.75 22.88 12.39 23 12 23C10.9 23 10 22.1 10 21H12.3Z",
         "groups": "M12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5M5.5 7C6.88 7 8 8.12 8 9.5S6.88 12 5.5 12 3 10.88 3 9.5 4.12 7 5.5 7M18.5 7C19.88 7 21 8.12 21 9.5S19.88 12 18.5 12 16 10.88 16 9.5 17.12 7 18.5 7M12 13C15.31 13 18 14.79 18 17V20H6V17C6 14.79 8.69 13 12 13M5.5 14C3.57 14 2 15.12 2 16.5V19H4V17C4 15.9 4.45 14.87 5.22 14.03L5.5 14M18.5 14L18.78 14.03C19.55 14.87 20 15.9 20 17V19H22V16.5C22 15.12 20.43 14 18.5 14Z",
-        "structure": "M10 3H4C2.9 3 2 3.9 2 5V9C2 10.1 2.9 11 4 11H10C11.1 11 12 10.1 12 9V8H15V11H14C12.9 11 12 11.9 12 13V19C12 20.1 12.9 21 14 21H20C21.1 21 22 20.1 22 19V15C22 13.9 21.1 13 20 13H17V7C17 6.45 16.55 6 16 6H12V5C12 3.9 11.1 3 10 3M4 5H10V9H4V5M14 13H20V19H14V13Z",
+        "structure": "M12 13H7V18H12V20H5V10H7V11H12V13M8 4V6H4V4H8M10 2H2V8H10V2M20 11V13H16V11H20M22 9H14V15H22V9M20 18V20H16V18H20M22 16H14V22H22V16Z",
         "security": "M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1M12 5C13.66 5 15 6.34 15 8V10H16V16H8V10H9V8C9 6.34 10.34 5 12 5M12 7C11.45 7 11 7.45 11 8V10H13V8C13 7.45 12.55 7 12 7Z",
-        "api": "M7 7H5C3.9 7 3 7.9 3 9V15C3 16.1 3.9 17 5 17H7V15H5V9H7V11H9V9C9 7.9 8.1 7 7 7M13 7H9V17H11V13H13C14.66 13 16 11.66 16 10S14.66 7 13 7M13 11H11V9H13C13.55 9 14 9.45 14 10S13.55 11 13 11M18 7V9H20V15H18V17H22V7H18Z",
+        "api": "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z",
         "about": "M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
         "discover": "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.24,7.76L14.12,14.12L7.76,16.24L9.88,9.88L16.24,7.76M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z",
@@ -147,7 +148,14 @@ def ui_preview_html(
             "</span>"
         )
 
-    def profile_tab(name: str, label_key: str, fallback: str, *, active: bool = False) -> str:
+    def profile_tab(
+        name: str,
+        label_key: str,
+        fallback: str,
+        *,
+        active: bool = False,
+        icon_name: str | None = None,
+    ) -> str:
         suffix = "".join(part.capitalize() for part in name.split("_"))
         active_class = ' class="active"' if active else ""
         return (
@@ -155,7 +163,7 @@ def ui_preview_html(
             f'aria-controls="profilePanel{suffix}" aria-selected="{"true" if active else "false"}" '
             f'tabindex="{"0" if active else "-1"}" aria-label="{h(fallback)}" title="{h(fallback)}" '
             f'data-next-i18n-aria="{h(label_key)}" data-next-i18n-title="{h(label_key)}" '
-            f'data-profile-tab="{h(name)}">{nav_icon(name)}'
+            f'data-profile-tab="{h(name)}">{nav_icon(icon_name or name)}'
             f'<span class="profile-tab-label" data-next-i18n="{h(label_key)}">{h(fallback)}</span></button>'
         )
 
@@ -12832,7 +12840,7 @@ def ui_preview_html(
               <nav class="detail-submenu profile-submenu profile-navigation" role="tablist" aria-label="Profile sections" data-next-i18n-aria="profile.sections">
                 """ + profile_tab("account", "profile.tabAccount", "Account", active=True) + """
                 """ + profile_tab("preferences", "preferences.title", "Preferences") + """
-                """ + profile_tab("notifications", "profile.tabNotifications", "Notifications") + """
+                """ + profile_tab("notifications", "profile.tabNotifications", "Notifications", icon_name="notification_settings") + """
                 """ + profile_tab("groups", "groups.memberGroups", "Groups") + """
                 """ + profile_tab("structure", "profile.tabStructure", "Structure") + """
                 """ + profile_tab("security", "profile.security", "Security") + """
