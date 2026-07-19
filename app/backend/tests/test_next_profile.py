@@ -249,6 +249,71 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('currentAuthStatus.auth_enabled === false', self.html)
         self.assertIn('setProfileMenuStyle(effectiveProfileMenuStyle());', self.html)
 
+    def test_preferences_dashboard_uses_accessible_icon_tabs(self):
+        tabs = {
+            "Appearance": ("appearance", "M12,22A10,10 0 0,1 2,12"),
+            "Library": ("library", "M9 3V18H12V3H9"),
+            "Collectors": ("collectors", "M20 21H4V10H6V19H18V10H20V21"),
+        }
+        self.assertIn('class="preferences-category-nav" role="tablist"', self.html)
+        for suffix, (name, path_start) in tabs.items():
+            with self.subTest(name=name):
+                self.assertIn(f'id="preferenceTab{suffix}"', self.html)
+                self.assertIn(f'aria-controls="preferencePanel{suffix}"', self.html)
+                self.assertIn(f'data-preferences-tab="{name}"', self.html)
+                self.assertIn(f'id="preferencePanel{suffix}"', self.html)
+                self.assertIn(f'aria-labelledby="preferenceTab{suffix}"', self.html)
+                self.assertIn(f'<path d="{path_start}', self.html)
+        self.assertIn("function handlePreferenceTabKeydown(button, event)", self.html)
+        self.assertIn('button.setAttribute("tabindex", active ? "0" : "-1");', self.html)
+        self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
+        self.assertIn(".preferences-category-nav .preferences-category-copy {\n        display: none;", self.html)
+
+    def test_preferences_dashboard_groups_settings_and_removes_legacy_modal(self):
+        for card in ("browse", "details", "pricing", "mode", "display", "management"):
+            self.assertIn(f'key: "{card}"', self.html)
+        self.assertIn('data-preference-card="loans-system"', self.html)
+        for element_id in (
+            "profileLanguagePicker",
+            "profileLanguageSelect",
+            "profilePreferenceList",
+            "profileCollectorPreferenceList",
+            "loansSystemSettingRow",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        library_groups = self.html.split("const preferenceLibraryGroups = [", 1)[1].split(
+            "const preferenceCollectorGroups = [", 1
+        )[0]
+        collector_groups = self.html.split("const preferenceCollectorGroups = [", 1)[1].split(
+            "const DEFAULT_PRICE_DISPLAY_CURRENCIES", 1
+        )[0]
+        self.assertNotIn("delete_container_members_with_container", library_groups)
+        self.assertIn(
+            '["delete_container_members_with_container", '
+            '"preferences.deleteContainerMembersWithContainer", '
+            '"preferences.deleteContainerMembersWithContainerHelp", "collectors_mode"]',
+            collector_groups,
+        )
+        collectors_disable_block = self.html.split(
+            'if (key === "collectors_mode" && !value) {', 1
+        )[1].split("}", 1)[0]
+        self.assertIn(
+            "preferences.delete_container_members_with_container = false;",
+            collectors_disable_block,
+        )
+        collectors_patch_block = self.html.split(
+            'if (key === "collectors_mode" && !value) {', 2
+        )[2].split("}", 1)[0]
+        self.assertIn(
+            "patch.delete_container_members_with_container = false;",
+            collectors_patch_block,
+        )
+        self.assertIn('class="preferences-setting-card system wide"', self.html)
+        self.assertNotIn('id="preferencesBackdrop"', self.html)
+        self.assertNotIn('id="legacyPreferenceList"', self.html)
+        self.assertNotIn("legacyList", self.html)
+
     def test_account_dashboard_preserves_existing_profile_bindings(self):
         self.assertIn('class="account-dashboard"', self.html)
         self.assertIn('id="profileAccountDisplayName"', self.html)
