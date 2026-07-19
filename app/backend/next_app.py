@@ -8003,6 +8003,55 @@ PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
     "mcp.use",
     "api.tokens.manage",
 )
+# Executable-code write operations (import/install, force-update to bundled,
+# rollback, and the auto-update toggle that can immediately trigger one of
+# those writes) must NOT be gated by PLUGIN_REGISTRY_MANAGE_PERMISSIONS: that
+# tuple exists to cover per-plugin *settings* management and intentionally
+# includes broad, low-privilege permissions such as "watchlist.manage" and
+# "collection.import" that ordinary roles (down to media_viewer) and even
+# read-only API-token roles (api_reader has "api.tokens.manage") legitimately
+# hold. A plugin's ``plugin.py`` is executed unconditionally by
+# ``discover_plugins`` the moment it exists on disk, regardless of its
+# "enabled" flag, so writing that file is equivalent to remote code execution
+# in the backend process and must be reserved for owner/admin.
+#
+# "plugins.delete" already is a genuinely dedicated plugin-management
+# permission that is only ever granted to the owner and admin roles (see
+# migrations_next/013_plugin_delete_permission.sql); it is reused here rather
+# than inventing a new permission/migration.
+PLUGIN_REGISTRY_INSTALL_PERMISSIONS = ("plugins.delete",)
+
+
+def require_plugin_registry_install_permission(conn) -> dict[str, Any]:
+    """Require an interactive owner/admin boundary for executable plugin writes."""
+
+    def commit_denial_audit() -> None:
+        try:
+            conn.commit()
+        except Exception:
+            app.logger.error("Failed to persist plugin permission-denied audit event")
+
+    try:
+        actor = require_any_next_permission(conn, PLUGIN_REGISTRY_INSTALL_PERMISSIONS)
+    except NextApiError as exc:
+        if exc.status_code == 403:
+            # Authorization runs before any route mutation, so this commits only
+            # the permission-denied audit event (and token last-used metadata).
+            commit_denial_audit()
+        raise
+    if actor_api_token_permission_keys(actor) is None:
+        return actor
+
+    message = "API tokens cannot install or replace executable plugins"
+    audit_permission_denied(
+        conn,
+        actor,
+        required_permissions=PLUGIN_REGISTRY_INSTALL_PERMISSIONS,
+        reason="api_token_scope_missing_required_permission",
+        message=message,
+    )
+    commit_denial_audit()
+    raise NextApiError(message, 403)
 
 
 def plugin_category_set(plugin: dict[str, Any]) -> set[str]:
@@ -8141,6 +8190,58 @@ def uploaded_plugin_file_path(destination_dir: Path) -> Path:
     return target
 
 
+def plugin_package_sha256(upload_path: Path) -> str:
+    """Digest of an uploaded plugin package for audit trails.
+
+    Only the digest (and size) are ever recorded in audit metadata; the
+    uploaded plugin source itself must never be logged.
+    """
+    digest = hashlib.sha256()
+    with upload_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def audit_plugin_import_failure(
+    conn,
+    *,
+    actor: dict[str, Any],
+    package_digest: str | None,
+    upload_size: int | None,
+    stage: str,
+    error: Exception,
+) -> None:
+    """Persist a source-free failure record without replacing the original error."""
+
+    is_api_error = isinstance(error, NextApiError)
+    reason = str(error) if is_api_error else "Internal plugin import error"
+    status_code = error.status_code if is_api_error else 500
+    try:
+        audit_event(
+            conn,
+            event_type="plugin.import_failed",
+            category="plugins",
+            actor=actor,
+            target_type="plugin_package",
+            target_id=package_digest,
+            summary=f"Plugin import failed during {stage}",
+            metadata={
+                "packageSha256": package_digest,
+                "uploadSizeBytes": upload_size,
+                "stage": stage,
+                "reason": reason,
+                "errorType": type(error).__name__,
+                "statusCode": status_code,
+            },
+        )
+        conn.commit()
+    except Exception:
+        # The original import error is authoritative. Report the audit outage
+        # without exposing uploaded source or exception details.
+        app.logger.error("Failed to persist plugin import failure audit event")
+
+
 def locate_plugin_root(extracted_dir: Path) -> Path:
     direct_manifest = extracted_dir / "manifest.json"
     if direct_manifest.exists():
@@ -8200,12 +8301,18 @@ def validate_import_plugin_root(plugin_root: Path) -> dict[str, Any]:
     return manifest
 
 
-def install_plugin_from_root(plugin_root: Path, manifest: dict[str, Any]) -> Path:
+def plugin_install_target_path(manifest: dict[str, Any]) -> Path:
     plugin_id = str(manifest["id"]).strip()
     install_base = plugin_install_dir().resolve()
     target = (install_base / plugin_id).resolve()
     if install_base != target and install_base not in target.parents:
         raise NextApiError("Plugin target path is not safe", 400)
+    return target
+
+
+def install_plugin_from_root(plugin_root: Path, manifest: dict[str, Any]) -> Path:
+    target = plugin_install_target_path(manifest)
+    install_base = target.parent
     install_base.mkdir(parents=True, exist_ok=True)
     if target.exists():
         shutil.rmtree(target)
@@ -8243,13 +8350,14 @@ def move_plugin_source_to_trash(plugin: dict[str, Any]) -> tuple[Path | None, Pa
     return source_path, trash_path, trash_root
 
 
-def restore_plugin_source(source_path: Path | None, trash_path: Path | None) -> None:
+def restore_plugin_source(source_path: Path | None, trash_path: Path | None) -> bool:
     if not source_path or not trash_path or not trash_path.exists():
-        return
+        return False
     source_path.parent.mkdir(parents=True, exist_ok=True)
     if source_path.exists():
-        return
+        return False
     shutil.move(str(trash_path), str(source_path))
+    return True
 
 
 def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
@@ -20628,7 +20736,11 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("'enabled' is required", 400)
         enabled = parse_bool_value(body.get("enabled"), default=True)
         with connect() as conn:
-            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            # Enabling auto-update can immediately install bundled plugin
+            # updates (upgrade_seeded_default_plugins) and re-sync/execute the
+            # registry, so it needs the same owner/admin-only boundary as the
+            # other executable-code write endpoints below.
+            actor = require_plugin_registry_install_permission(conn)
             with conn.transaction():
                 set_app_setting_value(
                     conn,
@@ -20665,7 +20777,7 @@ def register_routes(flask_app: Flask) -> None:
         if not plugin_id:
             raise NextApiError("Plugin id is required", 400)
         with connect() as conn:
-            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            actor = require_plugin_registry_install_permission(conn)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             try:
@@ -20701,7 +20813,7 @@ def register_routes(flask_app: Flask) -> None:
         if not plugin_id:
             raise NextApiError("Plugin id is required", 400)
         with connect() as conn:
-            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            actor = require_plugin_registry_install_permission(conn)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             try:
@@ -20773,70 +20885,138 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.post("/api/next/plugins/import")
     def import_plugin_zip():
         with connect() as conn:
-            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            # Importing a plugin writes a new plugin.py to disk, which
+            # discover_plugins() executes unconditionally on the next
+            # registry sync below -- this is the confirmed RCE path, so it
+            # must require the owner/admin-only plugin install boundary, not
+            # the broad PLUGIN_REGISTRY_MANAGE_PERMISSIONS tuple.
+            actor = require_plugin_registry_install_permission(conn)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
-            with tempfile.TemporaryDirectory(prefix="discvault-plugin-import-") as temp_dir_name:
-                temp_dir = Path(temp_dir_name)
-                upload_path = uploaded_plugin_file_path(temp_dir)
-                extracted_dir = temp_dir / "extracted"
-                extracted_dir.mkdir(parents=True, exist_ok=True)
-                try:
-                    safe_extract_plugin_zip(upload_path, extracted_dir)
-                except zipfile.BadZipFile as exc:
-                    raise NextApiError("Plugin upload is not a valid ZIP file", 400) from exc
-                plugin_root = locate_plugin_root(extracted_dir)
-                manifest = validate_import_plugin_root(plugin_root)
-                installed_path = install_plugin_from_root(plugin_root, manifest)
 
-            with conn.transaction():
-                if table_exists(conn, "metadata_plugins"):
-                    sync_metadata_plugin_registry(conn)
-                else:
-                    sync_plugin_registry(conn, table_exists, Jsonb)
+            package_digest: str | None = None
+            upload_size: int | None = None
+            install_target: Path | None = None
+            previous_source_path: Path | None = None
+            previous_trash_path: Path | None = None
+            previous_trash_root: Path | None = None
+            install_started = False
+            import_succeeded = False
+            failure_stage = "upload"
+            try:
+                with tempfile.TemporaryDirectory(
+                    prefix="discvault-plugin-import-",
+                    ignore_cleanup_errors=True,
+                ) as temp_dir_name:
+                    temp_dir = Path(temp_dir_name)
+                    upload_path = uploaded_plugin_file_path(temp_dir)
+                    upload_size = upload_path.stat().st_size
+                    package_digest = plugin_package_sha256(upload_path)
+                    failure_stage = "extract"
+                    extracted_dir = temp_dir / "extracted"
+                    extracted_dir.mkdir(parents=True, exist_ok=True)
+                    try:
+                        safe_extract_plugin_zip(upload_path, extracted_dir)
+                    except zipfile.BadZipFile as exc:
+                        raise NextApiError("Plugin upload is not a valid ZIP file", 400) from exc
+                    plugin_root = locate_plugin_root(extracted_dir)
+                    failure_stage = "validate"
+                    manifest = validate_import_plugin_root(plugin_root)
+                    install_target = plugin_install_target_path(manifest)
+                    failure_stage = "backup"
+                    previous_source_path, previous_trash_path, previous_trash_root = move_plugin_source_to_trash(
+                        {"sourcePath": str(install_target)}
+                    )
+                    failure_stage = "install"
+                    install_started = True
+                    installed_path = install_plugin_from_root(plugin_root, manifest)
+                    failure_stage = "registry_sync"
+                    with conn.transaction():
+                        if table_exists(conn, "metadata_plugins"):
+                            sync_metadata_plugin_registry(conn)
+                        else:
+                            sync_plugin_registry(conn, table_exists, Jsonb)
 
-                imported_plugin_id = str(manifest["id"])
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT categories FROM plugins WHERE id=%s",
-                        (imported_plugin_id,),
-                    )
-                    imported_row = cur.fetchone()
-                imported_categories = (
-                    (imported_row.get("categories") if imported_row else None) or []
-                )
-                imported_is_metadata_plugin = bool(
-                    {"metadata_source", "metadata_receiver"}.intersection(
-                        set(imported_categories)
-                    )
-                )
-                with conn.cursor() as cur:
-                    if imported_is_metadata_plugin and table_exists(conn, "metadata_plugins"):
-                        cur.execute(
-                            "UPDATE metadata_plugins SET enabled=true, updated_at=now() WHERE id=%s",
-                            (imported_plugin_id,),
+                        imported_plugin_id = str(manifest["id"])
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                "SELECT categories FROM plugins WHERE id=%s",
+                                (imported_plugin_id,),
+                            )
+                            imported_row = cur.fetchone()
+                        imported_categories = (
+                            (imported_row.get("categories") if imported_row else None) or []
                         )
-                    cur.execute(
-                        "UPDATE plugins SET enabled=true, updated_at=now() WHERE id=%s",
-                        (imported_plugin_id,),
-                    )
-                audit_event(
+                        imported_is_metadata_plugin = bool(
+                            {"metadata_source", "metadata_receiver"}.intersection(
+                                set(imported_categories)
+                            )
+                        )
+                        with conn.cursor() as cur:
+                            if imported_is_metadata_plugin and table_exists(conn, "metadata_plugins"):
+                                cur.execute(
+                                    "UPDATE metadata_plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                                    (imported_plugin_id,),
+                                )
+                            cur.execute(
+                                "UPDATE plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                                (imported_plugin_id,),
+                            )
+                        audit_event(
+                            conn,
+                            event_type="plugin.imported",
+                            category="plugins",
+                            actor=actor,
+                            target_type="plugin",
+                            target_id=str(manifest["id"]),
+                            summary=f"Imported plugin {manifest['id']} {manifest.get('version')}",
+                            metadata={
+                                "pluginId": manifest["id"],
+                                "name": manifest.get("name"),
+                                "version": manifest.get("version"),
+                                "categories": manifest.get("categories"),
+                                "installedPath": str(installed_path),
+                                "enabled": True,
+                                "packageSha256": package_digest,
+                                "uploadSizeBytes": upload_size,
+                            },
+                        )
+                    import_succeeded = True
+            except Exception as exc:
+                # Once installation starts, every later failure must remove the
+                # new executable and restore the previous plugin before failing.
+                if install_started and install_target and install_target.exists():
+                    try:
+                        shutil.rmtree(install_target)
+                    except OSError:
+                        app.logger.error("Failed to remove a partially imported plugin")
+                backup_available = bool(previous_trash_path and previous_trash_path.exists())
+                try:
+                    restored_previous = restore_plugin_source(previous_source_path, previous_trash_path)
+                except (OSError, shutil.Error):
+                    app.logger.error("Failed to restore the previous plugin after import failure")
+                else:
+                    if backup_available and not restored_previous:
+                        app.logger.error(
+                            "Previous plugin restore skipped because the target path is still occupied"
+                        )
+                audit_plugin_import_failure(
                     conn,
-                    event_type="plugin.imported",
-                    category="plugins",
                     actor=actor,
-                    target_type="plugin",
-                    target_id=str(manifest["id"]),
-                    summary=f"Imported plugin {manifest['id']} {manifest.get('version')}",
-                    metadata={
-                        "pluginId": manifest["id"],
-                        "name": manifest.get("name"),
-                        "version": manifest.get("version"),
-                        "categories": manifest.get("categories"),
-                        "installedPath": str(installed_path),
-                        "enabled": True,
-                    },
+                    package_digest=package_digest,
+                    upload_size=upload_size,
+                    stage=failure_stage,
+                    error=exc,
                 )
+                raise
+            finally:
+                if previous_trash_root:
+                    backup_remains = bool(previous_trash_path and previous_trash_path.exists())
+                    if import_succeeded or not backup_remains:
+                        shutil.rmtree(previous_trash_root, ignore_errors=True)
+                    else:
+                        app.logger.error("Preserved a previous plugin backup after failed import recovery")
+
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
             plugin = next((item for item in registry["plugins"] if item["id"] == manifest["id"]), None)
         return response({"status": "ok", "plugin": plugin, "registry": registry})
