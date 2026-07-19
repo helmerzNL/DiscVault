@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "프로필 메뉴",
+  "preferences.profileMenuStyleHelp": "큰 화면에서 프로필 메뉴에 레이블을 표시할지 선택합니다. 휴대폰에서는 항상 아이콘만 표시됩니다.",
+  "preferences.profileMenuIconOnly": "아이콘만",
+  "preferences.profileMenuIconText": "아이콘 및 텍스트",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Meniu profil",
+  "preferences.profileMenuStyleHelp": "Alegeți dacă meniul profilului afișează etichete pe ecrane mari. Pe telefoane sunt afișate întotdeauna doar pictograme.",
+  "preferences.profileMenuIconOnly": "Doar pictograme",
+  "preferences.profileMenuIconText": "Pictograme și text",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

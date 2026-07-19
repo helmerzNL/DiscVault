@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profilmenü",
+  "preferences.profileMenuStyleHelp": "Válassza ki, hogy a profilmenü megjelenítse-e a címkéket nagy képernyőkön. Telefonokon mindig csak ikonok jelennek meg.",
+  "preferences.profileMenuIconOnly": "Csak ikonok",
+  "preferences.profileMenuIconText": "Ikonok és szöveg",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

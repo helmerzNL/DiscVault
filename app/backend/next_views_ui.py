@@ -128,6 +128,13 @@ def ui_preview_html(
         "import": "M12 2A10 10 0 1 1 2 12A10 10 0 0 1 12 2M17 11H13V7H11V11H7V13H11V17H13V13H17V11Z",
         "notifications": "M12 22A2.5 2.5 0 0 0 14.5 19.5H9.5A2.5 2.5 0 0 0 12 22M18 16V11A6 6 0 0 0 13 5.1V4A1 1 0 0 0 11 4V5.1A6 6 0 0 0 6 11V16L4 18V19H20V18L18 16Z",
         "profile": "M12 4A4 4 0 1 1 8 8A4 4 0 0 1 12 4M12 14C16.42 14 20 15.79 20 18V20H4V18C4 15.79 7.58 14 12 14Z",
+        "account": "M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2M12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5M12 19.2C9.5 19.2 7.29 17.92 6 16C6.03 14 10 12.9 12 12.9S17.97 14 18 16C16.71 17.92 14.5 19.2 12 19.2Z",
+        "preferences": "M3 17V19H9V17H3M3 5V7H13V5H3M15 17V19H21V17H15M11 9V11H21V9H11M11 3V9H13V7H15V5H13V3H11M7 11V15H9V13H11V11H7M17 11V15H19V13H21V11H17Z",
+        "groups": "M12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5M5.5 7C6.88 7 8 8.12 8 9.5S6.88 12 5.5 12 3 10.88 3 9.5 4.12 7 5.5 7M18.5 7C19.88 7 21 8.12 21 9.5S19.88 12 18.5 12 16 10.88 16 9.5 17.12 7 18.5 7M12 13C15.31 13 18 14.79 18 17V20H6V17C6 14.79 8.69 13 12 13M5.5 14C3.57 14 2 15.12 2 16.5V19H4V17C4 15.9 4.45 14.87 5.22 14.03L5.5 14M18.5 14L18.78 14.03C19.55 14.87 20 15.9 20 17V19H22V16.5C22 15.12 20.43 14 18.5 14Z",
+        "structure": "M10 3H4C2.9 3 2 3.9 2 5V9C2 10.1 2.9 11 4 11H10C11.1 11 12 10.1 12 9V8H15V11H14C12.9 11 12 11.9 12 13V19C12 20.1 12.9 21 14 21H20C21.1 21 22 20.1 22 19V15C22 13.9 21.1 13 20 13H17V7C17 6.45 16.55 6 16 6H12V5C12 3.9 11.1 3 10 3M4 5H10V9H4V5M14 13H20V19H14V13Z",
+        "security": "M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1M12 5C13.66 5 15 6.34 15 8V10H16V16H8V10H9V8C9 6.34 10.34 5 12 5M12 7C11.45 7 11 7.45 11 8V10H13V8C13 7.45 12.55 7 12 7Z",
+        "api": "M7 7H5C3.9 7 3 7.9 3 9V15C3 16.1 3.9 17 5 17H7V15H5V9H7V11H9V9C9 7.9 8.1 7 7 7M13 7H9V17H11V13H13C14.66 13 16 11.66 16 10S14.66 7 13 7M13 11H11V9H13C13.55 9 14 9.45 14 10S13.55 11 13 11M18 7V9H20V15H18V17H22V7H18Z",
+        "about": "M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
         "discover": "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.24,7.76L14.12,14.12L7.76,16.24L9.88,9.88L16.24,7.76M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z",
     }
@@ -138,6 +145,18 @@ def ui_preview_html(
             f'<span class="nav-symbol {h(name)}" aria-hidden="true">'
             f'<svg viewBox="0 0 24 24" focusable="false" role="img"><path d="{path}"></path></svg>'
             "</span>"
+        )
+
+    def profile_tab(name: str, label_key: str, fallback: str, *, active: bool = False) -> str:
+        suffix = "".join(part.capitalize() for part in name.split("_"))
+        active_class = ' class="active"' if active else ""
+        return (
+            f'<button id="profileTab{suffix}" type="button"{active_class} role="tab" '
+            f'aria-controls="profilePanel{suffix}" aria-selected="{"true" if active else "false"}" '
+            f'tabindex="{"0" if active else "-1"}" aria-label="{h(fallback)}" title="{h(fallback)}" '
+            f'data-next-i18n-aria="{h(label_key)}" data-next-i18n-title="{h(label_key)}" '
+            f'data-profile-tab="{h(name)}">{nav_icon(name)}'
+            f'<span class="profile-tab-label" data-next-i18n="{h(label_key)}">{h(fallback)}</span></button>'
         )
 
     return """<!doctype html>
@@ -7745,6 +7764,20 @@ def ui_preview_html(
       gap: 16px;
       overflow: hidden;
     }
+    .profile-center-header {
+      align-items: flex-start;
+    }
+    .profile-center-layout {
+      display: grid;
+      grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+      min-width: 0;
+    }
+    .profile-content {
+      display: grid;
+      min-width: 0;
+    }
     .profile-view,
     .profile-center-card,
     .profile-panel,
@@ -7759,22 +7792,67 @@ def ui_preview_html(
       max-width: 100%;
       box-sizing: border-box;
     }
-    .profile-submenu {
-      width: max-content;
-      max-width: 100%;
-      overflow-x: auto;
-      justify-content: flex-start;
+    .profile-navigation {
+      position: sticky;
+      top: 18px;
+      display: grid;
+      width: 100%;
+      max-width: none;
+      gap: 6px;
+      padding: 8px;
+      border-radius: 16px;
+      overflow: visible;
       scrollbar-width: none;
       -webkit-overflow-scrolling: touch;
     }
-    .profile-submenu::-webkit-scrollbar {
+    .profile-navigation::-webkit-scrollbar {
       display: none;
     }
-    .profile-submenu button {
+    .profile-navigation button {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      width: 100%;
       min-width: 0;
+      min-height: 44px;
+      padding: 0 12px;
+      border-radius: 12px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      text-align: left;
+    }
+    .profile-navigation button:hover {
+      color: var(--text);
+      background: color-mix(in srgb, var(--accent) 10%, var(--bg-solid));
+    }
+    .profile-navigation button:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+    .profile-navigation button.active {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+        0 10px 24px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    .profile-tab-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    html[data-profile-menu-style="icon_only"] .profile-center-layout {
+      grid-template-columns: 72px minmax(0, 1fr);
+    }
+    html[data-profile-menu-style="icon_only"] .profile-navigation button {
+      justify-content: center;
+      padding-inline: 0;
+    }
+    html[data-profile-menu-style="icon_only"] .profile-navigation .profile-tab-label {
+      display: none;
     }
     .profile-panel {
       display: grid;
@@ -7787,6 +7865,107 @@ def ui_preview_html(
       gap: 14px;
       align-items: start;
       min-width: 0;
+    }
+    .account-dashboard {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .account-summary-card {
+      display: grid;
+      gap: 16px;
+      padding: 18px;
+      border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 42%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .account-summary-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .account-summary-symbol {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 13px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 17%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent);
+    }
+    .account-summary-symbol .nav-symbol {
+      width: 24px;
+      height: 24px;
+    }
+    .account-summary-symbol .nav-symbol svg {
+      width: 24px;
+      height: 24px;
+    }
+    .account-summary-copy {
+      min-width: 0;
+    }
+    .account-summary-copy h4 {
+      margin: 2px 0 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 1.15rem;
+    }
+    .account-fact-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      min-width: 0;
+    }
+    .account-fact {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+    }
+    .account-fact span {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 700;
+    }
+    .account-fact strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .account-editor-card {
+      padding: 18px;
+    }
+    .account-editor-heading {
+      display: grid;
+      gap: 4px;
+    }
+    .account-edit-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      min-width: 0;
+    }
+    .account-edit-grid .profile-form {
+      align-content: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 64%, transparent);
+    }
+    .account-session-actions {
+      display: flex;
+      justify-content: flex-end;
+      padding-top: 2px;
     }
     .profile-security-grid {
       gap: 12px;
@@ -10427,7 +10606,46 @@ def ui_preview_html(
       .profile-grid {
         grid-template-columns: 1fr;
       }
+      .profile-center-layout {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      html[data-profile-menu-style="icon_only"] .profile-center-layout {
+        grid-template-columns: 1fr;
+      }
+      .detail-submenu.profile-navigation {
+        position: static;
+        display: flex;
+        width: 100%;
+        max-width: 100%;
+        gap: 6px;
+        padding: 6px;
+        border-radius: 14px;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scroll-snap-type: inline proximity;
+      }
+      .detail-submenu.profile-navigation button,
+      html[data-profile-menu-style="icon_only"] .detail-submenu.profile-navigation button {
+        flex: 0 0 44px;
+        width: 44px;
+        min-width: 44px;
+        min-height: 44px;
+        max-width: 44px;
+        justify-content: center;
+        padding: 0;
+        scroll-snap-align: start;
+      }
+      .profile-navigation .profile-tab-label {
+        display: none;
+      }
       .profile-section-grid {
+        grid-template-columns: 1fr;
+      }
+      .account-fact-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .account-edit-grid {
         grid-template-columns: 1fr;
       }
       .profile-api-panel[data-profile-api-panel="general"],
@@ -12600,77 +12818,92 @@ def ui_preview_html(
               <button type="button" class="secondary-button profile-hero-nav-action hidden" id="profileOpenStatisticsButton" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span></button>
             </div>
             <button type="button" class="secondary-button hidden" id="profileOpenAdminButton" data-app-route="admin" data-next-i18n="profile.openAdmin">Open admin</button>
-            <button type="button" class="secondary-button" id="profileSignOutButton" data-next-i18n="auth.signOut">Sign out</button>
           </div>
         </section>
         <section class="profile-grid profile-grid-single">
           <div class="detail-card profile-card full profile-center-card">
-            <div class="detail-card-head">
+            <div class="detail-card-head profile-center-header">
               <div>
                 <h3 data-next-i18n="profile.profileCenter">Profile center</h3>
                 <p data-next-i18n="profile.profileCenterHelp">Manage your account, preferences, security and app information.</p>
               </div>
-              <nav class="detail-submenu profile-submenu" aria-label="Profile sections" data-next-i18n-aria="profile.sections">
-                <button type="button" class="active" data-profile-tab="account" data-next-i18n="profile.tabAccount">Account</button>
-                <button type="button" data-profile-tab="preferences" data-next-i18n="preferences.title">Preferences</button>
-                <button type="button" data-profile-tab="notifications" data-next-i18n="profile.tabNotifications">Notifications</button>
-                <button type="button" data-profile-tab="groups" data-next-i18n="groups.memberGroups">Groups</button>
-                <button type="button" data-profile-tab="structure" data-next-i18n="profile.tabStructure">Structure</button>
-                <button type="button" data-profile-tab="security" data-next-i18n="profile.security">Security</button>
-                <button type="button" data-profile-tab="api" data-next-i18n="profile.apiMcp">API & MCP</button>
-                <button type="button" data-profile-tab="about" data-next-i18n="profile.about">About</button>
-              </nav>
             </div>
-            <div class="detail-subpanel profile-panel" data-profile-panel="account">
-              <div class="profile-section-grid">
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.account">Account</h4>
-                  <div class="profile-meta">
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.username">Username</span>
-                      <strong id="profileUsername">-</strong>
-                    </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.role">Role</span>
-                      <strong id="profileRole">-</strong>
-                    </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.users">Users</span>
-                      <strong id="profileUserCount">-</strong>
-                    </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.credentials">Passkeys</span>
-                      <strong id="profileCredentialCount">-</strong>
+            <div class="profile-center-layout">
+              <nav class="detail-submenu profile-submenu profile-navigation" role="tablist" aria-label="Profile sections" data-next-i18n-aria="profile.sections">
+                """ + profile_tab("account", "profile.tabAccount", "Account", active=True) + """
+                """ + profile_tab("preferences", "preferences.title", "Preferences") + """
+                """ + profile_tab("notifications", "profile.tabNotifications", "Notifications") + """
+                """ + profile_tab("groups", "groups.memberGroups", "Groups") + """
+                """ + profile_tab("structure", "profile.tabStructure", "Structure") + """
+                """ + profile_tab("security", "profile.security", "Security") + """
+                """ + profile_tab("api", "profile.apiMcp", "API & MCP") + """
+                """ + profile_tab("about", "profile.about", "About") + """
+              </nav>
+              <div class="profile-content">
+                <div id="profilePanelAccount" class="detail-subpanel profile-panel" role="tabpanel" aria-labelledby="profileTabAccount" tabindex="0" data-profile-panel="account">
+                  <div class="account-dashboard">
+                    <section class="account-summary-card">
+                      <div class="account-summary-head">
+                        <span class="account-summary-symbol">""" + nav_icon("account") + """</span>
+                        <div class="account-summary-copy">
+                          <span class="eyebrow" data-next-i18n="profile.account">Account</span>
+                          <h4 id="profileAccountDisplayName">DiscVault</h4>
+                        </div>
+                      </div>
+                      <div class="account-fact-grid">
+                        <div class="account-fact">
+                          <span data-next-i18n="profile.username">Username</span>
+                          <strong id="profileUsername">-</strong>
+                        </div>
+                        <div class="account-fact">
+                          <span data-next-i18n="profile.role">Role</span>
+                          <strong id="profileRole">-</strong>
+                        </div>
+                        <div class="account-fact">
+                          <span data-next-i18n="profile.users">Users</span>
+                          <strong id="profileUserCount">-</strong>
+                        </div>
+                        <div class="account-fact">
+                          <span data-next-i18n="profile.credentials">Passkeys</span>
+                          <strong id="profileCredentialCount">-</strong>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="profile-section-box account-editor-card">
+                      <div class="account-editor-heading">
+                        <h4 data-next-i18n="profile.profileEditing">Profile editing</h4>
+                        <p data-next-i18n="profile.subtitle">Personal settings and account access.</p>
+                      </div>
+                      <div class="account-edit-grid">
+                        <form class="profile-form" id="profileEditForm">
+                          <label for="profileDisplayNameInput">
+                            <span data-next-i18n="profile.displayName">Display name</span>
+                            <input id="profileDisplayNameInput" name="display_name" maxlength="120" autocomplete="name">
+                          </label>
+                          <div class="profile-form-actions">
+                            <button type="submit" class="secondary-button" id="profileSaveButton" data-next-i18n="profile.saveProfile">Save profile</button>
+                            <span class="login-message" id="profileEditMessage"></span>
+                          </div>
+                        </form>
+                        <form class="profile-form" id="profileAvatarForm">
+                          <label for="profileAvatarFileInput">
+                            <span data-next-i18n="profile.avatar">Avatar</span>
+                            <input id="profileAvatarFileInput" name="file" type="file" accept="image/*">
+                          </label>
+                          <div class="profile-form-actions">
+                            <button type="submit" class="secondary-button" id="profileAvatarUploadButton" data-next-i18n="profile.uploadAvatar">Upload avatar</button>
+                            <button type="button" class="secondary-button" id="profileAvatarRemoveButton" data-next-i18n="profile.removeAvatar">Remove avatar</button>
+                            <span class="login-message" id="profileAvatarMessage"></span>
+                          </div>
+                        </form>
+                      </div>
+                    </section>
+                    <div class="account-session-actions">
+                      <button type="button" class="secondary-button" id="profileSignOutButton" data-next-i18n="auth.signOut">Sign out</button>
                     </div>
                   </div>
-                </section>
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.profileEditing">Profile editing</h4>
-                  <form class="profile-form" id="profileEditForm">
-                    <label for="profileDisplayNameInput">
-                      <span data-next-i18n="profile.displayName">Display name</span>
-                      <input id="profileDisplayNameInput" name="display_name" maxlength="120" autocomplete="name">
-                    </label>
-                    <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="profileSaveButton" data-next-i18n="profile.saveProfile">Save profile</button>
-                      <span class="login-message" id="profileEditMessage"></span>
-                    </div>
-                  </form>
-                  <form class="profile-form" id="profileAvatarForm">
-                    <label for="profileAvatarFileInput">
-                      <span data-next-i18n="profile.avatar">Avatar</span>
-                      <input id="profileAvatarFileInput" name="file" type="file" accept="image/*">
-                    </label>
-                    <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="profileAvatarUploadButton" data-next-i18n="profile.uploadAvatar">Upload avatar</button>
-                      <button type="button" class="secondary-button" id="profileAvatarRemoveButton" data-next-i18n="profile.removeAvatar">Remove avatar</button>
-                      <span class="login-message" id="profileAvatarMessage"></span>
-                    </div>
-                  </form>
-                </section>
-              </div>
-            </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="preferences">
+                </div>
+                <div id="profilePanelPreferences" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabPreferences" tabindex="0" data-profile-panel="preferences">
               <div class="detail-card-head compact">
                 <div>
                   <h4 data-next-i18n="preferences.title">Preferences</h4>
@@ -12713,6 +12946,16 @@ def ui_preview_html(
                   </div>
                   <div class="preference-control-row">
                     <span>
+                      <strong data-next-i18n="preferences.profileMenuStyle">Profile menu</strong>
+                      <span data-next-i18n="preferences.profileMenuStyleHelp">Choose whether the Profile menu shows labels on large screens. Phones always show icons only.</span>
+                    </span>
+                    <div class="segmented" role="group" aria-label="Profile menu" data-next-i18n-aria="preferences.profileMenuStyle">
+                      <button type="button" data-profile-menu-style-choice="icon_text" aria-pressed="true" data-next-i18n="preferences.profileMenuIconText">Icons and text</button>
+                      <button type="button" data-profile-menu-style-choice="icon_only" aria-pressed="false" data-next-i18n="preferences.profileMenuIconOnly">Icons only</button>
+                    </div>
+                  </div>
+                  <div class="preference-control-row">
+                    <span>
                       <strong data-next-i18n="preferences.language">Language</strong>
                       <span data-next-i18n="preferences.languageHelp">Choose the language for DiscVault on this device.</span>
                     </span>
@@ -12732,7 +12975,7 @@ def ui_preview_html(
               </div>
               <div class="login-message" id="preferencesMessage"></div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="notifications">
+                <div id="profilePanelNotifications" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabNotifications" tabindex="0" data-profile-panel="notifications">
               <div class="detail-card-head compact">
                 <div>
                   <h4 data-next-i18n="notifications.pushTitle">Push notifications</h4>
@@ -12768,7 +13011,7 @@ def ui_preview_html(
               </div>
               <div class="login-message" id="pushProfileMessage"></div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="groups">
+                <div id="profilePanelGroups" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabGroups" tabindex="0" data-profile-panel="groups">
               <div class="detail-card-head compact">
                 <div>
                   <h4 data-next-i18n="groups.memberGroups">Member Groups</h4>
@@ -12797,7 +13040,7 @@ def ui_preview_html(
               </div>
               <div class="container-manager-list member-group-list" id="memberGroupList"></div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="structure">
+                <div id="profilePanelStructure" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabStructure" tabindex="0" data-profile-panel="structure">
               <div class="detail-card-head compact">
                 <div>
                   <h4 data-next-i18n="containerManage.title">Collection structure</h4>
@@ -12847,7 +13090,7 @@ def ui_preview_html(
                 <div class="locations-tree" id="locationsTree"></div>
               </div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="security">
+                <div id="profilePanelSecurity" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabSecurity" tabindex="0" data-profile-panel="security">
               <div class="profile-section-grid profile-security-grid">
                 <div class="profile-security-column">
                   <section class="profile-section-box">
@@ -12907,7 +13150,7 @@ def ui_preview_html(
                 </div>
               </div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="api">
+                <div id="profilePanelApi" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabApi" tabindex="0" data-profile-panel="api">
               <div class="segmented profile-submenu profile-api-submenu" role="tablist" aria-label="API and MCP sections">
                 <button type="button" class="active" data-profile-api-tab="general" data-next-i18n="profile.apiTabGeneral">General</button>
                 <button type="button" data-profile-api-tab="create" data-next-i18n="profile.apiTabCreate">Create key</button>
@@ -12975,7 +13218,7 @@ def ui_preview_html(
                 </section>
               </div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="about">
+                <div id="profilePanelAbout" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabAbout" tabindex="0" data-profile-panel="about">
               <section class="profile-section-box">
                 <div>
                   <h4 data-next-i18n="profile.about">About</h4>
@@ -13039,6 +13282,8 @@ def ui_preview_html(
                   </div>
                 </div>
               </section>
+            </div>
+              </div>
             </div>
           </div>
         </section>
@@ -18936,6 +19181,40 @@ def ui_preview_html(
       }
       document.querySelectorAll("[data-accent-choice]").forEach((button) => {
         button.classList.toggle("active", button.dataset.accentChoice === selected);
+      });
+    }
+    const PROFILE_MENU_STYLES = ["icon_text", "icon_only"];
+    const PROFILE_MENU_STYLE_STORAGE_KEY = "dv_next_profile_menu_style";
+    function storedProfileMenuStyle() {
+      try {
+        const value = localStorage.getItem(PROFILE_MENU_STYLE_STORAGE_KEY);
+        return PROFILE_MENU_STYLES.includes(value) ? value : "";
+      } catch (error) {
+        return "";
+      }
+    }
+    function effectiveProfileMenuStyle() {
+      const stored = storedProfileMenuStyle();
+      if ((!appMode || currentAuthStatus.auth_enabled === false) && stored) return stored;
+      return PROFILE_MENU_STYLES.includes(preferences.profile_menu_style)
+        ? preferences.profile_menu_style
+        : "icon_text";
+    }
+    function persistProfileMenuStyle(style) {
+      if (!PROFILE_MENU_STYLES.includes(style)) return;
+      try {
+        localStorage.setItem(PROFILE_MENU_STYLE_STORAGE_KEY, style);
+      } catch (error) {
+        /* localStorage may be unavailable (private mode / blocked); ignore */
+      }
+    }
+    function setProfileMenuStyle(style) {
+      const selected = PROFILE_MENU_STYLES.includes(style) ? style : "icon_text";
+      document.documentElement.dataset.profileMenuStyle = selected;
+      document.querySelectorAll("[data-profile-menu-style-choice]").forEach((button) => {
+        const active = button.dataset.profileMenuStyleChoice === selected;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
       });
     }
     function groupOptionsHtml() {
@@ -33095,12 +33374,31 @@ def ui_preview_html(
         button.classList.toggle("hidden", !visible);
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
       });
       document.querySelectorAll("[data-profile-panel]").forEach((panel) => {
         const visible = canUseProfileTab(panel.dataset.profilePanel);
-        panel.classList.toggle("hidden", !visible || panel.dataset.profilePanel !== selected);
+        const active = visible && panel.dataset.profilePanel === selected;
+        panel.classList.toggle("hidden", !active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
       if (selected === "api") setProfileApiTab(activeProfileApiTab);
+    }
+    function handleProfileTabKeydown(button, event) {
+      if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      const tabs = [...document.querySelectorAll("[data-profile-tab]")]
+        .filter((item) => !item.classList.contains("hidden") && !item.disabled);
+      if (!tabs.length) return;
+      const currentIndex = Math.max(0, tabs.indexOf(button));
+      let targetIndex = currentIndex;
+      if (event.key === "Home") targetIndex = 0;
+      else if (event.key === "End") targetIndex = tabs.length - 1;
+      else if (event.key === "ArrowDown" || event.key === "ArrowRight") targetIndex = (currentIndex + 1) % tabs.length;
+      else targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      event.preventDefault();
+      const target = tabs[targetIndex];
+      setProfileTab(target.dataset.profileTab || "account");
+      target.focus();
     }
     function syncProfilePanelVisibility() {
       setProfileTab(activeProfileTab);
@@ -33178,6 +33476,7 @@ def ui_preview_html(
         bindPreferenceList(collectorList);
       }
       renderLoansSystemSetting();
+      setProfileMenuStyle(effectiveProfileMenuStyle());
       if (legacyList) {
         legacyList.innerHTML = preferenceRowsHtml(preferenceLabels);
         bindPreferenceList(legacyList);
@@ -34023,6 +34322,7 @@ def ui_preview_html(
       preferences = Object.assign({}, preferences, state.preferences || {});
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
       setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
+      setProfileMenuStyle(effectiveProfileMenuStyle());
       renderPreferences();
       renderProfile();
       renderCollectionSurface();
@@ -34061,6 +34361,7 @@ def ui_preview_html(
     function renderProfile() {
       const profile = profileIdentity();
       const title = document.getElementById("profilePageTitle");
+      const accountDisplayName = document.getElementById("profileAccountDisplayName");
       const avatar = document.getElementById("profileAvatar");
       const displayNameInput = document.getElementById("profileDisplayNameInput");
       const username = document.getElementById("profileUsername");
@@ -34069,6 +34370,7 @@ def ui_preview_html(
       const credentialCount = document.getElementById("profileCredentialCount");
       const navRole = document.getElementById("navProfileRole");
       if (title) title.textContent = profile.name;
+      if (accountDisplayName) accountDisplayName.textContent = profile.name;
       if (avatar) {
         avatar.innerHTML = profile.avatarUrl
           ? `<img src="${escapeHtml(profile.avatarUrl)}" alt="">`
@@ -35120,6 +35422,7 @@ def ui_preview_html(
       loadLocale(localeState.locale);
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
       setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
+      setProfileMenuStyle(effectiveProfileMenuStyle());
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
         select.addEventListener("change", (event) => loadLocale(event.target.value));
       });
@@ -35139,6 +35442,15 @@ def ui_preview_html(
           if (appMode) {
             updatePreference("accent", preferences.accent);
           }
+        });
+      });
+      document.querySelectorAll("[data-profile-menu-style-choice]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const selected = button.dataset.profileMenuStyleChoice || "icon_text";
+          preferences.profile_menu_style = selected;
+          persistProfileMenuStyle(selected);
+          setProfileMenuStyle(selected);
+          if (appMode) updatePreference("profile_menu_style", selected);
         });
       });
       document.querySelectorAll("[data-preview-movie]").forEach((button) => {
@@ -35407,6 +35719,7 @@ def ui_preview_html(
       setPreferenceTab("appearance");
       document.querySelectorAll("[data-profile-tab]").forEach((button) => {
         button.addEventListener("click", () => setProfileTab(button.dataset.profileTab || "account"));
+        button.addEventListener("keydown", (event) => handleProfileTabKeydown(button, event));
       });
       setProfileTab(activeProfileTab);
       document.getElementById("memberGroupCreateForm")?.addEventListener("submit", (event) => createMemberGroup(event));

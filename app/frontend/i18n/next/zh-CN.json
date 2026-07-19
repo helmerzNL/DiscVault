@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "个人资料菜单",
+  "preferences.profileMenuStyleHelp": "选择个人资料菜单是否在大屏幕上显示文字标签。手机上始终仅显示图标。",
+  "preferences.profileMenuIconOnly": "仅图标",
+  "preferences.profileMenuIconText": "图标和文字",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

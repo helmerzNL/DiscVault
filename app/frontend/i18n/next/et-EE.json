@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profiilimenüü",
+  "preferences.profileMenuStyleHelp": "Vali, kas profiilimenüü kuvab suurtel ekraanidel silte. Telefonides kuvatakse alati ainult ikoone.",
+  "preferences.profileMenuIconOnly": "Ainult ikoonid",
+  "preferences.profileMenuIconText": "Ikoonid ja tekst",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

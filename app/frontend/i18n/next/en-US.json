@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profile menu",
+  "preferences.profileMenuStyleHelp": "Choose whether the Profile menu shows labels on large screens. Phones always show icons only.",
+  "preferences.profileMenuIconOnly": "Icons only",
+  "preferences.profileMenuIconText": "Icons and text",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

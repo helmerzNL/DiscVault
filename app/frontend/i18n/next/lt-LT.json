@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profilio meniu",
+  "preferences.profileMenuStyleHelp": "Pasirinkite, ar profilio meniu dideliuose ekranuose rodyti etiketes. Telefonuose visada rodomos tik piktogramos.",
+  "preferences.profileMenuIconOnly": "Tik piktogramos",
+  "preferences.profileMenuIconText": "Piktogramos ir tekstas",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

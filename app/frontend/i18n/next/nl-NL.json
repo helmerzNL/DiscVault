@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profielmenu",
+  "preferences.profileMenuStyleHelp": "Kies of het profielmenu op grote schermen labels toont. Op telefoons worden altijd alleen iconen getoond.",
+  "preferences.profileMenuIconOnly": "Alleen iconen",
+  "preferences.profileMenuIconText": "Iconen en tekst",
   "appAdmin.activeInvites": "Actieve uitnodigingen",
   "appAdmin.addMember": "Lid toevoegen",
   "appAdmin.advancedMode": "Advanced",

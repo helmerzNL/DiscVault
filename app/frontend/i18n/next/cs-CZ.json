@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Nabídka profilu",
+  "preferences.profileMenuStyleHelp": "Zvolte, zda má nabídka profilu na velkých obrazovkách zobrazovat popisky. Na telefonech se vždy zobrazují pouze ikony.",
+  "preferences.profileMenuIconOnly": "Pouze ikony",
+  "preferences.profileMenuIconText": "Ikony a text",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

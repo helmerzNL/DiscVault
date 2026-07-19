@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Menú de perfil",
+  "preferences.profileMenuStyleHelp": "Elige si el menú de perfil muestra etiquetas en pantallas grandes. En los teléfonos siempre se muestran solo iconos.",
+  "preferences.profileMenuIconOnly": "Solo iconos",
+  "preferences.profileMenuIconText": "Iconos y texto",
   "appAdmin.activeInvites": "Invitaciones activas",
   "appAdmin.addMember": "A?adir miembro",
   "appAdmin.advancedMode": "Advanced",

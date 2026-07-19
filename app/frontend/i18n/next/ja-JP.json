@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "プロフィールメニュー",
+  "preferences.profileMenuStyleHelp": "大きな画面でプロフィールメニューにラベルを表示するか選択します。スマートフォンでは常にアイコンのみ表示されます。",
+  "preferences.profileMenuIconOnly": "アイコンのみ",
+  "preferences.profileMenuIconText": "アイコンとテキスト",
   "appAdmin.activeInvites": "Active invites",
   "appAdmin.addMember": "Add member",
   "appAdmin.advancedMode": "Advanced",

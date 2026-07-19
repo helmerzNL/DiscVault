@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profilmeny",
+  "preferences.profileMenuStyleHelp": "Välj om profilmenyn ska visa etiketter på stora skärmar. På telefoner visas alltid endast ikoner.",
+  "preferences.profileMenuIconOnly": "Endast ikoner",
+  "preferences.profileMenuIconText": "Ikoner och text",
   "appAdmin.activeInvites": "Aktiva inbjudningar",
   "appAdmin.addMember": "L?gg till medlem",
   "appAdmin.advancedMode": "Advanced",

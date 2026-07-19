@@ -1,4 +1,8 @@
 {
+  "preferences.profileMenuStyle": "Profilmenu",
+  "preferences.profileMenuStyleHelp": "Vælg, om profilmenuen skal vise etiketter på store skærme. Telefoner viser altid kun ikoner.",
+  "preferences.profileMenuIconOnly": "Kun ikoner",
+  "preferences.profileMenuIconText": "Ikoner og tekst",
   "appAdmin.activeInvites": "Aktive invitationer",
   "appAdmin.addMember": "Tilf?j medlem",
   "appAdmin.advancedMode": "Advanced",

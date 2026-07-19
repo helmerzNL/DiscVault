@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from html.parser import HTMLParser
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -12,11 +13,51 @@ if repo_root not in sys.path:
 try:
     from app.backend import next_app
     from app.backend import next_profile
+    from app.backend import next_views_ui
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
     if exc.name not in {"flask", "psycopg"}:
         raise
     next_app = None
     next_profile = None
+    next_views_ui = None
+
+
+class _ElementAncestryParser(HTMLParser):
+    VOID_ELEMENTS = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+
+    def __init__(self):
+        super().__init__()
+        self.stack = []
+        self.ancestors_by_id = {}
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        element_id = attributes.get("id")
+        if element_id:
+            self.ancestors_by_id[element_id] = tuple(item_id for _, item_id in self.stack if item_id)
+        if tag not in self.VOID_ELEMENTS:
+            self.stack.append((tag, element_id))
+
+    def handle_endtag(self, tag):
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index][0] == tag:
+                del self.stack[index:]
+                return
 
 
 class _FakeCursor:
@@ -159,6 +200,66 @@ class NextProfileHelperTests(unittest.TestCase):
         self.assertEqual(payload["role"], "media_viewer")
         self.assertEqual(payload["roleDisplayName"], "Media Viewer")
         self.assertEqual(payload["role_display_name"], "Media Viewer")
+
+
+@unittest.skipIf(next_views_ui is None, "Flask is not installed in this test environment")
+class NextProfileUiTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.html = next_views_ui.ui_preview_html(app_mode=True)
+
+    def test_profile_navigation_uses_accessible_icon_tabs(self):
+        tabs = {
+            "Account": "account",
+            "Preferences": "preferences",
+            "Notifications": "notifications",
+            "Groups": "groups",
+            "Structure": "structure",
+            "Security": "security",
+            "Api": "api",
+            "About": "about",
+        }
+        self.assertIn('class="detail-submenu profile-submenu profile-navigation" role="tablist"', self.html)
+        for suffix, name in tabs.items():
+            self.assertIn(f'id="profileTab{suffix}"', self.html)
+            self.assertIn(f'aria-controls="profilePanel{suffix}"', self.html)
+            self.assertIn(f'data-profile-tab="{name}"', self.html)
+            self.assertIn(f'id="profilePanel{suffix}"', self.html)
+            self.assertIn(f'aria-labelledby="profileTab{suffix}"', self.html)
+
+    def test_profile_navigation_has_desktop_preference_and_mobile_icon_override(self):
+        self.assertIn('data-profile-menu-style-choice="icon_text"', self.html)
+        self.assertIn('data-profile-menu-style-choice="icon_only"', self.html)
+        self.assertIn('document.documentElement.dataset.profileMenuStyle = selected;', self.html)
+        self.assertIn('.profile-navigation .profile-tab-label {\n        display: none;', self.html)
+        self.assertIn('html[data-profile-menu-style="icon_only"] .profile-navigation .profile-tab-label', self.html)
+        self.assertIn('localStorage.setItem(PROFILE_MENU_STYLE_STORAGE_KEY, style);', self.html)
+        self.assertIn('currentAuthStatus.auth_enabled === false', self.html)
+        self.assertIn('setProfileMenuStyle(effectiveProfileMenuStyle());', self.html)
+
+    def test_account_dashboard_preserves_existing_profile_bindings(self):
+        self.assertIn('class="account-dashboard"', self.html)
+        self.assertIn('id="profileAccountDisplayName"', self.html)
+        for element_id in (
+            "profileUsername",
+            "profileRole",
+            "profileUserCount",
+            "profileCredentialCount",
+            "profileEditForm",
+            "profileDisplayNameInput",
+            "profileAvatarForm",
+            "profileAvatarFileInput",
+            "profileSignOutButton",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+    def test_about_content_stays_inside_about_tab_panel(self):
+        parser = _ElementAncestryParser()
+        parser.feed(self.html)
+        self.assertIn(
+            "profilePanelAbout",
+            parser.ancestors_by_id["profileOfflineStatus"],
+        )
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
 APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "theme": "system",
     "accent": "bluray",
+    "profile_menu_style": "icon_text",
     "show_featured_hero": True,
     "show_collection_search": True,
     "show_auto_videos": True,
@@ -61,11 +62,12 @@ APP_BOOLEAN_PREFERENCES = {
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
     "accent": {"bluray", "amethyst", "chrome", "emerald", "teal", "crimson", "magenta", "ember"},
+    "profile_menu_style": {"icon_text", "icon_only"},
     "preferred_price_currency": {"", "EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY"},
     "rating_country": {"NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "PL", "CZ", "HU", "RO", "BG", "GR", "UA", "EE", "LT", "TR", "JP", "TW", "KR"},
 }
 APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
-    "appearance": ("theme", "accent"),
+    "appearance": ("theme", "accent", "profile_menu_style"),
     "library": (
         "show_featured_hero",
         "show_collection_search",
@@ -121,7 +123,12 @@ def validate_app_preference(key: str, value: Any) -> Any:
     if key in APP_BOOLEAN_PREFERENCES:
         return parse_bool_value(value, default=bool(APP_PREFERENCE_DEFAULTS[key]))
     if key in APP_CHOICE_PREFERENCES:
-        text = str(value or APP_PREFERENCE_DEFAULTS[key]).strip()
+        if key == "profile_menu_style":
+            if not isinstance(value, str):
+                raise NextApiError(f"Invalid value for preference {key}", 400)
+            text = value.strip()
+        else:
+            text = str(value or APP_PREFERENCE_DEFAULTS[key]).strip()
         text = text.upper() if key in {"rating_country", "preferred_price_currency"} else text.lower()
         if text not in APP_CHOICE_PREFERENCES[key]:
             raise NextApiError(f"Invalid value for preference {key}", 400)
