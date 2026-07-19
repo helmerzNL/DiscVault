@@ -1,7 +1,7 @@
 {
   "id": "priceapi",
   "name": "PriceAPI",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["price_provider"],

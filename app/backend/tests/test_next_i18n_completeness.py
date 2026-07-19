@@ -83,6 +83,9 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn("lists.watchedToday", self.source)
         self.assertIn("lists.watchedYesterday", self.source)
 
+    def test_source_catalog_includes_public_shop_url_denial(self):
+        self.assertIn("lists.wishlistPriceUrlNotPublic", self.source)
+
     def test_source_catalog_includes_responsive_media_actions(self):
         for key in (
             "common.more",

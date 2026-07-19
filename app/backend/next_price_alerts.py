@@ -45,11 +45,21 @@ try:
     from .next_notifications import create_user_notification
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_price_provider_detection import extract_amazon_asin as _extract_amazon_asin
+    from .next_public_http import PUBLIC_HTTP_FAILURE_CODES
+    from .next_public_http import PublicHttpError
+    from .next_public_http import fetch_public_text
+    from .next_public_http import public_url_hostname
+    from .next_public_http import validate_public_url
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import NextApiError, json_ready, table_exists
     from next_notifications import create_user_notification
     from next_plugin_runtime import run_plugin_entrypoint
     from next_price_provider_detection import extract_amazon_asin as _extract_amazon_asin
+    from next_public_http import PUBLIC_HTTP_FAILURE_CODES
+    from next_public_http import PublicHttpError
+    from next_public_http import fetch_public_text
+    from next_public_http import public_url_hostname
+    from next_public_http import validate_public_url
 
 PRICE_ALERT_JOB_TYPE = "price_alert.sweep"
 
@@ -107,14 +117,13 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _fetch_html(url: str, *, session: Any = None, browser_like: bool = False) -> str:
-    """Return the raw HTML of *url*.  Raises ``ValueError`` on failure.
+    """Return the raw HTML of *url* through the public-network transport.
 
     When *browser_like* is True (used for sites with bot-detection), the
     request mimics a real Chrome browser as closely as possible over plain
     HTTP.
     """
-    import urllib.request
-
+    _ = session
     if browser_like:
         headers = {
             "User-Agent": _BROWSER_USER_AGENT,
@@ -138,27 +147,7 @@ def _fetch_html(url: str, *, session: Any = None, browser_like: bool = False) ->
             "User-Agent": _BROWSER_USER_AGENT,
             "Accept": "text/html,application/xhtml+xml",
         }
-
-    try:
-        import gzip as _gzip
-        import zlib as _zlib
-
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=_FETCH_TIMEOUT) as resp:  # noqa: S310
-            charset = resp.headers.get_content_charset() or "utf-8"
-            raw = resp.read()
-            encoding = resp.headers.get("Content-Encoding", "").lower().strip()
-            if encoding == "gzip":
-                raw = _gzip.decompress(raw)
-            elif encoding == "deflate":
-                try:
-                    raw = _zlib.decompress(raw)
-                except _zlib.error:
-                    raw = _zlib.decompress(raw, -_zlib.MAX_WBITS)
-            # brotli ("br") requires the optional `brotli` package; skip gracefully.
-            return raw.decode(charset, errors="replace")
-    except Exception as exc:
-        raise ValueError(f"Could not fetch {url}: {exc}") from exc
+    return fetch_public_text(url, headers=headers, timeout_seconds=_FETCH_TIMEOUT)
 
 
 def _is_amazon_bot_blocked(html: str) -> bool:
@@ -438,6 +427,8 @@ def extract_price_from_url_with_source(
 
     try:
         html = _fetch_html(url, session=session, browser_like=is_amazon)
+    except PublicHttpError as exc:
+        return None, None, exc.code
     except ValueError:
         return None, None, None
 
@@ -513,12 +504,26 @@ def _run_price_provider_check(
     movievault_id: Any = None,
     shop: dict[str, Any] | None = None,
 ) -> tuple[float | None, str | None, str | None, str | None, str | None, str | None, float | None]:
+    shop_url = str((shop or {}).get("price_url") or "").strip()
+    if shop_url:
+        try:
+            validate_public_url(shop_url)
+        except PublicHttpError as exc:
+            logger.warning(
+                "price_provider_check_rejected plugin=%s item=%s shop=%s host=%s code=%s",
+                plugin_id,
+                item_id,
+                (shop or {}).get("id"),
+                public_url_hostname(shop_url),
+                exc.code,
+            )
+            return None, None, None, "error", exc.code, None, None
     logger.info(
-        "price_provider_check_start plugin=%s item=%s shop=%s url=%s",
+        "price_provider_check_start plugin=%s item=%s shop=%s host=%s",
         plugin_id,
         item_id,
         (shop or {}).get("id"),
-        (shop or {}).get("price_url"),
+        public_url_hostname(shop_url),
     )
     payload: dict[str, Any] = {"itemId": str(item_id) if item_id else None}
     if movievault_id:
@@ -534,15 +539,20 @@ def _run_price_provider_check(
     execution_status = str(execution.get("status") or "").lower()
     plugin_result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
     provider_status = str(_provider_result_value(plugin_result, "status") or execution_status or "error")
-    provider_error = str(
+    raw_provider_error = str(
         _provider_result_value(plugin_result, "error")
         or execution.get("error")
         or ""
     ).strip() or None
+    provider_error = (
+        raw_provider_error
+        if raw_provider_error in PUBLIC_HTTP_FAILURE_CODES
+        else ("provider_error" if raw_provider_error else None)
+    )
 
     if execution_status != "ok":
         logger.warning(
-            "price_provider_check_failed plugin=%s item=%s shop=%s status=%s error=%s",
+            "price_provider_check_failed plugin=%s item=%s shop=%s status=%s error_code=%s",
             plugin_id,
             item_id,
             (shop or {}).get("id"),
@@ -704,13 +714,13 @@ def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | N
                 )
             except Exception as exc:  # noqa: BLE001
                 provider_status = "error"
-                provider_error = str(exc)
+                provider_error = "provider_error"
                 logger.warning(
-                    "price_provider_check_exception plugin=%s item=%s shop=%s error=%s",
+                    "price_provider_check_exception plugin=%s item=%s shop=%s error_type=%s",
                     clean_provider_id,
                     item_id,
                     shop.get("id"),
-                    provider_error,
+                    type(exc).__name__,
                 )
 
         if not raw_url:
@@ -740,10 +750,10 @@ def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | N
                 )
             except Exception:  # noqa: BLE001
                 logger.warning(
-                    "price_url_extract_exception item=%s shop=%s url=%s provider=%s",
+                    "price_url_extract_exception item=%s shop=%s host=%s provider=%s",
                     item_id,
                     shop.get("id"),
-                    raw_url,
+                    public_url_hostname(raw_url),
                     provider_id,
                     exc_info=True,
                 )
@@ -762,12 +772,15 @@ def _fetch_item_prices_from_shops(conn, item: dict[str, Any]) -> tuple[float | N
                     confidence=confidence,
                 )
                 continue
+        if shop_price is None and extraction_source in PUBLIC_HTTP_FAILURE_CODES:
+            provider_status = provider_status or "error"
+            provider_error = provider_error or extraction_source
         if shop_price is None:
             logger.warning(
-                "price_check_no_price item=%s shop=%s url=%s provider=%s provider_status=%s provider_error=%s extraction_source=%s",
+                "price_check_no_price item=%s shop=%s host=%s provider=%s provider_status=%s provider_error=%s extraction_source=%s",
                 item_id,
                 shop.get("id"),
-                raw_url,
+                public_url_hostname(raw_url),
                 provider_id,
                 provider_status,
                 provider_error,

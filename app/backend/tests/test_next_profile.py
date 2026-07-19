@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from html.parser import HTMLParser
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -12,11 +13,51 @@ if repo_root not in sys.path:
 try:
     from app.backend import next_app
     from app.backend import next_profile
+    from app.backend import next_views_ui
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
     if exc.name not in {"flask", "psycopg"}:
         raise
     next_app = None
     next_profile = None
+    next_views_ui = None
+
+
+class _ElementAncestryParser(HTMLParser):
+    VOID_ELEMENTS = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+
+    def __init__(self):
+        super().__init__()
+        self.stack = []
+        self.ancestors_by_id = {}
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        element_id = attributes.get("id")
+        if element_id:
+            self.ancestors_by_id[element_id] = tuple(item_id for _, item_id in self.stack if item_id)
+        if tag not in self.VOID_ELEMENTS:
+            self.stack.append((tag, element_id))
+
+    def handle_endtag(self, tag):
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index][0] == tag:
+                del self.stack[index:]
+                return
 
 
 class _FakeCursor:
@@ -159,6 +200,143 @@ class NextProfileHelperTests(unittest.TestCase):
         self.assertEqual(payload["role"], "media_viewer")
         self.assertEqual(payload["roleDisplayName"], "Media Viewer")
         self.assertEqual(payload["role_display_name"], "Media Viewer")
+
+
+@unittest.skipIf(next_views_ui is None, "Flask is not installed in this test environment")
+class NextProfileUiTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.html = next_views_ui.ui_preview_html(app_mode=True)
+
+    def test_profile_navigation_uses_accessible_icon_tabs(self):
+        tabs = {
+            "Account": "account",
+            "Preferences": "preferences",
+            "Notifications": "notifications",
+            "Groups": "groups",
+            "Structure": "structure",
+            "Security": "security",
+            "Api": "api",
+            "About": "about",
+        }
+        self.assertIn('class="detail-submenu profile-submenu profile-navigation" role="tablist"', self.html)
+        for suffix, name in tabs.items():
+            self.assertIn(f'id="profileTab{suffix}"', self.html)
+            self.assertIn(f'aria-controls="profilePanel{suffix}"', self.html)
+            self.assertIn(f'data-profile-tab="{name}"', self.html)
+            self.assertIn(f'id="profilePanel{suffix}"', self.html)
+            self.assertIn(f'aria-labelledby="profileTab{suffix}"', self.html)
+
+    def test_profile_navigation_uses_canonical_mdi_icons(self):
+        expected_paths = {
+            "preferences": "M8 13C6.14 13 4.59 14.28 4.14 16H2V18H4.14",
+            "notification_settings": "M22.72 19.5C22.74 19.33 22.75 19.17 22.75 19",
+            "structure": "M12 13H7V18H12V20H5V10H7V11H12V13",
+            "api": "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9",
+        }
+        for icon_name, path_start in expected_paths.items():
+            with self.subTest(icon_name=icon_name):
+                self.assertIn(f'class="nav-symbol {icon_name}"', self.html)
+                self.assertIn(f'<path d="{path_start}', self.html)
+
+    def test_profile_navigation_has_desktop_preference_and_mobile_icon_override(self):
+        self.assertIn('data-profile-menu-style-choice="icon_text"', self.html)
+        self.assertIn('data-profile-menu-style-choice="icon_only"', self.html)
+        self.assertIn('document.documentElement.dataset.profileMenuStyle = selected;', self.html)
+        self.assertIn('.profile-navigation .profile-tab-label {\n        display: none;', self.html)
+        self.assertIn('html[data-profile-menu-style="icon_only"] .profile-navigation .profile-tab-label', self.html)
+        self.assertIn('localStorage.setItem(PROFILE_MENU_STYLE_STORAGE_KEY, style);', self.html)
+        self.assertIn('currentAuthStatus.auth_enabled === false', self.html)
+        self.assertIn('setProfileMenuStyle(effectiveProfileMenuStyle());', self.html)
+
+    def test_preferences_dashboard_uses_accessible_icon_tabs(self):
+        tabs = {
+            "Appearance": ("appearance", "M12,22A10,10 0 0,1 2,12"),
+            "Library": ("library", "M9 3V18H12V3H9"),
+            "Collectors": ("collectors", "M20 21H4V10H6V19H18V10H20V21"),
+        }
+        self.assertIn('class="preferences-category-nav" role="tablist"', self.html)
+        for suffix, (name, path_start) in tabs.items():
+            with self.subTest(name=name):
+                self.assertIn(f'id="preferenceTab{suffix}"', self.html)
+                self.assertIn(f'aria-controls="preferencePanel{suffix}"', self.html)
+                self.assertIn(f'data-preferences-tab="{name}"', self.html)
+                self.assertIn(f'id="preferencePanel{suffix}"', self.html)
+                self.assertIn(f'aria-labelledby="preferenceTab{suffix}"', self.html)
+                self.assertIn(f'<path d="{path_start}', self.html)
+        self.assertIn("function handlePreferenceTabKeydown(button, event)", self.html)
+        self.assertIn('button.setAttribute("tabindex", active ? "0" : "-1");', self.html)
+        self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
+        self.assertIn(".preferences-category-nav .preferences-category-copy {\n        display: none;", self.html)
+
+    def test_preferences_dashboard_groups_settings_and_removes_legacy_modal(self):
+        for card in ("browse", "details", "pricing", "mode", "display", "management"):
+            self.assertIn(f'key: "{card}"', self.html)
+        self.assertIn('data-preference-card="loans-system"', self.html)
+        for element_id in (
+            "profileLanguagePicker",
+            "profileLanguageSelect",
+            "profilePreferenceList",
+            "profileCollectorPreferenceList",
+            "loansSystemSettingRow",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        library_groups = self.html.split("const preferenceLibraryGroups = [", 1)[1].split(
+            "const preferenceCollectorGroups = [", 1
+        )[0]
+        collector_groups = self.html.split("const preferenceCollectorGroups = [", 1)[1].split(
+            "const DEFAULT_PRICE_DISPLAY_CURRENCIES", 1
+        )[0]
+        self.assertNotIn("delete_container_members_with_container", library_groups)
+        self.assertIn(
+            '["delete_container_members_with_container", '
+            '"preferences.deleteContainerMembersWithContainer", '
+            '"preferences.deleteContainerMembersWithContainerHelp", "collectors_mode"]',
+            collector_groups,
+        )
+        collectors_disable_block = self.html.split(
+            'if (key === "collectors_mode" && !value) {', 1
+        )[1].split("}", 1)[0]
+        self.assertIn(
+            "preferences.delete_container_members_with_container = false;",
+            collectors_disable_block,
+        )
+        collectors_patch_block = self.html.split(
+            'if (key === "collectors_mode" && !value) {', 2
+        )[2].split("}", 1)[0]
+        self.assertIn(
+            "patch.delete_container_members_with_container = false;",
+            collectors_patch_block,
+        )
+        self.assertIn('class="preferences-setting-card system wide"', self.html)
+        self.assertNotIn('id="preferencesBackdrop"', self.html)
+        self.assertNotIn('id="legacyPreferenceList"', self.html)
+        self.assertNotIn("legacyList", self.html)
+
+    def test_account_dashboard_preserves_existing_profile_bindings(self):
+        self.assertIn('class="account-dashboard"', self.html)
+        self.assertIn('id="profileAccountDisplayName"', self.html)
+        for element_id in (
+            "profileUsername",
+            "profileRole",
+            "profileUserCount",
+            "profileCredentialCount",
+            "profileEditForm",
+            "profileDisplayNameInput",
+            "profileAvatarForm",
+            "profileAvatarFileInput",
+            "profileSignOutButton",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+    def test_about_content_stays_inside_about_tab_panel(self):
+        parser = _ElementAncestryParser()
+        parser.feed(self.html)
+        self.assertIn(
+            "profilePanelAbout",
+            parser.ancestors_by_id["profileOfflineStatus"],
+        )
 
 
 if __name__ == "__main__":

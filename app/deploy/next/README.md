@@ -20,6 +20,12 @@ docker-compose.import.yml  # legacy optional one-off CLI importer
 Create `.env` from `.env.example` and change `POSTGRES_PASSWORD` and
 `JWT_SECRET` before first start.
 
+Generate `JWT_SECRET` once with `openssl rand -base64 48`, store it in `.env`,
+and keep it unchanged across updates and restarts. The stack fails before serving
+requests when this value is missing. Changing it invalidates active sessions and
+requires reconnecting integrations whose credentials were encrypted with the old
+value.
+
 ## Start
 
 Start the compose project from the directory containing `docker-compose.yml` and

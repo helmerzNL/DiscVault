@@ -6,7 +6,10 @@ import json
 import re
 from typing import Any
 
-import requests
+try:
+    from ...next_public_http import PublicHttpError, fetch_public_text, public_url_hostname
+except ImportError:  # pragma: no cover - dynamically loaded plugin
+    from next_public_http import PublicHttpError, fetch_public_text, public_url_hostname
 
 
 DEFAULT_TIMEOUT = 20
@@ -163,19 +166,20 @@ def price_check(payload=None, context=None):
     url = _product_url(payload)
     if not url:
         return {"status": "no_match", "error": "Provide a Zavvi product URL in url or providerProductRef."}
-    if "zavvi." not in url.lower():
+    if "zavvi." not in public_url_hostname(url):
         return {"status": "no_match", "error": "URL is not a Zavvi product URL."}
 
-    response = requests.get(
-        url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept-Language": "en-GB,en;q=0.9",
-        },
-        timeout=_timeout_seconds(context),
-    )
-    response.raise_for_status()
-    html = response.text or ""
+    try:
+        html = fetch_public_text(
+            url,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept-Language": "en-GB,en;q=0.9",
+            },
+            timeout_seconds=_timeout_seconds(context),
+        )
+    except PublicHttpError as exc:
+        return {"status": "error", "error": exc.code}
     lower_html = html.lower()
     if any(signature in lower_html for signature in BLOCK_SIGNATURES):
         return {"status": "no_match", "error": "Zavvi blocked the request (bot/challenge page)."}
@@ -196,4 +200,3 @@ def price_check(payload=None, context=None):
         "source_detail": url,
         "confidence": 0.78,
     }
-

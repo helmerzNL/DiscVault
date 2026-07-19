@@ -24,6 +24,7 @@ import sqlite3
 import tempfile
 import time
 import uuid
+import unicodedata
 import zipfile
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -68,6 +69,10 @@ try:
     from .next_price_provider_detection import detect_price_provider
     from .next_price_provider_detection import derive_provider_product_ref
     from .next_price_provider_detection import price_provider_entity
+    from .next_public_http import PUBLIC_HTTP_FAILURE_CODES
+    from .next_public_http import PublicHttpError
+    from .next_public_http import public_url_hostname
+    from .next_public_http import validate_public_url
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
@@ -118,6 +123,7 @@ try:
     from .next_auth import _rp_id
     from .next_auth import _rp_origins
     from .next_auth import _verify_signature
+    from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import MovieVaultConnectionError
     from .next_movievault_connection import MovieVaultInstanceRevoked
@@ -273,6 +279,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_price_provider_detection import detect_price_provider
     from next_price_provider_detection import derive_provider_product_ref
     from next_price_provider_detection import price_provider_entity
+    from next_public_http import PUBLIC_HTTP_FAILURE_CODES
+    from next_public_http import PublicHttpError
+    from next_public_http import public_url_hostname
+    from next_public_http import validate_public_url
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
@@ -323,6 +333,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_auth import _rp_id
     from next_auth import _rp_origins
     from next_auth import _verify_signature
+    from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import MovieVaultConnectionError
     from next_movievault_connection import MovieVaultInstanceRevoked
@@ -691,6 +702,7 @@ _PRICE_DISPLAY_RATE_CACHE: dict[str, Any] = {"expires_at": None, "payload": None
 
 
 def create_app() -> Flask:
+    validate_runtime_secrets()
     flask_app = Flask(__name__)
     CORS(flask_app, supports_credentials=True)
     register_routes(flask_app)
@@ -7415,6 +7427,7 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "bootstrap": "/api/next/sync/bootstrap",
             "delta": "/api/next/sync/delta",
             "mutations": "/api/next/sync/mutations",
+            "reconcile": "/api/next/sync/reconcile",
             "userBootstrap": "/api/next/sync/user/bootstrap",
             "userDelta": "/api/next/sync/user/delta",
         },
@@ -8003,6 +8016,55 @@ PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
     "mcp.use",
     "api.tokens.manage",
 )
+# Executable-code write operations (import/install, force-update to bundled,
+# rollback, and the auto-update toggle that can immediately trigger one of
+# those writes) must NOT be gated by PLUGIN_REGISTRY_MANAGE_PERMISSIONS: that
+# tuple exists to cover per-plugin *settings* management and intentionally
+# includes broad, low-privilege permissions such as "watchlist.manage" and
+# "collection.import" that ordinary roles (down to media_viewer) and even
+# read-only API-token roles (api_reader has "api.tokens.manage") legitimately
+# hold. A plugin's ``plugin.py`` is executed unconditionally by
+# ``discover_plugins`` the moment it exists on disk, regardless of its
+# "enabled" flag, so writing that file is equivalent to remote code execution
+# in the backend process and must be reserved for owner/admin.
+#
+# "plugins.delete" already is a genuinely dedicated plugin-management
+# permission that is only ever granted to the owner and admin roles (see
+# migrations_next/013_plugin_delete_permission.sql); it is reused here rather
+# than inventing a new permission/migration.
+PLUGIN_REGISTRY_INSTALL_PERMISSIONS = ("plugins.delete",)
+
+
+def require_plugin_registry_install_permission(conn) -> dict[str, Any]:
+    """Require an interactive owner/admin boundary for executable plugin writes."""
+
+    def commit_denial_audit() -> None:
+        try:
+            conn.commit()
+        except Exception:
+            app.logger.error("Failed to persist plugin permission-denied audit event")
+
+    try:
+        actor = require_any_next_permission(conn, PLUGIN_REGISTRY_INSTALL_PERMISSIONS)
+    except NextApiError as exc:
+        if exc.status_code == 403:
+            # Authorization runs before any route mutation, so this commits only
+            # the permission-denied audit event (and token last-used metadata).
+            commit_denial_audit()
+        raise
+    if actor_api_token_permission_keys(actor) is None:
+        return actor
+
+    message = "API tokens cannot install or replace executable plugins"
+    audit_permission_denied(
+        conn,
+        actor,
+        required_permissions=PLUGIN_REGISTRY_INSTALL_PERMISSIONS,
+        reason="api_token_scope_missing_required_permission",
+        message=message,
+    )
+    commit_denial_audit()
+    raise NextApiError(message, 403)
 
 
 def plugin_category_set(plugin: dict[str, Any]) -> set[str]:
@@ -8141,6 +8203,58 @@ def uploaded_plugin_file_path(destination_dir: Path) -> Path:
     return target
 
 
+def plugin_package_sha256(upload_path: Path) -> str:
+    """Digest of an uploaded plugin package for audit trails.
+
+    Only the digest (and size) are ever recorded in audit metadata; the
+    uploaded plugin source itself must never be logged.
+    """
+    digest = hashlib.sha256()
+    with upload_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def audit_plugin_import_failure(
+    conn,
+    *,
+    actor: dict[str, Any],
+    package_digest: str | None,
+    upload_size: int | None,
+    stage: str,
+    error: Exception,
+) -> None:
+    """Persist a source-free failure record without replacing the original error."""
+
+    is_api_error = isinstance(error, NextApiError)
+    reason = str(error) if is_api_error else "Internal plugin import error"
+    status_code = error.status_code if is_api_error else 500
+    try:
+        audit_event(
+            conn,
+            event_type="plugin.import_failed",
+            category="plugins",
+            actor=actor,
+            target_type="plugin_package",
+            target_id=package_digest,
+            summary=f"Plugin import failed during {stage}",
+            metadata={
+                "packageSha256": package_digest,
+                "uploadSizeBytes": upload_size,
+                "stage": stage,
+                "reason": reason,
+                "errorType": type(error).__name__,
+                "statusCode": status_code,
+            },
+        )
+        conn.commit()
+    except Exception:
+        # The original import error is authoritative. Report the audit outage
+        # without exposing uploaded source or exception details.
+        app.logger.error("Failed to persist plugin import failure audit event")
+
+
 def locate_plugin_root(extracted_dir: Path) -> Path:
     direct_manifest = extracted_dir / "manifest.json"
     if direct_manifest.exists():
@@ -8200,12 +8314,18 @@ def validate_import_plugin_root(plugin_root: Path) -> dict[str, Any]:
     return manifest
 
 
-def install_plugin_from_root(plugin_root: Path, manifest: dict[str, Any]) -> Path:
+def plugin_install_target_path(manifest: dict[str, Any]) -> Path:
     plugin_id = str(manifest["id"]).strip()
     install_base = plugin_install_dir().resolve()
     target = (install_base / plugin_id).resolve()
     if install_base != target and install_base not in target.parents:
         raise NextApiError("Plugin target path is not safe", 400)
+    return target
+
+
+def install_plugin_from_root(plugin_root: Path, manifest: dict[str, Any]) -> Path:
+    target = plugin_install_target_path(manifest)
+    install_base = target.parent
     install_base.mkdir(parents=True, exist_ok=True)
     if target.exists():
         shutil.rmtree(target)
@@ -8243,13 +8363,14 @@ def move_plugin_source_to_trash(plugin: dict[str, Any]) -> tuple[Path | None, Pa
     return source_path, trash_path, trash_root
 
 
-def restore_plugin_source(source_path: Path | None, trash_path: Path | None) -> None:
+def restore_plugin_source(source_path: Path | None, trash_path: Path | None) -> bool:
     if not source_path or not trash_path or not trash_path.exists():
-        return
+        return False
     source_path.parent.mkdir(parents=True, exist_ok=True)
     if source_path.exists():
-        return
+        return False
     shutil.move(str(trash_path), str(source_path))
+    return True
 
 
 def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
@@ -9051,6 +9172,8 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 location,
                 location_id,
                 owner_id,
+                client_id,
+                deleted_at,
                 metadata,
                 created_at,
                 updated_at
@@ -15003,7 +15126,7 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
                 m.created_at,
                 m.updated_at
             FROM movies m
-            WHERE {visibility_where}
+            WHERE {visibility_where} AND m.deleted_at IS NULL
             ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
             LIMIT %s
             """,
@@ -15060,7 +15183,7 @@ def all_movie_credit_entities(
             WITH bootstrap_movies AS (
                 SELECT m.id, lower(COALESCE(m.sort_title, m.title)) AS order_title, m.year
                 FROM movies m
-                WHERE {visibility_where}
+                WHERE {visibility_where} AND m.deleted_at IS NULL
                 ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
                 LIMIT %s
             )
@@ -15148,7 +15271,7 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.created_at,
                 c.updated_at
             FROM containers c
-            WHERE {visibility_where}
+            WHERE {visibility_where} AND c.deleted_at IS NULL
             ORDER BY c.container_type, lower(c.title)
             LIMIT %s
             """,
@@ -15225,6 +15348,10 @@ class SyncBatchContext:
     def __init__(self) -> None:
         self.consumed_client_entity_ids: set[str] = set()
         self.claimed_barcodes: set[str] = set()
+        # Persistent per-record clientId -> server id created earlier in this
+        # same batch, so the same clientId twice in one batch collapses to one
+        # record (the second mutation reports created=false).
+        self.claimed_client_ids: dict[str, UUID] = {}
 
 
 def movie_id_for_barcode(conn, barcode: str | None) -> UUID | None:
@@ -15235,6 +15362,305 @@ def movie_id_for_barcode(conn, barcode: str | None) -> UUID | None:
         cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
         row = cur.fetchone()
     return row["id"] if row else None
+
+
+def normalize_barcode(barcode: str | None) -> str | None:
+    """Digits-only comparison key for a barcode/EAN (leading zeros preserved).
+
+    Used only for MATCH comparisons in the dedup ladder; barcodes are still
+    stored verbatim so the import/unique paths are untouched.
+    """
+    if not barcode:
+        return None
+    digits = re.sub(r"\D", "", str(barcode))
+    return digits or None
+
+
+def find_movie_by_client_id(conn, client_id: str | None) -> UUID | None:
+    """Trede 1: a live movie already carrying this persistent clientId."""
+    if not client_id:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM movies WHERE client_id=%s AND deleted_at IS NULL",
+            (client_id,),
+        )
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def find_movie_by_barcode_match(conn, barcode: str | None) -> UUID | None:
+    """Trede 2: a live movie whose barcode matches (digits-only, tombstones excluded)."""
+    normalized = normalize_barcode(barcode)
+    if not normalized:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM movies
+            WHERE deleted_at IS NULL
+              AND barcode IS NOT NULL
+              AND regexp_replace(barcode, '\\D', '', 'g') = %s
+            ORDER BY created_at
+            LIMIT 1
+            """,
+            (normalized,),
+        )
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def find_movie_by_tmdb_edition(
+    conn,
+    *,
+    tmdb_id: str | None,
+    fmt: str | None,
+    edition: str | None,
+) -> UUID | None:
+    """Trede 3: same TMDB id AND physical format AND edition (all three).
+
+    Over-merge protection: format must be present and equal on both sides, so a
+    DVD and a 4K UHD of the same film never collapse into one record.
+    """
+    if not tmdb_id or not fmt:
+        return None
+    if not table_exists(conn, "movie_identifiers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT m.id
+            FROM movies m
+            JOIN movie_identifiers mi ON mi.movie_id = m.id
+            WHERE m.deleted_at IS NULL
+              AND lower(mi.provider_id) = 'tmdb'
+              AND mi.identifier_type = 'movie_id'
+              AND mi.identifier = %s
+              AND m.format IS NOT NULL
+              AND lower(m.format) = lower(%s)
+              AND lower(coalesce(m.edition, '')) = lower(coalesce(%s, ''))
+            ORDER BY m.created_at
+            LIMIT 1
+            """,
+            (str(tmdb_id), fmt, edition),
+        )
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def parse_client_timestamp(value: Any) -> datetime | None:
+    """Best-effort parse of a client-supplied ISO-8601 timestamp (tz-aware).
+
+    Used to decide, on a re-pushed create, whether the client's edit is newer
+    than a server-side tombstone (legitimate resurrection) or older (delete wins).
+    """
+    text = clean_text(value)
+    if not text:
+        return None
+    raw = text.strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def find_tombstoned_movie_by_identity(
+    conn,
+    *,
+    persistent_client_id: str | None,
+    barcode: str | None,
+) -> dict[str, Any] | None:
+    """Return a *tombstoned* movie matching the incoming record's clientId
+    (preferred) or barcode, plus how it matched, so an old client replaying a
+    create cannot resurrect a record deleted elsewhere (onderzoek H4)."""
+    if persistent_client_id:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, deleted_at, client_id
+                FROM movies
+                WHERE client_id=%s AND deleted_at IS NOT NULL
+                ORDER BY deleted_at DESC
+                LIMIT 1
+                """,
+                (persistent_client_id,),
+            )
+            row = cur.fetchone()
+        if row:
+            row["matched_by"] = "clientId"
+            return row
+    normalized = normalize_barcode(barcode)
+    if normalized:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, deleted_at, client_id
+                FROM movies
+                WHERE deleted_at IS NOT NULL
+                  AND barcode IS NOT NULL
+                  AND regexp_replace(barcode, '\\D', '', 'g') = %s
+                ORDER BY deleted_at DESC
+                LIMIT 1
+                """,
+                (normalized,),
+            )
+            row = cur.fetchone()
+        if row:
+            row["matched_by"] = "barcode"
+            return row
+    return None
+
+
+def match_existing_movie(
+    *,
+    persistent_client_id: str | None,
+    batch_claimed_client_id: UUID | None,
+    barcode_normalized: str | None,
+    barcode_claimed_in_batch: bool,
+    tmdb_id: str | None,
+    fmt: str | None,
+    duplicate_copy: bool,
+    find_by_client_id,
+    find_by_barcode,
+    find_by_tmdb_edition,
+) -> tuple[UUID | None, str | None]:
+    """Apply the create-path identity ladder and return ``(movie_id, matchedBy)``.
+
+    Strict order within the shared catalogue:
+
+    1. ``clientId`` — the same persistent per-record UUID, either created earlier
+       in this batch (``batch_claimed_client_id``) or already on a live movie.
+    2. barcode/EAN — exact digits-only match against a live movie, *unless* the
+       barcode was already claimed by an earlier create in this batch (a box-set
+       member sharing the container EAN, which must stay a distinct row) or the
+       client explicitly asked for a ``duplicateCopy``.
+    3. TMDB id + format + edition — all three must match (over-merge protection).
+
+    Trede 4 (title+year) is deliberately absent here; it is only active in the
+    first-connect ``/sync/reconcile`` adoption path.
+    """
+    if persistent_client_id and batch_claimed_client_id is not None:
+        return batch_claimed_client_id, "clientId"
+    if persistent_client_id:
+        found = find_by_client_id()
+        if found is not None:
+            return found, "clientId"
+    if barcode_normalized and not duplicate_copy and not barcode_claimed_in_batch:
+        found = find_by_barcode()
+        if found is not None:
+            return found, "barcode"
+    if tmdb_id and fmt:
+        found = find_by_tmdb_edition()
+        if found is not None:
+            return found, "tmdbEdition"
+    return None, None
+
+
+_TITLE_ARTICLES = {"the", "a", "an", "de", "het", "een", "le", "la", "les", "el", "los", "las"}
+
+
+def normalize_title(title: str | None) -> str | None:
+    """Normalize a title for last-resort title+year matching.
+
+    Lowercase, fold diacritics, strip punctuation, drop a leading article, and
+    collapse whitespace. Intentionally aggressive because trede 4 is only used
+    for first-connect adoption where false negatives (a needless create) are
+    safer than false positives, and always gated by an exact year + format match.
+    """
+    text = clean_text(title)
+    if not text:
+        return None
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    folded = folded.lower()
+    folded = re.sub(r"[^a-z0-9]+", " ", folded).strip()
+    if not folded:
+        return None
+    parts = folded.split()
+    if len(parts) > 1 and parts[0] in _TITLE_ARTICLES:
+        parts = parts[1:]
+    return " ".join(parts) or None
+
+
+def find_movie_by_title_year(
+    conn,
+    *,
+    title: str | None,
+    year: Any,
+    fmt: str | None,
+) -> UUID | None:
+    """Trede 4 (adoption-only): normalized title + exact year + matching format.
+
+    Over-merge protection: the format must be present and equal on both sides, so
+    a DVD and a 4K UHD of the same film never collapse. If the incoming record has
+    no format we refuse to match (per contract 1.3) and let the caller create.
+    """
+    normalized = normalize_title(title)
+    year_text = clean_text(year)
+    if not normalized or not year_text or not fmt:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT m.id, m.title, m.year
+            FROM movies m
+            WHERE m.deleted_at IS NULL
+              AND m.year = %s
+              AND m.format IS NOT NULL
+              AND lower(m.format) = lower(%s)
+            ORDER BY m.created_at
+            """,
+            (year_text, fmt),
+        )
+        rows = cur.fetchall()
+    for row in rows:
+        if normalize_title(row.get("title")) == normalized:
+            return row["id"]
+    return None
+
+
+def match_reconcile_item(
+    *,
+    persistent_client_id: str | None,
+    barcode_normalized: str | None,
+    tmdb_id: str | None,
+    fmt: str | None,
+    title: str | None,
+    year: Any,
+    find_by_client_id,
+    find_by_barcode,
+    find_by_tmdb_edition,
+    find_by_title_year,
+) -> tuple[UUID | None, str | None]:
+    """First-connect adoption ladder (clientId → barcode → tmdbEdition → titleYear).
+
+    Read-only: never claims batch state and never creates. The title+year tier is
+    active here and *only* here, matching the contract's restriction of the
+    fuzziest tier to the adoption path.
+    """
+    if persistent_client_id:
+        found = find_by_client_id()
+        if found is not None:
+            return found, "clientId"
+    if barcode_normalized:
+        found = find_by_barcode()
+        if found is not None:
+            return found, "barcode"
+    if tmdb_id and fmt:
+        found = find_by_tmdb_edition()
+        if found is not None:
+            return found, "tmdbEdition"
+    if title and year and fmt:
+        found = find_by_title_year()
+        if found is not None:
+            return found, "titleYear"
+    return None, None
 
 
 def resolve_new_movie_identity(
@@ -15308,20 +15734,160 @@ def apply_movie_upsert(
     provided_entity_id = parse_uuid(mutation.get("entityId"), "entityId")
     fields = movie_payload_fields(payload)
 
-    entity_id, healed_barcode = resolve_new_movie_identity(
-        entity_id=provided_entity_id,
-        client_entity_id=client_entity_id,
-        barcode=fields["barcode"],
-        batch_ctx=batch_ctx,
-        lookup_mapping=lambda: client_entity_mapping(
-            conn,
-            client_id=client_id,
-            entity_type="movie",
-            client_entity_id=client_entity_id,
-        ),
-        barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
+    # Persistent per-record identity fields (contract Deel 1). These are distinct
+    # from the throwaway clientEntityId/clientMutationId: clientId is a stable
+    # UUID minted once at record creation and reused across devices/retries.
+    persistent_client_id = clean_text(
+        payload.get("clientId") or payload.get("client_id")
     )
+    tmdb_id = clean_text(
+        payload.get("tmdbId") or payload.get("tmdb_id") or payload.get("tmdbID")
+    )
+    duplicate_copy = bool(payload.get("duplicateCopy") or payload.get("duplicate_copy"))
+
+    matched_by: str | None = None
+    ladder_entity_id: UUID | None = None
+    resurrect_tombstone = False
+    if batch_ctx is not None and provided_entity_id is None:
+        # Only run the dedup ladder for genuinely new records. A record already
+        # mapped via clientEntityId is a normal idempotent device re-push and
+        # must stay an update (matchedBy null), not a fresh match.
+        mapped_existing = (
+            client_entity_mapping(
+                conn,
+                client_id=client_id,
+                entity_type="movie",
+                client_entity_id=client_entity_id,
+            )
+            if client_entity_id
+            else None
+        )
+        if mapped_existing is None:
+            barcode_norm = normalize_barcode(fields["barcode"])
+            barcode_claimed = bool(barcode_norm) and any(
+                normalize_barcode(code) == barcode_norm
+                for code in batch_ctx.claimed_barcodes
+            )
+            batch_claimed_cid = (
+                batch_ctx.claimed_client_ids.get(persistent_client_id)
+                if persistent_client_id
+                else None
+            )
+            ladder_entity_id, matched_by = match_existing_movie(
+                persistent_client_id=persistent_client_id,
+                batch_claimed_client_id=batch_claimed_cid,
+                barcode_normalized=barcode_norm,
+                barcode_claimed_in_batch=barcode_claimed,
+                tmdb_id=tmdb_id,
+                fmt=fields["format"],
+                duplicate_copy=duplicate_copy,
+                find_by_client_id=lambda: find_movie_by_client_id(
+                    conn, persistent_client_id
+                ),
+                find_by_barcode=lambda: find_movie_by_barcode_match(
+                    conn, fields["barcode"]
+                ),
+                find_by_tmdb_edition=lambda: find_movie_by_tmdb_edition(
+                    conn,
+                    tmdb_id=tmdb_id,
+                    fmt=fields["format"],
+                    edition=fields["edition"],
+                ),
+            )
+
+    if ladder_entity_id is not None:
+        entity_id = ladder_entity_id
+        healed_barcode = fields["barcode"]
+    else:
+        # H4 tombstone guard: before minting a fresh id, check whether this
+        # record's identity belongs to a tombstoned row. Reusing that id (instead
+        # of creating a new one) prevents a resurrection duplicate. Whether the
+        # row comes back to life depends on client edit time vs. the tombstone.
+        if provided_entity_id is None and batch_ctx is not None and not duplicate_copy:
+            tomb = find_tombstoned_movie_by_identity(
+                conn,
+                persistent_client_id=persistent_client_id,
+                barcode=fields["barcode"],
+            )
+            if tomb is not None:
+                matched_by = tomb["matched_by"]
+                client_ts = parse_client_timestamp(
+                    payload.get("updatedAt")
+                    or payload.get("updated_at")
+                    or payload.get("clientUpdatedAt")
+                )
+                deleted_at = tomb.get("deleted_at")
+                resurrect = (
+                    client_ts is not None
+                    and deleted_at is not None
+                    and client_ts > deleted_at
+                )
+                if not resurrect:
+                    # Delete wins: do not touch the tombstone. Map the client's
+                    # temp id to it and return the deleted record so the client
+                    # learns (via response + delta) that it is gone.
+                    store_client_entity_mapping(
+                        conn,
+                        client_id=client_id,
+                        client_entity_id=client_entity_id,
+                        entity_type="movie",
+                        entity_id=tomb["id"],
+                        idem_key=idem_key,
+                    )
+                    entity = movie_entity(conn, tomb["id"]) or {}
+                    revision = next_revision(conn)
+                    return {
+                        "clientMutationId": mutation["clientMutationId"],
+                        "status": "applied",
+                        "entityType": "movie",
+                        "operation": "upsert",
+                        "entityId": tomb["id"],
+                        "clientEntityId": client_entity_id,
+                        "revision": revision,
+                        "entity": entity,
+                        "created": False,
+                        "matchedBy": matched_by,
+                        "recordClientId": persistent_client_id,
+                        "tombstoned": True,
+                    }
+                # Resurrection: reuse the tombstoned id and clear deleted_at below.
+                entity_id = tomb["id"]
+                healed_barcode = fields["barcode"]
+                resurrect_tombstone = True
+            else:
+                entity_id, healed_barcode = resolve_new_movie_identity(
+                    entity_id=provided_entity_id,
+                    client_entity_id=client_entity_id,
+                    barcode=fields["barcode"],
+                    batch_ctx=batch_ctx,
+                    lookup_mapping=lambda: client_entity_mapping(
+                        conn,
+                        client_id=client_id,
+                        entity_type="movie",
+                        client_entity_id=client_entity_id,
+                    ),
+                    barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
+                )
+        else:
+            entity_id, healed_barcode = resolve_new_movie_identity(
+                entity_id=provided_entity_id,
+                client_entity_id=client_entity_id,
+                barcode=fields["barcode"],
+                batch_ctx=batch_ctx,
+                lookup_mapping=lambda: client_entity_mapping(
+                    conn,
+                    client_id=client_id,
+                    entity_type="movie",
+                    client_entity_id=client_entity_id,
+                ),
+                barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
+            )
     existing = movie_entity(conn, entity_id)
+    created = existing is None
+    if created:
+        # A brand-new record was not "matched"; matchedBy only describes how an
+        # existing record was found by the dedup ladder.
+        matched_by = None
     title = fields["title"] or (existing or {}).get("title")
     if not title:
         raise NextApiError("Movie title is required for upsert", 400)
@@ -15354,13 +15920,14 @@ def apply_movie_upsert(
                 purchase_date,
                 purchase_price,
                 location,
+                client_id,
                 metadata,
                 created_at,
                 updated_at
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -15383,6 +15950,7 @@ def apply_movie_upsert(
                 purchase_date=COALESCE(EXCLUDED.purchase_date, movies.purchase_date),
                 purchase_price=COALESCE(EXCLUDED.purchase_price, movies.purchase_price),
                 location=COALESCE(EXCLUDED.location, movies.location),
+                client_id=COALESCE(movies.client_id, EXCLUDED.client_id),
                 metadata=movies.metadata || EXCLUDED.metadata,
                 updated_at=now()
             """,
@@ -15408,9 +15976,39 @@ def apply_movie_upsert(
                 fields["purchase_date"],
                 fields["purchase_price"],
                 fields["location"],
+                persistent_client_id,
                 Jsonb(fields["metadata"]),
             ),
         )
+
+    # Persist the TMDB identifier so trede 3 (tmdb+format+edition) can match on a
+    # later sync. Idempotent: the composite PK makes re-writes a no-op.
+    if tmdb_id and table_exists(conn, "movie_identifiers"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movie_identifiers
+                    (movie_id, provider_id, identifier_type, identifier)
+                VALUES (%s, 'tmdb', 'movie_id', %s)
+                ON CONFLICT (movie_id, provider_id, identifier_type, identifier)
+                DO NOTHING
+                """,
+                (entity_id, str(tmdb_id)),
+            )
+
+    # Resurrect a tombstoned record only when the client's edit post-dates the
+    # deletion (decided above); otherwise the delete-wins path returned earlier.
+    if resurrect_tombstone:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE movies SET deleted_at=NULL, updated_at=now() WHERE id=%s",
+                (entity_id,),
+            )
+
+    # Record this create for batch-local dedup so a repeated clientId within the
+    # same batch collapses onto this row (created=false on the second item).
+    if created and batch_ctx is not None and persistent_client_id:
+        batch_ctx.claimed_client_ids[persistent_client_id] = entity_id
 
     store_client_entity_mapping(
         conn,
@@ -15427,6 +16025,9 @@ def apply_movie_upsert(
         "clientId": client_id,
         "clientEntityId": client_entity_id,
         "clientMutationId": mutation["clientMutationId"],
+        "created": created,
+        "matchedBy": matched_by,
+        "recordClientId": persistent_client_id,
     }
     sync_change(
         conn,
@@ -15445,6 +16046,9 @@ def apply_movie_upsert(
         "clientEntityId": client_entity_id,
         "revision": revision,
         "entity": entity,
+        "created": created,
+        "matchedBy": matched_by,
+        "recordClientId": persistent_client_id,
     }
 
 
@@ -15466,10 +16070,24 @@ def apply_movie_delete(
     if not entity_id:
         raise NextApiError("Movie delete requires entityId or mapped clientEntityId", 400)
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM movies WHERE id=%s RETURNING id", (entity_id,))
+        cur.execute(
+            """
+            UPDATE movies
+            SET deleted_at=now(), updated_at=now()
+            WHERE id=%s AND deleted_at IS NULL
+            RETURNING id
+            """,
+            (entity_id,),
+        )
         deleted = cur.fetchone()
     if not deleted:
-        raise NextApiError("Movie not found", 404)
+        # Idempotent: re-deleting an already-tombstoned record still succeeds and
+        # re-emits the deletion into the delta feed. Only a truly unknown id 404s.
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM movies WHERE id=%s", (entity_id,))
+            row = cur.fetchone()
+        if not row:
+            raise NextApiError("Movie not found", 404)
     revision = next_revision(conn)
     payload = {
         "entityId": entity_id,
@@ -15645,7 +16263,28 @@ def apply_container_delete(
     )
     if not entity_id:
         raise NextApiError("Container delete requires entityId or mapped clientEntityId", 400)
-    delete_container_records(conn, entity_id, delete_members=False)
+    # Soft delete (tombstone) rather than a hard cascade: the delta feed emits the
+    # deletion so clients prune locally, and a re-pushed old copy hits the H4 guard
+    # instead of resurrecting the box set. Membership links are left intact.
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE containers
+            SET deleted_at=now(), updated_at=now()
+            WHERE id=%s AND deleted_at IS NULL
+            RETURNING id
+            """,
+            (entity_id,),
+        )
+        tombstoned = cur.fetchone()
+    if not tombstoned:
+        # Idempotent re-delete: already tombstoned still succeeds and re-emits the
+        # deletion; a truly unknown id 404s.
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM containers WHERE id=%s", (entity_id,))
+            row = cur.fetchone()
+        if not row:
+            raise NextApiError("Container not found", 404)
     revision = emit_container_change(conn, entity_id, operation="delete")
     return {
         "clientMutationId": mutation["clientMutationId"],
@@ -17328,7 +17967,10 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.errorhandler(NextApiError)
     def handle_next_error(error: NextApiError):
-        return response({"status": "error", "error": str(error)}, error.status_code)
+        payload = {"status": "error", "error": str(error)}
+        if error.code:
+            payload["errorCode"] = error.code
+        return response(payload, error.status_code)
 
     @flask_app.errorhandler(HTTPException)
     def handle_http_error(error: HTTPException):
@@ -20628,7 +21270,11 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("'enabled' is required", 400)
         enabled = parse_bool_value(body.get("enabled"), default=True)
         with connect() as conn:
-            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            # Enabling auto-update can immediately install bundled plugin
+            # updates (upgrade_seeded_default_plugins) and re-sync/execute the
+            # registry, so it needs the same owner/admin-only boundary as the
+            # other executable-code write endpoints below.
+            actor = require_plugin_registry_install_permission(conn)
             with conn.transaction():
                 set_app_setting_value(
                     conn,
@@ -20665,7 +21311,7 @@ def register_routes(flask_app: Flask) -> None:
         if not plugin_id:
             raise NextApiError("Plugin id is required", 400)
         with connect() as conn:
-            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            actor = require_plugin_registry_install_permission(conn)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             try:
@@ -20701,7 +21347,7 @@ def register_routes(flask_app: Flask) -> None:
         if not plugin_id:
             raise NextApiError("Plugin id is required", 400)
         with connect() as conn:
-            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            actor = require_plugin_registry_install_permission(conn)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
             try:
@@ -20773,70 +21419,138 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.post("/api/next/plugins/import")
     def import_plugin_zip():
         with connect() as conn:
-            actor = require_any_next_permission(conn, PLUGIN_REGISTRY_MANAGE_PERMISSIONS)
+            # Importing a plugin writes a new plugin.py to disk, which
+            # discover_plugins() executes unconditionally on the next
+            # registry sync below -- this is the confirmed RCE path, so it
+            # must require the owner/admin-only plugin install boundary, not
+            # the broad PLUGIN_REGISTRY_MANAGE_PERMISSIONS tuple.
+            actor = require_plugin_registry_install_permission(conn)
             if not table_exists(conn, "plugins"):
                 raise NextApiError("Plugin registry table is not available", 503)
-            with tempfile.TemporaryDirectory(prefix="discvault-plugin-import-") as temp_dir_name:
-                temp_dir = Path(temp_dir_name)
-                upload_path = uploaded_plugin_file_path(temp_dir)
-                extracted_dir = temp_dir / "extracted"
-                extracted_dir.mkdir(parents=True, exist_ok=True)
-                try:
-                    safe_extract_plugin_zip(upload_path, extracted_dir)
-                except zipfile.BadZipFile as exc:
-                    raise NextApiError("Plugin upload is not a valid ZIP file", 400) from exc
-                plugin_root = locate_plugin_root(extracted_dir)
-                manifest = validate_import_plugin_root(plugin_root)
-                installed_path = install_plugin_from_root(plugin_root, manifest)
 
-            with conn.transaction():
-                if table_exists(conn, "metadata_plugins"):
-                    sync_metadata_plugin_registry(conn)
-                else:
-                    sync_plugin_registry(conn, table_exists, Jsonb)
+            package_digest: str | None = None
+            upload_size: int | None = None
+            install_target: Path | None = None
+            previous_source_path: Path | None = None
+            previous_trash_path: Path | None = None
+            previous_trash_root: Path | None = None
+            install_started = False
+            import_succeeded = False
+            failure_stage = "upload"
+            try:
+                with tempfile.TemporaryDirectory(
+                    prefix="discvault-plugin-import-",
+                    ignore_cleanup_errors=True,
+                ) as temp_dir_name:
+                    temp_dir = Path(temp_dir_name)
+                    upload_path = uploaded_plugin_file_path(temp_dir)
+                    upload_size = upload_path.stat().st_size
+                    package_digest = plugin_package_sha256(upload_path)
+                    failure_stage = "extract"
+                    extracted_dir = temp_dir / "extracted"
+                    extracted_dir.mkdir(parents=True, exist_ok=True)
+                    try:
+                        safe_extract_plugin_zip(upload_path, extracted_dir)
+                    except zipfile.BadZipFile as exc:
+                        raise NextApiError("Plugin upload is not a valid ZIP file", 400) from exc
+                    plugin_root = locate_plugin_root(extracted_dir)
+                    failure_stage = "validate"
+                    manifest = validate_import_plugin_root(plugin_root)
+                    install_target = plugin_install_target_path(manifest)
+                    failure_stage = "backup"
+                    previous_source_path, previous_trash_path, previous_trash_root = move_plugin_source_to_trash(
+                        {"sourcePath": str(install_target)}
+                    )
+                    failure_stage = "install"
+                    install_started = True
+                    installed_path = install_plugin_from_root(plugin_root, manifest)
+                    failure_stage = "registry_sync"
+                    with conn.transaction():
+                        if table_exists(conn, "metadata_plugins"):
+                            sync_metadata_plugin_registry(conn)
+                        else:
+                            sync_plugin_registry(conn, table_exists, Jsonb)
 
-                imported_plugin_id = str(manifest["id"])
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT categories FROM plugins WHERE id=%s",
-                        (imported_plugin_id,),
-                    )
-                    imported_row = cur.fetchone()
-                imported_categories = (
-                    (imported_row.get("categories") if imported_row else None) or []
-                )
-                imported_is_metadata_plugin = bool(
-                    {"metadata_source", "metadata_receiver"}.intersection(
-                        set(imported_categories)
-                    )
-                )
-                with conn.cursor() as cur:
-                    if imported_is_metadata_plugin and table_exists(conn, "metadata_plugins"):
-                        cur.execute(
-                            "UPDATE metadata_plugins SET enabled=true, updated_at=now() WHERE id=%s",
-                            (imported_plugin_id,),
+                        imported_plugin_id = str(manifest["id"])
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                "SELECT categories FROM plugins WHERE id=%s",
+                                (imported_plugin_id,),
+                            )
+                            imported_row = cur.fetchone()
+                        imported_categories = (
+                            (imported_row.get("categories") if imported_row else None) or []
                         )
-                    cur.execute(
-                        "UPDATE plugins SET enabled=true, updated_at=now() WHERE id=%s",
-                        (imported_plugin_id,),
-                    )
-                audit_event(
+                        imported_is_metadata_plugin = bool(
+                            {"metadata_source", "metadata_receiver"}.intersection(
+                                set(imported_categories)
+                            )
+                        )
+                        with conn.cursor() as cur:
+                            if imported_is_metadata_plugin and table_exists(conn, "metadata_plugins"):
+                                cur.execute(
+                                    "UPDATE metadata_plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                                    (imported_plugin_id,),
+                                )
+                            cur.execute(
+                                "UPDATE plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                                (imported_plugin_id,),
+                            )
+                        audit_event(
+                            conn,
+                            event_type="plugin.imported",
+                            category="plugins",
+                            actor=actor,
+                            target_type="plugin",
+                            target_id=str(manifest["id"]),
+                            summary=f"Imported plugin {manifest['id']} {manifest.get('version')}",
+                            metadata={
+                                "pluginId": manifest["id"],
+                                "name": manifest.get("name"),
+                                "version": manifest.get("version"),
+                                "categories": manifest.get("categories"),
+                                "installedPath": str(installed_path),
+                                "enabled": True,
+                                "packageSha256": package_digest,
+                                "uploadSizeBytes": upload_size,
+                            },
+                        )
+                    import_succeeded = True
+            except Exception as exc:
+                # Once installation starts, every later failure must remove the
+                # new executable and restore the previous plugin before failing.
+                if install_started and install_target and install_target.exists():
+                    try:
+                        shutil.rmtree(install_target)
+                    except OSError:
+                        app.logger.error("Failed to remove a partially imported plugin")
+                backup_available = bool(previous_trash_path and previous_trash_path.exists())
+                try:
+                    restored_previous = restore_plugin_source(previous_source_path, previous_trash_path)
+                except (OSError, shutil.Error):
+                    app.logger.error("Failed to restore the previous plugin after import failure")
+                else:
+                    if backup_available and not restored_previous:
+                        app.logger.error(
+                            "Previous plugin restore skipped because the target path is still occupied"
+                        )
+                audit_plugin_import_failure(
                     conn,
-                    event_type="plugin.imported",
-                    category="plugins",
                     actor=actor,
-                    target_type="plugin",
-                    target_id=str(manifest["id"]),
-                    summary=f"Imported plugin {manifest['id']} {manifest.get('version')}",
-                    metadata={
-                        "pluginId": manifest["id"],
-                        "name": manifest.get("name"),
-                        "version": manifest.get("version"),
-                        "categories": manifest.get("categories"),
-                        "installedPath": str(installed_path),
-                        "enabled": True,
-                    },
+                    package_digest=package_digest,
+                    upload_size=upload_size,
+                    stage=failure_stage,
+                    error=exc,
                 )
+                raise
+            finally:
+                if previous_trash_root:
+                    backup_remains = bool(previous_trash_path and previous_trash_path.exists())
+                    if import_succeeded or not backup_remains:
+                        shutil.rmtree(previous_trash_root, ignore_errors=True)
+                    else:
+                        app.logger.error("Preserved a previous plugin backup after failed import recovery")
+
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
             plugin = next((item for item in registry["plugins"] if item["id"] == manifest["id"]), None)
         return response({"status": "ok", "plugin": plugin, "registry": registry})
@@ -22000,6 +22714,22 @@ def register_routes(flask_app: Flask) -> None:
         value = clean_text(raw)
         return (value or "EUR").upper()[:3]
 
+    def _validate_wishlist_price_url(raw_url: str) -> None:
+        try:
+            validate_public_url(raw_url)
+        except PublicHttpError as exc:
+            if exc.code == "url_invalid":
+                raise NextApiError(
+                    "Price URL must be a valid http or https URL without credentials",
+                    400,
+                    "wishlist_price_url_invalid",
+                ) from None
+            raise NextApiError(
+                "Price URL must resolve only to public network addresses",
+                400,
+                "wishlist_price_url_not_public",
+            ) from None
+
     def _validated_shop_selector_payload(body: dict[str, Any]) -> tuple[str | None, str | None, dict[str, Any]]:
         selector = body.get("priceSelector")
         selector_type = clean_text(body.get("selectorType") or body.get("selector_type"))
@@ -22039,9 +22769,7 @@ def register_routes(flask_app: Flask) -> None:
         raw_url = clean_text(body.get("priceUrl") or body.get("price_url"))
         if not raw_url:
             raise NextApiError("Shop URL is required", 400)
-        parsed = urlparse(raw_url)
-        if parsed.scheme not in ("http", "https"):
-            raise NextApiError("Price URL must be an http or https URL", 400)
+        _validate_wishlist_price_url(raw_url)
         selector_type, selector_value, selector_options = _validated_shop_selector_payload(body)
         provider_plugin_id, provider_product_ref = _validated_shop_provider_payload(body)
         return (
@@ -22240,8 +22968,14 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Wishlist request body must be an object", 400)
+        price_url_supplied = "priceUrl" in body or "price_url" in body
+        validated_price_url = None
+        if price_url_supplied:
+            validated_price_url = clean_text(body.get("priceUrl") or body.get("price_url"))
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            if validated_price_url:
+                _validate_wishlist_price_url(validated_price_url)
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             user_id = actor.get("id")
@@ -22332,14 +23066,8 @@ def register_routes(flask_app: Flask) -> None:
                         alert_fields["target_price"] = tp_val
                     except (ValueError, TypeError) as exc:
                         raise NextApiError("Target price must be a number", 400) from exc
-            if "priceUrl" in body or "price_url" in body:
-                raw_url = clean_text(body.get("priceUrl") or body.get("price_url"))
-                if raw_url:
-                    from urllib.parse import urlparse as _urlparse
-                    parsed = _urlparse(raw_url)
-                    if parsed.scheme not in ("http", "https"):
-                        raise NextApiError("Price URL must be an http or https URL", 400)
-                alert_fields["price_url"] = raw_url or None
+            if price_url_supplied:
+                alert_fields["price_url"] = validated_price_url or None
             if "priceCurrency" in body or "price_currency" in body:
                 raw_currency = clean_text(body.get("priceCurrency") or body.get("price_currency"))
                 alert_fields["price_currency"] = (raw_currency or "EUR").upper()[:3]
@@ -22397,18 +23125,18 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Shop request body must be an object", 400)
-        (
-            shop_name,
-            price_url,
-            price_currency,
-            selector_type,
-            selector_value,
-            selector_options,
-            provider_plugin_id,
-            provider_product_ref,
-        ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            (
+                shop_name,
+                price_url,
+                price_currency,
+                selector_type,
+                selector_value,
+                selector_options,
+                provider_plugin_id,
+                provider_product_ref,
+            ) = _validated_shop_payload(body)
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
@@ -22475,13 +23203,13 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 except Exception as exc:  # noqa: BLE001
                     provider_status = "error"
-                    provider_error = str(exc)
+                    provider_error = "provider_error"
                     current_app.logger.warning(
-                        "wishlist_shop_provider_check_exception item=%s provider=%s url=%s error=%s",
+                        "wishlist_shop_provider_check_exception item=%s provider=%s host=%s error_type=%s",
                         item_uuid,
                         provider_plugin_id,
-                        price_url,
-                        provider_error,
+                        public_url_hostname(price_url),
+                        type(exc).__name__,
                     )
             if current_price is None:
                 current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
@@ -22490,12 +23218,15 @@ def register_routes(flask_app: Flask) -> None:
                     selector_value=selector_value,
                     selector_options=selector_options,
                 )
+            if current_price is None and extraction_source in PUBLIC_HTTP_FAILURE_CODES:
+                provider_status = provider_status or "error"
+                provider_error = provider_error or extraction_source
             if current_price is None:
                 current_app.logger.warning(
-                    "wishlist_shop_price_missing item=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    "wishlist_shop_price_missing item=%s provider=%s host=%s provider_status=%s provider_error=%s extraction_source=%s",
                     item_uuid,
                     provider_plugin_id,
-                    price_url,
+                    public_url_hostname(price_url),
                     provider_status,
                     provider_error,
                     extraction_source,
@@ -22593,18 +23324,18 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Shop request body must be an object", 400)
-        (
-            shop_name,
-            price_url,
-            price_currency,
-            selector_type,
-            selector_value,
-            selector_options,
-            provider_plugin_id,
-            provider_product_ref,
-        ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            (
+                shop_name,
+                price_url,
+                price_currency,
+                selector_type,
+                selector_value,
+                selector_options,
+                provider_plugin_id,
+                provider_product_ref,
+            ) = _validated_shop_payload(body)
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
@@ -22659,14 +23390,14 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 except Exception as exc:  # noqa: BLE001
                     provider_status = "error"
-                    provider_error = str(exc)
+                    provider_error = "provider_error"
                     current_app.logger.warning(
-                        "wishlist_shop_provider_check_exception item=%s shop=%s provider=%s url=%s error=%s",
+                        "wishlist_shop_provider_check_exception item=%s shop=%s provider=%s host=%s error_type=%s",
                         item_uuid,
                         shop_uuid,
                         provider_plugin_id,
-                        price_url,
-                        provider_error,
+                        public_url_hostname(price_url),
+                        type(exc).__name__,
                     )
             if current_price is None:
                 current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
@@ -22675,13 +23406,16 @@ def register_routes(flask_app: Flask) -> None:
                     selector_value=selector_value,
                     selector_options=selector_options,
                 )
+            if current_price is None and extraction_source in PUBLIC_HTTP_FAILURE_CODES:
+                provider_status = provider_status or "error"
+                provider_error = provider_error or extraction_source
             if current_price is None:
                 current_app.logger.warning(
-                    "wishlist_shop_price_missing item=%s shop=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    "wishlist_shop_price_missing item=%s shop=%s provider=%s host=%s provider_status=%s provider_error=%s extraction_source=%s",
                     item_uuid,
                     shop_uuid,
                     provider_plugin_id,
-                    price_url,
+                    public_url_hostname(price_url),
                     provider_status,
                     provider_error,
                     extraction_source,
@@ -27908,6 +28642,89 @@ def register_routes(flask_app: Flask) -> None:
             {
                 "status": "ok",
                 "baseRevision": base_revision,
+                "currentRevision": revision,
+                "results": results,
+            }
+        )
+
+    @flask_app.post("/api/next/sync/reconcile")
+    def sync_reconcile():
+        """First-connect adoption: the client offers its full local list and gets
+        back, per item, whether the server already has that record (``matched``
+        with the server id + ``matchedBy``) or not (``unknown``). Read-only — no
+        creates, no mutations. This is the only path where the title+year tier is
+        active, keeping the fuzziest match confined to first connect."""
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Reconcile request body must be an object", 400)
+        client_id = str(body.get("clientId") or "").strip()
+        if not client_id:
+            raise NextApiError("clientId is required", 400)
+        items = body.get("items")
+        if not isinstance(items, list):
+            raise NextApiError("items must be a list", 400)
+        if len(items) > 1000:
+            raise NextApiError("At most 1000 items can be reconciled at once", 400)
+
+        results: list[dict[str, Any]] = []
+        with connect() as conn:
+            require_next_authenticated_user(conn)
+            revision = current_revision(conn)
+            for item in items:
+                if not isinstance(item, dict):
+                    results.append({"status": "invalid", "matched": False})
+                    continue
+                persistent_client_id = clean_text(
+                    item.get("clientId") or item.get("client_id")
+                )
+                barcode = item.get("barcode")
+                barcode_normalized = normalize_barcode(barcode)
+                tmdb_id = clean_text(
+                    item.get("tmdbId") or item.get("tmdb_id") or item.get("tmdbID")
+                )
+                fmt = clean_text(item.get("format"))
+                edition = clean_text(item.get("edition"))
+                title = item.get("title")
+                year = item.get("year")
+                matched_id, matched_by = match_reconcile_item(
+                    persistent_client_id=persistent_client_id,
+                    barcode_normalized=barcode_normalized,
+                    tmdb_id=tmdb_id,
+                    fmt=fmt,
+                    title=title,
+                    year=year,
+                    find_by_client_id=lambda: find_movie_by_client_id(
+                        conn, persistent_client_id
+                    ),
+                    find_by_barcode=lambda: find_movie_by_barcode_match(conn, barcode),
+                    find_by_tmdb_edition=lambda: find_movie_by_tmdb_edition(
+                        conn, tmdb_id=tmdb_id, fmt=fmt, edition=edition
+                    ),
+                    find_by_title_year=lambda: find_movie_by_title_year(
+                        conn, title=title, year=year, fmt=fmt
+                    ),
+                )
+                if matched_id is not None:
+                    results.append(
+                        {
+                            "clientId": persistent_client_id,
+                            "status": "matched",
+                            "matched": True,
+                            "entityId": str(matched_id),
+                            "matchedBy": matched_by,
+                        }
+                    )
+                else:
+                    results.append(
+                        {
+                            "clientId": persistent_client_id,
+                            "status": "unknown",
+                            "matched": False,
+                        }
+                    )
+        return response(
+            {
+                "status": "ok",
                 "currentRevision": revision,
                 "results": results,
             }

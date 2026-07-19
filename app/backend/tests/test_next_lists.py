@@ -1,7 +1,7 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -228,6 +228,160 @@ class ListsRouteRegistrationTests(unittest.TestCase):
 
     def test_statistics_route_is_registered(self):
         self.assertIn("/api/next/stats/personal", self._rules())
+
+    def test_shop_add_rejects_non_public_url_after_authorization_before_database_query(self):
+        item_id = "00000000-0000-0000-0000-000000000001"
+        conn = MagicMock()
+        with (
+            next_app.app.test_request_context(
+                f"/api/next/lists/wishlist/{item_id}/shops",
+                method="POST",
+                json={
+                    "shopName": "Internal",
+                    "priceUrl": "http://127.0.0.1:5000/api/next/health",
+                },
+            ),
+            patch(
+                "app.backend.next_app.validate_public_url",
+                side_effect=next_app.PublicHttpError("url_blocked"),
+            ),
+            patch("app.backend.next_app.connect") as connect,
+            patch(
+                "app.backend.next_app.require_next_permission",
+                return_value={"id": "user-1"},
+            ),
+        ):
+            connect.return_value.__enter__.return_value = conn
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.app.view_functions["add_wishlist_item_shop"](item_id)
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertEqual(raised.exception.code, "wishlist_price_url_not_public")
+        connect.assert_called_once()
+        conn.cursor.assert_not_called()
+
+    def test_shop_update_rejects_url_credentials_after_authorization_before_database_query(self):
+        item_id = "00000000-0000-0000-0000-000000000001"
+        shop_id = "00000000-0000-0000-0000-000000000002"
+        conn = MagicMock()
+        with (
+            next_app.app.test_request_context(
+                f"/api/next/lists/wishlist/{item_id}/shops/{shop_id}",
+                method="PATCH",
+                json={
+                    "shopName": "Unsafe",
+                    "priceUrl": "https://username@shop.example/product",
+                },
+            ),
+            patch(
+                "app.backend.next_app.validate_public_url",
+                side_effect=next_app.PublicHttpError("url_invalid"),
+            ),
+            patch("app.backend.next_app.connect") as connect,
+            patch(
+                "app.backend.next_app.require_next_permission",
+                return_value={"id": "user-1"},
+            ),
+        ):
+            connect.return_value.__enter__.return_value = conn
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.app.view_functions["update_wishlist_item_shop"](item_id, shop_id)
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertEqual(raised.exception.code, "wishlist_price_url_invalid")
+        connect.assert_called_once()
+        conn.cursor.assert_not_called()
+
+    def test_wishlist_update_rejects_legacy_private_url_after_authorization_before_database_query(self):
+        item_id = "00000000-0000-0000-0000-000000000001"
+        conn = MagicMock()
+        with (
+            next_app.app.test_request_context(
+                f"/api/next/lists/wishlist/{item_id}",
+                method="PATCH",
+                json={"priceUrl": "http://192.168.1.10/admin"},
+            ),
+            patch(
+                "app.backend.next_app.validate_public_url",
+                side_effect=next_app.PublicHttpError("url_blocked"),
+            ),
+            patch("app.backend.next_app.connect") as connect,
+            patch(
+                "app.backend.next_app.require_next_permission",
+                return_value={"id": "user-1"},
+            ),
+        ):
+            connect.return_value.__enter__.return_value = conn
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.app.view_functions["update_wishlist_item"](item_id)
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertEqual(raised.exception.code, "wishlist_price_url_not_public")
+        connect.assert_called_once()
+        conn.cursor.assert_not_called()
+
+    def test_unauthorized_wishlist_writes_do_not_resolve_price_url(self):
+        item_id = "00000000-0000-0000-0000-000000000001"
+        shop_id = "00000000-0000-0000-0000-000000000002"
+        cases = (
+            (
+                f"/api/next/lists/wishlist/{item_id}",
+                "update_wishlist_item",
+                (item_id,),
+            ),
+            (
+                f"/api/next/lists/wishlist/{item_id}/shops",
+                "add_wishlist_item_shop",
+                (item_id,),
+            ),
+            (
+                f"/api/next/lists/wishlist/{item_id}/shops/{shop_id}",
+                "update_wishlist_item_shop",
+                (item_id, shop_id),
+            ),
+        )
+        for path, endpoint, args in cases:
+            with self.subTest(endpoint=endpoint):
+                conn = MagicMock()
+                with (
+                    next_app.app.test_request_context(
+                        path,
+                        method="PATCH",
+                        json={
+                            "shopName": "Blocked",
+                            "priceUrl": "http://internal.example/admin",
+                        },
+                    ),
+                    patch("app.backend.next_app.connect") as connect,
+                    patch(
+                        "app.backend.next_app.require_next_permission",
+                        side_effect=next_app.NextApiError("Permission required", 403),
+                    ),
+                    patch("app.backend.next_app.validate_public_url") as validate_url,
+                ):
+                    connect.return_value.__enter__.return_value = conn
+                    with self.assertRaises(next_app.NextApiError) as raised:
+                        next_app.app.view_functions[endpoint](*args)
+                self.assertEqual(raised.exception.status_code, 403)
+                validate_url.assert_not_called()
+
+    def test_api_error_handler_serializes_stable_error_code(self):
+        error = next_app.NextApiError(
+            "Wishlist price URL must resolve to a public network address",
+            400,
+            "wishlist_price_url_not_public",
+        )
+        handler = next_app.app.error_handler_spec[None][None][next_app.NextApiError]
+
+        with next_app.app.test_request_context("/api/next/lists/wishlist/test"):
+            response, status = handler(error)
+
+        self.assertEqual(status, 400)
+        self.assertEqual(
+            response.get_json(),
+            {
+                "status": "error",
+                "error": "Wishlist price URL must resolve to a public network address",
+                "errorCode": "wishlist_price_url_not_public",
+            },
+        )
 
 
 class _FakeCursor:

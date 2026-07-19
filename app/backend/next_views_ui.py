@@ -128,8 +128,19 @@ def ui_preview_html(
         "import": "M12 2A10 10 0 1 1 2 12A10 10 0 0 1 12 2M17 11H13V7H11V11H7V13H11V17H13V13H17V11Z",
         "notifications": "M12 22A2.5 2.5 0 0 0 14.5 19.5H9.5A2.5 2.5 0 0 0 12 22M18 16V11A6 6 0 0 0 13 5.1V4A1 1 0 0 0 11 4V5.1A6 6 0 0 0 6 11V16L4 18V19H20V18L18 16Z",
         "profile": "M12 4A4 4 0 1 1 8 8A4 4 0 0 1 12 4M12 14C16.42 14 20 15.79 20 18V20H4V18C4 15.79 7.58 14 12 14Z",
+        "account": "M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2M12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5M12 19.2C9.5 19.2 7.29 17.92 6 16C6.03 14 10 12.9 12 12.9S17.97 14 18 16C16.71 17.92 14.5 19.2 12 19.2Z",
+        "preferences": "M8 13C6.14 13 4.59 14.28 4.14 16H2V18H4.14C4.59 19.72 6.14 21 8 21S11.41 19.72 11.86 18H22V16H11.86C11.41 14.28 9.86 13 8 13M8 19C6.9 19 6 18.1 6 17C6 15.9 6.9 15 8 15S10 15.9 10 17C10 18.1 9.1 19 8 19M19.86 6C19.41 4.28 17.86 3 16 3S12.59 4.28 12.14 6H2V8H12.14C12.59 9.72 14.14 11 16 11S19.41 9.72 19.86 8H22V6H19.86M16 9C14.9 9 14 8.1 14 7C14 5.9 14.9 5 16 5S18 5.9 18 7C18 8.1 17.1 9 16 9Z",
+        "notification_settings": "M22.72 19.5C22.74 19.33 22.75 19.17 22.75 19S22.74 18.67 22.72 18.5L23.77 17.68C23.87 17.61 23.89 17.5 23.83 17.36L22.83 15.64C22.77 15.53 22.64 15.5 22.53 15.53L21.28 16C21 15.83 20.75 15.66 20.44 15.54L20.25 14.21C20.23 14.09 20.13 14 20 14H18C17.88 14 17.77 14.09 17.75 14.21L17.57 15.54C17.25 15.66 17 15.83 16.72 16L15.5 15.53C15.37 15.5 15.23 15.53 15.17 15.64L14.17 17.36C14.11 17.5 14.14 17.61 14.23 17.68L15.29 18.5C15.27 18.67 15.25 18.84 15.25 19S15.27 19.33 15.29 19.5L14.23 20.32C14.14 20.39 14.11 20.53 14.17 20.64L15.17 22.37C15.23 22.5 15.37 22.5 15.5 22.5L16.72 21.97C17 22.17 17.25 22.34 17.57 22.47L17.75 23.79C17.77 23.91 17.88 24 18 24H20C20.13 24 20.23 23.91 20.25 23.79L20.44 22.47C20.75 22.34 21 22.17 21.28 21.97L22.53 22.5C22.64 22.5 22.77 22.5 22.83 22.37L23.83 20.64C23.89 20.53 23.87 20.39 23.77 20.32L22.72 19.5M19 20.75C18.04 20.75 17.25 19.97 17.25 19S18.04 17.25 19 17.25 20.75 18.03 20.75 19 19.97 20.75 19 20.75M12.08 20H3V19L5 17V11C5 7.9 7 5.2 10 4.3V4C10 2.9 10.9 2 12 2S14 2.9 14 4V4.3C17 5.2 19 7.9 19 11V12C18.31 12 17.63 12.11 17 12.29V11C17 8.2 14.8 6 12 6S7 8.2 7 11V18H12.08C12.03 18.33 12 18.66 12 19C12 19.34 12.03 19.67 12.08 20M12.3 21C12.5 21.6 12.74 22.17 13.06 22.69C12.75 22.88 12.39 23 12 23C10.9 23 10 22.1 10 21H12.3Z",
+        "groups": "M12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5M5.5 7C6.88 7 8 8.12 8 9.5S6.88 12 5.5 12 3 10.88 3 9.5 4.12 7 5.5 7M18.5 7C19.88 7 21 8.12 21 9.5S19.88 12 18.5 12 16 10.88 16 9.5 17.12 7 18.5 7M12 13C15.31 13 18 14.79 18 17V20H6V17C6 14.79 8.69 13 12 13M5.5 14C3.57 14 2 15.12 2 16.5V19H4V17C4 15.9 4.45 14.87 5.22 14.03L5.5 14M18.5 14L18.78 14.03C19.55 14.87 20 15.9 20 17V19H22V16.5C22 15.12 20.43 14 18.5 14Z",
+        "structure": "M12 13H7V18H12V20H5V10H7V11H12V13M8 4V6H4V4H8M10 2H2V8H10V2M20 11V13H16V11H20M22 9H14V15H22V9M20 18V20H16V18H20M22 16H14V22H22V16Z",
+        "security": "M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1M12 5C13.66 5 15 6.34 15 8V10H16V16H8V10H9V8C9 6.34 10.34 5 12 5M12 7C11.45 7 11 7.45 11 8V10H13V8C13 7.45 12.55 7 12 7Z",
+        "api": "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z",
+        "about": "M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
         "discover": "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.24,7.76L14.12,14.12L7.76,16.24L9.88,9.88L16.24,7.76M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z",
+        "appearance": "M12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2C17.5,2 22,6 22,11A6,6 0 0,1 16,17H14.2C13.9,17 13.7,17.2 13.7,17.5C13.7,17.6 13.8,17.7 13.8,17.8C14.2,18.3 14.4,18.9 14.4,19.5C14.5,20.9 13.4,22 12,22M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C12.3,20 12.5,19.8 12.5,19.5C12.5,19.3 12.4,19.2 12.4,19.1C12,18.6 11.8,18.1 11.8,17.5C11.8,16.1 12.9,15 14.3,15H16A4,4 0 0,0 20,11C20,7.1 16.4,4 12,4M6.5,10C7.3,10 8,10.7 8,11.5C8,12.3 7.3,13 6.5,13C5.7,13 5,12.3 5,11.5C5,10.7 5.7,10 6.5,10M9.5,6C10.3,6 11,6.7 11,7.5C11,8.3 10.3,9 9.5,9C8.7,9 8,8.3 8,7.5C8,6.7 8.7,6 9.5,6M14.5,6C15.3,6 16,6.7 16,7.5C16,8.3 15.3,9 14.5,9C13.7,9 13,8.3 13,7.5C13,6.7 13.7,6 14.5,6M17.5,10C18.3,10 19,10.7 19,11.5C19,12.3 18.3,13 17.5,13C16.7,13 16,12.3 16,11.5C16,10.7 16.7,10 17.5,10Z",
+        "library_preferences": "M9 3V18H12V3H9M12 5L16 18L19 17L15 4L12 5M5 5V18H8V5H5M3 19V21H21V19H3Z",
+        "collectors_preferences": "M20 21H4V10H6V19H18V10H20V21M3 3H21V9H3V3M9.5 11H14.5C14.78 11 15 11.22 15 11.5V13H9V11.5C9 11.22 9.22 11 9.5 11M5 5V7H19V5H5Z",
     }
 
     def nav_icon(name: str) -> str:
@@ -138,6 +149,49 @@ def ui_preview_html(
             f'<span class="nav-symbol {h(name)}" aria-hidden="true">'
             f'<svg viewBox="0 0 24 24" focusable="false" role="img"><path d="{path}"></path></svg>'
             "</span>"
+        )
+
+    def profile_tab(
+        name: str,
+        label_key: str,
+        fallback: str,
+        *,
+        active: bool = False,
+        icon_name: str | None = None,
+    ) -> str:
+        suffix = "".join(part.capitalize() for part in name.split("_"))
+        active_class = ' class="active"' if active else ""
+        return (
+            f'<button id="profileTab{suffix}" type="button"{active_class} role="tab" '
+            f'aria-controls="profilePanel{suffix}" aria-selected="{"true" if active else "false"}" '
+            f'tabindex="{"0" if active else "-1"}" aria-label="{h(fallback)}" title="{h(fallback)}" '
+            f'data-next-i18n-aria="{h(label_key)}" data-next-i18n-title="{h(label_key)}" '
+            f'data-profile-tab="{h(name)}">{nav_icon(icon_name or name)}'
+            f'<span class="profile-tab-label" data-next-i18n="{h(label_key)}">{h(fallback)}</span></button>'
+        )
+
+    def preference_tab(
+        name: str,
+        label_key: str,
+        fallback: str,
+        description_key: str,
+        description_fallback: str,
+        icon_name: str,
+        *,
+        active: bool = False,
+    ) -> str:
+        suffix = "".join(part.capitalize() for part in name.split("_"))
+        active_class = ' class="active"' if active else ""
+        return (
+            f'<button id="preferenceTab{suffix}" type="button"{active_class} role="tab" '
+            f'aria-controls="preferencePanel{suffix}" aria-selected="{"true" if active else "false"}" '
+            f'tabindex="{"0" if active else "-1"}" aria-label="{h(fallback)}" title="{h(fallback)}" '
+            f'data-next-i18n-aria="{h(label_key)}" data-next-i18n-title="{h(label_key)}" '
+            f'data-preferences-tab="{h(name)}">{nav_icon(icon_name)}'
+            '<span class="preferences-category-copy">'
+            f'<strong data-next-i18n="{h(label_key)}">{h(fallback)}</strong>'
+            f'<span data-next-i18n="{h(description_key)}">{h(description_fallback)}</span>'
+            "</span></button>"
         )
 
     return """<!doctype html>
@@ -7745,6 +7799,20 @@ def ui_preview_html(
       gap: 16px;
       overflow: hidden;
     }
+    .profile-center-header {
+      align-items: flex-start;
+    }
+    .profile-center-layout {
+      display: grid;
+      grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+      min-width: 0;
+    }
+    .profile-content {
+      display: grid;
+      min-width: 0;
+    }
     .profile-view,
     .profile-center-card,
     .profile-panel,
@@ -7759,22 +7827,67 @@ def ui_preview_html(
       max-width: 100%;
       box-sizing: border-box;
     }
-    .profile-submenu {
-      width: max-content;
-      max-width: 100%;
-      overflow-x: auto;
-      justify-content: flex-start;
+    .profile-navigation {
+      position: sticky;
+      top: 18px;
+      display: grid;
+      width: 100%;
+      max-width: none;
+      gap: 6px;
+      padding: 8px;
+      border-radius: 16px;
+      overflow: visible;
       scrollbar-width: none;
       -webkit-overflow-scrolling: touch;
     }
-    .profile-submenu::-webkit-scrollbar {
+    .profile-navigation::-webkit-scrollbar {
       display: none;
     }
-    .profile-submenu button {
+    .profile-navigation button {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      width: 100%;
       min-width: 0;
+      min-height: 44px;
+      padding: 0 12px;
+      border-radius: 12px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      text-align: left;
+    }
+    .profile-navigation button:hover {
+      color: var(--text);
+      background: color-mix(in srgb, var(--accent) 10%, var(--bg-solid));
+    }
+    .profile-navigation button:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+    .profile-navigation button.active {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+        0 10px 24px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    .profile-tab-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    html[data-profile-menu-style="icon_only"] .profile-center-layout {
+      grid-template-columns: 72px minmax(0, 1fr);
+    }
+    html[data-profile-menu-style="icon_only"] .profile-navigation button {
+      justify-content: center;
+      padding-inline: 0;
+    }
+    html[data-profile-menu-style="icon_only"] .profile-navigation .profile-tab-label {
+      display: none;
     }
     .profile-panel {
       display: grid;
@@ -7787,6 +7900,107 @@ def ui_preview_html(
       gap: 14px;
       align-items: start;
       min-width: 0;
+    }
+    .account-dashboard {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .account-summary-card {
+      display: grid;
+      gap: 16px;
+      padding: 18px;
+      border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 42%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .account-summary-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .account-summary-symbol {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 13px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 17%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent);
+    }
+    .account-summary-symbol .nav-symbol {
+      width: 24px;
+      height: 24px;
+    }
+    .account-summary-symbol .nav-symbol svg {
+      width: 24px;
+      height: 24px;
+    }
+    .account-summary-copy {
+      min-width: 0;
+    }
+    .account-summary-copy h4 {
+      margin: 2px 0 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 1.15rem;
+    }
+    .account-fact-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      min-width: 0;
+    }
+    .account-fact {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+    }
+    .account-fact span {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 700;
+    }
+    .account-fact strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .account-editor-card {
+      padding: 18px;
+    }
+    .account-editor-heading {
+      display: grid;
+      gap: 4px;
+    }
+    .account-edit-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      min-width: 0;
+    }
+    .account-edit-grid .profile-form {
+      align-content: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 64%, transparent);
+    }
+    .account-session-actions {
+      display: flex;
+      justify-content: flex-end;
+      padding-top: 2px;
     }
     .profile-security-grid {
       gap: 12px;
@@ -9414,23 +9628,6 @@ def ui_preview_html(
       font-size: .9rem;
       font-weight: 620;
     }
-    .preferences-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 40;
-      display: grid;
-      place-items: center;
-      padding: 18px;
-      background: rgba(0,0,0,.42);
-      backdrop-filter: blur(18px);
-    }
-    .preferences-panel {
-      width: min(720px, 100%);
-      max-height: min(760px, calc(100vh - 36px));
-      overflow: auto;
-      display: grid;
-      gap: 16px;
-    }
     .location-qr-backdrop {
       position: fixed;
       inset: 0;
@@ -9558,9 +9755,142 @@ def ui_preview_html(
       margin: 0 0 5px;
       font-size: 1.35rem;
     }
+    .preferences-dashboard {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .preferences-category-nav {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0;
+      background: transparent;
+      border: 0;
+    }
+    .preferences-category-nav button {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      min-height: 78px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 13px 14px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      color: var(--muted);
+      text-align: left;
+      cursor: pointer;
+      transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease;
+    }
+    .preferences-category-nav button:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+      color: var(--text);
+    }
+    .preferences-category-nav button:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+    .preferences-category-nav button.active {
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+      background: color-mix(in srgb, var(--accent) 13%, var(--bg-solid));
+      color: var(--accent-bright);
+      box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+    .preferences-category-nav .nav-symbol {
+      width: 26px;
+      height: 26px;
+    }
+    .preferences-category-copy {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .preferences-category-copy strong {
+      color: inherit;
+      font-size: .9rem;
+      line-height: 1.2;
+    }
+    .preferences-category-copy > span {
+      color: var(--muted);
+      font-size: .75rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .preferences-category-nav button.active .preferences-category-copy > span {
+      color: color-mix(in srgb, var(--accent-bright) 68%, var(--muted));
+    }
+    .preferences-panel-content {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .preferences-settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      align-items: start;
+      min-width: 0;
+    }
+    .preferences-setting-card {
+      display: grid;
+      align-content: start;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      overflow: hidden;
+    }
+    .preferences-setting-card.wide {
+      grid-column: 1 / -1;
+    }
+    .preferences-setting-card.system {
+      border-color: color-mix(in srgb, var(--warn) 38%, var(--line));
+      background: color-mix(in srgb, var(--warn) 7%, var(--bg-solid));
+    }
+    .preferences-setting-card-head {
+      display: grid;
+      gap: 4px;
+      padding: 14px 15px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .preferences-setting-card-head h5 {
+      margin: 0;
+      color: var(--text);
+      font-size: .9rem;
+    }
+    .preferences-setting-card-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .76rem;
+      line-height: 1.4;
+    }
+    .preferences-card-list,
     .preference-list {
       display: grid;
-      gap: 10px;
+      min-width: 0;
+    }
+    .preferences-setting-card .preference-row,
+    .preferences-setting-card .preference-control-row {
+      border: 0;
+      border-radius: 0;
+      border-top: 1px solid var(--line);
+      background: transparent;
+      padding: 12px 15px;
+    }
+    .preferences-setting-card-head + .preferences-card-list > :first-child,
+    .preferences-setting-card-head + .preference-control-list > :first-child,
+    .preferences-setting-card > .preferences-card-list:first-child > :first-child,
+    .preferences-setting-card > .preference-control-list:first-child > :first-child {
+      border-top: 0;
+    }
+    .preferences-setting-card .preference-row.dependent,
+    .preferences-setting-card .preference-control-row.dependent {
+      margin-left: 15px;
+      padding-left: 13px;
+      border-left: 2px solid color-mix(in srgb, var(--accent) 42%, var(--line));
     }
     .preference-row {
       display: grid;
@@ -9586,7 +9916,7 @@ def ui_preview_html(
     }
     .preference-control-list {
       display: grid;
-      gap: 10px;
+      min-width: 0;
     }
     .preference-control-row {
       display: grid;
@@ -9640,6 +9970,10 @@ def ui_preview_html(
     .switch:disabled {
       cursor: not-allowed;
       opacity: .66;
+    }
+    .switch:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 3px;
     }
     .movie-metadata-option {
       display: inline-flex;
@@ -10427,7 +10761,46 @@ def ui_preview_html(
       .profile-grid {
         grid-template-columns: 1fr;
       }
+      .profile-center-layout {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      html[data-profile-menu-style="icon_only"] .profile-center-layout {
+        grid-template-columns: 1fr;
+      }
+      .detail-submenu.profile-navigation {
+        position: static;
+        display: flex;
+        width: 100%;
+        max-width: 100%;
+        gap: 6px;
+        padding: 6px;
+        border-radius: 14px;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scroll-snap-type: inline proximity;
+      }
+      .detail-submenu.profile-navigation button,
+      html[data-profile-menu-style="icon_only"] .detail-submenu.profile-navigation button {
+        flex: 0 0 44px;
+        width: 44px;
+        min-width: 44px;
+        min-height: 44px;
+        max-width: 44px;
+        justify-content: center;
+        padding: 0;
+        scroll-snap-align: start;
+      }
+      .profile-navigation .profile-tab-label {
+        display: none;
+      }
       .profile-section-grid {
+        grid-template-columns: 1fr;
+      }
+      .account-fact-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .account-edit-grid {
         grid-template-columns: 1fr;
       }
       .profile-api-panel[data-profile-api-panel="general"],
@@ -10490,6 +10863,12 @@ def ui_preview_html(
       .preference-control-row {
         grid-template-columns: 1fr;
         align-items: stretch;
+      }
+      .preferences-settings-grid {
+        grid-template-columns: 1fr;
+      }
+      .preferences-setting-card.wide {
+        grid-column: auto;
       }
       .preference-row .switch {
         justify-self: start;
@@ -10611,6 +10990,43 @@ def ui_preview_html(
         min-height: 34px;
         padding: 0 10px;
         font-size: .76rem;
+      }
+      .preferences-category-nav {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .preferences-category-nav::-webkit-scrollbar {
+        display: none;
+      }
+      .preferences-category-nav button {
+        flex: 1 0 58px;
+        grid-template-columns: 1fr;
+        justify-items: center;
+        min-width: 58px;
+        min-height: 52px;
+        padding: 10px;
+      }
+      .preferences-category-nav .preferences-category-copy {
+        display: none;
+      }
+      .preferences-category-nav .nav-symbol {
+        width: 24px;
+        height: 24px;
+      }
+      .preferences-setting-card-head {
+        padding: 12px 13px 10px;
+      }
+      .preferences-setting-card .preference-row,
+      .preferences-setting-card .preference-control-row {
+        padding: 11px 13px;
+      }
+      .preferences-setting-card .preference-row.dependent,
+      .preferences-setting-card .preference-control-row.dependent {
+        margin-left: 12px;
+        padding-left: 11px;
       }
       .profile-form-actions,
       .profile-action-row,
@@ -12600,139 +13016,182 @@ def ui_preview_html(
               <button type="button" class="secondary-button profile-hero-nav-action hidden" id="profileOpenStatisticsButton" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span></button>
             </div>
             <button type="button" class="secondary-button hidden" id="profileOpenAdminButton" data-app-route="admin" data-next-i18n="profile.openAdmin">Open admin</button>
-            <button type="button" class="secondary-button" id="profileSignOutButton" data-next-i18n="auth.signOut">Sign out</button>
           </div>
         </section>
         <section class="profile-grid profile-grid-single">
           <div class="detail-card profile-card full profile-center-card">
-            <div class="detail-card-head">
+            <div class="detail-card-head profile-center-header">
               <div>
                 <h3 data-next-i18n="profile.profileCenter">Profile center</h3>
                 <p data-next-i18n="profile.profileCenterHelp">Manage your account, preferences, security and app information.</p>
               </div>
-              <nav class="detail-submenu profile-submenu" aria-label="Profile sections" data-next-i18n-aria="profile.sections">
-                <button type="button" class="active" data-profile-tab="account" data-next-i18n="profile.tabAccount">Account</button>
-                <button type="button" data-profile-tab="preferences" data-next-i18n="preferences.title">Preferences</button>
-                <button type="button" data-profile-tab="notifications" data-next-i18n="profile.tabNotifications">Notifications</button>
-                <button type="button" data-profile-tab="groups" data-next-i18n="groups.memberGroups">Groups</button>
-                <button type="button" data-profile-tab="structure" data-next-i18n="profile.tabStructure">Structure</button>
-                <button type="button" data-profile-tab="security" data-next-i18n="profile.security">Security</button>
-                <button type="button" data-profile-tab="api" data-next-i18n="profile.apiMcp">API & MCP</button>
-                <button type="button" data-profile-tab="about" data-next-i18n="profile.about">About</button>
+            </div>
+            <div class="profile-center-layout">
+              <nav class="detail-submenu profile-submenu profile-navigation" role="tablist" aria-label="Profile sections" data-next-i18n-aria="profile.sections">
+                """ + profile_tab("account", "profile.tabAccount", "Account", active=True) + """
+                """ + profile_tab("preferences", "preferences.title", "Preferences") + """
+                """ + profile_tab("notifications", "profile.tabNotifications", "Notifications", icon_name="notification_settings") + """
+                """ + profile_tab("groups", "groups.memberGroups", "Groups") + """
+                """ + profile_tab("structure", "profile.tabStructure", "Structure") + """
+                """ + profile_tab("security", "profile.security", "Security") + """
+                """ + profile_tab("api", "profile.apiMcp", "API & MCP") + """
+                """ + profile_tab("about", "profile.about", "About") + """
               </nav>
-            </div>
-            <div class="detail-subpanel profile-panel" data-profile-panel="account">
-              <div class="profile-section-grid">
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.account">Account</h4>
-                  <div class="profile-meta">
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.username">Username</span>
-                      <strong id="profileUsername">-</strong>
-                    </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.role">Role</span>
-                      <strong id="profileRole">-</strong>
-                    </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.users">Users</span>
-                      <strong id="profileUserCount">-</strong>
-                    </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="profile.credentials">Passkeys</span>
-                      <strong id="profileCredentialCount">-</strong>
+              <div class="profile-content">
+                <div id="profilePanelAccount" class="detail-subpanel profile-panel" role="tabpanel" aria-labelledby="profileTabAccount" tabindex="0" data-profile-panel="account">
+                  <div class="account-dashboard">
+                    <section class="account-summary-card">
+                      <div class="account-summary-head">
+                        <span class="account-summary-symbol">""" + nav_icon("account") + """</span>
+                        <div class="account-summary-copy">
+                          <span class="eyebrow" data-next-i18n="profile.account">Account</span>
+                          <h4 id="profileAccountDisplayName">DiscVault</h4>
+                        </div>
+                      </div>
+                      <div class="account-fact-grid">
+                        <div class="account-fact">
+                          <span data-next-i18n="profile.username">Username</span>
+                          <strong id="profileUsername">-</strong>
+                        </div>
+                        <div class="account-fact">
+                          <span data-next-i18n="profile.role">Role</span>
+                          <strong id="profileRole">-</strong>
+                        </div>
+                        <div class="account-fact">
+                          <span data-next-i18n="profile.users">Users</span>
+                          <strong id="profileUserCount">-</strong>
+                        </div>
+                        <div class="account-fact">
+                          <span data-next-i18n="profile.credentials">Passkeys</span>
+                          <strong id="profileCredentialCount">-</strong>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="profile-section-box account-editor-card">
+                      <div class="account-editor-heading">
+                        <h4 data-next-i18n="profile.profileEditing">Profile editing</h4>
+                        <p data-next-i18n="profile.subtitle">Personal settings and account access.</p>
+                      </div>
+                      <div class="account-edit-grid">
+                        <form class="profile-form" id="profileEditForm">
+                          <label for="profileDisplayNameInput">
+                            <span data-next-i18n="profile.displayName">Display name</span>
+                            <input id="profileDisplayNameInput" name="display_name" maxlength="120" autocomplete="name">
+                          </label>
+                          <div class="profile-form-actions">
+                            <button type="submit" class="secondary-button" id="profileSaveButton" data-next-i18n="profile.saveProfile">Save profile</button>
+                            <span class="login-message" id="profileEditMessage"></span>
+                          </div>
+                        </form>
+                        <form class="profile-form" id="profileAvatarForm">
+                          <label for="profileAvatarFileInput">
+                            <span data-next-i18n="profile.avatar">Avatar</span>
+                            <input id="profileAvatarFileInput" name="file" type="file" accept="image/*">
+                          </label>
+                          <div class="profile-form-actions">
+                            <button type="submit" class="secondary-button" id="profileAvatarUploadButton" data-next-i18n="profile.uploadAvatar">Upload avatar</button>
+                            <button type="button" class="secondary-button" id="profileAvatarRemoveButton" data-next-i18n="profile.removeAvatar">Remove avatar</button>
+                            <span class="login-message" id="profileAvatarMessage"></span>
+                          </div>
+                        </form>
+                      </div>
+                    </section>
+                    <div class="account-session-actions">
+                      <button type="button" class="secondary-button" id="profileSignOutButton" data-next-i18n="auth.signOut">Sign out</button>
                     </div>
                   </div>
-                </section>
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.profileEditing">Profile editing</h4>
-                  <form class="profile-form" id="profileEditForm">
-                    <label for="profileDisplayNameInput">
-                      <span data-next-i18n="profile.displayName">Display name</span>
-                      <input id="profileDisplayNameInput" name="display_name" maxlength="120" autocomplete="name">
-                    </label>
-                    <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="profileSaveButton" data-next-i18n="profile.saveProfile">Save profile</button>
-                      <span class="login-message" id="profileEditMessage"></span>
-                    </div>
-                  </form>
-                  <form class="profile-form" id="profileAvatarForm">
-                    <label for="profileAvatarFileInput">
-                      <span data-next-i18n="profile.avatar">Avatar</span>
-                      <input id="profileAvatarFileInput" name="file" type="file" accept="image/*">
-                    </label>
-                    <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="profileAvatarUploadButton" data-next-i18n="profile.uploadAvatar">Upload avatar</button>
-                      <button type="button" class="secondary-button" id="profileAvatarRemoveButton" data-next-i18n="profile.removeAvatar">Remove avatar</button>
-                      <span class="login-message" id="profileAvatarMessage"></span>
-                    </div>
-                  </form>
-                </section>
-              </div>
-            </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="preferences">
-              <div class="detail-card-head compact">
-                <div>
-                  <h4 data-next-i18n="preferences.title">Preferences</h4>
-                  <p data-next-i18n="preferences.description">Fine-tune how DiscVault feels on this device and account.</p>
                 </div>
-                <nav class="detail-submenu" aria-label="Preferences" data-next-i18n-aria="preferences.sections">
-                  <button type="button" class="active" data-preferences-tab="appearance" data-next-i18n="preferences.tabAppearance">Appearance</button>
-                  <button type="button" data-preferences-tab="library" data-next-i18n="preferences.tabLibrary">Library</button>
-                  <button type="button" data-preferences-tab="collectors" data-next-i18n="preferences.tabCollectors">Collectors</button>
+                <div id="profilePanelPreferences" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabPreferences" tabindex="0" data-profile-panel="preferences">
+              <div class="preferences-dashboard">
+                <div class="detail-card-head compact">
+                  <div>
+                    <h4 data-next-i18n="preferences.title">Preferences</h4>
+                    <p data-next-i18n="preferences.description">Fine-tune how DiscVault feels on this device and account.</p>
+                  </div>
+                </div>
+                <nav class="preferences-category-nav" role="tablist" aria-label="Preference sections" data-next-i18n-aria="preferences.sections">
+                  """ + preference_tab("appearance", "preferences.tabAppearance", "Appearance", "preferences.categoryAppearanceHelp", "Theme, accent, navigation and language.", "appearance", active=True) + """
+                  """ + preference_tab("library", "preferences.tabLibrary", "Library", "preferences.categoryLibraryHelp", "Choose how your library is presented and enriched.", "library_preferences") + """
+                  """ + preference_tab("collectors", "preferences.tabCollectors", "Collectors", "preferences.categoryCollectorsHelp", "Control editions, containers and collection tools.", "collectors_preferences") + """
                 </nav>
-              </div>
-              <div class="detail-subpanel" data-preferences-panel="appearance">
-                <div class="preference-control-list">
-                  <div class="preference-control-row">
-                    <span>
-                      <strong data-next-i18n="preferences.theme">Theme</strong>
-                      <span data-next-i18n="preferences.themeHelp">Follow the system theme or choose a fixed appearance.</span>
-                    </span>
-                    <div class="segmented" role="group" aria-label="Appearance" data-next-i18n-aria="appearance.label">
-                      <button type="button" data-theme-choice="system" data-next-i18n="appearance.system">System</button>
-                      <button type="button" data-theme-choice="light" data-next-i18n="appearance.light">Light</button>
-                      <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
-                    </div>
-                  </div>
-                  <div class="preference-control-row">
-                    <span>
-                      <strong data-next-i18n="preferences.accent">Accent color</strong>
-                      <span data-next-i18n="preferences.accentHelp">Pick the accent used across DiscVault. Neutrals and format badges stay fixed.</span>
-                    </span>
-                    <div class="accent-picker" role="group" aria-label="Accent color" data-next-i18n-aria="accent.label">
-                      <button type="button" class="accent-swatch" data-accent-choice="bluray" data-accent-swatch="#2A6FD6" aria-label="Blu-ray" data-next-i18n-aria="accent.bluray" title="Blu-ray"><span class="accent-swatch-dot" style="background:#2A6FD6"></span></button>
-                      <button type="button" class="accent-swatch" data-accent-choice="amethyst" data-accent-swatch="#6D5FE6" aria-label="Amethyst" data-next-i18n-aria="accent.amethyst" title="Amethyst"><span class="accent-swatch-dot" style="background:#6D5FE6"></span></button>
-                      <button type="button" class="accent-swatch" data-accent-choice="chrome" data-accent-swatch="#6B7787" aria-label="Chrome" data-next-i18n-aria="accent.chrome" title="Chrome"><span class="accent-swatch-dot" style="background:#6B7787"></span></button>
-                      <button type="button" class="accent-swatch" data-accent-choice="emerald" data-accent-swatch="#0C835B" aria-label="Emerald" data-next-i18n-aria="accent.emerald" title="Emerald"><span class="accent-swatch-dot" style="background:#0C835B"></span></button>
-                      <button type="button" class="accent-swatch" data-accent-choice="teal" data-accent-swatch="#0E7C93" aria-label="Teal" data-next-i18n-aria="accent.teal" title="Teal"><span class="accent-swatch-dot" style="background:#0E7C93"></span></button>
-                      <button type="button" class="accent-swatch" data-accent-choice="crimson" data-accent-swatch="#D62F3C" aria-label="Crimson" data-next-i18n-aria="accent.crimson" title="Crimson"><span class="accent-swatch-dot" style="background:#D62F3C"></span></button>
-                      <button type="button" class="accent-swatch" data-accent-choice="magenta" data-accent-swatch="#C93384" aria-label="Magenta" data-next-i18n-aria="accent.magenta" title="Magenta"><span class="accent-swatch-dot" style="background:#C93384"></span></button>
-                      <button type="button" class="accent-swatch" data-accent-choice="ember" data-accent-swatch="#A76400" aria-label="Ember" data-next-i18n-aria="accent.ember" title="Ember"><span class="accent-swatch-dot" style="background:#A76400"></span></button>
-                    </div>
-                  </div>
-                  <div class="preference-control-row">
-                    <span>
-                      <strong data-next-i18n="preferences.language">Language</strong>
-                      <span data-next-i18n="preferences.languageHelp">Choose the language for DiscVault on this device.</span>
-                    </span>
-                    <div class="language-picker" id="profileLanguagePicker">
-                      <span id="profileLanguageFlag" aria-hidden="true"></span>
-                      <select id="profileLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
-                    </div>
+                <div id="preferencePanelAppearance" class="preferences-panel-content" role="tabpanel" aria-labelledby="preferenceTabAppearance" tabindex="0" data-preferences-panel="appearance">
+                  <div class="preferences-settings-grid">
+                    <section class="preferences-setting-card wide">
+                      <div class="preferences-setting-card-head">
+                        <h5 data-next-i18n="preferences.tabAppearance">Appearance</h5>
+                        <p data-next-i18n="preferences.categoryAppearanceHelp">Theme, accent, navigation and language.</p>
+                      </div>
+                      <div class="preference-control-list">
+                        <div class="preference-control-row">
+                          <span>
+                            <strong data-next-i18n="preferences.theme">Theme</strong>
+                            <span data-next-i18n="preferences.themeHelp">Follow the system theme or choose a fixed appearance.</span>
+                          </span>
+                          <div class="segmented" role="group" aria-label="Appearance" data-next-i18n-aria="appearance.label">
+                            <button type="button" data-theme-choice="system" data-next-i18n="appearance.system">System</button>
+                            <button type="button" data-theme-choice="light" data-next-i18n="appearance.light">Light</button>
+                            <button type="button" data-theme-choice="dark" data-next-i18n="appearance.dark">Dark</button>
+                          </div>
+                        </div>
+                        <div class="preference-control-row">
+                          <span>
+                            <strong data-next-i18n="preferences.accent">Accent color</strong>
+                            <span data-next-i18n="preferences.accentHelp">Pick the accent used across DiscVault. Neutrals and format badges stay fixed.</span>
+                          </span>
+                          <div class="accent-picker" role="group" aria-label="Accent color" data-next-i18n-aria="accent.label">
+                            <button type="button" class="accent-swatch" data-accent-choice="bluray" data-accent-swatch="#2A6FD6" aria-label="Blu-ray" data-next-i18n-aria="accent.bluray" title="Blu-ray"><span class="accent-swatch-dot" style="background:#2A6FD6"></span></button>
+                            <button type="button" class="accent-swatch" data-accent-choice="amethyst" data-accent-swatch="#6D5FE6" aria-label="Amethyst" data-next-i18n-aria="accent.amethyst" title="Amethyst"><span class="accent-swatch-dot" style="background:#6D5FE6"></span></button>
+                            <button type="button" class="accent-swatch" data-accent-choice="chrome" data-accent-swatch="#6B7787" aria-label="Chrome" data-next-i18n-aria="accent.chrome" title="Chrome"><span class="accent-swatch-dot" style="background:#6B7787"></span></button>
+                            <button type="button" class="accent-swatch" data-accent-choice="emerald" data-accent-swatch="#0C835B" aria-label="Emerald" data-next-i18n-aria="accent.emerald" title="Emerald"><span class="accent-swatch-dot" style="background:#0C835B"></span></button>
+                            <button type="button" class="accent-swatch" data-accent-choice="teal" data-accent-swatch="#0E7C93" aria-label="Teal" data-next-i18n-aria="accent.teal" title="Teal"><span class="accent-swatch-dot" style="background:#0E7C93"></span></button>
+                            <button type="button" class="accent-swatch" data-accent-choice="crimson" data-accent-swatch="#D62F3C" aria-label="Crimson" data-next-i18n-aria="accent.crimson" title="Crimson"><span class="accent-swatch-dot" style="background:#D62F3C"></span></button>
+                            <button type="button" class="accent-swatch" data-accent-choice="magenta" data-accent-swatch="#C93384" aria-label="Magenta" data-next-i18n-aria="accent.magenta" title="Magenta"><span class="accent-swatch-dot" style="background:#C93384"></span></button>
+                            <button type="button" class="accent-swatch" data-accent-choice="ember" data-accent-swatch="#A76400" aria-label="Ember" data-next-i18n-aria="accent.ember" title="Ember"><span class="accent-swatch-dot" style="background:#A76400"></span></button>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="preferences-setting-card">
+                      <div class="preference-control-list">
+                        <div class="preference-control-row">
+                          <span>
+                            <strong data-next-i18n="preferences.profileMenuStyle">Profile menu</strong>
+                            <span data-next-i18n="preferences.profileMenuStyleHelp">Choose whether the Profile menu shows labels on large screens. Phones always show icons only.</span>
+                          </span>
+                          <div class="segmented" role="group" aria-label="Profile menu" data-next-i18n-aria="preferences.profileMenuStyle">
+                            <button type="button" data-profile-menu-style-choice="icon_text" aria-pressed="true" data-next-i18n="preferences.profileMenuIconText">Icons and text</button>
+                            <button type="button" data-profile-menu-style-choice="icon_only" aria-pressed="false" data-next-i18n="preferences.profileMenuIconOnly">Icons only</button>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="preferences-setting-card">
+                      <div class="preference-control-list">
+                        <div class="preference-control-row">
+                          <span>
+                            <strong data-next-i18n="preferences.language">Language</strong>
+                            <span data-next-i18n="preferences.languageHelp">Choose the language for DiscVault on this device.</span>
+                          </span>
+                          <div class="language-picker" id="profileLanguagePicker">
+                            <span id="profileLanguageFlag" aria-hidden="true"></span>
+                            <select id="profileLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
                   </div>
                 </div>
+                <div id="preferencePanelLibrary" class="preferences-panel-content hidden" role="tabpanel" aria-labelledby="preferenceTabLibrary" tabindex="0" aria-hidden="true" data-preferences-panel="library">
+                  <div id="profilePreferenceList"></div>
+                </div>
+                <div id="preferencePanelCollectors" class="preferences-panel-content hidden" role="tabpanel" aria-labelledby="preferenceTabCollectors" tabindex="0" aria-hidden="true" data-preferences-panel="collectors">
+                  <div id="profileCollectorPreferenceList"></div>
+                  <div class="hidden" id="loansSystemSettingRow"></div>
+                </div>
+                <div class="login-message" id="preferencesMessage" aria-live="polite"></div>
               </div>
-              <div class="detail-subpanel hidden" data-preferences-panel="library">
-                <div class="preference-list" id="profilePreferenceList"></div>
-              </div>
-              <div class="detail-subpanel hidden" data-preferences-panel="collectors">
-                <div class="preference-list" id="profileCollectorPreferenceList"></div>
-                <div class="preference-list hidden" id="loansSystemSettingRow"></div>
-              </div>
-              <div class="login-message" id="preferencesMessage"></div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="notifications">
+                <div id="profilePanelNotifications" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabNotifications" tabindex="0" data-profile-panel="notifications">
               <div class="detail-card-head compact">
                 <div>
                   <h4 data-next-i18n="notifications.pushTitle">Push notifications</h4>
@@ -12768,7 +13227,7 @@ def ui_preview_html(
               </div>
               <div class="login-message" id="pushProfileMessage"></div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="groups">
+                <div id="profilePanelGroups" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabGroups" tabindex="0" data-profile-panel="groups">
               <div class="detail-card-head compact">
                 <div>
                   <h4 data-next-i18n="groups.memberGroups">Member Groups</h4>
@@ -12797,7 +13256,7 @@ def ui_preview_html(
               </div>
               <div class="container-manager-list member-group-list" id="memberGroupList"></div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="structure">
+                <div id="profilePanelStructure" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabStructure" tabindex="0" data-profile-panel="structure">
               <div class="detail-card-head compact">
                 <div>
                   <h4 data-next-i18n="containerManage.title">Collection structure</h4>
@@ -12847,7 +13306,7 @@ def ui_preview_html(
                 <div class="locations-tree" id="locationsTree"></div>
               </div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="security">
+                <div id="profilePanelSecurity" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabSecurity" tabindex="0" data-profile-panel="security">
               <div class="profile-section-grid profile-security-grid">
                 <div class="profile-security-column">
                   <section class="profile-section-box">
@@ -12907,7 +13366,7 @@ def ui_preview_html(
                 </div>
               </div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="api">
+                <div id="profilePanelApi" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabApi" tabindex="0" data-profile-panel="api">
               <div class="segmented profile-submenu profile-api-submenu" role="tablist" aria-label="API and MCP sections">
                 <button type="button" class="active" data-profile-api-tab="general" data-next-i18n="profile.apiTabGeneral">General</button>
                 <button type="button" data-profile-api-tab="create" data-next-i18n="profile.apiTabCreate">Create key</button>
@@ -12975,7 +13434,7 @@ def ui_preview_html(
                 </section>
               </div>
             </div>
-            <div class="detail-subpanel profile-panel hidden" data-profile-panel="about">
+                <div id="profilePanelAbout" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabAbout" tabindex="0" data-profile-panel="about">
               <section class="profile-section-box">
                 <div>
                   <h4 data-next-i18n="profile.about">About</h4>
@@ -13039,6 +13498,8 @@ def ui_preview_html(
                   </div>
                 </div>
               </section>
+            </div>
+              </div>
             </div>
           </div>
         </section>
@@ -13615,19 +14076,6 @@ def ui_preview_html(
       </section>
     </main>
   </div>
-  <section class="preferences-backdrop hidden" id="preferencesBackdrop" aria-modal="true" role="dialog" aria-labelledby="preferencesTitle">
-    <div class="preferences-panel">
-      <div class="preferences-head">
-        <div>
-          <h2 id="preferencesTitle" data-next-i18n="preferences.title">Preferences</h2>
-          <p data-next-i18n="preferences.description">Fine-tune how DiscVault feels on this device and account.</p>
-        </div>
-        <button type="button" class="icon-button" id="preferencesCloseButton" aria-label="Close">×</button>
-      </div>
-      <div class="preference-list" id="legacyPreferenceList"></div>
-      <div class="login-message" id="legacyPreferencesMessage"></div>
-    </div>
-  </section>
   <section class="command-palette-backdrop hidden" id="commandPaletteBackdrop" aria-modal="true" role="dialog" aria-labelledby="commandPaletteTitle">
     <div class="command-palette">
       <h2 class="visually-hidden" id="commandPaletteTitle" data-next-i18n="commandPalette.title">Command palette</h2>
@@ -18936,6 +19384,40 @@ def ui_preview_html(
       }
       document.querySelectorAll("[data-accent-choice]").forEach((button) => {
         button.classList.toggle("active", button.dataset.accentChoice === selected);
+      });
+    }
+    const PROFILE_MENU_STYLES = ["icon_text", "icon_only"];
+    const PROFILE_MENU_STYLE_STORAGE_KEY = "dv_next_profile_menu_style";
+    function storedProfileMenuStyle() {
+      try {
+        const value = localStorage.getItem(PROFILE_MENU_STYLE_STORAGE_KEY);
+        return PROFILE_MENU_STYLES.includes(value) ? value : "";
+      } catch (error) {
+        return "";
+      }
+    }
+    function effectiveProfileMenuStyle() {
+      const stored = storedProfileMenuStyle();
+      if ((!appMode || currentAuthStatus.auth_enabled === false) && stored) return stored;
+      return PROFILE_MENU_STYLES.includes(preferences.profile_menu_style)
+        ? preferences.profile_menu_style
+        : "icon_text";
+    }
+    function persistProfileMenuStyle(style) {
+      if (!PROFILE_MENU_STYLES.includes(style)) return;
+      try {
+        localStorage.setItem(PROFILE_MENU_STYLE_STORAGE_KEY, style);
+      } catch (error) {
+        /* localStorage may be unavailable (private mode / blocked); ignore */
+      }
+    }
+    function setProfileMenuStyle(style) {
+      const selected = PROFILE_MENU_STYLES.includes(style) ? style : "icon_text";
+      document.documentElement.dataset.profileMenuStyle = selected;
+      document.querySelectorAll("[data-profile-menu-style-choice]").forEach((button) => {
+        const active = button.dataset.profileMenuStyleChoice === selected;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
       });
     }
     function groupOptionsHtml() {
@@ -29620,6 +30102,27 @@ def ui_preview_html(
             messageNode.className = "lists-modal-message " + modalMessageTone;
           }
         };
+        const setWishlistUrlError = (error) => {
+          const errorCode = String(error?.payload?.errorCode || "");
+          if (errorCode === "wishlist_price_url_not_public") {
+            setMessage(
+              tNext(
+                "lists.wishlistPriceUrlNotPublic",
+                "The shop URL must point to a public internet address."
+              ),
+              "bad"
+            );
+            return true;
+          }
+          if (errorCode === "wishlist_price_url_invalid") {
+            setMessage(
+              tNext("lists.wishlistPriceUrlInvalid", "Enter a valid http or https URL."),
+              "bad"
+            );
+            return true;
+          }
+          return false;
+        };
         if (modalMessageText || modalMessageTone) {
           setMessage(modalMessageText, modalMessageTone);
         }
@@ -29656,7 +30159,9 @@ def ui_preview_html(
             listsCloseOverlay(overlay);
             await loadListsView(true);
           } catch (error) {
-            setMessage((error && error.message) || String(error), "bad");
+            if (!setWishlistUrlError(error)) {
+              setMessage((error && error.message) || String(error), "bad");
+            }
           }
         });
         panel.querySelectorAll("[data-shop-edit]").forEach((btn) => {
@@ -29792,7 +30297,9 @@ def ui_preview_html(
             }
             render();
           } catch (error) {
-            setMessage((error && error.message) || String(error), "bad");
+            if (!setWishlistUrlError(error)) {
+              setMessage((error && error.message) || String(error), "bad");
+            }
           }
         });
         if (editing) {
@@ -32931,26 +33438,79 @@ def ui_preview_html(
         if (summary) summary.textContent = error.message || String(error);
       }
     }
-    const preferenceLibraryLabels = [
-      ["show_featured_hero", "preferences.showFeaturedHero", "preferences.showFeaturedHeroHelp"],
-      ["show_collection_search", "preferences.showCollectionSearch", "preferences.showCollectionSearchHelp"],
-      ["show_auto_videos", "preferences.showAutoVideos", "preferences.showAutoVideosHelp"],
-      ["show_local_title", "preferences.showLocalTitle", "preferences.showLocalTitleHelp"],
-      ["rating_country", "preferences.ratingCountry", "preferences.ratingCountryHelp"],
-      ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"],
-      ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"],
-      ["price_monitoring_enabled", "preferences.priceMonitoringEnabled", "preferences.priceMonitoringEnabledHelp"],
-      ["preferred_price_currency", "preferences.preferredPriceCurrency", "preferences.preferredPriceCurrencyHelp", "price_monitoring_enabled"],
-      ["delete_container_members_with_container", "preferences.deleteContainerMembersWithContainer", "preferences.deleteContainerMembersWithContainerHelp"]
+    const preferenceLibraryGroups = [
+      {
+        key: "browse",
+        titleKey: "preferences.cardBrowse",
+        title: "Browse and discovery",
+        helpKey: "preferences.cardBrowseHelp",
+        help: "Shape the first view of your collection.",
+        items: [
+          ["show_featured_hero", "preferences.showFeaturedHero", "preferences.showFeaturedHeroHelp"],
+          ["show_collection_search", "preferences.showCollectionSearch", "preferences.showCollectionSearchHelp"]
+        ]
+      },
+      {
+        key: "details",
+        titleKey: "preferences.cardDetails",
+        title: "Metadata and details",
+        helpKey: "preferences.cardDetailsHelp",
+        help: "Choose which enriched movie information DiscVault shows.",
+        items: [
+          ["show_auto_videos", "preferences.showAutoVideos", "preferences.showAutoVideosHelp"],
+          ["show_local_title", "preferences.showLocalTitle", "preferences.showLocalTitleHelp"],
+          ["rating_country", "preferences.ratingCountry", "preferences.ratingCountryHelp"],
+          ["show_extended_people_pages", "preferences.showExtendedPeoplePages", "preferences.showExtendedPeoplePagesHelp"]
+        ]
+      },
+      {
+        key: "pricing",
+        titleKey: "preferences.cardPricing",
+        title: "Badges and pricing",
+        helpKey: "preferences.cardPricingHelp",
+        help: "Control digital indicators and wishlist price display.",
+        items: [
+          ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"],
+          ["price_monitoring_enabled", "preferences.priceMonitoringEnabled", "preferences.priceMonitoringEnabledHelp"],
+          ["preferred_price_currency", "preferences.preferredPriceCurrency", "preferences.preferredPriceCurrencyHelp", "price_monitoring_enabled"]
+        ]
+      }
     ];
-    const preferenceCollectorLabels = [
-      ["collectors_mode", "preferences.collectorsMode", "preferences.collectorsModeHelp"],
-      ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"],
-      ["show_container_format_badges", "preferences.showContainerFormatBadges", "preferences.showContainerFormatBadgesHelp", "collectors_mode"],
-      ["show_container_member_badges", "preferences.showContainerMemberBadges", "preferences.showContainerMemberBadgesHelp", "collectors_mode"],
-      ["show_metadata_jobs", "preferences.showMetadataJobs", "preferences.showMetadataJobsHelp"]
+    const preferenceCollectorGroups = [
+      {
+        key: "mode",
+        titleKey: "preferences.collectorsMode",
+        title: "Collectors mode",
+        helpKey: "preferences.collectorsModeHelp",
+        help: "Enable advanced edition and container features.",
+        items: [
+          ["collectors_mode", "preferences.collectorsMode", "preferences.collectorsModeHelp"],
+          ["merge_editions_as_title", "preferences.mergeEditionsAsTitle", "preferences.mergeEditionsAsTitleHelp", "collectors_mode"]
+        ]
+      },
+      {
+        key: "display",
+        titleKey: "preferences.cardContainerDisplay",
+        title: "Container display",
+        helpKey: "preferences.cardContainerDisplayHelp",
+        help: "Choose which details appear on vaults, box sets and collections.",
+        items: [
+          ["show_container_format_badges", "preferences.showContainerFormatBadges", "preferences.showContainerFormatBadgesHelp", "collectors_mode"],
+          ["show_container_member_badges", "preferences.showContainerMemberBadges", "preferences.showContainerMemberBadgesHelp", "collectors_mode"]
+        ]
+      },
+      {
+        key: "management",
+        titleKey: "preferences.cardManagement",
+        title: "Collection management",
+        helpKey: "preferences.cardManagementHelp",
+        help: "Control cleanup behavior and background activity.",
+        items: [
+          ["delete_container_members_with_container", "preferences.deleteContainerMembersWithContainer", "preferences.deleteContainerMembersWithContainerHelp", "collectors_mode"],
+          ["show_metadata_jobs", "preferences.showMetadataJobs", "preferences.showMetadataJobsHelp"]
+        ]
+      }
     ];
-    const preferenceLabels = [...preferenceLibraryLabels, ...preferenceCollectorLabels];
     const DEFAULT_PRICE_DISPLAY_CURRENCIES = ["EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY"];
     function ratingCountryPickerHtml(disabled = false) {
       const selected = String(preferences.rating_country || "NL").toUpperCase();
@@ -32993,7 +33553,7 @@ def ui_preview_html(
         const disabled = requiresKey && !preferences[requiresKey];
         if (key === "rating_country") {
           return `
-            <div class="preference-control-row ${disabled ? "disabled" : ""}">
+            <div class="preference-control-row ${requiresKey ? "dependent" : ""} ${disabled ? "disabled" : ""}">
               <span>
                 <strong>${escapeHtml(tNext(labelKey, key))}</strong>
                 <span>${escapeHtml(tNext(helpKey, ""))}</span>
@@ -33006,7 +33566,7 @@ def ui_preview_html(
         }
         if (key === "preferred_price_currency") {
           return `
-            <div class="preference-control-row ${disabled ? "disabled" : ""}">
+            <div class="preference-control-row ${requiresKey ? "dependent" : ""} ${disabled ? "disabled" : ""}">
               <span>
                 <strong>${escapeHtml(tNext(labelKey, key))}</strong>
                 <span>${escapeHtml(tNext(helpKey, ""))}</span>
@@ -33019,15 +33579,32 @@ def ui_preview_html(
         }
         const active = disabled ? false : !!preferences[key];
         return `
-          <div class="preference-row ${disabled ? "disabled" : ""}">
+          <div class="preference-row ${requiresKey ? "dependent" : ""} ${disabled ? "disabled" : ""}">
             <span>
               <strong>${escapeHtml(tNext(labelKey, key))}</strong>
               <span>${escapeHtml(tNext(helpKey, ""))}</span>
             </span>
-            <button type="button" class="switch ${active ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-pressed="${active ? "true" : "false"}" ${disabled ? "disabled" : ""}></button>
+            <button type="button" class="switch ${active ? "on" : ""}" data-preference-toggle="${escapeHtml(key)}" aria-label="${escapeHtml(tNext(labelKey, key))}" aria-pressed="${active ? "true" : "false"}" ${disabled ? "disabled" : ""}></button>
           </div>
         `;
       }).join("");
+    }
+    function preferenceCardsHtml(groups) {
+      return `
+        <div class="preferences-settings-grid">
+          ${groups.map((group) => `
+            <section class="preferences-setting-card" data-preference-card="${escapeHtml(group.key)}">
+              <div class="preferences-setting-card-head">
+                <h5>${escapeHtml(tNext(group.titleKey, group.title))}</h5>
+                <p>${escapeHtml(tNext(group.helpKey, group.help))}</p>
+              </div>
+              <div class="preferences-card-list">
+                ${preferenceRowsHtml(group.items)}
+              </div>
+            </section>
+          `).join("")}
+        </div>
+      `;
     }
     function bindPreferenceList(list) {
       list.querySelectorAll("[data-preference-toggle]").forEach((button) => {
@@ -33063,10 +33640,29 @@ def ui_preview_html(
         const active = button.dataset.preferencesTab === selected;
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
       });
       document.querySelectorAll("[data-preferences-panel]").forEach((panel) => {
-        panel.classList.toggle("hidden", panel.dataset.preferencesPanel !== selected);
+        const active = panel.dataset.preferencesPanel === selected;
+        panel.classList.toggle("hidden", !active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
+    }
+    function handlePreferenceTabKeydown(button, event) {
+      if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      const tabs = [...document.querySelectorAll("[data-preferences-tab]")]
+        .filter((item) => !item.classList.contains("hidden") && !item.disabled);
+      if (!tabs.length) return;
+      const currentIndex = Math.max(0, tabs.indexOf(button));
+      let targetIndex = currentIndex;
+      if (event.key === "Home") targetIndex = 0;
+      else if (event.key === "End") targetIndex = tabs.length - 1;
+      else if (event.key === "ArrowRight") targetIndex = (currentIndex + 1) % tabs.length;
+      else targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      event.preventDefault();
+      const target = tabs[targetIndex];
+      setPreferenceTab(target.dataset.preferencesTab || "appearance");
+      target.focus();
     }
     function syncPreferencePanelVisibility() {
       setPreferenceTab(activePreferenceTab);
@@ -33095,12 +33691,31 @@ def ui_preview_html(
         button.classList.toggle("hidden", !visible);
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
       });
       document.querySelectorAll("[data-profile-panel]").forEach((panel) => {
         const visible = canUseProfileTab(panel.dataset.profilePanel);
-        panel.classList.toggle("hidden", !visible || panel.dataset.profilePanel !== selected);
+        const active = visible && panel.dataset.profilePanel === selected;
+        panel.classList.toggle("hidden", !active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
       if (selected === "api") setProfileApiTab(activeProfileApiTab);
+    }
+    function handleProfileTabKeydown(button, event) {
+      if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      const tabs = [...document.querySelectorAll("[data-profile-tab]")]
+        .filter((item) => !item.classList.contains("hidden") && !item.disabled);
+      if (!tabs.length) return;
+      const currentIndex = Math.max(0, tabs.indexOf(button));
+      let targetIndex = currentIndex;
+      if (event.key === "Home") targetIndex = 0;
+      else if (event.key === "End") targetIndex = tabs.length - 1;
+      else if (event.key === "ArrowDown" || event.key === "ArrowRight") targetIndex = (currentIndex + 1) % tabs.length;
+      else targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      event.preventDefault();
+      const target = tabs[targetIndex];
+      setProfileTab(target.dataset.profileTab || "account");
+      target.focus();
     }
     function syncProfilePanelVisibility() {
       setProfileTab(activeProfileTab);
@@ -33132,13 +33747,21 @@ def ui_preview_html(
       const active = loansSystemEnabled();
       row.classList.remove("hidden");
       row.innerHTML = `
-        <div class="preference-row">
-          <span>
-            <strong>${escapeHtml(tNext("preferences.loansSystemLabel", "Loans System"))}</strong>
-            <span>${escapeHtml(tNext("preferences.loansSystemHelp", "Enable lending and borrow requests across the collection."))}</span>
-          </span>
-          <button type="button" class="switch ${active ? "on" : ""}" id="loansSystemToggle" aria-pressed="${active ? "true" : "false"}"></button>
-        </div>
+        <section class="preferences-setting-card system wide" data-preference-card="loans-system">
+          <div class="preferences-setting-card-head">
+            <h5>${escapeHtml(tNext("preferences.cardSystem", "System settings"))}</h5>
+            <p>${escapeHtml(tNext("preferences.cardSystemHelp", "Administrator controls that affect the whole DiscVault installation."))}</p>
+          </div>
+          <div class="preferences-card-list">
+            <div class="preference-row">
+              <span>
+                <strong>${escapeHtml(tNext("preferences.loansSystemLabel", "Loans System"))}</strong>
+                <span>${escapeHtml(tNext("preferences.loansSystemHelp", "Enable lending and borrow requests across the collection."))}</span>
+              </span>
+              <button type="button" class="switch ${active ? "on" : ""}" id="loansSystemToggle" aria-label="${escapeHtml(tNext("preferences.loansSystemLabel", "Loans System"))}" aria-pressed="${active ? "true" : "false"}"></button>
+            </div>
+          </div>
+        </section>
       `;
       const toggle = document.getElementById("loansSystemToggle");
       if (toggle) toggle.addEventListener("click", () => toggleLoansSystem(!active));
@@ -33168,20 +33791,16 @@ def ui_preview_html(
     function renderPreferences() {
       const libraryList = document.getElementById("profilePreferenceList");
       const collectorList = document.getElementById("profileCollectorPreferenceList");
-      const legacyList = document.getElementById("legacyPreferenceList");
       if (libraryList) {
-        libraryList.innerHTML = preferenceRowsHtml(preferenceLibraryLabels);
+        libraryList.innerHTML = preferenceCardsHtml(preferenceLibraryGroups);
         bindPreferenceList(libraryList);
       }
       if (collectorList) {
-        collectorList.innerHTML = preferenceRowsHtml(preferenceCollectorLabels);
+        collectorList.innerHTML = preferenceCardsHtml(preferenceCollectorGroups);
         bindPreferenceList(collectorList);
       }
       renderLoansSystemSetting();
-      if (legacyList) {
-        legacyList.innerHTML = preferenceRowsHtml(preferenceLabels);
-        bindPreferenceList(legacyList);
-      }
+      setProfileMenuStyle(effectiveProfileMenuStyle());
       applyAppPermissionVisibility();
       setPreferenceTab(activePreferenceTab);
     }
@@ -33427,6 +34046,7 @@ def ui_preview_html(
         preferences.merge_editions_as_title = false;
         preferences.show_container_format_badges = false;
         preferences.show_container_member_badges = false;
+        preferences.delete_container_members_with_container = false;
       }
       renderPreferences();
       renderCollectionSurface();
@@ -33439,6 +34059,7 @@ def ui_preview_html(
           patch.merge_editions_as_title = false;
           patch.show_container_format_badges = false;
           patch.show_container_member_badges = false;
+          patch.delete_container_members_with_container = false;
         }
         const payload = await apiJson("/api/next/preferences", {
           method: "PATCH",
@@ -34023,6 +34644,7 @@ def ui_preview_html(
       preferences = Object.assign({}, preferences, state.preferences || {});
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
       setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
+      setProfileMenuStyle(effectiveProfileMenuStyle());
       renderPreferences();
       renderProfile();
       renderCollectionSurface();
@@ -34061,6 +34683,7 @@ def ui_preview_html(
     function renderProfile() {
       const profile = profileIdentity();
       const title = document.getElementById("profilePageTitle");
+      const accountDisplayName = document.getElementById("profileAccountDisplayName");
       const avatar = document.getElementById("profileAvatar");
       const displayNameInput = document.getElementById("profileDisplayNameInput");
       const username = document.getElementById("profileUsername");
@@ -34069,6 +34692,7 @@ def ui_preview_html(
       const credentialCount = document.getElementById("profileCredentialCount");
       const navRole = document.getElementById("navProfileRole");
       if (title) title.textContent = profile.name;
+      if (accountDisplayName) accountDisplayName.textContent = profile.name;
       if (avatar) {
         avatar.innerHTML = profile.avatarUrl
           ? `<img src="${escapeHtml(profile.avatarUrl)}" alt="">`
@@ -35120,6 +35744,7 @@ def ui_preview_html(
       loadLocale(localeState.locale);
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
       setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
+      setProfileMenuStyle(effectiveProfileMenuStyle());
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
         select.addEventListener("change", (event) => loadLocale(event.target.value));
       });
@@ -35139,6 +35764,15 @@ def ui_preview_html(
           if (appMode) {
             updatePreference("accent", preferences.accent);
           }
+        });
+      });
+      document.querySelectorAll("[data-profile-menu-style-choice]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const selected = button.dataset.profileMenuStyleChoice || "icon_text";
+          preferences.profile_menu_style = selected;
+          persistProfileMenuStyle(selected);
+          setProfileMenuStyle(selected);
+          if (appMode) updatePreference("profile_menu_style", selected);
         });
       });
       document.querySelectorAll("[data-preview-movie]").forEach((button) => {
@@ -35403,10 +36037,12 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-preferences-tab]").forEach((button) => {
         button.addEventListener("click", () => setPreferenceTab(button.dataset.preferencesTab || "appearance"));
+        button.addEventListener("keydown", (event) => handlePreferenceTabKeydown(button, event));
       });
       setPreferenceTab("appearance");
       document.querySelectorAll("[data-profile-tab]").forEach((button) => {
         button.addEventListener("click", () => setProfileTab(button.dataset.profileTab || "account"));
+        button.addEventListener("keydown", (event) => handleProfileTabKeydown(button, event));
       });
       setProfileTab(activeProfileTab);
       document.getElementById("memberGroupCreateForm")?.addEventListener("submit", (event) => createMemberGroup(event));
@@ -35980,12 +36616,6 @@ def ui_preview_html(
         if (deleteButton) deleteProfilePasskey(deleteButton.dataset.profilePasskeyDelete);
       });
       document.getElementById("profileLegacyPasswordForm")?.addEventListener("submit", (event) => changeProfileLegacyPassword(event));
-      document.getElementById("preferencesCloseButton")?.addEventListener("click", () => {
-        document.getElementById("preferencesBackdrop")?.classList.add("hidden");
-      });
-      document.getElementById("preferencesBackdrop")?.addEventListener("click", (event) => {
-        if (event.target.id === "preferencesBackdrop") event.currentTarget.classList.add("hidden");
-      });
       document.getElementById("locationQrCloseButton")?.addEventListener("click", () => closeLocationQr());
       document.getElementById("locationQrCopyButton")?.addEventListener("click", () => copyLocationQrLink());
       document.getElementById("locationQrPrintButton")?.addEventListener("click", () => {
