@@ -24,8 +24,10 @@ except ModuleNotFoundError:  # pragma: no cover - allows import-only tests witho
 
 try:
     from .versioning import backend_version, software_identity
+    from .next_runtime_secrets import key_encryption_secret
 except ImportError:  # pragma: no cover - supports running modules directly
     from versioning import backend_version, software_identity
+    from next_runtime_secrets import key_encryption_secret
 
 
 MOVIEVAULT_PLUGIN_ID = "movievault"
@@ -310,23 +312,11 @@ def _b64url(data: bytes) -> str:
 def _key_encryption_key() -> bytes:
     """Derive a stable Fernet key for encrypting instance secrets at rest.
 
-    Sourced from a dedicated env var, falling back to the app JWT secret and
-    finally a DATABASE_URL-derived value (mirrors ``next_auth._jwt_secret`` so
-    self-hosted stacks keep working without extra config). Production deployments
-    should set ``DISCVAULT_NEXT_KEY_ENCRYPTION_KEY`` (or ``JWT_SECRET``) so a bare
-    database dump never leaks the MovieVault signing key.
+    A dedicated key-encryption secret takes precedence over the required app JWT
+    secret. No database-derived fallback is permitted because a database dump must
+    not contain enough information to recover encrypted integration credentials.
     """
-    configured = (
-        os.environ.get("DISCVAULT_NEXT_KEY_ENCRYPTION_KEY")
-        or os.environ.get("DISCVAULT_KEY_ENCRYPTION_KEY")
-        or os.environ.get("DISCVAULT_NEXT_JWT_SECRET")
-        or os.environ.get("JWT_SECRET")
-        or ""
-    ).strip()
-    if not configured:
-        configured = hashlib.sha256(
-            ("discvault-next-kek:" + os.environ.get("DATABASE_URL", "discvault-next")).encode("utf-8")
-        ).hexdigest()
+    configured = key_encryption_secret()
     return base64.urlsafe_b64encode(hashlib.sha256(configured.encode("utf-8")).digest())
 
 
@@ -800,6 +790,12 @@ def reset_movievault_connection(conn) -> None:
         LAST_HANDSHAKE_AT_KEY,
         LINK_STATUS_KEY,
         AUTH_METHOD_KEY,
+        V3_API_TOKEN_KEY,
+        V3_KEY_ID_KEY,
+        V3_INSTANCE_ID_KEY,
+        V3_TOKEN_PREFIX_KEY,
+        V3_SCOPES_KEY,
+        V3_LAST_BOOTSTRAP_AT_KEY,
     ):
         _delete_setting(conn, key)
     _delete_token(conn)
@@ -849,7 +845,14 @@ def _scopes(conn) -> list[str]:
 
 def movievault_connection_status(conn, plugin_id: str | None = None) -> dict[str, Any]:
     token = stored_movievault_token(conn, plugin_id)
-    private_key_set = bool(_setting_value(conn, INSTANCE_PRIVATE_KEY_KEY, "", include_secret=True))
+    stored_private_key = _setting_value(conn, INSTANCE_PRIVATE_KEY_KEY, "", include_secret=True)
+    private_key_set = bool(stored_private_key)
+    private_key_usable = False
+    if private_key_set:
+        try:
+            private_key_usable = bool(_decrypt_secret_value(stored_private_key))
+        except MovieVaultConnectionError:
+            pass
     public_key_id = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_ID_KEY, ""))
     public_key = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_KEY, ""))
     sharing_mode = _text(_setting_value(conn, SHARING_MODE_KEY, "") or os.environ.get("MOVIEVAULT_SHARING_MODE") or "opt_in")
@@ -870,7 +873,7 @@ def movievault_connection_status(conn, plugin_id: str | None = None) -> dict[str
         "lastHandshakeAt": _text(_setting_value(conn, LAST_HANDSHAKE_AT_KEY, "")),
         "linkStatus": link_status,
         "privateKeySet": private_key_set,
-        "requiresReset": bool((public_key or public_key_id) and not private_key_set),
+        "requiresReset": bool((stored_private_key or public_key or public_key_id) and not private_key_usable),
         "scopes": _scopes(conn),
         "searchUrl": _search_url(conn),
         "sharingMode": sharing_mode,

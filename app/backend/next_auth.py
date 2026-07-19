@@ -55,6 +55,7 @@ try:
         verify_recovery_code,
         verify_totp,
     )
+    from .next_runtime_secrets import jwt_secret
 except ImportError:  # pragma: no cover - direct module execution compatibility
     from next_legacy_auth import (
         FLOW_TTL_SECONDS,
@@ -82,6 +83,7 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         verify_recovery_code,
         verify_totp,
     )
+    from next_runtime_secrets import jwt_secret
 
 
 ConnectFactory = Callable[[], Any]
@@ -248,15 +250,7 @@ def next_consume_recovery_code(cur, user_id: UUID | str, code: Any) -> bool:
 
 
 def _jwt_secret() -> str:
-    configured = (
-        os.environ.get("DISCVAULT_NEXT_JWT_SECRET")
-        or os.environ.get("JWT_SECRET")
-        or ""
-    ).strip()
-    if configured:
-        return configured
-    # Stable fallback for development stacks. Production should set JWT_SECRET.
-    return hashlib.sha256(os.environ.get("DATABASE_URL", "discvault-next").encode("utf-8")).hexdigest()
+    return jwt_secret()
 
 
 def _rp_id() -> str:
