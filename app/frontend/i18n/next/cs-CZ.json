@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "URL obchodu",
   "lists.wishlistPriceUrlPlaceholder": "Vložte URL produktové stránky",
   "lists.wishlistPriceUrlInvalid": "Zadejte platnou URL adresu http nebo https.",
+  "lists.wishlistPriceUrlNotPublic": "URL obchodu musí odkazovat na veřejnou internetovou adresu.",
   "lists.wishlistPriceCurrency": "Měna",
   "lists.wishlistLastSeenPrice": "Naposledy viděná cena",
   "lists.wishlistPriceDropAlert": "Pokles ceny",

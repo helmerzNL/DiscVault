@@ -68,6 +68,10 @@ try:
     from .next_price_provider_detection import detect_price_provider
     from .next_price_provider_detection import derive_provider_product_ref
     from .next_price_provider_detection import price_provider_entity
+    from .next_public_http import PUBLIC_HTTP_FAILURE_CODES
+    from .next_public_http import PublicHttpError
+    from .next_public_http import public_url_hostname
+    from .next_public_http import validate_public_url
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
@@ -274,6 +278,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_price_provider_detection import detect_price_provider
     from next_price_provider_detection import derive_provider_product_ref
     from next_price_provider_detection import price_provider_entity
+    from next_public_http import PUBLIC_HTTP_FAILURE_CODES
+    from next_public_http import PublicHttpError
+    from next_public_http import public_url_hostname
+    from next_public_http import validate_public_url
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
@@ -17439,7 +17447,10 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.errorhandler(NextApiError)
     def handle_next_error(error: NextApiError):
-        return response({"status": "error", "error": str(error)}, error.status_code)
+        payload = {"status": "error", "error": str(error)}
+        if error.code:
+            payload["errorCode"] = error.code
+        return response(payload, error.status_code)
 
     @flask_app.errorhandler(HTTPException)
     def handle_http_error(error: HTTPException):
@@ -22183,6 +22194,22 @@ def register_routes(flask_app: Flask) -> None:
         value = clean_text(raw)
         return (value or "EUR").upper()[:3]
 
+    def _validate_wishlist_price_url(raw_url: str) -> None:
+        try:
+            validate_public_url(raw_url)
+        except PublicHttpError as exc:
+            if exc.code == "url_invalid":
+                raise NextApiError(
+                    "Price URL must be a valid http or https URL without credentials",
+                    400,
+                    "wishlist_price_url_invalid",
+                ) from None
+            raise NextApiError(
+                "Price URL must resolve only to public network addresses",
+                400,
+                "wishlist_price_url_not_public",
+            ) from None
+
     def _validated_shop_selector_payload(body: dict[str, Any]) -> tuple[str | None, str | None, dict[str, Any]]:
         selector = body.get("priceSelector")
         selector_type = clean_text(body.get("selectorType") or body.get("selector_type"))
@@ -22222,9 +22249,7 @@ def register_routes(flask_app: Flask) -> None:
         raw_url = clean_text(body.get("priceUrl") or body.get("price_url"))
         if not raw_url:
             raise NextApiError("Shop URL is required", 400)
-        parsed = urlparse(raw_url)
-        if parsed.scheme not in ("http", "https"):
-            raise NextApiError("Price URL must be an http or https URL", 400)
+        _validate_wishlist_price_url(raw_url)
         selector_type, selector_value, selector_options = _validated_shop_selector_payload(body)
         provider_plugin_id, provider_product_ref = _validated_shop_provider_payload(body)
         return (
@@ -22423,8 +22448,14 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Wishlist request body must be an object", 400)
+        price_url_supplied = "priceUrl" in body or "price_url" in body
+        validated_price_url = None
+        if price_url_supplied:
+            validated_price_url = clean_text(body.get("priceUrl") or body.get("price_url"))
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            if validated_price_url:
+                _validate_wishlist_price_url(validated_price_url)
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             user_id = actor.get("id")
@@ -22515,14 +22546,8 @@ def register_routes(flask_app: Flask) -> None:
                         alert_fields["target_price"] = tp_val
                     except (ValueError, TypeError) as exc:
                         raise NextApiError("Target price must be a number", 400) from exc
-            if "priceUrl" in body or "price_url" in body:
-                raw_url = clean_text(body.get("priceUrl") or body.get("price_url"))
-                if raw_url:
-                    from urllib.parse import urlparse as _urlparse
-                    parsed = _urlparse(raw_url)
-                    if parsed.scheme not in ("http", "https"):
-                        raise NextApiError("Price URL must be an http or https URL", 400)
-                alert_fields["price_url"] = raw_url or None
+            if price_url_supplied:
+                alert_fields["price_url"] = validated_price_url or None
             if "priceCurrency" in body or "price_currency" in body:
                 raw_currency = clean_text(body.get("priceCurrency") or body.get("price_currency"))
                 alert_fields["price_currency"] = (raw_currency or "EUR").upper()[:3]
@@ -22580,18 +22605,18 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Shop request body must be an object", 400)
-        (
-            shop_name,
-            price_url,
-            price_currency,
-            selector_type,
-            selector_value,
-            selector_options,
-            provider_plugin_id,
-            provider_product_ref,
-        ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            (
+                shop_name,
+                price_url,
+                price_currency,
+                selector_type,
+                selector_value,
+                selector_options,
+                provider_plugin_id,
+                provider_product_ref,
+            ) = _validated_shop_payload(body)
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
@@ -22658,13 +22683,13 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 except Exception as exc:  # noqa: BLE001
                     provider_status = "error"
-                    provider_error = str(exc)
+                    provider_error = "provider_error"
                     current_app.logger.warning(
-                        "wishlist_shop_provider_check_exception item=%s provider=%s url=%s error=%s",
+                        "wishlist_shop_provider_check_exception item=%s provider=%s host=%s error_type=%s",
                         item_uuid,
                         provider_plugin_id,
-                        price_url,
-                        provider_error,
+                        public_url_hostname(price_url),
+                        type(exc).__name__,
                     )
             if current_price is None:
                 current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
@@ -22673,12 +22698,15 @@ def register_routes(flask_app: Flask) -> None:
                     selector_value=selector_value,
                     selector_options=selector_options,
                 )
+            if current_price is None and extraction_source in PUBLIC_HTTP_FAILURE_CODES:
+                provider_status = provider_status or "error"
+                provider_error = provider_error or extraction_source
             if current_price is None:
                 current_app.logger.warning(
-                    "wishlist_shop_price_missing item=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    "wishlist_shop_price_missing item=%s provider=%s host=%s provider_status=%s provider_error=%s extraction_source=%s",
                     item_uuid,
                     provider_plugin_id,
-                    price_url,
+                    public_url_hostname(price_url),
                     provider_status,
                     provider_error,
                     extraction_source,
@@ -22776,18 +22804,18 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Shop request body must be an object", 400)
-        (
-            shop_name,
-            price_url,
-            price_currency,
-            selector_type,
-            selector_value,
-            selector_options,
-            provider_plugin_id,
-            provider_product_ref,
-        ) = _validated_shop_payload(body)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
+            (
+                shop_name,
+                price_url,
+                price_currency,
+                selector_type,
+                selector_value,
+                selector_options,
+                provider_plugin_id,
+                provider_product_ref,
+            ) = _validated_shop_payload(body)
             if not table_exists(conn, "wishlist_items"):
                 raise NextApiError("Wishlist table is not available", 503)
             if not table_exists(conn, "wishlist_item_shops"):
@@ -22842,14 +22870,14 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 except Exception as exc:  # noqa: BLE001
                     provider_status = "error"
-                    provider_error = str(exc)
+                    provider_error = "provider_error"
                     current_app.logger.warning(
-                        "wishlist_shop_provider_check_exception item=%s shop=%s provider=%s url=%s error=%s",
+                        "wishlist_shop_provider_check_exception item=%s shop=%s provider=%s host=%s error_type=%s",
                         item_uuid,
                         shop_uuid,
                         provider_plugin_id,
-                        price_url,
-                        provider_error,
+                        public_url_hostname(price_url),
+                        type(exc).__name__,
                     )
             if current_price is None:
                 current_price, detected_currency, extraction_source = extract_price_from_url_with_source(
@@ -22858,13 +22886,16 @@ def register_routes(flask_app: Flask) -> None:
                     selector_value=selector_value,
                     selector_options=selector_options,
                 )
+            if current_price is None and extraction_source in PUBLIC_HTTP_FAILURE_CODES:
+                provider_status = provider_status or "error"
+                provider_error = provider_error or extraction_source
             if current_price is None:
                 current_app.logger.warning(
-                    "wishlist_shop_price_missing item=%s shop=%s provider=%s url=%s provider_status=%s provider_error=%s extraction_source=%s",
+                    "wishlist_shop_price_missing item=%s shop=%s provider=%s host=%s provider_status=%s provider_error=%s extraction_source=%s",
                     item_uuid,
                     shop_uuid,
                     provider_plugin_id,
-                    price_url,
+                    public_url_hostname(price_url),
                     provider_status,
                     provider_error,
                     extraction_source,

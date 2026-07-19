@@ -11,6 +11,8 @@ if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 try:
+    from app.backend import next_price_alerts as price_alerts_module
+    from app.backend import next_public_http
     from app.backend.next_price_alerts import (
         PRICE_ALERT_JOB_TYPE,
         _coerce_price,
@@ -25,7 +27,9 @@ try:
         evaluate_price_alert,
         extract_price_from_url,
         extract_price_from_url_with_source,
+        run_price_alert_sweep,
     )
+    from app.backend.next_public_http import PublicHttpError
     _MODULE_AVAILABLE = True
 except ModuleNotFoundError:
     _MODULE_AVAILABLE = False
@@ -174,6 +178,18 @@ class TestExtractPriceFromUrl(unittest.TestCase):
             price, currency = extract_price_from_url("https://example.com/product")
         self.assertIsNone(price)
         self.assertIsNone(currency)
+
+    def test_returns_stable_source_on_public_http_failure(self):
+        with patch(
+            "app.backend.next_price_alerts._fetch_html",
+            side_effect=PublicHttpError("url_blocked"),
+        ):
+            price, currency, source = extract_price_from_url_with_source(
+                "http://127.0.0.1/private"
+            )
+        self.assertIsNone(price)
+        self.assertIsNone(currency)
+        self.assertEqual(source, "url_blocked")
 
     def test_uses_amazon_preset_before_generic_extractors(self):
         html = '<span class="a-offscreen">€ 18,49</span>'
@@ -418,9 +434,100 @@ class TestProviderPluginParsing(unittest.TestCase):
         self.assertIsNone(currency)
         self.assertIsNone(source)
         self.assertEqual(provider_status, "throttled")
-        self.assertEqual(provider_error, "boom")
+        self.assertEqual(provider_error, "provider_error")
         self.assertIsNone(source_detail)
         self.assertIsNone(confidence)
+
+    def test_private_shop_url_is_rejected_before_plugin_execution(self):
+        with (
+            patch(
+                "app.backend.next_price_alerts.validate_public_url",
+                side_effect=PublicHttpError("url_blocked"),
+            ),
+            patch("app.backend.next_price_alerts.run_plugin_entrypoint") as run_plugin,
+        ):
+            result = _run_price_provider_check(
+                "amazon",
+                item_id="x",
+                shop={"id": "s1", "price_url": "http://127.0.0.1/private"},
+            )
+        self.assertEqual(result[3], "error")
+        self.assertEqual(result[4], "url_blocked")
+        run_plugin.assert_not_called()
+
+    def test_provider_exception_detail_is_not_returned_or_logged(self):
+        sensitive = "https://shop.example/product?token=secret-value"
+        with (
+            patch("app.backend.next_price_alerts.validate_public_url"),
+            patch(
+                "app.backend.next_price_alerts.run_plugin_entrypoint",
+                return_value={
+                    "status": "error",
+                    "error": "socket failed at 10.0.0.8 with token=secret-value",
+                },
+            ),
+            self.assertLogs("app.backend.next_price_alerts", level="WARNING") as logs,
+        ):
+            result = _run_price_provider_check(
+                "custom",
+                item_id="x",
+                shop={"id": "s1", "price_url": sensitive},
+            )
+        self.assertEqual(result[4], "provider_error")
+        output = "\n".join(logs.output)
+        self.assertNotIn("secret-value", output)
+        self.assertNotIn("10.0.0.8", output)
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestPriceAlertSweepSafety(unittest.TestCase):
+    def test_historical_private_url_is_blocked_without_connection_attempt(self):
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [
+            {
+                "id": "item-1",
+                "user_id": "user-1",
+                "title": "Private target",
+                "target_price": Decimal("10.00"),
+                "alert_enabled": True,
+                "price_url": "http://127.0.0.1/admin?token=sensitive",
+                "last_seen_price": None,
+                "price_currency": "EUR",
+                "last_price_checked_at": None,
+                "last_alerted_at": None,
+                "movievault_id": None,
+            }
+        ]
+
+        with (
+            patch.object(price_alerts_module, "table_exists", return_value=True),
+            patch.object(
+                price_alerts_module,
+                "_fetch_item_prices_from_shops",
+                return_value=(None, None),
+            ),
+            patch.object(next_public_http.socket, "create_connection") as create_connection,
+        ):
+            result = run_price_alert_sweep(conn)
+
+        self.assertEqual(
+            result,
+            {
+                "checked": 0,
+                "notified": 0,
+                "errors": 0,
+                "skipped": 1,
+                "status": "ok",
+            },
+        )
+        create_connection.assert_not_called()
+        self.assertTrue(
+            any(
+                "UPDATE wishlist_items SET last_price_checked_at" in call.args[0]
+                for call in cursor.execute.call_args_list
+            )
+        )
 
 
 if __name__ == "__main__":

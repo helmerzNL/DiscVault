@@ -1458,6 +1458,7 @@
   "lists.wishlistPriceUrl": "Winkel-URL",
   "lists.wishlistPriceUrlPlaceholder": "Plak een productpagina-URL",
   "lists.wishlistPriceUrlInvalid": "Voer een geldige http- of https-URL in.",
+  "lists.wishlistPriceUrlNotPublic": "De winkel-URL moet naar een openbaar internetadres verwijzen.",
   "lists.wishlistPriceCurrency": "Valuta",
   "lists.wishlistLastSeenPrice": "Laatste bekende prijs",
   "lists.wishlistPriceDropAlert": "Prijsdaling",

@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "Poe URL",
   "lists.wishlistPriceUrlPlaceholder": "Kleebi tootelehe URL",
   "lists.wishlistPriceUrlInvalid": "Sisesta kehtiv http või https URL.",
+  "lists.wishlistPriceUrlNotPublic": "Poe URL peab osutama avalikule internetiaadressile.",
   "lists.wishlistPriceCurrency": "Valuuta",
   "lists.wishlistLastSeenPrice": "Viimati nähtud hind",
   "lists.wishlistPriceDropAlert": "Hinnalangus",

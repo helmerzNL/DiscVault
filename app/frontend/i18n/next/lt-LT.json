@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "Parduotuvės URL",
   "lists.wishlistPriceUrlPlaceholder": "Įklijuokite produkto puslapio URL",
   "lists.wishlistPriceUrlInvalid": "Įveskite galiojančią http arba https URL.",
+  "lists.wishlistPriceUrlNotPublic": "Parduotuvės URL turi nurodyti viešą interneto adresą.",
   "lists.wishlistPriceCurrency": "Valiuta",
   "lists.wishlistLastSeenPrice": "Paskutinė matyta kaina",
   "lists.wishlistPriceDropAlert": "Kainos kritimas",

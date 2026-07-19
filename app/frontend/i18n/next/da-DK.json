@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "Butiks-URL",
   "lists.wishlistPriceUrlPlaceholder": "Indsæt en produktsides URL",
   "lists.wishlistPriceUrlInvalid": "Indtast en gyldig http- eller https-URL.",
+  "lists.wishlistPriceUrlNotPublic": "Butikkens URL skal pege på en offentlig internetadresse.",
   "lists.wishlistPriceCurrency": "Valuta",
   "lists.wishlistLastSeenPrice": "Sidst set pris",
   "lists.wishlistPriceDropAlert": "Prisfald",

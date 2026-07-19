@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "URL magazin",
   "lists.wishlistPriceUrlPlaceholder": "Lipeşte URL-ul unei pagini de produs",
   "lists.wishlistPriceUrlInvalid": "Introdu un URL http sau https valid.",
+  "lists.wishlistPriceUrlNotPublic": "URL-ul magazinului trebuie să indice o adresă publică de internet.",
   "lists.wishlistPriceCurrency": "Monedă",
   "lists.wishlistLastSeenPrice": "Ultimul preț văzut",
   "lists.wishlistPriceDropAlert": "Scădere de preț",

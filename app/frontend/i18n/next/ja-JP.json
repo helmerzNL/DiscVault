@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "ショップURL",
   "lists.wishlistPriceUrlPlaceholder": "商品ページのURLを貼り付けてください",
   "lists.wishlistPriceUrlInvalid": "有効なhttpまたはhttps URLを入力してください。",
+  "lists.wishlistPriceUrlNotPublic": "ショップURLは公開インターネットアドレスを指す必要があります。",
   "lists.wishlistPriceCurrency": "通貨",
   "lists.wishlistLastSeenPrice": "最終確認価格",
   "lists.wishlistPriceDropAlert": "価格下落",

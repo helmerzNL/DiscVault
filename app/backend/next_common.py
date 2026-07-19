@@ -20,9 +20,10 @@ from flask import jsonify, request
 class NextApiError(RuntimeError):
     """Expected API error with a caller-facing status code."""
 
-    def __init__(self, message: str, status_code: int = 500) -> None:
+    def __init__(self, message: str, status_code: int = 500, code: str | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.code = code
 
 
 def json_ready(value: Any) -> Any:

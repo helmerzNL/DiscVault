@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "Kaupan URL",
   "lists.wishlistPriceUrlPlaceholder": "Liitä tuotesivun URL",
   "lists.wishlistPriceUrlInvalid": "Syötä kelvollinen http- tai https-URL.",
+  "lists.wishlistPriceUrlNotPublic": "Kaupan URL-osoitteen on osoitettava julkiseen internetosoitteeseen.",
   "lists.wishlistPriceCurrency": "Valuutta",
   "lists.wishlistLastSeenPrice": "Viimeksi nähty hinta",
   "lists.wishlistPriceDropAlert": "Hinnan lasku",

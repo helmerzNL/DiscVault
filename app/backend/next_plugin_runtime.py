@@ -33,6 +33,15 @@ _DEFAULT_PLUGIN_UPGRADE_DONE: set[str] = set()
 # Optional in-process override of the auto-update preference, set by the app
 # layer from the database setting. ``None`` falls back to env/marker/default.
 _plugin_auto_update_override: bool | None = None
+# These bundled versions route user-controlled shop URLs through the pinned
+# public-network transport. Retaining or restoring an older copy would reopen
+# wishlist SSRF, so these floors override the routine auto-update preference.
+SECURITY_MINIMUM_BUNDLED_PLUGIN_VERSIONS = {
+    "amazon": "1.0.2",
+    "arrow": "1.0.2",
+    "bol": "1.0.2",
+    "zavvi": "1.0.2",
+}
 VALID_CATEGORIES = {
     "metadata_source",
     "metadata_bootstrap",
@@ -221,6 +230,11 @@ def _read_manifest_version(plugin_dir: Path) -> str:
     return str(raw.get("version") or "").strip()
 
 
+def _plugin_meets_security_minimum(plugin_id: str, version: str) -> bool:
+    minimum = SECURITY_MINIMUM_BUNDLED_PLUGIN_VERSIONS.get(plugin_id)
+    return minimum is None or _parse_plugin_version(version) >= _parse_plugin_version(minimum)
+
+
 def plugin_backup_dir() -> Path:
     """Directory holding the previous version of a plugin for rollback.
 
@@ -263,13 +277,15 @@ def plugin_update_state(plugin_id: str, installed_version: str | None = None) ->
     installed = (installed_version or installed_plugin_version(plugin_id)).strip()
     bundled = bundled_plugin_version(plugin_id)
     update_available = bool(bundled) and _parse_plugin_version(bundled) > _parse_plugin_version(installed)
+    backup_version = plugin_backup_version(plugin_id)
     return {
         "isBundledDefault": bundled_default_plugin_path(plugin_id) is not None,
         "bundledVersion": bundled,
         "installedVersion": installed,
         "updateAvailable": update_available,
-        "canRollback": plugin_has_backup(plugin_id),
-        "rollbackVersion": plugin_backup_version(plugin_id),
+        "canRollback": plugin_has_backup(plugin_id)
+        and _plugin_meets_security_minimum(plugin_id, backup_version),
+        "rollbackVersion": backup_version,
     }
 
 
@@ -382,9 +398,9 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
         # do not install missing bundled defaults when we cannot prove
         # whether they were previously seeded and user-deleted.
         marker_payload = None
-    if not plugin_auto_update_enabled():
+    auto_update_enabled = plugin_auto_update_enabled()
+    if not auto_update_enabled:
         result["disabled"] = True
-        return result
     for source in bundled_default_plugin_dirs():
         target = install_dir / source.name
         if not target.exists():
@@ -393,6 +409,9 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
                 continue
             if marker_payload is None:
                 # Legacy marker payloads do not track seeded plugin ids.
+                continue
+            if not auto_update_enabled:
+                result["skipped"].append(source.name)
                 continue
             try:
                 install_dir.mkdir(parents=True, exist_ok=True)
@@ -408,15 +427,23 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
         if _parse_plugin_version(bundled_version) <= _parse_plugin_version(installed_version):
             result["skipped"].append(source.name)
             continue
+        security_upgrade_required = (
+            not _plugin_meets_security_minimum(source.name, installed_version)
+            and _plugin_meets_security_minimum(source.name, bundled_version)
+        )
+        if not auto_update_enabled and not security_upgrade_required:
+            result["skipped"].append(source.name)
+            continue
         try:
             _replace_installed_plugin(source.name, source)
-            result["upgraded"].append(
-                {
-                    "plugin": source.name,
-                    "from": installed_version,
-                    "to": bundled_version,
-                }
-            )
+            upgrade = {
+                "plugin": source.name,
+                "from": installed_version,
+                "to": bundled_version,
+            }
+            if security_upgrade_required:
+                upgrade["securityRequired"] = True
+            result["upgraded"].append(upgrade)
         except OSError as exc:
             result["errors"].append({"path": str(target), "error": str(exc)})
     if marker_changed and marker_payload is not None:
@@ -461,6 +488,12 @@ def rollback_plugin_update(plugin_id: str) -> dict[str, Any]:
     target = install_dir / plugin_id
     current_version = installed_plugin_version(plugin_id)
     backup_version = _read_manifest_version(backup_target)
+    if not _plugin_meets_security_minimum(plugin_id, backup_version):
+        minimum = SECURITY_MINIMUM_BUNDLED_PLUGIN_VERSIONS[plugin_id]
+        raise ValueError(
+            f"Rollback for plugin {plugin_id} would restore a version below "
+            f"the required security minimum {minimum}"
+        )
     if target.exists():
         shutil.rmtree(target)
     install_dir.mkdir(parents=True, exist_ok=True)
