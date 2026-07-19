@@ -58,6 +58,7 @@ class NextSyncRouteRegistrationTests(unittest.TestCase):
         self.assertIn("/api/next/sync/state", rules)
         self.assertIn("/api/next/sync/bootstrap", rules)
         self.assertIn("/api/next/sync/mutations", rules)
+        self.assertIn("/api/next/sync/reconcile", rules)
 
     def test_movie_identifier_write_routes_are_registered(self):
         rules = {rule.rule for rule in next_app.app.url_map.iter_rules()}
@@ -412,6 +413,234 @@ class NextBatchCreateHealTests(unittest.TestCase):
         self.assertEqual(result, applied)
         upsert.assert_called_once()
         self.assertIs(upsert.call_args.kwargs["actor"], actor)
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextSyncDedupMigrationContractTests(unittest.TestCase):
+    """Migration 045 must declare the dedup/tombstone schema (Deel 1 + 2)."""
+
+    def setUp(self):
+        self.migrations = {m.version: m for m in discover_migrations()}
+
+    def test_dedup_migration_is_present(self):
+        self.assertIn("045", self.migrations)
+
+    def test_dedup_migration_declares_client_id_and_unique_index(self):
+        sql = self.migrations["045"].sql
+        self.assertIn("client_id", sql)
+        # Single shared catalogue -> partial unique on client_id (not per-owner).
+        self.assertIn("uq_movies_client_id", sql)
+
+    def test_dedup_migration_declares_tombstones(self):
+        sql = self.migrations["045"].sql
+        # Soft-delete columns on movies AND containers (box sets).
+        self.assertIn("deleted_at", sql)
+        self.assertIn("ALTER TABLE movies", sql)
+        self.assertIn("ALTER TABLE containers", sql)
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextIdentityLadderTests(unittest.TestCase):
+    """Create-path identity ladder: clientId -> barcode -> tmdbEdition (DoD Deel 1)."""
+
+    def _match(self, **overrides):
+        kwargs = dict(
+            persistent_client_id=None,
+            batch_claimed_client_id=None,
+            barcode_normalized=None,
+            barcode_claimed_in_batch=False,
+            tmdb_id=None,
+            fmt=None,
+            duplicate_copy=False,
+            find_by_client_id=lambda: None,
+            find_by_barcode=lambda: None,
+            find_by_tmdb_edition=lambda: None,
+        )
+        kwargs.update(overrides)
+        return next_app.match_existing_movie(**kwargs)
+
+    def test_same_client_id_in_batch_matches_the_first_create(self):
+        # A retry (same persistent clientId) resolves to the id claimed earlier
+        # in the batch -> one record, second call is "matched".
+        first = uuid.uuid4()
+        entity_id, matched_by = self._match(
+            persistent_client_id="rec-uuid", batch_claimed_client_id=first
+        )
+        self.assertEqual(entity_id, first)
+        self.assertEqual(matched_by, "clientId")
+
+    def test_client_id_matches_existing_live_movie(self):
+        # Retry after a committed batch (timeout replay): clientId already on a row.
+        existing = uuid.uuid4()
+        entity_id, matched_by = self._match(
+            persistent_client_id="rec-uuid", find_by_client_id=lambda: existing
+        )
+        self.assertEqual(entity_id, existing)
+        self.assertEqual(matched_by, "clientId")
+
+    def test_existing_barcode_matches_by_barcode(self):
+        existing = uuid.uuid4()
+        entity_id, matched_by = self._match(
+            barcode_normalized="5051890000000", find_by_barcode=lambda: existing
+        )
+        self.assertEqual(entity_id, existing)
+        self.assertEqual(matched_by, "barcode")
+
+    def test_duplicate_copy_skips_barcode_tier(self):
+        # An explicit second physical copy must NOT match -> create a new record.
+        entity_id, matched_by = self._match(
+            barcode_normalized="5051890000000",
+            duplicate_copy=True,
+            find_by_barcode=lambda: uuid.uuid4(),
+        )
+        self.assertIsNone(entity_id)
+        self.assertIsNone(matched_by)
+
+    def test_batch_claimed_barcode_skips_barcode_tier(self):
+        # Box-set members sharing the container EAN must stay distinct rows.
+        entity_id, _ = self._match(
+            barcode_normalized="5051890000000",
+            barcode_claimed_in_batch=True,
+            find_by_barcode=lambda: uuid.uuid4(),
+        )
+        self.assertIsNone(entity_id)
+
+    def test_tmdb_edition_matches_when_format_present(self):
+        existing = uuid.uuid4()
+        entity_id, matched_by = self._match(
+            tmdb_id="603", fmt="4K UHD", find_by_tmdb_edition=lambda: existing
+        )
+        self.assertEqual(entity_id, existing)
+        self.assertEqual(matched_by, "tmdbEdition")
+
+    def test_dvd_and_4k_of_same_film_stay_two_records(self):
+        # Anti-over-merge: the tmdb+format+edition lookup only returns a match for
+        # the *same* format. A different format resolves to no match -> create.
+        # Model: the DVD already exists; the incoming 4K's format-scoped lookup
+        # finds nothing, so the ladder returns None and the caller inserts a 2nd row.
+        entity_id, matched_by = self._match(
+            tmdb_id="603", fmt="4K UHD", find_by_tmdb_edition=lambda: None
+        )
+        self.assertIsNone(entity_id)
+        self.assertIsNone(matched_by)
+
+    def test_tmdb_tier_requires_a_format(self):
+        # Missing format -> tmdb tier is skipped entirely (over-merge protection).
+        entity_id, _ = self._match(
+            tmdb_id="603", fmt=None, find_by_tmdb_edition=lambda: uuid.uuid4()
+        )
+        self.assertIsNone(entity_id)
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextTitleNormalizationTests(unittest.TestCase):
+    """normalize_title + find_movie_by_title_year (trede 4, adoption-only)."""
+
+    def test_diacritics_and_article_are_folded(self):
+        self.assertEqual(next_app.normalize_title("Amélie"), "amelie")
+        self.assertEqual(
+            next_app.normalize_title("The Matrix"), next_app.normalize_title("matrix")
+        )
+
+    def test_punctuation_and_case_collapse(self):
+        self.assertEqual(
+            next_app.normalize_title("WALL·E"), next_app.normalize_title("wall e")
+        )
+
+    def test_empty_title_normalizes_to_none(self):
+        self.assertIsNone(next_app.normalize_title(None))
+        self.assertIsNone(next_app.normalize_title("   "))
+
+    def _title_year_conn(self, rows):
+        class _Cur:
+            def __enter__(self_inner):
+                return self_inner
+
+            def __exit__(self_inner, *a):
+                return False
+
+            def execute(self_inner, sql, params=()):
+                self_inner._rows = list(rows)
+
+            def fetchall(self_inner):
+                return list(self_inner._rows)
+
+        class _Conn:
+            def cursor(self_inner):
+                return _Cur()
+
+        return _Conn()
+
+    def test_missing_format_refuses_to_match(self):
+        # Over-merge protection: no incoming format -> no match, always create.
+        conn = self._title_year_conn([{"id": uuid.uuid4(), "title": "The Matrix", "year": "1999"}])
+        self.assertIsNone(
+            next_app.find_movie_by_title_year(conn, title="The Matrix", year="1999", fmt=None)
+        )
+
+    def test_normalized_title_and_year_match(self):
+        target = uuid.uuid4()
+        conn = self._title_year_conn([{"id": target, "title": "Amélie", "year": "2001"}])
+        found = next_app.find_movie_by_title_year(
+            conn, title="amelie", year="2001", fmt="Blu-ray"
+        )
+        self.assertEqual(found, target)
+
+    def test_no_row_matches_returns_none(self):
+        conn = self._title_year_conn([{"id": uuid.uuid4(), "title": "Different", "year": "2001"}])
+        self.assertIsNone(
+            next_app.find_movie_by_title_year(conn, title="Amelie", year="2001", fmt="Blu-ray")
+        )
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextReconcileLadderTests(unittest.TestCase):
+    """First-connect adoption ladder adds the title+year tier (Deel 1.4)."""
+
+    def _match(self, **overrides):
+        kwargs = dict(
+            persistent_client_id=None,
+            barcode_normalized=None,
+            tmdb_id=None,
+            fmt=None,
+            title=None,
+            year=None,
+            find_by_client_id=lambda: None,
+            find_by_barcode=lambda: None,
+            find_by_tmdb_edition=lambda: None,
+            find_by_title_year=lambda: None,
+        )
+        kwargs.update(overrides)
+        return next_app.match_reconcile_item(**kwargs)
+
+    def test_title_year_tier_is_active_in_reconcile(self):
+        existing = uuid.uuid4()
+        entity_id, matched_by = self._match(
+            title="The Matrix",
+            year="1999",
+            fmt="4K UHD",
+            find_by_title_year=lambda: existing,
+        )
+        self.assertEqual(entity_id, existing)
+        self.assertEqual(matched_by, "titleYear")
+
+    def test_client_id_takes_precedence_over_title_year(self):
+        by_client = uuid.uuid4()
+        entity_id, matched_by = self._match(
+            persistent_client_id="rec-uuid",
+            title="The Matrix",
+            year="1999",
+            fmt="4K UHD",
+            find_by_client_id=lambda: by_client,
+            find_by_title_year=lambda: uuid.uuid4(),
+        )
+        self.assertEqual(entity_id, by_client)
+        self.assertEqual(matched_by, "clientId")
+
+    def test_unknown_item_returns_no_match(self):
+        entity_id, matched_by = self._match(title="Ghost", year="1990", fmt="DVD")
+        self.assertIsNone(entity_id)
+        self.assertIsNone(matched_by)
 
 
 if __name__ == "__main__":
