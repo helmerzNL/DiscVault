@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "商店链接",
   "lists.wishlistPriceUrlPlaceholder": "粘贴商品页面链接",
   "lists.wishlistPriceUrlInvalid": "请输入有效的 http 或 https 链接。",
+  "lists.wishlistPriceUrlNotPublic": "商店链接必须指向公共互联网地址。",
   "lists.wishlistPriceCurrency": "货币",
   "lists.wishlistLastSeenPrice": "上次查看价格",
   "lists.wishlistPriceDropAlert": "价格下降",

@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "Bolt URL",
   "lists.wishlistPriceUrlPlaceholder": "Illesszen be termékoldalra mutató URL-t",
   "lists.wishlistPriceUrlInvalid": "Adjon meg érvényes http vagy https URL-t.",
+  "lists.wishlistPriceUrlNotPublic": "Az áruház URL-jének nyilvános internetcímre kell mutatnia.",
   "lists.wishlistPriceCurrency": "Pénznem",
   "lists.wishlistLastSeenPrice": "Utoljára látott ár",
   "lists.wishlistPriceDropAlert": "Árcsökkenés",

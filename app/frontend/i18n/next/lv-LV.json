@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "Veikala URL",
   "lists.wishlistPriceUrlPlaceholder": "Ielīmēt produkta lapas URL",
   "lists.wishlistPriceUrlInvalid": "Ievadi derīgu http vai https URL.",
+  "lists.wishlistPriceUrlNotPublic": "Veikala URL jānorāda uz publisku interneta adresi.",
   "lists.wishlistPriceCurrency": "Valūta",
   "lists.wishlistLastSeenPrice": "Pēdējā redzētā cena",
   "lists.wishlistPriceDropAlert": "Cenas kritums",

@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "URL магазину",
   "lists.wishlistPriceUrlPlaceholder": "Вставте URL сторінки товару",
   "lists.wishlistPriceUrlInvalid": "Введіть дійсну http або https URL-адресу.",
+  "lists.wishlistPriceUrlNotPublic": "URL-адреса магазину має вказувати на загальнодоступну інтернет-адресу.",
   "lists.wishlistPriceCurrency": "Валюта",
   "lists.wishlistLastSeenPrice": "Остання відома ціна",
   "lists.wishlistPriceDropAlert": "Зниження ціни",

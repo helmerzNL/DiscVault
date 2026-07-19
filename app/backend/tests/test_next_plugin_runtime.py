@@ -1408,6 +1408,53 @@ class PluginAutoUpdateTests(unittest.TestCase):
         # Installed copy untouched.
         self.assertEqual(installed_plugin_version("movievault_26"), "1.5.0")
 
+    def test_security_upgrade_applies_when_auto_update_is_disabled(self):
+        self._write_plugin(self.bundled_dir, "amazon", "1.0.2", "SAFE = True\n")
+        self._write_plugin(self.install_dir, "amazon", "1.0.1", "SAFE = False\n")
+        self._mark_initialized()
+        set_plugin_auto_update_enabled(False)
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertTrue(result["disabled"])
+        self.assertEqual(
+            result["upgraded"],
+            [
+                {
+                    "plugin": "amazon",
+                    "from": "1.0.1",
+                    "to": "1.0.2",
+                    "securityRequired": True,
+                }
+            ],
+        )
+        self.assertEqual(installed_plugin_version("amazon"), "1.0.2")
+        self.assertIn(
+            "SAFE = True",
+            (self.install_dir / "amazon" / "plugin.py").read_text(encoding="utf-8"),
+        )
+
+    def test_security_upgrade_does_not_resurrect_deleted_plugin(self):
+        self._write_plugin(self.bundled_dir, "amazon", "1.0.2")
+        self._mark_initialized_with_seeded(["amazon"])
+        set_plugin_auto_update_enabled(False)
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertEqual(result["upgraded"], [])
+        self.assertFalse((self.install_dir / "amazon").exists())
+
+    def test_auto_update_disabled_does_not_add_new_bundled_plugin(self):
+        self._write_plugin(self.bundled_dir, "keepa", "1.0.0")
+        self._mark_initialized_with_seeded(["movievault_26"])
+        set_plugin_auto_update_enabled(False)
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertEqual(result["added"], [])
+        self.assertIn("keepa", result["skipped"])
+        self.assertFalse((self.install_dir / "keepa").exists())
+
     def test_upgrade_does_not_resurrect_deleted_default(self):
         # Bundled has the plugin, but the user deleted it from the install dir.
         self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
@@ -1490,6 +1537,19 @@ class PluginAutoUpdateTests(unittest.TestCase):
         self._mark_initialized()
         with self.assertRaises(ValueError):
             rollback_plugin_update("movievault_26")
+
+    def test_rollback_rejects_version_below_security_minimum(self):
+        self._write_plugin(self.bundled_dir, "amazon", "1.0.2")
+        self._write_plugin(self.install_dir, "amazon", "1.0.1")
+        self._mark_initialized()
+        install_bundled_plugin_update("amazon")
+
+        state = plugin_update_state("amazon")
+        self.assertFalse(state["canRollback"])
+        self.assertEqual(state["rollbackVersion"], "1.0.1")
+        with self.assertRaisesRegex(ValueError, "required security minimum 1.0.2"):
+            rollback_plugin_update("amazon")
+        self.assertEqual(installed_plugin_version("amazon"), "1.0.2")
 
     def test_update_state_reports_update_then_rollback_availability(self):
         self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")

@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "URL καταστήματος",
   "lists.wishlistPriceUrlPlaceholder": "Επικολλήστε το URL σελίδας προϊόντος",
   "lists.wishlistPriceUrlInvalid": "Εισάγετε έγκυρο URL http ή https.",
+  "lists.wishlistPriceUrlNotPublic": "Το URL του καταστήματος πρέπει να οδηγεί σε δημόσια διεύθυνση διαδικτύου.",
   "lists.wishlistPriceCurrency": "Νόμισμα",
   "lists.wishlistLastSeenPrice": "Τελευταία τιμή",
   "lists.wishlistPriceDropAlert": "Πτώση τιμής",

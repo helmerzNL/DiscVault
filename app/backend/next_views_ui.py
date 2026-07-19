@@ -29899,6 +29899,27 @@ def ui_preview_html(
             messageNode.className = "lists-modal-message " + modalMessageTone;
           }
         };
+        const setWishlistUrlError = (error) => {
+          const errorCode = String(error?.payload?.errorCode || "");
+          if (errorCode === "wishlist_price_url_not_public") {
+            setMessage(
+              tNext(
+                "lists.wishlistPriceUrlNotPublic",
+                "The shop URL must point to a public internet address."
+              ),
+              "bad"
+            );
+            return true;
+          }
+          if (errorCode === "wishlist_price_url_invalid") {
+            setMessage(
+              tNext("lists.wishlistPriceUrlInvalid", "Enter a valid http or https URL."),
+              "bad"
+            );
+            return true;
+          }
+          return false;
+        };
         if (modalMessageText || modalMessageTone) {
           setMessage(modalMessageText, modalMessageTone);
         }
@@ -29935,7 +29956,9 @@ def ui_preview_html(
             listsCloseOverlay(overlay);
             await loadListsView(true);
           } catch (error) {
-            setMessage((error && error.message) || String(error), "bad");
+            if (!setWishlistUrlError(error)) {
+              setMessage((error && error.message) || String(error), "bad");
+            }
           }
         });
         panel.querySelectorAll("[data-shop-edit]").forEach((btn) => {
@@ -30071,7 +30094,9 @@ def ui_preview_html(
             }
             render();
           } catch (error) {
-            setMessage((error && error.message) || String(error), "bad");
+            if (!setWishlistUrlError(error)) {
+              setMessage((error && error.message) || String(error), "bad");
+            }
           }
         });
         if (editing) {

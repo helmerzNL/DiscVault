@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "URL trgovine",
   "lists.wishlistPriceUrlPlaceholder": "Prilepite URL strani izdelka",
   "lists.wishlistPriceUrlInvalid": "Vnesite veljaven http ali https URL.",
+  "lists.wishlistPriceUrlNotPublic": "URL trgovine mora kazati na javni internetni naslov.",
   "lists.wishlistPriceCurrency": "Valuta",
   "lists.wishlistLastSeenPrice": "Nazadnje videna cena",
   "lists.wishlistPriceDropAlert": "Padec cene",

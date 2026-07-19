@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "URL negozio",
   "lists.wishlistPriceUrlPlaceholder": "Incolla l’URL di una pagina prodotto",
   "lists.wishlistPriceUrlInvalid": "Inserisci un URL http o https valido.",
+  "lists.wishlistPriceUrlNotPublic": "L’URL del negozio deve puntare a un indirizzo Internet pubblico.",
   "lists.wishlistPriceCurrency": "Valuta",
   "lists.wishlistLastSeenPrice": "Ultimo prezzo rilevato",
   "lists.wishlistPriceDropAlert": "Calo di prezzo",

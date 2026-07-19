@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "쇼핑맰 URL",
   "lists.wishlistPriceUrlPlaceholder": "상품 페이지 URL을 붙여넣으세요",
   "lists.wishlistPriceUrlInvalid": "유효한 http 또는 https URL을 입력하세요.",
+  "lists.wishlistPriceUrlNotPublic": "쇼핑몰 URL은 공개 인터넷 주소를 가리켜야 합니다.",
   "lists.wishlistPriceCurrency": "통화",
   "lists.wishlistLastSeenPrice": "마지막으로 확인한 가격",
   "lists.wishlistPriceDropAlert": "가격 하락",

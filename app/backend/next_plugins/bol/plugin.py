@@ -6,7 +6,10 @@ import json
 import re
 from typing import Any
 
-import requests
+try:
+    from ...next_public_http import PublicHttpError, fetch_public_text, public_url_hostname
+except ImportError:  # pragma: no cover - dynamically loaded plugin
+    from next_public_http import PublicHttpError, fetch_public_text, public_url_hostname
 
 
 DEFAULT_TIMEOUT = 20
@@ -163,19 +166,21 @@ def price_check(payload=None, context=None):
     url = _product_url(payload)
     if not url:
         return {"status": "no_match", "error": "Provide a bol.com product URL in url or providerProductRef."}
-    if "bol.com" not in url.lower():
+    hostname = public_url_hostname(url)
+    if hostname != "bol.com" and not hostname.endswith(".bol.com"):
         return {"status": "no_match", "error": "URL is not a bol.com product URL."}
 
-    response = requests.get(
-        url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
-        },
-        timeout=_timeout_seconds(context),
-    )
-    response.raise_for_status()
-    html = response.text or ""
+    try:
+        html = fetch_public_text(
+            url,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8",
+            },
+            timeout_seconds=_timeout_seconds(context),
+        )
+    except PublicHttpError as exc:
+        return {"status": "error", "error": exc.code}
     lower_html = html.lower()
     if any(signature in lower_html for signature in BLOCK_SIGNATURES):
         return {"status": "no_match", "error": "bol.com blocked the request (bot/challenge page)."}
@@ -196,4 +201,3 @@ def price_check(payload=None, context=None):
         "source_detail": url,
         "confidence": 0.78,
     }
-

@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "商店連結",
   "lists.wishlistPriceUrlPlaceholder": "貼上商品頁面連結",
   "lists.wishlistPriceUrlInvalid": "請輸入有效的 http 或 https 連結。",
+  "lists.wishlistPriceUrlNotPublic": "商店連結必須指向公共網際網路位址。",
   "lists.wishlistPriceCurrency": "貨幣",
   "lists.wishlistLastSeenPrice": "上次查看價格",
   "lists.wishlistPriceDropAlert": "價格下降",

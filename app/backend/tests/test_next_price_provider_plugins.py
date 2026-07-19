@@ -14,6 +14,7 @@ from app.backend.next_plugins.amazon import plugin as amazon_plugin
 from app.backend.next_plugins.bol import plugin as bol_plugin
 from app.backend.next_plugins.keepa import plugin as keepa_plugin
 from app.backend.next_plugins.zavvi import plugin as zavvi_plugin
+from app.backend.next_public_http import PublicHttpError
 
 
 class _Response:
@@ -52,7 +53,7 @@ class TestZavviProviderPlugin(unittest.TestCase):
             '{"@type":"Product","offers":{"@type":"Offer","price":"21.99","priceCurrency":"GBP"}}'
             "</script>"
         )
-        with patch("app.backend.next_plugins.zavvi.plugin.requests.get", return_value=_Response(html)):
+        with patch("app.backend.next_plugins.zavvi.plugin.fetch_public_text", return_value=html):
             result = zavvi_plugin.price_check({"url": "https://www.zavvi.com/blu-ray/example/123"}, {})
         self.assertEqual(result.get("status"), "ok")
         self.assertEqual(result.get("source"), "zavvi")
@@ -61,13 +62,24 @@ class TestZavviProviderPlugin(unittest.TestCase):
 
     def test_price_check_uses_fallback_currency(self):
         html = '<div class="price">£14.95</div>'
-        with patch("app.backend.next_plugins.zavvi.plugin.requests.get", return_value=_Response(html)):
+        with patch("app.backend.next_plugins.zavvi.plugin.fetch_public_text", return_value=html):
             result = zavvi_plugin.price_check(
                 {"providerProductRef": "https://www.zavvi.com/blu-ray/example/123"},
                 {"settings": {"currency": "EUR"}},
             )
         self.assertEqual(result.get("status"), "ok")
         self.assertEqual(result.get("currency"), "GBP")
+
+    def test_public_http_failure_returns_stable_error(self):
+        with patch(
+            "app.backend.next_plugins.zavvi.plugin.fetch_public_text",
+            side_effect=PublicHttpError("url_blocked"),
+        ):
+            result = zavvi_plugin.price_check(
+                {"url": "https://www.zavvi.com/blu-ray/example/123"},
+                {},
+            )
+        self.assertEqual(result, {"status": "error", "error": "url_blocked"})
 
 
 class TestArrowProviderPlugin(unittest.TestCase):
@@ -80,7 +92,7 @@ class TestArrowProviderPlugin(unittest.TestCase):
             '<meta property="product:price:amount" content="29.50">'
             '<meta property="product:price:currency" content="USD">'
         )
-        with patch("app.backend.next_plugins.arrow.plugin.requests.get", return_value=_Response(html)):
+        with patch("app.backend.next_plugins.arrow.plugin.fetch_public_text", return_value=html):
             result = arrow_plugin.price_check({"url": "https://www.arrowfilms.com/product/example"}, {})
         self.assertEqual(result.get("status"), "ok")
         self.assertEqual(result.get("source"), "arrow")
@@ -91,6 +103,13 @@ class TestArrowProviderPlugin(unittest.TestCase):
         result = arrow_plugin.price_check({"url": "https://shop.example.com/item"}, {})
         self.assertEqual(result.get("status"), "no_match")
         self.assertIn("not an Arrow", result.get("error", ""))
+
+    def test_price_check_rejects_spoofed_arrow_hostname(self):
+        result = arrow_plugin.price_check(
+            {"url": "https://example.com/product?brand=arrowfilms.com"},
+            {},
+        )
+        self.assertEqual(result.get("status"), "no_match")
 
 
 class TestBolProviderPlugin(unittest.TestCase):
@@ -104,7 +123,7 @@ class TestBolProviderPlugin(unittest.TestCase):
             '{"@type":"Product","offers":{"@type":"Offer","price":"19.99","priceCurrency":"EUR"}}'
             "</script>"
         )
-        with patch("app.backend.next_plugins.bol.plugin.requests.get", return_value=_Response(html)):
+        with patch("app.backend.next_plugins.bol.plugin.fetch_public_text", return_value=html):
             result = bol_plugin.price_check({"url": "https://www.bol.com/nl/nl/p/example/9300000000000/"}, {})
         self.assertEqual(result.get("status"), "ok")
         self.assertEqual(result.get("source"), "bol")
@@ -116,6 +135,13 @@ class TestBolProviderPlugin(unittest.TestCase):
         self.assertEqual(result.get("status"), "no_match")
         self.assertIn("not a bol.com", result.get("error", ""))
 
+    def test_price_check_rejects_spoofed_bol_hostname(self):
+        result = bol_plugin.price_check(
+            {"url": "https://bol.com.example.test/product"},
+            {},
+        )
+        self.assertEqual(result.get("status"), "no_match")
+
 
 class TestAmazonProviderPlugin(unittest.TestCase):
     def test_health_check_is_available(self):
@@ -124,7 +150,7 @@ class TestAmazonProviderPlugin(unittest.TestCase):
 
     def test_price_check_extracts_price_from_offscreen_markup(self):
         html = '<span class="a-offscreen">EUR 105.24</span>'
-        with patch("app.backend.next_plugins.amazon.plugin.requests.get", return_value=_Response(html)):
+        with patch("app.backend.next_plugins.amazon.plugin.fetch_public_text", return_value=html):
             result = amazon_plugin.price_check({"url": "https://www.amazon.nl/dp/B09G9HD5XW"}, {})
         self.assertEqual(result.get("status"), "ok")
         self.assertEqual(result.get("source"), "amazon")
@@ -139,7 +165,7 @@ class TestAmazonProviderPlugin(unittest.TestCase):
 
     def test_price_check_uses_asin_provider_ref(self):
         html = '<span class="a-offscreen">$12.49</span>'
-        with patch("app.backend.next_plugins.amazon.plugin.requests.get", return_value=_Response(html)):
+        with patch("app.backend.next_plugins.amazon.plugin.fetch_public_text", return_value=html):
             result = amazon_plugin.price_check({"providerProductRef": "B09G9HD5XW"}, {})
         self.assertEqual(result.get("status"), "ok")
         self.assertEqual(result.get("providerProductRef"), "B09G9HD5XW")

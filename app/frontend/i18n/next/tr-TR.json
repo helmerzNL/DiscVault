@@ -1460,6 +1460,7 @@
   "lists.wishlistPriceUrl": "Mağaza URL'si",
   "lists.wishlistPriceUrlPlaceholder": "Ürün sayfası URL'sini yapıştırın",
   "lists.wishlistPriceUrlInvalid": "Geçerli bir http veya https URL'si girin.",
+  "lists.wishlistPriceUrlNotPublic": "Mağaza URL'si genel bir internet adresine yönelmelidir.",
   "lists.wishlistPriceCurrency": "Para birimi",
   "lists.wishlistLastSeenPrice": "Son görülen fiyat",
   "lists.wishlistPriceDropAlert": "Fiyat düşüşü",
