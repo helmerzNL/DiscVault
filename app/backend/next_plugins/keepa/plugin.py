@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
+from urllib.parse import urlencode
 
-import requests
+try:
+    from app.backend.next_public_http import PublicHttpError, fetch_public_text
+except ModuleNotFoundError:  # pragma: no cover - direct backend execution
+    from next_public_http import PublicHttpError, fetch_public_text
 
 
 DEFAULT_DOMAIN_ID = 4  # Amazon NL
@@ -97,20 +102,25 @@ def price_check(payload=None, context=None):
             "providerProductRef": asin,
         }
 
-    response = requests.get(
-        "https://api.keepa.com/product",
-        params={
+    endpoint = "https://api.keepa.com/product?" + urlencode(
+        {
             "key": key,
             "domain": _domain_id(context),
             "asin": asin,
             "buybox": 1,
             "history": 0,
             "stats": 0,
-        },
-        timeout=15,
+        }
     )
-    response.raise_for_status()
-    data = response.json() if response.content else {}
+    try:
+        response_text = fetch_public_text(
+            endpoint,
+            timeout_seconds=15,
+            maximum_redirects=0,
+        )
+    except PublicHttpError as exc:
+        return {"status": "error", "error": exc.code}
+    data = json.loads(response_text) if response_text else {}
     products = data.get("products") if isinstance(data, dict) else []
     product = products[0] if isinstance(products, list) and products else {}
     price = _price_from_product(product if isinstance(product, dict) else {})
@@ -126,4 +136,3 @@ def price_check(payload=None, context=None):
         "confidence": 0.95,
         "providerProductRef": asin,
     }
-

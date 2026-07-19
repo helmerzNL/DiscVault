@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
-import requests
+try:
+    from app.backend.next_public_http import PublicHttpError, request_public_text
+except ModuleNotFoundError:  # pragma: no cover - direct backend execution
+    from next_public_http import PublicHttpError, request_public_text
 
 
 DEFAULT_ENDPOINT = "https://api.priceapi.com/v2/jobs"
@@ -113,20 +117,31 @@ def price_check(payload=None, context=None):
             "providerProductRef": product_ref or None,
         }
 
-    response = requests.post(
-        _endpoint(context),
-        json={
+    request_body = json.dumps(
+        {
             "source": "discvault",
             "country": _country(context),
             "product_ref": product_ref or None,
             "url": product_url or None,
             "include_history": False,
         },
-        headers={"Authorization": f"Bearer {key}"},
-        timeout=20,
-    )
-    response.raise_for_status()
-    data = response.json() if response.content else {}
+        separators=(",", ":"),
+    ).encode("utf-8")
+    try:
+        response_text = request_public_text(
+            _endpoint(context),
+            method="POST",
+            body=request_body,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+            timeout_seconds=20,
+            maximum_redirects=0,
+        )
+    except PublicHttpError as exc:
+        return {"status": "error", "error": exc.code}
+    data = json.loads(response_text) if response_text else {}
 
     price, currency = _first_price(data)
     if price is None:

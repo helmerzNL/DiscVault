@@ -1434,6 +1434,40 @@ class PluginAutoUpdateTests(unittest.TestCase):
             (self.install_dir / "amazon" / "plugin.py").read_text(encoding="utf-8"),
         )
 
+    def test_provider_security_upgrades_apply_when_auto_update_is_disabled(self):
+        versions = {
+            "keepa": ("1.0.0", "1.0.2"),
+            "priceapi": ("1.0.0", "1.0.1"),
+        }
+        for plugin_id, (installed, bundled) in versions.items():
+            self._write_plugin(self.bundled_dir, plugin_id, bundled, "SAFE = True\n")
+            self._write_plugin(self.install_dir, plugin_id, installed, "SAFE = False\n")
+        self._mark_initialized()
+        set_plugin_auto_update_enabled(False)
+
+        result = upgrade_seeded_default_plugins()
+
+        self.assertTrue(result["disabled"])
+        self.assertEqual(
+            result["upgraded"],
+            [
+                {
+                    "plugin": "keepa",
+                    "from": "1.0.0",
+                    "to": "1.0.2",
+                    "securityRequired": True,
+                },
+                {
+                    "plugin": "priceapi",
+                    "from": "1.0.0",
+                    "to": "1.0.1",
+                    "securityRequired": True,
+                },
+            ],
+        )
+        for plugin_id, (_installed, bundled) in versions.items():
+            self.assertEqual(installed_plugin_version(plugin_id), bundled)
+
     def test_security_upgrade_does_not_resurrect_deleted_plugin(self):
         self._write_plugin(self.bundled_dir, "amazon", "1.0.2")
         self._mark_initialized_with_seeded(["amazon"])
@@ -1550,6 +1584,24 @@ class PluginAutoUpdateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "required security minimum 1.0.2"):
             rollback_plugin_update("amazon")
         self.assertEqual(installed_plugin_version("amazon"), "1.0.2")
+
+    def test_provider_rollbacks_reject_versions_below_security_minimum(self):
+        versions = {
+            "keepa": ("1.0.0", "1.0.2"),
+            "priceapi": ("1.0.0", "1.0.1"),
+        }
+        for plugin_id, (installed, bundled) in versions.items():
+            self._write_plugin(self.bundled_dir, plugin_id, bundled)
+            self._write_plugin(self.install_dir, plugin_id, installed)
+        self._mark_initialized()
+
+        for plugin_id in versions:
+            install_bundled_plugin_update(plugin_id)
+            state = plugin_update_state(plugin_id)
+            self.assertFalse(state["canRollback"])
+            with self.assertRaisesRegex(ValueError, "required security minimum"):
+                rollback_plugin_update(plugin_id)
+            self.assertEqual(installed_plugin_version(plugin_id), versions[plugin_id][1])
 
     def test_update_state_reports_update_then_rollback_availability(self):
         self._write_plugin(self.bundled_dir, "movievault_26", "1.5.1")
