@@ -1221,6 +1221,10 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                                     cur.execute("DELETE FROM users WHERE id=%s", (forged_user_id,))
 
                     self.addCleanup(cleanup_forged_wishlist_user)
+                    authenticated_actor = {"id": str(forged_user_id)}
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT id FROM users WHERE id=%s", (authenticated_actor["id"],))
+                        self.assertEqual(cur.fetchone()["id"], forged_user_id)
                     with patch.object(
                         next_movievault_v2_posters,
                         "_request",
@@ -1263,7 +1267,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value=authenticated_actor,
                     ),
                 ):
                     response = client.get(protected_path)
@@ -1295,7 +1299,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value=authenticated_actor,
                     ),
                 ):
                     degraded_fallback = client.get(protected_path)
@@ -1308,7 +1312,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value=authenticated_actor,
                     ),
                 ):
                     public_bypass = client.get(f"/api/next/media/assets/{media_asset_id}")
@@ -1319,7 +1323,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value=authenticated_actor,
                     ),
                 ):
                     protected_non_movievault = client.get(
@@ -1332,7 +1336,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value=authenticated_actor,
                     ),
                 ):
                     unlinked_response = client.get(f"/api/next/media/assets/{public_media_asset_id}")
