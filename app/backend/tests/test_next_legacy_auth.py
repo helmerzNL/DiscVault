@@ -547,31 +547,21 @@ class LegacyAuthContractTests(unittest.TestCase):
             self.collection_source,
         )
 
-    def test_totp_recovery_is_a_collapsed_challenge_only_alternative(self):
-        self.assertIn(
-            'id="appLegacyRecoveryCodeToggle" aria-expanded="false" '
-            'aria-controls="appLegacyRecoveryCodeField"',
-            self.ui_source,
-        )
-        self.assertIn(
-            'class="hidden" id="appLegacyRecoveryCodeField"',
-            self.ui_source,
-        )
-        self.assertIn("function setLegacyRecoveryCodeExpanded(expanded)", self.ui_source)
+    def test_totp_challenge_only_accepts_an_authenticator_code(self):
+        self.assertNotIn('id="appLegacyRecoveryCodeToggle"', self.ui_source)
+        self.assertNotIn('id="appLegacyRecoveryCodeField"', self.ui_source)
+        self.assertNotIn('id="appLegacyRecoveryCode"', self.ui_source)
+        self.assertNotIn("function setLegacyRecoveryCodeExpanded(expanded)", self.ui_source)
         self.assertIn('const mfaChallenge = legacyStage === "mfa_challenge";', self.ui_source)
-        self.assertIn(
-            'document.getElementById("appLegacyRecoveryAlternative")?.classList.toggle("hidden", !mfaChallenge);',
-            self.ui_source,
-        )
         self.assertIn(
             'document.getElementById("appRecoveryToggleButton")?.classList.toggle("hidden", mfaChallenge);',
             self.ui_source,
         )
-        self.assertIn("setLegacyRecoveryCodeExpanded(false);", self.ui_source)
         self.assertIn(
-            'recoveryCode ? "/api/next/auth/legacy/mfa/recovery" : "/api/next/auth/legacy/mfa/verify"',
+            'url = "/api/next/auth/legacy/mfa/verify";',
             self.ui_source,
         )
+        self.assertNotIn('"/api/next/auth/legacy/mfa/recovery"', self.ui_source)
 
     def test_owner_onboarding_is_method_neutral_and_validates_confirmation(self):
         self.assertIn(
