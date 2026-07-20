@@ -544,6 +544,7 @@ MAX_IMPORT_ARCHIVE_BYTES = 100 * 1024 * 1024
 IMPORT_UPLOAD_EXTENSIONS = {".csv", ".tsv", ".json", ".xml", ".zip"}
 IMPORT_ARCHIVE_EXTENSIONS = {".csv", ".tsv", ".json", ".xml"}
 MOVIE_ARTWORK_KINDS = {"poster", "backdrop"}
+WISHLIST_POSTER_ASSET_SNAPSHOT_KEY = "_localPosterAssetId"
 NOTIFICATION_PREF_DEFAULTS: dict[str, bool] = {
     "app_updates": True,
     "imports": True,
@@ -10192,9 +10193,36 @@ def emit_watch_history_change(conn, user_id, entry_id, *, operation: str, movie_
 # ---------------------------------------------------------------------------
 
 
+def wishlist_snapshot_with_local_poster_asset(
+    snapshot: dict[str, Any],
+    media_id: UUID | str,
+) -> dict[str, Any]:
+    trusted_snapshot = dict(snapshot)
+    trusted_snapshot[WISHLIST_POSTER_ASSET_SNAPSHOT_KEY] = str(media_id)
+    return trusted_snapshot
+
+
+def wishlist_snapshot_preserving_local_poster_asset(
+    snapshot: dict[str, Any],
+    current_snapshot: dict[str, Any],
+    *,
+    poster_url_supplied: bool,
+) -> dict[str, Any]:
+    trusted_snapshot = dict(snapshot)
+    if poster_url_supplied:
+        return trusted_snapshot
+    trusted_poster_asset_id = clean_text(current_snapshot.get(WISHLIST_POSTER_ASSET_SNAPSHOT_KEY))
+    if trusted_poster_asset_id:
+        trusted_snapshot[WISHLIST_POSTER_ASSET_SNAPSHOT_KEY] = trusted_poster_asset_id
+    return trusted_snapshot
+
+
 def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
     acquired_movie = row.get("acquired_movie_id")
     created_by = row.get("created_by_user_id")
+    snapshot = row.get("snapshot")
+    public_snapshot = dict(snapshot) if isinstance(snapshot, dict) else {}
+    public_snapshot.pop(WISHLIST_POSTER_ASSET_SNAPSHOT_KEY, None)
     return {
         "id": str(row.get("id")),
         "title": row.get("title"),
@@ -10204,7 +10232,7 @@ def _wishlist_row_entity(row: dict[str, Any]) -> dict[str, Any]:
         "movievaultId": row.get("movievault_id"),
         "posterUrl": row.get("poster_url"),
         "note": row.get("note"),
-        "snapshot": row.get("snapshot") or {},
+        "snapshot": public_snapshot,
         "addedAt": row.get("added_at"),
         "acquiredAt": row.get("acquired_at"),
         "acquiredMovieId": str(acquired_movie) if acquired_movie else None,
@@ -11532,6 +11560,119 @@ def media_asset_entity(conn, media_id: UUID) -> dict[str, Any] | None:
             (media_id,),
         )
         return cur.fetchone()
+
+
+def media_asset_entity_by_storage_key(conn, storage_key: str) -> dict[str, Any] | None:
+    if not table_exists(conn, "media_assets"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id,
+                kind,
+                variant,
+                storage_backend,
+                storage_key,
+                source_url,
+                provider_id,
+                content_type,
+                width,
+                height,
+                size_bytes,
+                sha256,
+                metadata,
+                created_at
+            FROM media_assets
+            WHERE storage_backend='local' AND storage_key=%s
+            """,
+            (storage_key,),
+        )
+        return cur.fetchone()
+
+
+def media_asset_authorization_references(conn, media_id: UUID) -> dict[str, set[Any]]:
+    references: dict[str, set[Any]] = {
+        "movie": set(),
+        "container": set(),
+        "person": set(),
+        "user_avatar": set(),
+        "wishlist": set(),
+    }
+    if table_exists(conn, "entity_media"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT entity_type, entity_id
+                FROM entity_media
+                WHERE media_id=%s
+                  AND entity_type IN ('movie', 'container', 'person')
+                  AND deleted_at IS NULL
+                  AND hidden_at IS NULL
+                """,
+                (media_id,),
+            )
+            for row in cur.fetchall():
+                references[str(row["entity_type"])].add(row["entity_id"])
+
+    if table_exists(conn, "people"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM people WHERE profile_asset_id=%s", (media_id,))
+            references["person"].update(row["id"] for row in cur.fetchall())
+
+    if table_exists(conn, "users"):
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE avatar_asset_id=%s", (media_id,))
+            references["user_avatar"].update(row["id"] for row in cur.fetchall())
+
+    if table_exists(conn, "wishlist_items"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT wi.user_id
+                FROM wishlist_items wi
+                JOIN media_assets ma ON ma.id=%s
+                WHERE wi.poster_url=%s
+                  AND (
+                        wi.snapshot->>%s = %s
+                        OR (
+                            ma.metadata->>'source' = 'wishlist_upload'
+                            AND ma.metadata->'uploadedBy'->>'id' = wi.user_id::text
+                        )
+                  )
+                """,
+                (
+                    media_id,
+                    f"/api/next/media/assets/{media_id}",
+                    WISHLIST_POSTER_ASSET_SNAPSHOT_KEY,
+                    str(media_id),
+                ),
+            )
+            references["wishlist"].update(row["user_id"] for row in cur.fetchall())
+    return references
+
+
+def actor_can_view_media_asset(conn, actor: dict[str, Any] | None, media_id: UUID) -> bool:
+    references = media_asset_authorization_references(conn, media_id)
+    if any(actor_can_view_movie(conn, actor, movie_id) for movie_id in references["movie"]):
+        return True
+    if any(
+        actor_can_view_container(conn, actor, container_id)
+        for container_id in references["container"]
+    ):
+        return True
+    if any(actor_can_view_person(conn, actor, person_id) for person_id in references["person"]):
+        return True
+
+    actor_id = str(actor.get("id") or "") if actor else ""
+    if actor_id and any(str(user_id) == actor_id for user_id in references["user_avatar"]):
+        return True
+    if references["user_avatar"] and actor_effective_has_permission(actor, "users.view"):
+        return True
+    return bool(
+        actor_id
+        and any(str(user_id) == actor_id for user_id in references["wishlist"])
+    )
 
 
 def is_movievault_v2_poster_media_asset(asset: dict[str, Any]) -> bool:
@@ -17934,8 +18075,6 @@ PUBLIC_NEXT_PREFIXES = (
     "/api/next/auth/",
     "/api/next/assets/",
     "/api/next/i18n/",
-    "/api/next/media/assets/",
-    "/api/next/media/legacy/",
     "/app/movies/",
     "/app/discover/",
     "/app/containers/",
@@ -23072,7 +23211,11 @@ def register_routes(flask_app: Flask) -> None:
                 raw_currency = clean_text(body.get("priceCurrency") or body.get("price_currency"))
                 alert_fields["price_currency"] = (raw_currency or "EUR").upper()[:3]
 
-            snapshot = _wishlist_snapshot(fields)
+            snapshot = wishlist_snapshot_preserving_local_poster_asset(
+                _wishlist_snapshot(fields),
+                current_snapshot,
+                poster_url_supplied="posterUrl" in body or "poster_url" in body,
+            )
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
@@ -23542,7 +23685,10 @@ def register_routes(flask_app: Flask) -> None:
                     or "movie",
                     "source": _normalise_wishlist_source(current_snapshot.get("source")),
                 }
-                snapshot = _wishlist_snapshot(fields)
+                snapshot = wishlist_snapshot_with_local_poster_asset(
+                    _wishlist_snapshot(fields),
+                    asset["id"],
+                )
                 with conn.cursor() as cur:
                     cur.execute(
                         "UPDATE wishlist_items SET poster_url=%s, snapshot=%s WHERE user_id=%s AND id=%s",
@@ -27404,33 +27550,52 @@ def register_routes(flask_app: Flask) -> None:
     def legacy_media(kind: str, filename: str):
         if kind not in {"poster", "backdrop", "profile"}:
             raise NextApiError("Unsupported legacy media kind", 404)
-        path = legacy_media_path(kind, filename)
+        relative = legacy_media_relative_path(kind, filename)
+        if not relative:
+            raise NextApiError("Legacy media file not found", 404)
+        with connect() as conn:
+            actor = require_next_authenticated_user(conn)
+            asset = media_asset_entity_by_storage_key(conn, relative)
+            if (
+                not asset
+                or asset.get("kind") != kind
+                or is_movievault_v2_poster_media_asset(asset)
+                or not actor_can_view_media_asset(conn, actor, asset["id"])
+            ):
+                raise NextApiError("Legacy media file not found", 404)
+        path = legacy_media_path(kind, relative)
         if not path:
             raise NextApiError("Legacy media file not found", 404)
         mimetype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        result = send_file(path, mimetype=mimetype, conditional=True, max_age=86400)
-        result.headers["Cache-Control"] = "public, max-age=86400"
+        result = send_file(path, mimetype=mimetype, conditional=True, max_age=0)
+        result.headers["Cache-Control"] = "private, no-cache, must-revalidate"
         return result
 
     @flask_app.get("/api/next/media/assets/<media_id>")
     def media_asset(media_id: str):
         media_uuid = parse_uuid(media_id, "mediaId")
         with connect() as conn:
+            actor = require_next_authenticated_user(conn)
             asset = media_asset_entity(conn, media_uuid)
-        if not asset or is_movievault_v2_poster_media_asset(asset):
-            raise NextApiError("Media asset not found", 404)
+            if (
+                not asset
+                or is_movievault_v2_poster_media_asset(asset)
+                or not actor_can_view_media_asset(conn, actor, media_uuid)
+            ):
+                raise NextApiError("Media asset not found", 404)
         path = local_media_asset_path(asset.get("storage_key"))
         if not path:
             raise NextApiError("Local media file not found", 404)
         mimetype = asset.get("content_type") or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        result = send_file(path, mimetype=mimetype, conditional=True, max_age=86400)
-        result.headers["Cache-Control"] = "public, max-age=86400"
+        result = send_file(path, mimetype=mimetype, conditional=True, max_age=0)
+        result.headers["Cache-Control"] = "private, no-cache, must-revalidate"
         return result
 
     @flask_app.get("/api/next/movievault-v2/posters/<media_id>")
     def movievault_v2_poster_media_asset(media_id: str):
         media_uuid = parse_uuid(media_id, "mediaId")
         with connect() as conn:
+            require_next_authenticated_user(conn)
             asset = movievault_v2_poster_media_asset_entity(conn, media_uuid)
         if not asset:
             raise NextApiError("MovieVault poster not found", 404)

@@ -33,7 +33,7 @@ class MovieVaultDistributionV4Tests(unittest.TestCase):
                 f"/api/next/movievault-v2/posters/{media_asset_id}"
             )
         )
-        self.assertTrue(
+        self.assertFalse(
             next_app.is_public_next_path(f"/api/next/media/assets/{media_asset_id}")
         )
 

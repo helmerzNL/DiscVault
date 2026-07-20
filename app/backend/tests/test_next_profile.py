@@ -520,6 +520,64 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn(".profile-about-grid {", self.html)
         self.assertIn(".profile-about-version {", self.html)
 
+    def test_admin_access_dashboard_preserves_invite_and_passkey_management(self):
+        self.assertIn(
+            'id="appAdminPanelAccess" role="tabpanel" aria-labelledby="appAdminTabAccess"',
+            self.html,
+        )
+        for card in ("access-overview", "invite-create", "active-invites", "passkeys"):
+            self.assertIn(f'data-admin-dashboard-card="{card}"', self.html)
+
+        for element_id in (
+            "appAdminRegistrationMode",
+            "appAdminUserCount",
+            "appAdminCredentialCount",
+            "appAdminSecurityMessage",
+            "appAdminInviteForm",
+            "appAdminInviteUsername",
+            "appAdminCreateInviteButton",
+            "appAdminInviteCodeOutput",
+            "appAdminInviteMessage",
+            "appAdminInvitesList",
+            "appAdminCredentialsList",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="appAdminSecurityMessage" aria-live="polite"', self.html)
+        self.assertIn('id="appAdminInviteMessage" aria-live="polite"', self.html)
+        self.assertIn('class="profile-passkey app-admin-entity-card app-admin-invite-card', self.html)
+        self.assertIn('class="profile-passkey app-admin-entity-card app-admin-passkey-card"', self.html)
+
+    def test_admin_users_dashboard_preserves_user_and_group_management(self):
+        self.assertIn(
+            'id="appAdminPanelUsers" role="tabpanel" aria-labelledby="appAdminTabUsers"',
+            self.html,
+        )
+        for card in ("legacy-auth", "legacy-user-create", "users", "groups"):
+            self.assertIn(f'data-admin-dashboard-card="{card}"', self.html)
+
+        for element_id in (
+            "appAdminLegacyCard",
+            "appAdminLegacyStatus",
+            "appAdminLegacyEnable",
+            "appAdminLegacyDisable",
+            "appAdminLegacyMessage",
+            "appAdminLegacyCreateCard",
+            "appAdminLegacyUserForm",
+            "appAdminUsersList",
+            "appAdminUsersMessage",
+            "appAdminGroupForm",
+            "appAdminGroupsList",
+            "appAdminGroupsMessage",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('class="profile-passkey app-admin-entity-card app-admin-user-card', self.html)
+        self.assertIn('class="profile-passkey app-admin-entity-card admin-group-row"', self.html)
+        self.assertIn('class="profile-add-passkey app-admin-legacy-controls"', self.html)
+        self.assertIn("function handleAppAdminTabKeydown(button, event)", self.html)
+        self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
+
     def test_account_dashboard_preserves_existing_profile_bindings(self):
         self.assertIn('class="account-dashboard"', self.html)
         self.assertIn('id="profileAccountDisplayName"', self.html)
