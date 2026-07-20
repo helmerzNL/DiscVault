@@ -488,6 +488,10 @@ class LegacyAuthContractTests(unittest.TestCase):
             'mfa_required = body.get("mfa_enabled") is True if mfa_optional else True',
             self.auth_source,
         )
+        self.assertIn(
+            'if not mfa_optional and body.get("password_risk_accepted") is not True:',
+            self.auth_source,
+        )
         self.assertIn("mfa_required=False", self.auth_source)
         self.assertIn("function passkeyProcessAvailable()", self.ui_source)
         self.assertIn("function passkeyConfigurationGuidanceVisible()", self.ui_source)
@@ -505,8 +509,32 @@ class LegacyAuthContractTests(unittest.TestCase):
         self.assertIn('id="appAuthGuidance"', self.ui_source)
         self.assertIn('href="https://docs.discvault.eu"', self.ui_source)
         self.assertIn('id="startupLegacyMfaEnabled"', self.ui_source)
+        self.assertIn('id="startupLegacyRiskOption"', self.ui_source)
+        self.assertGreaterEqual(
+            self.ui_source.count(
+                'document.getElementById("startupLegacyRiskOption")?.classList.toggle("hidden", startupLegacyMfaOptional);'
+            ),
+            2,
+        )
         self.assertIn(
             "mfa_enabled: !startupLegacyMfaOptional",
+            self.ui_source,
+        )
+        self.assertNotIn('id="appLoginDescription"', self.ui_source)
+        self.assertIn(
+            'id="appReviewToggleButton" data-next-i18n="auth.signIn">Sign in</button>',
+            self.ui_source,
+        )
+        self.assertIn(
+            'id="appReviewLoginButton" data-next-i18n="auth.signIn">Sign in</button>',
+            self.ui_source,
+        )
+        self.assertIn(
+            'labels[legacyStage] || tNext("auth.signIn", "Sign in")',
+            self.ui_source,
+        )
+        self.assertNotIn(
+            'setLoginMessage(tNext("auth.loginDescription", "Log in with your Passkey"))',
             self.ui_source,
         )
         self.assertIn("function passkeyProcessAvailable()", self.collection_source)
@@ -522,6 +550,11 @@ class LegacyAuthContractTests(unittest.TestCase):
             "(setupRequired || passkeyConfigurationGuidanceVisible())",
             self.collection_source,
         )
+        self.assertIn(
+            'id="authReviewButton" class="hidden" data-next-i18n="auth.signIn">Sign in</button>',
+            self.collection_source,
+        )
+        self.assertIn('tNext("auth.signIn", "Sign in")', self.collection_source)
         self.assertIn(
             "renderPasskeyConfigurationGuidance(description);",
             self.collection_source,

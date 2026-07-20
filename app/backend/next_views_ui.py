@@ -12680,7 +12680,6 @@ def ui_preview_html(
           <div class="brand-mark"><img src="/api/next/assets/logo.svg" alt="DiscVault"></div>
           <div>
             <h1>DiscVault</h1>
-            <p id="appLoginDescription" data-next-i18n="auth.loginDescription">Log in with your Passkey</p>
           </div>
         </div>
         <select id="authLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
@@ -12695,7 +12694,7 @@ def ui_preview_html(
       </div>
       <div class="login-actions">
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.loginDescription">Sign in with passkey</button>
-        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
+        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="auth.signIn">Sign in</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
@@ -12744,7 +12743,7 @@ def ui_preview_html(
           <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
         </label>
         <div class="profile-form-actions">
-          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
+          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="auth.signIn">Sign in</button>
         </div>
       </form>
       <form class="recovery-login-panel hidden" id="appInviteForm">
@@ -12829,7 +12828,7 @@ def ui_preview_html(
               <span data-next-i18n="auth.password">Password</span>
               <input id="startupLegacyPassword" type="password" minlength="15" autocomplete="new-password">
             </label>
-            <label class="legacy-checkbox-row">
+            <label class="legacy-checkbox-row" id="startupLegacyRiskOption">
               <input id="startupLegacyRiskAccepted" type="checkbox">
               <span data-next-i18n="legacyAuth.acceptRisk">I understand and accept the password risk.</span>
             </label>
@@ -17193,7 +17192,6 @@ def ui_preview_html(
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
       const reviewForm = document.getElementById("appReviewForm");
-      const loginDescription = document.getElementById("appLoginDescription");
       const authGuidance = document.getElementById("appAuthGuidance");
       const showAuthGuidance = passkeyConfigurationGuidanceVisible();
       authGuidance?.classList.toggle("hidden", !showAuthGuidance);
@@ -17238,24 +17236,6 @@ def ui_preview_html(
       setElementVisible(loginButton, passkeysAvailable);
       setElementVisible(toggleButton, passkeysAvailable);
       if (!passkeysAvailable) document.getElementById("appInviteForm")?.classList.add("hidden");
-      if (loginDescription) {
-        const key = passkeysAvailable
-          ? "auth.loginDescription"
-          : reviewLoginAvailable
-            ? "legacyAuth.signIn"
-            : Boolean(currentAuthStatus.passkey_configuration_valid)
-              ? "auth.passkeyConfiguredAddressTitle"
-              : "auth.passkeyFqdnRequiredTitle";
-        loginDescription.dataset.nextI18n = key;
-        loginDescription.textContent = tNext(
-          key,
-          passkeysAvailable
-            ? "Log in with your Passkey"
-            : reviewLoginAvailable
-              ? "Sign in with password"
-              : "Passkey configuration required"
-        );
-      }
       if (toggleButton) {
         const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
         toggleButton.dataset.nextI18n = key;
@@ -21400,6 +21380,7 @@ def ui_preview_html(
       startupLegacyMfaOptional = Boolean(currentAuthStatus.legacy_bootstrap_mfa_optional);
       const mfaEnabled = document.getElementById("startupLegacyMfaEnabled");
       if (mfaEnabled) mfaEnabled.checked = false;
+      document.getElementById("startupLegacyRiskOption")?.classList.toggle("hidden", startupLegacyMfaOptional);
       document.getElementById("startupLegacyMfaOption")?.classList.toggle("hidden", !startupLegacyMfaOptional);
       document.getElementById("startupLegacyMfaOptionalHelp")?.classList.toggle("hidden", !startupLegacyMfaOptional);
       const codes = document.getElementById("startupLegacyRecoveryCodes");
@@ -21620,7 +21601,7 @@ def ui_preview_html(
         mfa_challenge: tNext("legacyAuth.verifyTotp", "Verify authenticator"),
         recovery_codes: tNext("legacyAuth.continue", "Continue")
       };
-      if (submit) submit.textContent = labels[legacyStage] || tNext("legacyAuth.signIn", "Sign in with password");
+      if (submit) submit.textContent = labels[legacyStage] || tNext("auth.signIn", "Sign in");
     }
     async function completeLegacyLogin(payload) {
       if (payload.callback_url || payload.callbackUrl) {
@@ -37321,6 +37302,7 @@ def ui_preview_html(
       if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner && !legacyBootstrap);
       if (!legacyBootstrap && !startupLegacyStage) document.getElementById("startupLegacyFields")?.classList.add("hidden");
       startupLegacyMfaOptional = Boolean(currentAuthStatus.legacy_bootstrap_mfa_optional);
+      document.getElementById("startupLegacyRiskOption")?.classList.toggle("hidden", startupLegacyMfaOptional);
       document.getElementById("startupLegacyMfaOption")?.classList.toggle("hidden", !startupLegacyMfaOptional);
       document.getElementById("startupLegacyMfaOptionalHelp")?.classList.toggle("hidden", !startupLegacyMfaOptional);
       const bootstrapWarning = document.getElementById("startupLegacyBootstrapWarning");
@@ -38536,7 +38518,7 @@ def ui_preview_html(
       currentAuthStatus = auth || {};
       renderAppRegistrationMode(auth);
       if (auth.auth_enabled && !auth.authenticated) {
-        setLoginMessage(tNext("auth.loginDescription", "Log in with your Passkey"));
+        setLoginMessage("");
         setGate("auth");
         return;
       }
