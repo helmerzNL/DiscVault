@@ -101,17 +101,19 @@ For running the published image with a bundled PostgreSQL service, see
 
 ## Release flow
 
-Image publishing is handled by GitHub Actions in `.github/workflows/docker-publish.yml`.
+Before a production release, review and commit the version-specific notes at
+`docs/releases/vX.Y.Z.md`, matching the version in `app/VERSION`. The
+`Release (tag main)` workflow refuses to create or push a tag when that exact
+notes file is missing.
 
-1. Merge changes to `main`
-2. Create and push a semver tag
+1. Promote the verified beta changes to `main` with a merge commit.
+2. Confirm `app/VERSION` and `docs/releases/vX.Y.Z.md` contain the approved
+   release version and notes.
+3. Run **Release (tag main)** from the `main` branch in GitHub Actions.
 
-```bash
-git tag v1.0.1
-git push origin v1.0.1
-```
-
-This publishes multi-arch images to GHCR.
+The workflow tags the current `main` commit, publishes the committed notes
+verbatim as the GitHub Release, and triggers `.github/workflows/docker-publish.yml`
+to publish the multi-arch production images to GHCR.
 
 ## GitHub Pages website
 
