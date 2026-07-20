@@ -2684,6 +2684,15 @@ def register_next_auth_routes(
                             """,
                             (user["id"],),
                         )
+                        if flow["flow_type"] == "mfa_recovery_ack":
+                            cur.execute(
+                                """
+                                UPDATE legacy_password_credentials
+                                SET mfa_required=true, updated_at=now()
+                                WHERE user_id=%s
+                                """,
+                                (user["id"],),
+                            )
                 if flow["flow_type"] == "bootstrap_recovery_ack":
                     audit_event(
                         conn,
@@ -2707,6 +2716,22 @@ def register_next_auth_routes(
                             "recoveryCodesAcknowledged": True,
                         },
                     )
+                if flow["payload"].get("profileEnrollment") is True:
+                    audit_event(
+                        conn,
+                        event_type="auth.legacy_mfa_enabled",
+                        category="security",
+                        actor={
+                            "id": user["id"],
+                            "username": user["username"],
+                            "role": primary_role(conn, user["id"]),
+                        },
+                        target_type="user",
+                        target_id=user["id"],
+                        summary=f"Enabled two-factor authentication for {user['username']}",
+                        metadata={"recoveryCodesAcknowledged": True},
+                    )
+                    return response({"status": "ok", "stage": "complete"})
                 return legacy_complete_login(
                     conn,
                     user=user,
@@ -2944,6 +2969,94 @@ def register_next_auth_routes(
             }
         )
 
+    @route(
+        "/api/next/auth/legacy/mfa/enroll/start",
+        "/api/auth/legacy/mfa/enroll/start",
+        methods=["POST"],
+    )
+    def legacy_mfa_enroll_start():
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            require_legacy_enabled(conn)
+            with nullcontext():
+                if not _current_user_payload():
+                    raise next_api_error("Unauthorized", 401)
+                user = current_user(conn)
+                if not user:
+                    raise next_api_error("Unauthorized", 401)
+                identity_failures, ip_failures, identity_hash, ip_hash = recent_legacy_attempts(
+                    conn, user["username"]
+                )
+                if attempt_is_throttled(identity_failures, ip_failures):
+                    record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=False)
+                    conn.commit()
+                    raise next_api_error("Current password is invalid", 401)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            c.password_hash, c.must_change_password, c.mfa_required,
+                            c.failed_attempt_count, c.first_failed_at,
+                            c.locked_until, c.credential_expires_at,
+                            EXISTS (
+                                SELECT 1 FROM legacy_totp_credentials t
+                                WHERE t.user_id=c.user_id
+                                  AND t.confirmed_at IS NOT NULL
+                            ) AS mfa_enrolled
+                        FROM legacy_password_credentials c
+                        WHERE c.user_id=%s
+                        FOR UPDATE
+                        """,
+                        (user["id"],),
+                    )
+                    credential = cur.fetchone()
+                if not credential:
+                    raise next_api_error("Password credential not found", 404)
+                if credential.get("mfa_required") and credential.get("mfa_enrolled"):
+                    raise next_api_error("Two-factor authentication is already enabled", 409)
+                if credential.get("must_change_password"):
+                    raise next_api_error(
+                        "Change your password before enabling two-factor authentication",
+                        409,
+                    )
+                now = _utcnow()
+                credential_unavailable = (
+                    credential.get("locked_until")
+                    and credential["locked_until"] > now
+                ) or (
+                    credential.get("credential_expires_at")
+                    and credential["credential_expires_at"] <= now
+                )
+                password_verification = verify_password(
+                    credential["password_hash"], body.get("current_password")
+                )
+                if credential_unavailable or not password_verification.valid:
+                    failed_count, first_failed_at, new_locked_until = failed_attempt_state(
+                        int(credential.get("failed_attempt_count") or 0),
+                        credential.get("first_failed_at"),
+                        now,
+                    )
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE legacy_password_credentials
+                            SET failed_attempt_count=%s, first_failed_at=%s,
+                                locked_until=%s, updated_at=now()
+                            WHERE user_id=%s
+                            """,
+                            (
+                                failed_count,
+                                first_failed_at,
+                                new_locked_until or credential.get("locked_until"),
+                                user["id"],
+                            ),
+                        )
+                    record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=False)
+                    conn.commit()
+                    raise next_api_error("Current password is invalid", 401)
+                record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=True)
+                return issue_mfa_enrollment(conn, user, {"profileEnrollment": True})
+
     @route("/api/next/auth/legacy/mfa/setup", "/api/auth/legacy/mfa/setup", methods=["POST"])
     def legacy_mfa_setup():
         body = request.get_json(silent=True) or {}
@@ -3026,6 +3139,7 @@ def register_next_auth_routes(
                     payload={
                         "mobileFlow": flow["payload"].get("mobileFlow"),
                         "clientKind": flow["payload"].get("clientKind"),
+                        "profileEnrollment": flow["payload"].get("profileEnrollment") is True,
                     },
                 )
                 audit_event(

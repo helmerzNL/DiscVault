@@ -453,6 +453,21 @@ class NextProfileUiTests(unittest.TestCase):
             "profileLegacySecurity",
             "profileLegacyPasswordForm",
             "profileLegacyMfaStatus",
+            "profileLegacyMfaActions",
+            "profileLegacyMfaEnableButton",
+            "profileLegacyMfaSetup",
+            "profileLegacyMfaPasswordForm",
+            "profileLegacyMfaCurrentPassword",
+            "profileLegacyMfaTotpStep",
+            "profileLegacyMfaQr",
+            "profileLegacyMfaManualKey",
+            "profileLegacyMfaTotpForm",
+            "profileLegacyMfaCode",
+            "profileLegacyMfaRecoveryStep",
+            "profileLegacyMfaRecoveryCodes",
+            "profileLegacyMfaRecoveryAck",
+            "profileLegacyMfaFinishButton",
+            "profileLegacyMfaCancelButton",
             "profileRecoveryActiveCount",
             "profileRecoveryLastGenerated",
             "profileRecoveryCodes",
@@ -466,6 +481,14 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('id="profileSecurityMessage" aria-live="polite"', self.html)
         self.assertIn('id="profileRecoveryMessage" aria-live="polite"', self.html)
         self.assertIn(".profile-security-stats {", self.html)
+        self.assertIn("function renderProfileLegacyMfa()", self.html)
+        self.assertIn("const enabled = Boolean(credential.mfa_required) && enrolled;", self.html)
+        self.assertIn("function startProfileMfaEnrollment(event)", self.html)
+        self.assertIn("function verifyProfileMfaEnrollment(event)", self.html)
+        self.assertIn("function finishProfileMfaEnrollment()", self.html)
+        self.assertIn("/api/next/auth/legacy/mfa/enroll/start", self.html)
+        self.assertIn("/api/next/auth/legacy/mfa/setup/verify", self.html)
+        self.assertIn("/api/next/auth/legacy/recovery-codes/ack", self.html)
 
     def test_api_dashboard_uses_accessible_tabs_and_summary_cards(self):
         self.assertIn('class="profile-dashboard api-dashboard"', self.html)

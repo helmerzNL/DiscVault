@@ -8620,6 +8620,29 @@ def ui_preview_html(
     .profile-security-stat strong {
       overflow-wrap: anywhere;
     }
+    .profile-mfa-setup {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 76%, transparent);
+    }
+    .profile-mfa-setup > p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .profile-mfa-qr {
+      width: min(220px, 100%);
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px;
+    }
+    .profile-mfa-manual-key {
+      display: block;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
     .groups-dashboard {
       display: grid;
       gap: 16px;
@@ -15000,6 +15023,40 @@ def ui_preview_html(
                         <strong id="profileLegacyMfaStatus">-</strong>
                       </div>
                     </div>
+                    <div class="profile-action-row" id="profileLegacyMfaActions">
+                      <button type="button" class="primary-button" id="profileLegacyMfaEnableButton" data-next-i18n="legacyAuth.enableMfa">Enable 2FA</button>
+                    </div>
+                    <div class="profile-mfa-setup hidden" id="profileLegacyMfaSetup">
+                      <form class="profile-form" id="profileLegacyMfaPasswordForm">
+                        <p data-next-i18n="legacyAuth.confirmMfaPasswordHelp">Confirm your current password before setting up two-factor authentication.</p>
+                        <label for="profileLegacyMfaCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
+                          <input id="profileLegacyMfaCurrentPassword" type="password" autocomplete="current-password" required>
+                        </label>
+                        <button type="submit" class="primary-button" data-next-i18n="legacyAuth.startMfaSetup">Start 2FA setup</button>
+                      </form>
+                      <div class="hidden" id="profileLegacyMfaTotpStep">
+                        <p data-next-i18n="legacyAuth.enrollTotp">Scan the QR code, then enter the six-digit code.</p>
+                        <img class="profile-mfa-qr hidden" id="profileLegacyMfaQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
+                        <p><strong data-next-i18n="legacyAuth.manualKey">Manual key</strong></p>
+                        <code class="admin-code profile-mfa-manual-key" id="profileLegacyMfaManualKey"></code>
+                        <form class="profile-form" id="profileLegacyMfaTotpForm">
+                          <label for="profileLegacyMfaCode"><span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
+                            <input id="profileLegacyMfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required>
+                          </label>
+                          <button type="submit" class="primary-button" data-next-i18n="legacyAuth.verifyTotp">Verify authenticator</button>
+                        </form>
+                      </div>
+                      <div class="hidden" id="profileLegacyMfaRecoveryStep">
+                        <p data-next-i18n="legacyAuth.mfaRecoveryHelp">Save the replacement recovery codes before activating 2FA.</p>
+                        <div class="recovery-codes" id="profileLegacyMfaRecoveryCodes"></div>
+                        <label class="legacy-checkbox-row" for="profileLegacyMfaRecoveryAck">
+                          <input type="checkbox" id="profileLegacyMfaRecoveryAck">
+                          <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
+                        </label>
+                        <button type="button" class="primary-button" id="profileLegacyMfaFinishButton" data-next-i18n="legacyAuth.finishSetup">Finish setup</button>
+                      </div>
+                      <button type="button" class="secondary-button" id="profileLegacyMfaCancelButton" data-next-i18n="common.cancel">Cancel</button>
+                    </div>
                     <form class="profile-form" id="profileLegacyPasswordForm">
                       <label for="profileLegacyCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
                         <input id="profileLegacyCurrentPassword" type="password" autocomplete="current-password">
@@ -16125,6 +16182,7 @@ def ui_preview_html(
     let profileCredentials = [];
     let profileRecovery = {};
     let profileLegacy = {};
+    let profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
     let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
     let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all", category: "all", search: "", diagnostics: null, error: "", lastUrl: ""};
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
@@ -16861,6 +16919,11 @@ def ui_preview_html(
       const originMatches = !configuredOrigins.length || configuredOrigins.includes(window.location.origin.toLowerCase());
       return hostnameMatches && originMatches;
     }
+    function passkeyConfigurationGuidanceVisible() {
+      return !passkeyProcessAvailable()
+        && (Boolean(currentAuthStatus.passkey_configuration_valid)
+          || !Boolean(currentAuthStatus.request_host_is_local_ip));
+    }
     const APP_PERMISSION_GROUPS = {
       adminTabs: {
         access: ["security.toggle_auth", "security.manage_invite_only", "users.view", "users.invite", "users.manage_passkeys"],
@@ -17132,8 +17195,9 @@ def ui_preview_html(
       const reviewForm = document.getElementById("appReviewForm");
       const loginDescription = document.getElementById("appLoginDescription");
       const authGuidance = document.getElementById("appAuthGuidance");
-      authGuidance?.classList.toggle("hidden", passkeysAvailable);
-      if (!passkeysAvailable) {
+      const showAuthGuidance = passkeyConfigurationGuidanceVisible();
+      authGuidance?.classList.toggle("hidden", !showAuthGuidance);
+      if (showAuthGuidance) {
         const configurationValid = Boolean(currentAuthStatus.passkey_configuration_valid);
         const guidanceTitle = document.getElementById("appAuthGuidanceTitle");
         const guidanceBody = document.getElementById("appAuthGuidanceBody");
@@ -37347,6 +37411,7 @@ def ui_preview_html(
       if (removeAvatarButton) removeAvatarButton.disabled = !profile.avatarUrl;
       renderProfilePasskeys();
       renderProfileRecovery();
+      renderProfileLegacyMfa();
       renderProfileApiAccess();
       renderMemberGroups();
       renderContainerManager();
@@ -37587,6 +37652,195 @@ def ui_preview_html(
           </div>
         `;
       }).join("");
+    }
+    function setProfileLegacyMessage(message, tone) {
+      const node = document.getElementById("profileLegacyMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function resetProfileMfaEnrollment() {
+      profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
+      document.getElementById("profileLegacyMfaPasswordForm")?.reset();
+      document.getElementById("profileLegacyMfaTotpForm")?.reset();
+      const acknowledgement = document.getElementById("profileLegacyMfaRecoveryAck");
+      if (acknowledgement) acknowledgement.checked = false;
+      const qr = document.getElementById("profileLegacyMfaQr");
+      if (qr) {
+        qr.removeAttribute("src");
+        qr.classList.add("hidden");
+      }
+      const manualKey = document.getElementById("profileLegacyMfaManualKey");
+      if (manualKey) manualKey.textContent = "";
+      const recoveryCodes = document.getElementById("profileLegacyMfaRecoveryCodes");
+      if (recoveryCodes) recoveryCodes.replaceChildren();
+      renderProfileLegacyMfa();
+    }
+    function renderProfileLegacyMfa() {
+      const credential = profileLegacy.credential || {};
+      const enrolled = Boolean(credential.mfa_enrolled);
+      const enabled = Boolean(credential.mfa_required) && enrolled;
+      if (enabled && profileMfaEnrollment.stage) {
+        profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
+      }
+      const stage = profileMfaEnrollment.stage;
+      const canEnable = Boolean(profileLegacy.has_credential) && !enabled;
+      const status = document.getElementById("profileLegacyMfaStatus");
+      if (status) {
+        status.textContent = credential.mfa_required
+          ? (enabled ? tNext("legacyAuth.enabled", "Enabled") : tNext("legacyAuth.setupRequired", "Setup required"))
+          : tNext("legacyAuth.disabled", "Disabled");
+      }
+      document.getElementById("profileLegacyMfaActions")?.classList.toggle("hidden", !canEnable || Boolean(stage));
+      document.getElementById("profileLegacyMfaSetup")?.classList.toggle("hidden", !stage);
+      document.getElementById("profileLegacyMfaPasswordForm")?.classList.toggle("hidden", stage !== "password");
+      document.getElementById("profileLegacyMfaTotpStep")?.classList.toggle("hidden", stage !== "totp");
+      document.getElementById("profileLegacyMfaRecoveryStep")?.classList.toggle("hidden", stage !== "recovery");
+      document.querySelectorAll("#profileLegacyPasswordForm input, #profileLegacyPasswordForm button").forEach((control) => {
+        control.disabled = Boolean(stage);
+      });
+      const generateRecoveryButton = document.getElementById("profileGenerateRecoveryButton");
+      if (generateRecoveryButton) generateRecoveryButton.disabled = Boolean(stage);
+      const revokeRecoveryButton = document.getElementById("profileRevokeRecoveryButton");
+      if (revokeRecoveryButton) {
+        revokeRecoveryButton.disabled = Boolean(stage) || Number(profileRecovery.activeCount || 0) <= 0;
+      }
+    }
+    function openProfileMfaEnrollment() {
+      profileMfaEnrollment = {stage: "password", flowToken: "", recoveryCodes: []};
+      setProfileLegacyMessage("");
+      renderProfileLegacyMfa();
+      document.getElementById("profileLegacyMfaCurrentPassword")?.focus();
+    }
+    async function startProfileMfaEnrollment(event) {
+      event?.preventDefault();
+      const form = document.getElementById("profileLegacyMfaPasswordForm");
+      const button = form?.querySelector('button[type="submit"]');
+      const cancelButton = document.getElementById("profileLegacyMfaCancelButton");
+      const currentPassword = String(document.getElementById("profileLegacyMfaCurrentPassword")?.value || "");
+      if (!currentPassword) {
+        setProfileLegacyMessage(tNext("legacyAuth.currentPassword", "Current password"), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      if (cancelButton) cancelButton.disabled = true;
+      setProfileLegacyMessage(tNext("legacyAuth.stage.mfa_enrollment", "Set up your authenticator."));
+      try {
+        const payload = await authApiJson("/api/next/auth/legacy/mfa/enroll/start", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({current_password: currentPassword})
+        });
+        profileMfaEnrollment = {
+          stage: "totp",
+          flowToken: String(payload.flow_token || ""),
+          recoveryCodes: []
+        };
+        const qr = document.getElementById("profileLegacyMfaQr");
+        if (qr) {
+          qr.src = payload.qr_data_uri || "";
+          qr.alt = tNext("legacyAuth.qrAlt", "QR code for authenticator enrollment");
+          qr.classList.toggle("hidden", !payload.qr_data_uri);
+        }
+        const manualKey = document.getElementById("profileLegacyMfaManualKey");
+        if (manualKey) manualKey.textContent = payload.manual_key || "";
+        form?.reset();
+        renderProfileLegacyMfa();
+        setProfileLegacyMessage(tNext("legacyAuth.stage.mfa_enrollment", "Set up your authenticator."), "info");
+        document.getElementById("profileLegacyMfaCode")?.focus();
+      } catch (error) {
+        setProfileLegacyMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+        if (cancelButton) cancelButton.disabled = false;
+      }
+    }
+    async function verifyProfileMfaEnrollment(event) {
+      event?.preventDefault();
+      const form = document.getElementById("profileLegacyMfaTotpForm");
+      const button = form?.querySelector('button[type="submit"]');
+      const cancelButton = document.getElementById("profileLegacyMfaCancelButton");
+      const code = String(document.getElementById("profileLegacyMfaCode")?.value || "").trim();
+      if (!code) {
+        setProfileLegacyMessage(tNext("legacyAuth.totpPrompt", "Enter the six-digit code from your authenticator app."), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      if (cancelButton) cancelButton.disabled = true;
+      setProfileLegacyMessage(tNext("legacyAuth.verifyTotp", "Verify authenticator"));
+      try {
+        const payload = await authApiJson("/api/next/auth/legacy/mfa/setup/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({flow_token: profileMfaEnrollment.flowToken, code})
+        });
+        const codes = Array.isArray(payload.recovery_codes) ? payload.recovery_codes : [];
+        profileMfaEnrollment = {
+          stage: "recovery",
+          flowToken: String(payload.flow_token || ""),
+          recoveryCodes: codes
+        };
+        const codesNode = document.getElementById("profileLegacyMfaRecoveryCodes");
+        if (codesNode) {
+          codesNode.innerHTML = `
+            <strong>${escapeHtml(tNext("profile.recoveryCodesGenerated", "Save these recovery codes now. They will not be shown again."))}</strong>
+            <div class="recovery-code-grid">
+              ${codes.map((recoveryCode) => `<span class="recovery-code">${escapeHtml(recoveryCode)}</span>`).join("")}
+            </div>
+          `;
+        }
+        renderProfileLegacyMfa();
+        setProfileLegacyMessage(tNext("legacyAuth.stage.recovery_codes", "Save your recovery codes."), "info");
+      } catch (error) {
+        resetProfileMfaEnrollment();
+        setProfileLegacyMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+        if (cancelButton) cancelButton.disabled = false;
+      }
+    }
+    async function finishProfileMfaEnrollment() {
+      const button = document.getElementById("profileLegacyMfaFinishButton");
+      const cancelButton = document.getElementById("profileLegacyMfaCancelButton");
+      if (!document.getElementById("profileLegacyMfaRecoveryAck")?.checked) {
+        setProfileLegacyMessage(tNext("legacyAuth.saveCodesFirst", "Save and acknowledge the recovery codes first."), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      if (cancelButton) cancelButton.disabled = true;
+      setProfileLegacyMessage(tNext("legacyAuth.finishSetup", "Finish setup"));
+      try {
+        const payload = await authApiJson("/api/next/auth/legacy/recovery-codes/ack", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            flow_token: profileMfaEnrollment.flowToken,
+            acknowledged: true
+          })
+        });
+        if (payload.token) localStorage.setItem("dv_next_token", payload.token);
+        profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
+        await loadProfileDetails();
+        setProfileLegacyMessage(tNext("legacyAuth.mfaEnabled", "Two-factor authentication is enabled."), "good");
+      } catch (error) {
+        await loadProfileDetails();
+        if (profileLegacy.credential?.mfa_enrolled) {
+          profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
+          renderProfileLegacyMfa();
+          setProfileLegacyMessage(tNext("legacyAuth.mfaEnabled", "Two-factor authentication is enabled."), "good");
+        } else {
+          setProfileLegacyMessage(error.message || String(error), "bad");
+        }
+      } finally {
+        if (button) button.disabled = false;
+        if (cancelButton) cancelButton.disabled = false;
+      }
+    }
+    async function cancelProfileMfaEnrollment() {
+      const refreshRecovery = profileMfaEnrollment.stage === "recovery";
+      resetProfileMfaEnrollment();
+      setProfileLegacyMessage("");
+      if (refreshRecovery) await loadProfileDetails();
     }
     function setProfileRecoveryMessage(message, tone) {
       const node = document.getElementById("profileRecoveryMessage");
@@ -37946,11 +38200,6 @@ def ui_preview_html(
         profileApiAccess = payload.apiAccess || profileApiAccess;
         if (currentAuthStatus.legacy_auth_enabled) {
           profileLegacy = await authApiJson("/api/next/auth/legacy/me").catch(() => ({}));
-          const credential = profileLegacy.credential || {};
-          const mfaStatus = document.getElementById("profileLegacyMfaStatus");
-          if (mfaStatus) mfaStatus.textContent = credential.mfa_required
-            ? (credential.mfa_enrolled ? tNext("legacyAuth.enabled", "Enabled") : tNext("legacyAuth.setupRequired", "Setup required"))
-            : tNext("legacyAuth.disabled", "Disabled");
         }
         renderProfile();
       } catch (error) {
@@ -39332,6 +39581,11 @@ def ui_preview_html(
         if (deleteButton) deleteProfilePasskey(deleteButton.dataset.profilePasskeyDelete);
       });
       document.getElementById("profileLegacyPasswordForm")?.addEventListener("submit", (event) => changeProfileLegacyPassword(event));
+      document.getElementById("profileLegacyMfaEnableButton")?.addEventListener("click", () => openProfileMfaEnrollment());
+      document.getElementById("profileLegacyMfaPasswordForm")?.addEventListener("submit", (event) => startProfileMfaEnrollment(event));
+      document.getElementById("profileLegacyMfaTotpForm")?.addEventListener("submit", (event) => verifyProfileMfaEnrollment(event));
+      document.getElementById("profileLegacyMfaFinishButton")?.addEventListener("click", () => finishProfileMfaEnrollment());
+      document.getElementById("profileLegacyMfaCancelButton")?.addEventListener("click", () => cancelProfileMfaEnrollment());
       document.getElementById("locationQrCloseButton")?.addEventListener("click", () => closeLocationQr());
       document.getElementById("locationQrCopyButton")?.addEventListener("click", () => copyLocationQrLink());
       document.getElementById("locationQrPrintButton")?.addEventListener("click", () => {
