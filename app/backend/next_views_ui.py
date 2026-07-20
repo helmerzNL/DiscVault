@@ -8987,6 +8987,62 @@ def ui_preview_html(
       display: grid;
       gap: 16px;
     }
+    .app-admin-dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+    .app-admin-dashboard-grid > .full {
+      grid-column: 1 / -1;
+    }
+    .app-admin-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .app-admin-summary-item {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .app-admin-summary-item span {
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 700;
+    }
+    .app-admin-summary-item strong {
+      overflow-wrap: anywhere;
+    }
+    .app-admin-dashboard .profile-passkey-list {
+      min-width: 0;
+    }
+    .app-admin-entity-card {
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+    }
+    .app-admin-entity-main {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .app-admin-legacy-controls {
+      grid-template-columns: 1fr;
+      margin-top: 2px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .app-admin-summary-grid.compact {
+      grid-template-columns: 1fr;
+    }
+    .app-admin-dashboard .admin-code {
+      overflow-wrap: anywhere;
+    }
     .profile-card {
       display: grid;
       gap: 12px;
@@ -11544,7 +11600,8 @@ def ui_preview_html(
       .member-group-body,
       .structure-workspace,
       .profile-security-grid,
-      .profile-about-grid {
+      .profile-about-grid,
+      .app-admin-dashboard-grid {
         grid-template-columns: 1fr;
       }
       .profile-security-card.passkeys,
@@ -11791,7 +11848,8 @@ def ui_preview_html(
         width: 100%;
       }
       .profile-security-stats,
-      .profile-api-summary-grid {
+      .profile-api-summary-grid,
+      .app-admin-summary-grid {
         grid-template-columns: 1fr;
       }
       .profile-add-passkey {
@@ -14573,115 +14631,188 @@ def ui_preview_html(
             <button type="button" class="secondary-button" id="appAdminRefreshButton" data-next-i18n="common.refresh">Refresh</button>
           </div>
         </section>
-        <nav class="app-admin-submenu detail-submenu" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
-          <button type="button" class="active" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
-          <button type="button" data-app-admin-tab="users" data-next-i18n="appAdmin.tabPeople">Users & groups</button>
-          <button type="button" data-app-admin-tab="roles" data-next-i18n="appAdmin.tabRoles">Roles</button>
-          <button type="button" data-app-admin-tab="operations" data-next-i18n="appAdmin.tabOperations">Operations</button>
-          <button type="button" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
-          <button type="button" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
-          <button type="button" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
-          <button type="button" data-app-admin-tab="backup" data-next-i18n="appAdmin.tabBackup">Backup</button>
-          <button type="button" data-app-admin-tab="audit" data-next-i18n="appAdmin.tabAudit">Audit</button>
+        <nav class="app-admin-submenu detail-submenu" role="tablist" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
+          <button type="button" class="active" id="appAdminTabAccess" role="tab" aria-controls="appAdminPanelAccess" aria-selected="true" tabindex="0" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
+          <button type="button" id="appAdminTabUsers" role="tab" aria-controls="appAdminPanelUsers" aria-selected="false" tabindex="-1" data-app-admin-tab="users" data-next-i18n="appAdmin.tabPeople">Users & groups</button>
+          <button type="button" id="appAdminTabRoles" role="tab" aria-controls="appAdminPanelRoles" aria-selected="false" tabindex="-1" data-app-admin-tab="roles" data-next-i18n="appAdmin.tabRoles">Roles</button>
+          <button type="button" id="appAdminTabOperations" role="tab" aria-controls="appAdminPanelOperations" aria-selected="false" tabindex="-1" data-app-admin-tab="operations" data-next-i18n="appAdmin.tabOperations">Operations</button>
+          <button type="button" id="appAdminTabPlugins" role="tab" aria-controls="appAdminPanelPlugins" aria-selected="false" tabindex="-1" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
+          <button type="button" id="appAdminTabDigital" role="tab" aria-controls="appAdminPanelDigital" aria-selected="false" tabindex="-1" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
+          <button type="button" id="appAdminTabMetadata" role="tab" aria-controls="appAdminPanelMetadata" aria-selected="false" tabindex="-1" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
+          <button type="button" id="appAdminTabBackup" role="tab" aria-controls="appAdminPanelBackup" aria-selected="false" tabindex="-1" data-app-admin-tab="backup" data-next-i18n="appAdmin.tabBackup">Backup</button>
+          <button type="button" id="appAdminTabAudit" role="tab" aria-controls="appAdminPanelAudit" aria-selected="false" tabindex="-1" data-app-admin-tab="audit" data-next-i18n="appAdmin.tabAudit">Audit</button>
         </nav>
-        <section class="app-admin-panel active" data-app-admin-panel="access">
-          <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.security">Security</h3>
-              <p data-next-i18n="appAdmin.registrationHelp">Choose whether new users need an invite or can create an account themselves.</p>
-              <div class="profile-meta">
-                <div class="profile-meta-row">
+        <section class="app-admin-panel active" id="appAdminPanelAccess" role="tabpanel" aria-labelledby="appAdminTabAccess" aria-hidden="false" tabindex="0" data-app-admin-panel="access">
+          <div class="profile-dashboard app-admin-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("security") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="appAdmin.tabAccess">Access</h4>
+                <p data-next-i18n="appAdmin.registrationHelp">Choose whether new users need an invite or can create an account themselves.</p>
+              </div>
+            </header>
+            <div class="app-admin-dashboard-grid">
+              <section class="profile-dashboard-card primary" data-admin-dashboard-card="access-overview">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                  <div>
+                    <h4 data-next-i18n="appAdmin.security">Security</h4>
+                    <p data-next-i18n="appAdmin.registrationHelp">Choose whether new users need an invite or can create an account themselves.</p>
+                  </div>
+                  </div>
+                </div>
+                <div class="app-admin-summary-grid">
+                  <div class="app-admin-summary-item">
                   <span data-next-i18n="appAdmin.currentMode">Current mode</span>
                   <strong id="appAdminRegistrationMode">-</strong>
-                </div>
-                <div class="profile-meta-row">
+                  </div>
+                  <div class="app-admin-summary-item">
                   <span data-next-i18n="profile.users">Users</span>
                   <strong id="appAdminUserCount">-</strong>
-                </div>
-                <div class="profile-meta-row">
+                  </div>
+                  <div class="app-admin-summary-item">
                   <span data-next-i18n="profile.credentials">Passkeys</span>
                   <strong id="appAdminCredentialCount">-</strong>
+                  </div>
                 </div>
-              </div>
-              <div class="profile-action-row">
-                <button type="button" class="secondary-button" data-app-admin-registration-mode="invite" data-next-i18n="appAdmin.inviteOnly">Invite-only login</button>
-                <button type="button" class="secondary-button" data-app-admin-registration-mode="public" data-next-i18n="appAdmin.publicRegistration">Public registration</button>
-              </div>
-              <div class="login-message" id="appAdminSecurityMessage"></div>
-            </div>
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.createInvite">Create invite</h3>
-              <p data-next-i18n="appAdmin.createInviteHelp">Generate a one-time invite code for a new user.</p>
-              <form class="profile-form" id="appAdminInviteForm">
-                <label for="appAdminInviteUsername">
+                <div class="profile-action-row">
+                  <button type="button" class="secondary-button" data-app-admin-registration-mode="invite" data-next-i18n="appAdmin.inviteOnly">Invite-only login</button>
+                  <button type="button" class="secondary-button" data-app-admin-registration-mode="public" data-next-i18n="appAdmin.publicRegistration">Public registration</button>
+                </div>
+                <div class="login-message" id="appAdminSecurityMessage" aria-live="polite"></div>
+              </section>
+              <section class="profile-dashboard-card" data-admin-dashboard-card="invite-create">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                  <div>
+                    <h4 data-next-i18n="appAdmin.createInvite">Create invite</h4>
+                    <p data-next-i18n="appAdmin.createInviteHelp">Generate a one-time invite code for a new user.</p>
+                  </div>
+                  </div>
+                </div>
+                <form class="profile-form" id="appAdminInviteForm">
+                  <label for="appAdminInviteUsername">
                   <span data-next-i18n="profile.username">Username</span>
                   <input id="appAdminInviteUsername" autocomplete="off" maxlength="80">
-                </label>
-                <div class="profile-form-actions">
+                  </label>
+                  <div class="profile-form-actions">
                   <button type="submit" class="secondary-button" id="appAdminCreateInviteButton" data-next-i18n="appAdmin.createInviteButton">Create invite</button>
+                  </div>
+                </form>
+                <div class="admin-code hidden" id="appAdminInviteCodeOutput"></div>
+                <div class="login-message" id="appAdminInviteMessage" aria-live="polite"></div>
+              </section>
+              <section class="profile-dashboard-card full" data-admin-dashboard-card="active-invites">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("notifications") + """</span>
+                  <div><h4 data-next-i18n="appAdmin.activeInvites">Active invites</h4></div>
+                  </div>
                 </div>
-              </form>
-              <div class="admin-code hidden" id="appAdminInviteCodeOutput"></div>
-              <div class="login-message" id="appAdminInviteMessage"></div>
+                <div class="profile-passkey-list" id="appAdminInvitesList"></div>
+              </section>
+              <section class="profile-dashboard-card full" data-admin-dashboard-card="passkeys">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("devices") + """</span>
+                  <div><h4 data-next-i18n="profile.credentials">Passkeys</h4></div>
+                  </div>
+                </div>
+                <div class="profile-passkey-list" id="appAdminCredentialsList"></div>
+              </section>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.activeInvites">Active invites</h3>
-              <div class="profile-passkey-list" id="appAdminInvitesList"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="profile.credentials">Passkeys</h3>
-              <div class="profile-passkey-list" id="appAdminCredentialsList"></div>
-            </div>
-          </section>
+          </div>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="users">
-          <section class="profile-grid">
-            <div class="detail-card profile-card full" id="appAdminLegacyCard">
-              <h3 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h3>
-              <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
-              <div class="profile-meta-row"><span data-next-i18n="legacyAuth.status">Status</span><strong id="appAdminLegacyStatus">-</strong></div>
-              <div class="profile-action-row">
-                <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
-                <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
+        <section class="app-admin-panel" id="appAdminPanelUsers" role="tabpanel" aria-labelledby="appAdminTabUsers" aria-hidden="true" tabindex="0" data-app-admin-panel="users">
+          <div class="profile-dashboard app-admin-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("groups") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="appAdmin.tabPeople">Users & groups</h4>
+                <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
               </div>
-              <div class="login-message" id="appAdminLegacyMessage"></div>
-            </div>
-            <div class="detail-card profile-card full" id="appAdminLegacyCreateCard">
-              <h3 data-next-i18n="legacyAuth.createUser">Create password user</h3>
-              <form class="profile-form" id="appAdminLegacyUserForm">
-                <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
-                <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
-                <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
-                <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
-                <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
-                <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
-                <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
-              </form>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h3>
-              <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
-              <div class="profile-passkey-list" id="appAdminUsersList"></div>
-              <div class="login-message" id="appAdminUsersMessage"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.groups">Groups</h3>
-              <p data-next-i18n="appAdmin.groupsHelp">Create media groups and manage which users are members.</p>
-              <form class="profile-form" id="appAdminGroupForm">
-                <label for="appAdminGroupName">
+            </header>
+            <div class="app-admin-dashboard-grid">
+              <section class="profile-dashboard-card primary" id="appAdminLegacyCard" data-admin-dashboard-card="legacy-auth">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                  <div>
+                    <h4 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h4>
+                    <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
+                  </div>
+                  </div>
+                </div>
+                <div class="app-admin-summary-grid compact">
+                  <div class="app-admin-summary-item">
+                  <span data-next-i18n="legacyAuth.status">Status</span>
+                  <strong id="appAdminLegacyStatus">-</strong>
+                  </div>
+                </div>
+                <div class="profile-action-row">
+                  <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
+                  <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
+                </div>
+                <div class="login-message" id="appAdminLegacyMessage" aria-live="polite"></div>
+              </section>
+              <section class="profile-dashboard-card" id="appAdminLegacyCreateCard" data-admin-dashboard-card="legacy-user-create">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                  <div><h4 data-next-i18n="legacyAuth.createUser">Create password user</h4></div>
+                  </div>
+                </div>
+                <form class="profile-form" id="appAdminLegacyUserForm">
+                  <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
+                  <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
+                  <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
+                  <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
+                  <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
+                  <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
+                  <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
+                </form>
+              </section>
+              <section class="profile-dashboard-card full" data-admin-dashboard-card="users">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                  <div>
+                    <h4 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h4>
+                    <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
+                  </div>
+                  </div>
+                </div>
+                <div class="profile-passkey-list" id="appAdminUsersList"></div>
+                <div class="login-message" id="appAdminUsersMessage" aria-live="polite"></div>
+              </section>
+              <section class="profile-dashboard-card full" data-admin-dashboard-card="groups">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
+                  <div>
+                    <h4 data-next-i18n="appAdmin.groups">Groups</h4>
+                    <p data-next-i18n="appAdmin.groupsHelp">Create media groups and manage which users are members.</p>
+                  </div>
+                  </div>
+                </div>
+                <form class="profile-form" id="appAdminGroupForm">
+                  <label for="appAdminGroupName">
                   <span data-next-i18n="appAdmin.groupName">Group name</span>
                   <input id="appAdminGroupName" autocomplete="off" maxlength="120">
-                </label>
-                <div class="profile-form-actions">
+                  </label>
+                  <div class="profile-form-actions">
                   <button type="submit" class="secondary-button" data-next-i18n="appAdmin.createGroupButton">Create group</button>
-                </div>
-              </form>
-              <div class="profile-passkey-list" id="appAdminGroupsList"></div>
-              <div class="login-message" id="appAdminGroupsMessage"></div>
+                  </div>
+                </form>
+                <div class="profile-passkey-list" id="appAdminGroupsList"></div>
+                <div class="login-message" id="appAdminGroupsMessage" aria-live="polite"></div>
+              </section>
             </div>
-          </section>
+          </div>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="roles">
+        <section class="app-admin-panel" id="appAdminPanelRoles" role="tabpanel" aria-labelledby="appAdminTabRoles" aria-hidden="true" tabindex="0" data-app-admin-panel="roles">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.rbacMode">RBAC mode</h3>
@@ -14783,7 +14914,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="operations">
+        <section class="app-admin-panel" id="appAdminPanelOperations" role="tabpanel" aria-labelledby="appAdminTabOperations" aria-hidden="true" tabindex="0" data-app-admin-panel="operations">
           <section class="profile-grid">
             <div class="detail-card profile-card full">
               <div class="profile-passkey-head">
@@ -14837,7 +14968,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="plugins">
+        <section class="app-admin-panel" id="appAdminPanelPlugins" role="tabpanel" aria-labelledby="appAdminTabPlugins" aria-hidden="true" tabindex="0" data-app-admin-panel="plugins">
           <section class="profile-grid">
             <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.plugins">Plugins</h3>
@@ -14915,7 +15046,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="digital">
+        <section class="app-admin-panel" id="appAdminPanelDigital" role="tabpanel" aria-labelledby="appAdminTabDigital" aria-hidden="true" tabindex="0" data-app-admin-panel="digital">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.digitalOperations">Digital sources</h3>
@@ -14937,7 +15068,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="metadata">
+        <section class="app-admin-panel" id="appAdminPanelMetadata" role="tabpanel" aria-labelledby="appAdminTabMetadata" aria-hidden="true" tabindex="0" data-app-admin-panel="metadata">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.metadataOperations">Metadata</h3>
@@ -14977,7 +15108,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="backup">
+        <section class="app-admin-panel" id="appAdminPanelBackup" role="tabpanel" aria-labelledby="appAdminTabBackup" aria-hidden="true" tabindex="0" data-app-admin-panel="backup">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.backupOperations">Backup & restore</h3>
@@ -15095,7 +15226,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="audit">
+        <section class="app-admin-panel" id="appAdminPanelAudit" role="tabpanel" aria-labelledby="appAdminTabAudit" aria-hidden="true" tabindex="0" data-app-admin-panel="audit">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.auditLog">Audit log</h3>
@@ -16291,10 +16422,29 @@ def ui_preview_html(
         button.classList.toggle("hidden", !canUseAdminTab(button.dataset.appAdminTab));
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
       });
       document.querySelectorAll("[data-app-admin-panel]").forEach((panel) => {
-        panel.classList.toggle("active", panel.dataset.appAdminPanel === appAdmin.activeTab);
+        const active = panel.dataset.appAdminPanel === appAdmin.activeTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
+    }
+    function handleAppAdminTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-tab]")]
+        .filter((item) => !item.classList.contains("hidden"));
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminTab(nextButton.dataset.appAdminTab);
+      nextButton.focus();
     }
     function setAppAdminPluginTab(tab) {
       const allowed = ["registry", "packages", "jobs"];
@@ -18431,8 +18581,8 @@ def ui_preview_html(
           const disabled = user.status !== "active";
           const roleLocked = user.role === "owner";
           return `
-            <div class="profile-passkey ${disabled ? "disabled" : ""}">
-              <div>
+            <article class="profile-passkey app-admin-entity-card app-admin-user-card ${disabled ? "disabled" : ""}">
+              <div class="app-admin-entity-main">
                 <strong>${escapeHtml(user.display_name || user.username)}</strong>
                 <div class="profile-passkey-meta">
                   ${escapeHtml(user.username || "-")}
@@ -18448,7 +18598,7 @@ def ui_preview_html(
                 ${canAssignRoles ? `<select data-app-admin-user-role="${escapeHtml(user.id)}" ${roleLocked ? "disabled" : ""}>${appAdminRoleOptions(user.role)}</select>` : ""}
                 ${roleLocked || !canDisableUsers ? "" : `<button type="button" class="secondary-button" data-app-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${escapeHtml(disabled ? tNext("appAdmin.enableUser", "Enable") : tNext("appAdmin.disableUser", "Disable"))}</button>`}
               </div>
-              ${legacy.available ? `<div class="profile-add-passkey">
+              ${legacy.available ? `<div class="profile-add-passkey app-admin-legacy-controls">
                 <input type="password" minlength="15" autocomplete="new-password" data-app-admin-legacy-password="${escapeHtml(user.id)}" placeholder="${escapeHtml(tNext("legacyAuth.temporaryPassword", "Temporary password"))}">
                 <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-mfa="${escapeHtml(user.id)}" ${user.legacy_mfa_required !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.requireMfa", "Require TOTP MFA"))}</label>
                 <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
@@ -18456,7 +18606,7 @@ def ui_preview_html(
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button" data-app-admin-legacy-policy="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.savePolicy", "Save policy"))}</button>` : ""}
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button danger" data-app-admin-legacy-remove="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.removePassword", "Remove password"))}</button>` : ""}
               </div>` : ""}
-            </div>
+            </article>
           `;
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noUsers", "No users found."))}</div>`;
       }
@@ -18467,8 +18617,8 @@ def ui_preview_html(
           const members = group.members || [];
           const userOptions = appAdminUserOptions("");
           return `
-            <div class="profile-passkey admin-group-row">
-              <div>
+            <article class="profile-passkey app-admin-entity-card admin-group-row">
+              <div class="app-admin-entity-main">
                 <strong>${escapeHtml(group.name || tNext("common.untitled", "Untitled"))}</strong>
                 <div class="profile-passkey-meta">
                   ${escapeHtml(group.public_id || group.id)}
@@ -18476,7 +18626,7 @@ def ui_preview_html(
                   ${escapeHtml(tNext("appAdmin.members", "Members"))}: ${escapeHtml(group.member_count ?? members.length)}
                   &middot;
                   ${escapeHtml(tNext("collection.movies", "Movies"))}: ${escapeHtml(group.movie_count ?? 0)}
-                </div>
+                </article>
                 <div class="admin-member-cloud">
                   ${members.length ? members.map((member) => `
                     <span class="tag ${member.role === "manager" ? "good" : ""}">
@@ -18502,14 +18652,14 @@ def ui_preview_html(
         invitesList.innerHTML = invites.length ? invites.map((invite) => {
           const used = !!invite.used_at;
           return `
-            <div class="profile-passkey ${used ? "disabled" : ""}">
-              <div>
+            <article class="profile-passkey app-admin-entity-card app-admin-invite-card ${used ? "disabled" : ""}">
+              <div class="app-admin-entity-main">
                 <strong>${escapeHtml(invite.username || "-")}</strong>
                 <div class="profile-passkey-meta">
                   ${used ? escapeHtml(tNext("appAdmin.inviteUsed", "Used")) : escapeHtml(tNext("appAdmin.inviteActive", "Active"))}
                   &middot;
                   ${escapeHtml(tNext("appAdmin.expires", "Expires"))}: ${escapeHtml(shortDateTime(invite.expires_at))}
-                </div>
+                </article>
               </div>
               ${used ? "" : `<button type="button" class="secondary-button" data-app-admin-invite-delete="${escapeHtml(invite.id)}">${escapeHtml(tNext("appAdmin.deleteInvite", "Delete"))}</button>`}
             </div>
@@ -18520,8 +18670,8 @@ def ui_preview_html(
       if (credentialsList) {
         const credentials = appAdmin.credentials || [];
         credentialsList.innerHTML = credentials.length ? credentials.map((credential) => `
-          <div class="profile-passkey">
-            <div>
+          <article class="profile-passkey app-admin-entity-card app-admin-passkey-card">
+            <div class="app-admin-entity-main">
               <strong>${escapeHtml(credential.credential_name || tNext("auth.passkey", "Passkey"))}</strong>
               <div class="profile-passkey-meta">
                 ${escapeHtml(credential.username || "-")}
@@ -18529,7 +18679,7 @@ def ui_preview_html(
                 ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(credential.created_at))}
                 &middot;
                 ${escapeHtml(tNext("profile.lastUsed", "Last used"))}: ${escapeHtml(shortDateTime(credential.last_used_at))}
-              </div>
+              </article>
             </div>
           </div>
         `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPasskeys", "No passkeys found."))}</div>`;
@@ -37319,6 +37469,7 @@ def ui_preview_html(
       document.getElementById("appAdminDebugButton")?.addEventListener("click", () => setAppDebugMode(!appDebugMode));
       document.querySelectorAll("[data-app-admin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminTab(button.dataset.appAdminTab));
+        button.addEventListener("keydown", (event) => handleAppAdminTabKeydown(button, event));
       });
       document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminPluginTab(button.dataset.appAdminPluginTab));
