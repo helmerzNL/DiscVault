@@ -9095,6 +9095,23 @@ def ui_preview_html(
     .app-admin-dashboard-grid > .full {
       grid-column: 1 / -1;
     }
+    .app-admin-people-tabs,
+    .app-admin-roles-tabs {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .app-admin-roles-tabs {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .app-admin-people-panel,
+    .app-admin-roles-panel {
+      display: none;
+      min-width: 0;
+    }
+    .app-admin-people-panel.active,
+    .app-admin-roles-panel.active {
+      display: grid;
+      gap: 14px;
+    }
     .app-admin-summary-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -11934,7 +11951,9 @@ def ui_preview_html(
         height: 40px;
       }
       .profile-dashboard-tabs,
-      .profile-api-submenu {
+      .profile-api-submenu,
+      .app-admin-people-tabs,
+      .app-admin-roles-tabs {
         grid-template-columns: repeat(4, minmax(52px, 1fr));
         gap: 6px;
         width: 100%;
@@ -11942,7 +11961,8 @@ def ui_preview_html(
         padding: 6px;
         overflow: visible;
       }
-      .profile-api-submenu {
+      .profile-api-submenu,
+      .app-admin-people-tabs {
         grid-template-columns: repeat(3, minmax(52px, 1fr));
       }
       .profile-dashboard-tabs button,
@@ -14917,46 +14937,72 @@ def ui_preview_html(
                 <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
               </div>
             </header>
-            <div class="app-admin-dashboard-grid">
-              <section class="profile-dashboard-card primary" id="appAdminLegacyCard" data-admin-dashboard-card="legacy-auth">
-                <div class="profile-dashboard-card-head">
-                  <div class="profile-dashboard-card-title">
-                  <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
-                  <div>
-                    <h4 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h4>
-                    <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
+            <nav class="detail-submenu profile-dashboard-tabs app-admin-people-tabs" role="tablist" aria-label="Users and groups sections" data-next-i18n-aria="appAdmin.tabPeople">
+              <button type="button" class="active" id="appAdminUsersTabSettings" role="tab" aria-selected="true" aria-controls="appAdminUsersPanelSettings" tabindex="0" data-app-admin-users-tab="settings">""" + nav_icon("preferences") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.peopleTabSettingsCreate">Settings / Create</span></button>
+              <button type="button" id="appAdminUsersTabUsers" role="tab" aria-selected="false" aria-controls="appAdminUsersPanelUsers" tabindex="-1" data-app-admin-users-tab="users">""" + nav_icon("profile") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.tabUsers">Users</span></button>
+              <button type="button" id="appAdminUsersTabGroups" role="tab" aria-selected="false" aria-controls="appAdminUsersPanelGroups" tabindex="-1" data-app-admin-users-tab="groups">""" + nav_icon("groups") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.groups">Groups</span></button>
+            </nav>
+            <div class="app-admin-people-panel active" id="appAdminUsersPanelSettings" role="tabpanel" aria-labelledby="appAdminUsersTabSettings" aria-hidden="false" data-app-admin-users-panel="settings">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary" id="appAdminLegacyCard" data-admin-dashboard-card="legacy-auth">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                    <div>
+                      <h4 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h4>
+                      <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
+                    </div>
+                    </div>
                   </div>
+                  <div class="app-admin-summary-grid compact">
+                    <div class="app-admin-summary-item">
+                    <span data-next-i18n="legacyAuth.status">Status</span>
+                    <strong id="appAdminLegacyStatus">-</strong>
+                    </div>
                   </div>
-                </div>
-                <div class="app-admin-summary-grid compact">
-                  <div class="app-admin-summary-item">
-                  <span data-next-i18n="legacyAuth.status">Status</span>
-                  <strong id="appAdminLegacyStatus">-</strong>
+                  <div class="profile-action-row">
+                    <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
+                    <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
                   </div>
-                </div>
-                <div class="profile-action-row">
-                  <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
-                  <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
-                </div>
-                <div class="login-message" id="appAdminLegacyMessage" aria-live="polite"></div>
-              </section>
-              <section class="profile-dashboard-card" id="appAdminLegacyCreateCard" data-admin-dashboard-card="legacy-user-create">
-                <div class="profile-dashboard-card-head">
-                  <div class="profile-dashboard-card-title">
-                  <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
-                  <div><h4 data-next-i18n="legacyAuth.createUser">Create password user</h4></div>
+                  <div class="login-message" id="appAdminLegacyMessage" aria-live="polite"></div>
+                </section>
+                <section class="profile-dashboard-card" id="appAdminLegacyCreateCard" data-admin-dashboard-card="legacy-user-create">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                    <div><h4 data-next-i18n="legacyAuth.createUser">Create password user</h4></div>
+                    </div>
                   </div>
-                </div>
-                <form class="profile-form" id="appAdminLegacyUserForm">
-                  <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
-                  <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
-                  <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
-                  <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
-                  <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
-                  <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
-                  <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
-                </form>
-              </section>
+                  <form class="profile-form" id="appAdminLegacyUserForm">
+                    <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
+                    <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
+                    <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
+                    <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
+                    <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
+                    <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
+                    <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
+                  </form>
+                </section>
+                <section class="profile-dashboard-card full" id="appAdminGroupCreateCard" data-admin-dashboard-card="group-create">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
+                    <div><h4 data-next-i18n="appAdmin.createGroupButton">Create group</h4></div>
+                    </div>
+                  </div>
+                  <form class="profile-form" id="appAdminGroupForm">
+                    <label for="appAdminGroupName">
+                    <span data-next-i18n="appAdmin.groupName">Group name</span>
+                    <input id="appAdminGroupName" autocomplete="off" maxlength="120">
+                    </label>
+                    <div class="profile-form-actions">
+                    <button type="submit" class="secondary-button" data-next-i18n="appAdmin.createGroupButton">Create group</button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            </div>
+            <div class="app-admin-people-panel" id="appAdminUsersPanelUsers" role="tabpanel" aria-labelledby="appAdminUsersTabUsers" aria-hidden="true" data-app-admin-users-panel="users">
               <section class="profile-dashboard-card full" data-admin-dashboard-card="users">
                 <div class="profile-dashboard-card-head">
                   <div class="profile-dashboard-card-title">
@@ -14970,6 +15016,8 @@ def ui_preview_html(
                 <div class="profile-passkey-list" id="appAdminUsersList"></div>
                 <div class="login-message" id="appAdminUsersMessage" aria-live="polite"></div>
               </section>
+            </div>
+            <div class="app-admin-people-panel" id="appAdminUsersPanelGroups" role="tabpanel" aria-labelledby="appAdminUsersTabGroups" aria-hidden="true" data-app-admin-users-panel="groups">
               <section class="profile-dashboard-card full" data-admin-dashboard-card="groups">
                 <div class="profile-dashboard-card-head">
                   <div class="profile-dashboard-card-title">
@@ -14980,15 +15028,6 @@ def ui_preview_html(
                   </div>
                   </div>
                 </div>
-                <form class="profile-form" id="appAdminGroupForm">
-                  <label for="appAdminGroupName">
-                  <span data-next-i18n="appAdmin.groupName">Group name</span>
-                  <input id="appAdminGroupName" autocomplete="off" maxlength="120">
-                  </label>
-                  <div class="profile-form-actions">
-                  <button type="submit" class="secondary-button" data-next-i18n="appAdmin.createGroupButton">Create group</button>
-                  </div>
-                </form>
                 <div class="profile-passkey-list" id="appAdminGroupsList"></div>
                 <div class="login-message" id="appAdminGroupsMessage" aria-live="polite"></div>
               </section>
@@ -14996,89 +15035,132 @@ def ui_preview_html(
           </div>
         </section>
         <section class="app-admin-panel" id="appAdminPanelRoles" role="tabpanel" aria-labelledby="appAdminTabRoles" aria-hidden="true" tabindex="0" data-app-admin-panel="roles">
-          <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.rbacMode">RBAC mode</h3>
-              <p data-next-i18n="appAdmin.rbacModeHelp">Basic keeps DiscVault roles simple. Advanced unlocks custom roles and exact permission sets.</p>
-              <div class="profile-meta">
-                <div class="profile-meta-row">
-                  <span data-next-i18n="appAdmin.currentMode">Current mode</span>
-                  <strong id="appAdminRbacMode">-</strong>
-                </div>
-                <div class="profile-meta-row">
-                  <span data-next-i18n="appAdmin.permissionCount">Permissions</span>
-                  <strong id="appAdminPermissionCount">-</strong>
-                </div>
-                <div class="profile-meta-row">
-                  <span data-next-i18n="appAdmin.customRoleCount">Custom roles</span>
-                  <strong id="appAdminCustomRoleCount">-</strong>
-                </div>
+          <div class="profile-dashboard app-admin-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("security") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="appAdmin.tabRoles">Roles</h4>
+                <p data-next-i18n="appAdmin.rbacModeHelp">Basic keeps DiscVault roles simple. Advanced unlocks custom roles and exact permission sets.</p>
               </div>
-              <div class="app-admin-rbac-mode">
-                <button type="button" class="secondary-button" id="appAdminRbacBasicButton" data-app-admin-rbac-mode="basic" data-next-i18n="appAdmin.basicMode">Basic</button>
-                <button type="button" class="secondary-button" id="appAdminRbacAdvancedButton" data-app-admin-rbac-mode="advanced" data-next-i18n="appAdmin.advancedMode">Advanced</button>
+            </header>
+            <nav class="detail-submenu profile-dashboard-tabs app-admin-roles-tabs" role="tablist" aria-label="Role management sections" data-next-i18n-aria="appAdmin.tabRoles">
+              <button type="button" class="active" id="appAdminRolesTabOverview" role="tab" aria-selected="true" aria-controls="appAdminRolesPanelOverview" tabindex="0" data-app-admin-roles-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+              <button type="button" id="appAdminRolesTabRoles" role="tab" aria-selected="false" aria-controls="appAdminRolesPanelRoles" tabindex="-1" data-app-admin-roles-tab="roles">""" + nav_icon("groups") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.roles">Roles</span></button>
+              <button type="button" id="appAdminRolesTabPermissions" role="tab" aria-selected="false" aria-controls="appAdminRolesPanelPermissions" tabindex="-1" data-app-admin-roles-tab="permissions">""" + nav_icon("security") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabPermissions">Permissions</span></button>
+              <button type="button" id="appAdminRolesTabSimulator" role="tab" aria-selected="false" aria-controls="appAdminRolesPanelSimulator" tabindex="-1" data-app-admin-roles-tab="simulator">""" + nav_icon("discover") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.roleSimulator">Simulator</span></button>
+            </nav>
+            <div class="app-admin-roles-panel active" id="appAdminRolesPanelOverview" role="tabpanel" aria-labelledby="appAdminRolesTabOverview" aria-hidden="false" data-app-admin-roles-panel="overview">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary full">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.rbacMode">RBAC mode</h4>
+                        <p data-next-i18n="appAdmin.rbacModeHelp">Basic keeps DiscVault roles simple. Advanced unlocks custom roles and exact permission sets.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="app-admin-summary-grid">
+                    <div class="app-admin-summary-item">
+                      <span data-next-i18n="appAdmin.currentMode">Current mode</span>
+                      <strong id="appAdminRbacMode">-</strong>
+                    </div>
+                    <div class="app-admin-summary-item">
+                      <span data-next-i18n="appAdmin.permissionCount">Permissions</span>
+                      <strong id="appAdminPermissionCount">-</strong>
+                    </div>
+                    <div class="app-admin-summary-item">
+                      <span data-next-i18n="appAdmin.customRoleCount">Custom roles</span>
+                      <strong id="appAdminCustomRoleCount">-</strong>
+                    </div>
+                  </div>
+                  <div class="app-admin-rbac-mode">
+                    <button type="button" class="secondary-button" id="appAdminRbacBasicButton" data-app-admin-rbac-mode="basic" data-next-i18n="appAdmin.basicMode">Basic</button>
+                    <button type="button" class="secondary-button" id="appAdminRbacAdvancedButton" data-app-admin-rbac-mode="advanced" data-next-i18n="appAdmin.advancedMode">Advanced</button>
+                  </div>
+                  <div class="login-message" id="appAdminRbacMessage"></div>
+                </section>
               </div>
-              <div class="login-message" id="appAdminRbacMessage"></div>
             </div>
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.createCustomRole">Create custom role</h3>
-              <p data-next-i18n="appAdmin.createCustomRoleHelp">Create a role in Advanced mode, then select it below to attach permissions.</p>
-              <form class="profile-form" id="appAdminRoleCreateForm">
-                <label for="appAdminRoleKey">
-                  <span data-next-i18n="appAdmin.roleKey">Role key</span>
-                  <input id="appAdminRoleKey" autocomplete="off" maxlength="80" placeholder="family_curator">
-                </label>
-                <label for="appAdminRoleName">
-                  <span data-next-i18n="appAdmin.roleName">Role name</span>
-                  <input id="appAdminRoleName" autocomplete="off" maxlength="120">
-                </label>
-                <label for="appAdminRoleDescription">
-                  <span data-next-i18n="appAdmin.roleDescription">Description</span>
-                  <input id="appAdminRoleDescription" autocomplete="off" maxlength="500">
-                </label>
-                <div class="profile-form-actions">
-                  <button type="submit" class="secondary-button" id="appAdminCreateRoleButton" data-next-i18n="appAdmin.createRoleButton">Create role</button>
-                </div>
-              </form>
-            </div>
-            <div class="detail-card profile-card" id="appAdminRoleSimulatorCard">
-              <h3 data-next-i18n="appAdmin.roleSimulator">Role simulator</h3>
-              <p data-next-i18n="appAdmin.roleSimulatorHelp">Preview the app as a role without changing your real Owner session.</p>
-              <div class="profile-form">
-                <label for="appAdminRoleSimulationSelect">
-                  <span data-next-i18n="appAdmin.simulateRole">Simulate role</span>
-                  <select id="appAdminRoleSimulationSelect"></select>
-                </label>
-                <div class="profile-form-actions">
-                  <button type="button" class="secondary-button" id="appAdminStartSimulationButton" data-next-i18n="appAdmin.startRoleSimulation">Start simulation</button>
-                  <button type="button" class="secondary-button" id="appAdminStopSimulationButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
-                </div>
-              </div>
-              <div class="login-message" id="appAdminSimulatorMessage"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.roles">Roles</h3>
-              <p data-next-i18n="appAdmin.rolesHelp">Basic roles are fixed presets. In Advanced mode the Owner can create and maintain custom roles.</p>
-              <div class="app-admin-role-layout">
-                <div class="profile-passkey-list" id="appAdminRolesList"></div>
-                <div class="app-admin-role-editor" id="appAdminRoleEditor">
-                  <h3 data-next-i18n="appAdmin.roleEditor">Role editor</h3>
-                  <form class="profile-form" id="appAdminRoleEditForm">
-                    <label for="appAdminRoleEditName">
-                      <span data-next-i18n="appAdmin.roleName">Role name</span>
-                      <input id="appAdminRoleEditName" autocomplete="off" maxlength="120">
+            <div class="app-admin-roles-panel" id="appAdminRolesPanelRoles" role="tabpanel" aria-labelledby="appAdminRolesTabRoles" aria-hidden="true" data-app-admin-roles-panel="roles">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card" id="appAdminRoleCreateCard">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.createCustomRole">Create custom role</h4>
+                        <p data-next-i18n="appAdmin.createCustomRoleHelp">Create a role in Advanced mode, then select it below to attach permissions.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <form class="profile-form" id="appAdminRoleCreateForm">
+                    <label for="appAdminRoleKey">
+                      <span data-next-i18n="appAdmin.roleKey">Role key</span>
+                      <input id="appAdminRoleKey" autocomplete="off" maxlength="80" placeholder="family_curator">
                     </label>
-                    <label for="appAdminRoleEditDescription">
+                    <label for="appAdminRoleName">
+                      <span data-next-i18n="appAdmin.roleName">Role name</span>
+                      <input id="appAdminRoleName" autocomplete="off" maxlength="120">
+                    </label>
+                    <label for="appAdminRoleDescription">
                       <span data-next-i18n="appAdmin.roleDescription">Description</span>
-                      <input id="appAdminRoleEditDescription" autocomplete="off" maxlength="500">
+                      <input id="appAdminRoleDescription" autocomplete="off" maxlength="500">
                     </label>
                     <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="appAdminSaveRoleButton" data-next-i18n="appAdmin.saveRoleButton">Save role</button>
+                      <button type="submit" class="secondary-button" id="appAdminCreateRoleButton" data-next-i18n="appAdmin.createRoleButton">Create role</button>
                     </div>
                   </form>
+                </section>
+                <section class="profile-dashboard-card full">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.roles">Roles</h4>
+                        <p data-next-i18n="appAdmin.rolesHelp">Basic roles are fixed presets. In Advanced mode the Owner can create and maintain custom roles.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="app-admin-role-layout">
+                    <div class="profile-passkey-list" id="appAdminRolesList"></div>
+                    <div class="app-admin-role-editor" id="appAdminRoleEditor">
+                      <h3 data-next-i18n="appAdmin.roleEditor">Role editor</h3>
+                      <form class="profile-form" id="appAdminRoleEditForm">
+                        <label for="appAdminRoleEditName">
+                          <span data-next-i18n="appAdmin.roleName">Role name</span>
+                          <input id="appAdminRoleEditName" autocomplete="off" maxlength="120">
+                        </label>
+                        <label for="appAdminRoleEditDescription">
+                          <span data-next-i18n="appAdmin.roleDescription">Description</span>
+                          <input id="appAdminRoleEditDescription" autocomplete="off" maxlength="500">
+                        </label>
+                        <div class="profile-form-actions">
+                          <button type="submit" class="secondary-button" id="appAdminSaveRoleButton" data-next-i18n="appAdmin.saveRoleButton">Save role</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+            <div class="app-admin-roles-panel" id="appAdminRolesPanelPermissions" role="tabpanel" aria-labelledby="appAdminRolesTabPermissions" aria-hidden="true" data-app-admin-roles-panel="permissions">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card full">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.rolesTabPermissions">Permissions</h4>
+                        <p data-next-i18n="appAdmin.featurePreviewHelp">Shows which DiscVault features this role unlocks.</p>
+                      </div>
+                    </div>
+                  </div>
                   <div class="profile-action-row">
                     <button type="button" class="secondary-button" id="appAdminSelectAllPermissionsButton" data-next-i18n="appAdmin.selectAllPermissions">Select all</button>
                     <button type="button" class="secondary-button" id="appAdminClearPermissionsButton" data-next-i18n="appAdmin.clearPermissions">Clear</button>
+                    <button type="button" class="secondary-button" id="appAdminSavePermissionsButton" data-next-i18n="appAdmin.saveRoleButton">Save role</button>
                   </div>
                   <div id="appAdminPermissionEditor"></div>
                   <div class="app-admin-role-preview">
@@ -15086,16 +15168,49 @@ def ui_preview_html(
                     <p data-next-i18n="appAdmin.featurePreviewHelp">Shows which DiscVault features this role unlocks.</p>
                     <div id="appAdminRoleFeaturePreview"></div>
                   </div>
-                </div>
+                </section>
+                <section class="profile-dashboard-card full">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.permissionMatrix">Permission matrix</h4>
+                        <p data-next-i18n="appAdmin.permissionMatrixHelp">Compare which app features each role can use.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="rbac-feature-summary" id="appAdminRbacFeatureSummary"></div>
+                  <div id="appAdminPermissionMatrix"></div>
+                </section>
               </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.permissionMatrix">Permission matrix</h3>
-              <p data-next-i18n="appAdmin.permissionMatrixHelp">Compare which app features each role can use.</p>
-              <div class="rbac-feature-summary" id="appAdminRbacFeatureSummary"></div>
-              <div id="appAdminPermissionMatrix"></div>
+            <div class="app-admin-roles-panel" id="appAdminRolesPanelSimulator" role="tabpanel" aria-labelledby="appAdminRolesTabSimulator" aria-hidden="true" data-app-admin-roles-panel="simulator">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary full" id="appAdminRoleSimulatorCard">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("discover") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.roleSimulator">Role simulator</h4>
+                        <p data-next-i18n="appAdmin.roleSimulatorHelp">Preview the app as a role without changing your real Owner session.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="profile-form">
+                    <label for="appAdminRoleSimulationSelect">
+                      <span data-next-i18n="appAdmin.simulateRole">Simulate role</span>
+                      <select id="appAdminRoleSimulationSelect"></select>
+                    </label>
+                    <div class="profile-form-actions">
+                      <button type="button" class="secondary-button" id="appAdminStartSimulationButton" data-next-i18n="appAdmin.startRoleSimulation">Start simulation</button>
+                      <button type="button" class="secondary-button" id="appAdminStopSimulationButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
+                    </div>
+                  </div>
+                  <div class="login-message" id="appAdminSimulatorMessage"></div>
+                </section>
+              </div>
             </div>
-          </section>
+          </div>
         </section>
         <section class="app-admin-panel" id="appAdminPanelOperations" role="tabpanel" aria-labelledby="appAdminTabOperations" aria-hidden="true" tabindex="0" data-app-admin-panel="operations">
           <section class="profile-grid">
@@ -15588,6 +15703,8 @@ def ui_preview_html(
     let locationDragId = "";
     let appAdmin = {
       activeTab: "access",
+      activeUsersTab: localStorage.getItem("dv_next_admin_users_tab") || "settings",
+      activeRolesTab: localStorage.getItem("dv_next_admin_roles_tab") || "overview",
       activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "registry",
       activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "metadata_source",
       auditCategory: "",
@@ -16457,7 +16574,7 @@ def ui_preview_html(
       if (node) node.classList.toggle("hidden", !visible);
     }
     function closestCard(node) {
-      return node ? node.closest(".detail-card, .profile-card, .bulk-target") : null;
+      return node ? node.closest(".detail-card, .profile-card, .profile-dashboard-card, .bulk-target") : null;
     }
     function appRegistrationModeLabel() {
       return currentAuthStatus.registration_enabled
@@ -16612,6 +16729,8 @@ def ui_preview_html(
         panel.classList.toggle("active", active);
         panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
+      if (appAdmin.activeTab === "users") setAppAdminUsersTab(appAdmin.activeUsersTab);
+      if (appAdmin.activeTab === "roles") setAppAdminRolesTab(appAdmin.activeRolesTab);
     }
     function handleAppAdminTabKeydown(button, event) {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -16627,6 +16746,84 @@ def ui_preview_html(
       if (event.key === "End") nextIndex = buttons.length - 1;
       const nextButton = buttons[nextIndex];
       setAppAdminTab(nextButton.dataset.appAdminTab);
+      nextButton.focus();
+    }
+    function setAppAdminUsersTab(tab) {
+      const buttons = [...document.querySelectorAll("[data-app-admin-users-tab]")];
+      const visibleButtons = buttons.filter((button) => !button.classList.contains("hidden"));
+      const selectedButton = visibleButtons.find((button) => button.dataset.appAdminUsersTab === tab)
+        || visibleButtons[0]
+        || buttons[0];
+      appAdmin.activeUsersTab = selectedButton?.dataset.appAdminUsersTab || "settings";
+      localStorage.setItem("dv_next_admin_users_tab", appAdmin.activeUsersTab);
+      buttons.forEach((button) => {
+        const active = button.dataset.appAdminUsersTab === appAdmin.activeUsersTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-users-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminUsersPanel === appAdmin.activeUsersTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminUsersTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-users-tab]")]
+        .filter((item) => !item.classList.contains("hidden"));
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminUsersTab(nextButton.dataset.appAdminUsersTab);
+      nextButton.focus();
+    }
+    function setAppAdminRolesTab(tab) {
+      const mode = (appAdmin.rbac || {}).mode || "basic";
+      document.querySelectorAll("[data-app-admin-roles-tab]").forEach((button) => {
+        if (button.dataset.appAdminRolesTab === "permissions") {
+          setElementVisible(button, mode === "advanced");
+        }
+      });
+      const buttons = [...document.querySelectorAll("[data-app-admin-roles-tab]")];
+      const visibleButtons = buttons.filter((button) => !button.classList.contains("hidden"));
+      const selectedButton = visibleButtons.find((button) => button.dataset.appAdminRolesTab === tab)
+        || visibleButtons[0]
+        || buttons[0];
+      appAdmin.activeRolesTab = selectedButton?.dataset.appAdminRolesTab || "overview";
+      localStorage.setItem("dv_next_admin_roles_tab", appAdmin.activeRolesTab);
+      buttons.forEach((button) => {
+        const active = button.dataset.appAdminRolesTab === appAdmin.activeRolesTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-roles-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminRolesPanel === appAdmin.activeRolesTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminRolesTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-roles-tab]")]
+        .filter((item) => !item.classList.contains("hidden"));
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminRolesTab(nextButton.dataset.appAdminRolesTab);
       nextButton.focus();
     }
     function setAppAdminPluginTab(tab) {
@@ -18593,6 +18790,7 @@ def ui_preview_html(
       }
       const customRoles = roles.filter((role) => role.custom);
       const mode = rbac.mode || "basic";
+      const advanced = mode === "advanced";
       const canSwitch = currentRole() === "owner" && rbac.canSwitchMode !== false;
       const canManage = appAdminCanManageRbac();
       const modeNode = document.getElementById("appAdminRbacMode");
@@ -18606,12 +18804,13 @@ def ui_preview_html(
         button.classList.toggle("active", targetMode === mode);
         button.disabled = !canSwitch || targetMode === mode || (targetMode === "advanced" && rbac.advancedEnabled === false);
       });
-      const createForm = document.getElementById("appAdminRoleCreateForm");
-      if (createForm) setElementVisible(closestCard(createForm), canManage);
+      setElementVisible(document.getElementById("appAdminRoleCreateCard"), advanced && canManage);
+      setAppAdminRolesTab(appAdmin.activeRolesTab);
       const rolesList = document.getElementById("appAdminRolesList");
       if (rolesList) {
         const simulatedRole = appAdminSimulatedRole();
-        rolesList.innerHTML = roles.length ? roles.map((role) => {
+        const visibleRoles = advanced ? roles : roles.filter((role) => !role.custom);
+        rolesList.innerHTML = visibleRoles.length ? visibleRoles.map((role) => {
           const selected = selectedRole && String(selectedRole.id) === String(role.id);
           const simulated = simulatedRole && String(simulatedRole.id) === String(role.id);
           const canEdit = canManage && role.custom;
@@ -18626,13 +18825,12 @@ def ui_preview_html(
                   ${escapeHtml(role.key)}
                   &middot;
                   ${escapeHtml(role.custom ? tNext("appAdmin.customRole", "Custom") : tNext("appAdmin.systemRole", "System"))}
-                  &middot;
-                  ${escapeHtml(formatNumber((role.permissions || []).length))} ${escapeHtml(tNext("appAdmin.permissions", "permissions"))}
+                  ${advanced ? `&middot; ${escapeHtml(formatNumber((role.permissions || []).length))} ${escapeHtml(tNext("appAdmin.permissions", "permissions"))}` : ""}
                 </div>
-                <div class="admin-member-cloud">${appAdminPermissionTags(role.permissions || [], 10)}</div>
+                ${advanced ? `<div class="admin-member-cloud">${appAdminPermissionTags(role.permissions || [], 10)}</div>` : ""}
               </div>
               <div class="profile-passkey-actions">
-                <button type="button" class="secondary-button" data-app-admin-role-select="${escapeHtml(role.id)}">${escapeHtml(tNext("common.view", "View"))}</button>
+                ${advanced ? `<button type="button" class="secondary-button" data-app-admin-role-select="${escapeHtml(role.id)}">${escapeHtml(tNext("common.view", "View"))}</button>` : ""}
                 ${canEdit ? `<button type="button" class="secondary-button" data-app-admin-role-delete="${escapeHtml(role.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
               </div>
             </div>
@@ -18644,10 +18842,11 @@ def ui_preview_html(
       const nameInput = document.getElementById("appAdminRoleEditName");
       const descriptionInput = document.getElementById("appAdminRoleEditDescription");
       const saveButton = document.getElementById("appAdminSaveRoleButton");
+      const savePermissionsButton = document.getElementById("appAdminSavePermissionsButton");
       const selectAllButton = document.getElementById("appAdminSelectAllPermissionsButton");
       const clearButton = document.getElementById("appAdminClearPermissionsButton");
       const featurePreview = document.getElementById("appAdminRoleFeaturePreview");
-      if (editor) editor.classList.toggle("hidden", !selectedRole);
+      if (editor) editor.classList.toggle("hidden", !advanced || !selectedRole);
       if (nameInput) {
         nameInput.value = selectedRole ? (selectedRole.name || "") : "";
         nameInput.disabled = !canManage || !selectedRole?.custom;
@@ -18657,6 +18856,7 @@ def ui_preview_html(
         descriptionInput.disabled = !canManage || !selectedRole?.custom;
       }
       if (saveButton) saveButton.disabled = !canManage || !selectedRole?.custom;
+      if (savePermissionsButton) savePermissionsButton.disabled = !canManage || !selectedRole?.custom;
       if (selectAllButton) selectAllButton.disabled = !canManage || !selectedRole?.custom;
       if (clearButton) clearButton.disabled = !canManage || !selectedRole?.custom;
       if (permissionEditor) {
@@ -18740,11 +18940,16 @@ def ui_preview_html(
       const canViewUsers = isNativeAdminUser() && hasActualAnyPermission(["users.view", "users.assign_roles", "users.disable", "users.delete"]);
       const canViewGroups = hasActualAnyPermission(["groups.view", "groups.create", "groups.invite"]);
       const canManageGroups = hasActualAnyPermission(["groups.create", "groups.invite"]);
+      const canUsePeopleSettings = isNativeAdminUser() || canManageGroups;
       setElementVisible(closestCard(document.getElementById("appAdminUsersList")), canViewUsers);
       setElementVisible(closestCard(document.getElementById("appAdminGroupsList")), canViewGroups);
       setElementVisible(closestCard(document.getElementById("appAdminInviteForm")), canInviteUsers);
       setElementVisible(closestCard(document.getElementById("appAdminCredentialsList")), canViewPasskeys);
-      setElementVisible(document.getElementById("appAdminGroupForm"), canManageGroups);
+      setElementVisible(closestCard(document.getElementById("appAdminGroupForm")), canManageGroups);
+      setElementVisible(document.querySelector('[data-app-admin-users-tab="settings"]'), canUsePeopleSettings);
+      setElementVisible(document.querySelector('[data-app-admin-users-tab="users"]'), canViewUsers);
+      setElementVisible(document.querySelector('[data-app-admin-users-tab="groups"]'), canViewGroups);
+      setAppAdminUsersTab(appAdmin.activeUsersTab);
       setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasActualPermission("admin.restore_functional"));
       setElementVisible(document.getElementById("appAdminRefreshBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
       setElementVisible(document.getElementById("appAdminExportBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
@@ -37677,6 +37882,14 @@ def ui_preview_html(
         button.addEventListener("click", () => setAppAdminTab(button.dataset.appAdminTab));
         button.addEventListener("keydown", (event) => handleAppAdminTabKeydown(button, event));
       });
+      document.querySelectorAll("[data-app-admin-users-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminUsersTab(button.dataset.appAdminUsersTab));
+        button.addEventListener("keydown", (event) => handleAppAdminUsersTabKeydown(button, event));
+      });
+      document.querySelectorAll("[data-app-admin-roles-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminRolesTab(button.dataset.appAdminRolesTab));
+        button.addEventListener("keydown", (event) => handleAppAdminRolesTabKeydown(button, event));
+      });
       document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminPluginTab(button.dataset.appAdminPluginTab));
       });
@@ -37701,6 +37914,7 @@ def ui_preview_html(
       });
       document.getElementById("appAdminRoleCreateForm")?.addEventListener("submit", (event) => createAppAdminRole(event));
       document.getElementById("appAdminRoleEditForm")?.addEventListener("submit", (event) => saveAppAdminRole(event));
+      document.getElementById("appAdminSavePermissionsButton")?.addEventListener("click", () => saveAppAdminRole());
       document.getElementById("appAdminSelectAllPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(true));
       document.getElementById("appAdminClearPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(false));
       document.getElementById("appAdminRoleSimulationSelect")?.addEventListener("change", (event) => {
