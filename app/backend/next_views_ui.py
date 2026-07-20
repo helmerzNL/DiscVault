@@ -10398,20 +10398,53 @@ def ui_preview_html(
     }
     .app-admin-permission-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin-top: 10px;
     }
     .app-admin-permission-domain {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
-      padding: 10px;
       min-width: 0;
+      overflow: hidden;
     }
-    .app-admin-permission-domain h4 {
-      margin: 0 0 8px;
-      font-size: .82rem;
+    .app-admin-permission-domain-toggle {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      padding: 13px 14px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+    }
+    .app-admin-permission-domain-toggle:hover {
+      background: color-mix(in srgb, var(--accent) 7%, transparent);
+    }
+    .app-admin-permission-domain-toggle strong {
+      text-transform: capitalize;
+    }
+    .app-admin-permission-domain-toggle .mdi {
+      transition: transform .16s ease;
+    }
+    .app-admin-permission-domain-toggle[aria-expanded="true"] .mdi {
+      transform: rotate(180deg);
+    }
+    .app-admin-permission-domain-panel {
+      display: grid;
+      gap: 8px;
+      padding: 0 14px 14px;
+      border-top: 1px solid var(--line);
+    }
+    .app-admin-permission-domain-help {
+      margin: 0;
+      padding: 11px 0 3px;
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.45;
     }
     .app-admin-permission-domain label {
       display: grid;
@@ -10421,16 +10454,136 @@ def ui_preview_html(
       color: var(--text);
       font-size: .76rem;
       line-height: 1.3;
-      padding: 5px 0;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .app-admin-permission-domain label:has(input:checked) {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      background: color-mix(in srgb, var(--accent) 8%, var(--panel));
     }
     .app-admin-permission-domain input {
       margin-top: 2px;
+    }
+    .app-admin-permission-domain code {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: .68rem;
+      overflow-wrap: anywhere;
     }
     .app-admin-permission-domain small {
       display: block;
       color: var(--muted);
       font-size: .7rem;
-      margin-top: 2px;
+      line-height: 1.45;
+      margin-top: 5px;
+    }
+    .app-admin-role-wizard {
+      display: grid;
+      gap: 16px;
+    }
+    .app-admin-role-wizard-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .app-admin-role-wizard-summary .wide {
+      grid-column: 1 / -1;
+    }
+    .app-admin-role-wizard-steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .app-admin-role-wizard-step {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+      min-height: 46px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+      color: var(--muted);
+      text-align: left;
+    }
+    .app-admin-role-wizard-step.active {
+      border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+      background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+      color: var(--text);
+    }
+    .app-admin-role-wizard-step-number {
+      display: grid;
+      place-items: center;
+      width: 25px;
+      height: 25px;
+      border-radius: 50%;
+      background: color-mix(in srgb, currentColor 12%, transparent);
+      font-size: .74rem;
+      font-weight: 800;
+    }
+    .app-admin-role-wizard-panel {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .app-admin-role-wizard-panel > h4,
+    .app-admin-role-review h4 {
+      margin: 0;
+    }
+    .app-admin-role-wizard-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 2px;
+    }
+    .app-admin-role-review {
+      display: grid;
+      gap: 12px;
+    }
+    .app-admin-role-review-section {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+    }
+    .app-admin-role-review-section p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .app-admin-role-review-domains {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .app-admin-role-preview {
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .app-admin-role-preview > summary {
+      padding: 12px 14px;
+      cursor: pointer;
+      font-weight: 750;
+    }
+    .app-admin-role-preview > p,
+    .app-admin-role-preview > div {
+      margin-inline: 14px;
+    }
+    .app-admin-role-preview > div {
+      margin-bottom: 14px;
     }
     .profile-api-permission-grid {
       margin-top: 10px;
@@ -11984,7 +12137,9 @@ def ui_preview_html(
       }
       .profile-security-stats,
       .profile-api-summary-grid,
-      .app-admin-summary-grid {
+      .app-admin-summary-grid,
+      .app-admin-role-wizard-summary,
+      .app-admin-role-wizard-steps {
         grid-template-columns: 1fr;
       }
       .profile-add-passkey {
@@ -15123,51 +15278,68 @@ def ui_preview_html(
                       </div>
                     </div>
                   </div>
-                  <div class="app-admin-role-layout">
-                    <div class="profile-passkey-list" id="appAdminRolesList"></div>
-                    <div class="app-admin-role-editor" id="appAdminRoleEditor">
-                      <h3 data-next-i18n="appAdmin.roleEditor">Role editor</h3>
-                      <form class="profile-form" id="appAdminRoleEditForm">
-                        <label for="appAdminRoleEditName">
-                          <span data-next-i18n="appAdmin.roleName">Role name</span>
-                          <input id="appAdminRoleEditName" autocomplete="off" maxlength="120">
-                        </label>
-                        <label for="appAdminRoleEditDescription">
-                          <span data-next-i18n="appAdmin.roleDescription">Description</span>
-                          <input id="appAdminRoleEditDescription" autocomplete="off" maxlength="500">
-                        </label>
-                        <div class="profile-form-actions">
-                          <button type="submit" class="secondary-button" id="appAdminSaveRoleButton" data-next-i18n="appAdmin.saveRoleButton">Save role</button>
-                        </div>
-                      </form>
-                    </div>
-                  </div>
+                  <div class="profile-passkey-list" id="appAdminRolesList"></div>
                 </section>
               </div>
             </div>
             <div class="app-admin-roles-panel" id="appAdminRolesPanelPermissions" role="tabpanel" aria-labelledby="appAdminRolesTabPermissions" aria-hidden="true" data-app-admin-roles-panel="permissions">
               <div class="app-admin-dashboard-grid">
-                <section class="profile-dashboard-card full">
+                <section class="profile-dashboard-card full app-admin-role-wizard" id="appAdminRoleEditor">
                   <div class="profile-dashboard-card-head">
                     <div class="profile-dashboard-card-title">
                       <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
                       <div>
-                        <h4 data-next-i18n="appAdmin.rolesTabPermissions">Permissions</h4>
-                        <p data-next-i18n="appAdmin.featurePreviewHelp">Shows which DiscVault features this role unlocks.</p>
+                        <h4 id="appAdminRoleWizardHeading" tabindex="-1" data-next-i18n="appAdmin.roleWizardTitle">Role permissions</h4>
+                        <p data-next-i18n="appAdmin.roleWizardHelp">Review the role, assign permissions and confirm the final changes.</p>
                       </div>
                     </div>
                   </div>
-                  <div class="profile-action-row">
-                    <button type="button" class="secondary-button" id="appAdminSelectAllPermissionsButton" data-next-i18n="appAdmin.selectAllPermissions">Select all</button>
-                    <button type="button" class="secondary-button" id="appAdminClearPermissionsButton" data-next-i18n="appAdmin.clearPermissions">Clear</button>
-                    <button type="button" class="secondary-button" id="appAdminSavePermissionsButton" data-next-i18n="appAdmin.saveRoleButton">Save role</button>
-                  </div>
-                  <div id="appAdminPermissionEditor"></div>
-                  <div class="app-admin-role-preview">
-                    <h4 data-next-i18n="appAdmin.featurePreview">Feature preview</h4>
-                    <p data-next-i18n="appAdmin.featurePreviewHelp">Shows which DiscVault features this role unlocks.</p>
-                    <div id="appAdminRoleFeaturePreview"></div>
-                  </div>
+                  <div class="app-admin-role-wizard-summary" id="appAdminRoleWizardSummary"></div>
+                  <ol class="app-admin-role-wizard-steps" aria-label="Role setup progress" data-next-i18n-aria="appAdmin.roleWizardProgress">
+                    <li><button type="button" class="app-admin-role-wizard-step" id="appAdminRoleWizardStep1" data-app-admin-role-wizard-step="1" aria-controls="appAdminRoleWizardDetails"><span class="app-admin-role-wizard-step-number">1</span><span data-next-i18n="appAdmin.roleWizardStepDetails">Role details</span></button></li>
+                    <li><button type="button" class="app-admin-role-wizard-step" id="appAdminRoleWizardStep2" data-app-admin-role-wizard-step="2" aria-controls="appAdminRoleWizardPermissions"><span class="app-admin-role-wizard-step-number">2</span><span data-next-i18n="appAdmin.roleWizardStepPermissions">Permissions</span></button></li>
+                    <li><button type="button" class="app-admin-role-wizard-step" id="appAdminRoleWizardStep3" data-app-admin-role-wizard-step="3" aria-controls="appAdminRoleWizardReview"><span class="app-admin-role-wizard-step-number">3</span><span data-next-i18n="appAdmin.roleWizardStepReview">Review and save</span></button></li>
+                  </ol>
+                  <form class="profile-form" id="appAdminRoleEditForm">
+                    <div class="app-admin-role-wizard-panel" id="appAdminRoleWizardDetails" role="region" aria-labelledby="appAdminRoleWizardStep1" data-app-admin-role-wizard-panel="1">
+                      <h4 tabindex="-1" data-next-i18n="appAdmin.roleWizardStepDetails">Role details</h4>
+                      <p class="profile-passkey-meta" id="appAdminRoleWizardModeHelp"></p>
+                      <label for="appAdminRoleEditName">
+                        <span data-next-i18n="appAdmin.roleName">Role name</span>
+                        <input id="appAdminRoleEditName" autocomplete="off" maxlength="120">
+                      </label>
+                      <label for="appAdminRoleEditDescription">
+                        <span data-next-i18n="appAdmin.roleDescription">Description</span>
+                        <textarea id="appAdminRoleEditDescription" rows="3" maxlength="500"></textarea>
+                      </label>
+                    </div>
+                    <div class="app-admin-role-wizard-panel hidden" id="appAdminRoleWizardPermissions" role="region" aria-labelledby="appAdminRoleWizardStep2" data-app-admin-role-wizard-panel="2">
+                      <div>
+                        <h4 tabindex="-1" data-next-i18n="appAdmin.roleWizardStepPermissions">Permissions</h4>
+                        <p class="profile-passkey-meta" data-next-i18n="appAdmin.permissionCategoryHelp">Open a category to inspect its permissions. Assigned counts stay visible while categories are collapsed.</p>
+                      </div>
+                      <div class="profile-action-row">
+                        <button type="button" class="secondary-button" id="appAdminSelectAllPermissionsButton" data-next-i18n="appAdmin.selectAllPermissions">Select all</button>
+                        <button type="button" class="secondary-button" id="appAdminClearPermissionsButton" data-next-i18n="appAdmin.clearPermissions">Clear</button>
+                      </div>
+                      <div id="appAdminPermissionEditor"></div>
+                      <details class="app-admin-role-preview">
+                        <summary data-next-i18n="appAdmin.featurePreview">Feature preview</summary>
+                        <p data-next-i18n="appAdmin.featurePreviewHelp">Shows which DiscVault features this role unlocks.</p>
+                        <div id="appAdminRoleFeaturePreview"></div>
+                      </details>
+                    </div>
+                    <div class="app-admin-role-wizard-panel hidden" id="appAdminRoleWizardReview" role="region" aria-labelledby="appAdminRoleWizardStep3" data-app-admin-role-wizard-panel="3">
+                      <h4 tabindex="-1" data-next-i18n="appAdmin.roleWizardStepReview">Review and save</h4>
+                      <div class="app-admin-role-review" id="appAdminRoleReview"></div>
+                    </div>
+                    <div class="app-admin-role-wizard-actions">
+                      <button type="button" class="secondary-button" id="appAdminRoleWizardBackButton" data-next-i18n="appAdmin.roleWizardBack">Back</button>
+                      <button type="button" class="secondary-button" id="appAdminRoleWizardNextButton" data-next-i18n="appAdmin.roleWizardNext">Next</button>
+                      <button type="button" class="secondary-button hidden" id="appAdminSavePermissionsButton" data-next-i18n="appAdmin.roleWizardReviewChanges">Review changes</button>
+                      <button type="submit" class="secondary-button hidden" id="appAdminSaveRoleButton" data-next-i18n="appAdmin.saveRoleButton">Save role</button>
+                    </div>
+                  </form>
                 </section>
                 <section class="profile-dashboard-card full">
                   <div class="profile-dashboard-card-head">
@@ -15729,6 +15901,7 @@ def ui_preview_html(
       rbac: {},
       roles: [],
       assignableRoles: [],
+      roleWizard: {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false},
       simulation: {active: false, roleId: ""},
       selectedRoleId: "",
       users: []
@@ -18441,26 +18614,144 @@ def ui_preview_html(
       }
       return shown.join("") || `<span class="tag">${escapeHtml(tNext("appAdmin.noPermissions", "No permissions found."))}</span>`;
     }
-    function appAdminPermissionCheckboxes(selectedPermissions, disabled = false) {
+    function appAdminPermissionDomainId(domain) {
+      return String(domain || "core").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+    }
+    function appAdminPermissionDomainLabel(domain) {
+      return String(domain || "core").replaceAll("_", " ").replace(/\\b\\w/g, (letter) => letter.toUpperCase());
+    }
+    function appAdminPermissionCheckboxes(selectedPermissions, disabled = false, openDomains = []) {
       const selected = new Set((selectedPermissions || []).map(String));
+      const open = new Set((openDomains || []).map(String));
       const domains = appAdminPermissionDomains((appAdmin.rbac || {}).permissions || []);
       if (!domains.length) {
         return `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPermissions", "No permissions found."))}</div>`;
       }
       return `<div class="app-admin-permission-grid">${domains.map(([domain, permissions]) => `
         <div class="app-admin-permission-domain">
-          <h4>${escapeHtml(domain.replaceAll("_", " "))}</h4>
-          ${permissions.map((permission) => `
-            <label>
-              <input type="checkbox" data-app-admin-role-permission="${escapeHtml(permission.key)}" ${selected.has(permission.key) ? "checked" : ""} ${disabled ? "disabled" : ""}>
-              <span>
-                ${escapeHtml(permission.key)}
-                <small>${escapeHtml(permission.description || "")}</small>
-              </span>
-            </label>
-          `).join("")}
+          <button
+            type="button"
+            class="app-admin-permission-domain-toggle"
+            data-app-admin-permission-domain-toggle="${escapeHtml(domain)}"
+            aria-expanded="${open.has(domain) ? "true" : "false"}"
+            aria-controls="appAdminPermissionDomain-${escapeHtml(appAdminPermissionDomainId(domain))}"
+          >
+            <strong>${escapeHtml(appAdminPermissionDomainLabel(domain))}</strong>
+            <span class="tag" data-app-admin-permission-count="${escapeHtml(domain)}">${escapeHtml(tNext("appAdmin.permissionAssignedCount", "{assigned} of {total} assigned").replace("{assigned}", String(permissions.filter((permission) => selected.has(permission.key)).length)).replace("{total}", String(permissions.length)))}</span>
+            <span class="mdi mdi-chevron-down" aria-hidden="true"></span>
+          </button>
+          <div
+            class="app-admin-permission-domain-panel ${open.has(domain) ? "" : "hidden"}"
+            id="appAdminPermissionDomain-${escapeHtml(appAdminPermissionDomainId(domain))}"
+          >
+            <p class="app-admin-permission-domain-help">${escapeHtml(tNext("appAdmin.permissionDomainHelp", "These permissions control {domain} capabilities. Grant only the actions this role needs.").replace("{domain}", appAdminPermissionDomainLabel(domain)))}</p>
+            ${permissions.map((permission) => `
+              <label>
+                <input type="checkbox" data-app-admin-role-permission="${escapeHtml(permission.key)}" data-app-admin-role-permission-domain="${escapeHtml(domain)}" ${selected.has(permission.key) ? "checked" : ""} ${disabled ? "disabled" : ""}>
+                <span>
+                  <strong>${escapeHtml(permission.description || permission.key)}</strong>
+                  <code>${escapeHtml(permission.key)}</code>
+                  <small>${escapeHtml(tNext("appAdmin.permissionEffectHelp", "This grants access to the action described above within the {domain} category.").replace("{domain}", appAdminPermissionDomainLabel(domain)))}</small>
+                </span>
+              </label>
+            `).join("")}
+          </div>
         </div>
       `).join("")}</div>`;
+    }
+    function appAdminEnsureRoleWizard(role) {
+      const roleId = role ? String(role.id || "") : "";
+      const wizard = appAdmin.roleWizard || {};
+      if (String(wizard.roleId || "") !== roleId) {
+        appAdmin.roleWizard = {
+          roleId,
+          step: 1,
+          name: role ? String(role.name || "") : "",
+          description: role ? String(role.description || "") : "",
+          permissions: role ? [...(role.permissions || [])].map(String) : [],
+          openDomains: [],
+          dirty: false
+        };
+      }
+      return appAdmin.roleWizard;
+    }
+    function appAdminCaptureRoleWizardDraft() {
+      const wizard = appAdmin.roleWizard || {};
+      if (!wizard.roleId) return wizard;
+      const nameInput = document.getElementById("appAdminRoleEditName");
+      const descriptionInput = document.getElementById("appAdminRoleEditDescription");
+      if (nameInput) wizard.name = String(nameInput.value || "");
+      if (descriptionInput) wizard.description = String(descriptionInput.value || "");
+      const permissionInputs = [...document.querySelectorAll("#appAdminPermissionEditor [data-app-admin-role-permission]")];
+      if (permissionInputs.length) {
+        wizard.permissions = permissionInputs
+          .filter((input) => input.checked)
+          .map((input) => input.dataset.appAdminRolePermission)
+          .filter(Boolean);
+      }
+      const role = appAdminSelectedRole();
+      wizard.dirty = !!role && (
+        wizard.name.trim() !== String(role.name || "").trim()
+        || wizard.description.trim() !== String(role.description || "").trim()
+        || JSON.stringify([...wizard.permissions].sort()) !== JSON.stringify([...(role.permissions || [])].map(String).sort())
+      );
+      return wizard;
+    }
+    function appAdminRoleDraft(role) {
+      const wizard = appAdminEnsureRoleWizard(role);
+      return role ? {...role, name: wizard.name, description: wizard.description, permissions: [...wizard.permissions]} : null;
+    }
+    function appAdminRoleReviewHtml(role, draft) {
+      if (!role || !draft) return "";
+      const original = new Set((role.permissions || []).map(String));
+      const current = new Set((draft.permissions || []).map(String));
+      const added = [...current].filter((permission) => !original.has(permission)).sort();
+      const removed = [...original].filter((permission) => !current.has(permission)).sort();
+      const domainCounts = appAdminPermissionDomains((appAdmin.rbac || {}).permissions || [])
+        .map(([domain, permissions]) => ({
+          domain,
+          count: permissions.filter((permission) => current.has(permission.key)).length
+        }))
+        .filter((item) => item.count > 0);
+      const changeSummary = added.length || removed.length
+        ? `
+          <div class="app-admin-role-review-section">
+            <h4>${escapeHtml(tNext("appAdmin.roleWizardPermissionChanges", "Permission changes"))}</h4>
+            <p>${escapeHtml(tNext("appAdmin.roleWizardAddedRemoved", "{added} added, {removed} removed").replace("{added}", String(added.length)).replace("{removed}", String(removed.length)))}</p>
+            ${added.length ? `<div class="admin-member-cloud"><span class="tag good">${escapeHtml(tNext("appAdmin.roleWizardAdded", "Added"))}</span>${appAdminPermissionTags(added, 20)}</div>` : ""}
+            ${removed.length ? `<div class="admin-member-cloud"><span class="tag blue">${escapeHtml(tNext("appAdmin.roleWizardRemoved", "Removed"))}</span>${appAdminPermissionTags(removed, 20)}</div>` : ""}
+          </div>
+        `
+        : `
+          <div class="app-admin-role-review-section">
+            <h4>${escapeHtml(tNext("appAdmin.roleWizardPermissionChanges", "Permission changes"))}</h4>
+            <p>${escapeHtml(tNext("appAdmin.roleWizardNoPermissionChanges", "No permission assignments changed."))}</p>
+          </div>
+        `;
+      return `
+        <div class="app-admin-role-review-section">
+          <h4>${escapeHtml(tNext("appAdmin.roleWizardRoleDetails", "Role details"))}</h4>
+          <div class="app-admin-summary-grid">
+            <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.roleName", "Role name"))}</span><strong>${escapeHtml(draft.name || "-")}</strong></div>
+            <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.roleKey", "Role key"))}</span><strong>${escapeHtml(role.key || "-")}</strong></div>
+            <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.permissionCount", "Permissions"))}</span><strong>${escapeHtml(formatNumber(current.size))}</strong></div>
+          </div>
+          <p>${escapeHtml(draft.description || tNext("appAdmin.roleWizardNoDescription", "No description provided."))}</p>
+        </div>
+        <div class="app-admin-role-review-section">
+          <h4>${escapeHtml(tNext("appAdmin.roleWizardAssignedByCategory", "Assigned by category"))}</h4>
+          <div class="app-admin-role-review-domains">${domainCounts.length
+            ? domainCounts.map((item) => `<span class="tag">${escapeHtml(appAdminPermissionDomainLabel(item.domain))}: ${escapeHtml(formatNumber(item.count))}</span>`).join("")
+            : `<span class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.noPermissions", "No permissions found."))}</span>`
+          }</div>
+        </div>
+        ${role.custom ? changeSummary : `
+          <div class="app-admin-role-review-section">
+            <h4>${escapeHtml(tNext("appAdmin.systemRole", "System"))}</h4>
+            <p>${escapeHtml(tNext("appAdmin.roleWizardSystemReadOnly", "System roles are fixed and can be reviewed here, but they cannot be changed."))}</p>
+          </div>
+        `}
+      `;
     }
     function appAdminSelectedRole() {
       const roles = (appAdmin.rbac && appAdmin.rbac.roles) || appAdmin.roles || [];
@@ -18779,6 +19070,41 @@ def ui_preview_html(
       renderAppAdminRbac();
       refreshAppPermissionSurface();
     }
+    function setAppAdminRoleWizardStep(step, focus = false) {
+      const role = appAdminSelectedRole();
+      if (!role) return;
+      const wizard = appAdminCaptureRoleWizardDraft();
+      const nextStep = Math.min(3, Math.max(1, Number(step) || 1));
+      if (nextStep > 1 && !String(wizard.name || "").trim()) {
+        wizard.step = 1;
+        renderAppAdminRbac();
+        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleNameRequired", "Role name is required."), "bad");
+        document.getElementById("appAdminRoleEditName")?.focus();
+        return;
+      }
+      wizard.step = nextStep;
+      renderAppAdminRbac();
+      if (focus) {
+        requestAnimationFrame(() => {
+          const panel = document.querySelector(`[data-app-admin-role-wizard-panel="${nextStep}"]`);
+          (panel?.querySelector("h4") || document.getElementById("appAdminRoleWizardHeading"))?.focus?.();
+        });
+      }
+    }
+    function selectAppAdminRole(roleId) {
+      const role = appAdminRoleById(roleId);
+      if (!role) return;
+      appAdmin.selectedRoleId = role.id;
+      appAdmin.roleWizard = {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false};
+      appAdminEnsureRoleWizard(role);
+      setAppAdminRolesTab("permissions");
+      renderAppAdminRbac();
+      requestAnimationFrame(() => {
+        const editor = document.getElementById("appAdminRoleEditor");
+        editor?.scrollIntoView({behavior: "smooth", block: "start"});
+        document.getElementById("appAdminRoleWizardHeading")?.focus();
+      });
+    }
     function renderAppAdminRbac() {
       const rbac = appAdmin.rbac || {};
       const roles = rbac.roles || appAdmin.roles || [];
@@ -18846,25 +19172,67 @@ def ui_preview_html(
       const selectAllButton = document.getElementById("appAdminSelectAllPermissionsButton");
       const clearButton = document.getElementById("appAdminClearPermissionsButton");
       const featurePreview = document.getElementById("appAdminRoleFeaturePreview");
+      const wizardSummary = document.getElementById("appAdminRoleWizardSummary");
+      const wizardModeHelp = document.getElementById("appAdminRoleWizardModeHelp");
+      const roleReview = document.getElementById("appAdminRoleReview");
+      const wizard = appAdminEnsureRoleWizard(selectedRole);
+      const draftRole = appAdminRoleDraft(selectedRole);
+      const editable = !!(canManage && selectedRole?.custom);
       if (editor) editor.classList.toggle("hidden", !advanced || !selectedRole);
+      if (wizardSummary) {
+        wizardSummary.innerHTML = selectedRole ? `
+          <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.selectedRole", "Selected role"))}</span><strong>${escapeHtml(draftRole.name || draftRole.key || "-")}</strong></div>
+          <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.roleKey", "Role key"))}</span><strong>${escapeHtml(draftRole.key || "-")}</strong></div>
+          <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.roleType", "Role type"))}</span><strong>${escapeHtml(draftRole.custom ? tNext("appAdmin.customRole", "Custom") : tNext("appAdmin.systemRole", "System"))}</strong></div>
+          <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.permissionCount", "Permissions"))}</span><strong>${escapeHtml(formatNumber((draftRole.permissions || []).length))}</strong></div>
+          <div class="app-admin-summary-item wide"><span>${escapeHtml(tNext("appAdmin.roleDescription", "Description"))}</span><strong>${escapeHtml(draftRole.description || tNext("appAdmin.roleWizardNoDescription", "No description provided."))}</strong></div>
+        ` : "";
+      }
+      if (wizardModeHelp) {
+        wizardModeHelp.textContent = editable
+          ? tNext("appAdmin.roleWizardCustomEditable", "Update the custom role details, then continue to its permissions.")
+          : tNext("appAdmin.roleWizardSystemReadOnly", "System roles are fixed and can be reviewed here, but they cannot be changed.");
+      }
       if (nameInput) {
-        nameInput.value = selectedRole ? (selectedRole.name || "") : "";
-        nameInput.disabled = !canManage || !selectedRole?.custom;
+        nameInput.value = draftRole ? (draftRole.name || "") : "";
+        nameInput.disabled = !editable;
       }
       if (descriptionInput) {
-        descriptionInput.value = selectedRole ? (selectedRole.description || "") : "";
-        descriptionInput.disabled = !canManage || !selectedRole?.custom;
+        descriptionInput.value = draftRole ? (draftRole.description || "") : "";
+        descriptionInput.disabled = !editable;
       }
-      if (saveButton) saveButton.disabled = !canManage || !selectedRole?.custom;
-      if (savePermissionsButton) savePermissionsButton.disabled = !canManage || !selectedRole?.custom;
-      if (selectAllButton) selectAllButton.disabled = !canManage || !selectedRole?.custom;
-      if (clearButton) clearButton.disabled = !canManage || !selectedRole?.custom;
+      document.querySelectorAll("[data-app-admin-role-wizard-step]").forEach((button) => {
+        const active = Number(button.dataset.appAdminRoleWizardStep) === wizard.step;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-current", active ? "step" : "false");
+      });
+      document.querySelectorAll("[data-app-admin-role-wizard-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", Number(panel.dataset.appAdminRoleWizardPanel) !== wizard.step);
+      });
+      const backButton = document.getElementById("appAdminRoleWizardBackButton");
+      const nextButton = document.getElementById("appAdminRoleWizardNextButton");
+      if (backButton) backButton.classList.toggle("hidden", wizard.step === 1);
+      if (nextButton) nextButton.classList.toggle("hidden", wizard.step !== 1);
+      if (savePermissionsButton) savePermissionsButton.classList.toggle("hidden", wizard.step !== 2);
+      if (saveButton) {
+        saveButton.classList.toggle("hidden", wizard.step !== 3 || !editable);
+        saveButton.disabled = !editable;
+      }
+      if (selectAllButton) {
+        selectAllButton.disabled = !editable;
+        selectAllButton.classList.toggle("hidden", !editable);
+      }
+      if (clearButton) {
+        clearButton.disabled = !editable;
+        clearButton.classList.toggle("hidden", !editable);
+      }
       if (permissionEditor) {
-        permissionEditor.innerHTML = selectedRole
-          ? appAdminPermissionCheckboxes(selectedRole.permissions || [], !canManage || !selectedRole.custom)
+        permissionEditor.innerHTML = draftRole
+          ? appAdminPermissionCheckboxes(draftRole.permissions || [], !editable, wizard.openDomains)
           : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.selectRoleToEdit", "Select a role to edit."))}</div>`;
       }
-      if (featurePreview) featurePreview.innerHTML = appAdminRoleFeaturePreviewHtml(selectedRole);
+      if (featurePreview) featurePreview.innerHTML = appAdminRoleFeaturePreviewHtml(draftRole);
+      if (roleReview) roleReview.innerHTML = appAdminRoleReviewHtml(selectedRole, draftRole);
       renderAppAdminRoleSimulator(roles);
       renderAppAdminPermissionMatrix(roles);
       const message = document.getElementById("appAdminRbacMessage");
@@ -19411,6 +19779,7 @@ def ui_preview_html(
         if (document.getElementById("appAdminRoleDescription")) document.getElementById("appAdminRoleDescription").value = "";
         appAdmin.selectedRoleId = payload.role?.id || "";
         await loadAppAdmin();
+        selectAppAdminRole(appAdmin.selectedRoleId);
         setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleCreated", "Role created. Select permissions and save."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminRbacMessage", error.message || String(error), "bad");
@@ -19420,18 +19789,26 @@ def ui_preview_html(
       document.querySelectorAll("#appAdminPermissionEditor [data-app-admin-role-permission]").forEach((input) => {
         if (!input.disabled) input.checked = checked;
       });
+      appAdminCaptureRoleWizardDraft();
+      renderAppAdminRbac();
     }
     async function saveAppAdminRole(event) {
       if (event) event.preventDefault();
       const role = appAdminSelectedRole();
       if (!role || !role.custom || !appAdminCanManageRbac()) return;
-      const name = String(document.getElementById("appAdminRoleEditName")?.value || "").trim();
-      const description = String(document.getElementById("appAdminRoleEditDescription")?.value || "").trim();
-      const permissions = Array.from(document.querySelectorAll("#appAdminPermissionEditor [data-app-admin-role-permission]:checked"))
-        .map((input) => input.dataset.appAdminRolePermission)
-        .filter(Boolean);
+      const wizard = appAdminCaptureRoleWizardDraft();
+      if (wizard.step !== 3) {
+        setAppAdminRoleWizardStep(wizard.step === 1 ? 2 : 3, true);
+        return;
+      }
+      const name = String(wizard.name || "").trim();
+      const description = String(wizard.description || "").trim();
+      const permissions = [...(wizard.permissions || [])];
       if (!name) {
+        wizard.step = 1;
+        renderAppAdminRbac();
         setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleNameRequired", "Role name is required."), "bad");
+        document.getElementById("appAdminRoleEditName")?.focus();
         return;
       }
       setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.savingRole", "Saving role..."));
@@ -19442,7 +19819,10 @@ def ui_preview_html(
           body: JSON.stringify({name, description, permissions})
         });
         appAdmin.selectedRoleId = payload.role?.id || role.id;
+        appAdmin.roleWizard = {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false};
         await loadAppAdmin();
+        appAdminEnsureRoleWizard(appAdminSelectedRole()).step = 3;
+        renderAppAdminRbac();
         setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleSaved", "Role saved."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminRbacMessage", error.message || String(error), "bad");
@@ -19457,6 +19837,7 @@ def ui_preview_html(
       try {
         await authApiJson(`/api/next/auth/roles/${encodeURIComponent(roleId)}`, {method: "DELETE"});
         appAdmin.selectedRoleId = "";
+        appAdmin.roleWizard = {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false};
         await loadAppAdmin();
         setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleDeleted", "Role deleted."), "good");
       } catch (error) {
@@ -37914,9 +38295,48 @@ def ui_preview_html(
       });
       document.getElementById("appAdminRoleCreateForm")?.addEventListener("submit", (event) => createAppAdminRole(event));
       document.getElementById("appAdminRoleEditForm")?.addEventListener("submit", (event) => saveAppAdminRole(event));
-      document.getElementById("appAdminSavePermissionsButton")?.addEventListener("click", () => saveAppAdminRole());
+      document.getElementById("appAdminRoleEditName")?.addEventListener("input", () => appAdminCaptureRoleWizardDraft());
+      document.getElementById("appAdminRoleEditDescription")?.addEventListener("input", () => appAdminCaptureRoleWizardDraft());
+      document.querySelectorAll("[data-app-admin-role-wizard-step]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminRoleWizardStep(button.dataset.appAdminRoleWizardStep, true));
+      });
+      document.getElementById("appAdminRoleWizardBackButton")?.addEventListener("click", () => {
+        setAppAdminRoleWizardStep((appAdmin.roleWizard?.step || 1) - 1, true);
+      });
+      document.getElementById("appAdminRoleWizardNextButton")?.addEventListener("click", () => setAppAdminRoleWizardStep(2, true));
+      document.getElementById("appAdminSavePermissionsButton")?.addEventListener("click", () => setAppAdminRoleWizardStep(3, true));
       document.getElementById("appAdminSelectAllPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(true));
       document.getElementById("appAdminClearPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(false));
+      document.getElementById("appAdminPermissionEditor")?.addEventListener("click", (event) => {
+        const toggle = event.target.closest("[data-app-admin-permission-domain-toggle]");
+        if (!toggle) return;
+        const domain = toggle.dataset.appAdminPermissionDomainToggle || "";
+        const wizard = appAdmin.roleWizard || {};
+        const openDomains = new Set((wizard.openDomains || []).map(String));
+        const expanded = !openDomains.has(domain);
+        if (expanded) openDomains.add(domain);
+        else openDomains.delete(domain);
+        wizard.openDomains = [...openDomains];
+        toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+        document.getElementById(toggle.getAttribute("aria-controls"))?.classList.toggle("hidden", !expanded);
+      });
+      document.getElementById("appAdminPermissionEditor")?.addEventListener("change", (event) => {
+        const input = event.target.closest("[data-app-admin-role-permission]");
+        if (!input) return;
+        const wizard = appAdminCaptureRoleWizardDraft();
+        const domain = input.dataset.appAdminRolePermissionDomain || "";
+        const domainInputs = [...document.querySelectorAll(`#appAdminPermissionEditor [data-app-admin-role-permission-domain="${CSS.escape(domain)}"]`)];
+        const count = domainInputs.filter((item) => item.checked).length;
+        const countNode = document.querySelector(`[data-app-admin-permission-count="${CSS.escape(domain)}"]`);
+        if (countNode) {
+          countNode.textContent = tNext("appAdmin.permissionAssignedCount", "{assigned} of {total} assigned")
+            .replace("{assigned}", String(count))
+            .replace("{total}", String(domainInputs.length));
+        }
+        const role = appAdminSelectedRole();
+        const preview = document.getElementById("appAdminRoleFeaturePreview");
+        if (preview && role) preview.innerHTML = appAdminRoleFeaturePreviewHtml({...role, permissions: [...wizard.permissions]});
+      });
       document.getElementById("appAdminRoleSimulationSelect")?.addEventListener("change", (event) => {
         appAdmin.simulation.roleId = event.target.value || "";
         if ((appAdmin.simulation || {}).active) refreshAppPermissionSurface();
@@ -37929,8 +38349,7 @@ def ui_preview_html(
         const selectButton = event.target.closest("[data-app-admin-role-select]");
         const deleteButton = event.target.closest("[data-app-admin-role-delete]");
         if (selectButton) {
-          appAdmin.selectedRoleId = selectButton.dataset.appAdminRoleSelect || "";
-          renderAppAdminRbac();
+          selectAppAdminRole(selectButton.dataset.appAdminRoleSelect || "");
         }
         if (deleteButton) deleteAppAdminRole(deleteButton.dataset.appAdminRoleDelete);
       });
