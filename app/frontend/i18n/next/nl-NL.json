@@ -1,4 +1,12 @@
 {
+  "appAdmin.createCustomRoleWizardHelp": "Vul de rolgegevens in. DiscVault maakt de technische sleutel en opent daarna de rechtenwizard.",
+  "appAdmin.roleKeyGenerated": "Gegenereerde rolsleutel",
+  "appAdmin.roleKeyGeneratedHelp": "De sleutel wordt uit de rolnaam gemaakt en kan na het aanmaken niet meer worden gewijzigd.",
+  "appAdmin.roleNameSlugRequired": "Vul een rolnaam met letters of cijfers in.",
+  "appAdmin.roleWizardStartFailed": "De server heeft de aangemaakte rol niet teruggestuurd.",
+  "appAdmin.roleWizardStarted": "Rol aangemaakt. Ken rechten toe om door te gaan.",
+  "appAdmin.startRoleWizardButton": "Start rolwizard",
+  "appAdmin.startingRoleWizard": "Rolwizard starten...",
   "appAdmin.permissionAssignedCount": "{assigned} van {total} toegekend",
   "appAdmin.permissionCategoryHelp": "Open een categorie om de rechten te bekijken. Het aantal toegekende rechten blijft zichtbaar als categorieën zijn ingeklapt.",
   "appAdmin.permissionDomainHelp": "Deze rechten bepalen de mogelijkheden binnen {domain}. Ken alleen acties toe die deze rol nodig heeft.",

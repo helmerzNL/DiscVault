@@ -1,4 +1,12 @@
 {
+  "appAdmin.createCustomRoleWizardHelp": "Enter the role details. DiscVault generates the technical key and opens the permission wizard.",
+  "appAdmin.roleKeyGenerated": "Generated role key",
+  "appAdmin.roleKeyGeneratedHelp": "The key is generated from the role name and cannot be changed after creation.",
+  "appAdmin.roleNameSlugRequired": "Enter a role name containing letters or numbers.",
+  "appAdmin.roleWizardStartFailed": "The role was not returned by the server.",
+  "appAdmin.roleWizardStarted": "Role created. Assign permissions to continue.",
+  "appAdmin.startRoleWizardButton": "Start role wizard",
+  "appAdmin.startingRoleWizard": "Starting role wizard...",
   "appAdmin.permissionAssignedCount": "{assigned} of {total} assigned",
   "appAdmin.permissionCategoryHelp": "Open a category to inspect its permissions. Assigned counts stay visible while categories are collapsed.",
   "appAdmin.permissionDomainHelp": "These permissions control {domain} capabilities. Grant only the actions this role needs.",
