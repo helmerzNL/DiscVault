@@ -12444,7 +12444,7 @@ def ui_preview_html(
           <div class="brand-mark"><img src="/api/next/assets/logo.svg" alt="DiscVault"></div>
           <div>
             <h1>DiscVault</h1>
-            <p data-next-i18n="auth.loginDescription">Log in with your Passkey</p>
+            <p id="appLoginDescription" data-next-i18n="auth.loginDescription">Log in with your Passkey</p>
           </div>
         </div>
         <select id="authLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
@@ -16586,6 +16586,18 @@ def ui_preview_html(
       }
       return "";
     }
+    function passkeyProcessAvailable() {
+      if (currentAuthStatus.passkey_configuration_valid === undefined) return true;
+      if (!currentAuthStatus.passkey_configuration_valid) return false;
+      const rpId = String(currentAuthStatus.rp_id || "").trim().toLowerCase();
+      const hostname = String(window.location.hostname || "").trim().toLowerCase();
+      const configuredOrigins = Array.isArray(currentAuthStatus.rp_origins)
+        ? currentAuthStatus.rp_origins.map((origin) => String(origin || "").trim().toLowerCase())
+        : [];
+      const hostnameMatches = hostname === rpId || hostname.endsWith(`.${rpId}`);
+      const originMatches = !configuredOrigins.length || configuredOrigins.includes(window.location.origin.toLowerCase());
+      return hostnameMatches && originMatches;
+    }
     const APP_PERMISSION_GROUPS = {
       adminTabs: {
         access: ["security.toggle_auth", "security.manage_invite_only", "users.view", "users.invite", "users.manage_passkeys"],
@@ -16847,6 +16859,7 @@ def ui_preview_html(
       if (auth) currentAuthStatus = auth || {};
       const publicRegistration = !!currentAuthStatus.registration_enabled;
       const reviewLoginAvailable = !!currentAuthStatus.legacy_auth_enabled;
+      const passkeysAvailable = passkeyProcessAvailable();
       const loginButton = document.getElementById("appLoginButton");
       const toggleButton = document.getElementById("appInviteToggleButton");
       const reviewToggleButton = document.getElementById("appReviewToggleButton");
@@ -16854,6 +16867,7 @@ def ui_preview_html(
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
       const reviewForm = document.getElementById("appReviewForm");
+      const loginDescription = document.getElementById("appLoginDescription");
       if (loginButton) {
         const key = reviewLoginAvailable ? "legacyAuth.passkeyRecommended" : "auth.loginDescription";
         loginButton.dataset.nextI18n = key;
@@ -16861,6 +16875,14 @@ def ui_preview_html(
           key,
           reviewLoginAvailable ? "Sign in with passkey (recommended)" : "Sign in with passkey"
         );
+      }
+      setElementVisible(loginButton, passkeysAvailable);
+      setElementVisible(toggleButton, passkeysAvailable);
+      if (!passkeysAvailable) document.getElementById("appInviteForm")?.classList.add("hidden");
+      if (loginDescription) {
+        const key = passkeysAvailable ? "auth.loginDescription" : "legacyAuth.signIn";
+        loginDescription.dataset.nextI18n = key;
+        loginDescription.textContent = tNext(key, passkeysAvailable ? "Log in with your Passkey" : "Sign in with password");
       }
       if (toggleButton) {
         const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
@@ -16878,6 +16900,12 @@ def ui_preview_html(
       if (submitButton) {
         submitButton.textContent = tNext("auth.createAccount", "Create account");
       }
+      document.querySelectorAll('[data-security-dashboard-card="passkeys"], [data-admin-dashboard-card="passkeys"]').forEach((card) => {
+        setElementVisible(card, passkeysAvailable);
+      });
+      document.querySelectorAll("[data-app-admin-legacy-passkeys]").forEach((input) => {
+        setElementVisible(input.closest("label"), passkeysAvailable);
+      });
       renderAppAdminVisibility();
       applyAppPermissionVisibility();
     }
@@ -19302,7 +19330,7 @@ def ui_preview_html(
       if (legacyRoleSelect) legacyRoleSelect.innerHTML = appAdminRoleOptions("media_viewer");
       const canManageRegistration = isNativeAdminUser() && hasActualPermission("security.manage_invite_only");
       const canInviteUsers = isNativeAdminUser() && hasActualPermission("users.invite");
-      const canViewPasskeys = isNativeAdminUser() && hasActualPermission("users.manage_passkeys");
+      const canViewPasskeys = passkeyProcessAvailable() && isNativeAdminUser() && hasActualPermission("users.manage_passkeys");
       const canAssignRoles = isNativeAdminUser() && hasActualPermission("users.assign_roles");
       const canDisableUsers = isNativeAdminUser() && hasActualPermission("users.disable");
       const canViewUsers = isNativeAdminUser() && hasActualAnyPermission(["users.view", "users.assign_roles", "users.disable", "users.delete"]);
@@ -19357,7 +19385,7 @@ def ui_preview_html(
               ${legacy.available ? `<div class="profile-add-passkey app-admin-legacy-controls">
                 <input type="password" minlength="15" autocomplete="new-password" data-app-admin-legacy-password="${escapeHtml(user.id)}" placeholder="${escapeHtml(tNext("legacyAuth.temporaryPassword", "Temporary password"))}">
                 <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-mfa="${escapeHtml(user.id)}" ${user.legacy_mfa_required !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.requireMfa", "Require TOTP MFA"))}</label>
-                <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
+                <label class="legacy-checkbox-row ${passkeyProcessAvailable() ? "" : "hidden"}"><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
                 <button type="button" class="secondary-button" data-app-admin-legacy-save="${escapeHtml(user.id)}">${escapeHtml(user.legacy_credential_count ? tNext("legacyAuth.resetPassword", "Reset password") : tNext("legacyAuth.addPassword", "Add password"))}</button>
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button" data-app-admin-legacy-policy="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.savePolicy", "Save policy"))}</button>` : ""}
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button danger" data-app-admin-legacy-remove="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.removePassword", "Remove password"))}</button>` : ""}
@@ -36758,22 +36786,27 @@ def ui_preview_html(
       }
       const migrationLink = document.getElementById("startupMigrationLink");
       if (migrationLink) migrationLink.classList.toggle("hidden", !startup.canStartMigration && !["migration_required", "migration_running", "migration_pending_non_admin"].includes(phase));
+      const legacyBootstrap = !!currentAuthStatus.legacy_bootstrap_available && !!startup.canCreateOwner;
+      const passkeyOnboardingAvailable = !!startup.canCreateOwner && passkeyProcessAvailable();
       const ownerPasskeyButton = document.getElementById("startupOwnerPasskeyButton");
-      const ownerPasskeyUnavailable = startup.canCreateOwner ? webauthnUnavailableReason() : "";
+      const ownerPasskeyUnavailable = passkeyOnboardingAvailable ? webauthnUnavailableReason() : "";
+      const browserPasskeysUnsupported = !window.PublicKeyCredential || !navigator.credentials;
+      const ownerPasskeyMessage = legacyBootstrap && browserPasskeysUnsupported
+        ? ""
+        : ownerPasskeyUnavailable;
       if (ownerPasskeyButton) {
-        ownerPasskeyButton.classList.toggle("hidden", !startup.canCreateOwner);
+        ownerPasskeyButton.classList.toggle("hidden", !passkeyOnboardingAvailable);
         ownerPasskeyButton.disabled = !!ownerPasskeyUnavailable;
       }
       const ownerFields = document.getElementById("startupOwnerFields");
-      const legacyBootstrap = !!currentAuthStatus.legacy_bootstrap_available && !!startup.canCreateOwner;
       const legacyButton = document.getElementById("startupLegacyButton");
       if (legacyButton) legacyButton.classList.toggle("hidden", !legacyBootstrap);
       if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner && !legacyBootstrap);
       if (!legacyBootstrap && !startupLegacyStage) document.getElementById("startupLegacyFields")?.classList.add("hidden");
       const message = document.getElementById("startupMessage");
       if (message) {
-        message.textContent = ownerPasskeyUnavailable || startup.message || "";
-        message.className = `startup-message ${ownerPasskeyUnavailable ? "bad" : ""}`.trim();
+        message.textContent = ownerPasskeyMessage || startup.message || "";
+        message.className = `startup-message ${ownerPasskeyMessage ? "bad" : ""}`.trim();
       }
     }
     async function loadAppSnapshot() {
