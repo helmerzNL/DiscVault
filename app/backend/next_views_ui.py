@@ -483,12 +483,19 @@ def ui_preview_html(
       gap: 14px;
       min-width: 0;
     }
+    .login-brand-copy > div:last-child {
+      min-width: 0;
+    }
     .login-card h1,
     .startup-card h1 {
       margin: 0 0 8px;
       font-size: clamp(2.2rem, 8vw, 4rem);
       line-height: .96;
       letter-spacing: 0;
+    }
+    #startupTitle {
+      max-width: 100%;
+      overflow-wrap: anywhere;
     }
     .login-card p,
     .startup-card p {
@@ -516,7 +523,7 @@ def ui_preview_html(
     }
     .startup-owner-fields {
       margin-top: 18px;
-      width: min(440px, 100%);
+      width: 100%;
     }
     .startup-owner-fields label {
       display: grid;
@@ -12728,7 +12735,10 @@ def ui_preview_html(
             <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
             <input id="appLegacyTotpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
           </label>
-          <label for="appLegacyRecoveryCode">
+          <div class="profile-action-row hidden" id="appLegacyRecoveryAlternative">
+            <button type="button" class="secondary-button" id="appLegacyRecoveryCodeToggle" aria-expanded="false" aria-controls="appLegacyRecoveryCodeField" data-next-i18n="legacyAuth.useRecoveryCode">Use recovery code</button>
+          </div>
+          <label class="hidden" id="appLegacyRecoveryCodeField" for="appLegacyRecoveryCode">
             <span data-next-i18n="legacyAuth.recoveryCodeOptional">Recovery code (instead)</span>
             <input id="appLegacyRecoveryCode" autocomplete="one-time-code">
           </label>
@@ -12806,10 +12816,12 @@ def ui_preview_html(
         <select id="startupLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </label>
       <div class="startup-owner-fields hidden" id="startupOwnerFields">
-        <label for="startupOwnerUsernameInput">
-          <span data-next-i18n="auth.username">Username</span>
-          <input id="startupOwnerUsernameInput" autocomplete="username" maxlength="80" data-next-i18n-placeholder="auth.ownerUsernamePlaceholder" placeholder="Choose your username">
-        </label>
+        <div id="startupOwnerUsernameField">
+          <label for="startupOwnerUsernameInput">
+            <span data-next-i18n="auth.username">Username</span>
+            <input id="startupOwnerUsernameInput" autocomplete="username" maxlength="80" data-next-i18n-placeholder="auth.ownerUsernamePlaceholder" placeholder="Choose your username">
+          </label>
+        </div>
         <div class="hidden" id="startupLegacyFields">
           <div class="startup-onboarding-progress" id="startupLegacyProgress" aria-label="Onboarding progress" data-next-i18n-aria="legacyAuth.onboardingProgress">
             <div class="startup-onboarding-progress-item active" data-startup-legacy-progress="account">
@@ -12828,9 +12840,9 @@ def ui_preview_html(
               <span data-next-i18n="auth.password">Password</span>
               <input id="startupLegacyPassword" type="password" minlength="15" autocomplete="new-password">
             </label>
-            <label class="legacy-checkbox-row" id="startupLegacyRiskOption">
-              <input id="startupLegacyRiskAccepted" type="checkbox">
-              <span data-next-i18n="legacyAuth.acceptRisk">I understand and accept the password risk.</span>
+            <label for="startupLegacyPasswordConfirm">
+              <span data-next-i18n="legacyAuth.confirmPassword">Confirm password</span>
+              <input id="startupLegacyPasswordConfirm" type="password" minlength="15" autocomplete="new-password">
             </label>
             <label class="legacy-checkbox-row hidden" id="startupLegacyMfaOption">
               <input id="startupLegacyMfaEnabled" type="checkbox">
@@ -12863,10 +12875,10 @@ def ui_preview_html(
       </div>
       <div class="startup-actions">
         <button type="button" class="primary-button hidden" id="startupOwnerPasskeyButton" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
-        <button type="button" class="secondary-button hidden" id="startupLegacyButton" data-next-i18n="legacyAuth.setupOwner">Set up password + TOTP</button>
+        <button type="button" class="secondary-button hidden" id="startupLegacyButton" data-next-i18n="legacyAuth.setupOwner">Start</button>
         <a class="primary-button" id="startupMigrationLink" href="/api/next/migration" data-next-i18n="startup.openMigrationGuide">Open migration guide</a>
-        <button type="button" class="secondary-button" id="startupRefreshButton" data-next-i18n="common.refresh">Refresh</button>
-        <button type="button" class="secondary-button" id="startupLogoutButton" data-next-i18n="auth.signOut">Sign out</button>
+        <button type="button" class="secondary-button hidden" id="startupRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+        <button type="button" class="secondary-button hidden" id="startupLogoutButton" data-next-i18n="auth.signOut">Sign out</button>
       </div>
       <div class="startup-message" id="startupMessage"></div>
     </div>
@@ -21380,7 +21392,6 @@ def ui_preview_html(
       startupLegacyMfaOptional = Boolean(currentAuthStatus.legacy_bootstrap_mfa_optional);
       const mfaEnabled = document.getElementById("startupLegacyMfaEnabled");
       if (mfaEnabled) mfaEnabled.checked = false;
-      document.getElementById("startupLegacyRiskOption")?.classList.toggle("hidden", startupLegacyMfaOptional);
       document.getElementById("startupLegacyMfaOption")?.classList.toggle("hidden", !startupLegacyMfaOptional);
       document.getElementById("startupLegacyMfaOptionalHelp")?.classList.toggle("hidden", !startupLegacyMfaOptional);
       const codes = document.getElementById("startupLegacyRecoveryCodes");
@@ -21391,8 +21402,16 @@ def ui_preview_html(
       const fields = document.getElementById("startupLegacyFields");
       const button = document.getElementById("startupLegacyButton");
       if (fields?.classList.contains("hidden")) {
+        const usernameInput = document.getElementById("startupOwnerUsernameInput");
+        const username = String(usernameInput?.value || "").trim();
+        if (!username) {
+          setStartupGateMessage(tNext("auth.usernameRequired", "Username is required."), "bad");
+          usernameInput?.focus();
+          return;
+        }
         resetStartupLegacyWizard();
         fields.classList.remove("hidden");
+        renderStartup(currentStartup);
         document.getElementById("startupLegacyPassword")?.focus();
         return;
       }
@@ -21401,10 +21420,14 @@ def ui_preview_html(
         let url = "/api/next/auth/legacy/bootstrap/start";
         let body = {};
         if (!startupLegacyStage) {
+          const password = String(document.getElementById("startupLegacyPassword")?.value || "");
+          const passwordConfirmation = String(document.getElementById("startupLegacyPasswordConfirm")?.value || "");
+          if (password !== passwordConfirmation) {
+            throw new Error(tNext("legacyAuth.passwordMismatch", "Passwords do not match."));
+          }
           body = {
             username: String(document.getElementById("startupOwnerUsernameInput")?.value || "").trim(),
-            password: String(document.getElementById("startupLegacyPassword")?.value || ""),
-            password_risk_accepted: !!document.getElementById("startupLegacyRiskAccepted")?.checked,
+            password,
             mfa_enabled: !startupLegacyMfaOptional
               || !!document.getElementById("startupLegacyMfaEnabled")?.checked
           };
@@ -21558,6 +21581,16 @@ def ui_preview_html(
       panel?.classList.toggle("hidden");
       setLoginMessage("");
     }
+    function setLegacyRecoveryCodeExpanded(expanded) {
+      const toggle = document.getElementById("appLegacyRecoveryCodeToggle");
+      const field = document.getElementById("appLegacyRecoveryCodeField");
+      const input = document.getElementById("appLegacyRecoveryCode");
+      const isExpanded = legacyStage === "mfa_challenge" && !!expanded;
+      toggle?.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+      field?.classList.toggle("hidden", !isExpanded);
+      if (!isExpanded && input) input.value = "";
+      if (isExpanded) input?.focus();
+    }
     function renderLegacyLoginStage(payload = {}) {
       legacyStage = payload.stage || legacyStage || "";
       legacyFlowToken = payload.flow_token || legacyFlowToken || "";
@@ -21570,6 +21603,10 @@ def ui_preview_html(
       credentials?.classList.toggle("hidden", !!legacyStage);
       passwordChange?.classList.toggle("hidden", legacyStage !== "password_change");
       mfa?.classList.toggle("hidden", !["mfa_enrollment", "mfa_challenge"].includes(legacyStage));
+      const mfaChallenge = legacyStage === "mfa_challenge";
+      document.getElementById("appLegacyRecoveryAlternative")?.classList.toggle("hidden", !mfaChallenge);
+      document.getElementById("appRecoveryToggleButton")?.classList.toggle("hidden", mfaChallenge);
+      setLegacyRecoveryCodeExpanded(false);
       recoveryCodes?.classList.toggle("hidden", legacyStage !== "recovery_codes");
       document.getElementById("appLegacyRecoveryActions")?.classList.toggle("hidden", legacyStage !== "recovery_codes");
       ackLabel?.classList.toggle("hidden", legacyStage !== "recovery_codes");
@@ -37268,12 +37305,26 @@ def ui_preview_html(
     }
     function renderStartup(startup) {
       const phase = startup.phase || "ready";
+      const legacyBootstrap = !!currentAuthStatus.legacy_bootstrap_available && !!startup.canCreateOwner;
+      const passkeyOnboardingAvailable = !!startup.canCreateOwner && passkeyProcessAvailable();
+      const legacyFields = document.getElementById("startupLegacyFields");
+      const legacyWizardOpen = phase === "owner_setup"
+        && legacyBootstrap
+        && !legacyFields?.classList.contains("hidden");
+      const ownerUsername = String(document.getElementById("startupOwnerUsernameInput")?.value || "").trim();
       const title = document.getElementById("startupTitle");
       const description = document.getElementById("startupDescription");
-      if (title) title.textContent = tNext(`startup.phase.${phase}`, startup.message || "DiscVault");
+      if (title) {
+        title.textContent = legacyWizardOpen && ownerUsername
+          ? tNext("startup.helloUser", "Hello, {username}").replace("{username}", ownerUsername)
+          : tNext(`startup.phase.${phase}`, startup.message || "DiscVault");
+        if (legacyWizardOpen && ownerUsername) title.title = ownerUsername;
+        else title.removeAttribute("title");
+      }
       if (description) description.textContent = tNext(`startup.description.${phase}`, startup.message || "");
       const steps = document.getElementById("startupSteps");
       if (steps) {
+        steps.classList.toggle("hidden", phase === "owner_setup");
         steps.innerHTML = (startup.steps || []).map((step) => `
           <div class="startup-step ${escapeHtml(step.state || "")}">
             <strong>${escapeHtml(tNext(`startup.step.${step.key}`, step.label || step.key))}</strong>
@@ -37283,8 +37334,6 @@ def ui_preview_html(
       }
       const migrationLink = document.getElementById("startupMigrationLink");
       if (migrationLink) migrationLink.classList.toggle("hidden", !startup.canStartMigration && !["migration_required", "migration_running", "migration_pending_non_admin"].includes(phase));
-      const legacyBootstrap = !!currentAuthStatus.legacy_bootstrap_available && !!startup.canCreateOwner;
-      const passkeyOnboardingAvailable = !!startup.canCreateOwner && passkeyProcessAvailable();
       renderStartupAuthGuidance(startup);
       const ownerPasskeyButton = document.getElementById("startupOwnerPasskeyButton");
       const ownerPasskeyUnavailable = passkeyOnboardingAvailable ? webauthnUnavailableReason() : "";
@@ -37300,9 +37349,9 @@ def ui_preview_html(
       const legacyButton = document.getElementById("startupLegacyButton");
       if (legacyButton) legacyButton.classList.toggle("hidden", !legacyBootstrap);
       if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner && !legacyBootstrap);
-      if (!legacyBootstrap && !startupLegacyStage) document.getElementById("startupLegacyFields")?.classList.add("hidden");
+      document.getElementById("startupOwnerUsernameField")?.classList.toggle("hidden", legacyWizardOpen);
+      if (!legacyBootstrap && !startupLegacyStage) legacyFields?.classList.add("hidden");
       startupLegacyMfaOptional = Boolean(currentAuthStatus.legacy_bootstrap_mfa_optional);
-      document.getElementById("startupLegacyRiskOption")?.classList.toggle("hidden", startupLegacyMfaOptional);
       document.getElementById("startupLegacyMfaOption")?.classList.toggle("hidden", !startupLegacyMfaOptional);
       document.getElementById("startupLegacyMfaOptionalHelp")?.classList.toggle("hidden", !startupLegacyMfaOptional);
       const bootstrapWarning = document.getElementById("startupLegacyBootstrapWarning");
@@ -37311,9 +37360,18 @@ def ui_preview_html(
           ? tNext("legacyAuth.bootstrapWarningOptional", "Password onboarding is less phishing-resistant. Authenticator MFA is optional for this local setup.")
           : tNext("legacyAuth.bootstrapWarning", "Password onboarding is less phishing-resistant. Authenticator MFA is required.");
       }
+      const refreshPhases = new Set([
+        "schema_blocked",
+        "migration_required",
+        "migration_running",
+        "migration_pending_non_admin",
+        "sign_in_required"
+      ]);
+      document.getElementById("startupRefreshButton")?.classList.toggle("hidden", !refreshPhases.has(phase));
+      document.getElementById("startupLogoutButton")?.classList.toggle("hidden", !currentAuthStatus.authenticated);
       const message = document.getElementById("startupMessage");
       if (message) {
-        message.textContent = ownerPasskeyMessage || startup.message || "";
+        message.textContent = ownerPasskeyMessage || (phase === "owner_setup" ? "" : startup.message || "");
         message.className = `startup-message ${ownerPasskeyMessage ? "bad" : ""}`.trim();
       }
     }
@@ -39582,6 +39640,10 @@ def ui_preview_html(
       document.getElementById("appReviewForm")?.addEventListener("submit", (event) => loginReviewPassword(event));
       document.getElementById("appLegacyCopyCodes")?.addEventListener("click", () => copyLegacyCodes(legacyRecoveryCodes));
       document.getElementById("appLegacyDownloadCodes")?.addEventListener("click", () => downloadLegacyCodes(legacyRecoveryCodes));
+      document.getElementById("appLegacyRecoveryCodeToggle")?.addEventListener("click", () => {
+        const expanded = document.getElementById("appLegacyRecoveryCodeToggle")?.getAttribute("aria-expanded") === "true";
+        setLegacyRecoveryCodeExpanded(!expanded);
+      });
       document.getElementById("appInviteToggleButton")?.addEventListener("click", () => toggleInviteLogin());
       document.getElementById("appInviteForm")?.addEventListener("submit", (event) => registerInviteAccount(event));
       document.getElementById("appRecoveryToggleButton")?.addEventListener("click", () => toggleRecoveryLogin());

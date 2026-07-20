@@ -143,6 +143,27 @@ class NextI18nCompletenessTests(unittest.TestCase):
                     problems.append("{0}:{1}".format(locale, key))
         self.assertEqual(problems, [], "Empty/non-string translations:\n" + "\n".join(problems[:20]))
 
+    def test_auth_and_onboarding_copy_is_complete_and_method_neutral(self):
+        problems = []
+        for path in [self.source_path, *self.locale_files]:
+            locale = os.path.basename(path)
+            data = _load(path)
+            if data.get("legacyAuth.signIn") != data.get("auth.signIn"):
+                problems.append(f"{locale}: legacyAuth.signIn")
+            if data.get("auth.signInWithUsernamePassword") != data.get("auth.signIn"):
+                problems.append(f"{locale}: auth.signInWithUsernamePassword")
+            if "{username}" not in data.get("startup.helloUser", ""):
+                problems.append(f"{locale}: startup.helloUser")
+            for key in (
+                "legacyAuth.setupOwner",
+                "legacyAuth.useRecoveryCode",
+                "startup.description.owner_setup",
+                "startup.phase.owner_setup",
+            ):
+                if not data.get(key, "").strip():
+                    problems.append(f"{locale}: {key}")
+        self.assertEqual(problems, [], "Auth/onboarding copy problems:\n" + "\n".join(problems))
+
     def test_ui_preview_uses_localized_sidebar_toggle_attributes(self):
         with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
             source = handle.read()

@@ -469,7 +469,7 @@ class LegacyAuthContractTests(unittest.TestCase):
             registration_body,
         )
         self.assertGreaterEqual(
-            self.ui_source.count('class="legacy-checkbox-row'), 7
+            self.ui_source.count('class="legacy-checkbox-row'), 6
         )
         self.assertIn(
             'label.legacy-checkbox-row input[type="checkbox"]',
@@ -488,7 +488,7 @@ class LegacyAuthContractTests(unittest.TestCase):
             'mfa_required = body.get("mfa_enabled") is True if mfa_optional else True',
             self.auth_source,
         )
-        self.assertIn(
+        self.assertNotIn(
             'if not mfa_optional and body.get("password_risk_accepted") is not True:',
             self.auth_source,
         )
@@ -509,13 +509,9 @@ class LegacyAuthContractTests(unittest.TestCase):
         self.assertIn('id="appAuthGuidance"', self.ui_source)
         self.assertIn('href="https://docs.discvault.eu"', self.ui_source)
         self.assertIn('id="startupLegacyMfaEnabled"', self.ui_source)
-        self.assertIn('id="startupLegacyRiskOption"', self.ui_source)
-        self.assertGreaterEqual(
-            self.ui_source.count(
-                'document.getElementById("startupLegacyRiskOption")?.classList.toggle("hidden", startupLegacyMfaOptional);'
-            ),
-            2,
-        )
+        self.assertNotIn('id="startupLegacyRiskOption"', self.ui_source)
+        self.assertNotIn('id="startupLegacyRiskAccepted"', self.ui_source)
+        self.assertNotIn("password_risk_accepted:", self.ui_source)
         self.assertIn(
             "mfa_enabled: !startupLegacyMfaOptional",
             self.ui_source,
@@ -549,6 +545,74 @@ class LegacyAuthContractTests(unittest.TestCase):
         self.assertIn(
             "(setupRequired || passkeyConfigurationGuidanceVisible())",
             self.collection_source,
+        )
+
+    def test_totp_recovery_is_a_collapsed_challenge_only_alternative(self):
+        self.assertIn(
+            'id="appLegacyRecoveryCodeToggle" aria-expanded="false" '
+            'aria-controls="appLegacyRecoveryCodeField"',
+            self.ui_source,
+        )
+        self.assertIn(
+            'class="hidden" id="appLegacyRecoveryCodeField"',
+            self.ui_source,
+        )
+        self.assertIn("function setLegacyRecoveryCodeExpanded(expanded)", self.ui_source)
+        self.assertIn('const mfaChallenge = legacyStage === "mfa_challenge";', self.ui_source)
+        self.assertIn(
+            'document.getElementById("appLegacyRecoveryAlternative")?.classList.toggle("hidden", !mfaChallenge);',
+            self.ui_source,
+        )
+        self.assertIn(
+            'document.getElementById("appRecoveryToggleButton")?.classList.toggle("hidden", mfaChallenge);',
+            self.ui_source,
+        )
+        self.assertIn("setLegacyRecoveryCodeExpanded(false);", self.ui_source)
+        self.assertIn(
+            'recoveryCode ? "/api/next/auth/legacy/mfa/recovery" : "/api/next/auth/legacy/mfa/verify"',
+            self.ui_source,
+        )
+
+    def test_owner_onboarding_is_method_neutral_and_validates_confirmation(self):
+        self.assertIn(
+            'id="startupLegacyButton" data-next-i18n="legacyAuth.setupOwner">Start</button>',
+            self.ui_source,
+        )
+        self.assertIn('id="startupOwnerUsernameField"', self.ui_source)
+        self.assertIn('id="startupLegacyPasswordConfirm"', self.ui_source)
+        self.assertIn(
+            'if (password !== passwordConfirmation) {',
+            self.ui_source,
+        )
+        self.assertIn(
+            'tNext("legacyAuth.passwordMismatch", "Passwords do not match.")',
+            self.ui_source,
+        )
+        self.assertIn("width: 100%;", self.ui_source)
+        self.assertIn("overflow-wrap: anywhere;", self.ui_source)
+        self.assertIn(
+            'steps.classList.toggle("hidden", phase === "owner_setup");',
+            self.ui_source,
+        )
+        self.assertIn(
+            'tNext("startup.helloUser", "Hello, {username}")',
+            self.ui_source,
+        )
+        self.assertIn(
+            'document.getElementById("startupOwnerUsernameField")?.classList.toggle("hidden", legacyWizardOpen);',
+            self.ui_source,
+        )
+        self.assertIn(
+            'document.getElementById("startupRefreshButton")?.classList.toggle("hidden", !refreshPhases.has(phase));',
+            self.ui_source,
+        )
+        self.assertIn(
+            'document.getElementById("startupLogoutButton")?.classList.toggle("hidden", !currentAuthStatus.authenticated);',
+            self.ui_source,
+        )
+        self.assertIn(
+            'message.textContent = ownerPasskeyMessage || (phase === "owner_setup" ? "" : startup.message || "");',
+            self.ui_source,
         )
         self.assertIn(
             'id="authReviewButton" class="hidden" data-next-i18n="auth.signIn">Sign in</button>',
