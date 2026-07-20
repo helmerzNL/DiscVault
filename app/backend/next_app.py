@@ -24,6 +24,7 @@ import sqlite3
 import tempfile
 import time
 import uuid
+import unicodedata
 import zipfile
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -7427,6 +7428,7 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "bootstrap": "/api/next/sync/bootstrap",
             "delta": "/api/next/sync/delta",
             "mutations": "/api/next/sync/mutations",
+            "reconcile": "/api/next/sync/reconcile",
             "userBootstrap": "/api/next/sync/user/bootstrap",
             "userDelta": "/api/next/sync/user/delta",
         },
@@ -9171,6 +9173,8 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 location,
                 location_id,
                 owner_id,
+                client_id,
+                deleted_at,
                 metadata,
                 created_at,
                 updated_at
@@ -15263,7 +15267,7 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
                 m.created_at,
                 m.updated_at
             FROM movies m
-            WHERE {visibility_where}
+            WHERE {visibility_where} AND m.deleted_at IS NULL
             ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
             LIMIT %s
             """,
@@ -15320,7 +15324,7 @@ def all_movie_credit_entities(
             WITH bootstrap_movies AS (
                 SELECT m.id, lower(COALESCE(m.sort_title, m.title)) AS order_title, m.year
                 FROM movies m
-                WHERE {visibility_where}
+                WHERE {visibility_where} AND m.deleted_at IS NULL
                 ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
                 LIMIT %s
             )
@@ -15408,7 +15412,7 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.created_at,
                 c.updated_at
             FROM containers c
-            WHERE {visibility_where}
+            WHERE {visibility_where} AND c.deleted_at IS NULL
             ORDER BY c.container_type, lower(c.title)
             LIMIT %s
             """,
@@ -15485,6 +15489,10 @@ class SyncBatchContext:
     def __init__(self) -> None:
         self.consumed_client_entity_ids: set[str] = set()
         self.claimed_barcodes: set[str] = set()
+        # Persistent per-record clientId -> server id created earlier in this
+        # same batch, so the same clientId twice in one batch collapses to one
+        # record (the second mutation reports created=false).
+        self.claimed_client_ids: dict[str, UUID] = {}
 
 
 def movie_id_for_barcode(conn, barcode: str | None) -> UUID | None:
@@ -15495,6 +15503,305 @@ def movie_id_for_barcode(conn, barcode: str | None) -> UUID | None:
         cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
         row = cur.fetchone()
     return row["id"] if row else None
+
+
+def normalize_barcode(barcode: str | None) -> str | None:
+    """Digits-only comparison key for a barcode/EAN (leading zeros preserved).
+
+    Used only for MATCH comparisons in the dedup ladder; barcodes are still
+    stored verbatim so the import/unique paths are untouched.
+    """
+    if not barcode:
+        return None
+    digits = re.sub(r"\D", "", str(barcode))
+    return digits or None
+
+
+def find_movie_by_client_id(conn, client_id: str | None) -> UUID | None:
+    """Trede 1: a live movie already carrying this persistent clientId."""
+    if not client_id:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM movies WHERE client_id=%s AND deleted_at IS NULL",
+            (client_id,),
+        )
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def find_movie_by_barcode_match(conn, barcode: str | None) -> UUID | None:
+    """Trede 2: a live movie whose barcode matches (digits-only, tombstones excluded)."""
+    normalized = normalize_barcode(barcode)
+    if not normalized:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM movies
+            WHERE deleted_at IS NULL
+              AND barcode IS NOT NULL
+              AND regexp_replace(barcode, '\\D', '', 'g') = %s
+            ORDER BY created_at
+            LIMIT 1
+            """,
+            (normalized,),
+        )
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def find_movie_by_tmdb_edition(
+    conn,
+    *,
+    tmdb_id: str | None,
+    fmt: str | None,
+    edition: str | None,
+) -> UUID | None:
+    """Trede 3: same TMDB id AND physical format AND edition (all three).
+
+    Over-merge protection: format must be present and equal on both sides, so a
+    DVD and a 4K UHD of the same film never collapse into one record.
+    """
+    if not tmdb_id or not fmt:
+        return None
+    if not table_exists(conn, "movie_identifiers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT m.id
+            FROM movies m
+            JOIN movie_identifiers mi ON mi.movie_id = m.id
+            WHERE m.deleted_at IS NULL
+              AND lower(mi.provider_id) = 'tmdb'
+              AND mi.identifier_type = 'movie_id'
+              AND mi.identifier = %s
+              AND m.format IS NOT NULL
+              AND lower(m.format) = lower(%s)
+              AND lower(coalesce(m.edition, '')) = lower(coalesce(%s, ''))
+            ORDER BY m.created_at
+            LIMIT 1
+            """,
+            (str(tmdb_id), fmt, edition),
+        )
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def parse_client_timestamp(value: Any) -> datetime | None:
+    """Best-effort parse of a client-supplied ISO-8601 timestamp (tz-aware).
+
+    Used to decide, on a re-pushed create, whether the client's edit is newer
+    than a server-side tombstone (legitimate resurrection) or older (delete wins).
+    """
+    text = clean_text(value)
+    if not text:
+        return None
+    raw = text.strip()
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def find_tombstoned_movie_by_identity(
+    conn,
+    *,
+    persistent_client_id: str | None,
+    barcode: str | None,
+) -> dict[str, Any] | None:
+    """Return a *tombstoned* movie matching the incoming record's clientId
+    (preferred) or barcode, plus how it matched, so an old client replaying a
+    create cannot resurrect a record deleted elsewhere (onderzoek H4)."""
+    if persistent_client_id:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, deleted_at, client_id
+                FROM movies
+                WHERE client_id=%s AND deleted_at IS NOT NULL
+                ORDER BY deleted_at DESC
+                LIMIT 1
+                """,
+                (persistent_client_id,),
+            )
+            row = cur.fetchone()
+        if row:
+            row["matched_by"] = "clientId"
+            return row
+    normalized = normalize_barcode(barcode)
+    if normalized:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, deleted_at, client_id
+                FROM movies
+                WHERE deleted_at IS NOT NULL
+                  AND barcode IS NOT NULL
+                  AND regexp_replace(barcode, '\\D', '', 'g') = %s
+                ORDER BY deleted_at DESC
+                LIMIT 1
+                """,
+                (normalized,),
+            )
+            row = cur.fetchone()
+        if row:
+            row["matched_by"] = "barcode"
+            return row
+    return None
+
+
+def match_existing_movie(
+    *,
+    persistent_client_id: str | None,
+    batch_claimed_client_id: UUID | None,
+    barcode_normalized: str | None,
+    barcode_claimed_in_batch: bool,
+    tmdb_id: str | None,
+    fmt: str | None,
+    duplicate_copy: bool,
+    find_by_client_id,
+    find_by_barcode,
+    find_by_tmdb_edition,
+) -> tuple[UUID | None, str | None]:
+    """Apply the create-path identity ladder and return ``(movie_id, matchedBy)``.
+
+    Strict order within the shared catalogue:
+
+    1. ``clientId`` — the same persistent per-record UUID, either created earlier
+       in this batch (``batch_claimed_client_id``) or already on a live movie.
+    2. barcode/EAN — exact digits-only match against a live movie, *unless* the
+       barcode was already claimed by an earlier create in this batch (a box-set
+       member sharing the container EAN, which must stay a distinct row) or the
+       client explicitly asked for a ``duplicateCopy``.
+    3. TMDB id + format + edition — all three must match (over-merge protection).
+
+    Trede 4 (title+year) is deliberately absent here; it is only active in the
+    first-connect ``/sync/reconcile`` adoption path.
+    """
+    if persistent_client_id and batch_claimed_client_id is not None:
+        return batch_claimed_client_id, "clientId"
+    if persistent_client_id:
+        found = find_by_client_id()
+        if found is not None:
+            return found, "clientId"
+    if barcode_normalized and not duplicate_copy and not barcode_claimed_in_batch:
+        found = find_by_barcode()
+        if found is not None:
+            return found, "barcode"
+    if tmdb_id and fmt:
+        found = find_by_tmdb_edition()
+        if found is not None:
+            return found, "tmdbEdition"
+    return None, None
+
+
+_TITLE_ARTICLES = {"the", "a", "an", "de", "het", "een", "le", "la", "les", "el", "los", "las"}
+
+
+def normalize_title(title: str | None) -> str | None:
+    """Normalize a title for last-resort title+year matching.
+
+    Lowercase, fold diacritics, strip punctuation, drop a leading article, and
+    collapse whitespace. Intentionally aggressive because trede 4 is only used
+    for first-connect adoption where false negatives (a needless create) are
+    safer than false positives, and always gated by an exact year + format match.
+    """
+    text = clean_text(title)
+    if not text:
+        return None
+    folded = unicodedata.normalize("NFKD", text)
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    folded = folded.lower()
+    folded = re.sub(r"[^a-z0-9]+", " ", folded).strip()
+    if not folded:
+        return None
+    parts = folded.split()
+    if len(parts) > 1 and parts[0] in _TITLE_ARTICLES:
+        parts = parts[1:]
+    return " ".join(parts) or None
+
+
+def find_movie_by_title_year(
+    conn,
+    *,
+    title: str | None,
+    year: Any,
+    fmt: str | None,
+) -> UUID | None:
+    """Trede 4 (adoption-only): normalized title + exact year + matching format.
+
+    Over-merge protection: the format must be present and equal on both sides, so
+    a DVD and a 4K UHD of the same film never collapse. If the incoming record has
+    no format we refuse to match (per contract 1.3) and let the caller create.
+    """
+    normalized = normalize_title(title)
+    year_text = clean_text(year)
+    if not normalized or not year_text or not fmt:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT m.id, m.title, m.year
+            FROM movies m
+            WHERE m.deleted_at IS NULL
+              AND m.year = %s
+              AND m.format IS NOT NULL
+              AND lower(m.format) = lower(%s)
+            ORDER BY m.created_at
+            """,
+            (year_text, fmt),
+        )
+        rows = cur.fetchall()
+    for row in rows:
+        if normalize_title(row.get("title")) == normalized:
+            return row["id"]
+    return None
+
+
+def match_reconcile_item(
+    *,
+    persistent_client_id: str | None,
+    barcode_normalized: str | None,
+    tmdb_id: str | None,
+    fmt: str | None,
+    title: str | None,
+    year: Any,
+    find_by_client_id,
+    find_by_barcode,
+    find_by_tmdb_edition,
+    find_by_title_year,
+) -> tuple[UUID | None, str | None]:
+    """First-connect adoption ladder (clientId → barcode → tmdbEdition → titleYear).
+
+    Read-only: never claims batch state and never creates. The title+year tier is
+    active here and *only* here, matching the contract's restriction of the
+    fuzziest tier to the adoption path.
+    """
+    if persistent_client_id:
+        found = find_by_client_id()
+        if found is not None:
+            return found, "clientId"
+    if barcode_normalized:
+        found = find_by_barcode()
+        if found is not None:
+            return found, "barcode"
+    if tmdb_id and fmt:
+        found = find_by_tmdb_edition()
+        if found is not None:
+            return found, "tmdbEdition"
+    if title and year and fmt:
+        found = find_by_title_year()
+        if found is not None:
+            return found, "titleYear"
+    return None, None
 
 
 def resolve_new_movie_identity(
@@ -15568,20 +15875,160 @@ def apply_movie_upsert(
     provided_entity_id = parse_uuid(mutation.get("entityId"), "entityId")
     fields = movie_payload_fields(payload)
 
-    entity_id, healed_barcode = resolve_new_movie_identity(
-        entity_id=provided_entity_id,
-        client_entity_id=client_entity_id,
-        barcode=fields["barcode"],
-        batch_ctx=batch_ctx,
-        lookup_mapping=lambda: client_entity_mapping(
-            conn,
-            client_id=client_id,
-            entity_type="movie",
-            client_entity_id=client_entity_id,
-        ),
-        barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
+    # Persistent per-record identity fields (contract Deel 1). These are distinct
+    # from the throwaway clientEntityId/clientMutationId: clientId is a stable
+    # UUID minted once at record creation and reused across devices/retries.
+    persistent_client_id = clean_text(
+        payload.get("clientId") or payload.get("client_id")
     )
+    tmdb_id = clean_text(
+        payload.get("tmdbId") or payload.get("tmdb_id") or payload.get("tmdbID")
+    )
+    duplicate_copy = bool(payload.get("duplicateCopy") or payload.get("duplicate_copy"))
+
+    matched_by: str | None = None
+    ladder_entity_id: UUID | None = None
+    resurrect_tombstone = False
+    if batch_ctx is not None and provided_entity_id is None:
+        # Only run the dedup ladder for genuinely new records. A record already
+        # mapped via clientEntityId is a normal idempotent device re-push and
+        # must stay an update (matchedBy null), not a fresh match.
+        mapped_existing = (
+            client_entity_mapping(
+                conn,
+                client_id=client_id,
+                entity_type="movie",
+                client_entity_id=client_entity_id,
+            )
+            if client_entity_id
+            else None
+        )
+        if mapped_existing is None:
+            barcode_norm = normalize_barcode(fields["barcode"])
+            barcode_claimed = bool(barcode_norm) and any(
+                normalize_barcode(code) == barcode_norm
+                for code in batch_ctx.claimed_barcodes
+            )
+            batch_claimed_cid = (
+                batch_ctx.claimed_client_ids.get(persistent_client_id)
+                if persistent_client_id
+                else None
+            )
+            ladder_entity_id, matched_by = match_existing_movie(
+                persistent_client_id=persistent_client_id,
+                batch_claimed_client_id=batch_claimed_cid,
+                barcode_normalized=barcode_norm,
+                barcode_claimed_in_batch=barcode_claimed,
+                tmdb_id=tmdb_id,
+                fmt=fields["format"],
+                duplicate_copy=duplicate_copy,
+                find_by_client_id=lambda: find_movie_by_client_id(
+                    conn, persistent_client_id
+                ),
+                find_by_barcode=lambda: find_movie_by_barcode_match(
+                    conn, fields["barcode"]
+                ),
+                find_by_tmdb_edition=lambda: find_movie_by_tmdb_edition(
+                    conn,
+                    tmdb_id=tmdb_id,
+                    fmt=fields["format"],
+                    edition=fields["edition"],
+                ),
+            )
+
+    if ladder_entity_id is not None:
+        entity_id = ladder_entity_id
+        healed_barcode = fields["barcode"]
+    else:
+        # H4 tombstone guard: before minting a fresh id, check whether this
+        # record's identity belongs to a tombstoned row. Reusing that id (instead
+        # of creating a new one) prevents a resurrection duplicate. Whether the
+        # row comes back to life depends on client edit time vs. the tombstone.
+        if provided_entity_id is None and batch_ctx is not None and not duplicate_copy:
+            tomb = find_tombstoned_movie_by_identity(
+                conn,
+                persistent_client_id=persistent_client_id,
+                barcode=fields["barcode"],
+            )
+            if tomb is not None:
+                matched_by = tomb["matched_by"]
+                client_ts = parse_client_timestamp(
+                    payload.get("updatedAt")
+                    or payload.get("updated_at")
+                    or payload.get("clientUpdatedAt")
+                )
+                deleted_at = tomb.get("deleted_at")
+                resurrect = (
+                    client_ts is not None
+                    and deleted_at is not None
+                    and client_ts > deleted_at
+                )
+                if not resurrect:
+                    # Delete wins: do not touch the tombstone. Map the client's
+                    # temp id to it and return the deleted record so the client
+                    # learns (via response + delta) that it is gone.
+                    store_client_entity_mapping(
+                        conn,
+                        client_id=client_id,
+                        client_entity_id=client_entity_id,
+                        entity_type="movie",
+                        entity_id=tomb["id"],
+                        idem_key=idem_key,
+                    )
+                    entity = movie_entity(conn, tomb["id"]) or {}
+                    revision = next_revision(conn)
+                    return {
+                        "clientMutationId": mutation["clientMutationId"],
+                        "status": "applied",
+                        "entityType": "movie",
+                        "operation": "upsert",
+                        "entityId": tomb["id"],
+                        "clientEntityId": client_entity_id,
+                        "revision": revision,
+                        "entity": entity,
+                        "created": False,
+                        "matchedBy": matched_by,
+                        "recordClientId": persistent_client_id,
+                        "tombstoned": True,
+                    }
+                # Resurrection: reuse the tombstoned id and clear deleted_at below.
+                entity_id = tomb["id"]
+                healed_barcode = fields["barcode"]
+                resurrect_tombstone = True
+            else:
+                entity_id, healed_barcode = resolve_new_movie_identity(
+                    entity_id=provided_entity_id,
+                    client_entity_id=client_entity_id,
+                    barcode=fields["barcode"],
+                    batch_ctx=batch_ctx,
+                    lookup_mapping=lambda: client_entity_mapping(
+                        conn,
+                        client_id=client_id,
+                        entity_type="movie",
+                        client_entity_id=client_entity_id,
+                    ),
+                    barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
+                )
+        else:
+            entity_id, healed_barcode = resolve_new_movie_identity(
+                entity_id=provided_entity_id,
+                client_entity_id=client_entity_id,
+                barcode=fields["barcode"],
+                batch_ctx=batch_ctx,
+                lookup_mapping=lambda: client_entity_mapping(
+                    conn,
+                    client_id=client_id,
+                    entity_type="movie",
+                    client_entity_id=client_entity_id,
+                ),
+                barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
+            )
     existing = movie_entity(conn, entity_id)
+    created = existing is None
+    if created:
+        # A brand-new record was not "matched"; matchedBy only describes how an
+        # existing record was found by the dedup ladder.
+        matched_by = None
     title = fields["title"] or (existing or {}).get("title")
     if not title:
         raise NextApiError("Movie title is required for upsert", 400)
@@ -15614,13 +16061,14 @@ def apply_movie_upsert(
                 purchase_date,
                 purchase_price,
                 location,
+                client_id,
                 metadata,
                 created_at,
                 updated_at
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -15643,6 +16091,7 @@ def apply_movie_upsert(
                 purchase_date=COALESCE(EXCLUDED.purchase_date, movies.purchase_date),
                 purchase_price=COALESCE(EXCLUDED.purchase_price, movies.purchase_price),
                 location=COALESCE(EXCLUDED.location, movies.location),
+                client_id=COALESCE(movies.client_id, EXCLUDED.client_id),
                 metadata=movies.metadata || EXCLUDED.metadata,
                 updated_at=now()
             """,
@@ -15668,9 +16117,39 @@ def apply_movie_upsert(
                 fields["purchase_date"],
                 fields["purchase_price"],
                 fields["location"],
+                persistent_client_id,
                 Jsonb(fields["metadata"]),
             ),
         )
+
+    # Persist the TMDB identifier so trede 3 (tmdb+format+edition) can match on a
+    # later sync. Idempotent: the composite PK makes re-writes a no-op.
+    if tmdb_id and table_exists(conn, "movie_identifiers"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movie_identifiers
+                    (movie_id, provider_id, identifier_type, identifier)
+                VALUES (%s, 'tmdb', 'movie_id', %s)
+                ON CONFLICT (movie_id, provider_id, identifier_type, identifier)
+                DO NOTHING
+                """,
+                (entity_id, str(tmdb_id)),
+            )
+
+    # Resurrect a tombstoned record only when the client's edit post-dates the
+    # deletion (decided above); otherwise the delete-wins path returned earlier.
+    if resurrect_tombstone:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE movies SET deleted_at=NULL, updated_at=now() WHERE id=%s",
+                (entity_id,),
+            )
+
+    # Record this create for batch-local dedup so a repeated clientId within the
+    # same batch collapses onto this row (created=false on the second item).
+    if created and batch_ctx is not None and persistent_client_id:
+        batch_ctx.claimed_client_ids[persistent_client_id] = entity_id
 
     store_client_entity_mapping(
         conn,
@@ -15687,6 +16166,9 @@ def apply_movie_upsert(
         "clientId": client_id,
         "clientEntityId": client_entity_id,
         "clientMutationId": mutation["clientMutationId"],
+        "created": created,
+        "matchedBy": matched_by,
+        "recordClientId": persistent_client_id,
     }
     sync_change(
         conn,
@@ -15705,6 +16187,9 @@ def apply_movie_upsert(
         "clientEntityId": client_entity_id,
         "revision": revision,
         "entity": entity,
+        "created": created,
+        "matchedBy": matched_by,
+        "recordClientId": persistent_client_id,
     }
 
 
@@ -15726,10 +16211,24 @@ def apply_movie_delete(
     if not entity_id:
         raise NextApiError("Movie delete requires entityId or mapped clientEntityId", 400)
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM movies WHERE id=%s RETURNING id", (entity_id,))
+        cur.execute(
+            """
+            UPDATE movies
+            SET deleted_at=now(), updated_at=now()
+            WHERE id=%s AND deleted_at IS NULL
+            RETURNING id
+            """,
+            (entity_id,),
+        )
         deleted = cur.fetchone()
     if not deleted:
-        raise NextApiError("Movie not found", 404)
+        # Idempotent: re-deleting an already-tombstoned record still succeeds and
+        # re-emits the deletion into the delta feed. Only a truly unknown id 404s.
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM movies WHERE id=%s", (entity_id,))
+            row = cur.fetchone()
+        if not row:
+            raise NextApiError("Movie not found", 404)
     revision = next_revision(conn)
     payload = {
         "entityId": entity_id,
@@ -15905,7 +16404,28 @@ def apply_container_delete(
     )
     if not entity_id:
         raise NextApiError("Container delete requires entityId or mapped clientEntityId", 400)
-    delete_container_records(conn, entity_id, delete_members=False)
+    # Soft delete (tombstone) rather than a hard cascade: the delta feed emits the
+    # deletion so clients prune locally, and a re-pushed old copy hits the H4 guard
+    # instead of resurrecting the box set. Membership links are left intact.
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE containers
+            SET deleted_at=now(), updated_at=now()
+            WHERE id=%s AND deleted_at IS NULL
+            RETURNING id
+            """,
+            (entity_id,),
+        )
+        tombstoned = cur.fetchone()
+    if not tombstoned:
+        # Idempotent re-delete: already tombstoned still succeeds and re-emits the
+        # deletion; a truly unknown id 404s.
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM containers WHERE id=%s", (entity_id,))
+            row = cur.fetchone()
+        if not row:
+            raise NextApiError("Container not found", 404)
     revision = emit_container_change(conn, entity_id, operation="delete")
     return {
         "clientMutationId": mutation["clientMutationId"],
@@ -28287,6 +28807,89 @@ def register_routes(flask_app: Flask) -> None:
             {
                 "status": "ok",
                 "baseRevision": base_revision,
+                "currentRevision": revision,
+                "results": results,
+            }
+        )
+
+    @flask_app.post("/api/next/sync/reconcile")
+    def sync_reconcile():
+        """First-connect adoption: the client offers its full local list and gets
+        back, per item, whether the server already has that record (``matched``
+        with the server id + ``matchedBy``) or not (``unknown``). Read-only — no
+        creates, no mutations. This is the only path where the title+year tier is
+        active, keeping the fuzziest match confined to first connect."""
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Reconcile request body must be an object", 400)
+        client_id = str(body.get("clientId") or "").strip()
+        if not client_id:
+            raise NextApiError("clientId is required", 400)
+        items = body.get("items")
+        if not isinstance(items, list):
+            raise NextApiError("items must be a list", 400)
+        if len(items) > 1000:
+            raise NextApiError("At most 1000 items can be reconciled at once", 400)
+
+        results: list[dict[str, Any]] = []
+        with connect() as conn:
+            require_next_authenticated_user(conn)
+            revision = current_revision(conn)
+            for item in items:
+                if not isinstance(item, dict):
+                    results.append({"status": "invalid", "matched": False})
+                    continue
+                persistent_client_id = clean_text(
+                    item.get("clientId") or item.get("client_id")
+                )
+                barcode = item.get("barcode")
+                barcode_normalized = normalize_barcode(barcode)
+                tmdb_id = clean_text(
+                    item.get("tmdbId") or item.get("tmdb_id") or item.get("tmdbID")
+                )
+                fmt = clean_text(item.get("format"))
+                edition = clean_text(item.get("edition"))
+                title = item.get("title")
+                year = item.get("year")
+                matched_id, matched_by = match_reconcile_item(
+                    persistent_client_id=persistent_client_id,
+                    barcode_normalized=barcode_normalized,
+                    tmdb_id=tmdb_id,
+                    fmt=fmt,
+                    title=title,
+                    year=year,
+                    find_by_client_id=lambda: find_movie_by_client_id(
+                        conn, persistent_client_id
+                    ),
+                    find_by_barcode=lambda: find_movie_by_barcode_match(conn, barcode),
+                    find_by_tmdb_edition=lambda: find_movie_by_tmdb_edition(
+                        conn, tmdb_id=tmdb_id, fmt=fmt, edition=edition
+                    ),
+                    find_by_title_year=lambda: find_movie_by_title_year(
+                        conn, title=title, year=year, fmt=fmt
+                    ),
+                )
+                if matched_id is not None:
+                    results.append(
+                        {
+                            "clientId": persistent_client_id,
+                            "status": "matched",
+                            "matched": True,
+                            "entityId": str(matched_id),
+                            "matchedBy": matched_by,
+                        }
+                    )
+                else:
+                    results.append(
+                        {
+                            "clientId": persistent_client_id,
+                            "status": "unknown",
+                            "matched": False,
+                        }
+                    )
+        return response(
+            {
+                "status": "ok",
                 "currentRevision": revision,
                 "results": results,
             }
