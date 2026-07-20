@@ -9324,21 +9324,31 @@ def ui_preview_html(
       grid-column: 1 / -1;
     }
     .app-admin-people-tabs,
-    .app-admin-roles-tabs {
+    .app-admin-roles-tabs,
+    .app-admin-operations-tabs {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     .app-admin-roles-tabs {
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
+    .app-admin-operations-tabs {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
     .app-admin-people-panel,
-    .app-admin-roles-panel {
+    .app-admin-roles-panel,
+    .app-admin-operations-panel {
       display: none;
       min-width: 0;
     }
     .app-admin-people-panel.active,
-    .app-admin-roles-panel.active {
+    .app-admin-roles-panel.active,
+    .app-admin-operations-panel.active {
       display: grid;
       gap: 14px;
+    }
+    .app-admin-operations-tab-status {
+      min-width: 24px;
+      justify-content: center;
     }
     .app-admin-summary-grid {
       display: grid;
@@ -12349,7 +12359,8 @@ def ui_preview_html(
       .profile-dashboard-tabs,
       .profile-api-submenu,
       .app-admin-people-tabs,
-      .app-admin-roles-tabs {
+      .app-admin-roles-tabs,
+      .app-admin-operations-tabs {
         grid-template-columns: repeat(4, minmax(52px, 1fr));
         gap: 6px;
         width: 100%;
@@ -12360,6 +12371,12 @@ def ui_preview_html(
       .profile-api-submenu,
       .app-admin-people-tabs {
         grid-template-columns: repeat(3, minmax(52px, 1fr));
+      }
+      .app-admin-operations-tabs {
+        grid-template-columns: repeat(5, minmax(48px, 1fr));
+      }
+      .app-admin-operations-tabs .app-admin-operations-tab-status {
+        display: none;
       }
       .profile-dashboard-tabs button,
       .profile-api-submenu button {
@@ -15703,58 +15720,120 @@ def ui_preview_html(
           </div>
         </section>
         <section class="app-admin-panel" id="appAdminPanelOperations" role="tabpanel" aria-labelledby="appAdminTabOperations" aria-hidden="true" tabindex="0" data-app-admin-panel="operations">
-          <section class="profile-grid">
-            <div class="detail-card profile-card full">
-              <div class="profile-passkey-head">
-                <div>
-                  <h3 data-next-i18n="appAdmin.operationsTitle">Operations</h3>
-                  <p data-next-i18n="appAdmin.operationsHelp">A compact control room for metadata, plugins, imports, duplicates and automation readiness.</p>
-                </div>
-                <button type="button" class="secondary-button" id="appAdminRefreshOperationsButton" data-next-i18n="appAdmin.refreshOperations">Refresh operations</button>
+          <div class="profile-dashboard app-admin-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("preferences") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="appAdmin.operationsTitle">Operations</h4>
+                <p data-next-i18n="appAdmin.operationsHelp">A compact control room for metadata, plugins, imports, duplicates and automation readiness.</p>
               </div>
-              <div class="operations-dashboard" id="appAdminOperationsDashboard"></div>
-              <div class="login-message" id="appAdminOperationsMessage"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <div class="profile-passkey-head">
-                <div>
-                  <h3 data-next-i18n="appAdmin.collectionHealthTitle">Collection Health</h3>
-                  <p data-next-i18n="appAdmin.collectionHealthHelp">Find missing artwork, barcodes, empty containers and duplicate signals before they become messy.</p>
+            </header>
+            <nav class="detail-submenu profile-dashboard-tabs app-admin-operations-tabs" role="tablist" aria-label="Operations sections" data-next-i18n-aria="appAdmin.operationsTitle">
+              <button type="button" class="active" id="appAdminOperationsTabOverview" role="tab" aria-label="Overview" data-next-i18n-aria="appAdmin.rolesTabOverview" aria-selected="true" aria-controls="appAdminOperationsPanelOverview" tabindex="0" data-app-admin-operations-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabHealth" aria-hidden="true">-</span></button>
+              <button type="button" id="appAdminOperationsTabCollection" role="tab" aria-label="Collection Health" data-next-i18n-aria="appAdmin.collectionHealthTitle" aria-selected="false" aria-controls="appAdminOperationsPanelCollection" tabindex="-1" data-app-admin-operations-tab="collection">""" + nav_icon("library_preferences") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.collectionHealthTitle">Collection Health</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabIssues" aria-hidden="true">-</span></button>
+              <button type="button" id="appAdminOperationsTabReadiness" role="tab" aria-label="Feature readiness" data-next-i18n-aria="appAdmin.operationsFeatures" aria-selected="false" aria-controls="appAdminOperationsPanelReadiness" tabindex="-1" data-app-admin-operations-tab="readiness">""" + nav_icon("devices") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.operationsFeatures">Feature readiness</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabReady" aria-hidden="true">-</span></button>
+              <button type="button" id="appAdminOperationsTabPolicy" role="tab" aria-label="Policy" data-next-i18n-aria="appAdmin.policy" aria-selected="false" aria-controls="appAdminOperationsPanelPolicy" tabindex="-1" data-app-admin-operations-tab="policy">""" + nav_icon("security") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.policy">Policy</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabPolicies" aria-hidden="true">-</span></button>
+              <button type="button" id="appAdminOperationsTabActivity" role="tab" aria-label="Recent signals" data-next-i18n-aria="appAdmin.operationsSignals" aria-selected="false" aria-controls="appAdminOperationsPanelActivity" tabindex="-1" data-app-admin-operations-tab="activity">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.operationsSignals">Recent signals</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabSignals" aria-hidden="true">-</span></button>
+            </nav>
+            <div class="app-admin-operations-panel active" id="appAdminOperationsPanelOverview" role="tabpanel" aria-labelledby="appAdminOperationsTabOverview" aria-hidden="false" data-app-admin-operations-panel="overview">
+              <section class="profile-dashboard-card primary full">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.health">Health</h4>
+                      <p data-next-i18n="appAdmin.operationsHelp">A compact control room for metadata, plugins, imports, duplicates and automation readiness.</p>
+                    </div>
+                  </div>
+                  <button type="button" class="secondary-button" id="appAdminRefreshOperationsButton" data-next-i18n="appAdmin.refreshOperations">Refresh operations</button>
                 </div>
-                <span class="tag" id="appAdminCollectionHealthStatus">-</span>
+                <div class="operations-dashboard" id="appAdminOperationsDashboard"></div>
+                <div class="login-message" id="appAdminOperationsMessage" aria-live="polite"></div>
+              </section>
+            </div>
+            <div class="app-admin-operations-panel" id="appAdminOperationsPanelCollection" role="tabpanel" aria-labelledby="appAdminOperationsTabCollection" aria-hidden="true" data-app-admin-operations-panel="collection">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary full">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("library_preferences") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.collectionHealthTitle">Collection Health</h4>
+                        <p data-next-i18n="appAdmin.collectionHealthHelp">Find missing artwork, barcodes, empty containers and duplicate signals before they become messy.</p>
+                      </div>
+                    </div>
+                    <span class="tag" id="appAdminCollectionHealthStatus">-</span>
+                  </div>
+                  <div class="operations-dashboard" id="appAdminCollectionHealthSummary"></div>
+                  <div class="operations-row-list" id="appAdminCollectionHealthIssues"></div>
+                </section>
+                <section class="profile-dashboard-card full">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("discover") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.duplicateCenter">Duplicate detection</h4>
+                      <p data-next-i18n="appAdmin.duplicateCenterHelp">Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.</p>
+                    </div>
+                  </div>
+                  <div class="operations-row-list" id="appAdminDuplicateCenter"></div>
+                </section>
               </div>
-              <div class="operations-dashboard" id="appAdminCollectionHealthSummary"></div>
-              <div class="operations-row-list" id="appAdminCollectionHealthIssues"></div>
             </div>
-            <div class="detail-card profile-card full" id="appAdminArtworkTrashCard">
-              <h3 data-next-i18n="appAdmin.operationsFeatures">Feature readiness</h3>
-              <div class="operations-feature-grid" id="appAdminOperationsFeatures"></div>
+            <div class="app-admin-operations-panel" id="appAdminOperationsPanelReadiness" role="tabpanel" aria-labelledby="appAdminOperationsTabReadiness" aria-hidden="true" data-app-admin-operations-panel="readiness">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary full" id="appAdminArtworkTrashCard">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("devices") + """</span>
+                    <div><h4 data-next-i18n="appAdmin.operationsFeatures">Feature readiness</h4></div>
+                  </div>
+                  <div class="operations-feature-grid" id="appAdminOperationsFeatures"></div>
+                </section>
+                <section class="profile-dashboard-card full">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("structure") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.v26FeatureActionCenter">v26 Feature Action Center</h4>
+                      <p data-next-i18n="appAdmin.v26FeatureActionCenterHelp">Ten larger feature tracks with their owner surface, status and required permissions.</p>
+                    </div>
+                  </div>
+                  <div class="operations-feature-grid feature-cluster-grid" id="appAdminFeatureClusters"></div>
+                </section>
+              </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.v26FeatureActionCenter">v26 Feature Action Center</h3>
-              <p data-next-i18n="appAdmin.v26FeatureActionCenterHelp">Ten larger feature tracks with their owner surface, status and required permissions.</p>
-              <div class="operations-feature-grid feature-cluster-grid" id="appAdminFeatureClusters"></div>
+            <div class="app-admin-operations-panel" id="appAdminOperationsPanelPolicy" role="tabpanel" aria-labelledby="appAdminOperationsTabPolicy" aria-hidden="true" data-app-admin-operations-panel="policy">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("preferences") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.providerConflictPolicy">Provider priority & conflict policy</h4>
+                      <p data-next-i18n="appAdmin.providerConflictPolicyHelp">Shows which metadata source wins when providers disagree, and how protected artwork behaves.</p>
+                    </div>
+                  </div>
+                  <div class="operations-row-list" id="appAdminProviderPolicy"></div>
+                </section>
+                <section class="profile-dashboard-card">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("api") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.apiTokenPresets">API token presets</h4>
+                      <p data-next-i18n="appAdmin.apiTokenPresetsHelp">Suggested permission bundles for bots, MCP clients and automations. Only permissions you can grant are shown as available.</p>
+                    </div>
+                  </div>
+                  <div class="operations-row-list" id="appAdminApiTokenPresets"></div>
+                </section>
+              </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.duplicateCenter">Duplicate detection</h3>
-              <p data-next-i18n="appAdmin.duplicateCenterHelp">Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.</p>
-              <div class="operations-row-list" id="appAdminDuplicateCenter"></div>
+            <div class="app-admin-operations-panel" id="appAdminOperationsPanelActivity" role="tabpanel" aria-labelledby="appAdminOperationsTabActivity" aria-hidden="true" data-app-admin-operations-panel="activity">
+              <section class="profile-dashboard-card primary full">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("lists") + """</span>
+                  <div><h4 data-next-i18n="appAdmin.operationsSignals">Recent signals</h4></div>
+                </div>
+                <div class="operations-row-list" id="appAdminOperationsSignals"></div>
+              </section>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.providerConflictPolicy">Provider priority & conflict policy</h3>
-              <p data-next-i18n="appAdmin.providerConflictPolicyHelp">Shows which metadata source wins when providers disagree, and how protected artwork behaves.</p>
-              <div class="operations-row-list" id="appAdminProviderPolicy"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.apiTokenPresets">API token presets</h3>
-              <p data-next-i18n="appAdmin.apiTokenPresetsHelp">Suggested permission bundles for bots, MCP clients and automations. Only permissions you can grant are shown as available.</p>
-              <div class="operations-row-list" id="appAdminApiTokenPresets"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.operationsSignals">Recent signals</h3>
-              <div class="operations-row-list" id="appAdminOperationsSignals"></div>
-            </div>
-          </section>
+          </div>
         </section>
         <section class="app-admin-panel" id="appAdminPanelPlugins" role="tabpanel" aria-labelledby="appAdminTabPlugins" aria-hidden="true" tabindex="0" data-app-admin-panel="plugins">
           <section class="profile-grid">
@@ -16198,6 +16277,7 @@ def ui_preview_html(
       activeTab: "access",
       activeUsersTab: localStorage.getItem("dv_next_admin_users_tab") || "settings",
       activeRolesTab: localStorage.getItem("dv_next_admin_roles_tab") || "overview",
+      activeOperationsTab: localStorage.getItem("dv_next_admin_operations_tab") || "overview",
       activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "registry",
       activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "metadata_source",
       auditCategory: "",
@@ -17303,6 +17383,7 @@ def ui_preview_html(
       });
       if (appAdmin.activeTab === "users") setAppAdminUsersTab(appAdmin.activeUsersTab);
       if (appAdmin.activeTab === "roles") setAppAdminRolesTab(appAdmin.activeRolesTab);
+      if (appAdmin.activeTab === "operations") setAppAdminOperationsTab(appAdmin.activeOperationsTab);
     }
     function handleAppAdminTabKeydown(button, event) {
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
@@ -17396,6 +17477,37 @@ def ui_preview_html(
       if (event.key === "End") nextIndex = buttons.length - 1;
       const nextButton = buttons[nextIndex];
       setAppAdminRolesTab(nextButton.dataset.appAdminRolesTab);
+      nextButton.focus();
+    }
+    function setAppAdminOperationsTab(tab) {
+      const allowed = ["overview", "collection", "readiness", "policy", "activity"];
+      appAdmin.activeOperationsTab = allowed.includes(tab) ? tab : "overview";
+      localStorage.setItem("dv_next_admin_operations_tab", appAdmin.activeOperationsTab);
+      document.querySelectorAll("[data-app-admin-operations-tab]").forEach((button) => {
+        const active = button.dataset.appAdminOperationsTab === appAdmin.activeOperationsTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-operations-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminOperationsPanel === appAdmin.activeOperationsTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminOperationsTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-operations-tab]")];
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminOperationsTab(nextButton.dataset.appAdminOperationsTab);
       nextButton.focus();
     }
     function setAppAdminPluginTab(tab) {
@@ -18740,6 +18852,22 @@ def ui_preview_html(
       const features = operations.features || [];
       const readyFeatures = features.filter((feature) => ["ready", "ok", "healthy"].includes(String(feature.status || "").toLowerCase())).length;
       const attentionFeatures = features.filter((feature) => ["attention", "failed", "error"].includes(String(feature.status || "").toLowerCase())).length;
+      const collectionIssueCount = Number((((operations.collectionHealth || {}).counts || {}).totalIssues) || 0);
+      const policyCount = (pluginPolicy.sourceOrder || []).length;
+      const signalCount = ((operations.jobs || {}).latest || []).length + ((operations.audit || {}).receiver || []).length;
+      const tabStatuses = [
+        ["appAdminOperationsTabHealth", appAdminOperationsStatusLabel(health.status || "ok"), appAdminOperationsStatusClass(health.status || "ok")],
+        ["appAdminOperationsTabIssues", formatNumber(collectionIssueCount), collectionIssueCount ? "bad" : "good"],
+        ["appAdminOperationsTabReady", `${formatNumber(readyFeatures)}/${formatNumber(features.length)}`, attentionFeatures ? "blue" : "good"],
+        ["appAdminOperationsTabPolicies", formatNumber(policyCount), policyCount ? "good" : ""],
+        ["appAdminOperationsTabSignals", formatNumber(signalCount), signalCount ? "blue" : ""]
+      ];
+      tabStatuses.forEach(([id, label, tone]) => {
+        const node = document.getElementById(id);
+        if (!node) return;
+        node.textContent = label;
+        node.className = `tag app-admin-operations-tab-status ${tone || ""}`.trim();
+      });
       renderAppAdminCollectionHealth();
       dashboard.innerHTML = operations.status === undefined && !operations.counts
         ? `<div class="preview-empty">${escapeHtml(tNext("appAdmin.operationsNotLoaded", "Operations data has not been loaded yet."))}</div>`
@@ -19770,6 +19898,7 @@ def ui_preview_html(
       setElementVisible(document.querySelector('[data-app-admin-users-tab="users"]'), canViewUsers);
       setElementVisible(document.querySelector('[data-app-admin-users-tab="groups"]'), canViewGroups);
       setAppAdminUsersTab(appAdmin.activeUsersTab);
+      setAppAdminOperationsTab(appAdmin.activeOperationsTab);
       setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasActualPermission("admin.restore_functional"));
       setElementVisible(document.getElementById("appAdminRefreshBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
       setElementVisible(document.getElementById("appAdminExportBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
@@ -39034,6 +39163,10 @@ def ui_preview_html(
       document.querySelectorAll("[data-app-admin-roles-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminRolesTab(button.dataset.appAdminRolesTab));
         button.addEventListener("keydown", (event) => handleAppAdminRolesTabKeydown(button, event));
+      });
+      document.querySelectorAll("[data-app-admin-operations-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminOperationsTab(button.dataset.appAdminOperationsTab));
+        button.addEventListener("keydown", (event) => handleAppAdminOperationsTabKeydown(button, event));
       });
       document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminPluginTab(button.dataset.appAdminPluginTab));
