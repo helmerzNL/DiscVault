@@ -9,6 +9,7 @@ import hmac
 import json
 import re
 import socket
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -40,6 +41,11 @@ DEFAULT_TIMEOUT_SECONDS = 20
 DEFAULT_MAX_MANIFEST_BYTES = 64 * 1024
 DEFAULT_MAX_ARTIFACT_BYTES = 128 * 1024 * 1024
 DEFAULT_MAX_BUCKET_BYTES = 8 * 1024 * 1024
+RELEASE_DETAILS_CONTRACT = "release-technical-1"
+DEFAULT_MAX_RELEASE_DETAILS_BYTES = 256 * 1024
+DEFAULT_RELEASE_DETAILS_POLL_ATTEMPTS = 4
+MAX_RELEASE_DETAILS_POLL_ATTEMPTS = 10
+MAX_RELEASE_DETAILS_POLL_WAIT_SECONDS = 5
 MAX_RECORDS = 2_000_000
 HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COUNTRY_PATTERN = re.compile(r"^[A-Z]{2}$")
@@ -586,6 +592,711 @@ def _request(
     if len(content) > maximum_bytes:
         raise MovieVaultV2Error("response_too_large")
     return status, content, headers
+
+
+def _release_details_object(
+    value: Any,
+    *,
+    required: set[str],
+    optional: set[str],
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise MovieVaultV2Error("release_details_response_invalid")
+    keys = set(value)
+    if not required.issubset(keys) or keys - required - optional:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return value
+
+
+def _release_details_text(
+    value: Any,
+    *,
+    minimum: int = 0,
+    maximum: int,
+    pattern: str | None = None,
+) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) < minimum
+        or len(value) > maximum
+        or (pattern is not None and re.fullmatch(pattern, value) is None)
+    ):
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return value
+
+
+def _release_details_integer(value: Any, *, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return value
+
+
+def _release_details_barcode_value(value: Any, *, error_code: str) -> str:
+    if not isinstance(value, str) or len(value) not in {8, 12, 13, 14} or not value.isdigit():
+        raise MovieVaultV2Error(error_code)
+    expected = (
+        10
+        - sum(
+            int(digit) * (3 if index % 2 == 0 else 1)
+            for index, digit in enumerate(reversed(value[:-1]))
+        )
+        % 10
+    ) % 10
+    if expected != int(value[-1]):
+        raise MovieVaultV2Error(error_code)
+    return value
+
+
+def _release_details_barcode(value: Any, *, scopes: set[str]) -> dict[str, str]:
+    item = _release_details_object(
+        value,
+        required={"type", "value", "scope"},
+        optional=set(),
+    )
+    barcode = _release_details_barcode_value(
+        item["value"],
+        error_code="release_details_response_invalid",
+    )
+    expected_type = {8: "ean8", 12: "upca", 13: "ean13", 14: "gtin14"}[len(barcode)]
+    if item["type"] != expected_type or item["scope"] not in scopes:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return {"type": expected_type, "value": barcode, "scope": str(item["scope"])}
+
+
+def _release_details_alias(value: Any) -> dict[str, Any]:
+    item = _release_details_object(
+        value,
+        required={"title", "kind"},
+        optional={"languageCode", "countryCode"},
+    )
+    if item["kind"] not in {"alternate", "localized", "packaging", "retailer"}:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    result: dict[str, Any] = {
+        "title": _release_details_text(item["title"], minimum=1, maximum=500),
+        "kind": item["kind"],
+    }
+    language = item.get("languageCode")
+    if language is not None:
+        result["languageCode"] = _release_details_text(
+            language,
+            maximum=35,
+            pattern=r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$",
+        )
+    country = item.get("countryCode")
+    if country is not None:
+        result["countryCode"] = _release_details_text(
+            country,
+            maximum=2,
+            pattern=r"^[A-Z]{2}$",
+        )
+    return result
+
+
+def _release_details_aliases(value: Any, *, maximum: int) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or len(value) > maximum:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    aliases = [_release_details_alias(item) for item in value]
+    keys = {
+        (
+            alias["title"].casefold(),
+            alias["kind"],
+            alias.get("languageCode"),
+            alias.get("countryCode"),
+        )
+        for alias in aliases
+    }
+    if len(keys) != len(aliases):
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return aliases
+
+
+def _release_details_identifiers(value: Any) -> dict[str, str]:
+    item = _release_details_object(
+        value,
+        required=set(),
+        optional={"tmdbMovieId", "imdbId"},
+    )
+    result: dict[str, str] = {}
+    if item.get("tmdbMovieId") is not None:
+        result["tmdbMovieId"] = _release_details_text(
+            item["tmdbMovieId"],
+            maximum=20,
+            pattern=r"^[0-9]{1,20}$",
+        )
+    if item.get("imdbId") is not None:
+        result["imdbId"] = _release_details_text(
+            item["imdbId"],
+            maximum=18,
+            pattern=r"^tt[0-9]{1,16}$",
+        )
+    if not result:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return result
+
+
+def _release_details_film(value: Any) -> dict[str, Any]:
+    item = _release_details_object(
+        value,
+        required={"title", "identifiers", "links"},
+        optional={"year"},
+    )
+    identifiers = _release_details_identifiers(item["identifiers"])
+    links = _release_details_object(
+        item["links"],
+        required=set(),
+        optional={"tmdb", "imdb"},
+    )
+    expected_links = {
+        "tmdb": (
+            f"https://www.themoviedb.org/movie/{identifiers['tmdbMovieId']}"
+            if "tmdbMovieId" in identifiers
+            else None
+        ),
+        "imdb": (
+            f"https://www.imdb.com/title/{identifiers['imdbId']}/"
+            if "imdbId" in identifiers
+            else None
+        ),
+    }
+    if links != {key: value for key, value in expected_links.items() if value is not None}:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    result: dict[str, Any] = {
+        "title": _release_details_text(item["title"], minimum=1, maximum=500),
+        "identifiers": identifiers,
+        "links": links,
+    }
+    if item.get("year") is not None:
+        result["year"] = _release_details_integer(item["year"], minimum=1870, maximum=2200)
+    return result
+
+
+def _release_details_enum_list(
+    value: Any,
+    *,
+    maximum: int,
+    allowed: set[str],
+) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or len(value) > maximum
+        or any(not isinstance(item, str) or item not in allowed for item in value)
+        or len(set(value)) != len(value)
+    ):
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return list(value)
+
+
+def _release_details_language_list(value: Any, *, maximum: int) -> list[str]:
+    if (
+        not isinstance(value, list)
+        or len(value) > maximum
+        or any(not isinstance(item, str) for item in value)
+        or len(set(value)) != len(value)
+    ):
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return [
+        _release_details_text(
+            item,
+            maximum=35,
+            pattern=r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$",
+        )
+        for item in value
+    ]
+
+
+def _release_details_video(value: Any) -> dict[str, Any]:
+    item = _release_details_object(
+        value,
+        required=set(),
+        optional={"resolution", "codecs", "hdrFormats", "aspectRatios"},
+    )
+    result: dict[str, Any] = {}
+    if item.get("resolution") is not None:
+        if item["resolution"] not in {"480p", "576p", "720p", "1080i", "1080p", "2160p"}:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["resolution"] = item["resolution"]
+    if "codecs" in item:
+        result["codecs"] = _release_details_enum_list(
+            item["codecs"],
+            maximum=5,
+            allowed={"mpeg2", "vc1", "h264", "hevc", "av1"},
+        )
+    if "hdrFormats" in item:
+        result["hdrFormats"] = _release_details_enum_list(
+            item["hdrFormats"],
+            maximum=5,
+            allowed={"hdr", "hdr10", "hdr10_plus", "hlg", "dolby_vision"},
+        )
+    if "aspectRatios" in item:
+        ratios = item["aspectRatios"]
+        if (
+            not isinstance(ratios, list)
+            or len(ratios) > 8
+            or any(
+                not isinstance(ratio, str)
+                or re.fullmatch(r"^(?:1|2)\.[0-9]{2}:1$", ratio) is None
+                for ratio in ratios
+            )
+            or len(set(ratios)) != len(ratios)
+        ):
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["aspectRatios"] = list(ratios)
+    return result
+
+
+def _release_details_audio_track(value: Any) -> dict[str, Any]:
+    item = _release_details_object(
+        value,
+        required={"languageCode", "codec"},
+        optional={"channels", "immersiveFormat"},
+    )
+    if item["codec"] not in {
+        "pcm",
+        "dolby_digital",
+        "dolby_digital_plus",
+        "dolby_truehd",
+        "dts",
+        "dts_hd_hr",
+        "dts_hd_ma",
+        "mpeg_audio",
+        "aac",
+    }:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    result: dict[str, Any] = {
+        "languageCode": _release_details_text(
+            item["languageCode"],
+            maximum=35,
+            pattern=r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$",
+        ),
+        "codec": item["codec"],
+    }
+    if item.get("channels") is not None:
+        if item["channels"] not in {"1.0", "2.0", "5.1", "6.1", "7.1"}:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["channels"] = item["channels"]
+    if item.get("immersiveFormat") is not None:
+        if item["immersiveFormat"] not in {"dolby_atmos", "dts_x", "auro_3d"}:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["immersiveFormat"] = item["immersiveFormat"]
+    return result
+
+
+def _release_details_release(value: Any) -> dict[str, Any]:
+    item = _release_details_object(
+        value,
+        required={"barcodes", "title"},
+        optional={
+            "alternateTitles",
+            "format",
+            "edition",
+            "discCount",
+            "regions",
+            "packaging",
+            "video",
+            "audioTracks",
+            "subtitleLanguages",
+        },
+    )
+    barcodes_value = item["barcodes"]
+    if not isinstance(barcodes_value, list) or not 1 <= len(barcodes_value) <= 25:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    barcodes = [
+        _release_details_barcode(barcode, scopes={"package"})
+        for barcode in barcodes_value
+    ]
+    if len({barcode["value"] for barcode in barcodes}) != len(barcodes):
+        raise MovieVaultV2Error("release_details_response_invalid")
+    result: dict[str, Any] = {
+        "barcodes": barcodes,
+        "title": _release_details_text(item["title"], minimum=1, maximum=500),
+    }
+    if "alternateTitles" in item:
+        result["alternateTitles"] = _release_details_aliases(item["alternateTitles"], maximum=25)
+    for key, maximum in (("format", 80), ("edition", 255)):
+        if item.get(key) is not None:
+            result[key] = _release_details_text(item[key], maximum=maximum)
+    if item.get("discCount") is not None:
+        result["discCount"] = _release_details_integer(
+            item["discCount"],
+            minimum=1,
+            maximum=999,
+        )
+    if "regions" in item:
+        result["regions"] = _release_details_enum_list(
+            item["regions"],
+            maximum=8,
+            allowed={"A", "B", "C", "1", "2", "3", "4", "5", "6", "7", "8", "FREE"},
+        )
+    if "packaging" in item:
+        result["packaging"] = _release_details_enum_list(
+            item["packaging"],
+            maximum=8,
+            allowed={
+                "keep_case",
+                "amaray",
+                "steelbook",
+                "slipcover",
+                "slipcase",
+                "digibook",
+                "mediabook",
+                "digipak",
+                "box",
+            },
+        )
+    if "video" in item:
+        result["video"] = _release_details_video(item["video"])
+    if "audioTracks" in item:
+        tracks = item["audioTracks"]
+        if not isinstance(tracks, list) or len(tracks) > 50:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["audioTracks"] = [_release_details_audio_track(track) for track in tracks]
+    if "subtitleLanguages" in item:
+        result["subtitleLanguages"] = _release_details_language_list(
+            item["subtitleLanguages"],
+            maximum=50,
+        )
+    return result
+
+
+def _release_details_member(value: Any) -> dict[str, Any]:
+    item = _release_details_object(
+        value,
+        required={"position", "title"},
+        optional={
+            "alternateTitles",
+            "year",
+            "barcodes",
+            "discNumber",
+            "discFormat",
+            "identifiers",
+        },
+    )
+    result: dict[str, Any] = {
+        "position": _release_details_integer(item["position"], minimum=1, maximum=30),
+        "title": _release_details_text(item["title"], minimum=1, maximum=500),
+    }
+    if "alternateTitles" in item:
+        result["alternateTitles"] = _release_details_aliases(item["alternateTitles"], maximum=10)
+    if item.get("year") is not None:
+        result["year"] = _release_details_integer(item["year"], minimum=1870, maximum=2200)
+    if "barcodes" in item:
+        barcodes = item["barcodes"]
+        if not isinstance(barcodes, list) or len(barcodes) > 10:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["barcodes"] = [
+            _release_details_barcode(barcode, scopes={"member", "disc"})
+            for barcode in barcodes
+        ]
+        if len({barcode["value"] for barcode in result["barcodes"]}) != len(
+            result["barcodes"]
+        ):
+            raise MovieVaultV2Error("release_details_response_invalid")
+    if item.get("discNumber") is not None:
+        result["discNumber"] = _release_details_integer(
+            item["discNumber"],
+            minimum=1,
+            maximum=999,
+        )
+    if item.get("discFormat") is not None:
+        result["discFormat"] = _release_details_text(item["discFormat"], maximum=80)
+    if item.get("identifiers") is not None:
+        result["identifiers"] = _release_details_identifiers(item["identifiers"])
+    return result
+
+
+def _release_details_box_set(value: Any) -> dict[str, Any]:
+    item = _release_details_object(
+        value,
+        required={"state", "title", "members"},
+        optional={"alternateTitles", "format", "barcodes"},
+    )
+    if item["state"] not in {"explicit", "candidate"}:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    members_value = item["members"]
+    if not isinstance(members_value, list) or not 2 <= len(members_value) <= 30:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    members = [_release_details_member(member) for member in members_value]
+    positions = [member["position"] for member in members]
+    if positions != sorted(positions) or len(set(positions)) != len(positions):
+        raise MovieVaultV2Error("release_details_response_invalid")
+    result: dict[str, Any] = {
+        "state": item["state"],
+        "title": _release_details_text(item["title"], minimum=1, maximum=500),
+        "members": members,
+    }
+    if "alternateTitles" in item:
+        result["alternateTitles"] = _release_details_aliases(item["alternateTitles"], maximum=25)
+    if item.get("format") is not None:
+        result["format"] = _release_details_text(item["format"], maximum=80)
+    if "barcodes" in item:
+        barcodes = item["barcodes"]
+        if not isinstance(barcodes, list) or len(barcodes) > 25:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["barcodes"] = [
+            _release_details_barcode(barcode, scopes={"box_set"})
+            for barcode in barcodes
+        ]
+        if len({barcode["value"] for barcode in result["barcodes"]}) != len(
+            result["barcodes"]
+        ):
+            raise MovieVaultV2Error("release_details_response_invalid")
+    return result
+
+
+def validate_release_details_response(value: Any) -> dict[str, Any]:
+    item = _release_details_object(
+        value,
+        required={"contractVersion", "status"},
+        optional={
+            "verificationStatus",
+            "film",
+            "release",
+            "boxSet",
+            "moderation",
+            "resolutionId",
+            "retryAfterSeconds",
+            "errorCode",
+        },
+    )
+    if item["contractVersion"] != RELEASE_DETAILS_CONTRACT:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    status = item["status"]
+    if status == "pending":
+        _release_details_object(
+            item,
+            required={"contractVersion", "status", "resolutionId", "retryAfterSeconds"},
+            optional=set(),
+        )
+        try:
+            resolution_id = str(uuid.UUID(str(item["resolutionId"])))
+        except (ValueError, AttributeError) as exc:
+            raise MovieVaultV2Error("release_details_response_invalid") from exc
+        return {
+            "contractVersion": RELEASE_DETAILS_CONTRACT,
+            "status": "pending",
+            "resolutionId": resolution_id,
+            "retryAfterSeconds": _release_details_integer(
+                item["retryAfterSeconds"],
+                minimum=1,
+                maximum=60,
+            ),
+        }
+    if status in {"canonical_hit", "external_hit"}:
+        required = {
+            "contractVersion",
+            "status",
+            "verificationStatus",
+            "film",
+            "release",
+        }
+        if status == "external_hit":
+            required.add("moderation")
+        _release_details_object(
+            item,
+            required=required,
+            optional={"boxSet"},
+        )
+        expected_verification = (
+            "canonical" if status == "canonical_hit" else "unreviewed_external"
+        )
+        if item["verificationStatus"] != expected_verification:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result: dict[str, Any] = {
+            "contractVersion": RELEASE_DETAILS_CONTRACT,
+            "status": status,
+            "verificationStatus": expected_verification,
+            "film": _release_details_film(item["film"]),
+            "release": _release_details_release(item["release"]),
+        }
+        if item.get("boxSet") is not None:
+            result["boxSet"] = _release_details_box_set(item["boxSet"])
+        if status == "external_hit":
+            moderation = _release_details_object(
+                item["moderation"],
+                required={"candidateId", "status"},
+                optional=set(),
+            )
+            if (
+                re.fullmatch(r"^discovery_[A-Za-z0-9_-]{12,64}$", str(moderation["candidateId"]))
+                is None
+                or moderation["status"] not in {"pending", "accepted", "rejected"}
+            ):
+                raise MovieVaultV2Error("release_details_response_invalid")
+            result["moderation"] = {
+                "candidateId": moderation["candidateId"],
+                "status": moderation["status"],
+            }
+        return result
+    if status in {"ambiguous", "miss"}:
+        _release_details_object(
+            item,
+            required={"contractVersion", "status"},
+            optional=set(),
+        )
+        return {"contractVersion": RELEASE_DETAILS_CONTRACT, "status": status}
+    if status == "failed":
+        _release_details_object(
+            item,
+            required={"contractVersion", "status", "errorCode"},
+            optional=set(),
+        )
+        return {
+            "contractVersion": RELEASE_DETAILS_CONTRACT,
+            "status": "failed",
+            "errorCode": _release_details_text(
+                item["errorCode"],
+                minimum=3,
+                maximum=80,
+                pattern=r"^[a-z0-9_]{3,80}$",
+            ),
+        }
+    raise MovieVaultV2Error("release_details_response_invalid")
+
+
+def _release_details_payload(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or "barcode" not in value:
+        raise MovieVaultV2Error("release_details_request_invalid")
+    allowed = {"barcode", "title", "year", "edition", "format"}
+    if set(value) - allowed:
+        raise MovieVaultV2Error("release_details_request_invalid")
+    result: dict[str, Any] = {
+        "barcode": _release_details_barcode_value(
+            value["barcode"],
+            error_code="release_details_request_invalid",
+        )
+    }
+    for key, maximum in (("title", 500), ("edition", 255), ("format", 80)):
+        candidate = value.get(key)
+        if candidate is None:
+            continue
+        if not isinstance(candidate, str):
+            raise MovieVaultV2Error("release_details_request_invalid")
+        clean = " ".join(candidate.split())
+        if not clean:
+            continue
+        if len(clean) > maximum:
+            raise MovieVaultV2Error("release_details_request_invalid")
+        result[key] = clean
+    if value.get("year") is not None:
+        year = value["year"]
+        if isinstance(year, bool) or not isinstance(year, int) or not 1870 <= year <= 2200:
+            raise MovieVaultV2Error("release_details_request_invalid")
+        result["year"] = year
+    return result
+
+
+def _release_details_http(
+    url: str,
+    *,
+    method: str,
+    timeout_seconds: int,
+    payload: dict[str, Any] | None = None,
+) -> tuple[int, bytes]:
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "DiscVault-MovieVault-v2",
+    }
+    body = None
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(payload, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        method=method,
+        headers=headers,
+    )
+    opener = urllib.request.build_opener(_NoRedirect())
+    try:
+        with opener.open(request, timeout=timeout_seconds) as response:
+            status = int(response.status)
+            content = response.read(DEFAULT_MAX_RELEASE_DETAILS_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        if 300 <= exc.code < 400:
+            raise MovieVaultV2Error("redirect_rejected") from exc
+        if exc.code in {404, 409, 422, 429, 503}:
+            return exc.code, b""
+        raise MovieVaultV2Error("release_details_http_error") from exc
+    except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+        raise MovieVaultV2Error("release_details_network_error") from exc
+    if len(content) > DEFAULT_MAX_RELEASE_DETAILS_BYTES:
+        raise MovieVaultV2Error("release_details_response_too_large")
+    return status, content
+
+
+def _release_details_http_error(status: int) -> MovieVaultV2Error:
+    return MovieVaultV2Error(
+        {
+            404: "release_details_expired",
+            409: "release_details_conflict",
+            422: "release_details_request_invalid",
+            429: "release_details_rate_limited",
+            503: "release_details_unavailable",
+        }.get(status, "release_details_http_error")
+    )
+
+
+def _decode_release_details_response(status: int, content: bytes) -> dict[str, Any]:
+    if status not in {200, 202}:
+        raise _release_details_http_error(status)
+    try:
+        value = json.loads(content)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise MovieVaultV2Error("release_details_response_invalid") from exc
+    result = validate_release_details_response(value)
+    if status == 202 and result["status"] != "pending":
+        raise MovieVaultV2Error("release_details_response_invalid")
+    if status == 200 and result["status"] == "pending":
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return result
+
+
+def resolve_release_details(
+    settings: dict[str, Any],
+    request: dict[str, Any],
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    origin = normalize_origin(settings.get("origin"))
+    timeout_seconds = _bounded_setting(
+        settings.get("requestTimeoutSeconds"),
+        default=DEFAULT_TIMEOUT_SECONDS,
+        minimum=2,
+        maximum=120,
+        code="settings_invalid",
+    )
+    poll_attempts = _bounded_setting(
+        settings.get("releaseDetailsPollAttempts"),
+        default=DEFAULT_RELEASE_DETAILS_POLL_ATTEMPTS,
+        minimum=1,
+        maximum=MAX_RELEASE_DETAILS_POLL_ATTEMPTS,
+        code="settings_invalid",
+    )
+    payload = _release_details_payload(request)
+    status, content = _release_details_http(
+        f"{origin}/v2/release-details/resolve",
+        method="POST",
+        timeout_seconds=timeout_seconds,
+        payload=payload,
+    )
+    result = _decode_release_details_response(status, content)
+    for _attempt in range(poll_attempts):
+        if result["status"] != "pending":
+            return result
+        wait_seconds = result["retryAfterSeconds"]
+        if wait_seconds > MAX_RELEASE_DETAILS_POLL_WAIT_SECONDS:
+            raise MovieVaultV2Error("release_details_retry_after_invalid")
+        sleep(wait_seconds)
+        resolution_id = result["resolutionId"]
+        status, content = _release_details_http(
+            f"{origin}/v2/release-details/resolve/{resolution_id}",
+            method="GET",
+            timeout_seconds=timeout_seconds,
+        )
+        result = _decode_release_details_response(status, content)
+    if result["status"] == "pending":
+        raise MovieVaultV2Error("release_details_poll_timeout")
+    return result
 
 
 def _content_digest_sha256(value: Any) -> bytes:
@@ -1795,12 +2506,23 @@ def movievault_v2_plugin_context(
             contract_version=contract_version,
         )
 
+    def release_details_callback(request: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return resolve_release_details(safe_settings, request)
+        except MovieVaultV2Error as exc:
+            return {
+                "contractVersion": RELEASE_DETAILS_CONTRACT,
+                "status": "failed",
+                "errorCode": exc.code,
+            }
+
     return {
         **context,
         "movievaultV2Lookup": lookup_callback,
         "movievaultV2Status": status_callback,
         "movievaultV2Sync": sync_callback,
         "movievaultV2BucketLookup": bucket_callback,
+        "movievaultV2ReleaseDetails": release_details_callback,
         "movievaultDistributionContract": contract_version,
         "movievaultDistributionContractRange": {
             "minimum": SUPPORTED_CONTRACTS[0],

@@ -23,8 +23,14 @@ SCHEMA_SHA256 = "9f25a2b1ccd76dd4f7de89c33beea3250498fc96367bb0540c911bf53267948
 
 
 class FakeResponse:
-    def __init__(self, content: bytes, headers: dict[str, str] | None = None) -> None:
-        self.status = 200
+    def __init__(
+        self,
+        content: bytes,
+        headers: dict[str, str] | None = None,
+        *,
+        status: int = 200,
+    ) -> None:
+        self.status = status
         self._content = content
         self.headers = headers or {}
 
@@ -47,6 +53,73 @@ class FakeOpener:
         self.request = request
         self.timeout = timeout
         return self.response
+
+
+class SequenceOpener:
+    def __init__(self, responses: list[FakeResponse]) -> None:
+        self.responses = list(responses)
+        self.requests = []
+
+    def open(self, request, timeout: int):
+        self.requests.append((request, timeout))
+        return self.responses.pop(0)
+
+
+def release_details_hit(*, external: bool = False) -> dict:
+    payload = {
+        "contractVersion": "release-technical-1",
+        "status": "external_hit" if external else "canonical_hit",
+        "verificationStatus": "unreviewed_external" if external else "canonical",
+        "film": {
+            "title": "Example Film",
+            "year": 2024,
+            "identifiers": {
+                "tmdbMovieId": "123",
+                "imdbId": "tt1234567",
+            },
+            "links": {
+                "tmdb": "https://www.themoviedb.org/movie/123",
+                "imdb": "https://www.imdb.com/title/tt1234567/",
+            },
+        },
+        "release": {
+            "barcodes": [
+                {
+                    "type": "ean13",
+                    "value": "4006381333931",
+                    "scope": "package",
+                }
+            ],
+            "title": "Example Film - Collector's Edition",
+            "alternateTitles": [],
+            "format": "4K UHD",
+            "edition": "SteelBook",
+            "discCount": 2,
+            "regions": ["B"],
+            "packaging": ["steelbook"],
+            "video": {
+                "resolution": "2160p",
+                "codecs": ["hevc"],
+                "hdrFormats": ["dolby_vision"],
+                "aspectRatios": ["2.39:1"],
+            },
+            "audioTracks": [
+                {
+                    "languageCode": "en",
+                    "codec": "dolby_truehd",
+                    "channels": "7.1",
+                    "immersiveFormat": "dolby_atmos",
+                }
+            ],
+            "subtitleLanguages": ["en", "nl"],
+        },
+    }
+    if external:
+        payload["moderation"] = {
+            "candidateId": "discovery_abcdefghijkl",
+            "status": "pending",
+        }
+    return payload
 
 
 class MovieVaultV2ContractTests(unittest.TestCase):
@@ -195,6 +268,193 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertNotIn("x-instance-id", headers)
         self.assertNotIn("x-contribution-token", headers)
 
+    def test_release_details_post_is_anonymous_and_minimal(self):
+        opener = SequenceOpener(
+            [
+                FakeResponse(
+                    json.dumps(release_details_hit(), separators=(",", ":")).encode("ascii")
+                )
+            ]
+        )
+
+        with patch.object(
+            next_movievault_v2.urllib.request,
+            "build_opener",
+            return_value=opener,
+        ):
+            result = next_movievault_v2.resolve_release_details(
+                {
+                    "origin": "https://movievault.example",
+                    "requestTimeoutSeconds": 10,
+                },
+                {
+                    "barcode": "4006381333931",
+                    "title": "  Example   Film  ",
+                    "year": 2024,
+                },
+            )
+
+        self.assertEqual(result["status"], "canonical_hit")
+        request, timeout = opener.requests[0]
+        self.assertEqual(request.full_url, "https://movievault.example/v2/release-details/resolve")
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(timeout, 10)
+        self.assertEqual(
+            json.loads(request.data),
+            {
+                "barcode": "4006381333931",
+                "title": "Example Film",
+                "year": 2024,
+            },
+        )
+        headers = {key.lower(): value for key, value in request.header_items()}
+        self.assertEqual(
+            set(headers),
+            {"accept", "content-type", "user-agent"},
+        )
+        self.assertNotIn("authorization", headers)
+        self.assertNotIn("cookie", headers)
+        self.assertNotIn("x-instance-id", headers)
+        self.assertNotIn("x-contribution-token", headers)
+
+    def test_release_details_pending_polls_only_opaque_resolution_id(self):
+        resolution_id = "71a6c771-cd83-478e-a2db-109cb4fd6279"
+        opener = SequenceOpener(
+            [
+                FakeResponse(
+                    json.dumps(
+                        {
+                            "contractVersion": "release-technical-1",
+                            "status": "pending",
+                            "resolutionId": resolution_id,
+                            "retryAfterSeconds": 2,
+                        }
+                    ).encode("ascii"),
+                    status=202,
+                ),
+                FakeResponse(
+                    json.dumps(
+                        release_details_hit(external=True),
+                        separators=(",", ":"),
+                    ).encode("ascii")
+                ),
+            ]
+        )
+        waits = []
+
+        with patch.object(
+            next_movievault_v2.urllib.request,
+            "build_opener",
+            return_value=opener,
+        ):
+            result = next_movievault_v2.resolve_release_details(
+                {"origin": "https://movievault.example"},
+                {"barcode": "4006381333931"},
+                sleep=waits.append,
+            )
+
+        self.assertEqual(result["status"], "external_hit")
+        self.assertEqual(waits, [2])
+        poll_request, _timeout = opener.requests[1]
+        self.assertEqual(
+            poll_request.full_url,
+            f"https://movievault.example/v2/release-details/resolve/{resolution_id}",
+        )
+        self.assertEqual(poll_request.method, "GET")
+        self.assertIsNone(poll_request.data)
+        self.assertNotIn(b"4006381333931", poll_request.full_url.encode("ascii"))
+        poll_headers = {
+            key.lower(): value
+            for key, value in poll_request.header_items()
+        }
+        self.assertEqual(set(poll_headers), {"accept", "user-agent"})
+
+    def test_release_details_rejects_provider_owned_or_unknown_fields(self):
+        payload = release_details_hit(external=True)
+        payload["release"]["description"] = "provider-owned prose"
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_accepts_strict_ordered_box_set(self):
+        payload = release_details_hit(external=True)
+        payload["boxSet"] = {
+            "state": "explicit",
+            "title": "Example Collection",
+            "alternateTitles": [],
+            "format": "4K UHD",
+            "barcodes": [
+                {
+                    "type": "ean13",
+                    "value": "9780201379624",
+                    "scope": "box_set",
+                }
+            ],
+            "members": [
+                {
+                    "position": 1,
+                    "title": "Example Film",
+                    "year": 2024,
+                    "barcodes": [
+                        {
+                            "type": "upca",
+                            "value": "036000291452",
+                            "scope": "member",
+                        }
+                    ],
+                    "discNumber": 1,
+                    "discFormat": "4K UHD",
+                    "identifiers": {
+                        "tmdbMovieId": "123",
+                        "imdbId": "tt1234567",
+                    },
+                },
+                {
+                    "position": 2,
+                    "title": "Example Film Two",
+                    "barcodes": [
+                        {
+                            "type": "upca",
+                            "value": "012345678905",
+                            "scope": "disc",
+                        }
+                    ],
+                    "discNumber": 2,
+                    "discFormat": "Blu-ray",
+                    "identifiers": {
+                        "tmdbMovieId": "456",
+                        "imdbId": "tt7654321",
+                    },
+                },
+            ],
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["boxSet"]["state"], "explicit")
+        self.assertEqual(
+            [member["position"] for member in result["boxSet"]["members"]],
+            [1, 2],
+        )
+
+    def test_release_details_http_status_maps_to_stable_value_free_error(self):
+        with patch.object(
+            next_movievault_v2,
+            "_release_details_http",
+            return_value=(429, b""),
+        ):
+            with self.assertRaisesRegex(
+                next_movievault_v2.MovieVaultV2Error,
+                "^release_details_rate_limited$",
+            ):
+                next_movievault_v2.resolve_release_details(
+                    {"origin": "https://movievault.example"},
+                    {"barcode": "4006381333931"},
+                )
+
     def test_digest_mismatch_fails_without_exposing_content(self):
         with self.assertRaisesRegex(
             next_movievault_v2.MovieVaultV2Error,
@@ -274,6 +534,7 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertIn("movievaultV2Status", decorated)
         self.assertIn("movievaultV2Sync", decorated)
         self.assertIn("movievaultV2BucketLookup", decorated)
+        self.assertIn("movievaultV2ReleaseDetails", decorated)
         with self.assertRaisesRegex(
             next_movievault_v2.MovieVaultV2Error,
             "^core_bridge_unavailable$",
