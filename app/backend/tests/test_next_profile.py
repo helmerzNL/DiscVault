@@ -666,6 +666,37 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('button.dataset.appAdminRolesTab === "permissions"', self.html)
         self.assertIn('const visibleRoles = advanced ? roles : roles.filter((role) => !role.custom);', self.html)
 
+    def test_admin_operations_dashboard_uses_focused_submenus(self):
+        self.assertIn(
+            'id="appAdminPanelOperations" role="tabpanel" aria-labelledby="appAdminTabOperations"',
+            self.html,
+        )
+        for tab in ("Overview", "Collection", "Readiness", "Policy", "Activity"):
+            self.assertIn(f'id="appAdminOperationsTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminOperationsPanel{tab}" role="tabpanel"', self.html)
+        self.assertEqual(self.html.count('data-app-admin-operations-tab='), 5)
+        self.assertEqual(self.html.count('aria-hidden="true">-</span></button>'), 5)
+
+        for element_id in (
+            "appAdminOperationsDashboard",
+            "appAdminCollectionHealthSummary",
+            "appAdminCollectionHealthIssues",
+            "appAdminOperationsFeatures",
+            "appAdminFeatureClusters",
+            "appAdminDuplicateCenter",
+            "appAdminProviderPolicy",
+            "appAdminApiTokenPresets",
+            "appAdminOperationsSignals",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn("activeOperationsTab: localStorage.getItem", self.html)
+        self.assertIn("function setAppAdminOperationsTab(tab)", self.html)
+        self.assertIn("function handleAppAdminOperationsTabKeydown(button, event)", self.html)
+        self.assertIn('localStorage.setItem("dv_next_admin_operations_tab"', self.html)
+        self.assertIn('data-app-admin-operations-panel="collection"', self.html)
+        self.assertEqual(self.html.count('class="tag app-admin-operations-tab-status"'), 5)
+
     def test_admin_role_creation_generates_key_and_starts_permission_wizard(self):
         for element_id in (
             "appAdminRoleName",
