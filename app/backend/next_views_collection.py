@@ -1970,6 +1970,11 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         ? true
         : Boolean(authState.passkey_access_valid);
     }
+    function passkeyConfigurationGuidanceVisible() {
+      return !passkeyProcessAvailable()
+        && (Boolean(authState.passkey_configuration_valid)
+          || !Boolean(authState.request_host_is_local_ip));
+    }
     function renderPasskeyConfigurationGuidance(description) {
       const configurationValid = Boolean(authState.passkey_configuration_valid);
       description.textContent = configurationValid
@@ -2012,11 +2017,19 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const authenticated = !!authState.authenticated;
       const reviewLoginAvailable = !!authState.legacy_auth_enabled;
       const joinAllowed = !setupRequired && !authenticated && !!authState.auth_enabled;
-      title.textContent = authenticated ? "Signed in" : setupRequired ? "First passkey" : "Passkeys";
+      title.textContent = authenticated
+        ? "Signed in"
+        : setupRequired
+          ? "First passkey"
+          : !passkeyAvailable && reviewLoginAvailable
+            ? tNext("legacyAuth.password", "Password")
+            : "Passkeys";
       description.textContent = authenticated
         ? `Signed in${authState.role ? ` as ${authState.role}` : ""}.`
         : setupRequired
           ? "Create the first owner passkey for this DiscVault Next instance."
+          : !passkeyAvailable && reviewLoginAvailable
+            ? tNext("legacyAuth.signIn", "Sign in with password")
           : authState.registration_enabled
             ? "Sign in with your passkey or create a new account."
             : "Sign in with your passkey or create an account with an invite code.";
@@ -2032,7 +2045,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       setupButton.disabled = !!unavailable;
       joinButton.disabled = !!unavailable;
       loginButton.disabled = !!unavailable;
-      if (!passkeyAvailable && !authenticated) {
+      if (!passkeyAvailable && !authenticated && (setupRequired || passkeyConfigurationGuidanceVisible())) {
         renderPasskeyConfigurationGuidance(description);
         setAuthStatus("", "info");
       } else if (unavailable) {

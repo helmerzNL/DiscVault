@@ -344,6 +344,7 @@ class LegacyAuthContractTests(unittest.TestCase):
             "/api/next/auth/legacy/bootstrap/verify",
             "/api/next/auth/legacy/login",
             "/api/next/auth/legacy/password/change",
+            "/api/next/auth/legacy/mfa/enroll/start",
             "/api/next/auth/legacy/mfa/setup",
             "/api/next/auth/legacy/mfa/setup/verify",
             "/api/next/auth/legacy/mfa/verify",
@@ -377,6 +378,47 @@ class LegacyAuthContractTests(unittest.TestCase):
         ack_start = self.auth_source.index("def legacy_recovery_codes_ack():")
         ack_body = self.auth_source[ack_start : ack_start + 3500]
         self.assertIn("SET confirmed_at=now(), updated_at=now()", ack_body)
+        self.assertIn("SET mfa_required=true, updated_at=now()", ack_body)
+
+    def test_profile_mfa_enrollment_requires_password_and_reuses_guarded_flow(self):
+        start = self.auth_source.index("def legacy_mfa_enroll_start():")
+        body = self.auth_source[start : start + 5000]
+        self.assertIn("if not _current_user_payload()", body)
+        self.assertIn("user = current_user(conn)", body)
+        self.assertIn('raise next_api_error("Unauthorized", 401)', body)
+        self.assertIn(
+            'credential.get("mfa_required") and credential.get("mfa_enrolled")',
+            body,
+        )
+        self.assertIn("credential.get(\"must_change_password\")", body)
+        self.assertIn("credential.get(\"locked_until\")", body)
+        self.assertIn("credential.get(\"credential_expires_at\")", body)
+        self.assertIn("verify_password(", body)
+        self.assertIn("body.get(\"current_password\")", body)
+        self.assertIn("credential_unavailable or not password_verification.valid", body)
+        self.assertIn("recent_legacy_attempts(", body)
+        self.assertIn("attempt_is_throttled(", body)
+        self.assertIn("failed_attempt_state(", body)
+        self.assertIn("record_legacy_attempt(", body)
+        self.assertIn("conn.commit()", body)
+        self.assertIn(
+            'return issue_mfa_enrollment(conn, user, {"profileEnrollment": True})',
+            body,
+        )
+        verify_start = self.auth_source.index("def legacy_mfa_setup_verify():")
+        verify_body = self.auth_source[verify_start : verify_start + 3500]
+        self.assertIn(
+            '"profileEnrollment": flow["payload"].get("profileEnrollment") is True',
+            verify_body,
+        )
+        ack_start = self.auth_source.index("def legacy_recovery_codes_ack():")
+        ack_body = self.auth_source[ack_start : ack_start + 5000]
+        self.assertIn('flow["payload"].get("profileEnrollment") is True', ack_body)
+        self.assertIn('event_type="auth.legacy_mfa_enabled"', ack_body)
+        profile_ack = ack_body.index('flow["payload"].get("profileEnrollment") is True')
+        complete_login = ack_body.index("return legacy_complete_login(")
+        self.assertLess(profile_ack, complete_login)
+        self.assertIn('return response({"status": "ok", "stage": "complete"})', ack_body)
 
     def test_disabling_legacy_requires_an_active_owner_passkey(self):
         settings_start = self.auth_source.index("def legacy_settings():")
@@ -448,8 +490,13 @@ class LegacyAuthContractTests(unittest.TestCase):
         )
         self.assertIn("mfa_required=False", self.auth_source)
         self.assertIn("function passkeyProcessAvailable()", self.ui_source)
+        self.assertIn("function passkeyConfigurationGuidanceVisible()", self.ui_source)
         self.assertIn(
             "return Boolean(currentAuthStatus.passkey_access_valid);",
+            self.ui_source,
+        )
+        self.assertIn(
+            "|| !Boolean(currentAuthStatus.request_host_is_local_ip)",
             self.ui_source,
         )
         self.assertIn("const passkeyOnboardingAvailable", self.ui_source)
@@ -463,6 +510,18 @@ class LegacyAuthContractTests(unittest.TestCase):
             self.ui_source,
         )
         self.assertIn("function passkeyProcessAvailable()", self.collection_source)
+        self.assertIn(
+            "function passkeyConfigurationGuidanceVisible()",
+            self.collection_source,
+        )
+        self.assertIn(
+            "|| !Boolean(authState.request_host_is_local_ip)",
+            self.collection_source,
+        )
+        self.assertIn(
+            "(setupRequired || passkeyConfigurationGuidanceVisible())",
+            self.collection_source,
+        )
         self.assertIn(
             "renderPasskeyConfigurationGuidance(description);",
             self.collection_source,
