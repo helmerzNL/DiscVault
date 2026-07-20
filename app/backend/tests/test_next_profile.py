@@ -576,7 +576,100 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('class="profile-passkey app-admin-entity-card admin-group-row"', self.html)
         self.assertIn('class="profile-add-passkey app-admin-legacy-controls"', self.html)
         self.assertIn("function handleAppAdminTabKeydown(button, event)", self.html)
+        self.assertIn("function handleAppAdminUsersTabKeydown(button, event)", self.html)
         self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
+        for tab, panel in (
+            ("Settings", "Settings"),
+            ("Users", "Users"),
+            ("Groups", "Groups"),
+        ):
+            self.assertIn(
+                f'id="appAdminUsersTab{tab}" role="tab"',
+                self.html,
+            )
+            self.assertIn(
+                f'id="appAdminUsersPanel{panel}" role="tabpanel"',
+                self.html,
+            )
+
+    def test_admin_roles_dashboard_separates_basic_and_advanced_workflows(self):
+        self.assertIn(
+            'id="appAdminPanelRoles" role="tabpanel" aria-labelledby="appAdminTabRoles"',
+            self.html,
+        )
+        for tab in ("Overview", "Roles", "Permissions", "Simulator"):
+            self.assertIn(f'id="appAdminRolesTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminRolesPanel{tab}" role="tabpanel"', self.html)
+
+        for element_id in (
+            "appAdminRbacMode",
+            "appAdminRoleCreateForm",
+            "appAdminRolesList",
+            "appAdminRoleEditor",
+            "appAdminRoleEditForm",
+            "appAdminPermissionEditor",
+            "appAdminRoleFeaturePreview",
+            "appAdminPermissionMatrix",
+            "appAdminRoleSimulationSelect",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn("function handleAppAdminRolesTabKeydown(button, event)", self.html)
+        self.assertIn('button.dataset.appAdminRolesTab === "permissions"', self.html)
+        self.assertIn('const visibleRoles = advanced ? roles : roles.filter((role) => !role.custom);', self.html)
+
+    def test_admin_role_view_opens_permission_wizard(self):
+        for element_id in (
+            "appAdminRoleWizardHeading",
+            "appAdminRoleWizardSummary",
+            "appAdminRoleWizardStep1",
+            "appAdminRoleWizardStep2",
+            "appAdminRoleWizardStep3",
+            "appAdminRoleWizardDetails",
+            "appAdminRoleWizardPermissions",
+            "appAdminRoleWizardReview",
+            "appAdminRoleWizardBackButton",
+            "appAdminRoleWizardNextButton",
+            "appAdminRoleReview",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        for step in ("1", "2", "3"):
+            self.assertIn(f'data-app-admin-role-wizard-step="{step}"', self.html)
+            self.assertIn(f'data-app-admin-role-wizard-panel="{step}"', self.html)
+            self.assertIn(f'aria-controls="appAdminRoleWizard', self.html)
+            self.assertIn(f'aria-labelledby="appAdminRoleWizardStep{step}"', self.html)
+
+        self.assertIn("function selectAppAdminRole(roleId)", self.html)
+        self.assertIn('setAppAdminRolesTab("permissions");', self.html)
+        self.assertIn('editor?.scrollIntoView({behavior: "smooth", block: "start"});', self.html)
+        self.assertIn('document.getElementById("appAdminRoleWizardHeading")?.focus();', self.html)
+        self.assertIn('<details class="app-admin-role-preview">', self.html)
+        self.assertIn('<summary data-next-i18n="appAdmin.featurePreview">', self.html)
+
+    def test_admin_role_wizard_preserves_draft_and_system_roles_are_read_only(self):
+        self.assertIn(
+            'roleWizard: {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false}',
+            self.html,
+        )
+        self.assertIn("function appAdminEnsureRoleWizard(role)", self.html)
+        self.assertIn("function appAdminCaptureRoleWizardDraft()", self.html)
+        self.assertIn("function appAdminRoleReviewHtml(role, draft)", self.html)
+        self.assertIn("const editable = !!(canManage && selectedRole?.custom);", self.html)
+        self.assertIn("nameInput.disabled = !editable;", self.html)
+        self.assertIn('saveButton.classList.toggle("hidden", wizard.step !== 3 || !editable);', self.html)
+        self.assertIn("const permissions = [...(wizard.permissions || [])];", self.html)
+        self.assertIn("body: JSON.stringify({name, description, permissions})", self.html)
+
+    def test_admin_permission_categories_render_as_collapsed_accordions(self):
+        self.assertIn('class="app-admin-permission-domain-toggle"', self.html)
+        self.assertIn('data-app-admin-permission-domain-toggle=', self.html)
+        self.assertIn('aria-expanded="${open.has(domain) ? "true" : "false"}"', self.html)
+        self.assertIn('class="app-admin-permission-domain-panel ${open.has(domain) ? "" : "hidden"}"', self.html)
+        self.assertIn('data-app-admin-permission-count=', self.html)
+        self.assertIn("wizard.openDomains = [...openDomains];", self.html)
+        self.assertIn("appAdmin.permissionDomainHelp", self.html)
+        self.assertIn("appAdmin.permissionEffectHelp", self.html)
 
     def test_library_advanced_panel_groups_existing_controls(self):
         self.assertIn('id="advancedSearchToggleButton"', self.html)
