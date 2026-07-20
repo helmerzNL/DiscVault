@@ -10480,6 +10480,21 @@ def ui_preview_html(
       line-height: 1.45;
       margin-top: 5px;
     }
+    .app-admin-role-key-help {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: .74rem;
+      line-height: 1.45;
+    }
+    #appAdminRoleKey[readonly] {
+      background: color-mix(in srgb, var(--panel) 76%, transparent);
+      color: var(--muted);
+      cursor: default;
+    }
+    #appAdminCreateRoleButton[aria-busy="true"] {
+      cursor: wait;
+    }
     .app-admin-role-wizard {
       display: grid;
       gap: 16px;
@@ -15246,15 +15261,11 @@ def ui_preview_html(
                       <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
                       <div>
                         <h4 data-next-i18n="appAdmin.createCustomRole">Create custom role</h4>
-                        <p data-next-i18n="appAdmin.createCustomRoleHelp">Create a role in Advanced mode, then select it below to attach permissions.</p>
+                        <p data-next-i18n="appAdmin.createCustomRoleWizardHelp">Enter the role details. DiscVault generates the technical key and opens the permission wizard.</p>
                       </div>
                     </div>
                   </div>
-                  <form class="profile-form" id="appAdminRoleCreateForm">
-                    <label for="appAdminRoleKey">
-                      <span data-next-i18n="appAdmin.roleKey">Role key</span>
-                      <input id="appAdminRoleKey" autocomplete="off" maxlength="80" placeholder="family_curator">
-                    </label>
+                  <form class="profile-form" id="appAdminRoleCreateForm" aria-busy="false">
                     <label for="appAdminRoleName">
                       <span data-next-i18n="appAdmin.roleName">Role name</span>
                       <input id="appAdminRoleName" autocomplete="off" maxlength="120">
@@ -15263,8 +15274,14 @@ def ui_preview_html(
                       <span data-next-i18n="appAdmin.roleDescription">Description</span>
                       <input id="appAdminRoleDescription" autocomplete="off" maxlength="500">
                     </label>
+                    <label for="appAdminRoleKey">
+                      <span data-next-i18n="appAdmin.roleKeyGenerated">Generated role key</span>
+                      <input id="appAdminRoleKey" autocomplete="off" maxlength="64" readonly aria-describedby="appAdminRoleKeyHelp">
+                      <small class="app-admin-role-key-help" id="appAdminRoleKeyHelp" data-next-i18n="appAdmin.roleKeyGeneratedHelp">The key is generated from the role name and cannot be changed after creation.</small>
+                    </label>
+                    <div class="login-message" id="appAdminRoleCreateMessage" role="status" aria-live="polite"></div>
                     <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="appAdminCreateRoleButton" data-next-i18n="appAdmin.createRoleButton">Create role</button>
+                      <button type="submit" class="primary-button" id="appAdminCreateRoleButton" aria-busy="false" disabled data-next-i18n="appAdmin.startRoleWizardButton">Start role wizard</button>
                     </div>
                   </form>
                 </section>
@@ -15294,6 +15311,7 @@ def ui_preview_html(
                       </div>
                     </div>
                   </div>
+                  <div class="login-message" id="appAdminRoleWizardMessage" role="status" aria-live="polite"></div>
                   <div class="app-admin-role-wizard-summary" id="appAdminRoleWizardSummary"></div>
                   <ol class="app-admin-role-wizard-steps" aria-label="Role setup progress" data-next-i18n-aria="appAdmin.roleWizardProgress">
                     <li><button type="button" class="app-admin-role-wizard-step" id="appAdminRoleWizardStep1" data-app-admin-role-wizard-step="1" aria-controls="appAdminRoleWizardDetails"><span class="app-admin-role-wizard-step-number">1</span><span data-next-i18n="appAdmin.roleWizardStepDetails">Role details</span></button></li>
@@ -15901,6 +15919,7 @@ def ui_preview_html(
       rbac: {},
       roles: [],
       assignableRoles: [],
+      roleCreation: {busy: false},
       roleWizard: {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false},
       simulation: {active: false, roleId: ""},
       selectedRoleId: "",
@@ -18620,6 +18639,56 @@ def ui_preview_html(
       const rbac = appAdmin.rbac || {};
       return currentRole() === "owner" && rbac.mode === "advanced" && rbac.customRolesEnabled !== false;
     }
+    function appAdminRoleKeySlug(name) {
+      return String(name || "")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    }
+    function appAdminAvailableRoleKey(name) {
+      const slug = appAdminRoleKeySlug(name);
+      if (!slug) return "";
+      const existingKeys = new Set(
+        (((appAdmin.rbac || {}).roles || appAdmin.roles || []))
+          .map((role) => String(role.key || "").toLowerCase())
+          .filter(Boolean)
+      );
+      const base = `cr_${slug}`.slice(0, 64).replace(/_+$/g, "");
+      let candidate = base;
+      let suffixNumber = 2;
+      while (existingKeys.has(candidate)) {
+        const suffix = `_${suffixNumber}`;
+        candidate = `${base.slice(0, 64 - suffix.length).replace(/_+$/g, "")}${suffix}`;
+        suffixNumber += 1;
+      }
+      return candidate;
+    }
+    function renderAppAdminRoleCreateForm() {
+      const form = document.getElementById("appAdminRoleCreateForm");
+      const nameInput = document.getElementById("appAdminRoleName");
+      const descriptionInput = document.getElementById("appAdminRoleDescription");
+      const keyInput = document.getElementById("appAdminRoleKey");
+      const button = document.getElementById("appAdminCreateRoleButton");
+      if (!form || !nameInput || !descriptionInput || !keyInput || !button) return;
+      const busy = !!(appAdmin.roleCreation || {}).busy;
+      const key = appAdminAvailableRoleKey(nameInput.value);
+      keyInput.value = key;
+      nameInput.disabled = busy;
+      descriptionInput.disabled = busy;
+      form.setAttribute("aria-busy", busy ? "true" : "false");
+      button.setAttribute("aria-busy", busy ? "true" : "false");
+      button.disabled = busy || !key;
+      button.textContent = busy
+        ? tNext("appAdmin.startingRoleWizard", "Starting role wizard...")
+        : tNext("appAdmin.startRoleWizardButton", "Start role wizard");
+    }
+    function setAppAdminRoleCreateBusy(busy, message = "", tone = "") {
+      appAdmin.roleCreation = {busy: !!busy};
+      renderAppAdminRoleCreateForm();
+      setAppAdminMessage("appAdminRoleCreateMessage", message, tone);
+    }
     function appAdminPermissionDomains(permissions) {
       const grouped = {};
       const visiblePermissions = collectorsModeEnabled()
@@ -19119,18 +19188,20 @@ def ui_preview_html(
         });
       }
     }
-    function selectAppAdminRole(roleId) {
+    function selectAppAdminRole(roleId, initialStep = 1) {
       const role = appAdminRoleById(roleId);
       if (!role) return;
       appAdmin.selectedRoleId = role.id;
       appAdmin.roleWizard = {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false};
-      appAdminEnsureRoleWizard(role);
+      const wizard = appAdminEnsureRoleWizard(role);
+      wizard.step = Math.min(3, Math.max(1, Number(initialStep) || 1));
       setAppAdminRolesTab("permissions");
       renderAppAdminRbac();
       requestAnimationFrame(() => {
         const editor = document.getElementById("appAdminRoleEditor");
         editor?.scrollIntoView({behavior: "smooth", block: "start"});
-        document.getElementById("appAdminRoleWizardHeading")?.focus();
+        const panelHeading = document.querySelector(`[data-app-admin-role-wizard-panel="${wizard.step}"] h4`);
+        (wizard.step > 1 ? panelHeading : document.getElementById("appAdminRoleWizardHeading"))?.focus();
       });
     }
     function renderAppAdminRbac() {
@@ -19159,6 +19230,7 @@ def ui_preview_html(
         button.disabled = !canSwitch || targetMode === mode || (targetMode === "advanced" && rbac.advancedEnabled === false);
       });
       setElementVisible(document.getElementById("appAdminRoleCreateCard"), advanced && canManage);
+      renderAppAdminRoleCreateForm();
       setAppAdminRolesTab(appAdmin.activeRolesTab);
       const rolesList = document.getElementById("appAdminRolesList");
       if (rolesList) {
@@ -19787,30 +19859,35 @@ def ui_preview_html(
     }
     async function createAppAdminRole(event) {
       if (event) event.preventDefault();
-      if (!appAdminCanManageRbac()) return;
-      const key = String(document.getElementById("appAdminRoleKey")?.value || "").trim();
+      if (!appAdminCanManageRbac() || (appAdmin.roleCreation || {}).busy) return;
       const name = String(document.getElementById("appAdminRoleName")?.value || "").trim();
       const description = String(document.getElementById("appAdminRoleDescription")?.value || "").trim();
-      if (!key || !name) {
-        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleKeyNameRequired", "Role key and name are required."), "bad");
+      const key = appAdminAvailableRoleKey(name);
+      if (!key) {
+        setAppAdminMessage("appAdminRoleCreateMessage", tNext("appAdmin.roleNameSlugRequired", "Enter a role name containing letters or numbers."), "bad");
+        document.getElementById("appAdminRoleName")?.focus();
         return;
       }
-      setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.creatingRole", "Creating role..."));
+      setAppAdminRoleCreateBusy(true, tNext("appAdmin.startingRoleWizard", "Starting role wizard..."));
       try {
         const payload = await authApiJson("/api/next/auth/roles", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({key, name, description, permissions: []})
         });
-        if (document.getElementById("appAdminRoleKey")) document.getElementById("appAdminRoleKey").value = "";
+        const roleId = payload.role?.id || "";
+        if (!roleId) throw new Error(tNext("appAdmin.roleWizardStartFailed", "The role was not returned by the server."));
         if (document.getElementById("appAdminRoleName")) document.getElementById("appAdminRoleName").value = "";
         if (document.getElementById("appAdminRoleDescription")) document.getElementById("appAdminRoleDescription").value = "";
-        appAdmin.selectedRoleId = payload.role?.id || "";
+        if (document.getElementById("appAdminRoleKey")) document.getElementById("appAdminRoleKey").value = "";
+        appAdmin.selectedRoleId = roleId;
         await loadAppAdmin();
-        selectAppAdminRole(appAdmin.selectedRoleId);
-        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleCreated", "Role created. Select permissions and save."), "good");
+        selectAppAdminRole(roleId, 2);
+        setAppAdminRoleCreateBusy(false);
+        setAppAdminMessage("appAdminRoleWizardMessage", tNext("appAdmin.roleWizardStarted", "Role created. Assign permissions to continue."), "good");
       } catch (error) {
-        setAppAdminMessage("appAdminRbacMessage", error.message || String(error), "bad");
+        setAppAdminRoleCreateBusy(false, error.message || String(error), "bad");
+        document.getElementById("appAdminRoleName")?.focus();
       }
     }
     function setAppAdminRolePermissionSelection(checked) {
@@ -38327,6 +38404,10 @@ def ui_preview_html(
         button.addEventListener("click", () => setAppAdminRbacMode(button.dataset.appAdminRbacMode));
       });
       document.getElementById("appAdminRoleCreateForm")?.addEventListener("submit", (event) => createAppAdminRole(event));
+      document.getElementById("appAdminRoleName")?.addEventListener("input", () => {
+        setAppAdminMessage("appAdminRoleCreateMessage", "");
+        renderAppAdminRoleCreateForm();
+      });
       document.getElementById("appAdminRoleEditForm")?.addEventListener("submit", (event) => saveAppAdminRole(event));
       document.getElementById("appAdminRoleEditName")?.addEventListener("input", () => appAdminCaptureRoleWizardDraft());
       document.getElementById("appAdminRoleEditDescription")?.addEventListener("input", () => appAdminCaptureRoleWizardDraft());

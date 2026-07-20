@@ -618,6 +618,35 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('button.dataset.appAdminRolesTab === "permissions"', self.html)
         self.assertIn('const visibleRoles = advanced ? roles : roles.filter((role) => !role.custom);', self.html)
 
+    def test_admin_role_creation_generates_key_and_starts_permission_wizard(self):
+        for element_id in (
+            "appAdminRoleName",
+            "appAdminRoleDescription",
+            "appAdminRoleKey",
+            "appAdminRoleKeyHelp",
+            "appAdminRoleCreateMessage",
+            "appAdminCreateRoleButton",
+            "appAdminRoleWizardMessage",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="appAdminRoleKey" autocomplete="off" maxlength="64" readonly', self.html)
+        self.assertIn('id="appAdminRoleCreateMessage" role="status" aria-live="polite"', self.html)
+        self.assertIn('id="appAdminRoleWizardMessage" role="status" aria-live="polite"', self.html)
+        self.assertIn("function appAdminRoleKeySlug(name)", self.html)
+        self.assertIn('.normalize("NFKD")', self.html)
+        self.assertIn('.replace(/[^a-z0-9]+/g, "_")', self.html)
+        self.assertIn('const base = `cr_${slug}`.slice(0, 64)', self.html)
+        self.assertIn("while (existingKeys.has(candidate))", self.html)
+        self.assertIn('const suffix = `_${suffixNumber}`;', self.html)
+        self.assertIn("function renderAppAdminRoleCreateForm()", self.html)
+        self.assertIn('form.setAttribute("aria-busy", busy ? "true" : "false");', self.html)
+        self.assertIn("button.disabled = busy || !key;", self.html)
+        self.assertIn('if (!appAdminCanManageRbac() || (appAdmin.roleCreation || {}).busy) return;', self.html)
+        self.assertIn("body: JSON.stringify({key, name, description, permissions: []})", self.html)
+        self.assertIn("selectAppAdminRole(roleId, 2);", self.html)
+        self.assertIn('setAppAdminMessage("appAdminRoleWizardMessage"', self.html)
+
     def test_admin_role_view_opens_permission_wizard(self):
         for element_id in (
             "appAdminRoleWizardHeading",
@@ -640,10 +669,13 @@ class NextProfileUiTests(unittest.TestCase):
             self.assertIn(f'aria-controls="appAdminRoleWizard', self.html)
             self.assertIn(f'aria-labelledby="appAdminRoleWizardStep{step}"', self.html)
 
-        self.assertIn("function selectAppAdminRole(roleId)", self.html)
+        self.assertIn("function selectAppAdminRole(roleId, initialStep = 1)", self.html)
         self.assertIn('setAppAdminRolesTab("permissions");', self.html)
         self.assertIn('editor?.scrollIntoView({behavior: "smooth", block: "start"});', self.html)
-        self.assertIn('document.getElementById("appAdminRoleWizardHeading")?.focus();', self.html)
+        self.assertIn(
+            '(wizard.step > 1 ? panelHeading : document.getElementById("appAdminRoleWizardHeading"))?.focus();',
+            self.html,
+        )
         self.assertIn('<details class="app-admin-role-preview">', self.html)
         self.assertIn('<summary data-next-i18n="appAdmin.featurePreview">', self.html)
 
