@@ -12735,13 +12735,6 @@ def ui_preview_html(
             <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
             <input id="appLegacyTotpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
           </label>
-          <div class="profile-action-row hidden" id="appLegacyRecoveryAlternative">
-            <button type="button" class="secondary-button" id="appLegacyRecoveryCodeToggle" aria-expanded="false" aria-controls="appLegacyRecoveryCodeField" data-next-i18n="legacyAuth.useRecoveryCode">Use recovery code</button>
-          </div>
-          <label class="hidden" id="appLegacyRecoveryCodeField" for="appLegacyRecoveryCode">
-            <span data-next-i18n="legacyAuth.recoveryCodeOptional">Recovery code (instead)</span>
-            <input id="appLegacyRecoveryCode" autocomplete="one-time-code">
-          </label>
         </div>
         <div class="recovery-codes hidden" id="appLegacyRecoveryCodes"></div>
         <div class="profile-action-row hidden" id="appLegacyRecoveryActions">
@@ -21581,16 +21574,6 @@ def ui_preview_html(
       panel?.classList.toggle("hidden");
       setLoginMessage("");
     }
-    function setLegacyRecoveryCodeExpanded(expanded) {
-      const toggle = document.getElementById("appLegacyRecoveryCodeToggle");
-      const field = document.getElementById("appLegacyRecoveryCodeField");
-      const input = document.getElementById("appLegacyRecoveryCode");
-      const isExpanded = legacyStage === "mfa_challenge" && !!expanded;
-      toggle?.setAttribute("aria-expanded", isExpanded ? "true" : "false");
-      field?.classList.toggle("hidden", !isExpanded);
-      if (!isExpanded && input) input.value = "";
-      if (isExpanded) input?.focus();
-    }
     function renderLegacyLoginStage(payload = {}) {
       legacyStage = payload.stage || legacyStage || "";
       legacyFlowToken = payload.flow_token || legacyFlowToken || "";
@@ -21604,9 +21587,7 @@ def ui_preview_html(
       passwordChange?.classList.toggle("hidden", legacyStage !== "password_change");
       mfa?.classList.toggle("hidden", !["mfa_enrollment", "mfa_challenge"].includes(legacyStage));
       const mfaChallenge = legacyStage === "mfa_challenge";
-      document.getElementById("appLegacyRecoveryAlternative")?.classList.toggle("hidden", !mfaChallenge);
       document.getElementById("appRecoveryToggleButton")?.classList.toggle("hidden", mfaChallenge);
-      setLegacyRecoveryCodeExpanded(false);
       recoveryCodes?.classList.toggle("hidden", legacyStage !== "recovery_codes");
       document.getElementById("appLegacyRecoveryActions")?.classList.toggle("hidden", legacyStage !== "recovery_codes");
       ackLabel?.classList.toggle("hidden", legacyStage !== "recovery_codes");
@@ -21681,12 +21662,10 @@ def ui_preview_html(
           url = "/api/next/auth/legacy/mfa/setup/verify";
           body = {flow_token: legacyFlowToken, code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim()};
         } else if (legacyStage === "mfa_challenge") {
-          const recoveryCode = String(document.getElementById("appLegacyRecoveryCode")?.value || "").trim();
-          url = recoveryCode ? "/api/next/auth/legacy/mfa/recovery" : "/api/next/auth/legacy/mfa/verify";
+          url = "/api/next/auth/legacy/mfa/verify";
           body = {
             flow_token: legacyFlowToken,
-            code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim(),
-            recovery_code: recoveryCode
+            code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim()
           };
         } else if (legacyStage === "recovery_codes") {
           if (!document.getElementById("appLegacyRecoveryAck")?.checked) throw new Error(tNext("legacyAuth.saveCodesFirst", "Save and acknowledge the recovery codes first."));
@@ -39640,10 +39619,6 @@ def ui_preview_html(
       document.getElementById("appReviewForm")?.addEventListener("submit", (event) => loginReviewPassword(event));
       document.getElementById("appLegacyCopyCodes")?.addEventListener("click", () => copyLegacyCodes(legacyRecoveryCodes));
       document.getElementById("appLegacyDownloadCodes")?.addEventListener("click", () => downloadLegacyCodes(legacyRecoveryCodes));
-      document.getElementById("appLegacyRecoveryCodeToggle")?.addEventListener("click", () => {
-        const expanded = document.getElementById("appLegacyRecoveryCodeToggle")?.getAttribute("aria-expanded") === "true";
-        setLegacyRecoveryCodeExpanded(!expanded);
-      });
       document.getElementById("appInviteToggleButton")?.addEventListener("click", () => toggleInviteLogin());
       document.getElementById("appInviteForm")?.addEventListener("submit", (event) => registerInviteAccount(event));
       document.getElementById("appRecoveryToggleButton")?.addEventListener("click", () => toggleRecoveryLogin());
