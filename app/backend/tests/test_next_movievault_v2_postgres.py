@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from uuid import uuid4
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -1212,6 +1213,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
 
                 app = next_app.create_app()
                 client = app.test_client()
+                authenticated_user_id = str(uuid4())
                 protected_path = f"/api/next/movievault-v2/posters/{media_asset_id}"
                 self.assertFalse(next_app.is_public_next_path(protected_path))
                 self.assertTrue(next_app.is_public_next_path(f"/api/next/media/assets/{media_asset_id}"))
@@ -1228,7 +1230,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value={"id": authenticated_user_id},
                     ),
                 ):
                     response = client.get(protected_path)
@@ -1260,7 +1262,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value={"id": authenticated_user_id},
                     ),
                 ):
                     degraded_fallback = client.get(protected_path)
@@ -1276,7 +1278,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value={"id": authenticated_user_id},
                     ),
                 ):
                     protected_non_movievault = client.get(
