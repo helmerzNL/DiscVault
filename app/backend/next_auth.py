@@ -260,6 +260,20 @@ def _rp_id() -> str:
     return request.host.split(":", 1)[0] if request else "localhost"
 
 
+def _passkey_configuration_valid() -> bool:
+    rp_id = os.environ.get("RP_ID", "").strip().lower()
+    if rp_id == "localhost":
+        return True
+    if not rp_id or len(rp_id) > 253 or "." not in rp_id:
+        return False
+    labels = rp_id.split(".")
+    return all(
+        0 < len(label) <= 63
+        and re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label)
+        for label in labels
+    ) and not all(label.isdigit() for label in labels)
+
+
 def _rp_name() -> str:
     return os.environ.get("RP_NAME", "DiscVault").strip() or "DiscVault"
 
@@ -1902,6 +1916,7 @@ def register_next_auth_routes(
             "rp_id": _rp_id(),
             "rp_name": _rp_name(),
             "rp_origins": _rp_origins(),
+            "passkey_configuration_valid": _passkey_configuration_valid(),
             "authenticated": bool(user),
             "user_id": user["id"] if user else None,
             "username": user["username"] if user else None,

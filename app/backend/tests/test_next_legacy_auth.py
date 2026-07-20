@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from app.backend import next_backup
+from app.backend.next_auth import _passkey_configuration_valid
 from app.backend.next_legacy_auth import (
     PASSWORD_MIN_LENGTH,
     PasswordPolicyError,
@@ -63,6 +64,30 @@ class LegacyAuthSecurityTests(unittest.TestCase):
             with mock.patch.dict(os.environ, {"LEGACY_AUTH_ENABLED": value}):
                 self.assertFalse(legacy_auth_env_enabled())
                 self.assertFalse(legacy_auth_effective(True))
+
+    def test_passkeys_require_an_explicit_valid_relying_party_host(self):
+        invalid_values = (
+            "",
+            "192.168.1.10",
+            "https://discvault.example.com",
+            "discvault_example.com",
+            "-discvault.example.com",
+            "discvault.example.com.",
+        )
+        for value in invalid_values:
+            with self.subTest(value=value):
+                with mock.patch.dict(os.environ, {"RP_ID": value}, clear=False):
+                    self.assertFalse(_passkey_configuration_valid())
+        valid_values = (
+            "localhost",
+            "discvault.example.com",
+            "vault.home.arpa",
+            "DV.EXAMPLE.COM",
+        )
+        for value in valid_values:
+            with self.subTest(value=value):
+                with mock.patch.dict(os.environ, {"RP_ID": value}, clear=False):
+                    self.assertTrue(_passkey_configuration_valid())
 
     def test_constant_time_text_compare_accepts_unicode_input(self):
         self.assertTrue(constant_time_text_equal("cafe", "cafe"))
@@ -303,6 +328,10 @@ class LegacyAuthContractTests(unittest.TestCase):
             'label.legacy-checkbox-row input[type="checkbox"]',
             self.ui_source,
         )
+        self.assertIn('"passkey_configuration_valid": _passkey_configuration_valid()', self.auth_source)
+        self.assertIn("function passkeyProcessAvailable()", self.ui_source)
+        self.assertIn("const passkeyOnboardingAvailable", self.ui_source)
+        self.assertIn("legacyBootstrap && browserPasskeysUnsupported", self.ui_source)
         admin_visibility_start = self.ui_source.index(
             "function renderAppAdminVisibility()"
         )
