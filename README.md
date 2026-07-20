@@ -219,7 +219,7 @@ support, so it stays **inactive by default** until the matching
 and is not part of this repository. Existing `distribution-2`/`distribution-3`
 installations are unaffected.
 
-DiscVault `26.5.9` adds a bounded, anonymous `release-technical-1` bridge for
+DiscVault `26.5.10` adds a bounded, anonymous `release-technical-1` bridge for
 the existing barcode scanner and manual barcode entry. Matching
 `movievault_v2` plugin releases keep this technical fallback disabled by
 default. When an operator enables it, DiscVault still checks the synchronized
