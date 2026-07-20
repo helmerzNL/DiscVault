@@ -355,7 +355,55 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('enableButton.classList.toggle("hidden", pushProfile.subscribed);', self.html)
         self.assertIn('disableButton.classList.toggle("hidden", !pushProfile.subscribed);', self.html)
         self.assertIn('class="push-device-row ${item.current ? "current" : ""}"', self.html)
-        self.assertIn(".notification-overview-grid,\n      .notification-preference-grid {", self.html)
+        self.assertIn(".notification-overview-grid,", self.html)
+        self.assertIn(".notification-preference-grid,", self.html)
+
+    def test_groups_dashboard_uses_overview_cards_and_preserves_bindings(self):
+        for card in ("create", "scope"):
+            self.assertIn(f'data-groups-dashboard-card="{card}"', self.html)
+
+        for element_id in (
+            "memberGroupCreateSection",
+            "memberGroupCreateForm",
+            "memberGroupNameInput",
+            "memberGroupCreateButton",
+            "memberGroupScopeSummary",
+            "memberGroupMessage",
+            "memberGroupsHeading",
+            "memberGroupList",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="memberGroupMessage" aria-live="polite"', self.html)
+        self.assertIn('class="member-group-card" data-member-group-id="${id}"', self.html)
+        self.assertIn('class="member-group-metrics"', self.html)
+        self.assertIn('class="member-group-body ${invitePanel ? "" : "members-only"}"', self.html)
+        self.assertIn('data-member-group-open="${id}"', self.html)
+        self.assertIn('data-member-group-invite-send="${id}"', self.html)
+        self.assertIn('data-member-group-remove-user="${id}"', self.html)
+        self.assertIn('data-member-group-delete="${id}"', self.html)
+        self.assertIn("const canInvite = canManageMemberGroup(group);", self.html)
+        self.assertIn(
+            "const canDelete = isOwner && (isSystemOwner ? members.length === 0 : members.length === 1);",
+            self.html,
+        )
+        self.assertIn(".groups-overview-grid,", self.html)
+        self.assertIn(".member-group-body {", self.html)
+
+    def test_groups_dashboard_renames_inline_without_browser_prompt(self):
+        self.assertIn("let editingMemberGroupId = \"\";", self.html)
+        self.assertIn("function startMemberGroupRename(groupId)", self.html)
+        self.assertIn("function cancelMemberGroupRename(groupId)", self.html)
+        self.assertIn("async function saveMemberGroupRename(groupId, form)", self.html)
+        self.assertIn('data-member-group-rename-form="${id}"', self.html)
+        self.assertIn('data-member-group-rename-input="${id}"', self.html)
+        self.assertIn('data-member-group-rename-cancel="${id}"', self.html)
+        self.assertIn('if (event.key !== "Escape") return;', self.html)
+        self.assertIn("saveMemberGroupRename(form.dataset.memberGroupRenameForm, form);", self.html)
+        self.assertNotIn(
+            'window.prompt(tNext("groups.renamePrompt", "New group name")',
+            self.html,
+        )
 
     def test_account_dashboard_preserves_existing_profile_bindings(self):
         self.assertIn('class="account-dashboard"', self.html)

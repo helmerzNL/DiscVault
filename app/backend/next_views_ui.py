@@ -8180,42 +8180,288 @@ def ui_preview_html(
       gap: 10px;
       padding: 12px;
     }
-    .member-group-list {
+    .groups-dashboard {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .groups-overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+      min-width: 0;
+    }
+    .groups-dashboard-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .groups-dashboard-card.create {
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .groups-dashboard-card-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+    .groups-dashboard-card-head > div {
+      min-width: 0;
+    }
+    .groups-dashboard-card-head .nav-symbol {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 12px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+    .groups-dashboard-card-head .nav-symbol svg {
+      width: 22px;
+      height: 22px;
+    }
+    .groups-dashboard-card-head h4 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: 0;
+    }
+    .groups-dashboard-card-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .member-group-create-form {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+    }
+    .member-group-create-form .profile-form-actions {
+      align-self: end;
+    }
+    .member-group-create-form .primary-button {
+      min-width: 120px;
+    }
+    .groups-scope-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+    .groups-scope-summary .profile-meta-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+      align-content: start;
+      align-items: start;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .groups-scope-summary .profile-meta-row span {
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .groups-scope-summary .profile-meta-row strong {
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .member-groups-section {
       display: grid;
       gap: 10px;
+      min-width: 0;
     }
-    .member-group-row {
-      align-items: start;
+    .member-groups-heading {
+      display: grid;
+      gap: 3px;
+      padding: 2px 2px 0;
     }
-    .member-group-actions {
-      align-items: stretch;
+    .member-groups-heading h4 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
     }
-    .member-group-actions input {
-      min-width: min(220px, 100%);
+    .member-groups-heading p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
     }
-    .member-group-members {
+    .member-group-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr));
+      gap: 12px;
+      min-width: 0;
+    }
+    .member-group-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .member-group-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+    .member-group-identity {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr);
+      gap: 11px;
+      align-items: center;
+      min-width: 0;
+    }
+    .member-group-avatar {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 15%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+      font-size: 1rem;
+      font-weight: 850;
+    }
+    .member-group-title {
       display: flex;
       flex-wrap: wrap;
       gap: 7px;
-      margin-top: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+    .member-group-title h5 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+    .member-group-owner {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .member-group-role,
+    .member-group-member-role {
+      width: max-content;
+      max-width: 100%;
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      font-size: .7rem;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .member-group-open-button {
+      flex: 0 0 auto;
+    }
+    .member-group-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .member-group-metric {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--panel) 68%, transparent);
+    }
+    .member-group-metric strong {
+      font-size: 1rem;
+    }
+    .member-group-metric span {
+      color: var(--muted);
+      font-size: .7rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .member-group-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(210px, .78fr);
+      gap: 12px;
+      align-items: start;
+      min-width: 0;
+    }
+    .member-group-body.members-only {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .member-group-panel {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--panel) 54%, transparent);
+    }
+    .member-group-panel-head {
+      display: grid;
+      gap: 2px;
+    }
+    .member-group-panel-head h6 {
+      margin: 0;
+      color: var(--text);
+      font-size: .82rem;
+      letter-spacing: 0;
+    }
+    .member-group-panel-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .73rem;
+      line-height: 1.4;
+    }
+    .member-group-members {
+      display: grid;
+      gap: 7px;
     }
     .member-chip {
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: space-between;
+      gap: 8px;
       max-width: 100%;
-      padding: 5px 8px;
+      padding: 7px 8px 7px 10px;
       border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
-      border-radius: 999px;
+      border-radius: 10px;
       background: color-mix(in srgb, var(--bg-muted) 72%, transparent);
       color: var(--text);
       font-size: 12px;
       font-weight: 700;
     }
-    .member-chip small {
+    .member-chip-copy {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .member-group-member-role {
       color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
+      background: color-mix(in srgb, var(--muted) 11%, transparent);
+      font-size: .64rem;
     }
     .member-chip button {
       width: 20px;
@@ -8227,6 +8473,49 @@ def ui_preview_html(
       font-size: 13px;
       line-height: 1;
       cursor: pointer;
+    }
+    .member-group-invite-form,
+    .member-group-rename-form {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .member-group-invite-form input,
+    .member-group-rename-form input {
+      width: 100%;
+      min-width: 0;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: .86rem;
+      font-weight: 650;
+    }
+    .member-group-manage-actions,
+    .member-group-rename-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .member-group-manage-actions .danger-button {
+      margin-left: auto;
+    }
+    .member-group-delete-hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: .72rem;
+      line-height: 1.4;
+    }
+    .member-group-empty {
+      grid-column: 1 / -1;
+      min-height: 150px;
+      display: grid;
+      place-items: center;
+      text-align: center;
     }
     .profile-api-submenu {
       margin-bottom: 2px;
@@ -10963,7 +11252,9 @@ def ui_preview_html(
         grid-template-columns: 1fr;
       }
       .notification-overview-grid,
-      .notification-preference-grid {
+      .notification-preference-grid,
+      .groups-overview-grid,
+      .member-group-body {
         grid-template-columns: 1fr;
       }
       .account-fact-grid {
@@ -11211,11 +11502,39 @@ def ui_preview_html(
       .notification-settings-card {
         padding: 13px;
       }
+      .groups-dashboard-card,
+      .member-group-card {
+        padding: 13px;
+      }
       .notification-preference-card {
         padding: 0;
       }
       .notification-status-grid {
         grid-template-columns: 1fr;
+      }
+      .member-group-create-form,
+      .groups-scope-summary {
+        grid-template-columns: 1fr;
+      }
+      .member-group-card-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .member-group-open-button {
+        width: 100%;
+      }
+      .member-group-metrics {
+        gap: 6px;
+      }
+      .member-group-metric {
+        padding: 8px;
+      }
+      .member-group-manage-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .member-group-manage-actions .danger-button {
+        margin-left: 0;
       }
       .profile-form-actions,
       .profile-action-row,
@@ -13462,33 +13781,52 @@ def ui_preview_html(
               </div>
             </div>
                 <div id="profilePanelGroups" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabGroups" tabindex="0" data-profile-panel="groups">
-              <div class="detail-card-head compact">
-                <div>
-                  <h4 data-next-i18n="groups.memberGroups">Member Groups</h4>
-                  <p data-next-i18n="groups.memberGroupsHelp">Create your own sharing groups and invite friends by username.</p>
+              <div class="groups-dashboard">
+                <div class="detail-card-head compact">
+                  <div>
+                    <h4 data-next-i18n="groups.memberGroups">Groups</h4>
+                    <p data-next-i18n="groups.memberGroupsHelp">Create sharing groups, invite people and open each shared library from one place.</p>
+                  </div>
                 </div>
-              </div>
-              <div class="profile-section-grid">
-                <section class="profile-section-box" id="memberGroupCreateSection">
-                  <h4 data-next-i18n="groups.createGroup">Create group</h4>
-                  <form class="profile-form" id="memberGroupCreateForm">
-                    <label for="memberGroupNameInput">
-                      <span data-next-i18n="groups.groupName">Group name</span>
-                      <input id="memberGroupNameInput" maxlength="120" autocomplete="off" data-next-i18n-placeholder="groups.groupNamePlaceholder" placeholder="Family movie night">
-                    </label>
-                    <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="memberGroupCreateButton" data-next-i18n="groups.create">Create</button>
-                      <span class="login-message" id="memberGroupMessage"></span>
+                <div class="groups-overview-grid">
+                  <section class="groups-dashboard-card create" id="memberGroupCreateSection" data-groups-dashboard-card="create">
+                    <div class="groups-dashboard-card-head">
+                      """ + nav_icon("groups") + """
+                      <div>
+                        <h4 data-next-i18n="groups.createGroup">Create group</h4>
+                        <p data-next-i18n="groups.createGroupHelp">Start a shared library and invite people after it has been created.</p>
+                      </div>
                     </div>
-                  </form>
-                </section>
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="groups.libraryScope">Library view</h4>
-                  <p data-next-i18n="groups.libraryScopeHelp">Group-shared films only appear when you explicitly select that group in the library filter.</p>
-                  <div class="profile-meta" id="memberGroupScopeSummary"></div>
+                    <form class="profile-form member-group-create-form" id="memberGroupCreateForm">
+                      <label for="memberGroupNameInput">
+                        <span data-next-i18n="groups.groupName">Group name</span>
+                        <input id="memberGroupNameInput" maxlength="120" autocomplete="off" data-next-i18n-placeholder="groups.groupNamePlaceholder" placeholder="Family movie night">
+                      </label>
+                      <div class="profile-form-actions">
+                        <button type="submit" class="primary-button" id="memberGroupCreateButton" data-next-i18n="groups.create">Create</button>
+                      </div>
+                    </form>
+                  </section>
+                  <section class="groups-dashboard-card" data-groups-dashboard-card="scope">
+                    <div class="groups-dashboard-card-head">
+                      """ + nav_icon("library") + """
+                      <div>
+                        <h4 data-next-i18n="groups.libraryScope">Library view</h4>
+                        <p data-next-i18n="groups.libraryScopeHelp">Group-shared films only appear when you explicitly select that group in the library filter.</p>
+                      </div>
+                    </div>
+                    <div class="profile-meta groups-scope-summary" id="memberGroupScopeSummary"></div>
+                  </section>
+                </div>
+                <div class="login-message" id="memberGroupMessage" aria-live="polite"></div>
+                <section class="member-groups-section" aria-labelledby="memberGroupsHeading">
+                  <div class="member-groups-heading">
+                    <h4 id="memberGroupsHeading" data-next-i18n="groups.yourGroups">Your groups</h4>
+                    <p data-next-i18n="groups.yourGroupsHelp">Open a shared library or manage the people in groups you own.</p>
+                  </div>
+                  <div class="member-group-list" id="memberGroupList"></div>
                 </section>
               </div>
-              <div class="container-manager-list member-group-list" id="memberGroupList"></div>
             </div>
                 <div id="profilePanelStructure" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabStructure" tabindex="0" data-profile-panel="structure">
               <div class="detail-card-head compact">
@@ -34105,6 +34443,9 @@ def ui_preview_html(
       const canDelete = isOwner && (isSystemOwner ? members.length === 0 : members.length === 1);
       const owner = group.created_by_display_name || group.created_by_username || "";
       const currentId = String(currentUserId() || "");
+      const groupName = group.name || tNext("groups.unnamed", "Unnamed group");
+      const groupInitial = String(groupName).trim().charAt(0).toUpperCase() || "G";
+      const isEditing = String(editingMemberGroupId || "") === String(group.id || "");
       const memberRows = members.length
         ? members.map((member) => {
             const userId = String(member.user_id || member.userId || "");
@@ -34112,39 +34453,89 @@ def ui_preview_html(
             const canRemove = canInvite && userId && userId !== currentId && memberRole !== "owner";
             return `
               <span class="member-chip">
-                <span>${escapeHtml(member.display_name || member.username || userId || "")}</span>
-                ${memberRole ? `<small>${escapeHtml(memberGroupDisplayRole(memberRole))}</small>` : ""}
+                <span class="member-chip-copy">
+                  <span>${escapeHtml(member.display_name || member.username || userId || "")}</span>
+                  ${memberRole ? `<small class="member-group-member-role">${escapeHtml(memberGroupDisplayRole(memberRole))}</small>` : ""}
+                </span>
                 ${canRemove ? `<button type="button" data-member-group-remove-user="${id}" data-member-group-user-id="${escapeHtml(userId)}" aria-label="${escapeHtml(tNext("groups.removeMember", "Remove member"))}">&times;</button>` : ""}
               </span>
             `;
           }).join("")
         : `<span class="muted-inline">${escapeHtml(tNext("groups.noMembers", "No members yet"))}</span>`;
-      const stats = [
-        owner ? `${tNext("groups.owner", "Owner")}: ${owner}` : "",
-        `${Number(group.movie_count || 0)} ${tNext("groups.movies", "movies")}`,
-        `${Number(group.member_count || members.length || 0)} ${tNext("groups.members", "members")}`,
-        Number(group.pending_invite_count || 0) ? `${Number(group.pending_invite_count || 0)} ${tNext("groups.pendingInvites", "pending invites")}` : "",
-        role ? `${tNext("groups.yourRole", "Your role")}: ${memberGroupDisplayRole(role)}` : ""
-      ].filter(Boolean).join(" / ");
-      return `
-        <div class="container-manager-row member-group-row" data-member-group-id="${id}">
-          <div class="container-manager-meta">
-            <strong>${escapeHtml(group.name || tNext("groups.unnamed", "Unnamed group"))}</strong>
-            <span>${escapeHtml(stats)}</span>
-            <div class="member-group-members">${memberRows}</div>
+      const invitePanel = canInvite ? `
+        <section class="member-group-panel">
+          <div class="member-group-panel-head">
+            <h6>${escapeHtml(tNext("groups.inviteMember", "Invite member"))}</h6>
+            <p>${escapeHtml(tNext("groups.inviteMemberHelp", "Invite someone using their DiscVault username."))}</p>
           </div>
-          <div class="container-manager-actions member-group-actions">
-            <button type="button" class="secondary-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
-            ${isOwner ? `
-              <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+          <div class="member-group-invite-form">
+            <input data-member-group-invite="${id}" maxlength="120" autocomplete="username" placeholder="${escapeHtml(tNext("groups.inviteUsername", "Username"))}" aria-label="${escapeHtml(tNext("groups.inviteUsername", "Username"))}">
+            <button type="button" class="secondary-button" data-member-group-invite-send="${id}">${escapeHtml(tNext("groups.invite", "Invite"))}</button>
+          </div>
+          ${isOwner ? `
+            <div class="member-group-manage-actions">
+              <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("groups.editGroupName", "Edit name"))}</button>
               ${canDelete ? `<button type="button" class="danger-button" data-member-group-delete="${id}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
-            ` : ""}
-            ${canInvite ? `
-              <input data-member-group-invite="${id}" maxlength="120" autocomplete="username" placeholder="${escapeHtml(tNext("groups.inviteUsername", "Username"))}" aria-label="${escapeHtml(tNext("groups.inviteUsername", "Username"))}">
-              <button type="button" class="secondary-button" data-member-group-invite-send="${id}">${escapeHtml(tNext("groups.invite", "Invite"))}</button>
-            ` : ""}
+            </div>
+            ${!canDelete ? `<p class="member-group-delete-hint">${escapeHtml(tNext("groups.deleteUnavailableMembers", "Remove the other members before deleting this group."))}</p>` : ""}
+          ` : ""}
+        </section>
+      ` : isOwner ? `
+        <section class="member-group-panel">
+          <div class="member-group-panel-head">
+            <h6>${escapeHtml(tNext("groups.manageGroup", "Manage group"))}</h6>
           </div>
-        </div>
+          <div class="member-group-manage-actions">
+            <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("groups.editGroupName", "Edit name"))}</button>
+            ${canDelete ? `<button type="button" class="danger-button" data-member-group-delete="${id}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
+          </div>
+          ${!canDelete ? `<p class="member-group-delete-hint">${escapeHtml(tNext("groups.deleteUnavailableMembers", "Remove the other members before deleting this group."))}</p>` : ""}
+        </section>
+      ` : "";
+      const renameForm = isEditing ? `
+        <form class="member-group-rename-form" data-member-group-rename-form="${id}">
+          <label>
+            <span class="sr-only">${escapeHtml(tNext("groups.groupName", "Group name"))}</span>
+            <input data-member-group-rename-input="${id}" maxlength="120" autocomplete="off" value="${escapeHtml(groupName)}" aria-label="${escapeHtml(tNext("groups.groupName", "Group name"))}">
+          </label>
+          <div class="member-group-rename-actions">
+            <button type="submit" class="primary-button">${escapeHtml(tNext("groups.saveName", "Save name"))}</button>
+            <button type="button" class="secondary-button" data-member-group-rename-cancel="${id}">${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+          </div>
+        </form>
+      ` : "";
+      return `
+        <article class="member-group-card" data-member-group-id="${id}">
+          <header class="member-group-card-head">
+            <div class="member-group-identity">
+              <span class="member-group-avatar" aria-hidden="true">${escapeHtml(groupInitial)}</span>
+              <div>
+                <div class="member-group-title">
+                  <h5>${escapeHtml(groupName)}</h5>
+                  ${role ? `<span class="member-group-role">${escapeHtml(memberGroupDisplayRole(role))}</span>` : ""}
+                </div>
+                ${owner ? `<p class="member-group-owner">${escapeHtml(tNext("groups.owner", "Owner"))}: ${escapeHtml(owner)}</p>` : ""}
+              </div>
+            </div>
+            <button type="button" class="secondary-button member-group-open-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
+          </header>
+          ${renameForm}
+          <div class="member-group-metrics" aria-label="${escapeHtml(tNext("groups.groupOverview", "Group overview"))}">
+            <div class="member-group-metric"><strong>${Number(group.movie_count || 0)}</strong><span>${escapeHtml(tNext("groups.sharedMovies", "Shared films"))}</span></div>
+            <div class="member-group-metric"><strong>${Number(group.member_count || members.length || 0)}</strong><span>${escapeHtml(tNext("groups.members", "Members"))}</span></div>
+            <div class="member-group-metric"><strong>${Number(group.pending_invite_count || 0)}</strong><span>${escapeHtml(tNext("groups.pendingInvites", "Pending invites"))}</span></div>
+          </div>
+          <div class="member-group-body ${invitePanel ? "" : "members-only"}">
+            <section class="member-group-panel">
+              <div class="member-group-panel-head">
+                <h6>${escapeHtml(tNext("groups.membersTitle", "Members"))}</h6>
+                <p>${escapeHtml(tNext("groups.membersHelp", "Roles determine who can invite people and manage this group."))}</p>
+              </div>
+              <div class="member-group-members">${memberRows}</div>
+            </section>
+            ${invitePanel}
+          </div>
+        </article>
       `;
     }
     function renderMemberGroups() {
@@ -34154,12 +34545,12 @@ def ui_preview_html(
       renderMemberGroupScopeSummary();
       if (!list) return;
       if (!hasActualAnyPermission(["groups.view", "groups.create", "groups.invite"])) {
-        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("groups.noAccess", "You do not have access to member groups."))}</div>`;
+        list.innerHTML = `<div class="preview-empty member-group-empty">${escapeHtml(tNext("groups.noAccess", "You do not have access to member groups."))}</div>`;
         return;
       }
       const groups = Array.isArray(mediaGroups) ? mediaGroups : [];
       if (!groups.length) {
-        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("groups.empty", "No member groups yet."))}</div>`;
+        list.innerHTML = `<div class="preview-empty member-group-empty">${escapeHtml(tNext("groups.empty", "No member groups yet."))}</div>`;
         return;
       }
       list.innerHTML = groups.map(memberGroupCardHtml).join("");
@@ -34191,17 +34582,34 @@ def ui_preview_html(
         setMemberGroupMessage(error.message || String(error), "bad");
       }
     }
-    async function renameMemberGroup(groupId) {
+    let editingMemberGroupId = "";
+    function startMemberGroupRename(groupId) {
       const group = mediaGroups.find((item) => String(item.id) === String(groupId));
       if (!group || memberRoleForCurrentUser(group) !== "owner") return;
-      const nextName = window.prompt(tNext("groups.renamePrompt", "New group name"), group.name || "");
-      if (nextName === null) return;
-      const name = String(nextName || "").trim();
+      editingMemberGroupId = groupId;
+      renderMemberGroups();
+      const input = document.querySelector(`[data-member-group-rename-input="${CSS.escape(groupId)}"]`);
+      input?.focus();
+      input?.select();
+    }
+    function cancelMemberGroupRename(groupId) {
+      if (String(editingMemberGroupId || "") !== String(groupId || "")) return;
+      editingMemberGroupId = "";
+      renderMemberGroups();
+    }
+    async function saveMemberGroupRename(groupId, form) {
+      const group = mediaGroups.find((item) => String(item.id) === String(groupId));
+      if (!group || memberRoleForCurrentUser(group) !== "owner") return;
+      const input = form?.querySelector(`[data-member-group-rename-input="${CSS.escape(groupId)}"]`);
+      const name = String(input?.value || "").trim();
       if (!name) {
         setMemberGroupMessage(tNext("groups.nameRequired", "Enter a group name first."), "bad");
+        input?.focus();
         return;
       }
       setMemberGroupMessage(tNext("common.saving", "Saving…"));
+      const controls = Array.from(form?.querySelectorAll("input, button") || []);
+      controls.forEach((control) => { control.disabled = true; });
       try {
         const payload = await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}`, {
           method: "PATCH",
@@ -34211,11 +34619,14 @@ def ui_preview_html(
         if (payload.group) {
           mediaGroups = mediaGroups.map((item) => String(item.id) === String(groupId) ? payload.group : item);
         }
+        editingMemberGroupId = "";
         renderGroupFilter();
         renderMemberGroups();
         renderCollectionSurface();
         setMemberGroupMessage(tNext("groups.renamed", "Group renamed."), "good");
       } catch (error) {
+        controls.forEach((control) => { control.disabled = false; });
+        input?.focus();
         setMemberGroupMessage(error.message || String(error), "bad");
       }
     }
@@ -36301,7 +36712,12 @@ def ui_preview_html(
       document.getElementById("memberGroupList")?.addEventListener("click", (event) => {
         const renameButton = event.target.closest("[data-member-group-rename]");
         if (renameButton) {
-          renameMemberGroup(renameButton.dataset.memberGroupRename);
+          startMemberGroupRename(renameButton.dataset.memberGroupRename);
+          return;
+        }
+        const renameCancelButton = event.target.closest("[data-member-group-rename-cancel]");
+        if (renameCancelButton) {
+          cancelMemberGroupRename(renameCancelButton.dataset.memberGroupRenameCancel);
           return;
         }
         const deleteButton = event.target.closest("[data-member-group-delete]");
@@ -36321,6 +36737,19 @@ def ui_preview_html(
         }
         const inviteButton = event.target.closest("[data-member-group-invite-send]");
         if (inviteButton) inviteMemberGroupUser(inviteButton.dataset.memberGroupInviteSend);
+      });
+      document.getElementById("memberGroupList")?.addEventListener("submit", (event) => {
+        const form = event.target.closest("[data-member-group-rename-form]");
+        if (!form) return;
+        event.preventDefault();
+        saveMemberGroupRename(form.dataset.memberGroupRenameForm, form);
+      });
+      document.getElementById("memberGroupList")?.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const form = event.target.closest("[data-member-group-rename-form]");
+        if (!form) return;
+        event.preventDefault();
+        cancelMemberGroupRename(form.dataset.memberGroupRenameForm);
       });
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.addEventListener("click", () => {
