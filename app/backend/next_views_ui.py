@@ -134,6 +134,7 @@ def ui_preview_html(
         "groups": "M12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5M5.5 7C6.88 7 8 8.12 8 9.5S6.88 12 5.5 12 3 10.88 3 9.5 4.12 7 5.5 7M18.5 7C19.88 7 21 8.12 21 9.5S19.88 12 18.5 12 16 10.88 16 9.5 17.12 7 18.5 7M12 13C15.31 13 18 14.79 18 17V20H6V17C6 14.79 8.69 13 12 13M5.5 14C3.57 14 2 15.12 2 16.5V19H4V17C4 15.9 4.45 14.87 5.22 14.03L5.5 14M18.5 14L18.78 14.03C19.55 14.87 20 15.9 20 17V19H22V16.5C22 15.12 20.43 14 18.5 14Z",
         "structure": "M12 13H7V18H12V20H5V10H7V11H12V13M8 4V6H4V4H8M10 2H2V8H10V2M20 11V13H16V11H20M22 9H14V15H22V9M20 18V20H16V18H20M22 16H14V22H22V16Z",
         "security": "M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1M12 5C13.66 5 15 6.34 15 8V10H16V16H8V10H9V8C9 6.34 10.34 5 12 5M12 7C11.45 7 11 7.45 11 8V10H13V8C13 7.45 12.55 7 12 7Z",
+        "devices": "M4 6H22V18H4V6M22 4H4C2.89 4 2 4.89 2 6V18C2 19.11 2.9 20 4 20H11V22H7V24H19V22H15V20H22C23.11 20 24 19.1 24 18V6C24 4.89 23.1 4 22 4Z",
         "api": "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z",
         "about": "M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
@@ -4519,6 +4520,166 @@ def ui_preview_html(
       display: grid;
       gap: 8px;
     }
+    .notification-settings-dashboard {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .notification-overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+      gap: 14px;
+      align-items: stretch;
+      min-width: 0;
+    }
+    .notification-settings-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .notification-settings-card.status {
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .notification-settings-card-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+    .notification-settings-card-head > div {
+      min-width: 0;
+    }
+    .notification-settings-card-head .nav-symbol {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 12px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+    .notification-settings-card-head .nav-symbol svg {
+      width: 22px;
+      height: 22px;
+    }
+    .notification-settings-card-head h4,
+    .notification-settings-card-head h5 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+    .notification-settings-card-head h4 {
+      font-size: 1.05rem;
+    }
+    .notification-settings-card-head h5 {
+      font-size: .95rem;
+    }
+    .notification-settings-card-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .notification-status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+    .notification-status-fact {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .notification-status-fact > span {
+      color: var(--muted);
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .notification-state-pill {
+      width: max-content;
+      max-width: 100%;
+      padding: 5px 9px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--muted) 12%, transparent);
+      font-size: .78rem;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .notification-state-pill.good {
+      color: var(--success);
+      background: color-mix(in srgb, var(--success) 14%, transparent);
+    }
+    .notification-state-pill.bad {
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 13%, transparent);
+    }
+    .notification-status-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .notification-status-actions .debug-only {
+      margin-left: auto;
+    }
+    .notification-preferences-section {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .notification-preferences-heading {
+      display: grid;
+      gap: 3px;
+      padding: 2px 2px 0;
+    }
+    .notification-preferences-heading h4 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
+    }
+    .notification-preferences-heading p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .notification-preference-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      min-width: 0;
+    }
+    .notification-preference-card {
+      padding: 0;
+      overflow: hidden;
+    }
+    .notification-preference-card .notification-settings-card-head {
+      padding: 14px 14px 11px;
+    }
+    .notification-preference-card .preference-control-row {
+      min-height: 72px;
+      padding: 11px 14px;
+      border-top: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 58%, transparent);
+    }
+    .notification-preference-card .preference-control-row:first-child {
+      border-top: 0;
+    }
     .push-device-row {
       display: flex;
       align-items: center;
@@ -4528,6 +4689,10 @@ def ui_preview_html(
       border-radius: 14px;
       padding: 10px 12px;
       background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .push-device-row.current {
+      border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+      background: color-mix(in srgb, var(--accent) 7%, var(--bg-solid));
     }
     body.debug-mode .debug-only { display: inline-flex !important; }
     .movie-detail-page {
@@ -8015,42 +8180,288 @@ def ui_preview_html(
       gap: 10px;
       padding: 12px;
     }
-    .member-group-list {
+    .groups-dashboard {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .groups-overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+      min-width: 0;
+    }
+    .groups-dashboard-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .groups-dashboard-card.create {
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .groups-dashboard-card-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+    .groups-dashboard-card-head > div {
+      min-width: 0;
+    }
+    .groups-dashboard-card-head .nav-symbol {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 12px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+    .groups-dashboard-card-head .nav-symbol svg {
+      width: 22px;
+      height: 22px;
+    }
+    .groups-dashboard-card-head h4 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: 0;
+    }
+    .groups-dashboard-card-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .member-group-create-form {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+    }
+    .member-group-create-form .profile-form-actions {
+      align-self: end;
+    }
+    .member-group-create-form .primary-button {
+      min-width: 120px;
+    }
+    .groups-scope-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+    .groups-scope-summary .profile-meta-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+      align-content: start;
+      align-items: start;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .groups-scope-summary .profile-meta-row span {
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .groups-scope-summary .profile-meta-row strong {
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .member-groups-section {
       display: grid;
       gap: 10px;
+      min-width: 0;
     }
-    .member-group-row {
-      align-items: start;
+    .member-groups-heading {
+      display: grid;
+      gap: 3px;
+      padding: 2px 2px 0;
     }
-    .member-group-actions {
-      align-items: stretch;
+    .member-groups-heading h4 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
     }
-    .member-group-actions input {
-      min-width: min(220px, 100%);
+    .member-groups-heading p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
     }
-    .member-group-members {
+    .member-group-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr));
+      gap: 12px;
+      min-width: 0;
+    }
+    .member-group-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .member-group-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+    .member-group-identity {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr);
+      gap: 11px;
+      align-items: center;
+      min-width: 0;
+    }
+    .member-group-avatar {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 15%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+      font-size: 1rem;
+      font-weight: 850;
+    }
+    .member-group-title {
       display: flex;
       flex-wrap: wrap;
       gap: 7px;
-      margin-top: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+    .member-group-title h5 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+    .member-group-owner {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .member-group-role,
+    .member-group-member-role {
+      width: max-content;
+      max-width: 100%;
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      font-size: .7rem;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .member-group-open-button {
+      flex: 0 0 auto;
+    }
+    .member-group-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .member-group-metric {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--panel) 68%, transparent);
+    }
+    .member-group-metric strong {
+      font-size: 1rem;
+    }
+    .member-group-metric span {
+      color: var(--muted);
+      font-size: .7rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .member-group-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(210px, .78fr);
+      gap: 12px;
+      align-items: start;
+      min-width: 0;
+    }
+    .member-group-body.members-only {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .member-group-panel {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--panel) 54%, transparent);
+    }
+    .member-group-panel-head {
+      display: grid;
+      gap: 2px;
+    }
+    .member-group-panel-head h6 {
+      margin: 0;
+      color: var(--text);
+      font-size: .82rem;
+      letter-spacing: 0;
+    }
+    .member-group-panel-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .73rem;
+      line-height: 1.4;
+    }
+    .member-group-members {
+      display: grid;
+      gap: 7px;
     }
     .member-chip {
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: space-between;
+      gap: 8px;
       max-width: 100%;
-      padding: 5px 8px;
+      padding: 7px 8px 7px 10px;
       border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
-      border-radius: 999px;
+      border-radius: 10px;
       background: color-mix(in srgb, var(--bg-muted) 72%, transparent);
       color: var(--text);
       font-size: 12px;
       font-weight: 700;
     }
-    .member-chip small {
+    .member-chip-copy {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .member-group-member-role {
       color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
+      background: color-mix(in srgb, var(--muted) 11%, transparent);
+      font-size: .64rem;
     }
     .member-chip button {
       width: 20px;
@@ -8062,6 +8473,49 @@ def ui_preview_html(
       font-size: 13px;
       line-height: 1;
       cursor: pointer;
+    }
+    .member-group-invite-form,
+    .member-group-rename-form {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .member-group-invite-form input,
+    .member-group-rename-form input {
+      width: 100%;
+      min-width: 0;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: .86rem;
+      font-weight: 650;
+    }
+    .member-group-manage-actions,
+    .member-group-rename-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .member-group-manage-actions .danger-button {
+      margin-left: auto;
+    }
+    .member-group-delete-hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: .72rem;
+      line-height: 1.4;
+    }
+    .member-group-empty {
+      grid-column: 1 / -1;
+      min-height: 150px;
+      display: grid;
+      place-items: center;
+      text-align: center;
     }
     .profile-api-submenu {
       margin-bottom: 2px;
@@ -10797,6 +11251,12 @@ def ui_preview_html(
       .profile-section-grid {
         grid-template-columns: 1fr;
       }
+      .notification-overview-grid,
+      .notification-preference-grid,
+      .groups-overview-grid,
+      .member-group-body {
+        grid-template-columns: 1fr;
+      }
       .account-fact-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -10940,6 +11400,17 @@ def ui_preview_html(
       .app-admin-plugin-import .primary-button {
         width: 100%;
       }
+      .notification-status-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .notification-status-actions .secondary-button,
+      .notification-status-actions .primary-button {
+        width: 100%;
+      }
+      .notification-status-actions .debug-only {
+        margin-left: 0;
+      }
     }
     @media (max-width: 560px) {
       body,
@@ -11027,6 +11498,43 @@ def ui_preview_html(
       .preferences-setting-card .preference-control-row.dependent {
         margin-left: 12px;
         padding-left: 11px;
+      }
+      .notification-settings-card {
+        padding: 13px;
+      }
+      .groups-dashboard-card,
+      .member-group-card {
+        padding: 13px;
+      }
+      .notification-preference-card {
+        padding: 0;
+      }
+      .notification-status-grid {
+        grid-template-columns: 1fr;
+      }
+      .member-group-create-form,
+      .groups-scope-summary {
+        grid-template-columns: 1fr;
+      }
+      .member-group-card-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .member-group-open-button {
+        width: 100%;
+      }
+      .member-group-metrics {
+        gap: 6px;
+      }
+      .member-group-metric {
+        padding: 8px;
+      }
+      .member-group-manage-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .member-group-manage-actions .danger-button {
+        margin-left: 0;
       }
       .profile-form-actions,
       .profile-action-row,
@@ -13192,69 +13700,133 @@ def ui_preview_html(
               </div>
             </div>
                 <div id="profilePanelNotifications" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabNotifications" tabindex="0" data-profile-panel="notifications">
-              <div class="detail-card-head compact">
-                <div>
-                  <h4 data-next-i18n="notifications.pushTitle">Push notifications</h4>
-                  <p data-next-i18n="notifications.pushHelp">Enable native PWA notifications on this device and choose which messages you want to receive.</p>
-                </div>
-                <div class="profile-form-actions">
-                  <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
-                  <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
-                  <button type="button" class="secondary-button debug-only hidden" id="pushPriceCheckButton" data-next-i18n="notifications.priceCheck">Price Check</button>
-                </div>
-              </div>
-              <div class="profile-section-grid">
-                <section class="profile-section-box">
-                  <div class="profile-meta">
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="notifications.browserState">Browser</span>
-                      <strong id="pushBrowserState">-</strong>
+              <div class="notification-settings-dashboard">
+                <div class="notification-overview-grid">
+                  <section class="notification-settings-card status" data-notification-settings-card="status">
+                    <div class="notification-settings-card-head">
+                      """ + nav_icon("notification_settings") + """
+                      <div>
+                        <h4 data-next-i18n="notifications.pushTitle">Push notifications</h4>
+                        <p data-next-i18n="notifications.pushHelp">Enable native PWA notifications on this device and choose which messages you want to receive.</p>
+                      </div>
                     </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="notifications.deviceState">This device</span>
-                      <strong id="pushDeviceState">-</strong>
+                    <div class="notification-status-grid">
+                      <div class="notification-status-fact">
+                        <span data-next-i18n="notifications.browserState">Browser</span>
+                        <strong class="notification-state-pill" id="pushBrowserState">-</strong>
+                      </div>
+                      <div class="notification-status-fact">
+                        <span data-next-i18n="notifications.deviceState">This device</span>
+                        <strong class="notification-state-pill" id="pushDeviceState">-</strong>
+                      </div>
                     </div>
+                    <div class="notification-status-actions">
+                      <button type="button" class="primary-button" id="pushEnableButton" data-next-i18n="notifications.enablePush">Enable notifications</button>
+                      <button type="button" class="secondary-button hidden" id="pushDisableButton" data-next-i18n="notifications.disablePush">Disable on this device</button>
+                      <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+                      <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
+                      <button type="button" class="secondary-button debug-only hidden" id="pushPriceCheckButton" data-next-i18n="notifications.priceCheck">Price Check</button>
+                    </div>
+                  </section>
+                  <section class="notification-settings-card" data-notification-settings-card="devices">
+                    <div class="notification-settings-card-head">
+                      """ + nav_icon("devices") + """
+                      <div>
+                        <h4 data-next-i18n="notifications.devicesTitle">Connected devices</h4>
+                        <p data-next-i18n="notifications.devicesHelp">Devices currently registered for push notifications.</p>
+                      </div>
+                    </div>
+                    <div class="push-device-list" id="pushDeviceList"></div>
+                  </section>
+                </div>
+                <section class="notification-preferences-section" aria-labelledby="notificationCategoriesTitle">
+                  <div class="notification-preferences-heading">
+                    <h4 id="notificationCategoriesTitle" data-next-i18n="notifications.categoriesTitle">Notification categories</h4>
+                    <p data-next-i18n="notifications.categoriesHelp">Choose which updates can reach your devices.</p>
                   </div>
-                  <div class="profile-action-row">
-                    <button type="button" class="secondary-button" id="pushEnableButton" data-next-i18n="notifications.enablePush">Enable notifications</button>
-                    <button type="button" class="secondary-button" id="pushDisableButton" data-next-i18n="notifications.disablePush">Disable on this device</button>
+                  <div class="notification-preference-grid" id="pushPreferenceList">
+                    <section class="notification-settings-card notification-preference-card" data-push-preference-card="system">
+                      <div class="notification-settings-card-head">
+                        """ + nav_icon("security") + """
+                        <div>
+                          <h5 data-next-i18n="notifications.systemSecurityTitle">System &amp; security</h5>
+                          <p data-next-i18n="notifications.systemSecurityHelp">Important DiscVault and account updates.</p>
+                        </div>
+                      </div>
+                      <div class="preference-control-list" data-push-preference-group="system"></div>
+                    </section>
+                    <section class="notification-settings-card notification-preference-card" data-push-preference-card="library">
+                      <div class="notification-settings-card-head">
+                        """ + nav_icon("library") + """
+                        <div>
+                          <h5 data-next-i18n="notifications.libraryActivityTitle">Library activity</h5>
+                          <p data-next-i18n="notifications.libraryActivityHelp">Background work and wishlist price changes.</p>
+                        </div>
+                      </div>
+                      <div class="preference-control-list" data-push-preference-group="library"></div>
+                    </section>
+                    <section class="notification-settings-card notification-preference-card" data-push-preference-card="sharing">
+                      <div class="notification-settings-card-head">
+                        """ + nav_icon("groups") + """
+                        <div>
+                          <h5 data-next-i18n="notifications.sharingTitle">Sharing</h5>
+                          <p data-next-i18n="notifications.sharingHelp">Groups, invitations and shared activity.</p>
+                        </div>
+                      </div>
+                      <div class="preference-control-list" data-push-preference-group="sharing"></div>
+                    </section>
                   </div>
                 </section>
-                <section class="profile-section-box">
-                  <div class="preference-control-list" id="pushPreferenceList"></div>
-                  <div class="push-device-list" id="pushDeviceList"></div>
-                </section>
+                <div class="login-message" id="pushProfileMessage" aria-live="polite"></div>
               </div>
-              <div class="login-message" id="pushProfileMessage"></div>
             </div>
                 <div id="profilePanelGroups" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabGroups" tabindex="0" data-profile-panel="groups">
-              <div class="detail-card-head compact">
-                <div>
-                  <h4 data-next-i18n="groups.memberGroups">Member Groups</h4>
-                  <p data-next-i18n="groups.memberGroupsHelp">Create your own sharing groups and invite friends by username.</p>
+              <div class="groups-dashboard">
+                <div class="detail-card-head compact">
+                  <div>
+                    <h4 data-next-i18n="groups.memberGroups">Groups</h4>
+                    <p data-next-i18n="groups.memberGroupsHelp">Create sharing groups, invite people and open each shared library from one place.</p>
+                  </div>
                 </div>
-              </div>
-              <div class="profile-section-grid">
-                <section class="profile-section-box" id="memberGroupCreateSection">
-                  <h4 data-next-i18n="groups.createGroup">Create group</h4>
-                  <form class="profile-form" id="memberGroupCreateForm">
-                    <label for="memberGroupNameInput">
-                      <span data-next-i18n="groups.groupName">Group name</span>
-                      <input id="memberGroupNameInput" maxlength="120" autocomplete="off" data-next-i18n-placeholder="groups.groupNamePlaceholder" placeholder="Family movie night">
-                    </label>
-                    <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="memberGroupCreateButton" data-next-i18n="groups.create">Create</button>
-                      <span class="login-message" id="memberGroupMessage"></span>
+                <div class="groups-overview-grid">
+                  <section class="groups-dashboard-card create" id="memberGroupCreateSection" data-groups-dashboard-card="create">
+                    <div class="groups-dashboard-card-head">
+                      """ + nav_icon("groups") + """
+                      <div>
+                        <h4 data-next-i18n="groups.createGroup">Create group</h4>
+                        <p data-next-i18n="groups.createGroupHelp">Start a shared library and invite people after it has been created.</p>
+                      </div>
                     </div>
-                  </form>
-                </section>
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="groups.libraryScope">Library view</h4>
-                  <p data-next-i18n="groups.libraryScopeHelp">Group-shared films only appear when you explicitly select that group in the library filter.</p>
-                  <div class="profile-meta" id="memberGroupScopeSummary"></div>
+                    <form class="profile-form member-group-create-form" id="memberGroupCreateForm">
+                      <label for="memberGroupNameInput">
+                        <span data-next-i18n="groups.groupName">Group name</span>
+                        <input id="memberGroupNameInput" maxlength="120" autocomplete="off" data-next-i18n-placeholder="groups.groupNamePlaceholder" placeholder="Family movie night">
+                      </label>
+                      <div class="profile-form-actions">
+                        <button type="submit" class="primary-button" id="memberGroupCreateButton" data-next-i18n="groups.create">Create</button>
+                      </div>
+                    </form>
+                  </section>
+                  <section class="groups-dashboard-card" data-groups-dashboard-card="scope">
+                    <div class="groups-dashboard-card-head">
+                      """ + nav_icon("library") + """
+                      <div>
+                        <h4 data-next-i18n="groups.libraryScope">Library view</h4>
+                        <p data-next-i18n="groups.libraryScopeHelp">Group-shared films only appear when you explicitly select that group in the library filter.</p>
+                      </div>
+                    </div>
+                    <div class="profile-meta groups-scope-summary" id="memberGroupScopeSummary"></div>
+                  </section>
+                </div>
+                <div class="login-message" id="memberGroupMessage" aria-live="polite"></div>
+                <section class="member-groups-section" aria-labelledby="memberGroupsHeading">
+                  <div class="member-groups-heading">
+                    <h4 id="memberGroupsHeading" data-next-i18n="groups.yourGroups">Your groups</h4>
+                    <p data-next-i18n="groups.yourGroupsHelp">Open a shared library or manage the people in groups you own.</p>
+                  </div>
+                  <div class="member-group-list" id="memberGroupList"></div>
                 </section>
               </div>
-              <div class="container-manager-list member-group-list" id="memberGroupList"></div>
             </div>
                 <div id="profilePanelStructure" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabStructure" tabindex="0" data-profile-panel="structure">
               <div class="detail-card-head compact">
@@ -31189,24 +31761,31 @@ def ui_preview_html(
       const registration = await navigator.serviceWorker.ready;
       return registration.pushManager.getSubscription();
     }
-    function pushPreferenceRowsHtml(preferencesMap) {
-      const rows = [
+    const pushPreferenceGroups = {
+      system: [
         ["app_updates", "notifications.prefAppUpdates", "notifications.prefAppUpdatesHelp"],
+        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"]
+      ],
+      library: [
         ["imports", "notifications.prefImports", "notifications.prefImportsHelp"],
         ["metadata_jobs", "notifications.prefMetadataJobs", "notifications.prefMetadataJobsHelp"],
-        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"],
-        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"],
         ["price_alerts", "notifications.pref.price_alerts", "notifications.prefPriceAlertsHelp"]
-      ];
-      return rows.map(([key, labelKey, helpKey]) => {
+      ],
+      sharing: [
+        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"]
+      ]
+    };
+    function pushPreferenceRowsHtml(preferencesMap, rows) {
+      return (rows || []).map(([key, labelKey, helpKey]) => {
         const enabled = preferencesMap[key] !== false;
+        const label = tNext(labelKey, key);
         return `
           <div class="preference-control-row">
             <span>
-              <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+              <strong>${escapeHtml(label)}</strong>
               <span>${escapeHtml(tNext(helpKey, ""))}</span>
             </span>
-            <button type="button" class="switch ${enabled ? "on" : ""}" data-push-pref="${escapeHtml(key)}" aria-pressed="${enabled ? "true" : "false"}"></button>
+            <button type="button" class="switch ${enabled ? "on" : ""}" data-push-pref="${escapeHtml(key)}" aria-label="${escapeHtml(label)}" aria-pressed="${enabled ? "true" : "false"}"></button>
           </div>
         `;
       }).join("");
@@ -31225,21 +31804,32 @@ def ui_preview_html(
         browserState.textContent = supported
           ? (permission === "granted" ? tNext("notifications.permissionGranted", "Allowed") : permission === "denied" ? tNext("notifications.permissionDenied", "Blocked") : tNext("notifications.permissionDefault", "Not asked"))
           : tNext("notifications.unsupported", "Unsupported");
+        browserState.className = `notification-state-pill ${!supported || permission === "denied" ? "bad" : permission === "granted" ? "good" : ""}`.trim();
       }
       if (deviceState) {
         deviceState.textContent = pushProfile.subscribed
           ? tNext("notifications.deviceEnabled", "Enabled")
           : tNext("notifications.deviceDisabled", "Disabled");
+        deviceState.className = `notification-state-pill ${pushProfile.subscribed ? "good" : ""}`.trim();
       }
       if (enableButton) enableButton.disabled = !supported || pushProfile.subscribed || permission === "denied";
       if (disableButton) disableButton.disabled = !pushProfile.subscribed;
       if (testButton) testButton.disabled = !pushProfile.subscribed;
-      if (prefList) prefList.innerHTML = pushPreferenceRowsHtml(pushProfile.preferences || {});
+      if (enableButton) enableButton.classList.toggle("hidden", pushProfile.subscribed);
+      if (disableButton) disableButton.classList.toggle("hidden", !pushProfile.subscribed);
+      if (prefList) {
+        prefList.querySelectorAll("[data-push-preference-group]").forEach((group) => {
+          group.innerHTML = pushPreferenceRowsHtml(
+            pushProfile.preferences || {},
+            pushPreferenceGroups[group.dataset.pushPreferenceGroup] || []
+          );
+        });
+      }
       if (deviceList) {
         const subscriptions = pushProfile.subscriptions || [];
         deviceList.innerHTML = subscriptions.length
           ? subscriptions.map((item) => `
-              <div class="push-device-row">
+              <div class="push-device-row ${item.current ? "current" : ""}">
                 <span>
                   <strong>${escapeHtml(item.deviceLabel || tNext("notifications.device", "Device"))}</strong>
                   <span class="notification-meta">${escapeHtml(item.current ? tNext("notifications.currentDevice", "Current device") : tNext("notifications.otherDevice", "Other device"))}</span>
@@ -33853,6 +34443,9 @@ def ui_preview_html(
       const canDelete = isOwner && (isSystemOwner ? members.length === 0 : members.length === 1);
       const owner = group.created_by_display_name || group.created_by_username || "";
       const currentId = String(currentUserId() || "");
+      const groupName = group.name || tNext("groups.unnamed", "Unnamed group");
+      const groupInitial = String(groupName).trim().charAt(0).toUpperCase() || "G";
+      const isEditing = String(editingMemberGroupId || "") === String(group.id || "");
       const memberRows = members.length
         ? members.map((member) => {
             const userId = String(member.user_id || member.userId || "");
@@ -33860,39 +34453,89 @@ def ui_preview_html(
             const canRemove = canInvite && userId && userId !== currentId && memberRole !== "owner";
             return `
               <span class="member-chip">
-                <span>${escapeHtml(member.display_name || member.username || userId || "")}</span>
-                ${memberRole ? `<small>${escapeHtml(memberGroupDisplayRole(memberRole))}</small>` : ""}
+                <span class="member-chip-copy">
+                  <span>${escapeHtml(member.display_name || member.username || userId || "")}</span>
+                  ${memberRole ? `<small class="member-group-member-role">${escapeHtml(memberGroupDisplayRole(memberRole))}</small>` : ""}
+                </span>
                 ${canRemove ? `<button type="button" data-member-group-remove-user="${id}" data-member-group-user-id="${escapeHtml(userId)}" aria-label="${escapeHtml(tNext("groups.removeMember", "Remove member"))}">&times;</button>` : ""}
               </span>
             `;
           }).join("")
         : `<span class="muted-inline">${escapeHtml(tNext("groups.noMembers", "No members yet"))}</span>`;
-      const stats = [
-        owner ? `${tNext("groups.owner", "Owner")}: ${owner}` : "",
-        `${Number(group.movie_count || 0)} ${tNext("groups.movies", "movies")}`,
-        `${Number(group.member_count || members.length || 0)} ${tNext("groups.members", "members")}`,
-        Number(group.pending_invite_count || 0) ? `${Number(group.pending_invite_count || 0)} ${tNext("groups.pendingInvites", "pending invites")}` : "",
-        role ? `${tNext("groups.yourRole", "Your role")}: ${memberGroupDisplayRole(role)}` : ""
-      ].filter(Boolean).join(" / ");
-      return `
-        <div class="container-manager-row member-group-row" data-member-group-id="${id}">
-          <div class="container-manager-meta">
-            <strong>${escapeHtml(group.name || tNext("groups.unnamed", "Unnamed group"))}</strong>
-            <span>${escapeHtml(stats)}</span>
-            <div class="member-group-members">${memberRows}</div>
+      const invitePanel = canInvite ? `
+        <section class="member-group-panel">
+          <div class="member-group-panel-head">
+            <h6>${escapeHtml(tNext("groups.inviteMember", "Invite member"))}</h6>
+            <p>${escapeHtml(tNext("groups.inviteMemberHelp", "Invite someone using their DiscVault username."))}</p>
           </div>
-          <div class="container-manager-actions member-group-actions">
-            <button type="button" class="secondary-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
-            ${isOwner ? `
-              <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+          <div class="member-group-invite-form">
+            <input data-member-group-invite="${id}" maxlength="120" autocomplete="username" placeholder="${escapeHtml(tNext("groups.inviteUsername", "Username"))}" aria-label="${escapeHtml(tNext("groups.inviteUsername", "Username"))}">
+            <button type="button" class="secondary-button" data-member-group-invite-send="${id}">${escapeHtml(tNext("groups.invite", "Invite"))}</button>
+          </div>
+          ${isOwner ? `
+            <div class="member-group-manage-actions">
+              <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("groups.editGroupName", "Edit name"))}</button>
               ${canDelete ? `<button type="button" class="danger-button" data-member-group-delete="${id}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
-            ` : ""}
-            ${canInvite ? `
-              <input data-member-group-invite="${id}" maxlength="120" autocomplete="username" placeholder="${escapeHtml(tNext("groups.inviteUsername", "Username"))}" aria-label="${escapeHtml(tNext("groups.inviteUsername", "Username"))}">
-              <button type="button" class="secondary-button" data-member-group-invite-send="${id}">${escapeHtml(tNext("groups.invite", "Invite"))}</button>
-            ` : ""}
+            </div>
+            ${!canDelete ? `<p class="member-group-delete-hint">${escapeHtml(tNext("groups.deleteUnavailableMembers", "Remove the other members before deleting this group."))}</p>` : ""}
+          ` : ""}
+        </section>
+      ` : isOwner ? `
+        <section class="member-group-panel">
+          <div class="member-group-panel-head">
+            <h6>${escapeHtml(tNext("groups.manageGroup", "Manage group"))}</h6>
           </div>
-        </div>
+          <div class="member-group-manage-actions">
+            <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("groups.editGroupName", "Edit name"))}</button>
+            ${canDelete ? `<button type="button" class="danger-button" data-member-group-delete="${id}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
+          </div>
+          ${!canDelete ? `<p class="member-group-delete-hint">${escapeHtml(tNext("groups.deleteUnavailableMembers", "Remove the other members before deleting this group."))}</p>` : ""}
+        </section>
+      ` : "";
+      const renameForm = isEditing ? `
+        <form class="member-group-rename-form" data-member-group-rename-form="${id}">
+          <label>
+            <span class="sr-only">${escapeHtml(tNext("groups.groupName", "Group name"))}</span>
+            <input data-member-group-rename-input="${id}" maxlength="120" autocomplete="off" value="${escapeHtml(groupName)}" aria-label="${escapeHtml(tNext("groups.groupName", "Group name"))}">
+          </label>
+          <div class="member-group-rename-actions">
+            <button type="submit" class="primary-button">${escapeHtml(tNext("groups.saveName", "Save name"))}</button>
+            <button type="button" class="secondary-button" data-member-group-rename-cancel="${id}">${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+          </div>
+        </form>
+      ` : "";
+      return `
+        <article class="member-group-card" data-member-group-id="${id}">
+          <header class="member-group-card-head">
+            <div class="member-group-identity">
+              <span class="member-group-avatar" aria-hidden="true">${escapeHtml(groupInitial)}</span>
+              <div>
+                <div class="member-group-title">
+                  <h5>${escapeHtml(groupName)}</h5>
+                  ${role ? `<span class="member-group-role">${escapeHtml(memberGroupDisplayRole(role))}</span>` : ""}
+                </div>
+                ${owner ? `<p class="member-group-owner">${escapeHtml(tNext("groups.owner", "Owner"))}: ${escapeHtml(owner)}</p>` : ""}
+              </div>
+            </div>
+            <button type="button" class="secondary-button member-group-open-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
+          </header>
+          ${renameForm}
+          <div class="member-group-metrics" aria-label="${escapeHtml(tNext("groups.groupOverview", "Group overview"))}">
+            <div class="member-group-metric"><strong>${Number(group.movie_count || 0)}</strong><span>${escapeHtml(tNext("groups.sharedMovies", "Shared films"))}</span></div>
+            <div class="member-group-metric"><strong>${Number(group.member_count || members.length || 0)}</strong><span>${escapeHtml(tNext("groups.members", "Members"))}</span></div>
+            <div class="member-group-metric"><strong>${Number(group.pending_invite_count || 0)}</strong><span>${escapeHtml(tNext("groups.pendingInvites", "Pending invites"))}</span></div>
+          </div>
+          <div class="member-group-body ${invitePanel ? "" : "members-only"}">
+            <section class="member-group-panel">
+              <div class="member-group-panel-head">
+                <h6>${escapeHtml(tNext("groups.membersTitle", "Members"))}</h6>
+                <p>${escapeHtml(tNext("groups.membersHelp", "Roles determine who can invite people and manage this group."))}</p>
+              </div>
+              <div class="member-group-members">${memberRows}</div>
+            </section>
+            ${invitePanel}
+          </div>
+        </article>
       `;
     }
     function renderMemberGroups() {
@@ -33902,12 +34545,12 @@ def ui_preview_html(
       renderMemberGroupScopeSummary();
       if (!list) return;
       if (!hasActualAnyPermission(["groups.view", "groups.create", "groups.invite"])) {
-        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("groups.noAccess", "You do not have access to member groups."))}</div>`;
+        list.innerHTML = `<div class="preview-empty member-group-empty">${escapeHtml(tNext("groups.noAccess", "You do not have access to member groups."))}</div>`;
         return;
       }
       const groups = Array.isArray(mediaGroups) ? mediaGroups : [];
       if (!groups.length) {
-        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("groups.empty", "No member groups yet."))}</div>`;
+        list.innerHTML = `<div class="preview-empty member-group-empty">${escapeHtml(tNext("groups.empty", "No member groups yet."))}</div>`;
         return;
       }
       list.innerHTML = groups.map(memberGroupCardHtml).join("");
@@ -33939,17 +34582,34 @@ def ui_preview_html(
         setMemberGroupMessage(error.message || String(error), "bad");
       }
     }
-    async function renameMemberGroup(groupId) {
+    let editingMemberGroupId = "";
+    function startMemberGroupRename(groupId) {
       const group = mediaGroups.find((item) => String(item.id) === String(groupId));
       if (!group || memberRoleForCurrentUser(group) !== "owner") return;
-      const nextName = window.prompt(tNext("groups.renamePrompt", "New group name"), group.name || "");
-      if (nextName === null) return;
-      const name = String(nextName || "").trim();
+      editingMemberGroupId = groupId;
+      renderMemberGroups();
+      const input = document.querySelector(`[data-member-group-rename-input="${CSS.escape(groupId)}"]`);
+      input?.focus();
+      input?.select();
+    }
+    function cancelMemberGroupRename(groupId) {
+      if (String(editingMemberGroupId || "") !== String(groupId || "")) return;
+      editingMemberGroupId = "";
+      renderMemberGroups();
+    }
+    async function saveMemberGroupRename(groupId, form) {
+      const group = mediaGroups.find((item) => String(item.id) === String(groupId));
+      if (!group || memberRoleForCurrentUser(group) !== "owner") return;
+      const input = form?.querySelector(`[data-member-group-rename-input="${CSS.escape(groupId)}"]`);
+      const name = String(input?.value || "").trim();
       if (!name) {
         setMemberGroupMessage(tNext("groups.nameRequired", "Enter a group name first."), "bad");
+        input?.focus();
         return;
       }
       setMemberGroupMessage(tNext("common.saving", "Saving…"));
+      const controls = Array.from(form?.querySelectorAll("input, button") || []);
+      controls.forEach((control) => { control.disabled = true; });
       try {
         const payload = await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}`, {
           method: "PATCH",
@@ -33959,11 +34619,14 @@ def ui_preview_html(
         if (payload.group) {
           mediaGroups = mediaGroups.map((item) => String(item.id) === String(groupId) ? payload.group : item);
         }
+        editingMemberGroupId = "";
         renderGroupFilter();
         renderMemberGroups();
         renderCollectionSurface();
         setMemberGroupMessage(tNext("groups.renamed", "Group renamed."), "good");
       } catch (error) {
+        controls.forEach((control) => { control.disabled = false; });
+        input?.focus();
         setMemberGroupMessage(error.message || String(error), "bad");
       }
     }
@@ -36049,7 +36712,12 @@ def ui_preview_html(
       document.getElementById("memberGroupList")?.addEventListener("click", (event) => {
         const renameButton = event.target.closest("[data-member-group-rename]");
         if (renameButton) {
-          renameMemberGroup(renameButton.dataset.memberGroupRename);
+          startMemberGroupRename(renameButton.dataset.memberGroupRename);
+          return;
+        }
+        const renameCancelButton = event.target.closest("[data-member-group-rename-cancel]");
+        if (renameCancelButton) {
+          cancelMemberGroupRename(renameCancelButton.dataset.memberGroupRenameCancel);
           return;
         }
         const deleteButton = event.target.closest("[data-member-group-delete]");
@@ -36069,6 +36737,19 @@ def ui_preview_html(
         }
         const inviteButton = event.target.closest("[data-member-group-invite-send]");
         if (inviteButton) inviteMemberGroupUser(inviteButton.dataset.memberGroupInviteSend);
+      });
+      document.getElementById("memberGroupList")?.addEventListener("submit", (event) => {
+        const form = event.target.closest("[data-member-group-rename-form]");
+        if (!form) return;
+        event.preventDefault();
+        saveMemberGroupRename(form.dataset.memberGroupRenameForm, form);
+      });
+      document.getElementById("memberGroupList")?.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const form = event.target.closest("[data-member-group-rename-form]");
+        if (!form) return;
+        event.preventDefault();
+        cancelMemberGroupRename(form.dataset.memberGroupRenameForm);
       });
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.addEventListener("click", () => {
