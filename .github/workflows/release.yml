@@ -1,9 +1,10 @@
 name: Release (tag main)
 
 # Cut a production release from main. Reads app/VERSION as the single source of
-# truth, creates the matching `v<VERSION>` git tag on the current main commit and
-# publishes a GitHub Release. The tag push then triggers docker-publish.yml, which
-# builds the release snapshot (:v26.x.x, :v26, :stable) from that exact commit.
+# truth, requires reviewed notes at docs/releases/v<VERSION>.md, creates the
+# matching `v<VERSION>` git tag on the current main commit and publishes a GitHub
+# Release. The tag push then triggers docker-publish.yml, which builds the release
+# snapshot (:v26.x.x, :v26, :stable) from that exact commit.
 #
 # Run this manually from the GitHub UI (Actions -> Release (tag main) -> Run
 # workflow) with the branch set to `main`, after a beta -> main promotion has
@@ -49,9 +50,20 @@ jobs:
             exit 1
           fi
           TAG="v${VERSION}"
+          NOTES_FILE="docs/releases/${TAG}.md"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "notes_file=${NOTES_FILE}" >> "$GITHUB_OUTPUT"
           echo "Releasing ${TAG} from $(git rev-parse HEAD)"
+
+      - name: Guard version-specific release notes exist
+        env:
+          NOTES_FILE: ${{ steps.version.outputs.notes_file }}
+        run: |
+          if [[ ! -f "${NOTES_FILE}" ]]; then
+            echo "::error file=${NOTES_FILE}::Required release notes file ${NOTES_FILE} is missing. Review and commit ${NOTES_FILE} before running this workflow."
+            exit 1
+          fi
 
       - name: Guard tag does not already exist
         env:
@@ -67,6 +79,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
+          NOTES_FILE: ${{ steps.version.outputs.notes_file }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -75,5 +88,5 @@ jobs:
           gh release create "${TAG}" \
             --target main \
             --title "DiscVault ${TAG}" \
-            --generate-notes \
+            --notes-file "${NOTES_FILE}" \
             --latest

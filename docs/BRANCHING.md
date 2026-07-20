@@ -79,16 +79,19 @@ so promotion always goes through a PR — never via a direct push. After the mer
 
 `app/VERSION` is the single source of truth for the version number. After
 promotion PR(s) have landed on `main` and the version-guard has bumped
-`app/VERSION`, cut a release via the **`Release (tag main)`** workflow:
+`app/VERSION`, review and commit the version-specific release notes at
+`docs/releases/vX.Y.Z.md`, then cut a release via the **`Release (tag main)`**
+workflow:
 
 1. GitHub -> **Actions** -> **Release (tag main)** -> **Run workflow**.
 2. Choose branch **`main`** and start.
 
-The workflow reads `app/VERSION`, checks that the tag doesn't exist yet, puts
-`v<VERSION>` on the current `main` commit, and publishes a GitHub Release with
-generated notes. The tag push then triggers `docker-publish.yml`, which builds
-the release snapshot (`:v26.x.x` + refreshed `:v26`/`:stable`) from exactly
-that commit.
+The workflow reads `app/VERSION`, requires the matching reviewed
+`docs/releases/v<VERSION>.md` file, checks that the tag doesn't exist yet, puts
+`v<VERSION>` on the current `main` commit, and publishes that file verbatim as
+the GitHub Release notes. The tag push then triggers `docker-publish.yml`, which
+builds the release snapshot (`:v26.x.x` + refreshed `:v26`/`:stable`) from
+exactly that commit.
 
 > Avoid manually cherry-picking/porting individual commits between branches:
 > that was the cause of the earlier divergence between `main`, `v26`, and

@@ -134,6 +134,7 @@ def ui_preview_html(
         "groups": "M12 5C13.66 5 15 6.34 15 8S13.66 11 12 11 9 9.66 9 8 10.34 5 12 5M5.5 7C6.88 7 8 8.12 8 9.5S6.88 12 5.5 12 3 10.88 3 9.5 4.12 7 5.5 7M18.5 7C19.88 7 21 8.12 21 9.5S19.88 12 18.5 12 16 10.88 16 9.5 17.12 7 18.5 7M12 13C15.31 13 18 14.79 18 17V20H6V17C6 14.79 8.69 13 12 13M5.5 14C3.57 14 2 15.12 2 16.5V19H4V17C4 15.9 4.45 14.87 5.22 14.03L5.5 14M18.5 14L18.78 14.03C19.55 14.87 20 15.9 20 17V19H22V16.5C22 15.12 20.43 14 18.5 14Z",
         "structure": "M12 13H7V18H12V20H5V10H7V11H12V13M8 4V6H4V4H8M10 2H2V8H10V2M20 11V13H16V11H20M22 9H14V15H22V9M20 18V20H16V18H20M22 16H14V22H22V16Z",
         "security": "M12 1L3 5V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V5L12 1M12 5C13.66 5 15 6.34 15 8V10H16V16H8V10H9V8C9 6.34 10.34 5 12 5M12 7C11.45 7 11 7.45 11 8V10H13V8C13 7.45 12.55 7 12 7Z",
+        "devices": "M4 6H22V18H4V6M22 4H4C2.89 4 2 4.89 2 6V18C2 19.11 2.9 20 4 20H11V22H7V24H19V22H15V20H22C23.11 20 24 19.1 24 18V6C24 4.89 23.1 4 22 4Z",
         "api": "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z",
         "about": "M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
@@ -1131,19 +1132,107 @@ def ui_preview_html(
     }
     .advanced-search-panel {
       display: grid;
-      gap: 12px;
-      padding: 12px;
+      gap: 14px;
+      padding: 14px;
       border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
-      border-radius: 10px;
-      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
+      border-radius: 14px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 45%),
+        color-mix(in srgb, var(--bg-solid) 74%, transparent);
     }
     .advanced-search-panel.hidden {
       display: none;
     }
-    .advanced-search-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(150px, 1fr));
+    .library-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+    .library-panel-title {
+      display: flex;
+      align-items: center;
       gap: 10px;
+      min-width: 0;
+    }
+    .library-panel-title-icon {
+      flex: 0 0 auto;
+      display: inline-grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      color: var(--accent);
+    }
+    .library-panel-title-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+    .library-panel-title h3 {
+      margin: 0;
+      font-size: .98rem;
+      line-height: 1.2;
+    }
+    .library-adaptive-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+    }
+    .library-adaptive-group {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-elevated) 76%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.14);
+    }
+    .library-adaptive-group > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      padding: 10px 12px;
+      color: var(--muted-strong);
+      font-size: .72rem;
+      font-weight: 850;
+      letter-spacing: .035em;
+      text-transform: uppercase;
+      cursor: default;
+      list-style: none;
+    }
+    .library-adaptive-group > summary::-webkit-details-marker {
+      display: none;
+    }
+    .library-adaptive-group > summary:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: -2px;
+    }
+    .library-adaptive-chevron {
+      display: none;
+      flex: 0 0 auto;
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      transition: transform .18s ease;
+    }
+    .library-adaptive-group[open] .library-adaptive-chevron {
+      transform: rotate(180deg);
+    }
+    .library-adaptive-group-body {
+      display: grid;
+      gap: 10px;
+      padding: 0 12px 12px;
+    }
+    .advanced-search-group.release .library-adaptive-group-body {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .advanced-search-group.release .advanced-search-field:last-child {
+      grid-column: 1 / -1;
     }
     .advanced-search-field {
       display: grid;
@@ -1168,9 +1257,10 @@ def ui_preview_html(
     .advanced-search-actions {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end;
       flex-wrap: wrap;
       gap: 10px;
+      padding-top: 2px;
     }
     .smart-filter-picker {
       display: flex;
@@ -1792,8 +1882,7 @@ def ui_preview_html(
     }
     .bulk-bar {
       display: none;
-      align-items: stretch;
-      gap: 10px;
+      gap: 12px;
       border: 1px solid var(--line);
       border-radius: 16px;
       background:
@@ -1805,11 +1894,20 @@ def ui_preview_html(
     }
     .bulk-bar.visible {
       display: grid;
-      grid-template-columns: auto minmax(160px, 1fr);
+      grid-template-columns: 1fr;
+    }
+    .bulk-panel-head {
+      align-items: flex-start;
+    }
+    .bulk-panel-status {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
     }
     .bulk-selection-actions {
       justify-content: flex-start;
-      align-self: center;
       gap: 6px;
     }
     .bulk-selection-actions .compact-button {
@@ -1820,23 +1918,24 @@ def ui_preview_html(
     }
     .bulk-targets {
       display: grid;
-      grid-column: 1 / -1;
       grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
       gap: 8px;
       width: 100%;
     }
     .bulk-target {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 6px;
-      align-content: start;
       min-width: 0;
-      min-height: 0;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
-      padding: 8px;
+    }
+    .bulk-target .library-adaptive-group-body {
+      align-content: start;
+      gap: 6px;
+      padding: 0 8px 8px;
+    }
+    .bulk-target.danger {
+      border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+      background: color-mix(in srgb, var(--danger) 5%, var(--bg-elevated));
+    }
+    .bulk-target.danger > summary {
+      color: color-mix(in srgb, var(--danger) 82%, var(--text));
     }
     .bulk-target.wide {
       grid-column: span 2;
@@ -4519,6 +4618,166 @@ def ui_preview_html(
       display: grid;
       gap: 8px;
     }
+    .notification-settings-dashboard {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .notification-overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+      gap: 14px;
+      align-items: stretch;
+      min-width: 0;
+    }
+    .notification-settings-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .notification-settings-card.status {
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .notification-settings-card-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+    .notification-settings-card-head > div {
+      min-width: 0;
+    }
+    .notification-settings-card-head .nav-symbol {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 12px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+    .notification-settings-card-head .nav-symbol svg {
+      width: 22px;
+      height: 22px;
+    }
+    .notification-settings-card-head h4,
+    .notification-settings-card-head h5 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+    .notification-settings-card-head h4 {
+      font-size: 1.05rem;
+    }
+    .notification-settings-card-head h5 {
+      font-size: .95rem;
+    }
+    .notification-settings-card-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .notification-status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+    .notification-status-fact {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .notification-status-fact > span {
+      color: var(--muted);
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .notification-state-pill {
+      width: max-content;
+      max-width: 100%;
+      padding: 5px 9px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--muted) 12%, transparent);
+      font-size: .78rem;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .notification-state-pill.good {
+      color: var(--success);
+      background: color-mix(in srgb, var(--success) 14%, transparent);
+    }
+    .notification-state-pill.bad {
+      color: var(--danger);
+      background: color-mix(in srgb, var(--danger) 13%, transparent);
+    }
+    .notification-status-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .notification-status-actions .debug-only {
+      margin-left: auto;
+    }
+    .notification-preferences-section {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .notification-preferences-heading {
+      display: grid;
+      gap: 3px;
+      padding: 2px 2px 0;
+    }
+    .notification-preferences-heading h4 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
+    }
+    .notification-preferences-heading p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .notification-preference-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      min-width: 0;
+    }
+    .notification-preference-card {
+      padding: 0;
+      overflow: hidden;
+    }
+    .notification-preference-card .notification-settings-card-head {
+      padding: 14px 14px 11px;
+    }
+    .notification-preference-card .preference-control-row {
+      min-height: 72px;
+      padding: 11px 14px;
+      border-top: 1px solid var(--line);
+      background: color-mix(in srgb, var(--panel) 58%, transparent);
+    }
+    .notification-preference-card .preference-control-row:first-child {
+      border-top: 0;
+    }
     .push-device-row {
       display: flex;
       align-items: center;
@@ -4528,6 +4787,10 @@ def ui_preview_html(
       border-radius: 14px;
       padding: 10px 12px;
       background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .push-device-row.current {
+      border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+      background: color-mix(in srgb, var(--accent) 7%, var(--bg-solid));
     }
     body.debug-mode .debug-only { display: inline-flex !important; }
     .movie-detail-page {
@@ -8002,55 +8265,532 @@ def ui_preview_html(
       justify-content: flex-end;
       padding-top: 2px;
     }
-    .profile-security-grid {
-      gap: 12px;
-    }
-    .profile-security-column {
+    .profile-dashboard {
       display: grid;
-      gap: 12px;
-      align-content: start;
+      gap: 16px;
       min-width: 0;
     }
-    .profile-security-grid .profile-section-box {
+    .profile-dashboard-intro {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .profile-dashboard-symbol,
+    .profile-dashboard-card-icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 17%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent);
+    }
+    .profile-dashboard-symbol {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+    }
+    .profile-dashboard-symbol .nav-symbol,
+    .profile-dashboard-symbol .nav-symbol svg {
+      width: 26px;
+      height: 26px;
+    }
+    .profile-dashboard-copy {
+      min-width: 0;
+    }
+    .profile-dashboard-copy h4 {
+      margin: 0;
+      font-size: 1.14rem;
+      letter-spacing: 0;
+    }
+    .profile-dashboard-copy p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+    .profile-dashboard-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      width: 100%;
+      max-width: none;
+      padding: 8px;
+      border-radius: 16px;
+      overflow: visible;
+    }
+    .profile-dashboard-tabs button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 0;
+      min-height: 46px;
+      padding: 0 12px;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .profile-dashboard-tabs button .nav-symbol,
+    .profile-dashboard-tabs button .nav-symbol svg {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+    }
+    .profile-dashboard-tab-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .profile-dashboard-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .profile-dashboard-card.primary {
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .profile-dashboard-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+    .profile-dashboard-card-title {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      min-width: 0;
+    }
+    .profile-dashboard-card-title > div {
+      min-width: 0;
+    }
+    .profile-dashboard-card-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+    }
+    .profile-dashboard-card-icon .nav-symbol,
+    .profile-dashboard-card-icon .nav-symbol svg {
+      width: 21px;
+      height: 21px;
+    }
+    .profile-dashboard-card-head h4 {
+      margin: 0;
+      font-size: 1.02rem;
+      letter-spacing: 0;
+    }
+    .profile-dashboard-card-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .structure-workspace {
+      display: grid;
+      grid-template-columns: minmax(250px, .72fr) minmax(0, 1.28fr);
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+    .structure-create-card .profile-form,
+    .structure-create-card .locations-create-form {
+      grid-template-columns: 1fr;
+    }
+    .structure-list-card {
+      min-height: 220px;
+    }
+    .locations-tree {
+      display: grid;
       gap: 10px;
+      min-width: 0;
+    }
+    .locations-node {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .locations-children {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      margin-left: 20px;
+      padding-left: 12px;
+      border-left: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+    }
+    .locations-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
       padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .locations-row.drag-over {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--line));
+      background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+    }
+    .locations-handle {
+      color: var(--muted);
+      cursor: grab;
+    }
+    .locations-info {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .locations-info strong,
+    .locations-desc,
+    .locations-counts {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .locations-desc,
+    .locations-counts {
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .locations-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 7px;
+    }
+    .profile-security-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+    .profile-security-card.passkeys {
+      grid-column: 1 / -1;
+    }
+    .profile-security-card .profile-add-passkey {
+      padding-top: 2px;
+    }
+    .profile-security-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .profile-security-stat {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .profile-security-stat span {
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 700;
+    }
+    .profile-security-stat strong {
+      overflow-wrap: anywhere;
+    }
+    .groups-dashboard {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+    }
+    .groups-overview-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+      min-width: 0;
+    }
+    .groups-dashboard-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .groups-dashboard-card.create {
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .groups-dashboard-card-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      min-width: 0;
+    }
+    .groups-dashboard-card-head > div {
+      min-width: 0;
+    }
+    .groups-dashboard-card-head .nav-symbol {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 12px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+    }
+    .groups-dashboard-card-head .nav-symbol svg {
+      width: 22px;
+      height: 22px;
+    }
+    .groups-dashboard-card-head h4 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: 0;
+    }
+    .groups-dashboard-card-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .member-group-create-form {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+    }
+    .member-group-create-form .profile-form-actions {
+      align-self: end;
+    }
+    .member-group-create-form .primary-button {
+      min-width: 120px;
+    }
+    .groups-scope-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+    .groups-scope-summary .profile-meta-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+      align-content: start;
+      align-items: start;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .groups-scope-summary .profile-meta-row span {
+      font-size: .75rem;
+      font-weight: 700;
+    }
+    .groups-scope-summary .profile-meta-row strong {
+      text-align: left;
+      overflow-wrap: anywhere;
+    }
+    .member-groups-section {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+    }
+    .member-groups-heading {
+      display: grid;
+      gap: 3px;
+      padding: 2px 2px 0;
+    }
+    .member-groups-heading h4 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
+    }
+    .member-groups-heading p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
     }
     .member-group-list {
       display: grid;
-      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr));
+      gap: 12px;
+      min-width: 0;
     }
-    .member-group-row {
-      align-items: start;
+    .member-group-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
     }
-    .member-group-actions {
-      align-items: stretch;
+    .member-group-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
     }
-    .member-group-actions input {
-      min-width: min(220px, 100%);
+    .member-group-identity {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr);
+      gap: 11px;
+      align-items: center;
+      min-width: 0;
     }
-    .member-group-members {
+    .member-group-avatar {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 15%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+      font-size: 1rem;
+      font-weight: 850;
+    }
+    .member-group-title {
       display: flex;
       flex-wrap: wrap;
       gap: 7px;
-      margin-top: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+    .member-group-title h5 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+    .member-group-owner {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .member-group-role,
+    .member-group-member-role {
+      width: max-content;
+      max-width: 100%;
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 14%, transparent);
+      font-size: .7rem;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+    .member-group-open-button {
+      flex: 0 0 auto;
+    }
+    .member-group-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .member-group-metric {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--panel) 68%, transparent);
+    }
+    .member-group-metric strong {
+      font-size: 1rem;
+    }
+    .member-group-metric span {
+      color: var(--muted);
+      font-size: .7rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+    .member-group-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(210px, .78fr);
+      gap: 12px;
+      align-items: start;
+      min-width: 0;
+    }
+    .member-group-body.members-only {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .member-group-panel {
+      display: grid;
+      align-content: start;
+      gap: 10px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid color-mix(in srgb, var(--line) 84%, transparent);
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--panel) 54%, transparent);
+    }
+    .member-group-panel-head {
+      display: grid;
+      gap: 2px;
+    }
+    .member-group-panel-head h6 {
+      margin: 0;
+      color: var(--text);
+      font-size: .82rem;
+      letter-spacing: 0;
+    }
+    .member-group-panel-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .73rem;
+      line-height: 1.4;
+    }
+    .member-group-members {
+      display: grid;
+      gap: 7px;
     }
     .member-chip {
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: space-between;
+      gap: 8px;
       max-width: 100%;
-      padding: 5px 8px;
+      padding: 7px 8px 7px 10px;
       border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
-      border-radius: 999px;
+      border-radius: 10px;
       background: color-mix(in srgb, var(--bg-muted) 72%, transparent);
       color: var(--text);
       font-size: 12px;
       font-weight: 700;
     }
-    .member-chip small {
+    .member-chip-copy {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .member-group-member-role {
       color: var(--muted);
-      font-size: 11px;
-      font-weight: 700;
+      background: color-mix(in srgb, var(--muted) 11%, transparent);
+      font-size: .64rem;
     }
     .member-chip button {
       width: 20px;
@@ -8063,8 +8803,52 @@ def ui_preview_html(
       line-height: 1;
       cursor: pointer;
     }
+    .member-group-invite-form,
+    .member-group-rename-form {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .member-group-invite-form input,
+    .member-group-rename-form input {
+      width: 100%;
+      min-width: 0;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 10px;
+      font: inherit;
+      font-size: .86rem;
+      font-weight: 650;
+    }
+    .member-group-manage-actions,
+    .member-group-rename-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .member-group-manage-actions .danger-button {
+      margin-left: auto;
+    }
+    .member-group-delete-hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: .72rem;
+      line-height: 1.4;
+    }
+    .member-group-empty {
+      grid-column: 1 / -1;
+      min-height: 150px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+    }
     .profile-api-submenu {
       margin-bottom: 2px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     .profile-api-panel {
       display: grid;
@@ -8072,8 +8856,38 @@ def ui_preview_html(
       min-width: 0;
     }
     .profile-api-panel[data-profile-api-panel="general"] {
-      grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.35fr);
+      grid-template-columns: minmax(0, 1fr);
       align-items: start;
+    }
+    .profile-api-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+    .profile-api-summary-item {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .profile-api-summary-item span {
+      color: var(--muted);
+      font-size: .73rem;
+      font-weight: 700;
+    }
+    .profile-api-summary-item strong {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .profile-api-summary-item.action {
+      align-content: space-between;
+    }
+    .profile-api-summary-item.action .secondary-button {
+      justify-self: start;
     }
     .profile-api-activity-box {
       width: 100%;
@@ -8270,6 +9084,62 @@ def ui_preview_html(
     .app-admin-panel.active {
       display: grid;
       gap: 16px;
+    }
+    .app-admin-dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+    .app-admin-dashboard-grid > .full {
+      grid-column: 1 / -1;
+    }
+    .app-admin-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .app-admin-summary-item {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .app-admin-summary-item span {
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 700;
+    }
+    .app-admin-summary-item strong {
+      overflow-wrap: anywhere;
+    }
+    .app-admin-dashboard .profile-passkey-list {
+      min-width: 0;
+    }
+    .app-admin-entity-card {
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+    }
+    .app-admin-entity-main {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .app-admin-legacy-controls {
+      grid-template-columns: 1fr;
+      margin-top: 2px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .app-admin-summary-grid.compact {
+      grid-template-columns: 1fr;
+    }
+    .app-admin-dashboard .admin-code {
+      overflow-wrap: anywhere;
     }
     .profile-card {
       display: grid;
@@ -8717,9 +9587,13 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--bad, #d2453d) 55%, transparent);
       background: color-mix(in srgb, var(--bad, #d2453d) 14%, transparent);
     }
-    .profile-about-stack {
+    .profile-about-stack,
+    .profile-about-grid {
       display: grid;
       gap: 12px;
+    }
+    .profile-about-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .profile-about-card {
       display: grid;
@@ -8729,6 +9603,23 @@ def ui_preview_html(
       border-radius: 14px;
       padding: 12px;
       background: color-mix(in srgb, var(--field) 54%, transparent);
+    }
+    .profile-about-card--version,
+    .profile-about-card--debug {
+      grid-column: 1 / -1;
+    }
+    .profile-about-version {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      min-width: 0;
+    }
+    .profile-about-version strong {
+      min-width: 0;
+      color: var(--accent-bright);
+      font-size: clamp(1.28rem, 3vw, 1.75rem);
+      overflow-wrap: anywhere;
     }
     .profile-about-card-head {
       display: flex;
@@ -9995,8 +10886,7 @@ def ui_preview_html(
       flex: 0 0 auto;
     }
     .container-manager-create {
-      grid-template-columns: minmax(220px, 1fr) auto;
-      align-items: end;
+      grid-template-columns: 1fr;
     }
     .container-manager-list {
       display: grid;
@@ -10004,13 +10894,18 @@ def ui_preview_html(
     }
     .container-manager-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: center;
+      gap: 11px;
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
-      padding: 12px;
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+      padding: 13px;
+      min-width: 0;
+    }
+    .container-manager-row-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
       min-width: 0;
     }
     .container-manager-meta {
@@ -10030,7 +10925,7 @@ def ui_preview_html(
       grid-template-columns: minmax(160px, 1fr) auto auto auto;
       gap: 8px;
       align-items: center;
-      min-width: min(520px, 100%);
+      min-width: 0;
     }
     .container-manager-actions input {
       min-height: 36px;
@@ -10078,8 +10973,18 @@ def ui_preview_html(
       body {
         padding-bottom: calc(86px + env(safe-area-inset-bottom));
       }
-      .advanced-search-grid {
+      .library-adaptive-grid {
         grid-template-columns: 1fr;
+      }
+      .library-adaptive-group > summary {
+        min-height: 46px;
+        cursor: pointer;
+      }
+      .library-adaptive-chevron {
+        display: block;
+      }
+      .advanced-search-group.release .library-adaptive-group-body {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
       .advanced-search-actions {
         align-items: stretch;
@@ -10118,6 +11023,14 @@ def ui_preview_html(
       .bulk-bar.visible {
         grid-template-columns: 1fr;
       }
+      .bulk-panel-head,
+      .bulk-panel-status {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .bulk-panel-status {
+        justify-content: flex-start;
+      }
       .bulk-selection-actions {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -10130,7 +11043,6 @@ def ui_preview_html(
       .bulk-targets,
       .bulk-target,
       .bulk-target.wide {
-        grid-template-columns: 1fr;
         width: 100%;
       }
       .bulk-target.wide {
@@ -10797,6 +11709,21 @@ def ui_preview_html(
       .profile-section-grid {
         grid-template-columns: 1fr;
       }
+      .notification-overview-grid,
+      .notification-preference-grid,
+      .groups-overview-grid,
+      .member-group-body,
+      .structure-workspace,
+      .profile-security-grid,
+      .profile-about-grid,
+      .app-admin-dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      .profile-security-card.passkeys,
+      .profile-about-card--version,
+      .profile-about-card--debug {
+        grid-column: auto;
+      }
       .account-fact-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -10896,6 +11823,14 @@ def ui_preview_html(
       .container-manager-actions {
         min-width: 0;
       }
+      .locations-row {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+      }
+      .locations-actions {
+        grid-column: 2;
+        justify-content: flex-start;
+      }
       .app-admin-plugin-dashboard,
       .app-admin-priority-dashboard,
       .app-admin-priority-row {
@@ -10940,6 +11875,17 @@ def ui_preview_html(
       .app-admin-plugin-import .primary-button {
         width: 100%;
       }
+      .notification-status-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .notification-status-actions .secondary-button,
+      .notification-status-actions .primary-button {
+        width: 100%;
+      }
+      .notification-status-actions .debug-only {
+        margin-left: 0;
+      }
     }
     @media (max-width: 560px) {
       body,
@@ -10975,8 +11921,65 @@ def ui_preview_html(
       }
       .profile-center-card,
       .profile-section-box,
-      .profile-passkey {
+      .profile-passkey,
+      .profile-dashboard-intro,
+      .profile-dashboard-card {
         padding: 12px;
+      }
+      .profile-dashboard-intro {
+        gap: 11px;
+      }
+      .profile-dashboard-symbol {
+        width: 40px;
+        height: 40px;
+      }
+      .profile-dashboard-tabs,
+      .profile-api-submenu {
+        grid-template-columns: repeat(4, minmax(52px, 1fr));
+        gap: 6px;
+        width: 100%;
+        max-width: 100%;
+        padding: 6px;
+        overflow: visible;
+      }
+      .profile-api-submenu {
+        grid-template-columns: repeat(3, minmax(52px, 1fr));
+      }
+      .profile-dashboard-tabs button,
+      .profile-api-submenu button {
+        min-width: 0;
+        max-width: none;
+        min-height: 50px;
+        padding: 0 10px;
+      }
+      .profile-dashboard-tab-label {
+        display: none;
+      }
+      .profile-dashboard-card-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .profile-dashboard-card-head > .secondary-button {
+        width: 100%;
+      }
+      .profile-security-stats,
+      .profile-api-summary-grid,
+      .app-admin-summary-grid {
+        grid-template-columns: 1fr;
+      }
+      .profile-add-passkey {
+        grid-template-columns: 1fr;
+      }
+      .profile-add-passkey .primary-button {
+        width: 100%;
+      }
+      .profile-about-version {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .locations-children {
+        margin-left: 10px;
+        padding-left: 8px;
       }
       .profile-submenu,
       .app-admin-submenu {
@@ -11027,6 +12030,43 @@ def ui_preview_html(
       .preferences-setting-card .preference-control-row.dependent {
         margin-left: 12px;
         padding-left: 11px;
+      }
+      .notification-settings-card {
+        padding: 13px;
+      }
+      .groups-dashboard-card,
+      .member-group-card {
+        padding: 13px;
+      }
+      .notification-preference-card {
+        padding: 0;
+      }
+      .notification-status-grid {
+        grid-template-columns: 1fr;
+      }
+      .member-group-create-form,
+      .groups-scope-summary {
+        grid-template-columns: 1fr;
+      }
+      .member-group-card-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .member-group-open-button {
+        width: 100%;
+      }
+      .member-group-metrics {
+        gap: 6px;
+      }
+      .member-group-metric {
+        padding: 8px;
+      }
+      .member-group-manage-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .member-group-manage-actions .danger-button {
+        margin-left: 0;
       }
       .profile-form-actions,
       .profile-action-row,
@@ -11491,11 +12531,11 @@ def ui_preview_html(
                 </div>
               </div>
             </div>
-            <button type="button" class="icon-button advanced-search-toggle" id="advancedSearchToggleButton" aria-label="Advanced search" data-next-i18n-aria="collection.advancedSearch" title="Advanced" data-next-i18n-title="collection.advancedSearch">
+            <button type="button" class="icon-button advanced-search-toggle" id="advancedSearchToggleButton" aria-controls="advancedSearchPanel" aria-expanded="false" aria-label="Advanced search" data-next-i18n-aria="collection.advancedSearch" title="Advanced" data-next-i18n-title="collection.advancedSearch">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5,5.6L10,7L8.6,4.5L10,2L7.5,3.4L5,2L6.4,4.5L5,7L7.5,5.6M19.5,15.4L17,14L18.4,16.5L17,19L19.5,17.6L22,19L20.6,16.5L22,14L19.5,15.4M22,2L19.5,3.4L17,2L18.4,4.5L17,7L19.5,5.6L22,7L20.6,4.5L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z"/></svg>
               <span class="metadata-job-badge hidden" id="advancedSearchBadge">0</span>
             </button>
-            <button type="button" class="icon-button" id="selectModeButton" aria-pressed="false" aria-label="Select" data-next-i18n-aria="bulk.select" title="Select" data-next-i18n-title="bulk.select">
+            <button type="button" class="icon-button" id="selectModeButton" aria-controls="bulkBar" aria-pressed="false" aria-label="Select" data-next-i18n-aria="bulk.select" title="Select" data-next-i18n-title="bulk.select">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2,5H4V19C4,20.11 4.89,21 6,21H20V19H6V5M18,3A2,2 0 0,1 20,5V15A2,2 0 0,1 18,17H8A2,2 0 0,1 6,15V5A2,2 0 0,1 8,3H18M9.5,11L11,12.5L16.5,7L18,8.5L11,15.5L8,12.5L9.5,11Z"/></svg>
               <span class="visually-hidden" id="selectModeButtonLabel" data-next-i18n="bulk.select">Select</span>
             </button>
@@ -11510,73 +12550,113 @@ def ui_preview_html(
             </div>
           </div>
         </div>
-        <div class="advanced-search-panel hidden" id="advancedSearchPanel">
-          <div class="advanced-search-grid">
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.yearFrom">Year from</span>
-              <input id="advancedYearFrom" type="number" min="1880" max="2100" inputmode="numeric">
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.yearTo">Year to</span>
-              <input id="advancedYearTo" type="number" min="1880" max="2100" inputmode="numeric">
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.crewFilter">Crew or cast</span>
-              <input id="advancedCrewQuery" type="search" data-next-i18n-placeholder="collection.crewFilterPlaceholder" placeholder="Actor, director or crew">
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.digitalFilter">Digital source</span>
-              <select id="advancedDigitalFilter">
-                <option value="any" data-next-i18n="common.any">Any</option>
-                <option value="plex">Plex</option>
-                <option value="jellyfin">Jellyfin</option>
-                <option value="digital" data-next-i18n="collection.hasDigital">Has digital</option>
-                <option value="none" data-next-i18n="collection.noDigital">No digital</option>
-              </select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.artworkFilter">Artwork</span>
-              <select id="advancedArtworkFilter">
-                <option value="any" data-next-i18n="common.any">Any</option>
-                <option value="missingPoster" data-next-i18n="collection.missingPoster">Missing poster</option>
-                <option value="missingBackdrop" data-next-i18n="collection.missingBackdrop">Missing backdrop</option>
-                <option value="completeArtwork" data-next-i18n="collection.completeArtwork">Poster and backdrop</option>
-              </select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.personalFilter">Personal lists</span>
-              <select id="advancedPersonalFilter">
-                <option value="any" data-next-i18n="common.any">Any</option>
-                <option value="watchlist" data-next-i18n="lists.watchlist">Watchlist</option>
-                <option value="watched" data-next-i18n="lists.watched">Watched</option>
-                <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
-                <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
-                <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
-              </select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.containerType">Container type</span>
-              <select id="advancedContainerType">
-                <option value="any" data-next-i18n="common.any">Any</option>
-                <option value="movie" data-next-i18n="collection.movies">Movies</option>
-                <option value="container" data-next-i18n="collection.containers">Containers</option>
-                <option value="box_set" data-next-i18n="containerTypes.box_set">Box-set</option>
-                <option value="collection" data-next-i18n="containerTypes.collection">Collection</option>
-                <option value="vault" data-next-i18n="containerTypes.vault">Vault</option>
-              </select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.smartFilters">Smart filters</span>
-              <select id="smartFilterSelect"></select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.locationFilter">Location</span>
-              <select id="advancedLocationFilter"></select>
-            </label>
+        <div class="advanced-search-panel hidden" id="advancedSearchPanel" role="region" aria-labelledby="advancedSearchPanelTitle">
+          <div class="library-panel-head">
+            <div class="library-panel-title">
+              <span class="library-panel-title-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M7.5,5.6L10,7L8.6,4.5L10,2L7.5,3.4L5,2L6.4,4.5L5,7L7.5,5.6M19.5,15.4L17,14L18.4,16.5L17,19L19.5,17.6L22,19L20.6,16.5L22,14L19.5,15.4M22,2L19.5,3.4L17,2L18.4,4.5L17,7L19.5,5.6L22,7L20.6,4.5L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z"/></svg>
+              </span>
+              <h3 id="advancedSearchPanelTitle" data-next-i18n="collection.advancedSearch">Advanced</h3>
+            </div>
+            <span class="advanced-search-count hidden" id="advancedSearchActiveCount"></span>
+          </div>
+          <div class="library-adaptive-grid advanced-search-groups">
+            <details class="library-adaptive-group advanced-search-group release" data-library-adaptive-group data-library-advanced-group="release">
+              <summary>
+                <span data-next-i18n="collection.yearColumn">Year</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.yearFrom">Year from</span>
+                  <input id="advancedYearFrom" type="number" min="1880" max="2100" inputmode="numeric">
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.yearTo">Year to</span>
+                  <input id="advancedYearTo" type="number" min="1880" max="2100" inputmode="numeric">
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.crewFilter">Crew or cast</span>
+                  <input id="advancedCrewQuery" type="search" data-next-i18n-placeholder="collection.crewFilterPlaceholder" placeholder="Actor, director or crew">
+                </label>
+              </div>
+            </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="media">
+              <summary>
+                <span data-next-i18n="collection.mediaAssets">Media assets</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.digitalFilter">Digital source</span>
+                  <select id="advancedDigitalFilter">
+                    <option value="any" data-next-i18n="common.any">Any</option>
+                    <option value="plex">Plex</option>
+                    <option value="jellyfin">Jellyfin</option>
+                    <option value="digital" data-next-i18n="collection.hasDigital">Has digital</option>
+                    <option value="none" data-next-i18n="collection.noDigital">No digital</option>
+                  </select>
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.artworkFilter">Artwork</span>
+                  <select id="advancedArtworkFilter">
+                    <option value="any" data-next-i18n="common.any">Any</option>
+                    <option value="missingPoster" data-next-i18n="collection.missingPoster">Missing poster</option>
+                    <option value="missingBackdrop" data-next-i18n="collection.missingBackdrop">Missing backdrop</option>
+                    <option value="completeArtwork" data-next-i18n="collection.completeArtwork">Poster and backdrop</option>
+                  </select>
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.containerType">Container type</span>
+                  <select id="advancedContainerType">
+                    <option value="any" data-next-i18n="common.any">Any</option>
+                    <option value="movie" data-next-i18n="collection.movies">Movies</option>
+                    <option value="container" data-next-i18n="collection.containers">Containers</option>
+                    <option value="box_set" data-next-i18n="containerTypes.box_set">Box-set</option>
+                    <option value="collection" data-next-i18n="containerTypes.collection">Collection</option>
+                    <option value="vault" data-next-i18n="containerTypes.vault">Vault</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="personal">
+              <summary>
+                <span data-next-i18n="collection.personalFilter">Personal lists</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.personalFilter">Personal lists</span>
+                  <select id="advancedPersonalFilter">
+                    <option value="any" data-next-i18n="common.any">Any</option>
+                    <option value="watchlist" data-next-i18n="lists.watchlist">Watchlist</option>
+                    <option value="watched" data-next-i18n="lists.watched">Watched</option>
+                    <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
+                    <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
+                    <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
+                  </select>
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.locationFilter">Location</span>
+                  <select id="advancedLocationFilter"></select>
+                </label>
+              </div>
+            </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="smart">
+              <summary>
+                <span data-next-i18n="collection.smartFilters">Smart filters</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.smartFilters">Smart filters</span>
+                  <select id="smartFilterSelect"></select>
+                </label>
+              </div>
+            </details>
           </div>
           <div class="advanced-search-actions">
             <div class="smart-filter-picker">
-              <span class="advanced-search-count hidden" id="advancedSearchActiveCount"></span>
               <button type="button" class="secondary-button compact-button" id="advancedSearchSaveButton" data-next-i18n="collection.saveSmartFilter">Save smart filter</button>
               <button type="button" class="secondary-button compact-button danger" id="advancedSearchDeleteButton" data-next-i18n="common.delete">Delete</button>
             </div>
@@ -11618,66 +12698,94 @@ def ui_preview_html(
           <span class="bulk-count" id="librarySummary">""" + h(counts.get("movies", 0)) + """ movies</span>
         </div>
       </section>
-      <section class="bulk-bar" id="bulkBar">
-        <div class="button-row compact bulk-selection-actions">
-          <button type="button" class="secondary-button compact-button" data-bulk-select="all" data-next-i18n="bulk.selectAll">Select all</button>
-          <button type="button" class="secondary-button compact-button" data-bulk-select="none" data-next-i18n="bulk.deselectAll">Deselect all</button>
-          <button type="button" class="secondary-button compact-button hidden" data-bulk-select="clear" id="bulkClearSelection" data-next-i18n="bulk.clearSelection">Clear selection</button>
+      <section class="bulk-bar" id="bulkBar" role="region" aria-labelledby="bulkPanelTitle">
+        <div class="library-panel-head bulk-panel-head">
+          <div class="library-panel-title">
+            <span class="library-panel-title-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M2,5H4V19C4,20.11 4.89,21 6,21H20V19H6V5M18,3A2,2 0 0,1 20,5V15A2,2 0 0,1 18,17H8A2,2 0 0,1 6,15V5A2,2 0 0,1 8,3H18M9.5,11L11,12.5L16.5,7L18,8.5L11,15.5L8,12.5L9.5,11Z"/></svg>
+            </span>
+            <h3 id="bulkPanelTitle" data-next-i18n="bulk.select">Select</h3>
+          </div>
+          <div class="bulk-panel-status">
+            <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
+            <div class="button-row compact bulk-selection-actions">
+              <button type="button" class="secondary-button compact-button" data-bulk-select="all" data-next-i18n="bulk.selectAll">Select all</button>
+              <button type="button" class="secondary-button compact-button" data-bulk-select="none" data-next-i18n="bulk.deselectAll">Deselect all</button>
+              <button type="button" class="secondary-button compact-button hidden" data-bulk-select="clear" id="bulkClearSelection" data-next-i18n="bulk.clearSelection">Clear selection</button>
+            </div>
+          </div>
         </div>
-        <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
-        <div class="bulk-targets">
-          <div class="bulk-target">
-            <label>
+        <div class="bulk-targets library-adaptive-grid">
+          <details class="bulk-target library-adaptive-group" data-library-adaptive-group data-library-bulk-group="metadata">
+            <summary>
               <span data-next-i18n="bulk.metadata">Metadata</span>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
               <button type="button" class="bulk-action" disabled data-bulk-action="metadata" data-next-i18n="bulk.refreshMetadata">Refresh metadata</button>
-            </label>
-          </div>
-          <div class="bulk-target">
-            <label>
+            </div>
+          </details>
+          <details class="bulk-target library-adaptive-group" data-library-adaptive-group data-library-bulk-group="groups">
+            <summary>
               <span data-next-i18n="bulk.groupTarget">Group</span>
-              <select id="bulkGroupTarget"></select>
-            </label>
-            <button type="button" class="bulk-action" disabled data-bulk-action="group-add" data-next-i18n="bulk.addToGroup">Add</button>
-            <button type="button" class="bulk-action" disabled data-bulk-action="group-remove" data-next-i18n="bulk.removeFromGroup">Remove</button>
-          </div>
-          <div class="bulk-target wide">
-            <label>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
+              <select id="bulkGroupTarget" aria-label="Group" data-next-i18n-aria="bulk.groupTarget"></select>
+              <button type="button" class="bulk-action" disabled data-bulk-action="group-add" data-next-i18n="bulk.addToGroup">Add</button>
+              <button type="button" class="bulk-action" disabled data-bulk-action="group-remove" data-next-i18n="bulk.removeFromGroup">Remove</button>
+            </div>
+          </details>
+          <details class="bulk-target wide library-adaptive-group" data-library-adaptive-group data-library-bulk-group="tags">
+            <summary>
               <span data-next-i18n="bulk.tagsTarget">Tags</span>
-            </label>
-            <div class="bulk-tag-picker" id="bulkTagPicker" role="group" aria-label="Tags"></div>
-            <div class="button-row compact">
-              <button type="button" class="bulk-action" disabled data-bulk-action="tags-add" data-next-i18n="bulk.addTags">Assign tags</button>
-              <button type="button" class="bulk-action" disabled data-bulk-action="tags-remove" data-next-i18n="bulk.removeTags">Remove tags</button>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
+              <div class="bulk-tag-picker" id="bulkTagPicker" role="group" aria-label="Tags" data-next-i18n-aria="bulk.tagsTarget"></div>
+              <div class="button-row compact">
+                <button type="button" class="bulk-action" disabled data-bulk-action="tags-add" data-next-i18n="bulk.addTags">Assign tags</button>
+                <button type="button" class="bulk-action" disabled data-bulk-action="tags-remove" data-next-i18n="bulk.removeTags">Remove tags</button>
+              </div>
             </div>
-          </div>
-          <div class="bulk-target wide">
-            <label>
+          </details>
+          <details class="bulk-target wide library-adaptive-group" data-library-adaptive-group data-library-bulk-group="containers">
+            <summary>
               <span data-next-i18n="bulk.containerTarget">Container</span>
-              <select id="bulkContainerTarget"></select>
-            </label>
-            <div class="bulk-inline-create hidden" id="bulkContainerCreateControls">
-              <form class="bulk-inline-create-form" id="bulkContainerCreateForm">
-                <label class="visually-hidden" for="bulkContainerCreateTitle" data-next-i18n="bulk.containerCreateTitleLabel">Container name</label>
-                <input id="bulkContainerCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.containerCreatePlaceholder" placeholder="New container name">
-                <button type="submit" class="bulk-action" id="bulkContainerCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
-              </form>
-              <p class="bulk-create-message" id="bulkContainerCreateMessage"></p>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
+              <select id="bulkContainerTarget" aria-label="Container" data-next-i18n-aria="bulk.containerTarget"></select>
+              <div class="bulk-inline-create hidden" id="bulkContainerCreateControls">
+                <form class="bulk-inline-create-form" id="bulkContainerCreateForm">
+                  <label class="visually-hidden" for="bulkContainerCreateTitle" data-next-i18n="bulk.containerCreateTitleLabel">Container name</label>
+                  <input id="bulkContainerCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.containerCreatePlaceholder" placeholder="New container name">
+                  <button type="submit" class="bulk-action" id="bulkContainerCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
+                </form>
+                <p class="bulk-create-message" id="bulkContainerCreateMessage"></p>
+              </div>
+              <button type="button" class="bulk-action" disabled data-bulk-action="container" id="bulkContainerActionButton" data-next-i18n="bulk.addToContainer">Add to container</button>
             </div>
-            <button type="button" class="bulk-action" disabled data-bulk-action="container" id="bulkContainerActionButton" data-next-i18n="bulk.addToContainer">Add to container</button>
-          </div>
-          <div class="bulk-target">
-            <label>
+          </details>
+          <details class="bulk-target library-adaptive-group" data-library-adaptive-group data-library-bulk-group="location">
+            <summary>
               <span data-next-i18n="locations.assign">Storage location</span>
-              <select id="bulkLocationTarget"></select>
-            </label>
-            <button type="button" class="bulk-action" disabled data-bulk-action="location" id="bulkLocationActionButton" data-next-i18n="bulk.setLocation">Set location</button>
-          </div>
-          <div class="bulk-target">
-            <label>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
+              <select id="bulkLocationTarget" aria-label="Storage location" data-next-i18n-aria="locations.assign"></select>
+              <button type="button" class="bulk-action" disabled data-bulk-action="location" id="bulkLocationActionButton" data-next-i18n="bulk.setLocation">Set location</button>
+            </div>
+          </details>
+          <details class="bulk-target danger library-adaptive-group" data-library-adaptive-group data-library-bulk-group="delete">
+            <summary>
               <span data-next-i18n="bulk.deleteTarget">Delete</span>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
               <button type="button" class="bulk-action danger" disabled data-bulk-action="delete" data-next-i18n="bulk.deleteSelected">Delete selected</button>
-            </label>
-          </div>
+            </div>
+          </details>
         </div>
       </section>
       <section class="metadata-job-panel" id="libraryMetadataJobPanel" aria-live="polite">
@@ -13192,143 +14300,277 @@ def ui_preview_html(
               </div>
             </div>
                 <div id="profilePanelNotifications" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabNotifications" tabindex="0" data-profile-panel="notifications">
-              <div class="detail-card-head compact">
-                <div>
-                  <h4 data-next-i18n="notifications.pushTitle">Push notifications</h4>
-                  <p data-next-i18n="notifications.pushHelp">Enable native PWA notifications on this device and choose which messages you want to receive.</p>
-                </div>
-                <div class="profile-form-actions">
-                  <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
-                  <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
-                  <button type="button" class="secondary-button debug-only hidden" id="pushPriceCheckButton" data-next-i18n="notifications.priceCheck">Price Check</button>
-                </div>
-              </div>
-              <div class="profile-section-grid">
-                <section class="profile-section-box">
-                  <div class="profile-meta">
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="notifications.browserState">Browser</span>
-                      <strong id="pushBrowserState">-</strong>
+              <div class="notification-settings-dashboard">
+                <div class="notification-overview-grid">
+                  <section class="notification-settings-card status" data-notification-settings-card="status">
+                    <div class="notification-settings-card-head">
+                      """ + nav_icon("notification_settings") + """
+                      <div>
+                        <h4 data-next-i18n="notifications.pushTitle">Push notifications</h4>
+                        <p data-next-i18n="notifications.pushHelp">Enable native PWA notifications on this device and choose which messages you want to receive.</p>
+                      </div>
                     </div>
-                    <div class="profile-meta-row">
-                      <span data-next-i18n="notifications.deviceState">This device</span>
-                      <strong id="pushDeviceState">-</strong>
+                    <div class="notification-status-grid">
+                      <div class="notification-status-fact">
+                        <span data-next-i18n="notifications.browserState">Browser</span>
+                        <strong class="notification-state-pill" id="pushBrowserState">-</strong>
+                      </div>
+                      <div class="notification-status-fact">
+                        <span data-next-i18n="notifications.deviceState">This device</span>
+                        <strong class="notification-state-pill" id="pushDeviceState">-</strong>
+                      </div>
                     </div>
+                    <div class="notification-status-actions">
+                      <button type="button" class="primary-button" id="pushEnableButton" data-next-i18n="notifications.enablePush">Enable notifications</button>
+                      <button type="button" class="secondary-button hidden" id="pushDisableButton" data-next-i18n="notifications.disablePush">Disable on this device</button>
+                      <button type="button" class="secondary-button" id="pushRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+                      <button type="button" class="secondary-button" id="pushTestButton" data-next-i18n="notifications.testPush">Send test</button>
+                      <button type="button" class="secondary-button debug-only hidden" id="pushPriceCheckButton" data-next-i18n="notifications.priceCheck">Price Check</button>
+                    </div>
+                  </section>
+                  <section class="notification-settings-card" data-notification-settings-card="devices">
+                    <div class="notification-settings-card-head">
+                      """ + nav_icon("devices") + """
+                      <div>
+                        <h4 data-next-i18n="notifications.devicesTitle">Connected devices</h4>
+                        <p data-next-i18n="notifications.devicesHelp">Devices currently registered for push notifications.</p>
+                      </div>
+                    </div>
+                    <div class="push-device-list" id="pushDeviceList"></div>
+                  </section>
+                </div>
+                <section class="notification-preferences-section" aria-labelledby="notificationCategoriesTitle">
+                  <div class="notification-preferences-heading">
+                    <h4 id="notificationCategoriesTitle" data-next-i18n="notifications.categoriesTitle">Notification categories</h4>
+                    <p data-next-i18n="notifications.categoriesHelp">Choose which updates can reach your devices.</p>
                   </div>
-                  <div class="profile-action-row">
-                    <button type="button" class="secondary-button" id="pushEnableButton" data-next-i18n="notifications.enablePush">Enable notifications</button>
-                    <button type="button" class="secondary-button" id="pushDisableButton" data-next-i18n="notifications.disablePush">Disable on this device</button>
+                  <div class="notification-preference-grid" id="pushPreferenceList">
+                    <section class="notification-settings-card notification-preference-card" data-push-preference-card="system">
+                      <div class="notification-settings-card-head">
+                        """ + nav_icon("security") + """
+                        <div>
+                          <h5 data-next-i18n="notifications.systemSecurityTitle">System &amp; security</h5>
+                          <p data-next-i18n="notifications.systemSecurityHelp">Important DiscVault and account updates.</p>
+                        </div>
+                      </div>
+                      <div class="preference-control-list" data-push-preference-group="system"></div>
+                    </section>
+                    <section class="notification-settings-card notification-preference-card" data-push-preference-card="library">
+                      <div class="notification-settings-card-head">
+                        """ + nav_icon("library") + """
+                        <div>
+                          <h5 data-next-i18n="notifications.libraryActivityTitle">Library activity</h5>
+                          <p data-next-i18n="notifications.libraryActivityHelp">Background work and wishlist price changes.</p>
+                        </div>
+                      </div>
+                      <div class="preference-control-list" data-push-preference-group="library"></div>
+                    </section>
+                    <section class="notification-settings-card notification-preference-card" data-push-preference-card="sharing">
+                      <div class="notification-settings-card-head">
+                        """ + nav_icon("groups") + """
+                        <div>
+                          <h5 data-next-i18n="notifications.sharingTitle">Sharing</h5>
+                          <p data-next-i18n="notifications.sharingHelp">Groups, invitations and shared activity.</p>
+                        </div>
+                      </div>
+                      <div class="preference-control-list" data-push-preference-group="sharing"></div>
+                    </section>
                   </div>
                 </section>
-                <section class="profile-section-box">
-                  <div class="preference-control-list" id="pushPreferenceList"></div>
-                  <div class="push-device-list" id="pushDeviceList"></div>
-                </section>
+                <div class="login-message" id="pushProfileMessage" aria-live="polite"></div>
               </div>
-              <div class="login-message" id="pushProfileMessage"></div>
             </div>
                 <div id="profilePanelGroups" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabGroups" tabindex="0" data-profile-panel="groups">
-              <div class="detail-card-head compact">
-                <div>
-                  <h4 data-next-i18n="groups.memberGroups">Member Groups</h4>
-                  <p data-next-i18n="groups.memberGroupsHelp">Create your own sharing groups and invite friends by username.</p>
+              <div class="groups-dashboard">
+                <div class="detail-card-head compact">
+                  <div>
+                    <h4 data-next-i18n="groups.memberGroups">Groups</h4>
+                    <p data-next-i18n="groups.memberGroupsHelp">Create sharing groups, invite people and open each shared library from one place.</p>
+                  </div>
                 </div>
-              </div>
-              <div class="profile-section-grid">
-                <section class="profile-section-box" id="memberGroupCreateSection">
-                  <h4 data-next-i18n="groups.createGroup">Create group</h4>
-                  <form class="profile-form" id="memberGroupCreateForm">
-                    <label for="memberGroupNameInput">
-                      <span data-next-i18n="groups.groupName">Group name</span>
-                      <input id="memberGroupNameInput" maxlength="120" autocomplete="off" data-next-i18n-placeholder="groups.groupNamePlaceholder" placeholder="Family movie night">
-                    </label>
-                    <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="memberGroupCreateButton" data-next-i18n="groups.create">Create</button>
-                      <span class="login-message" id="memberGroupMessage"></span>
+                <div class="groups-overview-grid">
+                  <section class="groups-dashboard-card create" id="memberGroupCreateSection" data-groups-dashboard-card="create">
+                    <div class="groups-dashboard-card-head">
+                      """ + nav_icon("groups") + """
+                      <div>
+                        <h4 data-next-i18n="groups.createGroup">Create group</h4>
+                        <p data-next-i18n="groups.createGroupHelp">Start a shared library and invite people after it has been created.</p>
+                      </div>
                     </div>
-                  </form>
-                </section>
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="groups.libraryScope">Library view</h4>
-                  <p data-next-i18n="groups.libraryScopeHelp">Group-shared films only appear when you explicitly select that group in the library filter.</p>
-                  <div class="profile-meta" id="memberGroupScopeSummary"></div>
+                    <form class="profile-form member-group-create-form" id="memberGroupCreateForm">
+                      <label for="memberGroupNameInput">
+                        <span data-next-i18n="groups.groupName">Group name</span>
+                        <input id="memberGroupNameInput" maxlength="120" autocomplete="off" data-next-i18n-placeholder="groups.groupNamePlaceholder" placeholder="Family movie night">
+                      </label>
+                      <div class="profile-form-actions">
+                        <button type="submit" class="primary-button" id="memberGroupCreateButton" data-next-i18n="groups.create">Create</button>
+                      </div>
+                    </form>
+                  </section>
+                  <section class="groups-dashboard-card" data-groups-dashboard-card="scope">
+                    <div class="groups-dashboard-card-head">
+                      """ + nav_icon("library") + """
+                      <div>
+                        <h4 data-next-i18n="groups.libraryScope">Library view</h4>
+                        <p data-next-i18n="groups.libraryScopeHelp">Group-shared films only appear when you explicitly select that group in the library filter.</p>
+                      </div>
+                    </div>
+                    <div class="profile-meta groups-scope-summary" id="memberGroupScopeSummary"></div>
+                  </section>
+                </div>
+                <div class="login-message" id="memberGroupMessage" aria-live="polite"></div>
+                <section class="member-groups-section" aria-labelledby="memberGroupsHeading">
+                  <div class="member-groups-heading">
+                    <h4 id="memberGroupsHeading" data-next-i18n="groups.yourGroups">Your groups</h4>
+                    <p data-next-i18n="groups.yourGroupsHelp">Open a shared library or manage the people in groups you own.</p>
+                  </div>
+                  <div class="member-group-list" id="memberGroupList"></div>
                 </section>
               </div>
-              <div class="container-manager-list member-group-list" id="memberGroupList"></div>
             </div>
                 <div id="profilePanelStructure" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabStructure" tabindex="0" data-profile-panel="structure">
-              <div class="detail-card-head compact">
-                <div>
-                  <h4 data-next-i18n="containerManage.title">Collection structure</h4>
-                  <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
-                </div>
-                <nav class="detail-submenu" aria-label="Collection structure" data-next-i18n-aria="containerManage.sections">
-                  <button type="button" class="active" data-container-manager-type="box_set" data-next-i18n="containerManage.boxSets">Box-sets</button>
-                  <button type="button" data-container-manager-type="vault" data-next-i18n="containerManage.vaults">Vaults</button>
-                  <button type="button" data-container-manager-type="collection" data-next-i18n="containerManage.collections">Collections</button>
-                  <button type="button" data-structure-view="locations" data-next-i18n="locations.navLabel">Locations</button>
-                </nav>
-              </div>
-              <form class="profile-form container-manager-create" id="containerManagerCreateForm" data-structure-section="containers">
-                <label for="containerManagerTitle">
-                  <span data-next-i18n="containerManage.titleLabel">Name</span>
-                  <input id="containerManagerTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="containerManage.titlePlaceholder" placeholder="New collection name">
-                </label>
-                <div class="profile-form-actions">
-                  <button type="submit" class="secondary-button" id="containerManagerCreateButton" data-next-i18n="containerManage.create">Create</button>
-                  <span class="login-message" id="containerManagerMessage"></span>
-                </div>
-              </form>
-              <div class="container-manager-list" id="containerManagerList" data-structure-section="containers"></div>
-              <div class="locations-manager hidden" data-structure-section="locations">
-                <form class="profile-form locations-create-form" id="locationCreateForm">
-                  <label for="locationCreateName">
-                    <span data-next-i18n="locations.name">Name</span>
-                    <input id="locationCreateName" maxlength="240" autocomplete="off" data-next-i18n-placeholder="locations.namePlaceholder" placeholder="Cabinet 01">
-                  </label>
-                  <label for="locationCreateParent">
-                    <span data-next-i18n="locations.parent">Parent</span>
-                    <select id="locationCreateParent"></select>
-                  </label>
-                  <label for="locationCreateDescription">
-                    <span data-next-i18n="locations.descriptionField">Description</span>
-                    <input id="locationCreateDescription" maxlength="2000" autocomplete="off" data-next-i18n-placeholder="locations.descriptionPlaceholder" placeholder="Optional description">
-                  </label>
-                  <label for="locationCreateBackdrop">
-                    <span data-next-i18n="locations.backdropField">Backdrop</span>
-                    <input id="locationCreateBackdrop" type="file" accept="image/*">
-                  </label>
-                  <div class="profile-form-actions">
-                    <button type="submit" class="secondary-button" id="locationCreateButton" data-next-i18n="locations.create">Create location</button>
-                    <span class="login-message" id="locationManagerMessage"></span>
+              <div class="profile-dashboard structure-dashboard">
+                <header class="profile-dashboard-intro">
+                  <span class="profile-dashboard-symbol">""" + nav_icon("structure") + """</span>
+                  <div class="profile-dashboard-copy">
+                    <h4 data-next-i18n="containerManage.title">Collection structure</h4>
+                    <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
                   </div>
-                </form>
-                <div class="locations-tree" id="locationsTree"></div>
+                </header>
+                <nav class="detail-submenu profile-dashboard-tabs structure-dashboard-tabs" role="tablist" aria-label="Collection structure" data-next-i18n-aria="containerManage.sections">
+                  <button type="button" class="active" role="tab" aria-selected="true" aria-controls="structureContainersPanel" tabindex="0" data-structure-tab="box_set" data-container-manager-type="box_set">""" + nav_icon("structure") + """<span class="profile-dashboard-tab-label" data-next-i18n="containerManage.boxSets">Box-sets</span></button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="structureContainersPanel" tabindex="-1" data-structure-tab="vault" data-container-manager-type="vault">""" + nav_icon("security") + """<span class="profile-dashboard-tab-label" data-next-i18n="containerManage.vaults">Vaults</span></button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="structureContainersPanel" tabindex="-1" data-structure-tab="collection" data-container-manager-type="collection">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="containerManage.collections">Collections</span></button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="structureLocationsPanel" tabindex="-1" data-structure-tab="locations" data-structure-view="locations">""" + nav_icon("library") + """<span class="profile-dashboard-tab-label" data-next-i18n="locations.navLabel">Locations</span></button>
+                </nav>
+                <div class="structure-workspace" id="structureContainersPanel" role="tabpanel" data-structure-section="containers">
+                  <section class="profile-dashboard-card primary structure-create-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("import") + """</span>
+                        <div>
+                          <h4 data-next-i18n="containerManage.create">Create</h4>
+                          <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <form class="profile-form container-manager-create" id="containerManagerCreateForm">
+                      <label for="containerManagerTitle">
+                        <span data-next-i18n="containerManage.titleLabel">Name</span>
+                        <input id="containerManagerTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="containerManage.titlePlaceholder" placeholder="New collection name">
+                      </label>
+                      <div class="profile-form-actions">
+                        <button type="submit" class="primary-button" id="containerManagerCreateButton" data-next-i18n="containerManage.create">Create</button>
+                      </div>
+                    </form>
+                    <div class="login-message" id="containerManagerMessage" aria-live="polite"></div>
+                  </section>
+                  <section class="profile-dashboard-card structure-list-card" aria-labelledby="containerManagerListHeading">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("structure") + """</span>
+                        <div>
+                          <h4 id="containerManagerListHeading" data-next-i18n="containerManage.boxSets">Box-sets</h4>
+                        </div>
+                      </div>
+                      <span class="tag blue" id="containerManagerCount" aria-live="polite">0</span>
+                    </div>
+                    <div class="container-manager-list" id="containerManagerList"></div>
+                  </section>
+                </div>
+                <div class="structure-workspace locations-manager hidden" id="structureLocationsPanel" role="tabpanel" aria-hidden="true" data-structure-section="locations">
+                  <section class="profile-dashboard-card primary structure-create-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("import") + """</span>
+                        <div>
+                          <h4 data-next-i18n="locations.create">Create location</h4>
+                          <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <form class="profile-form locations-create-form" id="locationCreateForm">
+                      <label for="locationCreateName">
+                        <span data-next-i18n="locations.name">Name</span>
+                        <input id="locationCreateName" maxlength="240" autocomplete="off" data-next-i18n-placeholder="locations.namePlaceholder" placeholder="Cabinet 01">
+                      </label>
+                      <label for="locationCreateParent">
+                        <span data-next-i18n="locations.parent">Parent</span>
+                        <select id="locationCreateParent"></select>
+                      </label>
+                      <label for="locationCreateDescription">
+                        <span data-next-i18n="locations.descriptionField">Description</span>
+                        <input id="locationCreateDescription" maxlength="2000" autocomplete="off" data-next-i18n-placeholder="locations.descriptionPlaceholder" placeholder="Optional description">
+                      </label>
+                      <label for="locationCreateBackdrop">
+                        <span data-next-i18n="locations.backdropField">Backdrop</span>
+                        <input id="locationCreateBackdrop" type="file" accept="image/*">
+                      </label>
+                      <div class="profile-form-actions">
+                        <button type="submit" class="primary-button" id="locationCreateButton" data-next-i18n="locations.create">Create location</button>
+                      </div>
+                    </form>
+                    <div class="login-message" id="locationManagerMessage" aria-live="polite"></div>
+                  </section>
+                  <section class="profile-dashboard-card structure-list-card" aria-labelledby="locationsTreeHeading">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("library") + """</span>
+                        <div>
+                          <h4 id="locationsTreeHeading" data-next-i18n="locations.navLabel">Locations</h4>
+                          <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="locations-tree" id="locationsTree"></div>
+                  </section>
+                </div>
               </div>
             </div>
                 <div id="profilePanelSecurity" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabSecurity" tabindex="0" data-profile-panel="security">
-              <div class="profile-section-grid profile-security-grid">
+              <div class="profile-dashboard security-dashboard">
+                <header class="profile-dashboard-intro">
+                  <span class="profile-dashboard-symbol">""" + nav_icon("security") + """</span>
+                  <div class="profile-dashboard-copy">
+                    <h4 data-next-i18n="profile.security">Security</h4>
+                    <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+                  </div>
+                </header>
                 <div class="profile-security-column">
-                  <section class="profile-section-box">
-                    <div class="detail-card-head compact">
-                      <div>
-                        <h4 data-next-i18n="profile.security">Security</h4>
-                        <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+                  <div class="profile-security-grid">
+                  <section class="profile-dashboard-card primary profile-security-card passkeys" data-security-dashboard-card="passkeys">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("devices") + """</span>
+                        <div>
+                          <h4 data-next-i18n="auth.passkey">Passkey</h4>
+                          <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+                        </div>
                       </div>
                       <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
                     </div>
                     <div class="profile-passkey-list" id="profilePasskeyList"></div>
                     <div class="profile-add-passkey">
                       <input id="profileNewPasskeyNameInput" maxlength="80" autocomplete="off" data-next-i18n-placeholder="profile.newPasskeyName" placeholder="New passkey name">
-                      <button type="button" class="secondary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
+                      <button type="button" class="primary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
                     </div>
-                    <div class="login-message" id="profileSecurityMessage"></div>
+                    <div class="login-message" id="profileSecurityMessage" aria-live="polite"></div>
                   </section>
-                  <section class="profile-section-box" id="profileLegacySecurity">
-                    <h4 data-next-i18n="legacyAuth.passwordSecurity">Legacy security</h4>
-                    <p data-next-i18n="legacyAuth.passwordChangeHelp">Change your Legacy password. Use at least 15 characters.</p>
-                    <div class="profile-meta">
-                      <div class="profile-meta-row"><span data-next-i18n="legacyAuth.mfaStatus">2FA status</span><strong id="profileLegacyMfaStatus">-</strong></div>
+                  <section class="profile-dashboard-card profile-security-card legacy" id="profileLegacySecurity" data-security-dashboard-card="legacy">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                        <div>
+                          <h4 data-next-i18n="legacyAuth.passwordSecurity">Legacy security</h4>
+                          <p data-next-i18n="legacyAuth.passwordChangeHelp">Change your Legacy password. Use at least 15 characters.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-security-stats">
+                      <div class="profile-security-stat">
+                        <span data-next-i18n="legacyAuth.mfaStatus">2FA status</span>
+                        <strong id="profileLegacyMfaStatus">-</strong>
+                      </div>
                     </div>
                     <form class="profile-form" id="profileLegacyPasswordForm">
                       <label for="profileLegacyCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
@@ -13339,113 +14581,158 @@ def ui_preview_html(
                       </label>
                       <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.changePassword">Change password</button>
                     </form>
-                    <div class="login-message" id="profileLegacyMessage"></div>
+                    <div class="login-message" id="profileLegacyMessage" aria-live="polite"></div>
                   </section>
-                </div>
-                <div class="profile-security-column">
-                  <section class="profile-section-box">
-                    <h4 data-next-i18n="profile.recoveryTitle">Account recovery</h4>
-                    <p data-next-i18n="profile.recoveryHelp">Recovery codes let you regain access when your usual sign-in methods are unavailable.</p>
-                    <div class="profile-meta">
-                      <div class="profile-meta-row">
+                  <section class="profile-dashboard-card profile-security-card recovery" data-security-dashboard-card="recovery">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("lists") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.recoveryTitle">Account recovery</h4>
+                          <p data-next-i18n="profile.recoveryHelp">Recovery codes let you regain access when your usual sign-in methods are unavailable.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-security-stats">
+                      <div class="profile-security-stat">
                         <span data-next-i18n="profile.recoveryActiveCodes">Active codes</span>
                         <strong id="profileRecoveryActiveCount">-</strong>
                       </div>
-                      <div class="profile-meta-row">
+                      <div class="profile-security-stat">
                         <span data-next-i18n="profile.recoveryLastGenerated">Last generated</span>
                         <strong id="profileRecoveryLastGenerated">-</strong>
                       </div>
                     </div>
                     <div class="recovery-codes hidden" id="profileRecoveryCodes"></div>
                     <div class="profile-action-row">
-                      <button type="button" class="secondary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
+                      <button type="button" class="primary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
                       <button type="button" class="secondary-button" id="profileRevokeRecoveryButton" data-next-i18n="profile.revokeRecoveryCodes">Revoke active codes</button>
                     </div>
-                    <div class="login-message" id="profileRecoveryMessage"></div>
+                    <div class="login-message" id="profileRecoveryMessage" aria-live="polite"></div>
                   </section>
+                  </div>
                 </div>
               </div>
             </div>
                 <div id="profilePanelApi" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabApi" tabindex="0" data-profile-panel="api">
-              <div class="segmented profile-submenu profile-api-submenu" role="tablist" aria-label="API and MCP sections">
-                <button type="button" class="active" data-profile-api-tab="general" data-next-i18n="profile.apiTabGeneral">General</button>
-                <button type="button" data-profile-api-tab="create" data-next-i18n="profile.apiTabCreate">Create key</button>
-                <button type="button" data-profile-api-tab="activity" data-next-i18n="profile.apiTabActivity">Activity</button>
-              </div>
-              <div class="profile-api-panel" data-profile-api-panel="general">
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.apiMcp">API & MCP</h4>
-                  <p data-next-i18n="profile.apiMcpHelp">Create scoped access tokens for external API clients and the DiscVault MCP server.</p>
-                  <div class="profile-meta" id="profileApiMcpSummary"></div>
-                </section>
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.accessTokens">Access tokens</h4>
-                  <div class="profile-passkey-list" id="profileApiTokenList"></div>
-                </section>
-              </div>
-              <div class="profile-api-panel hidden" data-profile-api-panel="create">
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.createAccessToken">Create access token</h4>
-                  <p data-next-i18n="profile.createAccessTokenHelp">Choose exactly which API and MCP actions this key may use.</p>
-                  <form class="profile-form" id="profileApiTokenForm">
-                    <label for="profileApiTokenNameInput">
-                      <span data-next-i18n="profile.tokenName">Token name</span>
-                      <input id="profileApiTokenNameInput" maxlength="120" autocomplete="off" placeholder="DiscVault MCP">
-                    </label>
-                    <div class="profile-passkey-list" id="profileApiPermissionList"></div>
-                    <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="profileCreateApiTokenButton" data-next-i18n="profile.createToken">Create token</button>
-                    </div>
-                  </form>
-                  <div class="recovery-codes hidden" id="profileNewApiToken"></div>
-                  <div class="login-message" id="profileApiMessage"></div>
-                </section>
-              </div>
-              <div class="profile-api-panel hidden" data-profile-api-panel="activity">
-                <section class="profile-section-box profile-api-activity-box">
-                  <div class="detail-card-head compact">
-                    <div>
-                      <h4 data-next-i18n="profile.apiActivityTitle">API & MCP activity</h4>
-                      <p data-next-i18n="profile.apiActivityHelp">Review API and MCP requests made with your access keys.</p>
-                    </div>
-                    <button type="button" class="secondary-button" id="profileApiAuditRefreshButton" data-next-i18n="profile.apiActivityRefresh">Refresh</button>
+              <div class="profile-dashboard api-dashboard">
+                <header class="profile-dashboard-intro">
+                  <span class="profile-dashboard-symbol">""" + nav_icon("api") + """</span>
+                  <div class="profile-dashboard-copy">
+                    <h4 data-next-i18n="profile.apiMcp">API & MCP</h4>
+                    <p data-next-i18n="profile.apiMcpHelp">Create scoped access tokens for external API clients and the DiscVault MCP server.</p>
                   </div>
-                  <div class="profile-api-log-filter-row">
-                    <label for="profileApiAuditTokenFilter">
-                      <span data-next-i18n="profile.apiActivityTokenFilter">Access key</span>
-                      <select id="profileApiAuditTokenFilter"></select>
-                    </label>
-                    <label for="profileApiAuditCategoryFilter">
-                      <span data-next-i18n="profile.apiActivityTypeFilter">Type</span>
-                      <select id="profileApiAuditCategoryFilter">
-                        <option value="all" data-next-i18n="profile.apiActivityTypeAll">All activity</option>
-                        <option value="api" data-next-i18n="profile.apiActivityTypeApi">API</option>
-                        <option value="mcp" data-next-i18n="profile.apiActivityTypeMcp">MCP</option>
-                        <option value="security" data-next-i18n="profile.apiActivityTypeSecurity">Security</option>
-                      </select>
-                    </label>
-                    <label for="profileApiAuditSearchInput">
-                      <span data-next-i18n="profile.apiActivitySearchFilter">Search</span>
-                      <input id="profileApiAuditSearchInput" type="search" autocomplete="off" data-next-i18n-placeholder="profile.apiActivitySearchPlaceholder" placeholder="Endpoint, tool, agent or IP">
-                    </label>
-                  </div>
-                  <div id="profileApiAuditTroubleshooting"></div>
-                  <div class="profile-api-log-list" id="profileApiAuditList"></div>
-                </section>
+                </header>
+                <div class="detail-submenu profile-dashboard-tabs profile-api-submenu" role="tablist" aria-label="API and MCP sections">
+                  <button type="button" class="active" id="profileApiTabGeneral" role="tab" aria-selected="true" aria-controls="profileApiPanelGeneral" tabindex="0" data-profile-api-tab="general">""" + nav_icon("api") + """<span class="profile-dashboard-tab-label" data-next-i18n="profile.apiTabGeneral">General</span></button>
+                  <button type="button" id="profileApiTabCreate" role="tab" aria-selected="false" aria-controls="profileApiPanelCreate" tabindex="-1" data-profile-api-tab="create">""" + nav_icon("security") + """<span class="profile-dashboard-tab-label" data-next-i18n="profile.apiTabCreate">Create key</span></button>
+                  <button type="button" id="profileApiTabActivity" role="tab" aria-selected="false" aria-controls="profileApiPanelActivity" tabindex="-1" data-profile-api-tab="activity">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="profile.apiTabActivity">Activity</span></button>
+                </div>
+                <div class="profile-api-panel" id="profileApiPanelGeneral" role="tabpanel" aria-labelledby="profileApiTabGeneral" data-profile-api-panel="general">
+                  <section class="profile-dashboard-card primary">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("api") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.apiMcp">API & MCP</h4>
+                          <p data-next-i18n="profile.apiMcpHelp">Create scoped access tokens for external API clients and the DiscVault MCP server.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-api-summary-grid" id="profileApiMcpSummary"></div>
+                  </section>
+                  <section class="profile-dashboard-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.accessTokens">Access tokens</h4>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-passkey-list" id="profileApiTokenList"></div>
+                  </section>
+                </div>
+                <div class="profile-api-panel hidden" id="profileApiPanelCreate" role="tabpanel" aria-labelledby="profileApiTabCreate" aria-hidden="true" data-profile-api-panel="create">
+                  <section class="profile-dashboard-card primary">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.createAccessToken">Create access token</h4>
+                          <p data-next-i18n="profile.createAccessTokenHelp">Choose exactly which API and MCP actions this key may use.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <form class="profile-form" id="profileApiTokenForm">
+                      <label for="profileApiTokenNameInput">
+                        <span data-next-i18n="profile.tokenName">Token name</span>
+                        <input id="profileApiTokenNameInput" maxlength="120" autocomplete="off" placeholder="DiscVault MCP">
+                      </label>
+                      <div class="profile-passkey-list" id="profileApiPermissionList"></div>
+                      <div class="profile-form-actions">
+                        <button type="submit" class="primary-button" id="profileCreateApiTokenButton" data-next-i18n="profile.createToken">Create token</button>
+                      </div>
+                    </form>
+                    <div class="recovery-codes hidden" id="profileNewApiToken"></div>
+                    <div class="login-message" id="profileApiMessage" aria-live="polite"></div>
+                  </section>
+                </div>
+                <div class="profile-api-panel hidden" id="profileApiPanelActivity" role="tabpanel" aria-labelledby="profileApiTabActivity" aria-hidden="true" data-profile-api-panel="activity">
+                  <section class="profile-dashboard-card profile-api-activity-box">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.apiActivityTitle">API & MCP activity</h4>
+                          <p data-next-i18n="profile.apiActivityHelp">Review API and MCP requests made with your access keys.</p>
+                        </div>
+                      </div>
+                      <button type="button" class="secondary-button" id="profileApiAuditRefreshButton" data-next-i18n="profile.apiActivityRefresh">Refresh</button>
+                    </div>
+                    <div class="profile-api-log-filter-row">
+                      <label for="profileApiAuditTokenFilter">
+                        <span data-next-i18n="profile.apiActivityTokenFilter">Access key</span>
+                        <select id="profileApiAuditTokenFilter"></select>
+                      </label>
+                      <label for="profileApiAuditCategoryFilter">
+                        <span data-next-i18n="profile.apiActivityTypeFilter">Type</span>
+                        <select id="profileApiAuditCategoryFilter">
+                          <option value="all" data-next-i18n="profile.apiActivityTypeAll">All activity</option>
+                          <option value="api" data-next-i18n="profile.apiActivityTypeApi">API</option>
+                          <option value="mcp" data-next-i18n="profile.apiActivityTypeMcp">MCP</option>
+                          <option value="security" data-next-i18n="profile.apiActivityTypeSecurity">Security</option>
+                        </select>
+                      </label>
+                      <label for="profileApiAuditSearchInput">
+                        <span data-next-i18n="profile.apiActivitySearchFilter">Search</span>
+                        <input id="profileApiAuditSearchInput" type="search" autocomplete="off" data-next-i18n-placeholder="profile.apiActivitySearchPlaceholder" placeholder="Endpoint, tool, agent or IP">
+                      </label>
+                    </div>
+                    <div id="profileApiAuditTroubleshooting"></div>
+                    <div class="profile-api-log-list" id="profileApiAuditList"></div>
+                  </section>
+                </div>
               </div>
             </div>
                 <div id="profilePanelAbout" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabAbout" tabindex="0" data-profile-panel="about">
-              <section class="profile-section-box">
-                <div>
-                  <h4 data-next-i18n="profile.about">About</h4>
-                  <p class="muted" data-next-i18n="profile.aboutHelp">Version information, credits and data sources.</p>
-                </div>
-                <div class="profile-about-stack">
-                  <div class="profile-about-card">
-                    <div class="profile-meta">
-                      <div class="profile-meta-row">
-                        <span data-next-i18n="profile.appVersion">App version</span>
-                        <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+              <div class="profile-dashboard about-dashboard">
+                <header class="profile-dashboard-intro">
+                  <span class="profile-dashboard-symbol">""" + nav_icon("about") + """</span>
+                  <div class="profile-dashboard-copy">
+                    <h4 data-next-i18n="profile.about">About</h4>
+                    <p data-next-i18n="profile.aboutHelp">Version information, credits and data sources.</p>
+                  </div>
+                </header>
+                <div class="profile-about-grid">
+                  <section class="profile-dashboard-card primary profile-about-card profile-about-card--version">
+                    <div class="profile-about-version">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("about") + """</span>
+                        <div class="profile-about-card-copy">
+                          <span data-next-i18n="profile.appVersion">App version</span>
+                          <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+                        </div>
                       </div>
                     </div>
                     <div class="profile-update-block hidden" id="profileUpdateBlock">
@@ -13462,29 +14749,37 @@ def ui_preview_html(
                       </div>
                       <div class="profile-update-result" id="profileUpdateResult" hidden></div>
                     </div>
-                  </div>
-                  <div class="profile-about-card">
-                    <div class="profile-about-card-copy">
+                  </section>
+                  <section class="profile-dashboard-card profile-about-card">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                      <div class="profile-about-card-copy">
                       <span data-next-i18n="profile.developedBy">Developed by</span>
                       <div class="profile-about-brandmark">
                         <img class="profile-about-brandmark-light" src="/api/next/assets/flux76-wordmark-light.png" alt="Flux76">
                         <img class="profile-about-brandmark-dark" src="/api/next/assets/flux76-wordmark-dark.png" alt="Flux76">
                       </div>
+                      </div>
                     </div>
-                  </div>
-                  <div class="profile-about-card">
-                    <div class="profile-about-card-head">
+                  </section>
+                  <section class="profile-dashboard-card profile-about-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("library") + """</span>
                       <div class="profile-about-card-copy">
                         <span data-next-i18n="profile.tmdbDataProvidedBy">Data provided by TMDB</span>
                         <p class="profile-about-legal" data-next-i18n="profile.tmdbDisclaimer">DiscVault is not endorsed or certified by TMDB.</p>
                       </div>
                       <img class="profile-about-tmdb-logo" src="/api/next/assets/tmdb-logo.svg" alt="TMDB">
                     </div>
-                  </div>
-                  <div class="profile-about-card profile-about-card--debug">
-                    <div class="profile-about-card-head">
-                      <div class="profile-about-card-copy">
-                        <span data-next-i18n="appAdmin.debugMode">Debug</span>
+                  </section>
+                  <section class="profile-dashboard-card profile-about-card profile-about-card--debug">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                        <div class="profile-about-card-copy">
+                          <span data-next-i18n="appAdmin.debugMode">Debug</span>
+                        </div>
                       </div>
                       <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
                     </div>
@@ -13495,9 +14790,9 @@ def ui_preview_html(
                       </div>
                     </div>
                     <div class="offline-status-list" id="profileOfflineStatus"></div>
-                  </div>
+                  </section>
                 </div>
-              </section>
+              </div>
             </div>
               </div>
             </div>
@@ -13519,115 +14814,188 @@ def ui_preview_html(
             <button type="button" class="secondary-button" id="appAdminRefreshButton" data-next-i18n="common.refresh">Refresh</button>
           </div>
         </section>
-        <nav class="app-admin-submenu detail-submenu" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
-          <button type="button" class="active" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
-          <button type="button" data-app-admin-tab="users" data-next-i18n="appAdmin.tabPeople">Users & groups</button>
-          <button type="button" data-app-admin-tab="roles" data-next-i18n="appAdmin.tabRoles">Roles</button>
-          <button type="button" data-app-admin-tab="operations" data-next-i18n="appAdmin.tabOperations">Operations</button>
-          <button type="button" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
-          <button type="button" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
-          <button type="button" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
-          <button type="button" data-app-admin-tab="backup" data-next-i18n="appAdmin.tabBackup">Backup</button>
-          <button type="button" data-app-admin-tab="audit" data-next-i18n="appAdmin.tabAudit">Audit</button>
+        <nav class="app-admin-submenu detail-submenu" role="tablist" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
+          <button type="button" class="active" id="appAdminTabAccess" role="tab" aria-controls="appAdminPanelAccess" aria-selected="true" tabindex="0" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
+          <button type="button" id="appAdminTabUsers" role="tab" aria-controls="appAdminPanelUsers" aria-selected="false" tabindex="-1" data-app-admin-tab="users" data-next-i18n="appAdmin.tabPeople">Users & groups</button>
+          <button type="button" id="appAdminTabRoles" role="tab" aria-controls="appAdminPanelRoles" aria-selected="false" tabindex="-1" data-app-admin-tab="roles" data-next-i18n="appAdmin.tabRoles">Roles</button>
+          <button type="button" id="appAdminTabOperations" role="tab" aria-controls="appAdminPanelOperations" aria-selected="false" tabindex="-1" data-app-admin-tab="operations" data-next-i18n="appAdmin.tabOperations">Operations</button>
+          <button type="button" id="appAdminTabPlugins" role="tab" aria-controls="appAdminPanelPlugins" aria-selected="false" tabindex="-1" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
+          <button type="button" id="appAdminTabDigital" role="tab" aria-controls="appAdminPanelDigital" aria-selected="false" tabindex="-1" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
+          <button type="button" id="appAdminTabMetadata" role="tab" aria-controls="appAdminPanelMetadata" aria-selected="false" tabindex="-1" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
+          <button type="button" id="appAdminTabBackup" role="tab" aria-controls="appAdminPanelBackup" aria-selected="false" tabindex="-1" data-app-admin-tab="backup" data-next-i18n="appAdmin.tabBackup">Backup</button>
+          <button type="button" id="appAdminTabAudit" role="tab" aria-controls="appAdminPanelAudit" aria-selected="false" tabindex="-1" data-app-admin-tab="audit" data-next-i18n="appAdmin.tabAudit">Audit</button>
         </nav>
-        <section class="app-admin-panel active" data-app-admin-panel="access">
-          <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.security">Security</h3>
-              <p data-next-i18n="appAdmin.registrationHelp">Choose whether new users need an invite or can create an account themselves.</p>
-              <div class="profile-meta">
-                <div class="profile-meta-row">
+        <section class="app-admin-panel active" id="appAdminPanelAccess" role="tabpanel" aria-labelledby="appAdminTabAccess" aria-hidden="false" tabindex="0" data-app-admin-panel="access">
+          <div class="profile-dashboard app-admin-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("security") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="appAdmin.tabAccess">Access</h4>
+                <p data-next-i18n="appAdmin.registrationHelp">Choose whether new users need an invite or can create an account themselves.</p>
+              </div>
+            </header>
+            <div class="app-admin-dashboard-grid">
+              <section class="profile-dashboard-card primary" data-admin-dashboard-card="access-overview">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                  <div>
+                    <h4 data-next-i18n="appAdmin.security">Security</h4>
+                    <p data-next-i18n="appAdmin.registrationHelp">Choose whether new users need an invite or can create an account themselves.</p>
+                  </div>
+                  </div>
+                </div>
+                <div class="app-admin-summary-grid">
+                  <div class="app-admin-summary-item">
                   <span data-next-i18n="appAdmin.currentMode">Current mode</span>
                   <strong id="appAdminRegistrationMode">-</strong>
-                </div>
-                <div class="profile-meta-row">
+                  </div>
+                  <div class="app-admin-summary-item">
                   <span data-next-i18n="profile.users">Users</span>
                   <strong id="appAdminUserCount">-</strong>
-                </div>
-                <div class="profile-meta-row">
+                  </div>
+                  <div class="app-admin-summary-item">
                   <span data-next-i18n="profile.credentials">Passkeys</span>
                   <strong id="appAdminCredentialCount">-</strong>
+                  </div>
                 </div>
-              </div>
-              <div class="profile-action-row">
-                <button type="button" class="secondary-button" data-app-admin-registration-mode="invite" data-next-i18n="appAdmin.inviteOnly">Invite-only login</button>
-                <button type="button" class="secondary-button" data-app-admin-registration-mode="public" data-next-i18n="appAdmin.publicRegistration">Public registration</button>
-              </div>
-              <div class="login-message" id="appAdminSecurityMessage"></div>
-            </div>
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.createInvite">Create invite</h3>
-              <p data-next-i18n="appAdmin.createInviteHelp">Generate a one-time invite code for a new user.</p>
-              <form class="profile-form" id="appAdminInviteForm">
-                <label for="appAdminInviteUsername">
+                <div class="profile-action-row">
+                  <button type="button" class="secondary-button" data-app-admin-registration-mode="invite" data-next-i18n="appAdmin.inviteOnly">Invite-only login</button>
+                  <button type="button" class="secondary-button" data-app-admin-registration-mode="public" data-next-i18n="appAdmin.publicRegistration">Public registration</button>
+                </div>
+                <div class="login-message" id="appAdminSecurityMessage" aria-live="polite"></div>
+              </section>
+              <section class="profile-dashboard-card" data-admin-dashboard-card="invite-create">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                  <div>
+                    <h4 data-next-i18n="appAdmin.createInvite">Create invite</h4>
+                    <p data-next-i18n="appAdmin.createInviteHelp">Generate a one-time invite code for a new user.</p>
+                  </div>
+                  </div>
+                </div>
+                <form class="profile-form" id="appAdminInviteForm">
+                  <label for="appAdminInviteUsername">
                   <span data-next-i18n="profile.username">Username</span>
                   <input id="appAdminInviteUsername" autocomplete="off" maxlength="80">
-                </label>
-                <div class="profile-form-actions">
+                  </label>
+                  <div class="profile-form-actions">
                   <button type="submit" class="secondary-button" id="appAdminCreateInviteButton" data-next-i18n="appAdmin.createInviteButton">Create invite</button>
+                  </div>
+                </form>
+                <div class="admin-code hidden" id="appAdminInviteCodeOutput"></div>
+                <div class="login-message" id="appAdminInviteMessage" aria-live="polite"></div>
+              </section>
+              <section class="profile-dashboard-card full" data-admin-dashboard-card="active-invites">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("notifications") + """</span>
+                  <div><h4 data-next-i18n="appAdmin.activeInvites">Active invites</h4></div>
+                  </div>
                 </div>
-              </form>
-              <div class="admin-code hidden" id="appAdminInviteCodeOutput"></div>
-              <div class="login-message" id="appAdminInviteMessage"></div>
+                <div class="profile-passkey-list" id="appAdminInvitesList"></div>
+              </section>
+              <section class="profile-dashboard-card full" data-admin-dashboard-card="passkeys">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("devices") + """</span>
+                  <div><h4 data-next-i18n="profile.credentials">Passkeys</h4></div>
+                  </div>
+                </div>
+                <div class="profile-passkey-list" id="appAdminCredentialsList"></div>
+              </section>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.activeInvites">Active invites</h3>
-              <div class="profile-passkey-list" id="appAdminInvitesList"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="profile.credentials">Passkeys</h3>
-              <div class="profile-passkey-list" id="appAdminCredentialsList"></div>
-            </div>
-          </section>
+          </div>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="users">
-          <section class="profile-grid">
-            <div class="detail-card profile-card full" id="appAdminLegacyCard">
-              <h3 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h3>
-              <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
-              <div class="profile-meta-row"><span data-next-i18n="legacyAuth.status">Status</span><strong id="appAdminLegacyStatus">-</strong></div>
-              <div class="profile-action-row">
-                <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
-                <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
+        <section class="app-admin-panel" id="appAdminPanelUsers" role="tabpanel" aria-labelledby="appAdminTabUsers" aria-hidden="true" tabindex="0" data-app-admin-panel="users">
+          <div class="profile-dashboard app-admin-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("groups") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="appAdmin.tabPeople">Users & groups</h4>
+                <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
               </div>
-              <div class="login-message" id="appAdminLegacyMessage"></div>
-            </div>
-            <div class="detail-card profile-card full" id="appAdminLegacyCreateCard">
-              <h3 data-next-i18n="legacyAuth.createUser">Create password user</h3>
-              <form class="profile-form" id="appAdminLegacyUserForm">
-                <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
-                <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
-                <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
-                <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
-                <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
-                <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
-                <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
-              </form>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h3>
-              <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
-              <div class="profile-passkey-list" id="appAdminUsersList"></div>
-              <div class="login-message" id="appAdminUsersMessage"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.groups">Groups</h3>
-              <p data-next-i18n="appAdmin.groupsHelp">Create media groups and manage which users are members.</p>
-              <form class="profile-form" id="appAdminGroupForm">
-                <label for="appAdminGroupName">
+            </header>
+            <div class="app-admin-dashboard-grid">
+              <section class="profile-dashboard-card primary" id="appAdminLegacyCard" data-admin-dashboard-card="legacy-auth">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                  <div>
+                    <h4 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h4>
+                    <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
+                  </div>
+                  </div>
+                </div>
+                <div class="app-admin-summary-grid compact">
+                  <div class="app-admin-summary-item">
+                  <span data-next-i18n="legacyAuth.status">Status</span>
+                  <strong id="appAdminLegacyStatus">-</strong>
+                  </div>
+                </div>
+                <div class="profile-action-row">
+                  <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
+                  <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
+                </div>
+                <div class="login-message" id="appAdminLegacyMessage" aria-live="polite"></div>
+              </section>
+              <section class="profile-dashboard-card" id="appAdminLegacyCreateCard" data-admin-dashboard-card="legacy-user-create">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                  <div><h4 data-next-i18n="legacyAuth.createUser">Create password user</h4></div>
+                  </div>
+                </div>
+                <form class="profile-form" id="appAdminLegacyUserForm">
+                  <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
+                  <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
+                  <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
+                  <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
+                  <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
+                  <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
+                  <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
+                </form>
+              </section>
+              <section class="profile-dashboard-card full" data-admin-dashboard-card="users">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                  <div>
+                    <h4 data-next-i18n="appAdmin.usersAndRoles">Users & roles</h4>
+                    <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
+                  </div>
+                  </div>
+                </div>
+                <div class="profile-passkey-list" id="appAdminUsersList"></div>
+                <div class="login-message" id="appAdminUsersMessage" aria-live="polite"></div>
+              </section>
+              <section class="profile-dashboard-card full" data-admin-dashboard-card="groups">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
+                  <div>
+                    <h4 data-next-i18n="appAdmin.groups">Groups</h4>
+                    <p data-next-i18n="appAdmin.groupsHelp">Create media groups and manage which users are members.</p>
+                  </div>
+                  </div>
+                </div>
+                <form class="profile-form" id="appAdminGroupForm">
+                  <label for="appAdminGroupName">
                   <span data-next-i18n="appAdmin.groupName">Group name</span>
                   <input id="appAdminGroupName" autocomplete="off" maxlength="120">
-                </label>
-                <div class="profile-form-actions">
+                  </label>
+                  <div class="profile-form-actions">
                   <button type="submit" class="secondary-button" data-next-i18n="appAdmin.createGroupButton">Create group</button>
-                </div>
-              </form>
-              <div class="profile-passkey-list" id="appAdminGroupsList"></div>
-              <div class="login-message" id="appAdminGroupsMessage"></div>
+                  </div>
+                </form>
+                <div class="profile-passkey-list" id="appAdminGroupsList"></div>
+                <div class="login-message" id="appAdminGroupsMessage" aria-live="polite"></div>
+              </section>
             </div>
-          </section>
+          </div>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="roles">
+        <section class="app-admin-panel" id="appAdminPanelRoles" role="tabpanel" aria-labelledby="appAdminTabRoles" aria-hidden="true" tabindex="0" data-app-admin-panel="roles">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.rbacMode">RBAC mode</h3>
@@ -13729,7 +15097,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="operations">
+        <section class="app-admin-panel" id="appAdminPanelOperations" role="tabpanel" aria-labelledby="appAdminTabOperations" aria-hidden="true" tabindex="0" data-app-admin-panel="operations">
           <section class="profile-grid">
             <div class="detail-card profile-card full">
               <div class="profile-passkey-head">
@@ -13783,7 +15151,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="plugins">
+        <section class="app-admin-panel" id="appAdminPanelPlugins" role="tabpanel" aria-labelledby="appAdminTabPlugins" aria-hidden="true" tabindex="0" data-app-admin-panel="plugins">
           <section class="profile-grid">
             <div class="detail-card profile-card full">
               <h3 data-next-i18n="appAdmin.plugins">Plugins</h3>
@@ -13861,7 +15229,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="digital">
+        <section class="app-admin-panel" id="appAdminPanelDigital" role="tabpanel" aria-labelledby="appAdminTabDigital" aria-hidden="true" tabindex="0" data-app-admin-panel="digital">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.digitalOperations">Digital sources</h3>
@@ -13883,7 +15251,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="metadata">
+        <section class="app-admin-panel" id="appAdminPanelMetadata" role="tabpanel" aria-labelledby="appAdminTabMetadata" aria-hidden="true" tabindex="0" data-app-admin-panel="metadata">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.metadataOperations">Metadata</h3>
@@ -13923,7 +15291,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="backup">
+        <section class="app-admin-panel" id="appAdminPanelBackup" role="tabpanel" aria-labelledby="appAdminTabBackup" aria-hidden="true" tabindex="0" data-app-admin-panel="backup">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.backupOperations">Backup & restore</h3>
@@ -14041,7 +15409,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" data-app-admin-panel="audit">
+        <section class="app-admin-panel" id="appAdminPanelAudit" role="tabpanel" aria-labelledby="appAdminTabAudit" aria-hidden="true" tabindex="0" data-app-admin-panel="audit">
           <section class="profile-grid">
             <div class="detail-card profile-card">
               <h3 data-next-i18n="appAdmin.auditLog">Audit log</h3>
@@ -15237,10 +16605,29 @@ def ui_preview_html(
         button.classList.toggle("hidden", !canUseAdminTab(button.dataset.appAdminTab));
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
       });
       document.querySelectorAll("[data-app-admin-panel]").forEach((panel) => {
-        panel.classList.toggle("active", panel.dataset.appAdminPanel === appAdmin.activeTab);
+        const active = panel.dataset.appAdminPanel === appAdmin.activeTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
+    }
+    function handleAppAdminTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-tab]")]
+        .filter((item) => !item.classList.contains("hidden"));
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminTab(nextButton.dataset.appAdminTab);
+      nextButton.focus();
     }
     function setAppAdminPluginTab(tab) {
       const allowed = ["registry", "packages", "jobs"];
@@ -17377,8 +18764,8 @@ def ui_preview_html(
           const disabled = user.status !== "active";
           const roleLocked = user.role === "owner";
           return `
-            <div class="profile-passkey ${disabled ? "disabled" : ""}">
-              <div>
+            <article class="profile-passkey app-admin-entity-card app-admin-user-card ${disabled ? "disabled" : ""}">
+              <div class="app-admin-entity-main">
                 <strong>${escapeHtml(user.display_name || user.username)}</strong>
                 <div class="profile-passkey-meta">
                   ${escapeHtml(user.username || "-")}
@@ -17394,7 +18781,7 @@ def ui_preview_html(
                 ${canAssignRoles ? `<select data-app-admin-user-role="${escapeHtml(user.id)}" ${roleLocked ? "disabled" : ""}>${appAdminRoleOptions(user.role)}</select>` : ""}
                 ${roleLocked || !canDisableUsers ? "" : `<button type="button" class="secondary-button" data-app-admin-user-status="${escapeHtml(user.id)}" data-status="${disabled ? "active" : "disabled"}">${escapeHtml(disabled ? tNext("appAdmin.enableUser", "Enable") : tNext("appAdmin.disableUser", "Disable"))}</button>`}
               </div>
-              ${legacy.available ? `<div class="profile-add-passkey">
+              ${legacy.available ? `<div class="profile-add-passkey app-admin-legacy-controls">
                 <input type="password" minlength="15" autocomplete="new-password" data-app-admin-legacy-password="${escapeHtml(user.id)}" placeholder="${escapeHtml(tNext("legacyAuth.temporaryPassword", "Temporary password"))}">
                 <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-mfa="${escapeHtml(user.id)}" ${user.legacy_mfa_required !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.requireMfa", "Require TOTP MFA"))}</label>
                 <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
@@ -17402,7 +18789,7 @@ def ui_preview_html(
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button" data-app-admin-legacy-policy="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.savePolicy", "Save policy"))}</button>` : ""}
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button danger" data-app-admin-legacy-remove="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.removePassword", "Remove password"))}</button>` : ""}
               </div>` : ""}
-            </div>
+            </article>
           `;
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noUsers", "No users found."))}</div>`;
       }
@@ -17413,8 +18800,8 @@ def ui_preview_html(
           const members = group.members || [];
           const userOptions = appAdminUserOptions("");
           return `
-            <div class="profile-passkey admin-group-row">
-              <div>
+            <article class="profile-passkey app-admin-entity-card admin-group-row">
+              <div class="app-admin-entity-main">
                 <strong>${escapeHtml(group.name || tNext("common.untitled", "Untitled"))}</strong>
                 <div class="profile-passkey-meta">
                   ${escapeHtml(group.public_id || group.id)}
@@ -17422,7 +18809,7 @@ def ui_preview_html(
                   ${escapeHtml(tNext("appAdmin.members", "Members"))}: ${escapeHtml(group.member_count ?? members.length)}
                   &middot;
                   ${escapeHtml(tNext("collection.movies", "Movies"))}: ${escapeHtml(group.movie_count ?? 0)}
-                </div>
+                </article>
                 <div class="admin-member-cloud">
                   ${members.length ? members.map((member) => `
                     <span class="tag ${member.role === "manager" ? "good" : ""}">
@@ -17448,14 +18835,14 @@ def ui_preview_html(
         invitesList.innerHTML = invites.length ? invites.map((invite) => {
           const used = !!invite.used_at;
           return `
-            <div class="profile-passkey ${used ? "disabled" : ""}">
-              <div>
+            <article class="profile-passkey app-admin-entity-card app-admin-invite-card ${used ? "disabled" : ""}">
+              <div class="app-admin-entity-main">
                 <strong>${escapeHtml(invite.username || "-")}</strong>
                 <div class="profile-passkey-meta">
                   ${used ? escapeHtml(tNext("appAdmin.inviteUsed", "Used")) : escapeHtml(tNext("appAdmin.inviteActive", "Active"))}
                   &middot;
                   ${escapeHtml(tNext("appAdmin.expires", "Expires"))}: ${escapeHtml(shortDateTime(invite.expires_at))}
-                </div>
+                </article>
               </div>
               ${used ? "" : `<button type="button" class="secondary-button" data-app-admin-invite-delete="${escapeHtml(invite.id)}">${escapeHtml(tNext("appAdmin.deleteInvite", "Delete"))}</button>`}
             </div>
@@ -17466,8 +18853,8 @@ def ui_preview_html(
       if (credentialsList) {
         const credentials = appAdmin.credentials || [];
         credentialsList.innerHTML = credentials.length ? credentials.map((credential) => `
-          <div class="profile-passkey">
-            <div>
+          <article class="profile-passkey app-admin-entity-card app-admin-passkey-card">
+            <div class="app-admin-entity-main">
               <strong>${escapeHtml(credential.credential_name || tNext("auth.passkey", "Passkey"))}</strong>
               <div class="profile-passkey-meta">
                 ${escapeHtml(credential.username || "-")}
@@ -17475,7 +18862,7 @@ def ui_preview_html(
                 ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(credential.created_at))}
                 &middot;
                 ${escapeHtml(tNext("profile.lastUsed", "Last used"))}: ${escapeHtml(shortDateTime(credential.last_used_at))}
-              </div>
+              </article>
             </div>
           </div>
         `).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPasskeys", "No passkeys found."))}</div>`;
@@ -19454,6 +20841,26 @@ def ui_preview_html(
         status.title = label;
       }
     }
+    let libraryAdaptiveMobile = null;
+    function syncLibraryAdaptiveGroups() {
+      const mobile = window.matchMedia("(max-width: 760px)").matches;
+      const groups = [...document.querySelectorAll("[data-library-adaptive-group]")];
+      if (mobile !== libraryAdaptiveMobile) {
+        groups.forEach((group) => { group.open = !mobile; });
+        libraryAdaptiveMobile = mobile;
+      }
+      groups.forEach((group) => {
+        const summary = group.querySelector(":scope > summary");
+        if (!summary) return;
+        summary.tabIndex = mobile ? 0 : -1;
+        if (!summary.dataset.adaptiveGroupBound) {
+          summary.dataset.adaptiveGroupBound = "1";
+          summary.addEventListener("click", (event) => {
+            if (!window.matchMedia("(max-width: 760px)").matches) event.preventDefault();
+          });
+        }
+      });
+    }
     function syncSelectModeButton() {
       const button = document.getElementById("selectModeButton");
       if (!button) return;
@@ -19500,6 +20907,7 @@ def ui_preview_html(
       renderCollectionFilterMenu();
       syncAdvancedSearchControls();
       syncSelectModeButton();
+      syncLibraryAdaptiveGroups();
       syncBulkTargetCreateControls();
     }
     function collectionFilterActiveCount() {
@@ -31189,24 +32597,31 @@ def ui_preview_html(
       const registration = await navigator.serviceWorker.ready;
       return registration.pushManager.getSubscription();
     }
-    function pushPreferenceRowsHtml(preferencesMap) {
-      const rows = [
+    const pushPreferenceGroups = {
+      system: [
         ["app_updates", "notifications.prefAppUpdates", "notifications.prefAppUpdatesHelp"],
+        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"]
+      ],
+      library: [
         ["imports", "notifications.prefImports", "notifications.prefImportsHelp"],
         ["metadata_jobs", "notifications.prefMetadataJobs", "notifications.prefMetadataJobsHelp"],
-        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"],
-        ["security", "notifications.prefSecurity", "notifications.prefSecurityHelp"],
         ["price_alerts", "notifications.pref.price_alerts", "notifications.prefPriceAlertsHelp"]
-      ];
-      return rows.map(([key, labelKey, helpKey]) => {
+      ],
+      sharing: [
+        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"]
+      ]
+    };
+    function pushPreferenceRowsHtml(preferencesMap, rows) {
+      return (rows || []).map(([key, labelKey, helpKey]) => {
         const enabled = preferencesMap[key] !== false;
+        const label = tNext(labelKey, key);
         return `
           <div class="preference-control-row">
             <span>
-              <strong>${escapeHtml(tNext(labelKey, key))}</strong>
+              <strong>${escapeHtml(label)}</strong>
               <span>${escapeHtml(tNext(helpKey, ""))}</span>
             </span>
-            <button type="button" class="switch ${enabled ? "on" : ""}" data-push-pref="${escapeHtml(key)}" aria-pressed="${enabled ? "true" : "false"}"></button>
+            <button type="button" class="switch ${enabled ? "on" : ""}" data-push-pref="${escapeHtml(key)}" aria-label="${escapeHtml(label)}" aria-pressed="${enabled ? "true" : "false"}"></button>
           </div>
         `;
       }).join("");
@@ -31225,21 +32640,32 @@ def ui_preview_html(
         browserState.textContent = supported
           ? (permission === "granted" ? tNext("notifications.permissionGranted", "Allowed") : permission === "denied" ? tNext("notifications.permissionDenied", "Blocked") : tNext("notifications.permissionDefault", "Not asked"))
           : tNext("notifications.unsupported", "Unsupported");
+        browserState.className = `notification-state-pill ${!supported || permission === "denied" ? "bad" : permission === "granted" ? "good" : ""}`.trim();
       }
       if (deviceState) {
         deviceState.textContent = pushProfile.subscribed
           ? tNext("notifications.deviceEnabled", "Enabled")
           : tNext("notifications.deviceDisabled", "Disabled");
+        deviceState.className = `notification-state-pill ${pushProfile.subscribed ? "good" : ""}`.trim();
       }
       if (enableButton) enableButton.disabled = !supported || pushProfile.subscribed || permission === "denied";
       if (disableButton) disableButton.disabled = !pushProfile.subscribed;
       if (testButton) testButton.disabled = !pushProfile.subscribed;
-      if (prefList) prefList.innerHTML = pushPreferenceRowsHtml(pushProfile.preferences || {});
+      if (enableButton) enableButton.classList.toggle("hidden", pushProfile.subscribed);
+      if (disableButton) disableButton.classList.toggle("hidden", !pushProfile.subscribed);
+      if (prefList) {
+        prefList.querySelectorAll("[data-push-preference-group]").forEach((group) => {
+          group.innerHTML = pushPreferenceRowsHtml(
+            pushProfile.preferences || {},
+            pushPreferenceGroups[group.dataset.pushPreferenceGroup] || []
+          );
+        });
+      }
       if (deviceList) {
         const subscriptions = pushProfile.subscriptions || [];
         deviceList.innerHTML = subscriptions.length
           ? subscriptions.map((item) => `
-              <div class="push-device-row">
+              <div class="push-device-row ${item.current ? "current" : ""}">
                 <span>
                   <strong>${escapeHtml(item.deviceLabel || tNext("notifications.device", "Device"))}</strong>
                   <span class="notification-meta">${escapeHtml(item.current ? tNext("notifications.currentDevice", "Current device") : tNext("notifications.otherDevice", "Other device"))}</span>
@@ -33721,20 +35147,38 @@ def ui_preview_html(
       setProfileTab(activeProfileTab);
     }
     function setProfileApiTab(tab) {
-      const selected = tab || "general";
+      const selected = ["general", "create", "activity"].includes(tab) ? tab : "general";
       activeProfileApiTab = selected;
       localStorage.setItem("dv_next_profile_api_tab", selected);
       document.querySelectorAll("[data-profile-api-tab]").forEach((button) => {
         const active = button.dataset.profileApiTab === selected;
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
       });
       document.querySelectorAll("[data-profile-api-panel]").forEach((panel) => {
-        panel.classList.toggle("hidden", panel.dataset.profileApiPanel !== selected);
+        const active = panel.dataset.profileApiPanel === selected;
+        panel.classList.toggle("hidden", !active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
       if (selected === "activity" && !profileApiAudit.loaded && !profileApiAudit.loading) {
         loadProfileApiAuditEvents();
       }
+    }
+    function handleProfileApiTabKeydown(button, event) {
+      if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      const tabs = [...document.querySelectorAll("[data-profile-api-tab]")].filter((item) => !item.disabled);
+      if (!tabs.length) return;
+      const currentIndex = Math.max(0, tabs.indexOf(button));
+      let targetIndex = currentIndex;
+      if (event.key === "Home") targetIndex = 0;
+      else if (event.key === "End") targetIndex = tabs.length - 1;
+      else if (event.key === "ArrowRight") targetIndex = (currentIndex + 1) % tabs.length;
+      else targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      event.preventDefault();
+      const target = tabs[targetIndex];
+      setProfileApiTab(target.dataset.profileApiTab || "general");
+      target.focus();
     }
     function renderLoansSystemSetting() {
       const row = document.getElementById("loansSystemSettingRow");
@@ -33853,6 +35297,9 @@ def ui_preview_html(
       const canDelete = isOwner && (isSystemOwner ? members.length === 0 : members.length === 1);
       const owner = group.created_by_display_name || group.created_by_username || "";
       const currentId = String(currentUserId() || "");
+      const groupName = group.name || tNext("groups.unnamed", "Unnamed group");
+      const groupInitial = String(groupName).trim().charAt(0).toUpperCase() || "G";
+      const isEditing = String(editingMemberGroupId || "") === String(group.id || "");
       const memberRows = members.length
         ? members.map((member) => {
             const userId = String(member.user_id || member.userId || "");
@@ -33860,39 +35307,89 @@ def ui_preview_html(
             const canRemove = canInvite && userId && userId !== currentId && memberRole !== "owner";
             return `
               <span class="member-chip">
-                <span>${escapeHtml(member.display_name || member.username || userId || "")}</span>
-                ${memberRole ? `<small>${escapeHtml(memberGroupDisplayRole(memberRole))}</small>` : ""}
+                <span class="member-chip-copy">
+                  <span>${escapeHtml(member.display_name || member.username || userId || "")}</span>
+                  ${memberRole ? `<small class="member-group-member-role">${escapeHtml(memberGroupDisplayRole(memberRole))}</small>` : ""}
+                </span>
                 ${canRemove ? `<button type="button" data-member-group-remove-user="${id}" data-member-group-user-id="${escapeHtml(userId)}" aria-label="${escapeHtml(tNext("groups.removeMember", "Remove member"))}">&times;</button>` : ""}
               </span>
             `;
           }).join("")
         : `<span class="muted-inline">${escapeHtml(tNext("groups.noMembers", "No members yet"))}</span>`;
-      const stats = [
-        owner ? `${tNext("groups.owner", "Owner")}: ${owner}` : "",
-        `${Number(group.movie_count || 0)} ${tNext("groups.movies", "movies")}`,
-        `${Number(group.member_count || members.length || 0)} ${tNext("groups.members", "members")}`,
-        Number(group.pending_invite_count || 0) ? `${Number(group.pending_invite_count || 0)} ${tNext("groups.pendingInvites", "pending invites")}` : "",
-        role ? `${tNext("groups.yourRole", "Your role")}: ${memberGroupDisplayRole(role)}` : ""
-      ].filter(Boolean).join(" / ");
-      return `
-        <div class="container-manager-row member-group-row" data-member-group-id="${id}">
-          <div class="container-manager-meta">
-            <strong>${escapeHtml(group.name || tNext("groups.unnamed", "Unnamed group"))}</strong>
-            <span>${escapeHtml(stats)}</span>
-            <div class="member-group-members">${memberRows}</div>
+      const invitePanel = canInvite ? `
+        <section class="member-group-panel">
+          <div class="member-group-panel-head">
+            <h6>${escapeHtml(tNext("groups.inviteMember", "Invite member"))}</h6>
+            <p>${escapeHtml(tNext("groups.inviteMemberHelp", "Invite someone using their DiscVault username."))}</p>
           </div>
-          <div class="container-manager-actions member-group-actions">
-            <button type="button" class="secondary-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
-            ${isOwner ? `
-              <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("common.edit", "Edit"))}</button>
+          <div class="member-group-invite-form">
+            <input data-member-group-invite="${id}" maxlength="120" autocomplete="username" placeholder="${escapeHtml(tNext("groups.inviteUsername", "Username"))}" aria-label="${escapeHtml(tNext("groups.inviteUsername", "Username"))}">
+            <button type="button" class="secondary-button" data-member-group-invite-send="${id}">${escapeHtml(tNext("groups.invite", "Invite"))}</button>
+          </div>
+          ${isOwner ? `
+            <div class="member-group-manage-actions">
+              <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("groups.editGroupName", "Edit name"))}</button>
               ${canDelete ? `<button type="button" class="danger-button" data-member-group-delete="${id}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
-            ` : ""}
-            ${canInvite ? `
-              <input data-member-group-invite="${id}" maxlength="120" autocomplete="username" placeholder="${escapeHtml(tNext("groups.inviteUsername", "Username"))}" aria-label="${escapeHtml(tNext("groups.inviteUsername", "Username"))}">
-              <button type="button" class="secondary-button" data-member-group-invite-send="${id}">${escapeHtml(tNext("groups.invite", "Invite"))}</button>
-            ` : ""}
+            </div>
+            ${!canDelete ? `<p class="member-group-delete-hint">${escapeHtml(tNext("groups.deleteUnavailableMembers", "Remove the other members before deleting this group."))}</p>` : ""}
+          ` : ""}
+        </section>
+      ` : isOwner ? `
+        <section class="member-group-panel">
+          <div class="member-group-panel-head">
+            <h6>${escapeHtml(tNext("groups.manageGroup", "Manage group"))}</h6>
           </div>
-        </div>
+          <div class="member-group-manage-actions">
+            <button type="button" class="secondary-button" data-member-group-rename="${id}">${escapeHtml(tNext("groups.editGroupName", "Edit name"))}</button>
+            ${canDelete ? `<button type="button" class="danger-button" data-member-group-delete="${id}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
+          </div>
+          ${!canDelete ? `<p class="member-group-delete-hint">${escapeHtml(tNext("groups.deleteUnavailableMembers", "Remove the other members before deleting this group."))}</p>` : ""}
+        </section>
+      ` : "";
+      const renameForm = isEditing ? `
+        <form class="member-group-rename-form" data-member-group-rename-form="${id}">
+          <label>
+            <span class="sr-only">${escapeHtml(tNext("groups.groupName", "Group name"))}</span>
+            <input data-member-group-rename-input="${id}" maxlength="120" autocomplete="off" value="${escapeHtml(groupName)}" aria-label="${escapeHtml(tNext("groups.groupName", "Group name"))}">
+          </label>
+          <div class="member-group-rename-actions">
+            <button type="submit" class="primary-button">${escapeHtml(tNext("groups.saveName", "Save name"))}</button>
+            <button type="button" class="secondary-button" data-member-group-rename-cancel="${id}">${escapeHtml(tNext("common.cancel", "Cancel"))}</button>
+          </div>
+        </form>
+      ` : "";
+      return `
+        <article class="member-group-card" data-member-group-id="${id}">
+          <header class="member-group-card-head">
+            <div class="member-group-identity">
+              <span class="member-group-avatar" aria-hidden="true">${escapeHtml(groupInitial)}</span>
+              <div>
+                <div class="member-group-title">
+                  <h5>${escapeHtml(groupName)}</h5>
+                  ${role ? `<span class="member-group-role">${escapeHtml(memberGroupDisplayRole(role))}</span>` : ""}
+                </div>
+                ${owner ? `<p class="member-group-owner">${escapeHtml(tNext("groups.owner", "Owner"))}: ${escapeHtml(owner)}</p>` : ""}
+              </div>
+            </div>
+            <button type="button" class="secondary-button member-group-open-button" data-member-group-open="${id}">${escapeHtml(tNext("groups.openLibrary", "Open library"))}</button>
+          </header>
+          ${renameForm}
+          <div class="member-group-metrics" aria-label="${escapeHtml(tNext("groups.groupOverview", "Group overview"))}">
+            <div class="member-group-metric"><strong>${Number(group.movie_count || 0)}</strong><span>${escapeHtml(tNext("groups.sharedMovies", "Shared films"))}</span></div>
+            <div class="member-group-metric"><strong>${Number(group.member_count || members.length || 0)}</strong><span>${escapeHtml(tNext("groups.members", "Members"))}</span></div>
+            <div class="member-group-metric"><strong>${Number(group.pending_invite_count || 0)}</strong><span>${escapeHtml(tNext("groups.pendingInvites", "Pending invites"))}</span></div>
+          </div>
+          <div class="member-group-body ${invitePanel ? "" : "members-only"}">
+            <section class="member-group-panel">
+              <div class="member-group-panel-head">
+                <h6>${escapeHtml(tNext("groups.membersTitle", "Members"))}</h6>
+                <p>${escapeHtml(tNext("groups.membersHelp", "Roles determine who can invite people and manage this group."))}</p>
+              </div>
+              <div class="member-group-members">${memberRows}</div>
+            </section>
+            ${invitePanel}
+          </div>
+        </article>
       `;
     }
     function renderMemberGroups() {
@@ -33902,12 +35399,12 @@ def ui_preview_html(
       renderMemberGroupScopeSummary();
       if (!list) return;
       if (!hasActualAnyPermission(["groups.view", "groups.create", "groups.invite"])) {
-        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("groups.noAccess", "You do not have access to member groups."))}</div>`;
+        list.innerHTML = `<div class="preview-empty member-group-empty">${escapeHtml(tNext("groups.noAccess", "You do not have access to member groups."))}</div>`;
         return;
       }
       const groups = Array.isArray(mediaGroups) ? mediaGroups : [];
       if (!groups.length) {
-        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("groups.empty", "No member groups yet."))}</div>`;
+        list.innerHTML = `<div class="preview-empty member-group-empty">${escapeHtml(tNext("groups.empty", "No member groups yet."))}</div>`;
         return;
       }
       list.innerHTML = groups.map(memberGroupCardHtml).join("");
@@ -33939,17 +35436,34 @@ def ui_preview_html(
         setMemberGroupMessage(error.message || String(error), "bad");
       }
     }
-    async function renameMemberGroup(groupId) {
+    let editingMemberGroupId = "";
+    function startMemberGroupRename(groupId) {
       const group = mediaGroups.find((item) => String(item.id) === String(groupId));
       if (!group || memberRoleForCurrentUser(group) !== "owner") return;
-      const nextName = window.prompt(tNext("groups.renamePrompt", "New group name"), group.name || "");
-      if (nextName === null) return;
-      const name = String(nextName || "").trim();
+      editingMemberGroupId = groupId;
+      renderMemberGroups();
+      const input = document.querySelector(`[data-member-group-rename-input="${CSS.escape(groupId)}"]`);
+      input?.focus();
+      input?.select();
+    }
+    function cancelMemberGroupRename(groupId) {
+      if (String(editingMemberGroupId || "") !== String(groupId || "")) return;
+      editingMemberGroupId = "";
+      renderMemberGroups();
+    }
+    async function saveMemberGroupRename(groupId, form) {
+      const group = mediaGroups.find((item) => String(item.id) === String(groupId));
+      if (!group || memberRoleForCurrentUser(group) !== "owner") return;
+      const input = form?.querySelector(`[data-member-group-rename-input="${CSS.escape(groupId)}"]`);
+      const name = String(input?.value || "").trim();
       if (!name) {
         setMemberGroupMessage(tNext("groups.nameRequired", "Enter a group name first."), "bad");
+        input?.focus();
         return;
       }
       setMemberGroupMessage(tNext("common.saving", "Saving…"));
+      const controls = Array.from(form?.querySelectorAll("input, button") || []);
+      controls.forEach((control) => { control.disabled = true; });
       try {
         const payload = await authApiJson(`/api/next/media-groups/${encodeURIComponent(groupId)}`, {
           method: "PATCH",
@@ -33959,11 +35473,14 @@ def ui_preview_html(
         if (payload.group) {
           mediaGroups = mediaGroups.map((item) => String(item.id) === String(groupId) ? payload.group : item);
         }
+        editingMemberGroupId = "";
         renderGroupFilter();
         renderMemberGroups();
         renderCollectionSurface();
         setMemberGroupMessage(tNext("groups.renamed", "Group renamed."), "good");
       } catch (error) {
+        controls.forEach((control) => { control.disabled = false; });
+        input?.focus();
         setMemberGroupMessage(error.message || String(error), "bad");
       }
     }
@@ -34099,6 +35616,16 @@ def ui_preview_html(
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.classList.toggle("active", button.dataset.containerManagerType === containerManagerType);
       });
+      const typeLabels = {
+        box_set: tNext("containerManage.boxSets", "Box-sets"),
+        vault: tNext("containerManage.vaults", "Vaults"),
+        collection: tNext("containerManage.collections", "Collections")
+      };
+      const items = containerManagerItems();
+      const heading = document.getElementById("containerManagerListHeading");
+      const count = document.getElementById("containerManagerCount");
+      if (heading) heading.textContent = typeLabels[containerManagerType] || typeLabels.box_set;
+      if (count) count.textContent = String(items.length);
       const createButton = document.getElementById("containerManagerCreateButton");
       if (createButton) {
         createButton.textContent = tNext(
@@ -34107,7 +35634,6 @@ def ui_preview_html(
         );
       }
       if (!list) return;
-      const items = containerManagerItems();
       if (!items.length) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext(`containerManage.empty.${containerManagerType}`, tNext("containerManage.noItems", "Nothing here yet.")))}</div>`;
         return;
@@ -34119,10 +35645,13 @@ def ui_preview_html(
         const canRename = hasAnyPermission(["containers.edit", "collection.bulk_edit"]);
         const canDelete = hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete);
         return `
-          <div class="container-manager-row" data-container-manager-id="${id}">
-            <div class="container-manager-meta">
-              <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
-              <span>${escapeHtml(meta)}</span>
+          <article class="container-manager-row" data-container-manager-id="${id}">
+            <div class="container-manager-row-head">
+              <div class="container-manager-meta">
+                <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
+                <span>${escapeHtml(meta)}</span>
+              </div>
+              <span class="tag blue">${escapeHtml(typeLabel)}</span>
             </div>
             <div class="container-manager-actions">
               <input data-container-manager-title="${id}" value="${escapeHtml(container.title || "")}" maxlength="240" aria-label="${escapeHtml(tNext("containerManage.titleLabel", "Name"))}">
@@ -34130,7 +35659,7 @@ def ui_preview_html(
               <button type="button" class="secondary-button" data-container-manager-open="${id}">${escapeHtml(tNext("containerManage.open", "Open"))}</button>
               ${canDelete ? `<button type="button" class="secondary-button danger" data-container-manager-delete="${id}">${escapeHtml(tNext("containerManage.delete", "Delete"))}</button>` : ""}
             </div>
-          </div>
+          </article>
         `;
       }).join("");
     }
@@ -34544,15 +36073,44 @@ def ui_preview_html(
     function setStructureView(view) {
       structureView = view === "locations" ? "locations" : "containers";
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
-        button.classList.toggle("active", structureView === "containers" && button.dataset.containerManagerType === containerManagerType);
+        const active = structureView === "containers" && button.dataset.containerManagerType === containerManagerType;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
       });
       document.querySelectorAll("[data-structure-view]").forEach((button) => {
-        button.classList.toggle("active", structureView === "locations" && button.dataset.structureView === "locations");
+        const active = structureView === "locations" && button.dataset.structureView === "locations";
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
       });
-      document.querySelectorAll('[data-structure-section="containers"]').forEach((el) => el.classList.toggle("hidden", structureView !== "containers"));
-      document.querySelectorAll('[data-structure-section="locations"]').forEach((el) => el.classList.toggle("hidden", structureView !== "locations"));
+      document.querySelectorAll('[data-structure-section="containers"]').forEach((el) => {
+        const active = structureView === "containers";
+        el.classList.toggle("hidden", !active);
+        el.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+      document.querySelectorAll('[data-structure-section="locations"]').forEach((el) => {
+        const active = structureView === "locations";
+        el.classList.toggle("hidden", !active);
+        el.setAttribute("aria-hidden", active ? "false" : "true");
+      });
       if (structureView === "locations") renderLocationsPanel();
       else renderContainerManager();
+    }
+    function handleStructureTabKeydown(button, event) {
+      if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      const tabs = [...document.querySelectorAll("[data-structure-tab]")].filter((item) => !item.disabled);
+      if (!tabs.length) return;
+      const currentIndex = Math.max(0, tabs.indexOf(button));
+      let targetIndex = currentIndex;
+      if (event.key === "Home") targetIndex = 0;
+      else if (event.key === "End") targetIndex = tabs.length - 1;
+      else if (event.key === "ArrowRight") targetIndex = (currentIndex + 1) % tabs.length;
+      else targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      event.preventDefault();
+      const target = tabs[targetIndex];
+      target.click();
+      target.focus();
     }
     function bindLocationTreeEvents() {
       const tree = document.getElementById("locationsTree");
@@ -34930,11 +36488,11 @@ def ui_preview_html(
           ? `disabled title="${escapeHtml(tNext("profile.lastPasskeyBlocked", "You cannot delete your last passkey."))}"`
           : "";
         return `
-          <div class="profile-passkey" data-profile-passkey="${id}">
+          <article class="profile-passkey security-credential-card" data-profile-passkey="${id}">
             <div class="profile-passkey-head">
               <strong>${escapeHtml(name)}</strong>
               <span class="tag blue">${escapeHtml(tNext("auth.passkey", "Passkey"))}</span>
-            </div>
+            </article>
             <div class="profile-passkey-meta">
               ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(credential.created_at))}
               &middot;
@@ -35221,25 +36779,25 @@ def ui_preview_html(
         const allowed = access.allowedPermissions || [];
         const tokens = access.tokens || [];
         summary.innerHTML = `
-          <div class="profile-meta-row">
+          <div class="profile-api-summary-item">
             <span>${escapeHtml(tNext("profile.apiEndpoint", "API endpoint"))}</span>
             <strong>/api/next/api/v1</strong>
           </div>
-          <div class="profile-meta-row">
+          <div class="profile-api-summary-item">
             <span>${escapeHtml(tNext("profile.mcpEndpoint", "MCP endpoint"))}</span>
             <strong>/mcp</strong>
           </div>
-          <div class="profile-meta-row">
+          <div class="profile-api-summary-item">
             <span>${escapeHtml(tNext("profile.tokenPermissions", "Token permissions"))}</span>
             <strong>${escapeHtml(String(allowed.length))}</strong>
           </div>
-          <div class="profile-meta-row">
-            <span>${escapeHtml(tNext("profile.apiActivityTitle", "API & MCP activity"))}</span>
-            <button type="button" class="secondary-button compact-button" data-profile-api-open="activity">${escapeHtml(tNext("profile.apiTabActivity", "Activity"))}</button>
-          </div>
-          <div class="profile-meta-row">
+          <div class="profile-api-summary-item">
             <span>${escapeHtml(tNext("profile.accessTokens", "Access tokens"))}</span>
             <strong>${escapeHtml(String(tokens.length))}</strong>
+          </div>
+          <div class="profile-api-summary-item action">
+            <span>${escapeHtml(tNext("profile.apiActivityTitle", "API & MCP activity"))}</span>
+            <button type="button" class="secondary-button compact-button" data-profile-api-open="activity">${escapeHtml(tNext("profile.apiTabActivity", "Activity"))}</button>
           </div>
         `;
       }
@@ -35277,11 +36835,11 @@ def ui_preview_html(
           const revoked = !!token.revokedAt;
           const permissionKeys = token.permissionKeys || [];
           return `
-            <div class="profile-passkey ${revoked ? "disabled" : ""}">
+            <article class="profile-passkey profile-api-token-card ${revoked ? "disabled" : ""}">
               <div class="profile-passkey-head">
                 <strong>${escapeHtml(token.name || "API token")}</strong>
                 <span class="tag ${revoked ? "" : "good"}">${escapeHtml(revoked ? tNext("profile.revoked", "Revoked") : tNext("profile.active", "Active"))}</span>
-              </div>
+              </article>
               <div class="profile-passkey-meta">
                 ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(token.createdAt))}
                 &middot;
@@ -35939,6 +37497,8 @@ def ui_preview_html(
       });
       document.getElementById("libraryMetadataJobsToggleButton")?.addEventListener("click", () => toggleLibraryMetadataJobs());
       document.getElementById("libraryMetadataJobsRefreshButton")?.addEventListener("click", () => refreshLibraryMetadataJobs({open: true}));
+      window.addEventListener("resize", syncLibraryAdaptiveGroups);
+      syncLibraryAdaptiveGroups();
       document.getElementById("sidebarCollapseToggle")?.addEventListener("click", () => {
         const nextState = !document.getElementById("libraryShell")?.classList.contains("sidebar-collapsed");
         localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, nextState ? "1" : "0");
@@ -36049,7 +37609,12 @@ def ui_preview_html(
       document.getElementById("memberGroupList")?.addEventListener("click", (event) => {
         const renameButton = event.target.closest("[data-member-group-rename]");
         if (renameButton) {
-          renameMemberGroup(renameButton.dataset.memberGroupRename);
+          startMemberGroupRename(renameButton.dataset.memberGroupRename);
+          return;
+        }
+        const renameCancelButton = event.target.closest("[data-member-group-rename-cancel]");
+        if (renameCancelButton) {
+          cancelMemberGroupRename(renameCancelButton.dataset.memberGroupRenameCancel);
           return;
         }
         const deleteButton = event.target.closest("[data-member-group-delete]");
@@ -36070,6 +37635,19 @@ def ui_preview_html(
         const inviteButton = event.target.closest("[data-member-group-invite-send]");
         if (inviteButton) inviteMemberGroupUser(inviteButton.dataset.memberGroupInviteSend);
       });
+      document.getElementById("memberGroupList")?.addEventListener("submit", (event) => {
+        const form = event.target.closest("[data-member-group-rename-form]");
+        if (!form) return;
+        event.preventDefault();
+        saveMemberGroupRename(form.dataset.memberGroupRenameForm, form);
+      });
+      document.getElementById("memberGroupList")?.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const form = event.target.closest("[data-member-group-rename-form]");
+        if (!form) return;
+        event.preventDefault();
+        cancelMemberGroupRename(form.dataset.memberGroupRenameForm);
+      });
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.addEventListener("click", () => {
           containerManagerType = button.dataset.containerManagerType || "box_set";
@@ -36079,6 +37657,9 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-structure-view]").forEach((button) => {
         button.addEventListener("click", () => setStructureView(button.dataset.structureView || "containers"));
+      });
+      document.querySelectorAll("[data-structure-tab]").forEach((button) => {
+        button.addEventListener("keydown", (event) => handleStructureTabKeydown(button, event));
       });
       document.getElementById("locationCreateForm")?.addEventListener("submit", (event) => createLocation(event));
       document.getElementById("containerManagerCreateForm")?.addEventListener("submit", (event) => createManagedContainer(event));
@@ -36094,6 +37675,7 @@ def ui_preview_html(
       document.getElementById("appAdminDebugButton")?.addEventListener("click", () => setAppDebugMode(!appDebugMode));
       document.querySelectorAll("[data-app-admin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminTab(button.dataset.appAdminTab));
+        button.addEventListener("keydown", (event) => handleAppAdminTabKeydown(button, event));
       });
       document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminPluginTab(button.dataset.appAdminPluginTab));
@@ -36286,6 +37868,7 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-profile-api-tab]").forEach((button) => {
         button.addEventListener("click", () => setProfileApiTab(button.dataset.profileApiTab));
+        button.addEventListener("keydown", (event) => handleProfileApiTabKeydown(button, event));
       });
       document.getElementById("profileApiMcpSummary")?.addEventListener("click", (event) => {
         const openButton = event.target.closest("[data-profile-api-open]");

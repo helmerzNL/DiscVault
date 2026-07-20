@@ -314,6 +314,343 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertNotIn('id="legacyPreferenceList"', self.html)
         self.assertNotIn("legacyList", self.html)
 
+    def test_notifications_dashboard_groups_status_preferences_and_devices(self):
+        for card in ("status", "devices"):
+            self.assertIn(f'data-notification-settings-card="{card}"', self.html)
+        for group in ("system", "library", "sharing"):
+            self.assertIn(f'data-push-preference-card="{group}"', self.html)
+            self.assertIn(f'data-push-preference-group="{group}"', self.html)
+
+        for element_id in (
+            "pushBrowserState",
+            "pushDeviceState",
+            "pushEnableButton",
+            "pushDisableButton",
+            "pushRefreshButton",
+            "pushTestButton",
+            "pushPriceCheckButton",
+            "pushPreferenceList",
+            "pushDeviceList",
+            "pushProfileMessage",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="pushProfileMessage" aria-live="polite"', self.html)
+        self.assertIn("const pushPreferenceGroups = {", self.html)
+        self.assertIn(
+            'system: [\n'
+            '        ["app_updates", "notifications.prefAppUpdates", '
+            '"notifications.prefAppUpdatesHelp"],\n'
+            '        ["security", "notifications.prefSecurity", '
+            '"notifications.prefSecurityHelp"]',
+            self.html,
+        )
+        self.assertIn(
+            'sharing: [\n'
+            '        ["group_invites", "notifications.prefGroupInvites", '
+            '"notifications.prefGroupInvitesHelp"]',
+            self.html,
+        )
+        self.assertIn('aria-label="${escapeHtml(label)}"', self.html)
+        self.assertIn('enableButton.classList.toggle("hidden", pushProfile.subscribed);', self.html)
+        self.assertIn('disableButton.classList.toggle("hidden", !pushProfile.subscribed);', self.html)
+        self.assertIn('class="push-device-row ${item.current ? "current" : ""}"', self.html)
+        self.assertIn(".notification-overview-grid,", self.html)
+        self.assertIn(".notification-preference-grid,", self.html)
+
+    def test_groups_dashboard_uses_overview_cards_and_preserves_bindings(self):
+        for card in ("create", "scope"):
+            self.assertIn(f'data-groups-dashboard-card="{card}"', self.html)
+
+        for element_id in (
+            "memberGroupCreateSection",
+            "memberGroupCreateForm",
+            "memberGroupNameInput",
+            "memberGroupCreateButton",
+            "memberGroupScopeSummary",
+            "memberGroupMessage",
+            "memberGroupsHeading",
+            "memberGroupList",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="memberGroupMessage" aria-live="polite"', self.html)
+        self.assertIn('class="member-group-card" data-member-group-id="${id}"', self.html)
+        self.assertIn('class="member-group-metrics"', self.html)
+        self.assertIn('class="member-group-body ${invitePanel ? "" : "members-only"}"', self.html)
+        self.assertIn('data-member-group-open="${id}"', self.html)
+        self.assertIn('data-member-group-invite-send="${id}"', self.html)
+        self.assertIn('data-member-group-remove-user="${id}"', self.html)
+        self.assertIn('data-member-group-delete="${id}"', self.html)
+        self.assertIn("const canInvite = canManageMemberGroup(group);", self.html)
+        self.assertIn(
+            "const canDelete = isOwner && (isSystemOwner ? members.length === 0 : members.length === 1);",
+            self.html,
+        )
+        self.assertIn(".groups-overview-grid,", self.html)
+        self.assertIn(".member-group-body {", self.html)
+
+    def test_groups_dashboard_renames_inline_without_browser_prompt(self):
+        self.assertIn("let editingMemberGroupId = \"\";", self.html)
+        self.assertIn("function startMemberGroupRename(groupId)", self.html)
+        self.assertIn("function cancelMemberGroupRename(groupId)", self.html)
+        self.assertIn("async function saveMemberGroupRename(groupId, form)", self.html)
+        self.assertIn('data-member-group-rename-form="${id}"', self.html)
+        self.assertIn('data-member-group-rename-input="${id}"', self.html)
+        self.assertIn('data-member-group-rename-cancel="${id}"', self.html)
+        self.assertIn('if (event.key !== "Escape") return;', self.html)
+        self.assertIn("saveMemberGroupRename(form.dataset.memberGroupRenameForm, form);", self.html)
+        self.assertNotIn(
+            'window.prompt(tNext("groups.renamePrompt", "New group name")',
+            self.html,
+        )
+
+    def test_structure_dashboard_uses_accessible_workspace_cards(self):
+        self.assertIn('class="profile-dashboard structure-dashboard"', self.html)
+        tabs = {
+            "box_set": "structureContainersPanel",
+            "vault": "structureContainersPanel",
+            "collection": "structureContainersPanel",
+            "locations": "structureLocationsPanel",
+        }
+        for tab, panel_id in tabs.items():
+            with self.subTest(tab=tab):
+                self.assertIn(f'data-structure-tab="{tab}"', self.html)
+                self.assertIn(f'aria-controls="{panel_id}"', self.html)
+
+        for element_id in (
+            "containerManagerCreateForm",
+            "containerManagerTitle",
+            "containerManagerCreateButton",
+            "containerManagerMessage",
+            "containerManagerListHeading",
+            "containerManagerCount",
+            "containerManagerList",
+            "locationCreateForm",
+            "locationManagerMessage",
+            "locationsTree",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="containerManagerMessage" aria-live="polite"', self.html)
+        self.assertIn('class="container-manager-row" data-container-manager-id="${id}"', self.html)
+        self.assertIn("function handleStructureTabKeydown(button, event)", self.html)
+        self.assertIn('button.setAttribute("aria-selected", active ? "true" : "false");', self.html)
+        self.assertIn(".structure-workspace {", self.html)
+        self.assertIn(".locations-row {", self.html)
+
+    def test_security_dashboard_preserves_credentials_and_recovery_actions(self):
+        self.assertIn('class="profile-dashboard security-dashboard"', self.html)
+        for card in ("passkeys", "legacy", "recovery"):
+            self.assertIn(f'data-security-dashboard-card="{card}"', self.html)
+
+        for element_id in (
+            "profileRefreshPasskeysButton",
+            "profilePasskeyList",
+            "profileNewPasskeyNameInput",
+            "profileAddPasskeyButton",
+            "profileSecurityMessage",
+            "profileLegacySecurity",
+            "profileLegacyPasswordForm",
+            "profileLegacyMfaStatus",
+            "profileRecoveryActiveCount",
+            "profileRecoveryLastGenerated",
+            "profileRecoveryCodes",
+            "profileGenerateRecoveryButton",
+            "profileRevokeRecoveryButton",
+            "profileRecoveryMessage",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('class="profile-passkey security-credential-card"', self.html)
+        self.assertIn('id="profileSecurityMessage" aria-live="polite"', self.html)
+        self.assertIn('id="profileRecoveryMessage" aria-live="polite"', self.html)
+        self.assertIn(".profile-security-stats {", self.html)
+
+    def test_api_dashboard_uses_accessible_tabs_and_summary_cards(self):
+        self.assertIn('class="profile-dashboard api-dashboard"', self.html)
+        tabs = {
+            "General": ("general", "profileApiPanelGeneral"),
+            "Create": ("create", "profileApiPanelCreate"),
+            "Activity": ("activity", "profileApiPanelActivity"),
+        }
+        for suffix, (tab, panel_id) in tabs.items():
+            with self.subTest(tab=tab):
+                self.assertIn(f'id="profileApiTab{suffix}"', self.html)
+                self.assertIn(f'data-profile-api-tab="{tab}"', self.html)
+                self.assertIn(f'aria-controls="{panel_id}"', self.html)
+                self.assertIn(f'id="{panel_id}" role="tabpanel"', self.html)
+
+        for element_id in (
+            "profileApiMcpSummary",
+            "profileApiTokenList",
+            "profileApiTokenForm",
+            "profileApiPermissionList",
+            "profileCreateApiTokenButton",
+            "profileNewApiToken",
+            "profileApiMessage",
+            "profileApiAuditRefreshButton",
+            "profileApiAuditList",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn("function handleProfileApiTabKeydown(button, event)", self.html)
+        self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
+        self.assertIn('class="profile-api-summary-item"', self.html)
+        self.assertIn('class="profile-passkey profile-api-token-card ${revoked ? "disabled" : ""}"', self.html)
+
+    def test_about_dashboard_balances_version_credits_and_debug_info(self):
+        self.assertIn('class="profile-dashboard about-dashboard"', self.html)
+        self.assertIn('class="profile-about-grid"', self.html)
+        self.assertIn(
+            'class="profile-dashboard-card primary profile-about-card profile-about-card--version"',
+            self.html,
+        )
+        self.assertIn('class="profile-dashboard-card profile-about-card profile-about-card--debug"', self.html)
+        for element_id in (
+            "profileAppVersion",
+            "profileUpdateBlock",
+            "profileUpdateChannel",
+            "profileUpdateCheckButton",
+            "profileUpdateResult",
+            "profileBuildSha",
+            "profileOfflineStatus",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+        self.assertIn(".profile-about-grid {", self.html)
+        self.assertIn(".profile-about-version {", self.html)
+
+    def test_admin_access_dashboard_preserves_invite_and_passkey_management(self):
+        self.assertIn(
+            'id="appAdminPanelAccess" role="tabpanel" aria-labelledby="appAdminTabAccess"',
+            self.html,
+        )
+        for card in ("access-overview", "invite-create", "active-invites", "passkeys"):
+            self.assertIn(f'data-admin-dashboard-card="{card}"', self.html)
+
+        for element_id in (
+            "appAdminRegistrationMode",
+            "appAdminUserCount",
+            "appAdminCredentialCount",
+            "appAdminSecurityMessage",
+            "appAdminInviteForm",
+            "appAdminInviteUsername",
+            "appAdminCreateInviteButton",
+            "appAdminInviteCodeOutput",
+            "appAdminInviteMessage",
+            "appAdminInvitesList",
+            "appAdminCredentialsList",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="appAdminSecurityMessage" aria-live="polite"', self.html)
+        self.assertIn('id="appAdminInviteMessage" aria-live="polite"', self.html)
+        self.assertIn('class="profile-passkey app-admin-entity-card app-admin-invite-card', self.html)
+        self.assertIn('class="profile-passkey app-admin-entity-card app-admin-passkey-card"', self.html)
+
+    def test_admin_users_dashboard_preserves_user_and_group_management(self):
+        self.assertIn(
+            'id="appAdminPanelUsers" role="tabpanel" aria-labelledby="appAdminTabUsers"',
+            self.html,
+        )
+        for card in ("legacy-auth", "legacy-user-create", "users", "groups"):
+            self.assertIn(f'data-admin-dashboard-card="{card}"', self.html)
+
+        for element_id in (
+            "appAdminLegacyCard",
+            "appAdminLegacyStatus",
+            "appAdminLegacyEnable",
+            "appAdminLegacyDisable",
+            "appAdminLegacyMessage",
+            "appAdminLegacyCreateCard",
+            "appAdminLegacyUserForm",
+            "appAdminUsersList",
+            "appAdminUsersMessage",
+            "appAdminGroupForm",
+            "appAdminGroupsList",
+            "appAdminGroupsMessage",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('class="profile-passkey app-admin-entity-card app-admin-user-card', self.html)
+        self.assertIn('class="profile-passkey app-admin-entity-card admin-group-row"', self.html)
+        self.assertIn('class="profile-add-passkey app-admin-legacy-controls"', self.html)
+        self.assertIn("function handleAppAdminTabKeydown(button, event)", self.html)
+        self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
+
+    def test_library_advanced_panel_groups_existing_controls(self):
+        self.assertIn('id="advancedSearchToggleButton"', self.html)
+        self.assertIn('aria-controls="advancedSearchPanel"', self.html)
+        self.assertIn('class="advanced-search-panel hidden" id="advancedSearchPanel"', self.html)
+        self.assertIn('role="region" aria-labelledby="advancedSearchPanelTitle"', self.html)
+        for group in ("release", "media", "personal", "smart"):
+            self.assertIn(f'data-library-advanced-group="{group}"', self.html)
+
+        for element_id in (
+            "advancedYearFrom",
+            "advancedYearTo",
+            "advancedCrewQuery",
+            "advancedDigitalFilter",
+            "advancedArtworkFilter",
+            "advancedContainerType",
+            "advancedPersonalFilter",
+            "advancedLocationFilter",
+            "smartFilterSelect",
+            "advancedSearchSaveButton",
+            "advancedSearchDeleteButton",
+            "advancedSearchResetButton",
+            "advancedSearchApplyButton",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+    def test_library_bulk_panel_groups_existing_actions(self):
+        self.assertIn('id="selectModeButton"', self.html)
+        self.assertIn('aria-controls="bulkBar"', self.html)
+        self.assertIn(
+            'class="bulk-bar" id="bulkBar" role="region" aria-labelledby="bulkPanelTitle"',
+            self.html,
+        )
+        for group in ("metadata", "groups", "tags", "containers", "location", "delete"):
+            self.assertIn(f'data-library-bulk-group="{group}"', self.html)
+
+        for element_id in (
+            "bulkCount",
+            "bulkClearSelection",
+            "bulkGroupTarget",
+            "bulkTagPicker",
+            "bulkContainerTarget",
+            "bulkContainerCreateForm",
+            "bulkContainerCreateTitle",
+            "bulkContainerCreateSubmit",
+            "bulkContainerCreateMessage",
+            "bulkContainerActionButton",
+            "bulkLocationTarget",
+            "bulkLocationActionButton",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+        for selection in ("all", "none", "clear"):
+            self.assertEqual(self.html.count(f'data-bulk-select="{selection}"'), 1, selection)
+        for action in (
+            "metadata",
+            "group-add",
+            "group-remove",
+            "tags-add",
+            "tags-remove",
+            "container",
+            "location",
+            "delete",
+        ):
+            self.assertIn(f'disabled data-bulk-action="{action}"', self.html, action)
+
+    def test_library_action_groups_adapt_at_mobile_breakpoint(self):
+        self.assertEqual(self.html.count("data-library-adaptive-group "), 10)
+        self.assertIn("function syncLibraryAdaptiveGroups()", self.html)
+        self.assertIn('window.matchMedia("(max-width: 760px)").matches', self.html)
+        self.assertIn("groups.forEach((group) => { group.open = !mobile; });", self.html)
+        self.assertIn('window.addEventListener("resize", syncLibraryAdaptiveGroups);', self.html)
+        self.assertIn(".library-adaptive-group > summary:focus-visible {", self.html)
+        self.assertIn(".bulk-target.danger {", self.html)
+
     def test_account_dashboard_preserves_existing_profile_bindings(self):
         self.assertIn('class="account-dashboard"', self.html)
         self.assertIn('id="profileAccountDisplayName"', self.html)
