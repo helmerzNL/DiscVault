@@ -219,6 +219,20 @@ support, so it stays **inactive by default** until the matching
 and is not part of this repository. Existing `distribution-2`/`distribution-3`
 installations are unaffected.
 
+DiscVault `26.5.9` adds a bounded, anonymous `release-technical-1` bridge for
+the existing barcode scanner and manual barcode entry. Matching
+`movievault_v2` plugin releases keep this technical fallback disabled by
+default. When an operator enables it, DiscVault still checks the synchronized
+local index and optional hash bucket first. Only a genuine miss sends the
+normalized barcode and bounded release hints to MovieVault; no account,
+instance, collection, contribution credential, cookie, or client address is
+sent. Pending results are polled only by their opaque resolution ID. External
+results remain visibly unreviewed and require confirmation.
+
+The same DiscVault server-side bridge is used by PWA, Android, and iOS clients.
+Client scanners only submit a barcode to DiscVault and never contact
+MovieVault or a metadata provider directly.
+
 ## Repository Structure
 
 - `app/` - Main application code (backend, frontend, mcp-server, deployment files)
