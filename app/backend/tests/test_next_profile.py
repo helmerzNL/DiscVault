@@ -548,6 +548,31 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('class="profile-passkey app-admin-entity-card app-admin-invite-card', self.html)
         self.assertIn('class="profile-passkey app-admin-entity-card app-admin-passkey-card"', self.html)
 
+    def test_admin_submenu_uses_responsive_icon_navigation(self):
+        self.assertIn('<div class="app-admin-workspace">', self.html)
+        self.assertIn('class="app-admin-submenu detail-submenu"', self.html)
+        self.assertIn(".app-admin-workspace {", self.html)
+        self.assertIn("grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);", self.html)
+        self.assertIn("@media (max-width: 860px)", self.html)
+        self.assertIn("function syncAppAdminSubmenuOrientation()", self.html)
+        self.assertIn("submenu.querySelector('[aria-selected=\"true\"]')?.scrollIntoView", self.html)
+        self.assertIn('"ArrowUp", "ArrowDown"', self.html)
+        self.assertIn("button.scrollIntoView({block: \"nearest\", inline: \"nearest\"});", self.html)
+        for tab in (
+            "Access",
+            "Users",
+            "Roles",
+            "Operations",
+            "Plugins",
+            "Digital",
+            "Metadata",
+            "Backup",
+            "Audit",
+        ):
+            self.assertIn(f'id="appAdminTab{tab}" role="tab"', self.html)
+        self.assertEqual(self.html.count('class="app-admin-tab-icon"'), 9)
+        self.assertEqual(self.html.count('class="app-admin-tab-label"'), 9)
+
     def test_admin_users_dashboard_preserves_user_and_group_management(self):
         self.assertIn(
             'id="appAdminPanelUsers" role="tabpanel" aria-labelledby="appAdminTabUsers"',

@@ -195,6 +195,25 @@ def ui_preview_html(
             "</span></button>"
         )
 
+    def admin_tab(
+        name: str,
+        label_key: str,
+        fallback: str,
+        icon_name: str,
+        *,
+        active: bool = False,
+    ) -> str:
+        suffix = "".join(part.capitalize() for part in name.split("_"))
+        active_class = ' class="active"' if active else ""
+        return (
+            f'<button type="button"{active_class} id="appAdminTab{suffix}" role="tab" '
+            f'aria-controls="appAdminPanel{suffix}" aria-selected="{"true" if active else "false"}" '
+            f'tabindex="{"0" if active else "-1"}" aria-label="{h(fallback)}" title="{h(fallback)}" '
+            f'data-next-i18n-aria="{h(label_key)}" data-next-i18n-title="{h(label_key)}" '
+            f'data-app-admin-tab="{h(name)}"><span class="app-admin-tab-icon">{nav_icon(icon_name)}</span>'
+            f'<span class="app-admin-tab-label" data-next-i18n="{h(label_key)}">{h(fallback)}</span></button>'
+        )
+
     return """<!doctype html>
 <html lang="en">
 <head>
@@ -9153,21 +9172,108 @@ def ui_preview_html(
       padding-bottom: 0;
     }
     .app-admin-submenu {
-      width: max-content;
-      max-width: 100%;
-      overflow-x: auto;
+      width: 100%;
+      max-width: none;
+      display: flex;
+      flex-direction: column;
+      align-self: start;
+      gap: 4px;
+      overflow: visible;
+      padding: 8px;
+      border-radius: 16px;
+      position: sticky;
+      top: 16px;
       justify-content: flex-start;
       scrollbar-width: none;
       -webkit-overflow-scrolling: touch;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      box-shadow: 0 14px 34px rgba(0,0,0,.08);
     }
     .app-admin-submenu::-webkit-scrollbar {
       display: none;
     }
     .app-admin-submenu button {
+      width: 100%;
       min-width: 0;
-      white-space: nowrap;
+      min-height: 46px;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      align-items: center;
+      gap: 9px;
+      padding: 5px 10px;
+      border-radius: 11px;
+      text-align: left;
+      white-space: normal;
+      overflow: visible;
+    }
+    .app-admin-submenu button.active {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+        0 8px 20px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    .app-admin-tab-icon {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+      transition: color .18s ease, background .18s ease;
+    }
+    .app-admin-submenu button.active .app-admin-tab-icon {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+    }
+    .app-admin-tab-icon .nav-symbol {
+      width: 18px;
+      height: 18px;
+    }
+    .app-admin-tab-label {
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
+      line-height: 1.25;
+    }
+    .app-admin-workspace {
+      display: grid;
+      grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+      min-width: 0;
+    }
+    @media (max-width: 860px) {
+      .app-admin-workspace {
+        display: block;
+      }
+      .app-admin-submenu {
+        width: 100%;
+        max-width: 100%;
+        display: flex;
+        flex-direction: row;
+        gap: 4px;
+        margin-bottom: 16px;
+        padding: 5px;
+        border-radius: 14px;
+        position: static;
+        overflow-x: auto;
+      }
+      .app-admin-submenu button {
+        width: auto;
+        min-height: 40px;
+        flex: 0 0 auto;
+        grid-template-columns: 22px auto;
+        gap: 7px;
+        padding: 4px 12px;
+        white-space: nowrap;
+      }
+      .app-admin-tab-icon {
+        width: 22px;
+        height: 22px;
+        background: transparent;
+      }
     }
     .app-admin-panel {
       display: none;
@@ -15136,17 +15242,18 @@ def ui_preview_html(
             <button type="button" class="secondary-button" id="appAdminRefreshButton" data-next-i18n="common.refresh">Refresh</button>
           </div>
         </section>
-        <nav class="app-admin-submenu detail-submenu" role="tablist" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
-          <button type="button" class="active" id="appAdminTabAccess" role="tab" aria-controls="appAdminPanelAccess" aria-selected="true" tabindex="0" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
-          <button type="button" id="appAdminTabUsers" role="tab" aria-controls="appAdminPanelUsers" aria-selected="false" tabindex="-1" data-app-admin-tab="users" data-next-i18n="appAdmin.tabPeople">Users & groups</button>
-          <button type="button" id="appAdminTabRoles" role="tab" aria-controls="appAdminPanelRoles" aria-selected="false" tabindex="-1" data-app-admin-tab="roles" data-next-i18n="appAdmin.tabRoles">Roles</button>
-          <button type="button" id="appAdminTabOperations" role="tab" aria-controls="appAdminPanelOperations" aria-selected="false" tabindex="-1" data-app-admin-tab="operations" data-next-i18n="appAdmin.tabOperations">Operations</button>
-          <button type="button" id="appAdminTabPlugins" role="tab" aria-controls="appAdminPanelPlugins" aria-selected="false" tabindex="-1" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
-          <button type="button" id="appAdminTabDigital" role="tab" aria-controls="appAdminPanelDigital" aria-selected="false" tabindex="-1" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
-          <button type="button" id="appAdminTabMetadata" role="tab" aria-controls="appAdminPanelMetadata" aria-selected="false" tabindex="-1" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
-          <button type="button" id="appAdminTabBackup" role="tab" aria-controls="appAdminPanelBackup" aria-selected="false" tabindex="-1" data-app-admin-tab="backup" data-next-i18n="appAdmin.tabBackup">Backup</button>
-          <button type="button" id="appAdminTabAudit" role="tab" aria-controls="appAdminPanelAudit" aria-selected="false" tabindex="-1" data-app-admin-tab="audit" data-next-i18n="appAdmin.tabAudit">Audit</button>
-        </nav>
+        <div class="app-admin-workspace">
+          <nav class="app-admin-submenu detail-submenu" role="tablist" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
+            """ + admin_tab("access", "appAdmin.tabAccess", "Access", "security", active=True) + """
+            """ + admin_tab("users", "appAdmin.tabPeople", "Users & groups", "groups") + """
+            """ + admin_tab("roles", "appAdmin.tabRoles", "Roles", "account") + """
+            """ + admin_tab("operations", "appAdmin.tabOperations", "Operations", "preferences") + """
+            """ + admin_tab("plugins", "appAdmin.tabPlugins", "Plugins", "structure") + """
+            """ + admin_tab("digital", "appAdmin.tabDigital", "Digital", "devices") + """
+            """ + admin_tab("metadata", "appAdmin.tabMetadata", "Metadata", "library_preferences") + """
+            """ + admin_tab("backup", "appAdmin.tabBackup", "Backup", "import") + """
+            """ + admin_tab("audit", "appAdmin.tabAudit", "Audit", "lists") + """
+          </nav>
         <section class="app-admin-panel active" id="appAdminPanelAccess" role="tabpanel" aria-labelledby="appAdminTabAccess" aria-hidden="false" tabindex="0" data-app-admin-panel="access">
           <div class="profile-dashboard app-admin-dashboard">
             <header class="profile-dashboard-intro">
@@ -15878,6 +15985,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
+        </div>
       </section>
     </main>
   </div>
@@ -17115,15 +17223,29 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function syncAppAdminSubmenuOrientation() {
+      const submenu = document.querySelector(".app-admin-submenu");
+      if (!submenu) return;
+      const horizontal = window.matchMedia("(max-width: 860px)").matches;
+      submenu.setAttribute("aria-orientation", horizontal ? "horizontal" : "vertical");
+      if (horizontal) {
+        submenu.querySelector('[aria-selected="true"]')?.scrollIntoView({block: "nearest", inline: "nearest"});
+      }
+    }
     function setAppAdminTab(tab) {
       const allowedTabs = allowedAppAdminTabs();
       appAdmin.activeTab = allowedTabs.includes(tab) ? tab : (allowedTabs[0] || "");
+      syncAppAdminSubmenuOrientation();
       document.querySelectorAll("[data-app-admin-tab]").forEach((button) => {
         const active = button.dataset.appAdminTab === appAdmin.activeTab;
         button.classList.toggle("hidden", !canUseAdminTab(button.dataset.appAdminTab));
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
         button.tabIndex = active ? 0 : -1;
+        const submenu = button.closest(".app-admin-submenu");
+        if (active && submenu?.scrollWidth > submenu.clientWidth) {
+          button.scrollIntoView({block: "nearest", inline: "nearest"});
+        }
       });
       document.querySelectorAll("[data-app-admin-panel]").forEach((panel) => {
         const active = panel.dataset.appAdminPanel === appAdmin.activeTab;
@@ -17134,15 +17256,15 @@ def ui_preview_html(
       if (appAdmin.activeTab === "roles") setAppAdminRolesTab(appAdmin.activeRolesTab);
     }
     function handleAppAdminTabKeydown(button, event) {
-      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
       const buttons = [...document.querySelectorAll("[data-app-admin-tab]")]
         .filter((item) => !item.classList.contains("hidden"));
       if (!buttons.length) return;
       event.preventDefault();
       const currentIndex = Math.max(0, buttons.indexOf(button));
       let nextIndex = currentIndex;
-      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
-      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (["ArrowLeft", "ArrowUp"].includes(event.key)) nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (["ArrowRight", "ArrowDown"].includes(event.key)) nextIndex = (currentIndex + 1) % buttons.length;
       if (event.key === "Home") nextIndex = 0;
       if (event.key === "End") nextIndex = buttons.length - 1;
       const nextButton = buttons[nextIndex];
@@ -38636,6 +38758,7 @@ def ui_preview_html(
         button.addEventListener("click", () => setAppAdminTab(button.dataset.appAdminTab));
         button.addEventListener("keydown", (event) => handleAppAdminTabKeydown(button, event));
       });
+      window.addEventListener("resize", syncAppAdminSubmenuOrientation);
       document.querySelectorAll("[data-app-admin-users-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminUsersTab(button.dataset.appAdminUsersTab));
         button.addEventListener("keydown", (event) => handleAppAdminUsersTabKeydown(button, event));
