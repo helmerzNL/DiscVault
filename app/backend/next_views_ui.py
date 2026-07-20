@@ -8167,18 +8167,249 @@ def ui_preview_html(
       justify-content: flex-end;
       padding-top: 2px;
     }
-    .profile-security-grid {
-      gap: 12px;
-    }
-    .profile-security-column {
+    .profile-dashboard {
       display: grid;
-      gap: 12px;
-      align-content: start;
+      gap: 16px;
       min-width: 0;
     }
-    .profile-security-grid .profile-section-box {
+    .profile-dashboard-intro {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .profile-dashboard-symbol,
+    .profile-dashboard-card-icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 17%, var(--bg-solid));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent);
+    }
+    .profile-dashboard-symbol {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+    }
+    .profile-dashboard-symbol .nav-symbol,
+    .profile-dashboard-symbol .nav-symbol svg {
+      width: 26px;
+      height: 26px;
+    }
+    .profile-dashboard-copy {
+      min-width: 0;
+    }
+    .profile-dashboard-copy h4 {
+      margin: 0;
+      font-size: 1.14rem;
+      letter-spacing: 0;
+    }
+    .profile-dashboard-copy p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+    .profile-dashboard-tabs {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      width: 100%;
+      max-width: none;
+      padding: 8px;
+      border-radius: 16px;
+      overflow: visible;
+    }
+    .profile-dashboard-tabs button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-width: 0;
+      min-height: 46px;
+      padding: 0 12px;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .profile-dashboard-tabs button .nav-symbol,
+    .profile-dashboard-tabs button .nav-symbol svg {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+    }
+    .profile-dashboard-tab-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .profile-dashboard-card {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+    }
+    .profile-dashboard-card.primary {
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      background:
+        radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 44%),
+        color-mix(in srgb, var(--bg-solid) 78%, transparent);
+    }
+    .profile-dashboard-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+    .profile-dashboard-card-title {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      min-width: 0;
+    }
+    .profile-dashboard-card-title > div {
+      min-width: 0;
+    }
+    .profile-dashboard-card-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+    }
+    .profile-dashboard-card-icon .nav-symbol,
+    .profile-dashboard-card-icon .nav-symbol svg {
+      width: 21px;
+      height: 21px;
+    }
+    .profile-dashboard-card-head h4 {
+      margin: 0;
+      font-size: 1.02rem;
+      letter-spacing: 0;
+    }
+    .profile-dashboard-card-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .structure-workspace {
+      display: grid;
+      grid-template-columns: minmax(250px, .72fr) minmax(0, 1.28fr);
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+    .structure-create-card .profile-form,
+    .structure-create-card .locations-create-form {
+      grid-template-columns: 1fr;
+    }
+    .structure-list-card {
+      min-height: 220px;
+    }
+    .locations-tree {
+      display: grid;
       gap: 10px;
+      min-width: 0;
+    }
+    .locations-node {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .locations-children {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      margin-left: 20px;
+      padding-left: 12px;
+      border-left: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+    }
+    .locations-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
       padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .locations-row.drag-over {
+      border-color: color-mix(in srgb, var(--accent) 62%, var(--line));
+      background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+    }
+    .locations-handle {
+      color: var(--muted);
+      cursor: grab;
+    }
+    .locations-info {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .locations-info strong,
+    .locations-desc,
+    .locations-counts {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .locations-desc,
+    .locations-counts {
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .locations-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 7px;
+    }
+    .profile-security-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+    .profile-security-card.passkeys {
+      grid-column: 1 / -1;
+    }
+    .profile-security-card .profile-add-passkey {
+      padding-top: 2px;
+    }
+    .profile-security-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .profile-security-stat {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .profile-security-stat span {
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 700;
+    }
+    .profile-security-stat strong {
+      overflow-wrap: anywhere;
     }
     .groups-dashboard {
       display: grid;
@@ -8519,6 +8750,7 @@ def ui_preview_html(
     }
     .profile-api-submenu {
       margin-bottom: 2px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
     .profile-api-panel {
       display: grid;
@@ -8526,8 +8758,38 @@ def ui_preview_html(
       min-width: 0;
     }
     .profile-api-panel[data-profile-api-panel="general"] {
-      grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.35fr);
+      grid-template-columns: minmax(0, 1fr);
       align-items: start;
+    }
+    .profile-api-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+    .profile-api-summary-item {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .profile-api-summary-item span {
+      color: var(--muted);
+      font-size: .73rem;
+      font-weight: 700;
+    }
+    .profile-api-summary-item strong {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .profile-api-summary-item.action {
+      align-content: space-between;
+    }
+    .profile-api-summary-item.action .secondary-button {
+      justify-self: start;
     }
     .profile-api-activity-box {
       width: 100%;
@@ -9171,9 +9433,13 @@ def ui_preview_html(
       border-color: color-mix(in srgb, var(--bad, #d2453d) 55%, transparent);
       background: color-mix(in srgb, var(--bad, #d2453d) 14%, transparent);
     }
-    .profile-about-stack {
+    .profile-about-stack,
+    .profile-about-grid {
       display: grid;
       gap: 12px;
+    }
+    .profile-about-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .profile-about-card {
       display: grid;
@@ -9183,6 +9449,23 @@ def ui_preview_html(
       border-radius: 14px;
       padding: 12px;
       background: color-mix(in srgb, var(--field) 54%, transparent);
+    }
+    .profile-about-card--version,
+    .profile-about-card--debug {
+      grid-column: 1 / -1;
+    }
+    .profile-about-version {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      min-width: 0;
+    }
+    .profile-about-version strong {
+      min-width: 0;
+      color: var(--accent-bright);
+      font-size: clamp(1.28rem, 3vw, 1.75rem);
+      overflow-wrap: anywhere;
     }
     .profile-about-card-head {
       display: flex;
@@ -10449,8 +10732,7 @@ def ui_preview_html(
       flex: 0 0 auto;
     }
     .container-manager-create {
-      grid-template-columns: minmax(220px, 1fr) auto;
-      align-items: end;
+      grid-template-columns: 1fr;
     }
     .container-manager-list {
       display: grid;
@@ -10458,13 +10740,18 @@ def ui_preview_html(
     }
     .container-manager-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: center;
+      gap: 11px;
       border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
-      padding: 12px;
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+      padding: 13px;
+      min-width: 0;
+    }
+    .container-manager-row-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
       min-width: 0;
     }
     .container-manager-meta {
@@ -10484,7 +10771,7 @@ def ui_preview_html(
       grid-template-columns: minmax(160px, 1fr) auto auto auto;
       gap: 8px;
       align-items: center;
-      min-width: min(520px, 100%);
+      min-width: 0;
     }
     .container-manager-actions input {
       min-height: 36px;
@@ -11254,8 +11541,16 @@ def ui_preview_html(
       .notification-overview-grid,
       .notification-preference-grid,
       .groups-overview-grid,
-      .member-group-body {
+      .member-group-body,
+      .structure-workspace,
+      .profile-security-grid,
+      .profile-about-grid {
         grid-template-columns: 1fr;
+      }
+      .profile-security-card.passkeys,
+      .profile-about-card--version,
+      .profile-about-card--debug {
+        grid-column: auto;
       }
       .account-fact-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -11356,6 +11651,14 @@ def ui_preview_html(
       .container-manager-actions {
         min-width: 0;
       }
+      .locations-row {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+      }
+      .locations-actions {
+        grid-column: 2;
+        justify-content: flex-start;
+      }
       .app-admin-plugin-dashboard,
       .app-admin-priority-dashboard,
       .app-admin-priority-row {
@@ -11446,8 +11749,64 @@ def ui_preview_html(
       }
       .profile-center-card,
       .profile-section-box,
-      .profile-passkey {
+      .profile-passkey,
+      .profile-dashboard-intro,
+      .profile-dashboard-card {
         padding: 12px;
+      }
+      .profile-dashboard-intro {
+        gap: 11px;
+      }
+      .profile-dashboard-symbol {
+        width: 40px;
+        height: 40px;
+      }
+      .profile-dashboard-tabs,
+      .profile-api-submenu {
+        grid-template-columns: repeat(4, minmax(52px, 1fr));
+        gap: 6px;
+        width: 100%;
+        max-width: 100%;
+        padding: 6px;
+        overflow: visible;
+      }
+      .profile-api-submenu {
+        grid-template-columns: repeat(3, minmax(52px, 1fr));
+      }
+      .profile-dashboard-tabs button,
+      .profile-api-submenu button {
+        min-width: 0;
+        max-width: none;
+        min-height: 50px;
+        padding: 0 10px;
+      }
+      .profile-dashboard-tab-label {
+        display: none;
+      }
+      .profile-dashboard-card-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .profile-dashboard-card-head > .secondary-button {
+        width: 100%;
+      }
+      .profile-security-stats,
+      .profile-api-summary-grid {
+        grid-template-columns: 1fr;
+      }
+      .profile-add-passkey {
+        grid-template-columns: 1fr;
+      }
+      .profile-add-passkey .primary-button {
+        width: 100%;
+      }
+      .profile-about-version {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .locations-children {
+        margin-left: 10px;
+        padding-left: 8px;
       }
       .profile-submenu,
       .app-admin-submenu {
@@ -13829,78 +14188,148 @@ def ui_preview_html(
               </div>
             </div>
                 <div id="profilePanelStructure" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabStructure" tabindex="0" data-profile-panel="structure">
-              <div class="detail-card-head compact">
-                <div>
-                  <h4 data-next-i18n="containerManage.title">Collection structure</h4>
-                  <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
-                </div>
-                <nav class="detail-submenu" aria-label="Collection structure" data-next-i18n-aria="containerManage.sections">
-                  <button type="button" class="active" data-container-manager-type="box_set" data-next-i18n="containerManage.boxSets">Box-sets</button>
-                  <button type="button" data-container-manager-type="vault" data-next-i18n="containerManage.vaults">Vaults</button>
-                  <button type="button" data-container-manager-type="collection" data-next-i18n="containerManage.collections">Collections</button>
-                  <button type="button" data-structure-view="locations" data-next-i18n="locations.navLabel">Locations</button>
-                </nav>
-              </div>
-              <form class="profile-form container-manager-create" id="containerManagerCreateForm" data-structure-section="containers">
-                <label for="containerManagerTitle">
-                  <span data-next-i18n="containerManage.titleLabel">Name</span>
-                  <input id="containerManagerTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="containerManage.titlePlaceholder" placeholder="New collection name">
-                </label>
-                <div class="profile-form-actions">
-                  <button type="submit" class="secondary-button" id="containerManagerCreateButton" data-next-i18n="containerManage.create">Create</button>
-                  <span class="login-message" id="containerManagerMessage"></span>
-                </div>
-              </form>
-              <div class="container-manager-list" id="containerManagerList" data-structure-section="containers"></div>
-              <div class="locations-manager hidden" data-structure-section="locations">
-                <form class="profile-form locations-create-form" id="locationCreateForm">
-                  <label for="locationCreateName">
-                    <span data-next-i18n="locations.name">Name</span>
-                    <input id="locationCreateName" maxlength="240" autocomplete="off" data-next-i18n-placeholder="locations.namePlaceholder" placeholder="Cabinet 01">
-                  </label>
-                  <label for="locationCreateParent">
-                    <span data-next-i18n="locations.parent">Parent</span>
-                    <select id="locationCreateParent"></select>
-                  </label>
-                  <label for="locationCreateDescription">
-                    <span data-next-i18n="locations.descriptionField">Description</span>
-                    <input id="locationCreateDescription" maxlength="2000" autocomplete="off" data-next-i18n-placeholder="locations.descriptionPlaceholder" placeholder="Optional description">
-                  </label>
-                  <label for="locationCreateBackdrop">
-                    <span data-next-i18n="locations.backdropField">Backdrop</span>
-                    <input id="locationCreateBackdrop" type="file" accept="image/*">
-                  </label>
-                  <div class="profile-form-actions">
-                    <button type="submit" class="secondary-button" id="locationCreateButton" data-next-i18n="locations.create">Create location</button>
-                    <span class="login-message" id="locationManagerMessage"></span>
+              <div class="profile-dashboard structure-dashboard">
+                <header class="profile-dashboard-intro">
+                  <span class="profile-dashboard-symbol">""" + nav_icon("structure") + """</span>
+                  <div class="profile-dashboard-copy">
+                    <h4 data-next-i18n="containerManage.title">Collection structure</h4>
+                    <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
                   </div>
-                </form>
-                <div class="locations-tree" id="locationsTree"></div>
+                </header>
+                <nav class="detail-submenu profile-dashboard-tabs structure-dashboard-tabs" role="tablist" aria-label="Collection structure" data-next-i18n-aria="containerManage.sections">
+                  <button type="button" class="active" role="tab" aria-selected="true" aria-controls="structureContainersPanel" tabindex="0" data-structure-tab="box_set" data-container-manager-type="box_set">""" + nav_icon("structure") + """<span class="profile-dashboard-tab-label" data-next-i18n="containerManage.boxSets">Box-sets</span></button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="structureContainersPanel" tabindex="-1" data-structure-tab="vault" data-container-manager-type="vault">""" + nav_icon("security") + """<span class="profile-dashboard-tab-label" data-next-i18n="containerManage.vaults">Vaults</span></button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="structureContainersPanel" tabindex="-1" data-structure-tab="collection" data-container-manager-type="collection">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="containerManage.collections">Collections</span></button>
+                  <button type="button" role="tab" aria-selected="false" aria-controls="structureLocationsPanel" tabindex="-1" data-structure-tab="locations" data-structure-view="locations">""" + nav_icon("library") + """<span class="profile-dashboard-tab-label" data-next-i18n="locations.navLabel">Locations</span></button>
+                </nav>
+                <div class="structure-workspace" id="structureContainersPanel" role="tabpanel" data-structure-section="containers">
+                  <section class="profile-dashboard-card primary structure-create-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("import") + """</span>
+                        <div>
+                          <h4 data-next-i18n="containerManage.create">Create</h4>
+                          <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <form class="profile-form container-manager-create" id="containerManagerCreateForm">
+                      <label for="containerManagerTitle">
+                        <span data-next-i18n="containerManage.titleLabel">Name</span>
+                        <input id="containerManagerTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="containerManage.titlePlaceholder" placeholder="New collection name">
+                      </label>
+                      <div class="profile-form-actions">
+                        <button type="submit" class="primary-button" id="containerManagerCreateButton" data-next-i18n="containerManage.create">Create</button>
+                      </div>
+                    </form>
+                    <div class="login-message" id="containerManagerMessage" aria-live="polite"></div>
+                  </section>
+                  <section class="profile-dashboard-card structure-list-card" aria-labelledby="containerManagerListHeading">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("structure") + """</span>
+                        <div>
+                          <h4 id="containerManagerListHeading" data-next-i18n="containerManage.boxSets">Box-sets</h4>
+                        </div>
+                      </div>
+                      <span class="tag blue" id="containerManagerCount" aria-live="polite">0</span>
+                    </div>
+                    <div class="container-manager-list" id="containerManagerList"></div>
+                  </section>
+                </div>
+                <div class="structure-workspace locations-manager hidden" id="structureLocationsPanel" role="tabpanel" aria-hidden="true" data-structure-section="locations">
+                  <section class="profile-dashboard-card primary structure-create-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("import") + """</span>
+                        <div>
+                          <h4 data-next-i18n="locations.create">Create location</h4>
+                          <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <form class="profile-form locations-create-form" id="locationCreateForm">
+                      <label for="locationCreateName">
+                        <span data-next-i18n="locations.name">Name</span>
+                        <input id="locationCreateName" maxlength="240" autocomplete="off" data-next-i18n-placeholder="locations.namePlaceholder" placeholder="Cabinet 01">
+                      </label>
+                      <label for="locationCreateParent">
+                        <span data-next-i18n="locations.parent">Parent</span>
+                        <select id="locationCreateParent"></select>
+                      </label>
+                      <label for="locationCreateDescription">
+                        <span data-next-i18n="locations.descriptionField">Description</span>
+                        <input id="locationCreateDescription" maxlength="2000" autocomplete="off" data-next-i18n-placeholder="locations.descriptionPlaceholder" placeholder="Optional description">
+                      </label>
+                      <label for="locationCreateBackdrop">
+                        <span data-next-i18n="locations.backdropField">Backdrop</span>
+                        <input id="locationCreateBackdrop" type="file" accept="image/*">
+                      </label>
+                      <div class="profile-form-actions">
+                        <button type="submit" class="primary-button" id="locationCreateButton" data-next-i18n="locations.create">Create location</button>
+                      </div>
+                    </form>
+                    <div class="login-message" id="locationManagerMessage" aria-live="polite"></div>
+                  </section>
+                  <section class="profile-dashboard-card structure-list-card" aria-labelledby="locationsTreeHeading">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("library") + """</span>
+                        <div>
+                          <h4 id="locationsTreeHeading" data-next-i18n="locations.navLabel">Locations</h4>
+                          <p data-next-i18n="containerManage.description">Manage box-sets, vaults and collections from one place.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="locations-tree" id="locationsTree"></div>
+                  </section>
+                </div>
               </div>
             </div>
                 <div id="profilePanelSecurity" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabSecurity" tabindex="0" data-profile-panel="security">
-              <div class="profile-section-grid profile-security-grid">
+              <div class="profile-dashboard security-dashboard">
+                <header class="profile-dashboard-intro">
+                  <span class="profile-dashboard-symbol">""" + nav_icon("security") + """</span>
+                  <div class="profile-dashboard-copy">
+                    <h4 data-next-i18n="profile.security">Security</h4>
+                    <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+                  </div>
+                </header>
                 <div class="profile-security-column">
-                  <section class="profile-section-box">
-                    <div class="detail-card-head compact">
-                      <div>
-                        <h4 data-next-i18n="profile.security">Security</h4>
-                        <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+                  <div class="profile-security-grid">
+                  <section class="profile-dashboard-card primary profile-security-card passkeys" data-security-dashboard-card="passkeys">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("devices") + """</span>
+                        <div>
+                          <h4 data-next-i18n="auth.passkey">Passkey</h4>
+                          <p data-next-i18n="profile.passkeysHelp">Manage passkey names and trusted devices.</p>
+                        </div>
                       </div>
                       <button type="button" class="secondary-button" id="profileRefreshPasskeysButton" data-next-i18n="common.refresh">Refresh</button>
                     </div>
                     <div class="profile-passkey-list" id="profilePasskeyList"></div>
                     <div class="profile-add-passkey">
                       <input id="profileNewPasskeyNameInput" maxlength="80" autocomplete="off" data-next-i18n-placeholder="profile.newPasskeyName" placeholder="New passkey name">
-                      <button type="button" class="secondary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
+                      <button type="button" class="primary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
                     </div>
-                    <div class="login-message" id="profileSecurityMessage"></div>
+                    <div class="login-message" id="profileSecurityMessage" aria-live="polite"></div>
                   </section>
-                  <section class="profile-section-box" id="profileLegacySecurity">
-                    <h4 data-next-i18n="legacyAuth.passwordSecurity">Legacy security</h4>
-                    <p data-next-i18n="legacyAuth.passwordChangeHelp">Change your Legacy password. Use at least 15 characters.</p>
-                    <div class="profile-meta">
-                      <div class="profile-meta-row"><span data-next-i18n="legacyAuth.mfaStatus">2FA status</span><strong id="profileLegacyMfaStatus">-</strong></div>
+                  <section class="profile-dashboard-card profile-security-card legacy" id="profileLegacySecurity" data-security-dashboard-card="legacy">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                        <div>
+                          <h4 data-next-i18n="legacyAuth.passwordSecurity">Legacy security</h4>
+                          <p data-next-i18n="legacyAuth.passwordChangeHelp">Change your Legacy password. Use at least 15 characters.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-security-stats">
+                      <div class="profile-security-stat">
+                        <span data-next-i18n="legacyAuth.mfaStatus">2FA status</span>
+                        <strong id="profileLegacyMfaStatus">-</strong>
+                      </div>
                     </div>
                     <form class="profile-form" id="profileLegacyPasswordForm">
                       <label for="profileLegacyCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
@@ -13911,113 +14340,158 @@ def ui_preview_html(
                       </label>
                       <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.changePassword">Change password</button>
                     </form>
-                    <div class="login-message" id="profileLegacyMessage"></div>
+                    <div class="login-message" id="profileLegacyMessage" aria-live="polite"></div>
                   </section>
-                </div>
-                <div class="profile-security-column">
-                  <section class="profile-section-box">
-                    <h4 data-next-i18n="profile.recoveryTitle">Account recovery</h4>
-                    <p data-next-i18n="profile.recoveryHelp">Recovery codes let you regain access when your usual sign-in methods are unavailable.</p>
-                    <div class="profile-meta">
-                      <div class="profile-meta-row">
+                  <section class="profile-dashboard-card profile-security-card recovery" data-security-dashboard-card="recovery">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("lists") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.recoveryTitle">Account recovery</h4>
+                          <p data-next-i18n="profile.recoveryHelp">Recovery codes let you regain access when your usual sign-in methods are unavailable.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-security-stats">
+                      <div class="profile-security-stat">
                         <span data-next-i18n="profile.recoveryActiveCodes">Active codes</span>
                         <strong id="profileRecoveryActiveCount">-</strong>
                       </div>
-                      <div class="profile-meta-row">
+                      <div class="profile-security-stat">
                         <span data-next-i18n="profile.recoveryLastGenerated">Last generated</span>
                         <strong id="profileRecoveryLastGenerated">-</strong>
                       </div>
                     </div>
                     <div class="recovery-codes hidden" id="profileRecoveryCodes"></div>
                     <div class="profile-action-row">
-                      <button type="button" class="secondary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
+                      <button type="button" class="primary-button" id="profileGenerateRecoveryButton" data-next-i18n="profile.generateRecoveryCodes">Generate recovery codes</button>
                       <button type="button" class="secondary-button" id="profileRevokeRecoveryButton" data-next-i18n="profile.revokeRecoveryCodes">Revoke active codes</button>
                     </div>
-                    <div class="login-message" id="profileRecoveryMessage"></div>
+                    <div class="login-message" id="profileRecoveryMessage" aria-live="polite"></div>
                   </section>
+                  </div>
                 </div>
               </div>
             </div>
                 <div id="profilePanelApi" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabApi" tabindex="0" data-profile-panel="api">
-              <div class="segmented profile-submenu profile-api-submenu" role="tablist" aria-label="API and MCP sections">
-                <button type="button" class="active" data-profile-api-tab="general" data-next-i18n="profile.apiTabGeneral">General</button>
-                <button type="button" data-profile-api-tab="create" data-next-i18n="profile.apiTabCreate">Create key</button>
-                <button type="button" data-profile-api-tab="activity" data-next-i18n="profile.apiTabActivity">Activity</button>
-              </div>
-              <div class="profile-api-panel" data-profile-api-panel="general">
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.apiMcp">API & MCP</h4>
-                  <p data-next-i18n="profile.apiMcpHelp">Create scoped access tokens for external API clients and the DiscVault MCP server.</p>
-                  <div class="profile-meta" id="profileApiMcpSummary"></div>
-                </section>
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.accessTokens">Access tokens</h4>
-                  <div class="profile-passkey-list" id="profileApiTokenList"></div>
-                </section>
-              </div>
-              <div class="profile-api-panel hidden" data-profile-api-panel="create">
-                <section class="profile-section-box">
-                  <h4 data-next-i18n="profile.createAccessToken">Create access token</h4>
-                  <p data-next-i18n="profile.createAccessTokenHelp">Choose exactly which API and MCP actions this key may use.</p>
-                  <form class="profile-form" id="profileApiTokenForm">
-                    <label for="profileApiTokenNameInput">
-                      <span data-next-i18n="profile.tokenName">Token name</span>
-                      <input id="profileApiTokenNameInput" maxlength="120" autocomplete="off" placeholder="DiscVault MCP">
-                    </label>
-                    <div class="profile-passkey-list" id="profileApiPermissionList"></div>
-                    <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="profileCreateApiTokenButton" data-next-i18n="profile.createToken">Create token</button>
-                    </div>
-                  </form>
-                  <div class="recovery-codes hidden" id="profileNewApiToken"></div>
-                  <div class="login-message" id="profileApiMessage"></div>
-                </section>
-              </div>
-              <div class="profile-api-panel hidden" data-profile-api-panel="activity">
-                <section class="profile-section-box profile-api-activity-box">
-                  <div class="detail-card-head compact">
-                    <div>
-                      <h4 data-next-i18n="profile.apiActivityTitle">API & MCP activity</h4>
-                      <p data-next-i18n="profile.apiActivityHelp">Review API and MCP requests made with your access keys.</p>
-                    </div>
-                    <button type="button" class="secondary-button" id="profileApiAuditRefreshButton" data-next-i18n="profile.apiActivityRefresh">Refresh</button>
+              <div class="profile-dashboard api-dashboard">
+                <header class="profile-dashboard-intro">
+                  <span class="profile-dashboard-symbol">""" + nav_icon("api") + """</span>
+                  <div class="profile-dashboard-copy">
+                    <h4 data-next-i18n="profile.apiMcp">API & MCP</h4>
+                    <p data-next-i18n="profile.apiMcpHelp">Create scoped access tokens for external API clients and the DiscVault MCP server.</p>
                   </div>
-                  <div class="profile-api-log-filter-row">
-                    <label for="profileApiAuditTokenFilter">
-                      <span data-next-i18n="profile.apiActivityTokenFilter">Access key</span>
-                      <select id="profileApiAuditTokenFilter"></select>
-                    </label>
-                    <label for="profileApiAuditCategoryFilter">
-                      <span data-next-i18n="profile.apiActivityTypeFilter">Type</span>
-                      <select id="profileApiAuditCategoryFilter">
-                        <option value="all" data-next-i18n="profile.apiActivityTypeAll">All activity</option>
-                        <option value="api" data-next-i18n="profile.apiActivityTypeApi">API</option>
-                        <option value="mcp" data-next-i18n="profile.apiActivityTypeMcp">MCP</option>
-                        <option value="security" data-next-i18n="profile.apiActivityTypeSecurity">Security</option>
-                      </select>
-                    </label>
-                    <label for="profileApiAuditSearchInput">
-                      <span data-next-i18n="profile.apiActivitySearchFilter">Search</span>
-                      <input id="profileApiAuditSearchInput" type="search" autocomplete="off" data-next-i18n-placeholder="profile.apiActivitySearchPlaceholder" placeholder="Endpoint, tool, agent or IP">
-                    </label>
-                  </div>
-                  <div id="profileApiAuditTroubleshooting"></div>
-                  <div class="profile-api-log-list" id="profileApiAuditList"></div>
-                </section>
+                </header>
+                <div class="detail-submenu profile-dashboard-tabs profile-api-submenu" role="tablist" aria-label="API and MCP sections">
+                  <button type="button" class="active" id="profileApiTabGeneral" role="tab" aria-selected="true" aria-controls="profileApiPanelGeneral" tabindex="0" data-profile-api-tab="general">""" + nav_icon("api") + """<span class="profile-dashboard-tab-label" data-next-i18n="profile.apiTabGeneral">General</span></button>
+                  <button type="button" id="profileApiTabCreate" role="tab" aria-selected="false" aria-controls="profileApiPanelCreate" tabindex="-1" data-profile-api-tab="create">""" + nav_icon("security") + """<span class="profile-dashboard-tab-label" data-next-i18n="profile.apiTabCreate">Create key</span></button>
+                  <button type="button" id="profileApiTabActivity" role="tab" aria-selected="false" aria-controls="profileApiPanelActivity" tabindex="-1" data-profile-api-tab="activity">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="profile.apiTabActivity">Activity</span></button>
+                </div>
+                <div class="profile-api-panel" id="profileApiPanelGeneral" role="tabpanel" aria-labelledby="profileApiTabGeneral" data-profile-api-panel="general">
+                  <section class="profile-dashboard-card primary">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("api") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.apiMcp">API & MCP</h4>
+                          <p data-next-i18n="profile.apiMcpHelp">Create scoped access tokens for external API clients and the DiscVault MCP server.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-api-summary-grid" id="profileApiMcpSummary"></div>
+                  </section>
+                  <section class="profile-dashboard-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.accessTokens">Access tokens</h4>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="profile-passkey-list" id="profileApiTokenList"></div>
+                  </section>
+                </div>
+                <div class="profile-api-panel hidden" id="profileApiPanelCreate" role="tabpanel" aria-labelledby="profileApiTabCreate" aria-hidden="true" data-profile-api-panel="create">
+                  <section class="profile-dashboard-card primary">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.createAccessToken">Create access token</h4>
+                          <p data-next-i18n="profile.createAccessTokenHelp">Choose exactly which API and MCP actions this key may use.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <form class="profile-form" id="profileApiTokenForm">
+                      <label for="profileApiTokenNameInput">
+                        <span data-next-i18n="profile.tokenName">Token name</span>
+                        <input id="profileApiTokenNameInput" maxlength="120" autocomplete="off" placeholder="DiscVault MCP">
+                      </label>
+                      <div class="profile-passkey-list" id="profileApiPermissionList"></div>
+                      <div class="profile-form-actions">
+                        <button type="submit" class="primary-button" id="profileCreateApiTokenButton" data-next-i18n="profile.createToken">Create token</button>
+                      </div>
+                    </form>
+                    <div class="recovery-codes hidden" id="profileNewApiToken"></div>
+                    <div class="login-message" id="profileApiMessage" aria-live="polite"></div>
+                  </section>
+                </div>
+                <div class="profile-api-panel hidden" id="profileApiPanelActivity" role="tabpanel" aria-labelledby="profileApiTabActivity" aria-hidden="true" data-profile-api-panel="activity">
+                  <section class="profile-dashboard-card profile-api-activity-box">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.apiActivityTitle">API & MCP activity</h4>
+                          <p data-next-i18n="profile.apiActivityHelp">Review API and MCP requests made with your access keys.</p>
+                        </div>
+                      </div>
+                      <button type="button" class="secondary-button" id="profileApiAuditRefreshButton" data-next-i18n="profile.apiActivityRefresh">Refresh</button>
+                    </div>
+                    <div class="profile-api-log-filter-row">
+                      <label for="profileApiAuditTokenFilter">
+                        <span data-next-i18n="profile.apiActivityTokenFilter">Access key</span>
+                        <select id="profileApiAuditTokenFilter"></select>
+                      </label>
+                      <label for="profileApiAuditCategoryFilter">
+                        <span data-next-i18n="profile.apiActivityTypeFilter">Type</span>
+                        <select id="profileApiAuditCategoryFilter">
+                          <option value="all" data-next-i18n="profile.apiActivityTypeAll">All activity</option>
+                          <option value="api" data-next-i18n="profile.apiActivityTypeApi">API</option>
+                          <option value="mcp" data-next-i18n="profile.apiActivityTypeMcp">MCP</option>
+                          <option value="security" data-next-i18n="profile.apiActivityTypeSecurity">Security</option>
+                        </select>
+                      </label>
+                      <label for="profileApiAuditSearchInput">
+                        <span data-next-i18n="profile.apiActivitySearchFilter">Search</span>
+                        <input id="profileApiAuditSearchInput" type="search" autocomplete="off" data-next-i18n-placeholder="profile.apiActivitySearchPlaceholder" placeholder="Endpoint, tool, agent or IP">
+                      </label>
+                    </div>
+                    <div id="profileApiAuditTroubleshooting"></div>
+                    <div class="profile-api-log-list" id="profileApiAuditList"></div>
+                  </section>
+                </div>
               </div>
             </div>
                 <div id="profilePanelAbout" class="detail-subpanel profile-panel hidden" role="tabpanel" aria-labelledby="profileTabAbout" tabindex="0" data-profile-panel="about">
-              <section class="profile-section-box">
-                <div>
-                  <h4 data-next-i18n="profile.about">About</h4>
-                  <p class="muted" data-next-i18n="profile.aboutHelp">Version information, credits and data sources.</p>
-                </div>
-                <div class="profile-about-stack">
-                  <div class="profile-about-card">
-                    <div class="profile-meta">
-                      <div class="profile-meta-row">
-                        <span data-next-i18n="profile.appVersion">App version</span>
-                        <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+              <div class="profile-dashboard about-dashboard">
+                <header class="profile-dashboard-intro">
+                  <span class="profile-dashboard-symbol">""" + nav_icon("about") + """</span>
+                  <div class="profile-dashboard-copy">
+                    <h4 data-next-i18n="profile.about">About</h4>
+                    <p data-next-i18n="profile.aboutHelp">Version information, credits and data sources.</p>
+                  </div>
+                </header>
+                <div class="profile-about-grid">
+                  <section class="profile-dashboard-card primary profile-about-card profile-about-card--version">
+                    <div class="profile-about-version">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("about") + """</span>
+                        <div class="profile-about-card-copy">
+                          <span data-next-i18n="profile.appVersion">App version</span>
+                          <strong id="profileAppVersion">""" + h(build_version()) + """</strong>
+                        </div>
                       </div>
                     </div>
                     <div class="profile-update-block hidden" id="profileUpdateBlock">
@@ -14034,29 +14508,37 @@ def ui_preview_html(
                       </div>
                       <div class="profile-update-result" id="profileUpdateResult" hidden></div>
                     </div>
-                  </div>
-                  <div class="profile-about-card">
-                    <div class="profile-about-card-copy">
+                  </section>
+                  <section class="profile-dashboard-card profile-about-card">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                      <div class="profile-about-card-copy">
                       <span data-next-i18n="profile.developedBy">Developed by</span>
                       <div class="profile-about-brandmark">
                         <img class="profile-about-brandmark-light" src="/api/next/assets/flux76-wordmark-light.png" alt="Flux76">
                         <img class="profile-about-brandmark-dark" src="/api/next/assets/flux76-wordmark-dark.png" alt="Flux76">
                       </div>
+                      </div>
                     </div>
-                  </div>
-                  <div class="profile-about-card">
-                    <div class="profile-about-card-head">
+                  </section>
+                  <section class="profile-dashboard-card profile-about-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("library") + """</span>
                       <div class="profile-about-card-copy">
                         <span data-next-i18n="profile.tmdbDataProvidedBy">Data provided by TMDB</span>
                         <p class="profile-about-legal" data-next-i18n="profile.tmdbDisclaimer">DiscVault is not endorsed or certified by TMDB.</p>
                       </div>
                       <img class="profile-about-tmdb-logo" src="/api/next/assets/tmdb-logo.svg" alt="TMDB">
                     </div>
-                  </div>
-                  <div class="profile-about-card profile-about-card--debug">
-                    <div class="profile-about-card-head">
-                      <div class="profile-about-card-copy">
-                        <span data-next-i18n="appAdmin.debugMode">Debug</span>
+                  </section>
+                  <section class="profile-dashboard-card profile-about-card profile-about-card--debug">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                        <div class="profile-about-card-copy">
+                          <span data-next-i18n="appAdmin.debugMode">Debug</span>
+                        </div>
                       </div>
                       <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
                     </div>
@@ -14067,9 +14549,9 @@ def ui_preview_html(
                       </div>
                     </div>
                     <div class="offline-status-list" id="profileOfflineStatus"></div>
-                  </div>
+                  </section>
                 </div>
-              </section>
+              </div>
             </div>
               </div>
             </div>
@@ -34311,20 +34793,38 @@ def ui_preview_html(
       setProfileTab(activeProfileTab);
     }
     function setProfileApiTab(tab) {
-      const selected = tab || "general";
+      const selected = ["general", "create", "activity"].includes(tab) ? tab : "general";
       activeProfileApiTab = selected;
       localStorage.setItem("dv_next_profile_api_tab", selected);
       document.querySelectorAll("[data-profile-api-tab]").forEach((button) => {
         const active = button.dataset.profileApiTab === selected;
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
       });
       document.querySelectorAll("[data-profile-api-panel]").forEach((panel) => {
-        panel.classList.toggle("hidden", panel.dataset.profileApiPanel !== selected);
+        const active = panel.dataset.profileApiPanel === selected;
+        panel.classList.toggle("hidden", !active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
       if (selected === "activity" && !profileApiAudit.loaded && !profileApiAudit.loading) {
         loadProfileApiAuditEvents();
       }
+    }
+    function handleProfileApiTabKeydown(button, event) {
+      if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      const tabs = [...document.querySelectorAll("[data-profile-api-tab]")].filter((item) => !item.disabled);
+      if (!tabs.length) return;
+      const currentIndex = Math.max(0, tabs.indexOf(button));
+      let targetIndex = currentIndex;
+      if (event.key === "Home") targetIndex = 0;
+      else if (event.key === "End") targetIndex = tabs.length - 1;
+      else if (event.key === "ArrowRight") targetIndex = (currentIndex + 1) % tabs.length;
+      else targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      event.preventDefault();
+      const target = tabs[targetIndex];
+      setProfileApiTab(target.dataset.profileApiTab || "general");
+      target.focus();
     }
     function renderLoansSystemSetting() {
       const row = document.getElementById("loansSystemSettingRow");
@@ -34762,6 +35262,16 @@ def ui_preview_html(
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
         button.classList.toggle("active", button.dataset.containerManagerType === containerManagerType);
       });
+      const typeLabels = {
+        box_set: tNext("containerManage.boxSets", "Box-sets"),
+        vault: tNext("containerManage.vaults", "Vaults"),
+        collection: tNext("containerManage.collections", "Collections")
+      };
+      const items = containerManagerItems();
+      const heading = document.getElementById("containerManagerListHeading");
+      const count = document.getElementById("containerManagerCount");
+      if (heading) heading.textContent = typeLabels[containerManagerType] || typeLabels.box_set;
+      if (count) count.textContent = String(items.length);
       const createButton = document.getElementById("containerManagerCreateButton");
       if (createButton) {
         createButton.textContent = tNext(
@@ -34770,7 +35280,6 @@ def ui_preview_html(
         );
       }
       if (!list) return;
-      const items = containerManagerItems();
       if (!items.length) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext(`containerManage.empty.${containerManagerType}`, tNext("containerManage.noItems", "Nothing here yet.")))}</div>`;
         return;
@@ -34782,10 +35291,13 @@ def ui_preview_html(
         const canRename = hasAnyPermission(["containers.edit", "collection.bulk_edit"]);
         const canDelete = hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete);
         return `
-          <div class="container-manager-row" data-container-manager-id="${id}">
-            <div class="container-manager-meta">
-              <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
-              <span>${escapeHtml(meta)}</span>
+          <article class="container-manager-row" data-container-manager-id="${id}">
+            <div class="container-manager-row-head">
+              <div class="container-manager-meta">
+                <strong>${escapeHtml(container.title || tNext("common.untitled", "Untitled"))}</strong>
+                <span>${escapeHtml(meta)}</span>
+              </div>
+              <span class="tag blue">${escapeHtml(typeLabel)}</span>
             </div>
             <div class="container-manager-actions">
               <input data-container-manager-title="${id}" value="${escapeHtml(container.title || "")}" maxlength="240" aria-label="${escapeHtml(tNext("containerManage.titleLabel", "Name"))}">
@@ -34793,7 +35305,7 @@ def ui_preview_html(
               <button type="button" class="secondary-button" data-container-manager-open="${id}">${escapeHtml(tNext("containerManage.open", "Open"))}</button>
               ${canDelete ? `<button type="button" class="secondary-button danger" data-container-manager-delete="${id}">${escapeHtml(tNext("containerManage.delete", "Delete"))}</button>` : ""}
             </div>
-          </div>
+          </article>
         `;
       }).join("");
     }
@@ -35207,15 +35719,44 @@ def ui_preview_html(
     function setStructureView(view) {
       structureView = view === "locations" ? "locations" : "containers";
       document.querySelectorAll("[data-container-manager-type]").forEach((button) => {
-        button.classList.toggle("active", structureView === "containers" && button.dataset.containerManagerType === containerManagerType);
+        const active = structureView === "containers" && button.dataset.containerManagerType === containerManagerType;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
       });
       document.querySelectorAll("[data-structure-view]").forEach((button) => {
-        button.classList.toggle("active", structureView === "locations" && button.dataset.structureView === "locations");
+        const active = structureView === "locations" && button.dataset.structureView === "locations";
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("tabindex", active ? "0" : "-1");
       });
-      document.querySelectorAll('[data-structure-section="containers"]').forEach((el) => el.classList.toggle("hidden", structureView !== "containers"));
-      document.querySelectorAll('[data-structure-section="locations"]').forEach((el) => el.classList.toggle("hidden", structureView !== "locations"));
+      document.querySelectorAll('[data-structure-section="containers"]').forEach((el) => {
+        const active = structureView === "containers";
+        el.classList.toggle("hidden", !active);
+        el.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+      document.querySelectorAll('[data-structure-section="locations"]').forEach((el) => {
+        const active = structureView === "locations";
+        el.classList.toggle("hidden", !active);
+        el.setAttribute("aria-hidden", active ? "false" : "true");
+      });
       if (structureView === "locations") renderLocationsPanel();
       else renderContainerManager();
+    }
+    function handleStructureTabKeydown(button, event) {
+      if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      const tabs = [...document.querySelectorAll("[data-structure-tab]")].filter((item) => !item.disabled);
+      if (!tabs.length) return;
+      const currentIndex = Math.max(0, tabs.indexOf(button));
+      let targetIndex = currentIndex;
+      if (event.key === "Home") targetIndex = 0;
+      else if (event.key === "End") targetIndex = tabs.length - 1;
+      else if (event.key === "ArrowRight") targetIndex = (currentIndex + 1) % tabs.length;
+      else targetIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      event.preventDefault();
+      const target = tabs[targetIndex];
+      target.click();
+      target.focus();
     }
     function bindLocationTreeEvents() {
       const tree = document.getElementById("locationsTree");
@@ -35593,11 +36134,11 @@ def ui_preview_html(
           ? `disabled title="${escapeHtml(tNext("profile.lastPasskeyBlocked", "You cannot delete your last passkey."))}"`
           : "";
         return `
-          <div class="profile-passkey" data-profile-passkey="${id}">
+          <article class="profile-passkey security-credential-card" data-profile-passkey="${id}">
             <div class="profile-passkey-head">
               <strong>${escapeHtml(name)}</strong>
               <span class="tag blue">${escapeHtml(tNext("auth.passkey", "Passkey"))}</span>
-            </div>
+            </article>
             <div class="profile-passkey-meta">
               ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(credential.created_at))}
               &middot;
@@ -35884,25 +36425,25 @@ def ui_preview_html(
         const allowed = access.allowedPermissions || [];
         const tokens = access.tokens || [];
         summary.innerHTML = `
-          <div class="profile-meta-row">
+          <div class="profile-api-summary-item">
             <span>${escapeHtml(tNext("profile.apiEndpoint", "API endpoint"))}</span>
             <strong>/api/next/api/v1</strong>
           </div>
-          <div class="profile-meta-row">
+          <div class="profile-api-summary-item">
             <span>${escapeHtml(tNext("profile.mcpEndpoint", "MCP endpoint"))}</span>
             <strong>/mcp</strong>
           </div>
-          <div class="profile-meta-row">
+          <div class="profile-api-summary-item">
             <span>${escapeHtml(tNext("profile.tokenPermissions", "Token permissions"))}</span>
             <strong>${escapeHtml(String(allowed.length))}</strong>
           </div>
-          <div class="profile-meta-row">
-            <span>${escapeHtml(tNext("profile.apiActivityTitle", "API & MCP activity"))}</span>
-            <button type="button" class="secondary-button compact-button" data-profile-api-open="activity">${escapeHtml(tNext("profile.apiTabActivity", "Activity"))}</button>
-          </div>
-          <div class="profile-meta-row">
+          <div class="profile-api-summary-item">
             <span>${escapeHtml(tNext("profile.accessTokens", "Access tokens"))}</span>
             <strong>${escapeHtml(String(tokens.length))}</strong>
+          </div>
+          <div class="profile-api-summary-item action">
+            <span>${escapeHtml(tNext("profile.apiActivityTitle", "API & MCP activity"))}</span>
+            <button type="button" class="secondary-button compact-button" data-profile-api-open="activity">${escapeHtml(tNext("profile.apiTabActivity", "Activity"))}</button>
           </div>
         `;
       }
@@ -35940,11 +36481,11 @@ def ui_preview_html(
           const revoked = !!token.revokedAt;
           const permissionKeys = token.permissionKeys || [];
           return `
-            <div class="profile-passkey ${revoked ? "disabled" : ""}">
+            <article class="profile-passkey profile-api-token-card ${revoked ? "disabled" : ""}">
               <div class="profile-passkey-head">
                 <strong>${escapeHtml(token.name || "API token")}</strong>
                 <span class="tag ${revoked ? "" : "good"}">${escapeHtml(revoked ? tNext("profile.revoked", "Revoked") : tNext("profile.active", "Active"))}</span>
-              </div>
+              </article>
               <div class="profile-passkey-meta">
                 ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(token.createdAt))}
                 &middot;
@@ -36761,6 +37302,9 @@ def ui_preview_html(
       document.querySelectorAll("[data-structure-view]").forEach((button) => {
         button.addEventListener("click", () => setStructureView(button.dataset.structureView || "containers"));
       });
+      document.querySelectorAll("[data-structure-tab]").forEach((button) => {
+        button.addEventListener("keydown", (event) => handleStructureTabKeydown(button, event));
+      });
       document.getElementById("locationCreateForm")?.addEventListener("submit", (event) => createLocation(event));
       document.getElementById("containerManagerCreateForm")?.addEventListener("submit", (event) => createManagedContainer(event));
       document.getElementById("containerManagerList")?.addEventListener("click", (event) => {
@@ -36967,6 +37511,7 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-profile-api-tab]").forEach((button) => {
         button.addEventListener("click", () => setProfileApiTab(button.dataset.profileApiTab));
+        button.addEventListener("keydown", (event) => handleProfileApiTabKeydown(button, event));
       });
       document.getElementById("profileApiMcpSummary")?.addEventListener("click", (event) => {
         const openButton = event.target.closest("[data-profile-api-open]");

@@ -405,6 +405,121 @@ class NextProfileUiTests(unittest.TestCase):
             self.html,
         )
 
+    def test_structure_dashboard_uses_accessible_workspace_cards(self):
+        self.assertIn('class="profile-dashboard structure-dashboard"', self.html)
+        tabs = {
+            "box_set": "structureContainersPanel",
+            "vault": "structureContainersPanel",
+            "collection": "structureContainersPanel",
+            "locations": "structureLocationsPanel",
+        }
+        for tab, panel_id in tabs.items():
+            with self.subTest(tab=tab):
+                self.assertIn(f'data-structure-tab="{tab}"', self.html)
+                self.assertIn(f'aria-controls="{panel_id}"', self.html)
+
+        for element_id in (
+            "containerManagerCreateForm",
+            "containerManagerTitle",
+            "containerManagerCreateButton",
+            "containerManagerMessage",
+            "containerManagerListHeading",
+            "containerManagerCount",
+            "containerManagerList",
+            "locationCreateForm",
+            "locationManagerMessage",
+            "locationsTree",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="containerManagerMessage" aria-live="polite"', self.html)
+        self.assertIn('class="container-manager-row" data-container-manager-id="${id}"', self.html)
+        self.assertIn("function handleStructureTabKeydown(button, event)", self.html)
+        self.assertIn('button.setAttribute("aria-selected", active ? "true" : "false");', self.html)
+        self.assertIn(".structure-workspace {", self.html)
+        self.assertIn(".locations-row {", self.html)
+
+    def test_security_dashboard_preserves_credentials_and_recovery_actions(self):
+        self.assertIn('class="profile-dashboard security-dashboard"', self.html)
+        for card in ("passkeys", "legacy", "recovery"):
+            self.assertIn(f'data-security-dashboard-card="{card}"', self.html)
+
+        for element_id in (
+            "profileRefreshPasskeysButton",
+            "profilePasskeyList",
+            "profileNewPasskeyNameInput",
+            "profileAddPasskeyButton",
+            "profileSecurityMessage",
+            "profileLegacySecurity",
+            "profileLegacyPasswordForm",
+            "profileLegacyMfaStatus",
+            "profileRecoveryActiveCount",
+            "profileRecoveryLastGenerated",
+            "profileRecoveryCodes",
+            "profileGenerateRecoveryButton",
+            "profileRevokeRecoveryButton",
+            "profileRecoveryMessage",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('class="profile-passkey security-credential-card"', self.html)
+        self.assertIn('id="profileSecurityMessage" aria-live="polite"', self.html)
+        self.assertIn('id="profileRecoveryMessage" aria-live="polite"', self.html)
+        self.assertIn(".profile-security-stats {", self.html)
+
+    def test_api_dashboard_uses_accessible_tabs_and_summary_cards(self):
+        self.assertIn('class="profile-dashboard api-dashboard"', self.html)
+        tabs = {
+            "General": ("general", "profileApiPanelGeneral"),
+            "Create": ("create", "profileApiPanelCreate"),
+            "Activity": ("activity", "profileApiPanelActivity"),
+        }
+        for suffix, (tab, panel_id) in tabs.items():
+            with self.subTest(tab=tab):
+                self.assertIn(f'id="profileApiTab{suffix}"', self.html)
+                self.assertIn(f'data-profile-api-tab="{tab}"', self.html)
+                self.assertIn(f'aria-controls="{panel_id}"', self.html)
+                self.assertIn(f'id="{panel_id}" role="tabpanel"', self.html)
+
+        for element_id in (
+            "profileApiMcpSummary",
+            "profileApiTokenList",
+            "profileApiTokenForm",
+            "profileApiPermissionList",
+            "profileCreateApiTokenButton",
+            "profileNewApiToken",
+            "profileApiMessage",
+            "profileApiAuditRefreshButton",
+            "profileApiAuditList",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn("function handleProfileApiTabKeydown(button, event)", self.html)
+        self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
+        self.assertIn('class="profile-api-summary-item"', self.html)
+        self.assertIn('class="profile-passkey profile-api-token-card ${revoked ? "disabled" : ""}"', self.html)
+
+    def test_about_dashboard_balances_version_credits_and_debug_info(self):
+        self.assertIn('class="profile-dashboard about-dashboard"', self.html)
+        self.assertIn('class="profile-about-grid"', self.html)
+        self.assertIn(
+            'class="profile-dashboard-card primary profile-about-card profile-about-card--version"',
+            self.html,
+        )
+        self.assertIn('class="profile-dashboard-card profile-about-card profile-about-card--debug"', self.html)
+        for element_id in (
+            "profileAppVersion",
+            "profileUpdateBlock",
+            "profileUpdateChannel",
+            "profileUpdateCheckButton",
+            "profileUpdateResult",
+            "profileBuildSha",
+            "profileOfflineStatus",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+        self.assertIn(".profile-about-grid {", self.html)
+        self.assertIn(".profile-about-version {", self.html)
+
     def test_account_dashboard_preserves_existing_profile_bindings(self):
         self.assertIn('class="account-dashboard"', self.html)
         self.assertIn('id="profileAccountDisplayName"', self.html)
