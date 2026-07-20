@@ -1,4 +1,4 @@
-const SW_VERSION = "discvault-sw-v152";
+const SW_VERSION = "discvault-sw-v153";
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
@@ -177,6 +177,16 @@ function normalizedCacheRequest(request) {
   return request;
 }
 
+function isProtectedMediaPath(pathname) {
+  return pathname.startsWith("/api/next/media/") ||
+    pathname.startsWith("/api/next/movievault-v2/posters/");
+}
+
+function isProtectedMediaRequest(request) {
+  const url = new URL(request.url);
+  return url.origin === self.location.origin && isProtectedMediaPath(url.pathname);
+}
+
 async function cacheMatch(request, cacheName) {
   const key = normalizedCacheRequest(request);
   const cache = cacheName ? await caches.open(cacheName) : null;
@@ -185,6 +195,7 @@ async function cacheMatch(request, cacheName) {
 
 async function cachePut(request, response, cacheName) {
   if (!response || !(response.ok || response.type === "opaque")) return;
+  if (isProtectedMediaRequest(request)) return;
   const cache = await caches.open(cacheName);
   await cache.put(normalizedCacheRequest(request), response.clone());
 }
@@ -231,7 +242,14 @@ async function cachedSnapshot() {
 function isCacheableImageUrl(value) {
   const text = String(value || "").trim();
   if (!text) return false;
-  if (text.startsWith("/api/next/media/") || text.startsWith("/api/next/assets/") || text.startsWith("/api/next/flags/")) return true;
+  let parsed;
+  try {
+    parsed = new URL(text, self.location.origin);
+  } catch {
+    return false;
+  }
+  if (parsed.origin === self.location.origin && isProtectedMediaPath(parsed.pathname)) return false;
+  if (text.startsWith("/api/next/assets/") || text.startsWith("/api/next/flags/")) return true;
   if (!/^https?:\/\//i.test(text)) return false;
   if (/\/(image\.tmdb\.org|images\.static-bluray\.com)\//i.test(text)) return true;
   return /\.(avif|gif|jpe?g|png|svg|webp)(\?|#|$)/i.test(text);
@@ -275,16 +293,15 @@ async function prefetchSnapshotAssets(response) {
   const snapshot = payload && payload.snapshot;
   if (!snapshot) return;
   const urls = collectSnapshotImageUrls(snapshot);
-  const cache = await caches.open(RUNTIME_CACHE);
   await Promise.all(urls.map(async assetUrl => {
     const absolute = new URL(assetUrl, self.location.origin);
     const request = absolute.origin === self.location.origin
       ? new Request(absolute.toString(), { method: "GET" })
       : new Request(absolute.toString(), { method: "GET", mode: "no-cors" });
-    const cached = await cache.match(normalizedCacheRequest(request));
+    const cached = await cacheMatch(request, RUNTIME_CACHE);
     if (cached) return;
     const resp = await fetch(request).catch(() => null);
-    if (resp && (resp.ok || resp.type === "opaque")) await cache.put(normalizedCacheRequest(request), resp.clone());
+    if (resp && (resp.ok || resp.type === "opaque")) await cachePut(request, resp, RUNTIME_CACHE);
   }));
 }
 
@@ -443,6 +460,14 @@ async function handleApi(request, event) {
         detail: error && error.message ? error.message : "",
         path: url.pathname
       }, 503);
+    }
+  }
+
+  if (isProtectedMediaPath(url.pathname)) {
+    try {
+      return await fetch(new Request(request, { cache: "no-store" }));
+    } catch {
+      return imageFallbackResponse();
     }
   }
 

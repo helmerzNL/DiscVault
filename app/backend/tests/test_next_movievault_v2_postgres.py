@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+import uuid
 from unittest.mock import patch
 
 
@@ -1148,7 +1149,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         self.assertEqual(cleanup_result["removed"], 0)
         self.assertEqual(remaining, 4)
 
-    def test_movievault_poster_route_requires_auth_and_keeps_generic_media_public(self):
+    def test_movievault_poster_route_requires_auth_and_rejects_unlinked_generic_media(self):
         content = _png_bytes()
         checksum = hashlib.sha256(content).hexdigest()
         public_content = _png_bytes(size=(11, 11))
@@ -1186,6 +1187,44 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                                 (public_storage_key, len(public_content), public_checksum),
                             )
                             public_media_asset_id = cur.fetchone()["id"]
+                            forged_user_id = uuid.uuid4()
+                            cur.execute(
+                                """
+                                INSERT INTO users (id, username, display_name)
+                                VALUES (%s, %s, %s)
+                                """,
+                                (
+                                    forged_user_id,
+                                    f"media-forgery-{forged_user_id.hex}",
+                                    "Media forgery test",
+                                ),
+                            )
+                            cur.execute(
+                                """
+                                INSERT INTO wishlist_items (user_id, title, poster_url, snapshot)
+                                VALUES (%s, %s, %s, %s)
+                                RETURNING id
+                                """,
+                                (
+                                    forged_user_id,
+                                    "Forged poster reference",
+                                    f"/api/next/media/assets/{public_media_asset_id}",
+                                    Jsonb({}),
+                                ),
+                            )
+                            forged_wishlist_item_id = cur.fetchone()["id"]
+
+                    def cleanup_forged_wishlist_user():
+                        with self.connect() as cleanup_conn:
+                            with cleanup_conn.transaction():
+                                with cleanup_conn.cursor() as cur:
+                                    cur.execute("DELETE FROM users WHERE id=%s", (forged_user_id,))
+
+                    self.addCleanup(cleanup_forged_wishlist_user)
+                    authenticated_actor = {"id": str(forged_user_id)}
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT id FROM users WHERE id=%s", (authenticated_actor["id"],))
+                        self.assertEqual(cur.fetchone()["id"], forged_user_id)
                     with patch.object(
                         next_movievault_v2_posters,
                         "_request",
@@ -1214,7 +1253,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 client = app.test_client()
                 protected_path = f"/api/next/movievault-v2/posters/{media_asset_id}"
                 self.assertFalse(next_app.is_public_next_path(protected_path))
-                self.assertTrue(next_app.is_public_next_path(f"/api/next/media/assets/{media_asset_id}"))
+                self.assertFalse(next_app.is_public_next_path(f"/api/next/media/assets/{media_asset_id}"))
 
                 with (
                     patch.object(next_app, "next_auth_effective_enabled", return_value=True),
@@ -1228,7 +1267,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value=authenticated_actor,
                     ),
                 ):
                     response = client.get(protected_path)
@@ -1260,7 +1299,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value=authenticated_actor,
                     ),
                 ):
                     degraded_fallback = client.get(protected_path)
@@ -1268,7 +1307,15 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 self.assertEqual(degraded_fallback.data, content)
                 degraded_fallback.close()
 
-                public_bypass = client.get(f"/api/next/media/assets/{media_asset_id}")
+                with (
+                    patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+                    patch.object(
+                        next_app,
+                        "next_auth_current_user",
+                        return_value=authenticated_actor,
+                    ),
+                ):
+                    public_bypass = client.get(f"/api/next/media/assets/{media_asset_id}")
                 self.assertEqual(public_bypass.status_code, 404)
 
                 with (
@@ -1276,7 +1323,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     patch.object(
                         next_app,
                         "next_auth_current_user",
-                        return_value={"id": "authenticated-user"},
+                        return_value=authenticated_actor,
                     ),
                 ):
                     protected_non_movievault = client.get(
@@ -1284,11 +1331,61 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     )
                 self.assertEqual(protected_non_movievault.status_code, 404)
 
-                public_response = client.get(f"/api/next/media/assets/{public_media_asset_id}")
-                self.assertEqual(public_response.status_code, 200)
-                self.assertEqual(public_response.data, public_content)
-                self.assertIn("public", public_response.headers.get("Cache-Control", ""))
-                public_response.close()
+                with (
+                    patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+                    patch.object(
+                        next_app,
+                        "next_auth_current_user",
+                        return_value=authenticated_actor,
+                    ),
+                ):
+                    unlinked_response = client.get(f"/api/next/media/assets/{public_media_asset_id}")
+                self.assertEqual(unlinked_response.status_code, 404)
+
+                wishlist_actor = {
+                    "id": str(forged_user_id),
+                    "permissions": ["watchlist.manage"],
+                }
+                with (
+                    patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+                    patch.object(next_app, "next_auth_current_user", return_value=wishlist_actor),
+                ):
+                    forged_wishlist_response = client.get(
+                        f"/api/next/media/assets/{public_media_asset_id}"
+                    )
+                self.assertEqual(forged_wishlist_response.status_code, 404)
+
+                with self.connect() as conn:
+                    with conn.transaction():
+                        with conn.cursor() as cur:
+                            cur.execute(
+                                """
+                                UPDATE wishlist_items
+                                SET snapshot=%s
+                                WHERE id=%s AND user_id=%s
+                                """,
+                                (
+                                    Jsonb(
+                                        {
+                                            next_app.WISHLIST_POSTER_ASSET_SNAPSHOT_KEY: str(
+                                                public_media_asset_id
+                                            )
+                                        }
+                                    ),
+                                    forged_wishlist_item_id,
+                                    forged_user_id,
+                                ),
+                            )
+                with (
+                    patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+                    patch.object(next_app, "next_auth_current_user", return_value=wishlist_actor),
+                ):
+                    trusted_wishlist_response = client.get(
+                        f"/api/next/media/assets/{public_media_asset_id}"
+                    )
+                self.assertEqual(trusted_wishlist_response.status_code, 200)
+                self.assertEqual(trusted_wishlist_response.data, public_content)
+                trusted_wishlist_response.close()
 
                 with self.connect() as conn:
                     with conn.cursor() as cur:
