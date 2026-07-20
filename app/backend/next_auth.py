@@ -2541,7 +2541,7 @@ def register_next_auth_routes(
         body = request.get_json(silent=True) or {}
         mfa_optional = _legacy_bootstrap_mfa_optional()
         mfa_required = body.get("mfa_enabled") is True if mfa_optional else True
-        if body.get("password_risk_accepted") is not True:
+        if not mfa_optional and body.get("password_risk_accepted") is not True:
             raise next_api_error("Password risk acknowledgement is required", 400)
         try:
             username = _normalize_username(body.get("username"))

@@ -1350,7 +1350,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         <div class="actions">
           <button type="button" id="authSetupButton" data-auth-action="setup" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
           <button type="button" id="authJoinButton" data-auth-action="join" data-next-i18n="auth.createAccount">Create account</button>
-          <button type="button" id="authReviewButton" class="hidden" data-next-i18n="auth.signInWithUsernamePassword">Sign in with username/password</button>
+          <button type="button" id="authReviewButton" class="hidden" data-next-i18n="auth.signIn">Sign in</button>
           <button type="button" id="authLoginButton" data-auth-action="login" data-next-i18n="auth.signIn">Sign in</button>
           <button type="button" id="authLogoutButton" data-auth-action="logout" data-next-i18n="auth.signOut">Sign out</button>
         </div>
@@ -2029,7 +2029,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         : setupRequired
           ? "Create the first owner passkey for this DiscVault Next instance."
           : !passkeyAvailable && reviewLoginAvailable
-            ? tNext("legacyAuth.signIn", "Sign in with password")
+            ? tNext("auth.signIn", "Sign in")
           : authState.registration_enabled
             ? "Sign in with your passkey or create a new account."
             : "Sign in with your passkey or create an account with an invite code.";
