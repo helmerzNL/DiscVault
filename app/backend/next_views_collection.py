@@ -1965,6 +1965,35 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       }
       return payload;
     }
+    function passkeyProcessAvailable() {
+      return authState.passkey_access_valid === undefined
+        ? true
+        : Boolean(authState.passkey_access_valid);
+    }
+    function renderPasskeyConfigurationGuidance(description) {
+      const configurationValid = Boolean(authState.passkey_configuration_valid);
+      description.textContent = configurationValid
+        ? tNext("auth.passkeyConfiguredAddressBody", "Passkeys are configured, but this address does not match. Open DiscVault through the configured HTTPS address to continue.")
+        : tNext("auth.passkeyFqdnRequiredBody", "Passkey onboarding requires a valid RP_ID and HTTPS RP_ORIGIN for a fully qualified domain name. Configure these values and open DiscVault through that address.");
+      const configuredOrigin = configurationValid && Array.isArray(authState.rp_origins)
+        ? String(authState.rp_origins[0] || "")
+        : "";
+      try {
+        const url = new URL(configuredOrigin);
+        if (url.protocol === "https:") {
+          const originLink = document.createElement("a");
+          originLink.href = url.origin;
+          originLink.textContent = tNext("auth.openConfiguredOrigin", "Open {origin}").replace("{origin}", url.origin);
+          description.append(" ", originLink);
+        }
+      } catch (_) { /* invalid origins are never linked */ }
+      const documentationLink = document.createElement("a");
+      documentationLink.href = "https://docs.discvault.eu";
+      documentationLink.target = "_blank";
+      documentationLink.rel = "noreferrer";
+      documentationLink.textContent = tNext("auth.passkeyDocumentation", "Passkey documentation");
+      description.append(" ", documentationLink);
+    }
     function renderAuthStatus() {
       const title = document.getElementById("authTitle");
       const description = document.getElementById("authDescription");
@@ -1977,7 +2006,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const loginButton = document.getElementById("authLoginButton");
       const logoutButton = document.getElementById("authLogoutButton");
       const inviteLabel = document.getElementById("authInviteLabel");
-      const unavailable = webauthnUnavailableReason();
+      const passkeyAvailable = passkeyProcessAvailable();
+      const unavailable = passkeyAvailable ? webauthnUnavailableReason() : "";
       const setupRequired = !!authState.setup_required;
       const authenticated = !!authState.authenticated;
       const reviewLoginAvailable = !!authState.legacy_auth_enabled;
@@ -1991,18 +2021,21 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             ? "Sign in with your passkey or create a new account."
             : "Sign in with your passkey or create an account with an invite code.";
       meta.textContent = `RP ID: ${authState.rp_id || "-"}; origins: ${(authState.rp_origins || []).join(", ") || "-"}`;
-      setupFields.classList.toggle("hidden", !(setupRequired || joinAllowed));
+      setupFields.classList.toggle("hidden", !passkeyAvailable || !(setupRequired || joinAllowed));
       inviteLabel.classList.toggle("hidden", !joinAllowed || !!authState.registration_enabled);
-      setupButton.classList.toggle("hidden", !setupRequired);
-      joinButton.classList.toggle("hidden", !joinAllowed);
+      setupButton.classList.toggle("hidden", !passkeyAvailable || !setupRequired);
+      joinButton.classList.toggle("hidden", !passkeyAvailable || !joinAllowed);
       reviewButton.classList.toggle("hidden", setupRequired || authenticated || !reviewLoginAvailable);
       reviewFields.classList.toggle("hidden", !reviewLoginAvailable || setupRequired || authenticated);
-      loginButton.classList.toggle("hidden", setupRequired || authenticated);
+      loginButton.classList.toggle("hidden", !passkeyAvailable || setupRequired || authenticated);
       logoutButton.classList.toggle("hidden", !authenticated);
       setupButton.disabled = !!unavailable;
       joinButton.disabled = !!unavailable;
       loginButton.disabled = !!unavailable;
-      if (unavailable) {
+      if (!passkeyAvailable && !authenticated) {
+        renderPasskeyConfigurationGuidance(description);
+        setAuthStatus("", "info");
+      } else if (unavailable) {
         setAuthStatus(unavailable, "bad");
       } else if (!document.getElementById("authStatusLine").textContent) {
         setAuthStatus(setupRequired ? "Ready to create a passkey." : "Ready.", "info");
@@ -2146,7 +2179,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderStartupSteps(startup.steps);
       renderStartupFacts(startup);
       const authButton = document.getElementById("startupAuthButton");
-      authButton.classList.toggle("hidden", !(startup.canCreateOwner || startup.canSignIn || startup.canSwitchAccount));
+      const canOpenAuth = startup.canSignIn
+        || startup.canSwitchAccount
+        || (startup.canCreateOwner && passkeyProcessAvailable());
+      authButton.classList.toggle("hidden", !canOpenAuth);
       authButton.textContent = startup.canCreateOwner
         ? tNext("auth.createOwnerPasskey", "Create owner passkey")
         : startup.canSwitchAccount
@@ -2191,6 +2227,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     async function registerOwnerPasskey(triggerButton = null) {
       setAuthStatus("Create owner passkey clicked.", "info");
+      if (!passkeyProcessAvailable()) {
+        renderAuthStatus();
+        return;
+      }
       const unavailable = webauthnUnavailableReason();
       if (unavailable) {
         setAuthStatus(unavailable, "bad");

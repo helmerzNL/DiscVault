@@ -145,6 +145,7 @@ class NextMigrationContractTests(unittest.TestCase):
         with (
             patch.object(next_app, "migration_readiness", return_value=readiness),
             patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+            patch.object(next_app, "next_auth_ready", return_value=False),
             patch.object(next_app, "count_table", return_value=0),
             patch.object(next_app, "next_auth_current_user", return_value=None),
         ):
@@ -182,6 +183,7 @@ class NextMigrationContractTests(unittest.TestCase):
         with (
             patch.object(next_app, "migration_readiness", return_value=readiness),
             patch.object(next_app, "next_auth_effective_enabled", return_value=False),
+            patch.object(next_app, "next_auth_ready", return_value=False),
             patch.object(next_app, "count_table", return_value=0),
             patch.object(next_app, "next_auth_current_user", return_value=None),
         ):

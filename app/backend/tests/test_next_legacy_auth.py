@@ -9,6 +9,7 @@ from unittest import mock
 
 from argon2 import PasswordHasher, Type
 from cryptography.exceptions import InvalidTag
+from flask import Flask
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -16,7 +17,13 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from app.backend import next_backup
-from app.backend.next_auth import _passkey_configuration_valid
+from app.backend.next_auth import (
+    _legacy_bootstrap_mfa_optional,
+    _passkey_access_valid,
+    _passkey_configuration_valid,
+    _request_host_is_local_ip,
+    _rp_origins,
+)
 from app.backend.next_legacy_auth import (
     PASSWORD_MIN_LENGTH,
     PasswordPolicyError,
@@ -65,29 +72,124 @@ class LegacyAuthSecurityTests(unittest.TestCase):
                 self.assertFalse(legacy_auth_env_enabled())
                 self.assertFalse(legacy_auth_effective(True))
 
-    def test_passkeys_require_an_explicit_valid_relying_party_host(self):
-        invalid_values = (
-            "",
-            "192.168.1.10",
-            "https://discvault.example.com",
-            "discvault_example.com",
-            "-discvault.example.com",
-            "discvault.example.com.",
+    def test_passkeys_require_explicit_non_placeholder_rp_configuration(self):
+        invalid_configurations = (
+            {"RP_ID": "", "RP_ORIGINS": ""},
+            {"RP_ID": "localhost", "RP_ORIGINS": "http://localhost:6080"},
+            {
+                "RP_ID": "discvault.example.com",
+                "RP_ORIGINS": "https://discvault.example.com",
+            },
+            {"RP_ID": "192.168.1.10", "RP_ORIGINS": "https://192.168.1.10"},
+            {"RP_ID": "vault.home.arpa", "RP_ORIGINS": ""},
+            {"RP_ID": "vault.home.arpa", "RP_ORIGINS": "http://vault.home.arpa"},
+            {"RP_ID": "vault.home.arpa", "RP_ORIGINS": "https://other.home.arpa"},
+            {"RP_ID": "https://vault.home.arpa", "RP_ORIGINS": "https://vault.home.arpa"},
         )
-        for value in invalid_values:
-            with self.subTest(value=value):
-                with mock.patch.dict(os.environ, {"RP_ID": value}, clear=False):
+        for configuration in invalid_configurations:
+            with self.subTest(configuration=configuration):
+                with mock.patch.dict(os.environ, configuration, clear=False):
                     self.assertFalse(_passkey_configuration_valid())
-        valid_values = (
-            "localhost",
-            "discvault.example.com",
-            "vault.home.arpa",
-            "DV.EXAMPLE.COM",
-        )
-        for value in valid_values:
-            with self.subTest(value=value):
-                with mock.patch.dict(os.environ, {"RP_ID": value}, clear=False):
-                    self.assertTrue(_passkey_configuration_valid())
+        with mock.patch.dict(
+            os.environ,
+            {
+                "RP_ID": "vault.home.arpa",
+                "RP_ORIGINS": "https://vault.home.arpa,https://admin.vault.home.arpa",
+            },
+            clear=False,
+        ):
+            self.assertTrue(_passkey_configuration_valid())
+
+    def test_passkey_access_and_local_mfa_exception_follow_request_host(self):
+        app = Flask(__name__)
+        placeholder_config = {
+            "RP_ID": "localhost",
+            "RP_ORIGINS": "http://localhost:6080",
+            "LEGACY_AUTH_ENABLED": "true",
+        }
+        for base_url, remote_addr in (
+            ("http://10.0.0.8:6080", "10.0.0.42"),
+            ("http://172.16.4.2:6080", "172.16.4.3"),
+            ("http://192.168.1.20:6080", "192.168.1.21"),
+            ("http://127.0.0.1:6080", "127.0.0.1"),
+            ("http://[::1]:6080", "::1"),
+        ):
+            with self.subTest(base_url=base_url):
+                with mock.patch.dict(os.environ, placeholder_config, clear=False):
+                    with app.test_request_context(
+                        "/",
+                        base_url=base_url,
+                        environ_base={"REMOTE_ADDR": remote_addr},
+                    ):
+                        self.assertTrue(_request_host_is_local_ip())
+                        self.assertTrue(_legacy_bootstrap_mfa_optional())
+        with mock.patch.dict(os.environ, placeholder_config, clear=False):
+            with app.test_request_context(
+                "/",
+                base_url="http://203.0.113.10:6080",
+                environ_base={"REMOTE_ADDR": "203.0.113.11"},
+            ):
+                self.assertFalse(_request_host_is_local_ip())
+                self.assertFalse(_legacy_bootstrap_mfa_optional())
+            with app.test_request_context(
+                "/",
+                base_url="http://203.0.113.10:6080",
+                headers={"X-Forwarded-Host": "192.168.1.20:6080"},
+                environ_base={"REMOTE_ADDR": "203.0.113.11"},
+            ):
+                self.assertFalse(_request_host_is_local_ip())
+                self.assertFalse(_legacy_bootstrap_mfa_optional())
+            with app.test_request_context(
+                "/",
+                base_url="http://192.168.1.20:6080",
+                environ_base={"REMOTE_ADDR": "203.0.113.11"},
+            ):
+                self.assertFalse(_request_host_is_local_ip())
+                self.assertFalse(_legacy_bootstrap_mfa_optional())
+            with app.test_request_context(
+                "/",
+                base_url="http://192.168.1.20:6080",
+                headers={"X-Forwarded-For": "203.0.113.11"},
+                environ_base={"REMOTE_ADDR": "192.168.1.2"},
+            ):
+                self.assertFalse(_request_host_is_local_ip())
+                self.assertFalse(_legacy_bootstrap_mfa_optional())
+
+        valid_config = {
+            "RP_ID": "vault.home.arpa",
+            "RP_ORIGINS": "https://vault.home.arpa",
+            "LEGACY_AUTH_ENABLED": "true",
+        }
+        with mock.patch.dict(os.environ, valid_config, clear=False):
+            with app.test_request_context(
+                "/",
+                base_url="https://vault.home.arpa",
+                environ_base={"REMOTE_ADDR": "192.168.1.21"},
+            ):
+                self.assertTrue(_passkey_access_valid())
+                self.assertFalse(_legacy_bootstrap_mfa_optional())
+            with app.test_request_context(
+                "/",
+                base_url="http://192.168.1.20:6080",
+                environ_base={"REMOTE_ADDR": "192.168.1.21"},
+            ):
+                self.assertFalse(_passkey_access_valid())
+                self.assertFalse(_legacy_bootstrap_mfa_optional())
+
+        canonical_config = {
+            "RP_ID": "VAULT.HOME.ARPA",
+            "RP_ORIGINS": "https://VAULT.HOME.ARPA:443",
+            "LEGACY_AUTH_ENABLED": "true",
+        }
+        with mock.patch.dict(os.environ, canonical_config, clear=False):
+            with app.test_request_context(
+                "/",
+                base_url="https://vault.home.arpa",
+                environ_base={"REMOTE_ADDR": "192.168.1.21"},
+            ):
+                self.assertTrue(_passkey_configuration_valid())
+                self.assertTrue(_passkey_access_valid())
+                self.assertEqual(_rp_origins(), ["https://vault.home.arpa"])
 
     def test_constant_time_text_compare_accepts_unicode_input(self):
         self.assertTrue(constant_time_text_equal("cafe", "cafe"))
@@ -213,6 +315,9 @@ class LegacyAuthContractTests(unittest.TestCase):
         cls.collection_source = (
             REPO_ROOT / "app/backend/next_views_collection.py"
         ).read_text(encoding="utf-8")
+        cls.app_source = (REPO_ROOT / "app/backend/next_app.py").read_text(
+            encoding="utf-8"
+        )
         cls.migration = (
             REPO_ROOT / "app/backend/migrations_next/041_legacy_auth.sql"
         ).read_text(encoding="utf-8")
@@ -270,7 +375,7 @@ class LegacyAuthContractTests(unittest.TestCase):
     def test_totp_is_confirmed_only_after_recovery_codes_are_acknowledged(self):
         self.assertGreaterEqual(self.auth_source.count("VALUES (%s, %s, %s, NULL, %s)"), 2)
         ack_start = self.auth_source.index("def legacy_recovery_codes_ack():")
-        ack_body = self.auth_source[ack_start : ack_start + 1500]
+        ack_body = self.auth_source[ack_start : ack_start + 3500]
         self.assertIn("SET confirmed_at=now(), updated_at=now()", ack_body)
 
     def test_disabling_legacy_requires_an_active_owner_passkey(self):
@@ -315,7 +420,7 @@ class LegacyAuthContractTests(unittest.TestCase):
             "function renderAppRegistrationMode(auth)"
         )
         registration_body = self.ui_source[
-            registration_start : registration_start + 1800
+            registration_start : registration_start + 5000
         ]
         self.assertIn(
             'reviewLoginAvailable ? "legacyAuth.passkeyRecommended" : "auth.loginDescription"',
@@ -328,10 +433,77 @@ class LegacyAuthContractTests(unittest.TestCase):
             'label.legacy-checkbox-row input[type="checkbox"]',
             self.ui_source,
         )
-        self.assertIn('"passkey_configuration_valid": _passkey_configuration_valid()', self.auth_source)
+        self.assertIn(
+            '"passkey_configuration_valid": passkey_configuration_valid',
+            self.auth_source,
+        )
+        self.assertIn('"passkey_access_valid": passkey_access_valid', self.auth_source)
+        self.assertIn(
+            '"legacy_bootstrap_mfa_optional": bool(',
+            self.auth_source,
+        )
+        self.assertIn(
+            'mfa_required = body.get("mfa_enabled") is True if mfa_optional else True',
+            self.auth_source,
+        )
+        self.assertIn("mfa_required=False", self.auth_source)
         self.assertIn("function passkeyProcessAvailable()", self.ui_source)
+        self.assertIn(
+            "return Boolean(currentAuthStatus.passkey_access_valid);",
+            self.ui_source,
+        )
         self.assertIn("const passkeyOnboardingAvailable", self.ui_source)
         self.assertIn("legacyBootstrap && browserPasskeysUnsupported", self.ui_source)
+        self.assertIn('id="startupAuthGuidance"', self.ui_source)
+        self.assertIn('id="appAuthGuidance"', self.ui_source)
+        self.assertIn('href="https://docs.discvault.eu"', self.ui_source)
+        self.assertIn('id="startupLegacyMfaEnabled"', self.ui_source)
+        self.assertIn(
+            "mfa_enabled: !startupLegacyMfaOptional",
+            self.ui_source,
+        )
+        self.assertIn("function passkeyProcessAvailable()", self.collection_source)
+        self.assertIn(
+            "renderPasskeyConfigurationGuidance(description);",
+            self.collection_source,
+        )
+        self.assertGreaterEqual(
+            self.auth_source.count("require_passkey_access()"),
+            9,
+        )
+        for route_function in (
+            "def register_options():",
+            "def register_verify():",
+            "def login_options():",
+            "def login_verify():",
+            "def ownership_transfer_options():",
+            "def ownership_transfer_verify():",
+            "def legacy_settings_enable_options():",
+            "def legacy_settings_enable_verify():",
+        ):
+            route_start = self.auth_source.index(route_function)
+            route_body = self.auth_source[route_start : route_start + 300]
+            self.assertIn("require_passkey_access()", route_body)
+        for route_function in (
+            "def legacy_migration_auth_options():",
+            "def legacy_migration_auth_verify():",
+        ):
+            route_start = self.app_source.index(route_function)
+            route_body = self.app_source[route_start : route_start + 400]
+            self.assertIn("_passkey_access_valid()", route_body)
+        register_verify_start = self.auth_source.index("def register_verify():")
+        register_verify_body = self.auth_source[
+            register_verify_start : register_verify_start + 6500
+        ]
+        self.assertIn(
+            "pg_advisory_xact_lock(hashtext('discvault-legacy-bootstrap'))",
+            register_verify_body,
+        )
+        self.assertIn("LEGACY_BOOTSTRAP_PENDING_STATUS", self.auth_source)
+        self.assertIn(
+            '"recoveryCodesAcknowledged": True',
+            self.auth_source,
+        )
         admin_visibility_start = self.ui_source.index(
             "function renderAppAdminVisibility()"
         )

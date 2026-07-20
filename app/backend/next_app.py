@@ -111,6 +111,7 @@ try:
     from .next_auth import next_auth_current_user
     from .next_auth import next_auth_current_api_token_user
     from .next_auth import next_auth_effective_enabled
+    from .next_auth import next_auth_ready
     from .next_auth import next_api_token_hash
     from .next_auth import next_create_api_token_value
     from .next_auth import next_generate_recovery_codes
@@ -119,6 +120,7 @@ try:
     from .next_auth import _b64url_decode
     from .next_auth import _b64url_encode
     from .next_auth import _make_challenge
+    from .next_auth import _passkey_access_valid
     from .next_auth import _parse_auth_data
     from .next_auth import _rp_id
     from .next_auth import _rp_origins
@@ -321,6 +323,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_auth import next_auth_current_user
     from next_auth import next_auth_current_api_token_user
     from next_auth import next_auth_effective_enabled
+    from next_auth import next_auth_ready
     from next_auth import next_api_token_hash
     from next_auth import next_create_api_token_value
     from next_auth import next_generate_recovery_codes
@@ -329,6 +332,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_auth import _b64url_decode
     from next_auth import _b64url_encode
     from next_auth import _make_challenge
+    from next_auth import _passkey_access_valid
     from next_auth import _parse_auth_data
     from next_auth import _rp_id
     from next_auth import _rp_origins
@@ -4007,7 +4011,7 @@ def startup_status_payload(conn) -> dict[str, Any]:
     auth_effective = next_auth_effective_enabled(conn, table_exists)
     user_count = count_table(conn, "users")
     credential_count = count_table(conn, "passkey_credentials")
-    auth_ready = user_count > 0 and credential_count > 0
+    auth_ready = next_auth_ready(conn, table_exists)
     user = next_auth_current_user(conn) if auth_effective else None
     role = next_user_primary_role(conn, user["id"]) if user else None
     permissions = next_user_permission_keys(conn, user["id"]) if user else set()
@@ -27725,6 +27729,11 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.post("/api/next/migration/legacy-auth/options")
     def legacy_migration_auth_options():
+        if not _passkey_access_valid():
+            raise NextApiError(
+                "Passkeys require a valid RP_ID and HTTPS RP_ORIGIN, accessed through the configured origin",
+                403,
+            )
         with connect() as conn:
             readiness = migration_readiness(conn)
             source = readiness["legacyData"]
@@ -27757,6 +27766,11 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.post("/api/next/migration/legacy-auth/verify")
     def legacy_migration_auth_verify():
+        if not _passkey_access_valid():
+            raise NextApiError(
+                "Passkeys require a valid RP_ID and HTTPS RP_ORIGIN, accessed through the configured origin",
+                403,
+            )
         body = request.get_json(silent=True) or {}
         credential = body.get("credential") or {}
         credential_id = clean_text(credential.get("id"))

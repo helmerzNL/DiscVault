@@ -497,7 +497,7 @@ def ui_preview_html(
     }
     .startup-owner-fields {
       margin-top: 18px;
-      width: min(360px, 100%);
+      width: min(440px, 100%);
     }
     .startup-owner-fields label {
       display: grid;
@@ -519,6 +519,98 @@ def ui_preview_html(
       font: inherit;
       font-size: .94rem;
       font-weight: 700;
+    }
+    .startup-auth-guidance {
+      display: grid;
+      gap: 8px;
+      margin-top: 18px;
+      border: 1px solid color-mix(in srgb, var(--amber, #ff9f0a) 44%, var(--line));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--amber, #ff9f0a) 8%, var(--bg-solid));
+      padding: 14px 16px;
+    }
+    .startup-auth-guidance strong {
+      font-size: .95rem;
+    }
+    .startup-auth-guidance span {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
+    .startup-auth-guidance-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      font-size: .86rem;
+      font-weight: 750;
+    }
+    .startup-auth-guidance-links a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .startup-onboarding-progress {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .startup-onboarding-progress-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 750;
+    }
+    .startup-onboarding-progress-item b {
+      display: grid;
+      flex: 0 0 24px;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--text) 8%, transparent);
+      color: var(--text);
+      font-size: .72rem;
+    }
+    .startup-onboarding-progress-item.active {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+      color: var(--text);
+    }
+    .startup-onboarding-progress-item.active b {
+      background: var(--accent);
+      color: var(--accent-contrast);
+    }
+    .startup-onboarding-progress-item.complete {
+      border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+    }
+    .startup-onboarding-progress-item.complete b {
+      background: color-mix(in srgb, var(--green) 18%, transparent);
+      color: var(--green);
+    }
+    .startup-onboarding-step {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+      padding: 14px;
+    }
+    .startup-onboarding-step .legacy-checkbox-row {
+      display: flex;
+    }
+    .startup-onboarding-step .legacy-checkbox-row input {
+      width: auto;
+      min-height: auto;
+    }
+    .startup-onboarding-help {
+      font-size: .82rem;
+      line-height: 1.45;
     }
     .login-primary,
     .primary-button {
@@ -12449,6 +12541,14 @@ def ui_preview_html(
         </div>
         <select id="authLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </div>
+      <div class="startup-auth-guidance hidden" id="appAuthGuidance" role="status">
+        <strong id="appAuthGuidanceTitle"></strong>
+        <span id="appAuthGuidanceBody"></span>
+        <div class="startup-auth-guidance-links">
+          <a class="hidden" id="appConfiguredOriginLink" target="_self"></a>
+          <a href="https://docs.discvault.eu" target="_blank" rel="noreferrer" data-next-i18n="auth.passkeyDocumentation">Passkey documentation</a>
+        </div>
+      </div>
       <div class="login-actions">
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.loginDescription">Sign in with passkey</button>
         <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
@@ -12550,6 +12650,14 @@ def ui_preview_html(
         </div>
       </div>
       <div class="startup-steps" id="startupSteps"></div>
+      <div class="startup-auth-guidance hidden" id="startupAuthGuidance" role="status">
+        <strong id="startupAuthGuidanceTitle"></strong>
+        <span id="startupAuthGuidanceBody"></span>
+        <div class="startup-auth-guidance-links">
+          <a class="hidden" id="startupConfiguredOriginLink" target="_self"></a>
+          <a href="https://docs.discvault.eu" target="_blank" rel="noreferrer" data-next-i18n="auth.passkeyDocumentation">Passkey documentation</a>
+        </div>
+      </div>
       <label class="language-picker startup-language">
         <span data-next-i18n="language.label">Language</span>
         <select id="startupLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
@@ -12560,30 +12668,54 @@ def ui_preview_html(
           <input id="startupOwnerUsernameInput" autocomplete="username" maxlength="80" data-next-i18n-placeholder="auth.ownerUsernamePlaceholder" placeholder="Choose your username">
         </label>
         <div class="hidden" id="startupLegacyFields">
-          <p data-next-i18n="legacyAuth.bootstrapWarning">Password onboarding is less phishing-resistant. TOTP is mandatory.</p>
-          <label for="startupLegacyPassword">
-            <span data-next-i18n="auth.password">Password</span>
-            <input id="startupLegacyPassword" type="password" minlength="15" autocomplete="new-password">
-          </label>
-          <label class="legacy-checkbox-row">
-            <input id="startupLegacyRiskAccepted" type="checkbox">
-            <span data-next-i18n="legacyAuth.acceptRisk">I understand and accept the password risk.</span>
-          </label>
-          <img class="hidden" id="startupLegacyQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
-          <code class="admin-code hidden" id="startupLegacyManualKey"></code>
-          <label class="hidden" id="startupLegacyCodeLabel">
-            <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
-            <input id="startupLegacyCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
-          </label>
-          <div class="recovery-codes hidden" id="startupLegacyRecoveryCodes"></div>
-          <div class="profile-action-row hidden" id="startupLegacyRecoveryActions">
-            <button type="button" class="secondary-button" id="startupLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
-            <button type="button" class="secondary-button" id="startupLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
+          <div class="startup-onboarding-progress" id="startupLegacyProgress" aria-label="Onboarding progress" data-next-i18n-aria="legacyAuth.onboardingProgress">
+            <div class="startup-onboarding-progress-item active" data-startup-legacy-progress="account">
+              <b>1</b><span data-next-i18n="legacyAuth.accountStep">Account</span>
+            </div>
+            <div class="startup-onboarding-progress-item" data-startup-legacy-progress="mfa">
+              <b>2</b><span data-next-i18n="legacyAuth.mfaStep">Authenticator</span>
+            </div>
+            <div class="startup-onboarding-progress-item" data-startup-legacy-progress="recovery">
+              <b>3</b><span data-next-i18n="legacyAuth.recoveryStep">Recovery</span>
+            </div>
           </div>
-          <label class="legacy-checkbox-row hidden" id="startupLegacyAckLabel">
-            <input id="startupLegacyAck" type="checkbox">
-            <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
-          </label>
+          <div class="startup-onboarding-step" id="startupLegacyAccountStep">
+            <p id="startupLegacyBootstrapWarning" data-next-i18n="legacyAuth.bootstrapWarning">Password onboarding is less phishing-resistant. TOTP is mandatory.</p>
+            <label for="startupLegacyPassword">
+              <span data-next-i18n="auth.password">Password</span>
+              <input id="startupLegacyPassword" type="password" minlength="15" autocomplete="new-password">
+            </label>
+            <label class="legacy-checkbox-row">
+              <input id="startupLegacyRiskAccepted" type="checkbox">
+              <span data-next-i18n="legacyAuth.acceptRisk">I understand and accept the password risk.</span>
+            </label>
+            <label class="legacy-checkbox-row hidden" id="startupLegacyMfaOption">
+              <input id="startupLegacyMfaEnabled" type="checkbox">
+              <span data-next-i18n="legacyAuth.enableMfaDuringSetup">Enable authenticator MFA</span>
+            </label>
+            <p class="startup-onboarding-help hidden" id="startupLegacyMfaOptionalHelp" data-next-i18n="legacyAuth.mfaOptionalHelp">MFA is optional only for this local setup. You can enable it later from your profile.</p>
+          </div>
+          <div class="startup-onboarding-step hidden" id="startupLegacyTotpStep">
+            <p data-next-i18n="legacyAuth.enrollTotp">Scan the QR code, then enter the six-digit code.</p>
+            <img class="hidden" id="startupLegacyQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
+            <code class="admin-code hidden" id="startupLegacyManualKey"></code>
+            <label id="startupLegacyCodeLabel">
+              <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
+              <input id="startupLegacyCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+            </label>
+          </div>
+          <div class="startup-onboarding-step hidden" id="startupLegacyRecoveryStep">
+            <p data-next-i18n="legacyAuth.saveCodesFirst">Save and acknowledge the recovery codes first.</p>
+            <div class="recovery-codes" id="startupLegacyRecoveryCodes"></div>
+            <div class="profile-action-row" id="startupLegacyRecoveryActions">
+              <button type="button" class="secondary-button" id="startupLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
+              <button type="button" class="secondary-button" id="startupLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
+            </div>
+            <label class="legacy-checkbox-row" id="startupLegacyAckLabel">
+              <input id="startupLegacyAck" type="checkbox">
+              <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
+            </label>
+          </div>
         </div>
       </div>
       <div class="startup-actions">
@@ -15863,6 +15995,7 @@ def ui_preview_html(
     let startupLegacyFlowToken = "";
     let startupLegacyStage = "";
     let startupLegacyRecoveryCodes = [];
+    let startupLegacyMfaOptional = false;
     let profileCredentials = [];
     let profileRecovery = {};
     let profileLegacy = {};
@@ -16587,6 +16720,9 @@ def ui_preview_html(
       return "";
     }
     function passkeyProcessAvailable() {
+      if (currentAuthStatus.passkey_access_valid !== undefined) {
+        return Boolean(currentAuthStatus.passkey_access_valid);
+      }
       if (currentAuthStatus.passkey_configuration_valid === undefined) return true;
       if (!currentAuthStatus.passkey_configuration_valid) return false;
       const rpId = String(currentAuthStatus.rp_id || "").trim().toLowerCase();
@@ -16868,6 +17004,38 @@ def ui_preview_html(
       const submitButton = document.getElementById("appInviteJoinButton");
       const reviewForm = document.getElementById("appReviewForm");
       const loginDescription = document.getElementById("appLoginDescription");
+      const authGuidance = document.getElementById("appAuthGuidance");
+      authGuidance?.classList.toggle("hidden", passkeysAvailable);
+      if (!passkeysAvailable) {
+        const configurationValid = Boolean(currentAuthStatus.passkey_configuration_valid);
+        const guidanceTitle = document.getElementById("appAuthGuidanceTitle");
+        const guidanceBody = document.getElementById("appAuthGuidanceBody");
+        if (guidanceTitle) {
+          guidanceTitle.textContent = configurationValid
+            ? tNext("auth.passkeyConfiguredAddressTitle", "Open the configured address")
+            : tNext("auth.passkeyFqdnRequiredTitle", "Configure a fully qualified domain name");
+        }
+        if (guidanceBody) {
+          guidanceBody.textContent = configurationValid
+            ? tNext("auth.passkeyConfiguredAddressBody", "Passkeys are configured, but this address does not match. Open DiscVault through the configured HTTPS address to continue.")
+            : tNext("auth.passkeyFqdnRequiredBody", "Passkey onboarding requires a valid RP_ID and HTTPS RP_ORIGIN for a fully qualified domain name. Configure these values and open DiscVault through that address.");
+        }
+        const configuredOriginLink = document.getElementById("appConfiguredOriginLink");
+        configuredOriginLink?.classList.add("hidden");
+        if (configurationValid && configuredOriginLink) {
+          const configuredOrigin = Array.isArray(currentAuthStatus.rp_origins)
+            ? String(currentAuthStatus.rp_origins[0] || "")
+            : "";
+          try {
+            const url = new URL(configuredOrigin);
+            if (url.protocol === "https:") {
+              configuredOriginLink.href = url.origin;
+              configuredOriginLink.textContent = tNext("auth.openConfiguredOrigin", "Open {origin}").replace("{origin}", url.origin);
+              configuredOriginLink.classList.remove("hidden");
+            }
+          } catch (_) { /* invalid origins are never linked */ }
+        }
+      }
       if (loginButton) {
         const key = reviewLoginAvailable ? "legacyAuth.passkeyRecommended" : "auth.loginDescription";
         loginButton.dataset.nextI18n = key;
@@ -16880,9 +17048,22 @@ def ui_preview_html(
       setElementVisible(toggleButton, passkeysAvailable);
       if (!passkeysAvailable) document.getElementById("appInviteForm")?.classList.add("hidden");
       if (loginDescription) {
-        const key = passkeysAvailable ? "auth.loginDescription" : "legacyAuth.signIn";
+        const key = passkeysAvailable
+          ? "auth.loginDescription"
+          : reviewLoginAvailable
+            ? "legacyAuth.signIn"
+            : Boolean(currentAuthStatus.passkey_configuration_valid)
+              ? "auth.passkeyConfiguredAddressTitle"
+              : "auth.passkeyFqdnRequiredTitle";
         loginDescription.dataset.nextI18n = key;
-        loginDescription.textContent = tNext(key, passkeysAvailable ? "Log in with your Passkey" : "Sign in with password");
+        loginDescription.textContent = tNext(
+          key,
+          passkeysAvailable
+            ? "Log in with your Passkey"
+            : reviewLoginAvailable
+              ? "Sign in with password"
+              : "Passkey configuration required"
+        );
       }
       if (toggleButton) {
         const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
@@ -20925,12 +21106,49 @@ def ui_preview_html(
       anchor.click();
       URL.revokeObjectURL(url);
     }
+    function showStartupLegacyStage(stage) {
+      const progressStage = stage === "bootstrap_totp"
+        ? "mfa"
+        : stage === "recovery_codes"
+          ? "recovery"
+          : "account";
+      document.getElementById("startupLegacyAccountStep")?.classList.toggle("hidden", progressStage !== "account");
+      document.getElementById("startupLegacyTotpStep")?.classList.toggle("hidden", progressStage !== "mfa");
+      document.getElementById("startupLegacyRecoveryStep")?.classList.toggle("hidden", progressStage !== "recovery");
+      const order = {account: 0, mfa: 1, recovery: 2};
+      document.querySelectorAll("[data-startup-legacy-progress]").forEach((item) => {
+        const itemStage = String(item.getAttribute("data-startup-legacy-progress") || "");
+        item.classList.toggle("active", itemStage === progressStage);
+        item.classList.toggle("complete", order[itemStage] < order[progressStage]);
+      });
+      const button = document.getElementById("startupLegacyButton");
+      if (button) {
+        button.textContent = progressStage === "recovery"
+          ? tNext("legacyAuth.finishSetup", "Finish setup")
+          : progressStage === "mfa"
+            ? tNext("legacyAuth.verifyTotp", "Verify authenticator")
+            : tNext("legacyAuth.continue", "Continue");
+      }
+    }
+    function resetStartupLegacyWizard() {
+      startupLegacyStage = "";
+      startupLegacyFlowToken = "";
+      startupLegacyRecoveryCodes = [];
+      startupLegacyMfaOptional = Boolean(currentAuthStatus.legacy_bootstrap_mfa_optional);
+      const mfaEnabled = document.getElementById("startupLegacyMfaEnabled");
+      if (mfaEnabled) mfaEnabled.checked = false;
+      document.getElementById("startupLegacyMfaOption")?.classList.toggle("hidden", !startupLegacyMfaOptional);
+      document.getElementById("startupLegacyMfaOptionalHelp")?.classList.toggle("hidden", !startupLegacyMfaOptional);
+      const codes = document.getElementById("startupLegacyRecoveryCodes");
+      if (codes) codes.innerHTML = "";
+      showStartupLegacyStage("");
+    }
     async function runStartupLegacyBootstrap() {
       const fields = document.getElementById("startupLegacyFields");
       const button = document.getElementById("startupLegacyButton");
       if (fields?.classList.contains("hidden")) {
+        resetStartupLegacyWizard();
         fields.classList.remove("hidden");
-        button.textContent = tNext("legacyAuth.continue", "Continue");
         document.getElementById("startupLegacyPassword")?.focus();
         return;
       }
@@ -20942,7 +21160,9 @@ def ui_preview_html(
           body = {
             username: String(document.getElementById("startupOwnerUsernameInput")?.value || "").trim(),
             password: String(document.getElementById("startupLegacyPassword")?.value || ""),
-            password_risk_accepted: !!document.getElementById("startupLegacyRiskAccepted")?.checked
+            password_risk_accepted: !!document.getElementById("startupLegacyRiskAccepted")?.checked,
+            mfa_enabled: !startupLegacyMfaOptional
+              || !!document.getElementById("startupLegacyMfaEnabled")?.checked
           };
         } else if (startupLegacyStage === "bootstrap_totp") {
           url = "/api/next/auth/legacy/bootstrap/verify";
@@ -20972,32 +21192,24 @@ def ui_preview_html(
           const manual = document.getElementById("startupLegacyManualKey");
           if (manual) {
             manual.textContent = payload.manual_key || "";
-            manual.classList.remove("hidden");
+            manual.classList.toggle("hidden", !payload.manual_key);
           }
-          document.getElementById("startupLegacyCodeLabel")?.classList.remove("hidden");
-          if (button) button.textContent = tNext("legacyAuth.verifyTotp", "Verify authenticator");
         } else if (payload.stage === "recovery_codes") {
           startupLegacyRecoveryCodes = payload.recovery_codes || [];
           const codes = document.getElementById("startupLegacyRecoveryCodes");
           if (codes) {
             codes.innerHTML = startupLegacyRecoveryCodes.map((code) => `<code>${escapeHtml(code)}</code>`).join("");
-            codes.classList.remove("hidden");
           }
-          document.getElementById("startupLegacyRecoveryActions")?.classList.remove("hidden");
-          document.getElementById("startupLegacyAckLabel")?.classList.remove("hidden");
-          if (button) button.textContent = tNext("legacyAuth.finishSetup", "Finish setup");
         } else if (payload.stage === "complete") {
           if (payload.token) localStorage.setItem("dv_next_token", payload.token);
           startupLegacyFlowToken = "";
           startupLegacyStage = "";
           await refreshAppFlow();
         }
+        showStartupLegacyStage(startupLegacyStage);
       } catch (error) {
         if (startupLegacyStage === "bootstrap_totp") {
-          startupLegacyStage = "";
-          startupLegacyFlowToken = "";
-          document.getElementById("startupLegacyCodeLabel")?.classList.add("hidden");
-          if (button) button.textContent = tNext("legacyAuth.continue", "Continue");
+          resetStartupLegacyWizard();
         }
         setStartupGateMessage(error.message || tNext("legacyAuth.bootstrapFailed", "Password onboarding failed."), "bad");
       } finally {
@@ -36769,6 +36981,47 @@ def ui_preview_html(
       });
       tree.addEventListener("dragend", () => { locationDragId = ""; });
     }
+    function renderStartupAuthGuidance(startup) {
+      const canCreateOwner = Boolean(startup.canCreateOwner);
+      const configurationValid = Boolean(currentAuthStatus.passkey_configuration_valid);
+      const accessValid = Boolean(currentAuthStatus.passkey_access_valid);
+      const legacyAvailable = Boolean(currentAuthStatus.legacy_bootstrap_available);
+      const showInvalidConfiguration = canCreateOwner && !configurationValid && !legacyAvailable;
+      const showAccessMismatch = canCreateOwner && configurationValid && !accessValid;
+      const guidance = document.getElementById("startupAuthGuidance");
+      const showGuidance = showInvalidConfiguration || showAccessMismatch;
+      guidance?.classList.toggle("hidden", !showGuidance);
+      if (!showGuidance) return;
+
+      const title = document.getElementById("startupAuthGuidanceTitle");
+      const body = document.getElementById("startupAuthGuidanceBody");
+      if (title) {
+        title.textContent = showAccessMismatch
+          ? tNext("auth.passkeyConfiguredAddressTitle", "Open the configured address")
+          : tNext("auth.passkeyFqdnRequiredTitle", "Configure a fully qualified domain name");
+      }
+      if (body) {
+        body.textContent = showAccessMismatch
+          ? tNext("auth.passkeyConfiguredAddressBody", "Passkeys are configured, but this address does not match. Open DiscVault through the configured HTTPS address to continue.")
+          : tNext("auth.passkeyFqdnRequiredBody", "Passkey onboarding requires a valid RP_ID and HTTPS RP_ORIGIN for a fully qualified domain name. Configure these values and open DiscVault through that address.");
+      }
+
+      const configuredOriginLink = document.getElementById("startupConfiguredOriginLink");
+      configuredOriginLink?.classList.add("hidden");
+      if (showAccessMismatch && configuredOriginLink) {
+        const configuredOrigin = Array.isArray(currentAuthStatus.rp_origins)
+          ? String(currentAuthStatus.rp_origins[0] || "")
+          : "";
+        try {
+          const url = new URL(configuredOrigin);
+          if (url.protocol === "https:") {
+            configuredOriginLink.href = url.origin;
+            configuredOriginLink.textContent = tNext("auth.openConfiguredOrigin", "Open {origin}").replace("{origin}", url.origin);
+            configuredOriginLink.classList.remove("hidden");
+          }
+        } catch (_) { /* invalid origins are never linked */ }
+      }
+    }
     function renderStartup(startup) {
       const phase = startup.phase || "ready";
       const title = document.getElementById("startupTitle");
@@ -36788,6 +37041,7 @@ def ui_preview_html(
       if (migrationLink) migrationLink.classList.toggle("hidden", !startup.canStartMigration && !["migration_required", "migration_running", "migration_pending_non_admin"].includes(phase));
       const legacyBootstrap = !!currentAuthStatus.legacy_bootstrap_available && !!startup.canCreateOwner;
       const passkeyOnboardingAvailable = !!startup.canCreateOwner && passkeyProcessAvailable();
+      renderStartupAuthGuidance(startup);
       const ownerPasskeyButton = document.getElementById("startupOwnerPasskeyButton");
       const ownerPasskeyUnavailable = passkeyOnboardingAvailable ? webauthnUnavailableReason() : "";
       const browserPasskeysUnsupported = !window.PublicKeyCredential || !navigator.credentials;
@@ -36803,6 +37057,15 @@ def ui_preview_html(
       if (legacyButton) legacyButton.classList.toggle("hidden", !legacyBootstrap);
       if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner && !legacyBootstrap);
       if (!legacyBootstrap && !startupLegacyStage) document.getElementById("startupLegacyFields")?.classList.add("hidden");
+      startupLegacyMfaOptional = Boolean(currentAuthStatus.legacy_bootstrap_mfa_optional);
+      document.getElementById("startupLegacyMfaOption")?.classList.toggle("hidden", !startupLegacyMfaOptional);
+      document.getElementById("startupLegacyMfaOptionalHelp")?.classList.toggle("hidden", !startupLegacyMfaOptional);
+      const bootstrapWarning = document.getElementById("startupLegacyBootstrapWarning");
+      if (bootstrapWarning) {
+        bootstrapWarning.textContent = startupLegacyMfaOptional
+          ? tNext("legacyAuth.bootstrapWarningOptional", "Password onboarding is less phishing-resistant. Authenticator MFA is optional for this local setup.")
+          : tNext("legacyAuth.bootstrapWarning", "Password onboarding is less phishing-resistant. Authenticator MFA is required.");
+      }
       const message = document.getElementById("startupMessage");
       if (message) {
         message.textContent = ownerPasskeyMessage || startup.message || "";
