@@ -576,7 +576,47 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('class="profile-passkey app-admin-entity-card admin-group-row"', self.html)
         self.assertIn('class="profile-add-passkey app-admin-legacy-controls"', self.html)
         self.assertIn("function handleAppAdminTabKeydown(button, event)", self.html)
+        self.assertIn("function handleAppAdminUsersTabKeydown(button, event)", self.html)
         self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
+        for tab, panel in (
+            ("Settings", "Settings"),
+            ("Users", "Users"),
+            ("Groups", "Groups"),
+        ):
+            self.assertIn(
+                f'id="appAdminUsersTab{tab}" role="tab"',
+                self.html,
+            )
+            self.assertIn(
+                f'id="appAdminUsersPanel{panel}" role="tabpanel"',
+                self.html,
+            )
+
+    def test_admin_roles_dashboard_separates_basic_and_advanced_workflows(self):
+        self.assertIn(
+            'id="appAdminPanelRoles" role="tabpanel" aria-labelledby="appAdminTabRoles"',
+            self.html,
+        )
+        for tab in ("Overview", "Roles", "Permissions", "Simulator"):
+            self.assertIn(f'id="appAdminRolesTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminRolesPanel{tab}" role="tabpanel"', self.html)
+
+        for element_id in (
+            "appAdminRbacMode",
+            "appAdminRoleCreateForm",
+            "appAdminRolesList",
+            "appAdminRoleEditor",
+            "appAdminRoleEditForm",
+            "appAdminPermissionEditor",
+            "appAdminRoleFeaturePreview",
+            "appAdminPermissionMatrix",
+            "appAdminRoleSimulationSelect",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn("function handleAppAdminRolesTabKeydown(button, event)", self.html)
+        self.assertIn('button.dataset.appAdminRolesTab === "permissions"', self.html)
+        self.assertIn('const visibleRoles = advanced ? roles : roles.filter((role) => !role.custom);', self.html)
 
     def test_library_advanced_panel_groups_existing_controls(self):
         self.assertIn('id="advancedSearchToggleButton"', self.html)
