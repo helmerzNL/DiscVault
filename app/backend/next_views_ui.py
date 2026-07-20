@@ -1132,19 +1132,107 @@ def ui_preview_html(
     }
     .advanced-search-panel {
       display: grid;
-      gap: 12px;
-      padding: 12px;
+      gap: 14px;
+      padding: 14px;
       border: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
-      border-radius: 10px;
-      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
+      border-radius: 14px;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 45%),
+        color-mix(in srgb, var(--bg-solid) 74%, transparent);
     }
     .advanced-search-panel.hidden {
       display: none;
     }
-    .advanced-search-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(150px, 1fr));
+    .library-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+    .library-panel-title {
+      display: flex;
+      align-items: center;
       gap: 10px;
+      min-width: 0;
+    }
+    .library-panel-title-icon {
+      flex: 0 0 auto;
+      display: inline-grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line));
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      color: var(--accent);
+    }
+    .library-panel-title-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+    .library-panel-title h3 {
+      margin: 0;
+      font-size: .98rem;
+      line-height: 1.2;
+    }
+    .library-adaptive-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+    }
+    .library-adaptive-group {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-elevated) 76%, transparent);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.14);
+    }
+    .library-adaptive-group > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      padding: 10px 12px;
+      color: var(--muted-strong);
+      font-size: .72rem;
+      font-weight: 850;
+      letter-spacing: .035em;
+      text-transform: uppercase;
+      cursor: default;
+      list-style: none;
+    }
+    .library-adaptive-group > summary::-webkit-details-marker {
+      display: none;
+    }
+    .library-adaptive-group > summary:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: -2px;
+    }
+    .library-adaptive-chevron {
+      display: none;
+      flex: 0 0 auto;
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+      transition: transform .18s ease;
+    }
+    .library-adaptive-group[open] .library-adaptive-chevron {
+      transform: rotate(180deg);
+    }
+    .library-adaptive-group-body {
+      display: grid;
+      gap: 10px;
+      padding: 0 12px 12px;
+    }
+    .advanced-search-group.release .library-adaptive-group-body {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .advanced-search-group.release .advanced-search-field:last-child {
+      grid-column: 1 / -1;
     }
     .advanced-search-field {
       display: grid;
@@ -1169,9 +1257,10 @@ def ui_preview_html(
     .advanced-search-actions {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end;
       flex-wrap: wrap;
       gap: 10px;
+      padding-top: 2px;
     }
     .smart-filter-picker {
       display: flex;
@@ -1793,8 +1882,7 @@ def ui_preview_html(
     }
     .bulk-bar {
       display: none;
-      align-items: stretch;
-      gap: 10px;
+      gap: 12px;
       border: 1px solid var(--line);
       border-radius: 16px;
       background:
@@ -1806,11 +1894,20 @@ def ui_preview_html(
     }
     .bulk-bar.visible {
       display: grid;
-      grid-template-columns: auto minmax(160px, 1fr);
+      grid-template-columns: 1fr;
+    }
+    .bulk-panel-head {
+      align-items: flex-start;
+    }
+    .bulk-panel-status {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 8px;
     }
     .bulk-selection-actions {
       justify-content: flex-start;
-      align-self: center;
       gap: 6px;
     }
     .bulk-selection-actions .compact-button {
@@ -1821,23 +1918,24 @@ def ui_preview_html(
     }
     .bulk-targets {
       display: grid;
-      grid-column: 1 / -1;
       grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
       gap: 8px;
       width: 100%;
     }
     .bulk-target {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 6px;
-      align-content: start;
       min-width: 0;
-      min-height: 0;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
-      padding: 8px;
+    }
+    .bulk-target .library-adaptive-group-body {
+      align-content: start;
+      gap: 6px;
+      padding: 0 8px 8px;
+    }
+    .bulk-target.danger {
+      border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+      background: color-mix(in srgb, var(--danger) 5%, var(--bg-elevated));
+    }
+    .bulk-target.danger > summary {
+      color: color-mix(in srgb, var(--danger) 82%, var(--text));
     }
     .bulk-target.wide {
       grid-column: span 2;
@@ -10875,8 +10973,18 @@ def ui_preview_html(
       body {
         padding-bottom: calc(86px + env(safe-area-inset-bottom));
       }
-      .advanced-search-grid {
+      .library-adaptive-grid {
         grid-template-columns: 1fr;
+      }
+      .library-adaptive-group > summary {
+        min-height: 46px;
+        cursor: pointer;
+      }
+      .library-adaptive-chevron {
+        display: block;
+      }
+      .advanced-search-group.release .library-adaptive-group-body {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
       .advanced-search-actions {
         align-items: stretch;
@@ -10915,6 +11023,14 @@ def ui_preview_html(
       .bulk-bar.visible {
         grid-template-columns: 1fr;
       }
+      .bulk-panel-head,
+      .bulk-panel-status {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .bulk-panel-status {
+        justify-content: flex-start;
+      }
       .bulk-selection-actions {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -10927,7 +11043,6 @@ def ui_preview_html(
       .bulk-targets,
       .bulk-target,
       .bulk-target.wide {
-        grid-template-columns: 1fr;
         width: 100%;
       }
       .bulk-target.wide {
@@ -12416,11 +12531,11 @@ def ui_preview_html(
                 </div>
               </div>
             </div>
-            <button type="button" class="icon-button advanced-search-toggle" id="advancedSearchToggleButton" aria-label="Advanced search" data-next-i18n-aria="collection.advancedSearch" title="Advanced" data-next-i18n-title="collection.advancedSearch">
+            <button type="button" class="icon-button advanced-search-toggle" id="advancedSearchToggleButton" aria-controls="advancedSearchPanel" aria-expanded="false" aria-label="Advanced search" data-next-i18n-aria="collection.advancedSearch" title="Advanced" data-next-i18n-title="collection.advancedSearch">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5,5.6L10,7L8.6,4.5L10,2L7.5,3.4L5,2L6.4,4.5L5,7L7.5,5.6M19.5,15.4L17,14L18.4,16.5L17,19L19.5,17.6L22,19L20.6,16.5L22,14L19.5,15.4M22,2L19.5,3.4L17,2L18.4,4.5L17,7L19.5,5.6L22,7L20.6,4.5L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z"/></svg>
               <span class="metadata-job-badge hidden" id="advancedSearchBadge">0</span>
             </button>
-            <button type="button" class="icon-button" id="selectModeButton" aria-pressed="false" aria-label="Select" data-next-i18n-aria="bulk.select" title="Select" data-next-i18n-title="bulk.select">
+            <button type="button" class="icon-button" id="selectModeButton" aria-controls="bulkBar" aria-pressed="false" aria-label="Select" data-next-i18n-aria="bulk.select" title="Select" data-next-i18n-title="bulk.select">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2,5H4V19C4,20.11 4.89,21 6,21H20V19H6V5M18,3A2,2 0 0,1 20,5V15A2,2 0 0,1 18,17H8A2,2 0 0,1 6,15V5A2,2 0 0,1 8,3H18M9.5,11L11,12.5L16.5,7L18,8.5L11,15.5L8,12.5L9.5,11Z"/></svg>
               <span class="visually-hidden" id="selectModeButtonLabel" data-next-i18n="bulk.select">Select</span>
             </button>
@@ -12435,73 +12550,113 @@ def ui_preview_html(
             </div>
           </div>
         </div>
-        <div class="advanced-search-panel hidden" id="advancedSearchPanel">
-          <div class="advanced-search-grid">
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.yearFrom">Year from</span>
-              <input id="advancedYearFrom" type="number" min="1880" max="2100" inputmode="numeric">
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.yearTo">Year to</span>
-              <input id="advancedYearTo" type="number" min="1880" max="2100" inputmode="numeric">
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.crewFilter">Crew or cast</span>
-              <input id="advancedCrewQuery" type="search" data-next-i18n-placeholder="collection.crewFilterPlaceholder" placeholder="Actor, director or crew">
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.digitalFilter">Digital source</span>
-              <select id="advancedDigitalFilter">
-                <option value="any" data-next-i18n="common.any">Any</option>
-                <option value="plex">Plex</option>
-                <option value="jellyfin">Jellyfin</option>
-                <option value="digital" data-next-i18n="collection.hasDigital">Has digital</option>
-                <option value="none" data-next-i18n="collection.noDigital">No digital</option>
-              </select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.artworkFilter">Artwork</span>
-              <select id="advancedArtworkFilter">
-                <option value="any" data-next-i18n="common.any">Any</option>
-                <option value="missingPoster" data-next-i18n="collection.missingPoster">Missing poster</option>
-                <option value="missingBackdrop" data-next-i18n="collection.missingBackdrop">Missing backdrop</option>
-                <option value="completeArtwork" data-next-i18n="collection.completeArtwork">Poster and backdrop</option>
-              </select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.personalFilter">Personal lists</span>
-              <select id="advancedPersonalFilter">
-                <option value="any" data-next-i18n="common.any">Any</option>
-                <option value="watchlist" data-next-i18n="lists.watchlist">Watchlist</option>
-                <option value="watched" data-next-i18n="lists.watched">Watched</option>
-                <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
-                <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
-                <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
-              </select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.containerType">Container type</span>
-              <select id="advancedContainerType">
-                <option value="any" data-next-i18n="common.any">Any</option>
-                <option value="movie" data-next-i18n="collection.movies">Movies</option>
-                <option value="container" data-next-i18n="collection.containers">Containers</option>
-                <option value="box_set" data-next-i18n="containerTypes.box_set">Box-set</option>
-                <option value="collection" data-next-i18n="containerTypes.collection">Collection</option>
-                <option value="vault" data-next-i18n="containerTypes.vault">Vault</option>
-              </select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.smartFilters">Smart filters</span>
-              <select id="smartFilterSelect"></select>
-            </label>
-            <label class="advanced-search-field">
-              <span data-next-i18n="collection.locationFilter">Location</span>
-              <select id="advancedLocationFilter"></select>
-            </label>
+        <div class="advanced-search-panel hidden" id="advancedSearchPanel" role="region" aria-labelledby="advancedSearchPanelTitle">
+          <div class="library-panel-head">
+            <div class="library-panel-title">
+              <span class="library-panel-title-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M7.5,5.6L10,7L8.6,4.5L10,2L7.5,3.4L5,2L6.4,4.5L5,7L7.5,5.6M19.5,15.4L17,14L18.4,16.5L17,19L19.5,17.6L22,19L20.6,16.5L22,14L19.5,15.4M22,2L19.5,3.4L17,2L18.4,4.5L17,7L19.5,5.6L22,7L20.6,4.5L22,2M13.34,12.78L15.78,10.34L13.66,8.22L11.22,10.66L13.34,12.78M14.37,7.29L16.71,9.63C17.1,10 17.1,10.65 16.71,11.04L5.04,22.71C4.65,23.1 4,23.1 3.63,22.71L1.29,20.37C0.9,20 0.9,19.35 1.29,18.96L12.96,7.29C13.35,6.9 14,6.9 14.37,7.29Z"/></svg>
+              </span>
+              <h3 id="advancedSearchPanelTitle" data-next-i18n="collection.advancedSearch">Advanced</h3>
+            </div>
+            <span class="advanced-search-count hidden" id="advancedSearchActiveCount"></span>
+          </div>
+          <div class="library-adaptive-grid advanced-search-groups">
+            <details class="library-adaptive-group advanced-search-group release" data-library-adaptive-group data-library-advanced-group="release">
+              <summary>
+                <span data-next-i18n="collection.yearColumn">Year</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.yearFrom">Year from</span>
+                  <input id="advancedYearFrom" type="number" min="1880" max="2100" inputmode="numeric">
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.yearTo">Year to</span>
+                  <input id="advancedYearTo" type="number" min="1880" max="2100" inputmode="numeric">
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.crewFilter">Crew or cast</span>
+                  <input id="advancedCrewQuery" type="search" data-next-i18n-placeholder="collection.crewFilterPlaceholder" placeholder="Actor, director or crew">
+                </label>
+              </div>
+            </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="media">
+              <summary>
+                <span data-next-i18n="collection.mediaAssets">Media assets</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.digitalFilter">Digital source</span>
+                  <select id="advancedDigitalFilter">
+                    <option value="any" data-next-i18n="common.any">Any</option>
+                    <option value="plex">Plex</option>
+                    <option value="jellyfin">Jellyfin</option>
+                    <option value="digital" data-next-i18n="collection.hasDigital">Has digital</option>
+                    <option value="none" data-next-i18n="collection.noDigital">No digital</option>
+                  </select>
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.artworkFilter">Artwork</span>
+                  <select id="advancedArtworkFilter">
+                    <option value="any" data-next-i18n="common.any">Any</option>
+                    <option value="missingPoster" data-next-i18n="collection.missingPoster">Missing poster</option>
+                    <option value="missingBackdrop" data-next-i18n="collection.missingBackdrop">Missing backdrop</option>
+                    <option value="completeArtwork" data-next-i18n="collection.completeArtwork">Poster and backdrop</option>
+                  </select>
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.containerType">Container type</span>
+                  <select id="advancedContainerType">
+                    <option value="any" data-next-i18n="common.any">Any</option>
+                    <option value="movie" data-next-i18n="collection.movies">Movies</option>
+                    <option value="container" data-next-i18n="collection.containers">Containers</option>
+                    <option value="box_set" data-next-i18n="containerTypes.box_set">Box-set</option>
+                    <option value="collection" data-next-i18n="containerTypes.collection">Collection</option>
+                    <option value="vault" data-next-i18n="containerTypes.vault">Vault</option>
+                  </select>
+                </label>
+              </div>
+            </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="personal">
+              <summary>
+                <span data-next-i18n="collection.personalFilter">Personal lists</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.personalFilter">Personal lists</span>
+                  <select id="advancedPersonalFilter">
+                    <option value="any" data-next-i18n="common.any">Any</option>
+                    <option value="watchlist" data-next-i18n="lists.watchlist">Watchlist</option>
+                    <option value="watched" data-next-i18n="lists.watched">Watched</option>
+                    <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
+                    <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
+                    <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
+                  </select>
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.locationFilter">Location</span>
+                  <select id="advancedLocationFilter"></select>
+                </label>
+              </div>
+            </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="smart">
+              <summary>
+                <span data-next-i18n="collection.smartFilters">Smart filters</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.smartFilters">Smart filters</span>
+                  <select id="smartFilterSelect"></select>
+                </label>
+              </div>
+            </details>
           </div>
           <div class="advanced-search-actions">
             <div class="smart-filter-picker">
-              <span class="advanced-search-count hidden" id="advancedSearchActiveCount"></span>
               <button type="button" class="secondary-button compact-button" id="advancedSearchSaveButton" data-next-i18n="collection.saveSmartFilter">Save smart filter</button>
               <button type="button" class="secondary-button compact-button danger" id="advancedSearchDeleteButton" data-next-i18n="common.delete">Delete</button>
             </div>
@@ -12543,66 +12698,94 @@ def ui_preview_html(
           <span class="bulk-count" id="librarySummary">""" + h(counts.get("movies", 0)) + """ movies</span>
         </div>
       </section>
-      <section class="bulk-bar" id="bulkBar">
-        <div class="button-row compact bulk-selection-actions">
-          <button type="button" class="secondary-button compact-button" data-bulk-select="all" data-next-i18n="bulk.selectAll">Select all</button>
-          <button type="button" class="secondary-button compact-button" data-bulk-select="none" data-next-i18n="bulk.deselectAll">Deselect all</button>
-          <button type="button" class="secondary-button compact-button hidden" data-bulk-select="clear" id="bulkClearSelection" data-next-i18n="bulk.clearSelection">Clear selection</button>
+      <section class="bulk-bar" id="bulkBar" role="region" aria-labelledby="bulkPanelTitle">
+        <div class="library-panel-head bulk-panel-head">
+          <div class="library-panel-title">
+            <span class="library-panel-title-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M2,5H4V19C4,20.11 4.89,21 6,21H20V19H6V5M18,3A2,2 0 0,1 20,5V15A2,2 0 0,1 18,17H8A2,2 0 0,1 6,15V5A2,2 0 0,1 8,3H18M9.5,11L11,12.5L16.5,7L18,8.5L11,15.5L8,12.5L9.5,11Z"/></svg>
+            </span>
+            <h3 id="bulkPanelTitle" data-next-i18n="bulk.select">Select</h3>
+          </div>
+          <div class="bulk-panel-status">
+            <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
+            <div class="button-row compact bulk-selection-actions">
+              <button type="button" class="secondary-button compact-button" data-bulk-select="all" data-next-i18n="bulk.selectAll">Select all</button>
+              <button type="button" class="secondary-button compact-button" data-bulk-select="none" data-next-i18n="bulk.deselectAll">Deselect all</button>
+              <button type="button" class="secondary-button compact-button hidden" data-bulk-select="clear" id="bulkClearSelection" data-next-i18n="bulk.clearSelection">Clear selection</button>
+            </div>
+          </div>
         </div>
-        <span class="bulk-count" id="bulkCount" data-next-i18n="bulk.noneSelected">No movies selected</span>
-        <div class="bulk-targets">
-          <div class="bulk-target">
-            <label>
+        <div class="bulk-targets library-adaptive-grid">
+          <details class="bulk-target library-adaptive-group" data-library-adaptive-group data-library-bulk-group="metadata">
+            <summary>
               <span data-next-i18n="bulk.metadata">Metadata</span>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
               <button type="button" class="bulk-action" disabled data-bulk-action="metadata" data-next-i18n="bulk.refreshMetadata">Refresh metadata</button>
-            </label>
-          </div>
-          <div class="bulk-target">
-            <label>
+            </div>
+          </details>
+          <details class="bulk-target library-adaptive-group" data-library-adaptive-group data-library-bulk-group="groups">
+            <summary>
               <span data-next-i18n="bulk.groupTarget">Group</span>
-              <select id="bulkGroupTarget"></select>
-            </label>
-            <button type="button" class="bulk-action" disabled data-bulk-action="group-add" data-next-i18n="bulk.addToGroup">Add</button>
-            <button type="button" class="bulk-action" disabled data-bulk-action="group-remove" data-next-i18n="bulk.removeFromGroup">Remove</button>
-          </div>
-          <div class="bulk-target wide">
-            <label>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
+              <select id="bulkGroupTarget" aria-label="Group" data-next-i18n-aria="bulk.groupTarget"></select>
+              <button type="button" class="bulk-action" disabled data-bulk-action="group-add" data-next-i18n="bulk.addToGroup">Add</button>
+              <button type="button" class="bulk-action" disabled data-bulk-action="group-remove" data-next-i18n="bulk.removeFromGroup">Remove</button>
+            </div>
+          </details>
+          <details class="bulk-target wide library-adaptive-group" data-library-adaptive-group data-library-bulk-group="tags">
+            <summary>
               <span data-next-i18n="bulk.tagsTarget">Tags</span>
-            </label>
-            <div class="bulk-tag-picker" id="bulkTagPicker" role="group" aria-label="Tags"></div>
-            <div class="button-row compact">
-              <button type="button" class="bulk-action" disabled data-bulk-action="tags-add" data-next-i18n="bulk.addTags">Assign tags</button>
-              <button type="button" class="bulk-action" disabled data-bulk-action="tags-remove" data-next-i18n="bulk.removeTags">Remove tags</button>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
+              <div class="bulk-tag-picker" id="bulkTagPicker" role="group" aria-label="Tags" data-next-i18n-aria="bulk.tagsTarget"></div>
+              <div class="button-row compact">
+                <button type="button" class="bulk-action" disabled data-bulk-action="tags-add" data-next-i18n="bulk.addTags">Assign tags</button>
+                <button type="button" class="bulk-action" disabled data-bulk-action="tags-remove" data-next-i18n="bulk.removeTags">Remove tags</button>
+              </div>
             </div>
-          </div>
-          <div class="bulk-target wide">
-            <label>
+          </details>
+          <details class="bulk-target wide library-adaptive-group" data-library-adaptive-group data-library-bulk-group="containers">
+            <summary>
               <span data-next-i18n="bulk.containerTarget">Container</span>
-              <select id="bulkContainerTarget"></select>
-            </label>
-            <div class="bulk-inline-create hidden" id="bulkContainerCreateControls">
-              <form class="bulk-inline-create-form" id="bulkContainerCreateForm">
-                <label class="visually-hidden" for="bulkContainerCreateTitle" data-next-i18n="bulk.containerCreateTitleLabel">Container name</label>
-                <input id="bulkContainerCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.containerCreatePlaceholder" placeholder="New container name">
-                <button type="submit" class="bulk-action" id="bulkContainerCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
-              </form>
-              <p class="bulk-create-message" id="bulkContainerCreateMessage"></p>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
+              <select id="bulkContainerTarget" aria-label="Container" data-next-i18n-aria="bulk.containerTarget"></select>
+              <div class="bulk-inline-create hidden" id="bulkContainerCreateControls">
+                <form class="bulk-inline-create-form" id="bulkContainerCreateForm">
+                  <label class="visually-hidden" for="bulkContainerCreateTitle" data-next-i18n="bulk.containerCreateTitleLabel">Container name</label>
+                  <input id="bulkContainerCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.containerCreatePlaceholder" placeholder="New container name">
+                  <button type="submit" class="bulk-action" id="bulkContainerCreateSubmit" data-next-i18n="bulk.createAndAddSelected">Create and add selected</button>
+                </form>
+                <p class="bulk-create-message" id="bulkContainerCreateMessage"></p>
+              </div>
+              <button type="button" class="bulk-action" disabled data-bulk-action="container" id="bulkContainerActionButton" data-next-i18n="bulk.addToContainer">Add to container</button>
             </div>
-            <button type="button" class="bulk-action" disabled data-bulk-action="container" id="bulkContainerActionButton" data-next-i18n="bulk.addToContainer">Add to container</button>
-          </div>
-          <div class="bulk-target">
-            <label>
+          </details>
+          <details class="bulk-target library-adaptive-group" data-library-adaptive-group data-library-bulk-group="location">
+            <summary>
               <span data-next-i18n="locations.assign">Storage location</span>
-              <select id="bulkLocationTarget"></select>
-            </label>
-            <button type="button" class="bulk-action" disabled data-bulk-action="location" id="bulkLocationActionButton" data-next-i18n="bulk.setLocation">Set location</button>
-          </div>
-          <div class="bulk-target">
-            <label>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
+              <select id="bulkLocationTarget" aria-label="Storage location" data-next-i18n-aria="locations.assign"></select>
+              <button type="button" class="bulk-action" disabled data-bulk-action="location" id="bulkLocationActionButton" data-next-i18n="bulk.setLocation">Set location</button>
+            </div>
+          </details>
+          <details class="bulk-target danger library-adaptive-group" data-library-adaptive-group data-library-bulk-group="delete">
+            <summary>
               <span data-next-i18n="bulk.deleteTarget">Delete</span>
+              <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+            </summary>
+            <div class="library-adaptive-group-body">
               <button type="button" class="bulk-action danger" disabled data-bulk-action="delete" data-next-i18n="bulk.deleteSelected">Delete selected</button>
-            </label>
-          </div>
+            </div>
+          </details>
         </div>
       </section>
       <section class="metadata-job-panel" id="libraryMetadataJobPanel" aria-live="polite">
@@ -20658,6 +20841,26 @@ def ui_preview_html(
         status.title = label;
       }
     }
+    let libraryAdaptiveMobile = null;
+    function syncLibraryAdaptiveGroups() {
+      const mobile = window.matchMedia("(max-width: 760px)").matches;
+      const groups = [...document.querySelectorAll("[data-library-adaptive-group]")];
+      if (mobile !== libraryAdaptiveMobile) {
+        groups.forEach((group) => { group.open = !mobile; });
+        libraryAdaptiveMobile = mobile;
+      }
+      groups.forEach((group) => {
+        const summary = group.querySelector(":scope > summary");
+        if (!summary) return;
+        summary.tabIndex = mobile ? 0 : -1;
+        if (!summary.dataset.adaptiveGroupBound) {
+          summary.dataset.adaptiveGroupBound = "1";
+          summary.addEventListener("click", (event) => {
+            if (!window.matchMedia("(max-width: 760px)").matches) event.preventDefault();
+          });
+        }
+      });
+    }
     function syncSelectModeButton() {
       const button = document.getElementById("selectModeButton");
       if (!button) return;
@@ -20704,6 +20907,7 @@ def ui_preview_html(
       renderCollectionFilterMenu();
       syncAdvancedSearchControls();
       syncSelectModeButton();
+      syncLibraryAdaptiveGroups();
       syncBulkTargetCreateControls();
     }
     function collectionFilterActiveCount() {
@@ -37293,6 +37497,8 @@ def ui_preview_html(
       });
       document.getElementById("libraryMetadataJobsToggleButton")?.addEventListener("click", () => toggleLibraryMetadataJobs());
       document.getElementById("libraryMetadataJobsRefreshButton")?.addEventListener("click", () => refreshLibraryMetadataJobs({open: true}));
+      window.addEventListener("resize", syncLibraryAdaptiveGroups);
+      syncLibraryAdaptiveGroups();
       document.getElementById("sidebarCollapseToggle")?.addEventListener("click", () => {
         const nextState = !document.getElementById("libraryShell")?.classList.contains("sidebar-collapsed");
         localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, nextState ? "1" : "0");

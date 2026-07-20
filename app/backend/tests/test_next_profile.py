@@ -578,6 +578,79 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn("function handleAppAdminTabKeydown(button, event)", self.html)
         self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
 
+    def test_library_advanced_panel_groups_existing_controls(self):
+        self.assertIn('id="advancedSearchToggleButton"', self.html)
+        self.assertIn('aria-controls="advancedSearchPanel"', self.html)
+        self.assertIn('class="advanced-search-panel hidden" id="advancedSearchPanel"', self.html)
+        self.assertIn('role="region" aria-labelledby="advancedSearchPanelTitle"', self.html)
+        for group in ("release", "media", "personal", "smart"):
+            self.assertIn(f'data-library-advanced-group="{group}"', self.html)
+
+        for element_id in (
+            "advancedYearFrom",
+            "advancedYearTo",
+            "advancedCrewQuery",
+            "advancedDigitalFilter",
+            "advancedArtworkFilter",
+            "advancedContainerType",
+            "advancedPersonalFilter",
+            "advancedLocationFilter",
+            "smartFilterSelect",
+            "advancedSearchSaveButton",
+            "advancedSearchDeleteButton",
+            "advancedSearchResetButton",
+            "advancedSearchApplyButton",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+    def test_library_bulk_panel_groups_existing_actions(self):
+        self.assertIn('id="selectModeButton"', self.html)
+        self.assertIn('aria-controls="bulkBar"', self.html)
+        self.assertIn(
+            'class="bulk-bar" id="bulkBar" role="region" aria-labelledby="bulkPanelTitle"',
+            self.html,
+        )
+        for group in ("metadata", "groups", "tags", "containers", "location", "delete"):
+            self.assertIn(f'data-library-bulk-group="{group}"', self.html)
+
+        for element_id in (
+            "bulkCount",
+            "bulkClearSelection",
+            "bulkGroupTarget",
+            "bulkTagPicker",
+            "bulkContainerTarget",
+            "bulkContainerCreateForm",
+            "bulkContainerCreateTitle",
+            "bulkContainerCreateSubmit",
+            "bulkContainerCreateMessage",
+            "bulkContainerActionButton",
+            "bulkLocationTarget",
+            "bulkLocationActionButton",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+        for selection in ("all", "none", "clear"):
+            self.assertEqual(self.html.count(f'data-bulk-select="{selection}"'), 1, selection)
+        for action in (
+            "metadata",
+            "group-add",
+            "group-remove",
+            "tags-add",
+            "tags-remove",
+            "container",
+            "location",
+            "delete",
+        ):
+            self.assertIn(f'disabled data-bulk-action="{action}"', self.html, action)
+
+    def test_library_action_groups_adapt_at_mobile_breakpoint(self):
+        self.assertEqual(self.html.count("data-library-adaptive-group "), 10)
+        self.assertIn("function syncLibraryAdaptiveGroups()", self.html)
+        self.assertIn('window.matchMedia("(max-width: 760px)").matches', self.html)
+        self.assertIn("groups.forEach((group) => { group.open = !mobile; });", self.html)
+        self.assertIn('window.addEventListener("resize", syncLibraryAdaptiveGroups);', self.html)
+        self.assertIn(".library-adaptive-group > summary:focus-visible {", self.html)
+        self.assertIn(".bulk-target.danger {", self.html)
+
     def test_account_dashboard_preserves_existing_profile_bindings(self):
         self.assertIn('class="account-dashboard"', self.html)
         self.assertIn('id="profileAccountDisplayName"', self.html)
