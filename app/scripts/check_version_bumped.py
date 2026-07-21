@@ -198,7 +198,15 @@ def validate_version_progression(base: str, head: str, base_ref: str | None) -> 
         return []
 
     base_semver = parse_semver(base_version)
-    if base_semver is not None and head_semver <= base_semver:
+    if base_semver is None:
+        return [
+            (
+                label,
+                f"{VERSION_FILE} at the actual base is '{base_version}', which is not valid "
+                f"MAJOR.MINOR.PATCH semver ({actual_base[:12]})",
+            )
+        ]
+    if head_semver <= base_semver:
         return [
             (
                 label,
