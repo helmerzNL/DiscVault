@@ -158,6 +158,54 @@ class NextMigrationContractTests(unittest.TestCase):
         self.assertFalse(payload["migration"]["legacyData"]["found"])
 
     @unittest.skipIf(next_app is None, "PostgreSQL dependencies are not installed")
+    def test_startup_reports_legacy_password_as_ready_authentication(self):
+        readiness = {
+            "state": "not_required",
+            "canStart": False,
+            "requiresConfirmation": False,
+            "requiredActions": [],
+            "activeJob": None,
+            "latestRun": None,
+            "legacyData": {
+                "found": False,
+                "readable": False,
+                "sourceCounts": {},
+                "mediaExtensions": {},
+            },
+            "importSources": [],
+            "migrations": {"state": "ready"},
+        }
+        counts = {
+            "users": 1,
+            "passkey_credentials": 0,
+            "legacy_password_credentials": 1,
+        }
+
+        with (
+            patch.object(next_app, "migration_readiness", return_value=readiness),
+            patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+            patch.object(next_app, "next_auth_ready", return_value=True),
+            patch.object(
+                next_app,
+                "count_table",
+                side_effect=lambda _conn, table_name: counts[table_name],
+            ),
+            patch.object(next_app, "next_auth_current_user", return_value=None),
+        ):
+            payload = next_app.startup_status_payload(object())
+
+        auth_step = payload["steps"][0]
+        self.assertEqual(auth_step["key"], "auth")
+        self.assertEqual(auth_step["label"], "Owner account")
+        self.assertEqual(auth_step["state"], "complete")
+        self.assertEqual(
+            auth_step["detail"],
+            "1 user(s), 1 authentication credential(s)",
+        )
+        self.assertTrue(payload["auth"]["ready"])
+        self.assertEqual(payload["auth"]["credentialCount"], 1)
+
+    @unittest.skipIf(next_app is None, "PostgreSQL dependencies are not installed")
     def test_startup_uses_legacy_passkeys_before_owner_setup(self):
         readiness = {
             "state": "ready_for_confirmation",
