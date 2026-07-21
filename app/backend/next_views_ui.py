@@ -12845,7 +12845,7 @@ def ui_preview_html(
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
       <form class="recovery-login-panel hidden" id="appReviewForm">
-        <p data-next-i18n="legacyAuth.warning">Passwords are less phishing-resistant than passkeys.</p>
+        <p id="appLegacyLoginWarning" data-next-i18n="legacyAuth.warning">Passwords are less phishing-resistant than passkeys.</p>
         <div id="appLegacyCredentials">
         <label for="appReviewUsername">
           <span data-next-i18n="auth.username">Username</span>
@@ -17498,6 +17498,7 @@ def ui_preview_html(
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
       const reviewForm = document.getElementById("appReviewForm");
+      const legacyLoginWarning = document.getElementById("appLegacyLoginWarning");
       const authGuidance = document.getElementById("appAuthGuidance");
       const showAuthGuidance = passkeyConfigurationGuidanceVisible();
       authGuidance?.classList.toggle("hidden", !showAuthGuidance);
@@ -17549,6 +17550,7 @@ def ui_preview_html(
       }
       if (reviewToggleButton) reviewToggleButton.classList.toggle("hidden", !reviewLoginAvailable);
       if (!reviewLoginAvailable) reviewForm?.classList.add("hidden");
+      legacyLoginWarning?.classList.toggle("hidden", reviewLoginAvailable);
       document.getElementById("profileLegacySecurity")?.classList.toggle("hidden", !currentAuthStatus.legacy_auth_enabled);
       if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
       if (codeInput) {
@@ -22029,7 +22031,7 @@ def ui_preview_html(
       const recoveryPanel = document.getElementById("appRecoveryForm");
       invitePanel?.classList.add("hidden");
       recoveryPanel?.classList.add("hidden");
-      panel?.classList.toggle("hidden");
+      panel?.classList.remove("hidden");
       setLoginMessage("");
     }
     async function registerInviteAccount(event) {
@@ -22108,7 +22110,7 @@ def ui_preview_html(
       const reviewPanel = document.getElementById("appReviewForm");
       invitePanel?.classList.add("hidden");
       reviewPanel?.classList.add("hidden");
-      panel?.classList.toggle("hidden");
+      panel?.classList.remove("hidden");
       setLoginMessage("");
     }
     function renderLegacyLoginStage(payload = {}) {
