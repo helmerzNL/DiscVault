@@ -23,15 +23,22 @@ def _git_available() -> bool:
         return False
 
 
-def _run_script(repo_dir: str, *extra_args: str) -> int:
-    """Run the version-guard script in repo_dir and return the exit code."""
-    result = subprocess.run(
+def _run_script_result(
+    repo_dir: str, *extra_args: str
+) -> subprocess.CompletedProcess[str]:
+    """Run the version-guard script in repo_dir and capture its result."""
+    return subprocess.run(
         [sys.executable, SCRIPT, *extra_args],
         cwd=repo_dir,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        text=True,
     )
-    return result.returncode
+
+
+def _run_script(repo_dir: str, *extra_args: str) -> int:
+    """Run the version-guard script in repo_dir and return the exit code."""
+    return _run_script_result(repo_dir, *extra_args).returncode
 
 
 class TempRepo:
@@ -181,6 +188,182 @@ class TestVersionGuardCLI(unittest.TestCase):
             # --base HEAD~1 --head HEAD (default)
             rc = repo.run()
             self.assertEqual(rc, 0)
+
+    def test_aggregate_fails_invalid_semver_at_head(self) -> None:
+        """A protected change bumping to a non-semver value must fail with a clear reason."""
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            root_sha = repo.commit("app/VERSION", message="init")
+
+            repo.write("app/backend/foo.py", "# foo")
+            repo.write("app/VERSION", "not-a-version")
+            sha_a = repo.commit("app/backend/foo.py", "app/VERSION", message="feat+bad bump")
+
+            result = subprocess.run(
+                [sys.executable, SCRIPT, "--base", root_sha, "--head", sha_a, "--aggregate"],
+                cwd=repo.path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("semver", result.stderr)
+
+    def test_aggregate_fails_semver_with_leading_zeroes(self) -> None:
+        """SemVer numeric identifiers must not contain leading zeroes."""
+        for version in ("01.2.3", "1.02.3", "1.2.03"):
+            with self.subTest(version=version), TempRepo() as repo:
+                repo.write("app/VERSION", "1.0.0")
+                root_sha = repo.commit("app/VERSION", message="init")
+
+                repo.write("app/backend/foo.py", "# foo")
+                repo.write("app/VERSION", version)
+                sha_a = repo.commit("app/backend/foo.py", "app/VERSION", message="feat+bad bump")
+
+                result = subprocess.run(
+                    [sys.executable, SCRIPT, "--base", root_sha, "--head", sha_a, "--aggregate"],
+                    cwd=repo.path,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("semver", result.stderr)
+
+    def test_aggregate_fails_invalid_semver_at_base(self) -> None:
+        """An invalid version at the actual base must fail closed."""
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "not-a-version")
+            root_sha = repo.commit("app/VERSION", message="invalid base")
+
+            repo.write("app/backend/foo.py", "# foo")
+            repo.write("app/VERSION", "2.0.0")
+            sha_a = repo.commit("app/backend/foo.py", "app/VERSION", message="feat+valid bump")
+
+            result = subprocess.run(
+                [sys.executable, SCRIPT, "--base", root_sha, "--head", sha_a, "--aggregate"],
+                cwd=repo.path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("actual base", result.stderr)
+            self.assertIn("not valid", result.stderr)
+
+    def test_aggregate_fails_when_head_version_equals_base(self) -> None:
+        """Merely re-writing the same version value must not satisfy the guard."""
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            root_sha = repo.commit("app/VERSION", message="init")
+
+            repo.write("app/backend/foo.py", "# foo")
+            repo.write("app/VERSION", "1.0.0")
+            sha_a = repo.commit("app/backend/foo.py", "app/VERSION", message="feat, no real bump")
+
+            rc = repo.run("--base", root_sha, "--head", sha_a, "--aggregate")
+            self.assertEqual(rc, 1, "identical version value is not a real bump")
+
+    def test_two_branches_same_next_version_stale_equal_head_fails(self) -> None:
+        """
+        Reproduce the PR #340/#341 class of bug end-to-end:
+        - main starts at 1.0.0.
+        - Branch A forks from main, independently bumps to 1.0.1 with a protected
+          change, and lands first (main's real tip is now 1.0.1).
+        - Branch B forked from the SAME original commit (before A merged) and,
+          unaware of A, also bumps to the SAME 1.0.1 with its own protected change.
+        - Checked against the actual (now-updated) base, B's "bump" is stale/equal,
+          not a real increment, and must fail even though it looks fine relative to
+          the old fork point.
+        """
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            root_sha = repo.commit("app/VERSION", message="init")
+
+            # Branch A: bumps to 1.0.1 and lands first -> becomes the new base tip.
+            repo.write("app/backend/a.py", "# a")
+            repo.write("app/VERSION", "1.0.1")
+            sha_a = repo.commit("app/backend/a.py", "app/VERSION", message="feat A + bump")
+
+            # Branch B: forked from the same root, independently chose the same
+            # next version (1.0.1) without knowledge of A.
+            subprocess.check_call(
+                ["git", "-C", repo.path, "checkout", "-q", root_sha, "-b", "branch-b"]
+            )
+            repo.write("app/backend/b.py", "# b")
+            repo.write("app/VERSION", "1.0.1")
+            sha_b = repo.commit("app/backend/b.py", "app/VERSION", message="feat B + same bump")
+
+            # Against the REAL current base (sha_a, now at 1.0.1) this must fail:
+            # B's version does not actually advance past the true base.
+            rc_against_true_base = repo.run("--base", sha_a, "--head", sha_b, "--aggregate")
+            self.assertEqual(
+                rc_against_true_base,
+                1,
+                "stale/equal version vs the real (updated) base must fail",
+            )
+
+            # Sanity check: against the stale original fork point alone, the same
+            # diff looks like a legitimate bump (1.0.0 -> 1.0.1). This is exactly
+            # why comparing against the *actual* base value (not just diff
+            # presence) matters.
+            rc_against_stale_base = repo.run("--base", root_sha, "--head", sha_b, "--aggregate")
+            self.assertEqual(rc_against_stale_base, 0)
+
+    def test_base_ref_resolves_moved_target_branch(self) -> None:
+        """--base-ref lets the guard detect a target branch that moved forward
+        since the (possibly stale) --base sha was recorded, without needing a
+        real network remote."""
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            root_sha = repo.commit("app/VERSION", message="init")
+
+            repo.write("app/backend/a.py", "# a")
+            repo.write("app/VERSION", "1.0.1")
+            sha_a = repo.commit("app/backend/a.py", "app/VERSION", message="feat A + bump")
+            # Simulate the target branch ("main") having already moved to sha_a.
+            subprocess.check_call(["git", "-C", repo.path, "branch", "-f", "main", sha_a])
+
+            subprocess.check_call(
+                ["git", "-C", repo.path, "checkout", "-q", root_sha, "-b", "branch-b"]
+            )
+            repo.write("app/backend/b.py", "# b")
+            repo.write("app/VERSION", "1.0.1")
+            sha_b = repo.commit("app/backend/b.py", "app/VERSION", message="feat B + stale bump")
+
+            # The recorded/stale base (root_sha) alone would pass; --base-ref
+            # should resolve to the moved branch and catch the redundant bump.
+            rc = repo.run("--base", root_sha, "--head", sha_b, "--base-ref", "main", "--aggregate")
+            self.assertEqual(rc, 1, "base-ref should resolve to the moved target and fail")
+
+            # Without --base-ref, the stale base alone looks fine (regression guard).
+            rc_without_base_ref = repo.run("--base", root_sha, "--head", sha_b, "--aggregate")
+            self.assertEqual(rc_without_base_ref, 0)
+
+    def test_failure_reports_full_range_and_actual_target_branch(self) -> None:
+        """Failure output keeps the aggregate range and uses --base-ref guidance."""
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            root_sha = repo.commit("app/VERSION", message="init")
+
+            repo.write("app/backend/foo.py", "# foo")
+            head_sha = repo.commit("app/backend/foo.py", message="feat: no bump")
+
+            result = _run_script_result(
+                repo.path,
+                "--base",
+                root_sha,
+                "--head",
+                head_sha,
+                "--base-ref",
+                "main",
+                "--aggregate",
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(f"{root_sha[:12]}...{head_sha[:12]}", result.stderr)
+            self.assertIn("git fetch origin main && git rebase origin/main", result.stderr)
+            self.assertNotIn("origin/release/v26-beta", result.stderr)
 
 
 if __name__ == "__main__":

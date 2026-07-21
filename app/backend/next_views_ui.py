@@ -195,6 +195,25 @@ def ui_preview_html(
             "</span></button>"
         )
 
+    def admin_tab(
+        name: str,
+        label_key: str,
+        fallback: str,
+        icon_name: str,
+        *,
+        active: bool = False,
+    ) -> str:
+        suffix = "".join(part.capitalize() for part in name.split("_"))
+        active_class = ' class="active"' if active else ""
+        return (
+            f'<button type="button"{active_class} id="appAdminTab{suffix}" role="tab" '
+            f'aria-controls="appAdminPanel{suffix}" aria-selected="{"true" if active else "false"}" '
+            f'tabindex="{"0" if active else "-1"}" aria-label="{h(fallback)}" title="{h(fallback)}" '
+            f'data-next-i18n-aria="{h(label_key)}" data-next-i18n-title="{h(label_key)}" '
+            f'data-app-admin-tab="{h(name)}"><span class="app-admin-tab-icon">{nav_icon(icon_name)}</span>'
+            f'<span class="app-admin-tab-label" data-next-i18n="{h(label_key)}">{h(fallback)}</span></button>'
+        )
+
     return """<!doctype html>
 <html lang="en">
 <head>
@@ -464,12 +483,19 @@ def ui_preview_html(
       gap: 14px;
       min-width: 0;
     }
+    .login-brand-copy > div:last-child {
+      min-width: 0;
+    }
     .login-card h1,
     .startup-card h1 {
       margin: 0 0 8px;
       font-size: clamp(2.2rem, 8vw, 4rem);
       line-height: .96;
       letter-spacing: 0;
+    }
+    #startupTitle {
+      max-width: 100%;
+      overflow-wrap: anywhere;
     }
     .login-card p,
     .startup-card p {
@@ -497,7 +523,7 @@ def ui_preview_html(
     }
     .startup-owner-fields {
       margin-top: 18px;
-      width: min(360px, 100%);
+      width: 100%;
     }
     .startup-owner-fields label {
       display: grid;
@@ -519,6 +545,98 @@ def ui_preview_html(
       font: inherit;
       font-size: .94rem;
       font-weight: 700;
+    }
+    .startup-auth-guidance {
+      display: grid;
+      gap: 8px;
+      margin-top: 18px;
+      border: 1px solid color-mix(in srgb, var(--amber, #ff9f0a) 44%, var(--line));
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--amber, #ff9f0a) 8%, var(--bg-solid));
+      padding: 14px 16px;
+    }
+    .startup-auth-guidance strong {
+      font-size: .95rem;
+    }
+    .startup-auth-guidance span {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
+    .startup-auth-guidance-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      font-size: .86rem;
+      font-weight: 750;
+    }
+    .startup-auth-guidance-links a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .startup-onboarding-progress {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .startup-onboarding-progress-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 750;
+    }
+    .startup-onboarding-progress-item b {
+      display: grid;
+      flex: 0 0 24px;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--text) 8%, transparent);
+      color: var(--text);
+      font-size: .72rem;
+    }
+    .startup-onboarding-progress-item.active {
+      border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+      color: var(--text);
+    }
+    .startup-onboarding-progress-item.active b {
+      background: var(--accent);
+      color: var(--accent-contrast);
+    }
+    .startup-onboarding-progress-item.complete {
+      border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+    }
+    .startup-onboarding-progress-item.complete b {
+      background: color-mix(in srgb, var(--green) 18%, transparent);
+      color: var(--green);
+    }
+    .startup-onboarding-step {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
+      padding: 14px;
+    }
+    .startup-onboarding-step .legacy-checkbox-row {
+      display: flex;
+    }
+    .startup-onboarding-step .legacy-checkbox-row input {
+      width: auto;
+      min-height: auto;
+    }
+    .startup-onboarding-help {
+      font-size: .82rem;
+      line-height: 1.45;
     }
     .login-primary,
     .primary-button {
@@ -8342,6 +8460,17 @@ def ui_preview_html(
       height: 20px;
       flex: 0 0 auto;
     }
+    .app-admin-section-tabs button {
+      transition: color .18s ease, background .18s ease, box-shadow .18s ease;
+    }
+    .app-admin-section-tabs button.active,
+    .app-admin-section-tabs button[aria-selected="true"] {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+        0 8px 20px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
     .profile-dashboard-tab-label {
       min-width: 0;
       overflow: hidden;
@@ -8508,6 +8637,29 @@ def ui_preview_html(
     }
     .profile-security-stat strong {
       overflow-wrap: anywhere;
+    }
+    .profile-mfa-setup {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--panel) 76%, transparent);
+    }
+    .profile-mfa-setup > p {
+      margin: 0;
+      color: var(--muted);
+    }
+    .profile-mfa-qr {
+      width: min(220px, 100%);
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px;
+    }
+    .profile-mfa-manual-key {
+      display: block;
+      overflow-wrap: anywhere;
+      white-space: normal;
     }
     .groups-dashboard {
       display: grid;
@@ -9061,21 +9213,108 @@ def ui_preview_html(
       padding-bottom: 0;
     }
     .app-admin-submenu {
-      width: max-content;
-      max-width: 100%;
-      overflow-x: auto;
+      width: 100%;
+      max-width: none;
+      display: flex;
+      flex-direction: column;
+      align-self: start;
+      gap: 4px;
+      overflow: visible;
+      padding: 8px;
+      border-radius: 16px;
+      position: sticky;
+      top: 16px;
       justify-content: flex-start;
       scrollbar-width: none;
       -webkit-overflow-scrolling: touch;
+      background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
+      box-shadow: 0 14px 34px rgba(0,0,0,.08);
     }
     .app-admin-submenu::-webkit-scrollbar {
       display: none;
     }
     .app-admin-submenu button {
+      width: 100%;
       min-width: 0;
-      white-space: nowrap;
+      min-height: 46px;
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      align-items: center;
+      gap: 9px;
+      padding: 5px 10px;
+      border-radius: 11px;
+      text-align: left;
+      white-space: normal;
+      overflow: visible;
+    }
+    .app-admin-submenu button.active {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+        0 8px 20px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    .app-admin-tab-icon {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 9px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+      transition: color .18s ease, background .18s ease;
+    }
+    .app-admin-submenu button.active .app-admin-tab-icon {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+    }
+    .app-admin-tab-icon .nav-symbol {
+      width: 18px;
+      height: 18px;
+    }
+    .app-admin-tab-label {
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
+      line-height: 1.25;
+    }
+    .app-admin-workspace {
+      display: grid;
+      grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+      min-width: 0;
+    }
+    @media (max-width: 860px) {
+      .app-admin-workspace {
+        display: block;
+      }
+      .app-admin-submenu {
+        width: 100%;
+        max-width: 100%;
+        display: flex;
+        flex-direction: row;
+        gap: 4px;
+        margin-bottom: 16px;
+        padding: 5px;
+        border-radius: 14px;
+        position: static;
+        overflow-x: auto;
+      }
+      .app-admin-submenu button {
+        width: auto;
+        min-height: 40px;
+        flex: 0 0 auto;
+        grid-template-columns: 22px auto;
+        gap: 7px;
+        padding: 4px 12px;
+        white-space: nowrap;
+      }
+      .app-admin-tab-icon {
+        width: 22px;
+        height: 22px;
+        background: transparent;
+      }
     }
     .app-admin-panel {
       display: none;
@@ -9094,6 +9333,42 @@ def ui_preview_html(
     }
     .app-admin-dashboard-grid > .full {
       grid-column: 1 / -1;
+    }
+    .app-admin-people-tabs,
+    .app-admin-roles-tabs,
+    .app-admin-operations-tabs {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .app-admin-roles-tabs {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .app-admin-operations-tabs {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .app-admin-people-panel,
+    .app-admin-roles-panel,
+    .app-admin-operations-panel {
+      display: none;
+      min-width: 0;
+    }
+    .app-admin-people-panel.active,
+    .app-admin-roles-panel.active,
+    .app-admin-operations-panel.active {
+      display: grid;
+      gap: 14px;
+    }
+    .app-admin-operations-tab-status {
+      min-width: 24px;
+      justify-content: center;
+    }
+    .app-admin-operations-tabs button[data-status-tone="good"] .nav-symbol {
+      color: var(--green);
+    }
+    .app-admin-operations-tabs button[data-status-tone="bad"] .nav-symbol {
+      color: var(--red);
+    }
+    .app-admin-operations-tabs button[data-status-tone="blue"] .nav-symbol {
+      color: var(--accent);
     }
     .app-admin-summary-grid {
       display: grid;
@@ -9918,6 +10193,57 @@ def ui_preview_html(
         justify-content: flex-start;
       }
     }
+    .app-admin-plugin-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      margin: 12px 0;
+    }
+    .app-admin-plugin-filter {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1 1 160px;
+      min-width: 0;
+    }
+    .app-admin-plugin-filter > span {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 760;
+    }
+    .app-admin-plugin-filter input,
+    .app-admin-plugin-filter select {
+      min-width: 0;
+      width: 100%;
+      max-width: none;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      color: var(--text);
+      font: inherit;
+    }
+    .app-admin-plugin-attention {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .app-admin-plugin-attention h4 {
+      margin: 0;
+      font-size: .9rem;
+    }
+    .app-admin-plugin-attention-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 9px 10px;
+      background: color-mix(in srgb, var(--field) 54%, transparent);
+      min-width: 0;
+    }
     .app-admin-plugin-tab-panel {
       display: none;
       min-width: 0;
@@ -10127,15 +10453,6 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .8rem;
       margin-top: 3px;
-    }
-    .plugin-submenu {
-      width: 100%;
-      max-width: 100%;
-      flex-wrap: wrap;
-    }
-    .plugin-submenu button {
-      flex: 1 1 148px;
-      min-width: 0;
     }
     .app-admin-plugin-meta,
     .app-admin-plugin-actions {
@@ -10381,20 +10698,53 @@ def ui_preview_html(
     }
     .app-admin-permission-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin-top: 10px;
     }
     .app-admin-permission-domain {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 10px;
       background: color-mix(in srgb, var(--bg-solid) 76%, transparent);
-      padding: 10px;
       min-width: 0;
+      overflow: hidden;
     }
-    .app-admin-permission-domain h4 {
-      margin: 0 0 8px;
-      font-size: .82rem;
+    .app-admin-permission-domain-toggle {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      width: 100%;
+      padding: 13px 14px;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+    }
+    .app-admin-permission-domain-toggle:hover {
+      background: color-mix(in srgb, var(--accent) 7%, transparent);
+    }
+    .app-admin-permission-domain-toggle strong {
+      text-transform: capitalize;
+    }
+    .app-admin-permission-domain-toggle .mdi {
+      transition: transform .16s ease;
+    }
+    .app-admin-permission-domain-toggle[aria-expanded="true"] .mdi {
+      transform: rotate(180deg);
+    }
+    .app-admin-permission-domain-panel {
+      display: grid;
+      gap: 8px;
+      padding: 0 14px 14px;
+      border-top: 1px solid var(--line);
+    }
+    .app-admin-permission-domain-help {
+      margin: 0;
+      padding: 11px 0 3px;
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.45;
     }
     .app-admin-permission-domain label {
       display: grid;
@@ -10404,16 +10754,151 @@ def ui_preview_html(
       color: var(--text);
       font-size: .76rem;
       line-height: 1.3;
-      padding: 5px 0;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+    .app-admin-permission-domain label:has(input:checked) {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      background: color-mix(in srgb, var(--accent) 8%, var(--panel));
     }
     .app-admin-permission-domain input {
       margin-top: 2px;
+    }
+    .app-admin-permission-domain code {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: .68rem;
+      overflow-wrap: anywhere;
     }
     .app-admin-permission-domain small {
       display: block;
       color: var(--muted);
       font-size: .7rem;
-      margin-top: 2px;
+      line-height: 1.45;
+      margin-top: 5px;
+    }
+    .app-admin-role-key-help {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: .74rem;
+      line-height: 1.45;
+    }
+    #appAdminRoleKey[readonly] {
+      background: color-mix(in srgb, var(--panel) 76%, transparent);
+      color: var(--muted);
+      cursor: default;
+    }
+    #appAdminCreateRoleButton[aria-busy="true"] {
+      cursor: wait;
+    }
+    .app-admin-role-wizard {
+      display: grid;
+      gap: 16px;
+    }
+    .app-admin-role-wizard-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .app-admin-role-wizard-summary .wide {
+      grid-column: 1 / -1;
+    }
+    .app-admin-role-wizard-steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .app-admin-role-wizard-step {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      width: 100%;
+      min-height: 46px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+      color: var(--muted);
+      text-align: left;
+    }
+    .app-admin-role-wizard-step.active {
+      border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+      background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+      color: var(--text);
+    }
+    .app-admin-role-wizard-step-number {
+      display: grid;
+      place-items: center;
+      width: 25px;
+      height: 25px;
+      border-radius: 50%;
+      background: color-mix(in srgb, currentColor 12%, transparent);
+      font-size: .74rem;
+      font-weight: 800;
+    }
+    .app-admin-role-wizard-panel {
+      display: grid;
+      gap: 14px;
+      min-width: 0;
+    }
+    .app-admin-role-wizard-panel > h4,
+    .app-admin-role-review h4 {
+      margin: 0;
+    }
+    .app-admin-role-wizard-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 2px;
+    }
+    .app-admin-role-review {
+      display: grid;
+      gap: 12px;
+    }
+    .app-admin-role-review-section {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--panel) 72%, transparent);
+    }
+    .app-admin-role-review-section p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .app-admin-role-review-domains {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .app-admin-role-preview {
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .app-admin-role-preview > summary {
+      padding: 12px 14px;
+      cursor: pointer;
+      font-weight: 750;
+    }
+    .app-admin-role-preview > p,
+    .app-admin-role-preview > div {
+      margin-inline: 14px;
+    }
+    .app-admin-role-preview > div {
+      margin-bottom: 14px;
     }
     .profile-api-permission-grid {
       margin-top: 10px;
@@ -11833,7 +12318,8 @@ def ui_preview_html(
       }
       .app-admin-plugin-dashboard,
       .app-admin-priority-dashboard,
-      .app-admin-priority-row {
+      .app-admin-priority-row,
+      .app-admin-plugin-attention-row {
         grid-template-columns: 1fr;
       }
       .app-admin-plugin-config {
@@ -11934,7 +12420,10 @@ def ui_preview_html(
         height: 40px;
       }
       .profile-dashboard-tabs,
-      .profile-api-submenu {
+      .profile-api-submenu,
+      .app-admin-people-tabs,
+      .app-admin-roles-tabs,
+      .app-admin-operations-tabs {
         grid-template-columns: repeat(4, minmax(52px, 1fr));
         gap: 6px;
         width: 100%;
@@ -11942,8 +12431,19 @@ def ui_preview_html(
         padding: 6px;
         overflow: visible;
       }
-      .profile-api-submenu {
+      .profile-api-submenu,
+      .app-admin-people-tabs {
         grid-template-columns: repeat(3, minmax(52px, 1fr));
+      }
+      .app-admin-operations-tabs {
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(68px, 1fr);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .app-admin-operations-tabs::-webkit-scrollbar {
+        display: none;
       }
       .profile-dashboard-tabs button,
       .profile-api-submenu button {
@@ -11951,6 +12451,16 @@ def ui_preview_html(
         max-width: none;
         min-height: 50px;
         padding: 0 10px;
+      }
+      .app-admin-operations-tabs button {
+        gap: 6px;
+        padding: 0 7px;
+      }
+      .app-admin-operations-tabs .app-admin-operations-tab-status {
+        min-width: 22px;
+        min-height: 22px;
+        padding: 0 6px;
+        font-size: .68rem;
       }
       .profile-dashboard-tab-label {
         display: none;
@@ -11964,7 +12474,9 @@ def ui_preview_html(
       }
       .profile-security-stats,
       .profile-api-summary-grid,
-      .app-admin-summary-grid {
+      .app-admin-summary-grid,
+      .app-admin-role-wizard-summary,
+      .app-admin-role-wizard-steps {
         grid-template-columns: 1fr;
       }
       .profile-add-passkey {
@@ -12269,14 +12781,21 @@ def ui_preview_html(
           <div class="brand-mark"><img src="/api/next/assets/logo.svg" alt="DiscVault"></div>
           <div>
             <h1>DiscVault</h1>
-            <p data-next-i18n="auth.loginDescription">Log in with your Passkey</p>
           </div>
         </div>
         <select id="authLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </div>
+      <div class="startup-auth-guidance hidden" id="appAuthGuidance" role="status">
+        <strong id="appAuthGuidanceTitle"></strong>
+        <span id="appAuthGuidanceBody"></span>
+        <div class="startup-auth-guidance-links">
+          <a class="hidden" id="appConfiguredOriginLink" target="_self"></a>
+          <a href="https://docs.discvault.eu" target="_blank" rel="noreferrer" data-next-i18n="auth.passkeyDocumentation">Passkey documentation</a>
+        </div>
+      </div>
       <div class="login-actions">
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.loginDescription">Sign in with passkey</button>
-        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
+        <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="auth.signIn">Sign in</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
@@ -12310,10 +12829,6 @@ def ui_preview_html(
             <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
             <input id="appLegacyTotpCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
           </label>
-          <label for="appLegacyRecoveryCode">
-            <span data-next-i18n="legacyAuth.recoveryCodeOptional">Recovery code (instead)</span>
-            <input id="appLegacyRecoveryCode" autocomplete="one-time-code">
-          </label>
         </div>
         <div class="recovery-codes hidden" id="appLegacyRecoveryCodes"></div>
         <div class="profile-action-row hidden" id="appLegacyRecoveryActions">
@@ -12325,7 +12840,7 @@ def ui_preview_html(
           <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
         </label>
         <div class="profile-form-actions">
-          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="legacyAuth.signIn">Sign in with password</button>
+          <button type="submit" class="login-primary" id="appReviewLoginButton" data-next-i18n="auth.signIn">Sign in</button>
         </div>
       </form>
       <form class="recovery-login-panel hidden" id="appInviteForm">
@@ -12375,48 +12890,82 @@ def ui_preview_html(
         </div>
       </div>
       <div class="startup-steps" id="startupSteps"></div>
+      <div class="startup-auth-guidance hidden" id="startupAuthGuidance" role="status">
+        <strong id="startupAuthGuidanceTitle"></strong>
+        <span id="startupAuthGuidanceBody"></span>
+        <div class="startup-auth-guidance-links">
+          <a class="hidden" id="startupConfiguredOriginLink" target="_self"></a>
+          <a href="https://docs.discvault.eu" target="_blank" rel="noreferrer" data-next-i18n="auth.passkeyDocumentation">Passkey documentation</a>
+        </div>
+      </div>
       <label class="language-picker startup-language">
         <span data-next-i18n="language.label">Language</span>
         <select id="startupLanguageSelect" aria-label="Language" data-next-i18n-aria="language.label"></select>
       </label>
       <div class="startup-owner-fields hidden" id="startupOwnerFields">
-        <label for="startupOwnerUsernameInput">
-          <span data-next-i18n="auth.username">Username</span>
-          <input id="startupOwnerUsernameInput" autocomplete="username" maxlength="80" data-next-i18n-placeholder="auth.ownerUsernamePlaceholder" placeholder="Choose your username">
-        </label>
+        <div id="startupOwnerUsernameField">
+          <label for="startupOwnerUsernameInput">
+            <span data-next-i18n="auth.username">Username</span>
+            <input id="startupOwnerUsernameInput" autocomplete="username" maxlength="80" data-next-i18n-placeholder="auth.ownerUsernamePlaceholder" placeholder="Choose your username">
+          </label>
+        </div>
         <div class="hidden" id="startupLegacyFields">
-          <p data-next-i18n="legacyAuth.bootstrapWarning">Password onboarding is less phishing-resistant. TOTP is mandatory.</p>
-          <label for="startupLegacyPassword">
-            <span data-next-i18n="auth.password">Password</span>
-            <input id="startupLegacyPassword" type="password" minlength="15" autocomplete="new-password">
-          </label>
-          <label class="legacy-checkbox-row">
-            <input id="startupLegacyRiskAccepted" type="checkbox">
-            <span data-next-i18n="legacyAuth.acceptRisk">I understand and accept the password risk.</span>
-          </label>
-          <img class="hidden" id="startupLegacyQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
-          <code class="admin-code hidden" id="startupLegacyManualKey"></code>
-          <label class="hidden" id="startupLegacyCodeLabel">
-            <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
-            <input id="startupLegacyCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
-          </label>
-          <div class="recovery-codes hidden" id="startupLegacyRecoveryCodes"></div>
-          <div class="profile-action-row hidden" id="startupLegacyRecoveryActions">
-            <button type="button" class="secondary-button" id="startupLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
-            <button type="button" class="secondary-button" id="startupLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
+          <div class="startup-onboarding-progress" id="startupLegacyProgress" aria-label="Onboarding progress" data-next-i18n-aria="legacyAuth.onboardingProgress">
+            <div class="startup-onboarding-progress-item active" data-startup-legacy-progress="account">
+              <b>1</b><span data-next-i18n="legacyAuth.accountStep">Account</span>
+            </div>
+            <div class="startup-onboarding-progress-item" data-startup-legacy-progress="mfa">
+              <b>2</b><span data-next-i18n="legacyAuth.mfaStep">Authenticator</span>
+            </div>
+            <div class="startup-onboarding-progress-item" data-startup-legacy-progress="recovery">
+              <b>3</b><span data-next-i18n="legacyAuth.recoveryStep">Recovery</span>
+            </div>
           </div>
-          <label class="legacy-checkbox-row hidden" id="startupLegacyAckLabel">
-            <input id="startupLegacyAck" type="checkbox">
-            <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
-          </label>
+          <div class="startup-onboarding-step" id="startupLegacyAccountStep">
+            <p id="startupLegacyBootstrapWarning" data-next-i18n="legacyAuth.bootstrapWarning">Password onboarding is less phishing-resistant. TOTP is mandatory.</p>
+            <label for="startupLegacyPassword">
+              <span data-next-i18n="auth.password">Password</span>
+              <input id="startupLegacyPassword" type="password" minlength="15" autocomplete="new-password">
+            </label>
+            <label for="startupLegacyPasswordConfirm">
+              <span data-next-i18n="legacyAuth.confirmPassword">Confirm password</span>
+              <input id="startupLegacyPasswordConfirm" type="password" minlength="15" autocomplete="new-password">
+            </label>
+            <label class="legacy-checkbox-row hidden" id="startupLegacyMfaOption">
+              <input id="startupLegacyMfaEnabled" type="checkbox">
+              <span data-next-i18n="legacyAuth.enableMfaDuringSetup">Enable authenticator MFA</span>
+            </label>
+            <p class="startup-onboarding-help hidden" id="startupLegacyMfaOptionalHelp" data-next-i18n="legacyAuth.mfaOptionalHelp">MFA is optional only for this local setup. You can enable it later from your profile.</p>
+          </div>
+          <div class="startup-onboarding-step hidden" id="startupLegacyTotpStep">
+            <p data-next-i18n="legacyAuth.enrollTotp">Scan the QR code, then enter the six-digit code.</p>
+            <img class="hidden" id="startupLegacyQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
+            <code class="admin-code hidden" id="startupLegacyManualKey"></code>
+            <label id="startupLegacyCodeLabel">
+              <span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
+              <input id="startupLegacyCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+            </label>
+          </div>
+          <div class="startup-onboarding-step hidden" id="startupLegacyRecoveryStep">
+            <p data-next-i18n="legacyAuth.saveCodesFirst">Save and acknowledge the recovery codes first.</p>
+            <div class="recovery-codes" id="startupLegacyRecoveryCodes"></div>
+            <div class="profile-action-row" id="startupLegacyRecoveryActions">
+              <button type="button" class="secondary-button" id="startupLegacyCopyCodes" data-next-i18n="common.copy">Copy</button>
+              <button type="button" class="secondary-button" id="startupLegacyDownloadCodes" data-next-i18n="legacyAuth.downloadCodes">Download codes</button>
+            </div>
+            <label class="legacy-checkbox-row" id="startupLegacyAckLabel">
+              <input id="startupLegacyAck" type="checkbox">
+              <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
+            </label>
+          </div>
         </div>
       </div>
       <div class="startup-actions">
         <button type="button" class="primary-button hidden" id="startupOwnerPasskeyButton" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
-        <button type="button" class="secondary-button hidden" id="startupLegacyButton" data-next-i18n="legacyAuth.setupOwner">Set up password + TOTP</button>
+        <button type="button" class="secondary-button hidden" id="startupLegacyButton" data-next-i18n="legacyAuth.setupOwner">Start</button>
         <a class="primary-button" id="startupMigrationLink" href="/api/next/migration" data-next-i18n="startup.openMigrationGuide">Open migration guide</a>
-        <button type="button" class="secondary-button" id="startupRefreshButton" data-next-i18n="common.refresh">Refresh</button>
-        <button type="button" class="secondary-button" id="startupLogoutButton" data-next-i18n="auth.signOut">Sign out</button>
+        <button type="button" class="secondary-button hidden" id="startupRefreshButton" data-next-i18n="common.refresh">Refresh</button>
+        <button type="button" class="secondary-button hidden" id="startupLogoutButton" data-next-i18n="auth.signOut">Sign out</button>
       </div>
       <div class="startup-message" id="startupMessage"></div>
     </div>
@@ -14572,6 +15121,40 @@ def ui_preview_html(
                         <strong id="profileLegacyMfaStatus">-</strong>
                       </div>
                     </div>
+                    <div class="profile-action-row" id="profileLegacyMfaActions">
+                      <button type="button" class="primary-button" id="profileLegacyMfaEnableButton" data-next-i18n="legacyAuth.enableMfa">Enable 2FA</button>
+                    </div>
+                    <div class="profile-mfa-setup hidden" id="profileLegacyMfaSetup">
+                      <form class="profile-form" id="profileLegacyMfaPasswordForm">
+                        <p data-next-i18n="legacyAuth.confirmMfaPasswordHelp">Confirm your current password before setting up two-factor authentication.</p>
+                        <label for="profileLegacyMfaCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
+                          <input id="profileLegacyMfaCurrentPassword" type="password" autocomplete="current-password" required>
+                        </label>
+                        <button type="submit" class="primary-button" data-next-i18n="legacyAuth.startMfaSetup">Start 2FA setup</button>
+                      </form>
+                      <div class="hidden" id="profileLegacyMfaTotpStep">
+                        <p data-next-i18n="legacyAuth.enrollTotp">Scan the QR code, then enter the six-digit code.</p>
+                        <img class="profile-mfa-qr hidden" id="profileLegacyMfaQr" alt="" data-next-i18n-alt="legacyAuth.qrAlt">
+                        <p><strong data-next-i18n="legacyAuth.manualKey">Manual key</strong></p>
+                        <code class="admin-code profile-mfa-manual-key" id="profileLegacyMfaManualKey"></code>
+                        <form class="profile-form" id="profileLegacyMfaTotpForm">
+                          <label for="profileLegacyMfaCode"><span data-next-i18n="legacyAuth.authenticatorCode">Authenticator code</span>
+                            <input id="profileLegacyMfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required>
+                          </label>
+                          <button type="submit" class="primary-button" data-next-i18n="legacyAuth.verifyTotp">Verify authenticator</button>
+                        </form>
+                      </div>
+                      <div class="hidden" id="profileLegacyMfaRecoveryStep">
+                        <p data-next-i18n="legacyAuth.mfaRecoveryHelp">Save the replacement recovery codes before activating 2FA.</p>
+                        <div class="recovery-codes" id="profileLegacyMfaRecoveryCodes"></div>
+                        <label class="legacy-checkbox-row" for="profileLegacyMfaRecoveryAck">
+                          <input type="checkbox" id="profileLegacyMfaRecoveryAck">
+                          <span data-next-i18n="legacyAuth.recoveryAck">I saved these recovery codes.</span>
+                        </label>
+                        <button type="button" class="primary-button" id="profileLegacyMfaFinishButton" data-next-i18n="legacyAuth.finishSetup">Finish setup</button>
+                      </div>
+                      <button type="button" class="secondary-button" id="profileLegacyMfaCancelButton" data-next-i18n="common.cancel">Cancel</button>
+                    </div>
                     <form class="profile-form" id="profileLegacyPasswordForm">
                       <label for="profileLegacyCurrentPassword"><span data-next-i18n="legacyAuth.currentPassword">Current password</span>
                         <input id="profileLegacyCurrentPassword" type="password" autocomplete="current-password">
@@ -14814,17 +15397,18 @@ def ui_preview_html(
             <button type="button" class="secondary-button" id="appAdminRefreshButton" data-next-i18n="common.refresh">Refresh</button>
           </div>
         </section>
-        <nav class="app-admin-submenu detail-submenu" role="tablist" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
-          <button type="button" class="active" id="appAdminTabAccess" role="tab" aria-controls="appAdminPanelAccess" aria-selected="true" tabindex="0" data-app-admin-tab="access" data-next-i18n="appAdmin.tabAccess">Access</button>
-          <button type="button" id="appAdminTabUsers" role="tab" aria-controls="appAdminPanelUsers" aria-selected="false" tabindex="-1" data-app-admin-tab="users" data-next-i18n="appAdmin.tabPeople">Users & groups</button>
-          <button type="button" id="appAdminTabRoles" role="tab" aria-controls="appAdminPanelRoles" aria-selected="false" tabindex="-1" data-app-admin-tab="roles" data-next-i18n="appAdmin.tabRoles">Roles</button>
-          <button type="button" id="appAdminTabOperations" role="tab" aria-controls="appAdminPanelOperations" aria-selected="false" tabindex="-1" data-app-admin-tab="operations" data-next-i18n="appAdmin.tabOperations">Operations</button>
-          <button type="button" id="appAdminTabPlugins" role="tab" aria-controls="appAdminPanelPlugins" aria-selected="false" tabindex="-1" data-app-admin-tab="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</button>
-          <button type="button" id="appAdminTabDigital" role="tab" aria-controls="appAdminPanelDigital" aria-selected="false" tabindex="-1" data-app-admin-tab="digital" data-next-i18n="appAdmin.tabDigital">Digital</button>
-          <button type="button" id="appAdminTabMetadata" role="tab" aria-controls="appAdminPanelMetadata" aria-selected="false" tabindex="-1" data-app-admin-tab="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</button>
-          <button type="button" id="appAdminTabBackup" role="tab" aria-controls="appAdminPanelBackup" aria-selected="false" tabindex="-1" data-app-admin-tab="backup" data-next-i18n="appAdmin.tabBackup">Backup</button>
-          <button type="button" id="appAdminTabAudit" role="tab" aria-controls="appAdminPanelAudit" aria-selected="false" tabindex="-1" data-app-admin-tab="audit" data-next-i18n="appAdmin.tabAudit">Audit</button>
-        </nav>
+        <div class="app-admin-workspace">
+          <nav class="app-admin-submenu detail-submenu" role="tablist" aria-label="Admin sections" data-next-i18n-aria="appAdmin.sections">
+            """ + admin_tab("access", "appAdmin.tabAccess", "Access", "security", active=True) + """
+            """ + admin_tab("users", "appAdmin.tabPeople", "Users & groups", "groups") + """
+            """ + admin_tab("roles", "appAdmin.tabRoles", "Roles", "account") + """
+            """ + admin_tab("operations", "appAdmin.tabOperations", "Operations", "preferences") + """
+            """ + admin_tab("plugins", "appAdmin.tabPlugins", "Plugins", "structure") + """
+            """ + admin_tab("digital", "appAdmin.tabDigital", "Digital", "devices") + """
+            """ + admin_tab("metadata", "appAdmin.tabMetadata", "Metadata", "library_preferences") + """
+            """ + admin_tab("backup", "appAdmin.tabBackup", "Backup", "import") + """
+            """ + admin_tab("audit", "appAdmin.tabAudit", "Audit", "lists") + """
+          </nav>
         <section class="app-admin-panel active" id="appAdminPanelAccess" role="tabpanel" aria-labelledby="appAdminTabAccess" aria-hidden="false" tabindex="0" data-app-admin-panel="access">
           <div class="profile-dashboard app-admin-dashboard">
             <header class="profile-dashboard-intro">
@@ -14917,46 +15501,72 @@ def ui_preview_html(
                 <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
               </div>
             </header>
-            <div class="app-admin-dashboard-grid">
-              <section class="profile-dashboard-card primary" id="appAdminLegacyCard" data-admin-dashboard-card="legacy-auth">
-                <div class="profile-dashboard-card-head">
-                  <div class="profile-dashboard-card-title">
-                  <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
-                  <div>
-                    <h4 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h4>
-                    <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
+            <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-people-tabs" role="tablist" aria-label="Users and groups sections" data-next-i18n-aria="appAdmin.tabPeople">
+              <button type="button" class="active" id="appAdminUsersTabSettings" role="tab" aria-selected="true" aria-controls="appAdminUsersPanelSettings" tabindex="0" data-app-admin-users-tab="settings">""" + nav_icon("preferences") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.peopleTabSettingsCreate">Settings / Create</span></button>
+              <button type="button" id="appAdminUsersTabUsers" role="tab" aria-selected="false" aria-controls="appAdminUsersPanelUsers" tabindex="-1" data-app-admin-users-tab="users">""" + nav_icon("profile") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.tabUsers">Users</span></button>
+              <button type="button" id="appAdminUsersTabGroups" role="tab" aria-selected="false" aria-controls="appAdminUsersPanelGroups" tabindex="-1" data-app-admin-users-tab="groups">""" + nav_icon("groups") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.groups">Groups</span></button>
+            </nav>
+            <div class="app-admin-people-panel active" id="appAdminUsersPanelSettings" role="tabpanel" aria-labelledby="appAdminUsersTabSettings" aria-hidden="false" data-app-admin-users-panel="settings">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary" id="appAdminLegacyCard" data-admin-dashboard-card="legacy-auth">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                    <div>
+                      <h4 data-next-i18n="legacyAuth.adminTitle">Legacy password authentication</h4>
+                      <p data-next-i18n="legacyAuth.adminWarning">Passkeys are recommended. Enabling passwords requires fresh passkey confirmation.</p>
+                    </div>
+                    </div>
                   </div>
+                  <div class="app-admin-summary-grid compact">
+                    <div class="app-admin-summary-item">
+                    <span data-next-i18n="legacyAuth.status">Status</span>
+                    <strong id="appAdminLegacyStatus">-</strong>
+                    </div>
                   </div>
-                </div>
-                <div class="app-admin-summary-grid compact">
-                  <div class="app-admin-summary-item">
-                  <span data-next-i18n="legacyAuth.status">Status</span>
-                  <strong id="appAdminLegacyStatus">-</strong>
+                  <div class="profile-action-row">
+                    <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
+                    <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
                   </div>
-                </div>
-                <div class="profile-action-row">
-                  <button type="button" class="secondary-button" id="appAdminLegacyEnable" data-next-i18n="legacyAuth.enable">Enable with passkey</button>
-                  <button type="button" class="secondary-button danger" id="appAdminLegacyDisable" data-next-i18n="legacyAuth.disable">Disable</button>
-                </div>
-                <div class="login-message" id="appAdminLegacyMessage" aria-live="polite"></div>
-              </section>
-              <section class="profile-dashboard-card" id="appAdminLegacyCreateCard" data-admin-dashboard-card="legacy-user-create">
-                <div class="profile-dashboard-card-head">
-                  <div class="profile-dashboard-card-title">
-                  <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
-                  <div><h4 data-next-i18n="legacyAuth.createUser">Create password user</h4></div>
+                  <div class="login-message" id="appAdminLegacyMessage" aria-live="polite"></div>
+                </section>
+                <section class="profile-dashboard-card" id="appAdminLegacyCreateCard" data-admin-dashboard-card="legacy-user-create">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("profile") + """</span>
+                    <div><h4 data-next-i18n="legacyAuth.createUser">Create password user</h4></div>
+                    </div>
                   </div>
-                </div>
-                <form class="profile-form" id="appAdminLegacyUserForm">
-                  <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
-                  <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
-                  <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
-                  <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
-                  <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
-                  <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
-                  <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
-                </form>
-              </section>
+                  <form class="profile-form" id="appAdminLegacyUserForm">
+                    <label><span data-next-i18n="auth.username">Username</span><input id="appAdminLegacyUsername" maxlength="80" autocomplete="off"></label>
+                    <label><span data-next-i18n="profile.displayName">Display name</span><input id="appAdminLegacyDisplayName" maxlength="120" autocomplete="off"></label>
+                    <label><span data-next-i18n="legacyAuth.temporaryPassword">Temporary password</span><input id="appAdminLegacyPassword" type="password" minlength="15" autocomplete="new-password"></label>
+                    <label><span data-next-i18n="appAdmin.role">Role</span><select id="appAdminLegacyRole"></select></label>
+                    <label class="legacy-checkbox-row"><input id="appAdminLegacyMfa" type="checkbox" checked><span data-next-i18n="legacyAuth.requireMfa">Require TOTP MFA</span></label>
+                    <label class="legacy-checkbox-row"><input id="appAdminLegacyPasskeys" type="checkbox" checked><span data-next-i18n="legacyAuth.allowPasskeys">Allow passkey registration</span></label>
+                    <button type="submit" class="secondary-button" data-next-i18n="legacyAuth.createUser">Create password user</button>
+                  </form>
+                </section>
+                <section class="profile-dashboard-card full" id="appAdminGroupCreateCard" data-admin-dashboard-card="group-create">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
+                    <div><h4 data-next-i18n="appAdmin.createGroupButton">Create group</h4></div>
+                    </div>
+                  </div>
+                  <form class="profile-form" id="appAdminGroupForm">
+                    <label for="appAdminGroupName">
+                    <span data-next-i18n="appAdmin.groupName">Group name</span>
+                    <input id="appAdminGroupName" autocomplete="off" maxlength="120">
+                    </label>
+                    <div class="profile-form-actions">
+                    <button type="submit" class="secondary-button" data-next-i18n="appAdmin.createGroupButton">Create group</button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            </div>
+            <div class="app-admin-people-panel" id="appAdminUsersPanelUsers" role="tabpanel" aria-labelledby="appAdminUsersTabUsers" aria-hidden="true" data-app-admin-users-panel="users">
               <section class="profile-dashboard-card full" data-admin-dashboard-card="users">
                 <div class="profile-dashboard-card-head">
                   <div class="profile-dashboard-card-title">
@@ -14970,6 +15580,8 @@ def ui_preview_html(
                 <div class="profile-passkey-list" id="appAdminUsersList"></div>
                 <div class="login-message" id="appAdminUsersMessage" aria-live="polite"></div>
               </section>
+            </div>
+            <div class="app-admin-people-panel" id="appAdminUsersPanelGroups" role="tabpanel" aria-labelledby="appAdminUsersTabGroups" aria-hidden="true" data-app-admin-users-panel="groups">
               <section class="profile-dashboard-card full" data-admin-dashboard-card="groups">
                 <div class="profile-dashboard-card-head">
                   <div class="profile-dashboard-card-title">
@@ -14980,15 +15592,6 @@ def ui_preview_html(
                   </div>
                   </div>
                 </div>
-                <form class="profile-form" id="appAdminGroupForm">
-                  <label for="appAdminGroupName">
-                  <span data-next-i18n="appAdmin.groupName">Group name</span>
-                  <input id="appAdminGroupName" autocomplete="off" maxlength="120">
-                  </label>
-                  <div class="profile-form-actions">
-                  <button type="submit" class="secondary-button" data-next-i18n="appAdmin.createGroupButton">Create group</button>
-                  </div>
-                </form>
                 <div class="profile-passkey-list" id="appAdminGroupsList"></div>
                 <div class="login-message" id="appAdminGroupsMessage" aria-live="polite"></div>
               </section>
@@ -14996,160 +15599,318 @@ def ui_preview_html(
           </div>
         </section>
         <section class="app-admin-panel" id="appAdminPanelRoles" role="tabpanel" aria-labelledby="appAdminTabRoles" aria-hidden="true" tabindex="0" data-app-admin-panel="roles">
-          <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.rbacMode">RBAC mode</h3>
-              <p data-next-i18n="appAdmin.rbacModeHelp">Basic keeps DiscVault roles simple. Advanced unlocks custom roles and exact permission sets.</p>
-              <div class="profile-meta">
-                <div class="profile-meta-row">
-                  <span data-next-i18n="appAdmin.currentMode">Current mode</span>
-                  <strong id="appAdminRbacMode">-</strong>
-                </div>
-                <div class="profile-meta-row">
-                  <span data-next-i18n="appAdmin.permissionCount">Permissions</span>
-                  <strong id="appAdminPermissionCount">-</strong>
-                </div>
-                <div class="profile-meta-row">
-                  <span data-next-i18n="appAdmin.customRoleCount">Custom roles</span>
-                  <strong id="appAdminCustomRoleCount">-</strong>
-                </div>
+          <div class="profile-dashboard app-admin-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("security") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="appAdmin.tabRoles">Roles</h4>
+                <p data-next-i18n="appAdmin.rbacModeHelp">Basic keeps DiscVault roles simple. Advanced unlocks custom roles and exact permission sets.</p>
               </div>
-              <div class="app-admin-rbac-mode">
-                <button type="button" class="secondary-button" id="appAdminRbacBasicButton" data-app-admin-rbac-mode="basic" data-next-i18n="appAdmin.basicMode">Basic</button>
-                <button type="button" class="secondary-button" id="appAdminRbacAdvancedButton" data-app-admin-rbac-mode="advanced" data-next-i18n="appAdmin.advancedMode">Advanced</button>
+            </header>
+            <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-roles-tabs" role="tablist" aria-label="Role management sections" data-next-i18n-aria="appAdmin.tabRoles">
+              <button type="button" class="active" id="appAdminRolesTabOverview" role="tab" aria-selected="true" aria-controls="appAdminRolesPanelOverview" tabindex="0" data-app-admin-roles-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+              <button type="button" id="appAdminRolesTabRoles" role="tab" aria-selected="false" aria-controls="appAdminRolesPanelRoles" tabindex="-1" data-app-admin-roles-tab="roles">""" + nav_icon("groups") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.roles">Roles</span></button>
+              <button type="button" id="appAdminRolesTabPermissions" role="tab" aria-selected="false" aria-controls="appAdminRolesPanelPermissions" tabindex="-1" data-app-admin-roles-tab="permissions">""" + nav_icon("security") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabPermissions">Permissions</span></button>
+              <button type="button" id="appAdminRolesTabSimulator" role="tab" aria-selected="false" aria-controls="appAdminRolesPanelSimulator" tabindex="-1" data-app-admin-roles-tab="simulator">""" + nav_icon("discover") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.roleSimulator">Simulator</span></button>
+            </nav>
+            <div class="app-admin-roles-panel active" id="appAdminRolesPanelOverview" role="tabpanel" aria-labelledby="appAdminRolesTabOverview" aria-hidden="false" data-app-admin-roles-panel="overview">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary full">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.rbacMode">RBAC mode</h4>
+                        <p data-next-i18n="appAdmin.rbacModeHelp">Basic keeps DiscVault roles simple. Advanced unlocks custom roles and exact permission sets.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="app-admin-summary-grid">
+                    <div class="app-admin-summary-item">
+                      <span data-next-i18n="appAdmin.currentMode">Current mode</span>
+                      <strong id="appAdminRbacMode">-</strong>
+                    </div>
+                    <div class="app-admin-summary-item">
+                      <span data-next-i18n="appAdmin.permissionCount">Permissions</span>
+                      <strong id="appAdminPermissionCount">-</strong>
+                    </div>
+                    <div class="app-admin-summary-item">
+                      <span data-next-i18n="appAdmin.customRoleCount">Custom roles</span>
+                      <strong id="appAdminCustomRoleCount">-</strong>
+                    </div>
+                  </div>
+                  <div class="app-admin-rbac-mode">
+                    <button type="button" class="secondary-button" id="appAdminRbacBasicButton" data-app-admin-rbac-mode="basic" data-next-i18n="appAdmin.basicMode">Basic</button>
+                    <button type="button" class="secondary-button" id="appAdminRbacAdvancedButton" data-app-admin-rbac-mode="advanced" data-next-i18n="appAdmin.advancedMode">Advanced</button>
+                  </div>
+                  <div class="login-message" id="appAdminRbacMessage"></div>
+                </section>
               </div>
-              <div class="login-message" id="appAdminRbacMessage"></div>
             </div>
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.createCustomRole">Create custom role</h3>
-              <p data-next-i18n="appAdmin.createCustomRoleHelp">Create a role in Advanced mode, then select it below to attach permissions.</p>
-              <form class="profile-form" id="appAdminRoleCreateForm">
-                <label for="appAdminRoleKey">
-                  <span data-next-i18n="appAdmin.roleKey">Role key</span>
-                  <input id="appAdminRoleKey" autocomplete="off" maxlength="80" placeholder="family_curator">
-                </label>
-                <label for="appAdminRoleName">
-                  <span data-next-i18n="appAdmin.roleName">Role name</span>
-                  <input id="appAdminRoleName" autocomplete="off" maxlength="120">
-                </label>
-                <label for="appAdminRoleDescription">
-                  <span data-next-i18n="appAdmin.roleDescription">Description</span>
-                  <input id="appAdminRoleDescription" autocomplete="off" maxlength="500">
-                </label>
-                <div class="profile-form-actions">
-                  <button type="submit" class="secondary-button" id="appAdminCreateRoleButton" data-next-i18n="appAdmin.createRoleButton">Create role</button>
-                </div>
-              </form>
-            </div>
-            <div class="detail-card profile-card" id="appAdminRoleSimulatorCard">
-              <h3 data-next-i18n="appAdmin.roleSimulator">Role simulator</h3>
-              <p data-next-i18n="appAdmin.roleSimulatorHelp">Preview the app as a role without changing your real Owner session.</p>
-              <div class="profile-form">
-                <label for="appAdminRoleSimulationSelect">
-                  <span data-next-i18n="appAdmin.simulateRole">Simulate role</span>
-                  <select id="appAdminRoleSimulationSelect"></select>
-                </label>
-                <div class="profile-form-actions">
-                  <button type="button" class="secondary-button" id="appAdminStartSimulationButton" data-next-i18n="appAdmin.startRoleSimulation">Start simulation</button>
-                  <button type="button" class="secondary-button" id="appAdminStopSimulationButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
-                </div>
-              </div>
-              <div class="login-message" id="appAdminSimulatorMessage"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.roles">Roles</h3>
-              <p data-next-i18n="appAdmin.rolesHelp">Basic roles are fixed presets. In Advanced mode the Owner can create and maintain custom roles.</p>
-              <div class="app-admin-role-layout">
-                <div class="profile-passkey-list" id="appAdminRolesList"></div>
-                <div class="app-admin-role-editor" id="appAdminRoleEditor">
-                  <h3 data-next-i18n="appAdmin.roleEditor">Role editor</h3>
-                  <form class="profile-form" id="appAdminRoleEditForm">
-                    <label for="appAdminRoleEditName">
+            <div class="app-admin-roles-panel" id="appAdminRolesPanelRoles" role="tabpanel" aria-labelledby="appAdminRolesTabRoles" aria-hidden="true" data-app-admin-roles-panel="roles">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card" id="appAdminRoleCreateCard">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.createCustomRole">Create custom role</h4>
+                        <p data-next-i18n="appAdmin.createCustomRoleWizardHelp">Enter the role details. DiscVault generates the technical key and opens the permission wizard.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <form class="profile-form" id="appAdminRoleCreateForm" aria-busy="false">
+                    <label for="appAdminRoleName">
                       <span data-next-i18n="appAdmin.roleName">Role name</span>
-                      <input id="appAdminRoleEditName" autocomplete="off" maxlength="120">
+                      <input id="appAdminRoleName" autocomplete="off" maxlength="120">
                     </label>
-                    <label for="appAdminRoleEditDescription">
+                    <label for="appAdminRoleDescription">
                       <span data-next-i18n="appAdmin.roleDescription">Description</span>
-                      <input id="appAdminRoleEditDescription" autocomplete="off" maxlength="500">
+                      <input id="appAdminRoleDescription" autocomplete="off" maxlength="500">
                     </label>
+                    <label for="appAdminRoleKey">
+                      <span data-next-i18n="appAdmin.roleKeyGenerated">Generated role key</span>
+                      <input id="appAdminRoleKey" autocomplete="off" maxlength="64" readonly aria-describedby="appAdminRoleKeyHelp">
+                      <small class="app-admin-role-key-help" id="appAdminRoleKeyHelp" data-next-i18n="appAdmin.roleKeyGeneratedHelp">The key is generated from the role name and cannot be changed after creation.</small>
+                    </label>
+                    <div class="login-message" id="appAdminRoleCreateMessage" role="status" aria-live="polite"></div>
                     <div class="profile-form-actions">
-                      <button type="submit" class="secondary-button" id="appAdminSaveRoleButton" data-next-i18n="appAdmin.saveRoleButton">Save role</button>
+                      <button type="submit" class="primary-button" id="appAdminCreateRoleButton" aria-busy="false" disabled data-next-i18n="appAdmin.startRoleWizardButton">Start role wizard</button>
                     </div>
                   </form>
-                  <div class="profile-action-row">
-                    <button type="button" class="secondary-button" id="appAdminSelectAllPermissionsButton" data-next-i18n="appAdmin.selectAllPermissions">Select all</button>
-                    <button type="button" class="secondary-button" id="appAdminClearPermissionsButton" data-next-i18n="appAdmin.clearPermissions">Clear</button>
+                </section>
+                <section class="profile-dashboard-card full">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.roles">Roles</h4>
+                        <p data-next-i18n="appAdmin.rolesHelp">Basic roles are fixed presets. In Advanced mode the Owner can create and maintain custom roles.</p>
+                      </div>
+                    </div>
                   </div>
-                  <div id="appAdminPermissionEditor"></div>
-                  <div class="app-admin-role-preview">
-                    <h4 data-next-i18n="appAdmin.featurePreview">Feature preview</h4>
-                    <p data-next-i18n="appAdmin.featurePreviewHelp">Shows which DiscVault features this role unlocks.</p>
-                    <div id="appAdminRoleFeaturePreview"></div>
-                  </div>
-                </div>
+                  <div class="profile-passkey-list" id="appAdminRolesList"></div>
+                </section>
               </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.permissionMatrix">Permission matrix</h3>
-              <p data-next-i18n="appAdmin.permissionMatrixHelp">Compare which app features each role can use.</p>
-              <div class="rbac-feature-summary" id="appAdminRbacFeatureSummary"></div>
-              <div id="appAdminPermissionMatrix"></div>
+            <div class="app-admin-roles-panel" id="appAdminRolesPanelPermissions" role="tabpanel" aria-labelledby="appAdminRolesTabPermissions" aria-hidden="true" data-app-admin-roles-panel="permissions">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card full app-admin-role-wizard" id="appAdminRoleEditor">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                      <div>
+                        <h4 id="appAdminRoleWizardHeading" tabindex="-1" data-next-i18n="appAdmin.roleWizardTitle">Role permissions</h4>
+                        <p data-next-i18n="appAdmin.roleWizardHelp">Review the role, assign permissions and confirm the final changes.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="login-message" id="appAdminRoleWizardMessage" role="status" aria-live="polite"></div>
+                  <div class="app-admin-role-wizard-summary" id="appAdminRoleWizardSummary"></div>
+                  <ol class="app-admin-role-wizard-steps" aria-label="Role setup progress" data-next-i18n-aria="appAdmin.roleWizardProgress">
+                    <li><button type="button" class="app-admin-role-wizard-step" id="appAdminRoleWizardStep1" data-app-admin-role-wizard-step="1" aria-controls="appAdminRoleWizardDetails"><span class="app-admin-role-wizard-step-number">1</span><span data-next-i18n="appAdmin.roleWizardStepDetails">Role details</span></button></li>
+                    <li><button type="button" class="app-admin-role-wizard-step" id="appAdminRoleWizardStep2" data-app-admin-role-wizard-step="2" aria-controls="appAdminRoleWizardPermissions"><span class="app-admin-role-wizard-step-number">2</span><span data-next-i18n="appAdmin.roleWizardStepPermissions">Permissions</span></button></li>
+                    <li><button type="button" class="app-admin-role-wizard-step" id="appAdminRoleWizardStep3" data-app-admin-role-wizard-step="3" aria-controls="appAdminRoleWizardReview"><span class="app-admin-role-wizard-step-number">3</span><span data-next-i18n="appAdmin.roleWizardStepReview">Review and save</span></button></li>
+                  </ol>
+                  <form class="profile-form" id="appAdminRoleEditForm">
+                    <div class="app-admin-role-wizard-panel" id="appAdminRoleWizardDetails" role="region" aria-labelledby="appAdminRoleWizardStep1" data-app-admin-role-wizard-panel="1">
+                      <h4 tabindex="-1" data-next-i18n="appAdmin.roleWizardStepDetails">Role details</h4>
+                      <p class="profile-passkey-meta" id="appAdminRoleWizardModeHelp"></p>
+                      <label for="appAdminRoleEditName">
+                        <span data-next-i18n="appAdmin.roleName">Role name</span>
+                        <input id="appAdminRoleEditName" autocomplete="off" maxlength="120">
+                      </label>
+                      <label for="appAdminRoleEditDescription">
+                        <span data-next-i18n="appAdmin.roleDescription">Description</span>
+                        <textarea id="appAdminRoleEditDescription" rows="3" maxlength="500"></textarea>
+                      </label>
+                    </div>
+                    <div class="app-admin-role-wizard-panel hidden" id="appAdminRoleWizardPermissions" role="region" aria-labelledby="appAdminRoleWizardStep2" data-app-admin-role-wizard-panel="2">
+                      <div>
+                        <h4 tabindex="-1" data-next-i18n="appAdmin.roleWizardStepPermissions">Permissions</h4>
+                        <p class="profile-passkey-meta" data-next-i18n="appAdmin.permissionCategoryHelp">Open a category to inspect its permissions. Assigned counts stay visible while categories are collapsed.</p>
+                      </div>
+                      <div class="profile-action-row">
+                        <button type="button" class="secondary-button" id="appAdminSelectAllPermissionsButton" data-next-i18n="appAdmin.selectAllPermissions">Select all</button>
+                        <button type="button" class="secondary-button" id="appAdminClearPermissionsButton" data-next-i18n="appAdmin.clearPermissions">Clear</button>
+                      </div>
+                      <div id="appAdminPermissionEditor"></div>
+                      <details class="app-admin-role-preview">
+                        <summary data-next-i18n="appAdmin.featurePreview">Feature preview</summary>
+                        <p data-next-i18n="appAdmin.featurePreviewHelp">Shows which DiscVault features this role unlocks.</p>
+                        <div id="appAdminRoleFeaturePreview"></div>
+                      </details>
+                    </div>
+                    <div class="app-admin-role-wizard-panel hidden" id="appAdminRoleWizardReview" role="region" aria-labelledby="appAdminRoleWizardStep3" data-app-admin-role-wizard-panel="3">
+                      <h4 tabindex="-1" data-next-i18n="appAdmin.roleWizardStepReview">Review and save</h4>
+                      <div class="app-admin-role-review" id="appAdminRoleReview"></div>
+                    </div>
+                    <div class="app-admin-role-wizard-actions">
+                      <button type="button" class="secondary-button" id="appAdminRoleWizardBackButton" data-next-i18n="appAdmin.roleWizardBack">Back</button>
+                      <button type="button" class="secondary-button" id="appAdminRoleWizardNextButton" data-next-i18n="appAdmin.roleWizardNext">Next</button>
+                      <button type="button" class="secondary-button hidden" id="appAdminSavePermissionsButton" data-next-i18n="appAdmin.roleWizardReviewChanges">Review changes</button>
+                      <button type="submit" class="secondary-button hidden" id="appAdminSaveRoleButton" data-next-i18n="appAdmin.saveRoleButton">Save role</button>
+                    </div>
+                  </form>
+                </section>
+                <section class="profile-dashboard-card full">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.permissionMatrix">Permission matrix</h4>
+                        <p data-next-i18n="appAdmin.permissionMatrixHelp">Compare which app features each role can use.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="rbac-feature-summary" id="appAdminRbacFeatureSummary"></div>
+                  <div id="appAdminPermissionMatrix"></div>
+                </section>
+              </div>
             </div>
-          </section>
+            <div class="app-admin-roles-panel" id="appAdminRolesPanelSimulator" role="tabpanel" aria-labelledby="appAdminRolesTabSimulator" aria-hidden="true" data-app-admin-roles-panel="simulator">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary full" id="appAdminRoleSimulatorCard">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("discover") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.roleSimulator">Role simulator</h4>
+                        <p data-next-i18n="appAdmin.roleSimulatorHelp">Preview the app as a role without changing your real Owner session.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="profile-form">
+                    <label for="appAdminRoleSimulationSelect">
+                      <span data-next-i18n="appAdmin.simulateRole">Simulate role</span>
+                      <select id="appAdminRoleSimulationSelect"></select>
+                    </label>
+                    <div class="profile-form-actions">
+                      <button type="button" class="secondary-button" id="appAdminStartSimulationButton" data-next-i18n="appAdmin.startRoleSimulation">Start simulation</button>
+                      <button type="button" class="secondary-button" id="appAdminStopSimulationButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
+                    </div>
+                  </div>
+                  <div class="login-message" id="appAdminSimulatorMessage"></div>
+                </section>
+              </div>
+            </div>
+          </div>
         </section>
         <section class="app-admin-panel" id="appAdminPanelOperations" role="tabpanel" aria-labelledby="appAdminTabOperations" aria-hidden="true" tabindex="0" data-app-admin-panel="operations">
-          <section class="profile-grid">
-            <div class="detail-card profile-card full">
-              <div class="profile-passkey-head">
-                <div>
-                  <h3 data-next-i18n="appAdmin.operationsTitle">Operations</h3>
-                  <p data-next-i18n="appAdmin.operationsHelp">A compact control room for metadata, plugins, imports, duplicates and automation readiness.</p>
-                </div>
-                <button type="button" class="secondary-button" id="appAdminRefreshOperationsButton" data-next-i18n="appAdmin.refreshOperations">Refresh operations</button>
+          <div class="profile-dashboard app-admin-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("preferences") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="appAdmin.operationsTitle">Operations</h4>
+                <p data-next-i18n="appAdmin.operationsHelp">A compact control room for metadata, plugins, imports, duplicates and automation readiness.</p>
               </div>
-              <div class="operations-dashboard" id="appAdminOperationsDashboard"></div>
-              <div class="login-message" id="appAdminOperationsMessage"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <div class="profile-passkey-head">
-                <div>
-                  <h3 data-next-i18n="appAdmin.collectionHealthTitle">Collection Health</h3>
-                  <p data-next-i18n="appAdmin.collectionHealthHelp">Find missing artwork, barcodes, empty containers and duplicate signals before they become messy.</p>
+            </header>
+            <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-operations-tabs" role="tablist" aria-label="Operations sections" data-next-i18n-aria="appAdmin.operationsTitle">
+              <button type="button" class="active" id="appAdminOperationsTabOverview" role="tab" aria-label="Overview" data-next-i18n-aria="appAdmin.rolesTabOverview" aria-selected="true" aria-controls="appAdminOperationsPanelOverview" tabindex="0" data-app-admin-operations-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabHealth" aria-hidden="true">-</span></button>
+              <button type="button" id="appAdminOperationsTabCollection" role="tab" aria-label="Collection Health" data-next-i18n-aria="appAdmin.collectionHealthTitle" aria-selected="false" aria-controls="appAdminOperationsPanelCollection" tabindex="-1" data-app-admin-operations-tab="collection">""" + nav_icon("library_preferences") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.collectionHealthTitle">Collection Health</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabIssues" aria-hidden="true">-</span></button>
+              <button type="button" id="appAdminOperationsTabReadiness" role="tab" aria-label="Feature readiness" data-next-i18n-aria="appAdmin.operationsFeatures" aria-selected="false" aria-controls="appAdminOperationsPanelReadiness" tabindex="-1" data-app-admin-operations-tab="readiness">""" + nav_icon("devices") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.operationsFeatures">Feature readiness</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabReady" aria-hidden="true">-</span></button>
+              <button type="button" id="appAdminOperationsTabPolicy" role="tab" aria-label="Policy" data-next-i18n-aria="appAdmin.policy" aria-selected="false" aria-controls="appAdminOperationsPanelPolicy" tabindex="-1" data-app-admin-operations-tab="policy">""" + nav_icon("security") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.policy">Policy</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabPolicies" aria-hidden="true">-</span></button>
+              <button type="button" id="appAdminOperationsTabActivity" role="tab" aria-label="Recent signals" data-next-i18n-aria="appAdmin.operationsSignals" aria-selected="false" aria-controls="appAdminOperationsPanelActivity" tabindex="-1" data-app-admin-operations-tab="activity">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.operationsSignals">Recent signals</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabSignals" aria-hidden="true">-</span></button>
+            </nav>
+            <div class="app-admin-operations-panel active" id="appAdminOperationsPanelOverview" role="tabpanel" aria-labelledby="appAdminOperationsTabOverview" aria-hidden="false" data-app-admin-operations-panel="overview">
+              <section class="profile-dashboard-card primary full">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.health">Health</h4>
+                      <p data-next-i18n="appAdmin.operationsHelp">A compact control room for metadata, plugins, imports, duplicates and automation readiness.</p>
+                    </div>
+                  </div>
+                  <button type="button" class="secondary-button" id="appAdminRefreshOperationsButton" data-next-i18n="appAdmin.refreshOperations">Refresh operations</button>
                 </div>
-                <span class="tag" id="appAdminCollectionHealthStatus">-</span>
+                <div class="operations-dashboard" id="appAdminOperationsDashboard"></div>
+                <div class="login-message" id="appAdminOperationsMessage" aria-live="polite"></div>
+              </section>
+            </div>
+            <div class="app-admin-operations-panel" id="appAdminOperationsPanelCollection" role="tabpanel" aria-labelledby="appAdminOperationsTabCollection" aria-hidden="true" data-app-admin-operations-panel="collection">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary full">
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("library_preferences") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.collectionHealthTitle">Collection Health</h4>
+                        <p data-next-i18n="appAdmin.collectionHealthHelp">Find missing artwork, barcodes, empty containers and duplicate signals before they become messy.</p>
+                      </div>
+                    </div>
+                    <span class="tag" id="appAdminCollectionHealthStatus">-</span>
+                  </div>
+                  <div class="operations-dashboard" id="appAdminCollectionHealthSummary"></div>
+                  <div class="operations-row-list" id="appAdminCollectionHealthIssues"></div>
+                </section>
+                <section class="profile-dashboard-card full">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("discover") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.duplicateCenter">Duplicate detection</h4>
+                      <p data-next-i18n="appAdmin.duplicateCenterHelp">Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.</p>
+                    </div>
+                  </div>
+                  <div class="operations-row-list" id="appAdminDuplicateCenter"></div>
+                </section>
               </div>
-              <div class="operations-dashboard" id="appAdminCollectionHealthSummary"></div>
-              <div class="operations-row-list" id="appAdminCollectionHealthIssues"></div>
             </div>
-            <div class="detail-card profile-card full" id="appAdminArtworkTrashCard">
-              <h3 data-next-i18n="appAdmin.operationsFeatures">Feature readiness</h3>
-              <div class="operations-feature-grid" id="appAdminOperationsFeatures"></div>
+            <div class="app-admin-operations-panel" id="appAdminOperationsPanelReadiness" role="tabpanel" aria-labelledby="appAdminOperationsTabReadiness" aria-hidden="true" data-app-admin-operations-panel="readiness">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary full" id="appAdminArtworkTrashCard">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("devices") + """</span>
+                    <div><h4 data-next-i18n="appAdmin.operationsFeatures">Feature readiness</h4></div>
+                  </div>
+                  <div class="operations-feature-grid" id="appAdminOperationsFeatures"></div>
+                </section>
+                <section class="profile-dashboard-card full">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("structure") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.v26FeatureActionCenter">v26 Feature Action Center</h4>
+                      <p data-next-i18n="appAdmin.v26FeatureActionCenterHelp">Ten larger feature tracks with their owner surface, status and required permissions.</p>
+                    </div>
+                  </div>
+                  <div class="operations-feature-grid feature-cluster-grid" id="appAdminFeatureClusters"></div>
+                </section>
+              </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.v26FeatureActionCenter">v26 Feature Action Center</h3>
-              <p data-next-i18n="appAdmin.v26FeatureActionCenterHelp">Ten larger feature tracks with their owner surface, status and required permissions.</p>
-              <div class="operations-feature-grid feature-cluster-grid" id="appAdminFeatureClusters"></div>
+            <div class="app-admin-operations-panel" id="appAdminOperationsPanelPolicy" role="tabpanel" aria-labelledby="appAdminOperationsTabPolicy" aria-hidden="true" data-app-admin-operations-panel="policy">
+              <div class="app-admin-dashboard-grid">
+                <section class="profile-dashboard-card primary">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("preferences") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.providerConflictPolicy">Provider priority & conflict policy</h4>
+                      <p data-next-i18n="appAdmin.providerConflictPolicyHelp">Shows which metadata source wins when providers disagree, and how protected artwork behaves.</p>
+                    </div>
+                  </div>
+                  <div class="operations-row-list" id="appAdminProviderPolicy"></div>
+                </section>
+                <section class="profile-dashboard-card">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("api") + """</span>
+                    <div>
+                      <h4 data-next-i18n="appAdmin.apiTokenPresets">API token presets</h4>
+                      <p data-next-i18n="appAdmin.apiTokenPresetsHelp">Suggested permission bundles for bots, MCP clients and automations. Only permissions you can grant are shown as available.</p>
+                    </div>
+                  </div>
+                  <div class="operations-row-list" id="appAdminApiTokenPresets"></div>
+                </section>
+              </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.duplicateCenter">Duplicate detection</h3>
-              <p data-next-i18n="appAdmin.duplicateCenterHelp">Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.</p>
-              <div class="operations-row-list" id="appAdminDuplicateCenter"></div>
+            <div class="app-admin-operations-panel" id="appAdminOperationsPanelActivity" role="tabpanel" aria-labelledby="appAdminOperationsTabActivity" aria-hidden="true" data-app-admin-operations-panel="activity">
+              <section class="profile-dashboard-card primary full">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("lists") + """</span>
+                  <div><h4 data-next-i18n="appAdmin.operationsSignals">Recent signals</h4></div>
+                </div>
+                <div class="operations-row-list" id="appAdminOperationsSignals"></div>
+              </section>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.providerConflictPolicy">Provider priority & conflict policy</h3>
-              <p data-next-i18n="appAdmin.providerConflictPolicyHelp">Shows which metadata source wins when providers disagree, and how protected artwork behaves.</p>
-              <div class="operations-row-list" id="appAdminProviderPolicy"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.apiTokenPresets">API token presets</h3>
-              <p data-next-i18n="appAdmin.apiTokenPresetsHelp">Suggested permission bundles for bots, MCP clients and automations. Only permissions you can grant are shown as available.</p>
-              <div class="operations-row-list" id="appAdminApiTokenPresets"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.operationsSignals">Recent signals</h3>
-              <div class="operations-row-list" id="appAdminOperationsSignals"></div>
-            </div>
-          </section>
+          </div>
         </section>
         <section class="app-admin-panel" id="appAdminPanelPlugins" role="tabpanel" aria-labelledby="appAdminTabPlugins" aria-hidden="true" tabindex="0" data-app-admin-panel="plugins">
           <section class="profile-grid">
@@ -15170,15 +15931,23 @@ def ui_preview_html(
                   <strong id="appAdminDigitalSourceCount">-</strong>
                 </div>
               </div>
-              <div class="app-admin-plugin-dashboard" id="appAdminPluginDashboard"></div>
-              <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin sections" data-next-i18n-aria="appAdmin.plugins">
-                <button type="button" class="active" data-app-admin-plugin-tab="registry" data-next-i18n="appAdmin.plugins">Plugins</button>
-                <button type="button" data-app-admin-plugin-tab="packages" data-next-i18n="appAdmin.pluginPackages">Plugin packages</button>
-                <button type="button" data-app-admin-plugin-tab="jobs" data-next-i18n="appAdmin.pluginJobs">Plugin jobs</button>
-              </div>
+              <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-plugin-tabs" role="tablist" aria-label="Plugin sections" data-next-i18n-aria="appAdmin.plugins">
+                <button type="button" class="active" id="appAdminPluginTabOverview" role="tab" aria-label="Overview" data-next-i18n-aria="appAdmin.rolesTabOverview" aria-selected="true" aria-controls="appAdminPluginPanelOverview" tabindex="0" data-app-admin-plugin-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+                <button type="button" id="appAdminPluginTabInstalled" role="tab" aria-label="Installed" data-next-i18n-aria="appAdmin.pluginTabInstalled" aria-selected="false" aria-controls="appAdminPluginPanelInstalled" tabindex="-1" data-app-admin-plugin-tab="installed">""" + nav_icon("structure") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.pluginTabInstalled">Installed</span></button>
+                <button type="button" id="appAdminPluginTabPackages" role="tab" aria-label="Packages" data-next-i18n-aria="appAdmin.pluginPackages" aria-selected="false" aria-controls="appAdminPluginPanelPackages" tabindex="-1" data-app-admin-plugin-tab="packages">""" + nav_icon("import") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.pluginPackages">Plugin packages</span></button>
+                <button type="button" id="appAdminPluginTabActivity" role="tab" aria-label="Activity" data-next-i18n-aria="appAdmin.pluginTabActivity" aria-selected="false" aria-controls="appAdminPluginPanelActivity" tabindex="-1" data-app-admin-plugin-tab="activity">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.pluginTabActivity">Activity</span></button>
+              </nav>
               <div class="login-message" id="appAdminPluginsMessage"></div>
             </div>
-            <div class="app-admin-plugin-tab-panel active full" data-app-admin-plugin-panel="registry">
+            <div class="app-admin-plugin-tab-panel active full" id="appAdminPluginPanelOverview" role="tabpanel" aria-labelledby="appAdminPluginTabOverview" aria-hidden="false" data-app-admin-plugin-panel="overview">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.rolesTabOverview">Overview</h3>
+                <p data-next-i18n="appAdmin.pluginOverviewHelp">Installed and enabled totals, runtime health, and jobs that need attention.</p>
+                <div class="app-admin-plugin-dashboard" id="appAdminPluginDashboard"></div>
+                <div class="app-admin-plugin-attention" id="appAdminPluginAttention"></div>
+              </div>
+            </div>
+            <div class="app-admin-plugin-tab-panel full" id="appAdminPluginPanelInstalled" role="tabpanel" aria-labelledby="appAdminPluginTabInstalled" aria-hidden="true" data-app-admin-plugin-panel="installed">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginRegistry">Plugin registry</h3>
                 <label class="app-admin-plugin-auto-update" for="appAdminPluginAutoUpdateToggle" style="display:flex;align-items:center;gap:8px;margin:4px 0 12px;">
@@ -15189,24 +15958,44 @@ def ui_preview_html(
                   </span>
                 </label>
                 <div id="appAdminMetadataPriorityPanel"></div>
-                <div class="plugin-operation-panel" id="appAdminPluginExecutionDashboard"></div>
-                <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin types" data-next-i18n-aria="appAdmin.pluginRegistry">
-                  <button type="button" class="active" data-app-admin-plugin-type-tab="metadata_source" data-next-i18n="appAdmin.pluginTypeMetadataSources">Metadata sources</button>
-                  <button type="button" data-app-admin-plugin-type-tab="metadata_receiver" data-next-i18n="appAdmin.pluginTypeMetadataReceivers">Metadata receivers</button>
-                  <button type="button" data-app-admin-plugin-type-tab="digital_media_source" data-next-i18n="appAdmin.pluginTypeDigitalSources">Digital media sources</button>
-                  <button type="button" data-app-admin-plugin-type-tab="personal_list_source" data-next-i18n="appAdmin.pluginTypePersonalListSources">Personal list sources</button>
-                  <button type="button" data-app-admin-plugin-type-tab="price_provider" data-next-i18n="appAdmin.pluginTypePriceProviders">Price providers</button>
-                  <button type="button" data-app-admin-plugin-type-tab="import_source" data-next-i18n="appAdmin.pluginTypeImportSources">Import sources</button>
-                  <button type="button" data-app-admin-plugin-type-tab="system" data-next-i18n="appAdmin.pluginTypeSystem">System integrations</button>
-                  <button type="button" data-app-admin-plugin-type-tab="other" data-next-i18n="appAdmin.pluginTypeOther">Other plugins</button>
+                <div class="app-admin-plugin-filters">
+                  <label class="app-admin-plugin-filter" for="appAdminPluginSearchInput">
+                    <span data-next-i18n="appAdmin.pluginSearchLabel">Search</span>
+                    <input type="search" id="appAdminPluginSearchInput" data-next-i18n-placeholder="appAdmin.pluginSearchPlaceholder" placeholder="Search plugins by name or key">
+                  </label>
+                  <label class="app-admin-plugin-filter" for="appAdminPluginTypeFilter">
+                    <span data-next-i18n="appAdmin.pluginTypeFilterLabel">Type</span>
+                    <select id="appAdminPluginTypeFilter">
+                      <option value="all" data-next-i18n="appAdmin.pluginTypeAll">All types</option>
+                      <option value="metadata_source" data-next-i18n="appAdmin.pluginTypeMetadataSources">Metadata sources</option>
+                      <option value="metadata_receiver" data-next-i18n="appAdmin.pluginTypeMetadataReceivers">Metadata receivers</option>
+                      <option value="digital_media_source" data-next-i18n="appAdmin.pluginTypeDigitalSources">Digital media sources</option>
+                      <option value="personal_list_source" data-next-i18n="appAdmin.pluginTypePersonalListSources">Personal list sources</option>
+                      <option value="price_provider" data-next-i18n="appAdmin.pluginTypePriceProviders">Price providers</option>
+                      <option value="import_source" data-next-i18n="appAdmin.pluginTypeImportSources">Import sources</option>
+                      <option value="system" data-next-i18n="appAdmin.pluginTypeSystem">System integrations</option>
+                      <option value="other" data-next-i18n="appAdmin.pluginTypeOther">Other plugins</option>
+                    </select>
+                  </label>
+                  <label class="app-admin-plugin-filter" for="appAdminPluginStatusFilter">
+                    <span data-next-i18n="appAdmin.pluginStatusFilterLabel">Status</span>
+                    <select id="appAdminPluginStatusFilter">
+                      <option value="all" data-next-i18n="appAdmin.pluginStatusAll">All statuses</option>
+                      <option value="enabled" data-next-i18n="appAdmin.enabled">Enabled</option>
+                      <option value="disabled" data-next-i18n="appAdmin.disabled">Disabled</option>
+                      <option value="config-needed" data-next-i18n="appAdmin.configurationNeeded">Configuration needed</option>
+                      <option value="update-available" data-next-i18n="appAdmin.updateAvailable">Update available</option>
+                    </select>
+                  </label>
                 </div>
                 <div class="profile-passkey-list" id="appAdminPluginsList"></div>
               </div>
             </div>
-            <div class="app-admin-plugin-tab-panel full" data-app-admin-plugin-panel="packages">
+            <div class="app-admin-plugin-tab-panel full" id="appAdminPluginPanelPackages" role="tabpanel" aria-labelledby="appAdminPluginTabPackages" aria-hidden="true" data-app-admin-plugin-panel="packages">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginPackages">Plugin packages</h3>
                 <p data-next-i18n="appAdmin.pluginPackagesHelp">Export installed plugins or install a compatible DiscVault plugin ZIP.</p>
+                <p class="profile-passkey-meta" data-next-i18n="appAdmin.pluginLifecycleHelp">Per-plugin update, rollback and export actions stay on each plugin card under Installed.</p>
                 <div class="app-admin-plugin-import">
                   <input type="file" id="appAdminPluginImportFile" accept=".zip,application/zip">
                   <button type="button" class="secondary-button" id="appAdminImportPluginButton" data-next-i18n="appAdmin.importPlugin">Import plugin</button>
@@ -15215,12 +16004,13 @@ def ui_preview_html(
                 <div class="plugin-operation-panel" id="appAdminPluginPackageValidator"></div>
               </div>
             </div>
-            <div class="app-admin-plugin-tab-panel full" data-app-admin-plugin-panel="jobs">
+            <div class="app-admin-plugin-tab-panel full" id="appAdminPluginPanelActivity" role="tabpanel" aria-labelledby="appAdminPluginTabActivity" aria-hidden="true" data-app-admin-plugin-panel="activity">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginJobs">Plugin jobs</h3>
                 <div class="profile-action-row">
                   <button type="button" class="secondary-button" id="appAdminRefreshPluginJobsButton" data-next-i18n="appAdmin.refreshPluginJobs">Refresh plugin jobs</button>
                 </div>
+                <div class="plugin-operation-panel" id="appAdminPluginExecutionDashboard"></div>
                 <div class="plugin-operation-panel" id="appAdminPersonalListSyncDashboard"></div>
                 <div class="plugin-operation-panel" id="appAdminContributionCenter"></div>
                 <div class="app-admin-contribution-list" id="appAdminContributionQueue"></div>
@@ -15441,6 +16231,7 @@ def ui_preview_html(
             </div>
           </section>
         </section>
+        </div>
       </section>
     </main>
   </div>
@@ -15576,9 +16367,11 @@ def ui_preview_html(
     let startupLegacyFlowToken = "";
     let startupLegacyStage = "";
     let startupLegacyRecoveryCodes = [];
+    let startupLegacyMfaOptional = false;
     let profileCredentials = [];
     let profileRecovery = {};
     let profileLegacy = {};
+    let profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
     let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
     let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all", category: "all", search: "", diagnostics: null, error: "", lastUrl: ""};
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
@@ -15588,8 +16381,13 @@ def ui_preview_html(
     let locationDragId = "";
     let appAdmin = {
       activeTab: "access",
-      activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "registry",
-      activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "metadata_source",
+      activeUsersTab: localStorage.getItem("dv_next_admin_users_tab") || "settings",
+      activeRolesTab: localStorage.getItem("dv_next_admin_roles_tab") || "overview",
+      activeOperationsTab: localStorage.getItem("dv_next_admin_operations_tab") || "overview",
+      activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "overview",
+      activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "all",
+      pluginSearch: "",
+      pluginStatusFilter: "all",
       auditCategory: "",
       auditEvents: [],
       backup: null,
@@ -15612,6 +16410,8 @@ def ui_preview_html(
       rbac: {},
       roles: [],
       assignableRoles: [],
+      roleCreation: {busy: false},
+      roleWizard: {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false},
       simulation: {active: false, roleId: ""},
       selectedRoleId: "",
       users: []
@@ -16296,6 +17096,26 @@ def ui_preview_html(
       }
       return "";
     }
+    function passkeyProcessAvailable() {
+      if (currentAuthStatus.passkey_access_valid !== undefined) {
+        return Boolean(currentAuthStatus.passkey_access_valid);
+      }
+      if (currentAuthStatus.passkey_configuration_valid === undefined) return true;
+      if (!currentAuthStatus.passkey_configuration_valid) return false;
+      const rpId = String(currentAuthStatus.rp_id || "").trim().toLowerCase();
+      const hostname = String(window.location.hostname || "").trim().toLowerCase();
+      const configuredOrigins = Array.isArray(currentAuthStatus.rp_origins)
+        ? currentAuthStatus.rp_origins.map((origin) => String(origin || "").trim().toLowerCase())
+        : [];
+      const hostnameMatches = hostname === rpId || hostname.endsWith(`.${rpId}`);
+      const originMatches = !configuredOrigins.length || configuredOrigins.includes(window.location.origin.toLowerCase());
+      return hostnameMatches && originMatches;
+    }
+    function passkeyConfigurationGuidanceVisible() {
+      return !passkeyProcessAvailable()
+        && (Boolean(currentAuthStatus.passkey_configuration_valid)
+          || !Boolean(currentAuthStatus.request_host_is_local_ip));
+    }
     const APP_PERMISSION_GROUPS = {
       adminTabs: {
         access: ["security.toggle_auth", "security.manage_invite_only", "users.view", "users.invite", "users.manage_passkeys"],
@@ -16457,7 +17277,7 @@ def ui_preview_html(
       if (node) node.classList.toggle("hidden", !visible);
     }
     function closestCard(node) {
-      return node ? node.closest(".detail-card, .profile-card, .bulk-target") : null;
+      return node ? node.closest(".detail-card, .profile-card, .profile-dashboard-card, .bulk-target") : null;
     }
     function appRegistrationModeLabel() {
       return currentAuthStatus.registration_enabled
@@ -16557,6 +17377,7 @@ def ui_preview_html(
       if (auth) currentAuthStatus = auth || {};
       const publicRegistration = !!currentAuthStatus.registration_enabled;
       const reviewLoginAvailable = !!currentAuthStatus.legacy_auth_enabled;
+      const passkeysAvailable = passkeyProcessAvailable();
       const loginButton = document.getElementById("appLoginButton");
       const toggleButton = document.getElementById("appInviteToggleButton");
       const reviewToggleButton = document.getElementById("appReviewToggleButton");
@@ -16564,6 +17385,39 @@ def ui_preview_html(
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
       const reviewForm = document.getElementById("appReviewForm");
+      const authGuidance = document.getElementById("appAuthGuidance");
+      const showAuthGuidance = passkeyConfigurationGuidanceVisible();
+      authGuidance?.classList.toggle("hidden", !showAuthGuidance);
+      if (showAuthGuidance) {
+        const configurationValid = Boolean(currentAuthStatus.passkey_configuration_valid);
+        const guidanceTitle = document.getElementById("appAuthGuidanceTitle");
+        const guidanceBody = document.getElementById("appAuthGuidanceBody");
+        if (guidanceTitle) {
+          guidanceTitle.textContent = configurationValid
+            ? tNext("auth.passkeyConfiguredAddressTitle", "Open the configured address")
+            : tNext("auth.passkeyFqdnRequiredTitle", "Configure a fully qualified domain name");
+        }
+        if (guidanceBody) {
+          guidanceBody.textContent = configurationValid
+            ? tNext("auth.passkeyConfiguredAddressBody", "Passkeys are configured, but this address does not match. Open DiscVault through the configured HTTPS address to continue.")
+            : tNext("auth.passkeyFqdnRequiredBody", "Passkey onboarding requires a valid RP_ID and HTTPS RP_ORIGIN for a fully qualified domain name. Configure these values and open DiscVault through that address.");
+        }
+        const configuredOriginLink = document.getElementById("appConfiguredOriginLink");
+        configuredOriginLink?.classList.add("hidden");
+        if (configurationValid && configuredOriginLink) {
+          const configuredOrigin = Array.isArray(currentAuthStatus.rp_origins)
+            ? String(currentAuthStatus.rp_origins[0] || "")
+            : "";
+          try {
+            const url = new URL(configuredOrigin);
+            if (url.protocol === "https:") {
+              configuredOriginLink.href = url.origin;
+              configuredOriginLink.textContent = tNext("auth.openConfiguredOrigin", "Open {origin}").replace("{origin}", url.origin);
+              configuredOriginLink.classList.remove("hidden");
+            }
+          } catch (_) { /* invalid origins are never linked */ }
+        }
+      }
       if (loginButton) {
         const key = reviewLoginAvailable ? "legacyAuth.passkeyRecommended" : "auth.loginDescription";
         loginButton.dataset.nextI18n = key;
@@ -16572,6 +17426,9 @@ def ui_preview_html(
           reviewLoginAvailable ? "Sign in with passkey (recommended)" : "Sign in with passkey"
         );
       }
+      setElementVisible(loginButton, passkeysAvailable);
+      setElementVisible(toggleButton, passkeysAvailable);
+      if (!passkeysAvailable) document.getElementById("appInviteForm")?.classList.add("hidden");
       if (toggleButton) {
         const key = publicRegistration ? "auth.createAccount" : "auth.inviteOnly";
         toggleButton.dataset.nextI18n = key;
@@ -16588,6 +17445,12 @@ def ui_preview_html(
       if (submitButton) {
         submitButton.textContent = tNext("auth.createAccount", "Create account");
       }
+      document.querySelectorAll('[data-security-dashboard-card="passkeys"], [data-admin-dashboard-card="passkeys"]').forEach((card) => {
+        setElementVisible(card, passkeysAvailable);
+      });
+      document.querySelectorAll("[data-app-admin-legacy-passkeys]").forEach((input) => {
+        setElementVisible(input.closest("label"), passkeysAvailable);
+      });
       renderAppAdminVisibility();
       applyAppPermissionVisibility();
     }
@@ -16597,25 +17460,78 @@ def ui_preview_html(
       node.textContent = message || "";
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function syncAppAdminSubmenuOrientation() {
+      const submenu = document.querySelector(".app-admin-submenu");
+      if (!submenu) return;
+      const horizontal = window.matchMedia("(max-width: 860px)").matches;
+      submenu.setAttribute("aria-orientation", horizontal ? "horizontal" : "vertical");
+      if (horizontal) {
+        submenu.querySelector('[aria-selected="true"]')?.scrollIntoView({block: "nearest", inline: "nearest"});
+      }
+    }
     function setAppAdminTab(tab) {
       const allowedTabs = allowedAppAdminTabs();
       appAdmin.activeTab = allowedTabs.includes(tab) ? tab : (allowedTabs[0] || "");
+      syncAppAdminSubmenuOrientation();
       document.querySelectorAll("[data-app-admin-tab]").forEach((button) => {
         const active = button.dataset.appAdminTab === appAdmin.activeTab;
         button.classList.toggle("hidden", !canUseAdminTab(button.dataset.appAdminTab));
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
         button.tabIndex = active ? 0 : -1;
+        const submenu = button.closest(".app-admin-submenu");
+        if (active && submenu?.scrollWidth > submenu.clientWidth) {
+          button.scrollIntoView({block: "nearest", inline: "nearest"});
+        }
       });
       document.querySelectorAll("[data-app-admin-panel]").forEach((panel) => {
         const active = panel.dataset.appAdminPanel === appAdmin.activeTab;
         panel.classList.toggle("active", active);
         panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
+      if (appAdmin.activeTab === "users") setAppAdminUsersTab(appAdmin.activeUsersTab);
+      if (appAdmin.activeTab === "roles") setAppAdminRolesTab(appAdmin.activeRolesTab);
+      if (appAdmin.activeTab === "operations") setAppAdminOperationsTab(appAdmin.activeOperationsTab);
     }
     function handleAppAdminTabKeydown(button, event) {
-      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
       const buttons = [...document.querySelectorAll("[data-app-admin-tab]")]
+        .filter((item) => !item.classList.contains("hidden"));
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (["ArrowLeft", "ArrowUp"].includes(event.key)) nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (["ArrowRight", "ArrowDown"].includes(event.key)) nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminTab(nextButton.dataset.appAdminTab);
+      nextButton.focus();
+    }
+    function setAppAdminUsersTab(tab) {
+      const buttons = [...document.querySelectorAll("[data-app-admin-users-tab]")];
+      const visibleButtons = buttons.filter((button) => !button.classList.contains("hidden"));
+      const selectedButton = visibleButtons.find((button) => button.dataset.appAdminUsersTab === tab)
+        || visibleButtons[0]
+        || buttons[0];
+      appAdmin.activeUsersTab = selectedButton?.dataset.appAdminUsersTab || "settings";
+      localStorage.setItem("dv_next_admin_users_tab", appAdmin.activeUsersTab);
+      buttons.forEach((button) => {
+        const active = button.dataset.appAdminUsersTab === appAdmin.activeUsersTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-users-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminUsersPanel === appAdmin.activeUsersTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminUsersTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-users-tab]")]
         .filter((item) => !item.classList.contains("hidden"));
       if (!buttons.length) return;
       event.preventDefault();
@@ -16626,32 +17542,147 @@ def ui_preview_html(
       if (event.key === "Home") nextIndex = 0;
       if (event.key === "End") nextIndex = buttons.length - 1;
       const nextButton = buttons[nextIndex];
-      setAppAdminTab(nextButton.dataset.appAdminTab);
+      setAppAdminUsersTab(nextButton.dataset.appAdminUsersTab);
+      nextButton.focus();
+    }
+    function setAppAdminRolesTab(tab) {
+      const mode = (appAdmin.rbac || {}).mode || "basic";
+      document.querySelectorAll("[data-app-admin-roles-tab]").forEach((button) => {
+        if (button.dataset.appAdminRolesTab === "permissions") {
+          setElementVisible(button, mode === "advanced");
+        }
+      });
+      const buttons = [...document.querySelectorAll("[data-app-admin-roles-tab]")];
+      const visibleButtons = buttons.filter((button) => !button.classList.contains("hidden"));
+      const selectedButton = visibleButtons.find((button) => button.dataset.appAdminRolesTab === tab)
+        || visibleButtons[0]
+        || buttons[0];
+      appAdmin.activeRolesTab = selectedButton?.dataset.appAdminRolesTab || "overview";
+      localStorage.setItem("dv_next_admin_roles_tab", appAdmin.activeRolesTab);
+      buttons.forEach((button) => {
+        const active = button.dataset.appAdminRolesTab === appAdmin.activeRolesTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-roles-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminRolesPanel === appAdmin.activeRolesTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminRolesTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-roles-tab]")]
+        .filter((item) => !item.classList.contains("hidden"));
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminRolesTab(nextButton.dataset.appAdminRolesTab);
+      nextButton.focus();
+    }
+    function setAppAdminOperationsTab(tab) {
+      const allowed = ["overview", "collection", "readiness", "policy", "activity"];
+      appAdmin.activeOperationsTab = allowed.includes(tab) ? tab : "overview";
+      localStorage.setItem("dv_next_admin_operations_tab", appAdmin.activeOperationsTab);
+      document.querySelectorAll("[data-app-admin-operations-tab]").forEach((button) => {
+        const active = button.dataset.appAdminOperationsTab === appAdmin.activeOperationsTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-operations-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminOperationsPanel === appAdmin.activeOperationsTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminOperationsTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-operations-tab]")];
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminOperationsTab(nextButton.dataset.appAdminOperationsTab);
       nextButton.focus();
     }
     function setAppAdminPluginTab(tab) {
-      const allowed = ["registry", "packages", "jobs"];
-      appAdmin.activePluginTab = allowed.includes(tab) ? tab : "registry";
+      const allowed = ["overview", "installed", "packages", "activity"];
+      const aliases = {registry: "installed", jobs: "activity"};
+      const resolved = aliases[tab] || tab;
+      appAdmin.activePluginTab = allowed.includes(resolved) ? resolved : "overview";
       localStorage.setItem("dv_next_admin_plugin_tab", appAdmin.activePluginTab);
       document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
         const active = button.dataset.appAdminPluginTab === appAdmin.activePluginTab;
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
       });
       document.querySelectorAll("[data-app-admin-plugin-panel]").forEach((panel) => {
-        panel.classList.toggle("active", panel.dataset.appAdminPluginPanel === appAdmin.activePluginTab);
+        const active = panel.dataset.appAdminPluginPanel === appAdmin.activePluginTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
+      renderAppAdminPluginExecutionDashboard();
+    }
+    function handleAppAdminPluginTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-plugin-tab]")];
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminPluginTab(nextButton.dataset.appAdminPluginTab);
+      nextButton.focus();
     }
     function setAppAdminPluginTypeTab(tab, render = true) {
-      const allowed = ["metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "price_provider", "import_source", "system", "other"];
-      appAdmin.activePluginTypeTab = allowed.includes(tab) ? tab : "metadata_source";
+      const allowed = ["all", "metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "price_provider", "import_source", "system", "other"];
+      appAdmin.activePluginTypeTab = allowed.includes(tab) ? tab : "all";
       localStorage.setItem("dv_next_admin_plugin_type_tab", appAdmin.activePluginTypeTab);
-      document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
-        const active = button.dataset.appAdminPluginTypeTab === appAdmin.activePluginTypeTab;
-        button.classList.toggle("active", active);
-        button.setAttribute("aria-selected", active ? "true" : "false");
-      });
+      const select = document.getElementById("appAdminPluginTypeFilter");
+      if (select && select.value !== appAdmin.activePluginTypeTab) select.value = appAdmin.activePluginTypeTab;
       if (render) renderAppAdminPlugins();
+    }
+    function setAppAdminPluginStatusFilter(value, render = true) {
+      const allowed = ["all", "enabled", "disabled", "config-needed", "update-available"];
+      appAdmin.pluginStatusFilter = allowed.includes(value) ? value : "all";
+      const select = document.getElementById("appAdminPluginStatusFilter");
+      if (select && select.value !== appAdmin.pluginStatusFilter) select.value = appAdmin.pluginStatusFilter;
+      if (render) renderAppAdminPlugins();
+    }
+    function setAppAdminPluginSearch(value, render = true) {
+      appAdmin.pluginSearch = String(value || "");
+      if (render) renderAppAdminPlugins();
+    }
+    function appAdminPluginMatchesStatusFilter(plugin, filter) {
+      if (filter === "enabled") return !!plugin.enabled;
+      if (filter === "disabled") return !plugin.enabled;
+      if (filter === "config-needed") return appAdminPluginNeedsConfiguration(plugin);
+      if (filter === "update-available") return !!plugin.updateAvailable;
+      return true;
+    }
+    function appAdminPluginMatchesSearch(plugin, term) {
+      const needle = String(term || "").trim().toLowerCase();
+      if (!needle) return true;
+      const haystacks = [pluginDisplayName(plugin), plugin.id, appAdminPluginCategoryLabel(plugin)];
+      return haystacks.some((value) => String(value || "").toLowerCase().includes(needle));
     }
     function appAdminPluginHasCategory(plugin, category) {
       return (plugin.categories || []).includes(category);
@@ -16721,12 +17752,14 @@ def ui_preview_html(
       const jobs = appAdmin.pluginJobs || [];
       const healthStates = plugins.map(appAdminPluginHealthState);
       const activeJobs = jobs.filter((job) => ["pending", "running"].includes(String(job.status || ""))).length;
+      const failedJobs = jobs.filter((job) => String(job.status || "") === "failed").length;
       const cards = [
         [tNext("appAdmin.pluginTotal", "Installed"), plugins.length],
         [tNext("appAdmin.enabledPlugins", "Enabled"), plugins.filter((plugin) => plugin.enabled).length],
         [tNext("appAdmin.configNeeded", "Configuration needed"), plugins.filter(appAdminPluginNeedsConfiguration).length],
         [tNext("appAdmin.pluginHealthOk", "Runtime ready"), healthStates.filter((state) => ["ok", "loaded", "ready"].includes(String(state))).length],
         [tNext("appAdmin.pluginJobsActive", "Active jobs"), activeJobs],
+        [tNext("appAdmin.failedJobs", "Failed jobs"), failedJobs],
         [tNext("appAdmin.pluginReceivers", "Receivers"), plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver")).length],
         [tNext("appAdmin.pluginSources", "Sources"), plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source")).length],
         [tNext("appAdmin.pluginImporters", "Importers"), plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source")).length]
@@ -16743,7 +17776,7 @@ def ui_preview_html(
       if (!node) return;
       const jobs = appAdmin.pluginJobs || [];
       const plugins = appAdmin.plugins || [];
-      const visible = appAdmin.activePluginTab === "registry";
+      const visible = appAdmin.activePluginTab === "activity";
       if (!visible) {
         node.innerHTML = "";
         return;
@@ -16762,10 +17795,42 @@ def ui_preview_html(
             <span>${escapeHtml(formatNumber(activeJobs.length))}</span>
           </div>
           <div class="plugin-operation-row">
-            <strong>${escapeHtml(tNext("appAdmin.failedPluginJobs", "Failed plugin jobs"))}</strong>
+            <strong>${escapeHtml(tNext("appAdmin.failedJobs", "Failed jobs"))}</strong>
             <span>${escapeHtml(formatNumber(failedJobs.length))}</span>
           </div>
         </section>
+      `;
+    }
+    function renderAppAdminPluginAttention() {
+      const node = document.getElementById("appAdminPluginAttention");
+      if (!node) return;
+      const plugins = appAdmin.plugins || [];
+      const jobs = appAdmin.pluginJobs || [];
+      const configNeeded = plugins.filter(appAdminPluginNeedsConfiguration).length;
+      const updatesAvailable = plugins.filter((plugin) => plugin.updateAvailable).length;
+      const failedJobs = jobs.filter((job) => String(job.status || "") === "failed").length;
+      const items = [
+        configNeeded ? {
+          text: tNext("appAdmin.pluginAttentionConfigNeeded", "{count} plugins need configuration").replace("{count}", String(configNeeded)),
+          tab: "installed"
+        } : null,
+        updatesAvailable ? {
+          text: tNext("appAdmin.pluginAttentionUpdates", "{count} plugin updates available").replace("{count}", String(updatesAvailable)),
+          tab: "installed"
+        } : null,
+        failedJobs ? {
+          text: tNext("appAdmin.pluginAttentionFailedJobs", "{count} failed plugin jobs").replace("{count}", String(failedJobs)),
+          tab: "activity"
+        } : null
+      ].filter(Boolean);
+      node.innerHTML = `
+        <h4>${escapeHtml(tNext("appAdmin.pluginAttentionTitle", "Needs attention"))}</h4>
+        ${items.length ? items.map((item) => `
+          <div class="app-admin-plugin-attention-row">
+            <span>${escapeHtml(item.text)}</span>
+            <button type="button" class="secondary-button" data-app-admin-plugin-attention-tab="${escapeHtml(item.tab)}">${escapeHtml(tNext("appAdmin.openFeatureSurface", "Open"))}</button>
+          </div>
+        `).join("") : `<div class="preview-empty good">${escapeHtml(tNext("appAdmin.pluginAttentionEmpty", "Nothing needs attention right now."))}</div>`}
       `;
     }
     function renderAppAdminMetadataPriorityPanel() {
@@ -16774,7 +17839,7 @@ def ui_preview_html(
       const sources = (appAdmin.plugins || [])
         .filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source"))
         .sort(appAdminPluginSort);
-      if (!sources.length || appAdmin.activePluginTypeTab !== "metadata_source") {
+      if (!sources.length || !["metadata_source", "all"].includes(appAdmin.activePluginTypeTab)) {
         node.innerHTML = "";
         return;
       }
@@ -16813,6 +17878,8 @@ def ui_preview_html(
       const plugins = appAdmin.plugins || [];
       const exportable = plugins.filter(appAdminCanExportPlugin).length;
       const importable = hasActualPermission("plugins.import") || hasActualPermission("metadata.manage_plugins");
+      const updatesAvailable = plugins.filter((plugin) => plugin.updateAvailable).length;
+      const rollbacksAvailable = plugins.filter((plugin) => plugin.canRollback).length;
       node.innerHTML = `
         <section class="plugin-operation-grid">
           <div class="plugin-operation-row">
@@ -16826,6 +17893,14 @@ def ui_preview_html(
           <div class="plugin-operation-row">
             <strong>${escapeHtml(tNext("appAdmin.importPermission", "Import permission"))}</strong>
             <span>${escapeHtml(importable ? tNext("appAdmin.allowed", "Allowed") : tNext("appAdmin.featureBlocked", "Blocked"))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.updateAvailable", "Update available"))}</strong>
+            <span>${escapeHtml(formatNumber(updatesAvailable))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.rollbackAvailable", "Rollback available"))}</strong>
+            <span>${escapeHtml(formatNumber(rollbacksAvailable))}</span>
           </div>
         </section>
       `;
@@ -17087,6 +18162,7 @@ def ui_preview_html(
       const canMoveUp = pluginIndex > 0;
       const canMoveDown = pluginIndex >= 0 && pluginIndex < orderedSection.length - 1;
       const canManage = appAdminCanManagePlugin(plugin);
+      const canReorder = canManage && !!sectionCategory;
       const canViewHealth = appAdminCanViewPluginHealth(plugin);
       const version = plugin.version || (plugin.manifest || {}).version || "0.0.0";
       return `
@@ -17097,8 +18173,8 @@ def ui_preview_html(
               <div class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.pluginKey", "Plugin key"))}: ${escapeHtml(plugin.id)} &middot; ${escapeHtml(tNext("appAdmin.version", "Version"))} ${escapeHtml(version)} &middot; ${escapeHtml(appAdminPluginCategoryLabel(plugin))} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</div>
             </div>
             <div class="app-admin-plugin-order">
-              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>` : ""}
-              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="down" ${canMoveDown ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveDown", "Down"))}</button>` : ""}
+              ${canReorder ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>` : ""}
+              ${canReorder ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="down" ${canMoveDown ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveDown", "Down"))}</button>` : ""}
             </div>
             <span class="tag ${plugin.enabled ? "good" : ""}">${escapeHtml(plugin.enabled ? tNext("appAdmin.enabled", "Enabled") : tNext("appAdmin.disabled", "Disabled"))}</span>
           </div>
@@ -17971,6 +19047,24 @@ def ui_preview_html(
       const features = operations.features || [];
       const readyFeatures = features.filter((feature) => ["ready", "ok", "healthy"].includes(String(feature.status || "").toLowerCase())).length;
       const attentionFeatures = features.filter((feature) => ["attention", "failed", "error"].includes(String(feature.status || "").toLowerCase())).length;
+      const collectionIssueCount = Number((((operations.collectionHealth || {}).counts || {}).totalIssues) || 0);
+      const policyCount = (pluginPolicy.sourceOrder || []).length;
+      const signalCount = ((operations.jobs || {}).latest || []).length + ((operations.audit || {}).receiver || []).length;
+      const tabStatuses = [
+        ["appAdminOperationsTabHealth", appAdminOperationsStatusLabel(health.status || "ok"), appAdminOperationsStatusClass(health.status || "ok")],
+        ["appAdminOperationsTabIssues", formatNumber(collectionIssueCount), collectionIssueCount ? "bad" : "good"],
+        ["appAdminOperationsTabReady", `${formatNumber(readyFeatures)}/${formatNumber(features.length)}`, attentionFeatures ? "blue" : "good"],
+        ["appAdminOperationsTabPolicies", formatNumber(policyCount), policyCount ? "good" : ""],
+        ["appAdminOperationsTabSignals", formatNumber(signalCount), signalCount ? "blue" : ""]
+      ];
+      tabStatuses.forEach(([id, label, tone]) => {
+        const node = document.getElementById(id);
+        if (!node) return;
+        node.textContent = label;
+        node.className = `tag app-admin-operations-tab-status ${tone || ""}`.trim();
+        const button = node.closest("button");
+        if (button) button.dataset.statusTone = tone || "neutral";
+      });
       renderAppAdminCollectionHealth();
       dashboard.innerHTML = operations.status === undefined && !operations.counts
         ? `<div class="preview-empty">${escapeHtml(tNext("appAdmin.operationsNotLoaded", "Operations data has not been loaded yet."))}</div>`
@@ -18148,6 +19242,7 @@ def ui_preview_html(
       if (configNode) configNode.textContent = String(configNeeded);
       if (digitalNode) digitalNode.textContent = String(digitalSources.length);
       renderAppAdminPluginDashboard();
+      renderAppAdminPluginAttention();
       const autoUpdateToggle = document.getElementById("appAdminPluginAutoUpdateToggle");
       if (autoUpdateToggle) autoUpdateToggle.checked = appAdmin.pluginAutoUpdate !== false;
       renderAppAdminPluginExecutionDashboard();
@@ -18159,59 +19254,50 @@ def ui_preview_html(
       renderAppAdminMetadataJobs();
       renderAppAdminDigitalSources();
       setAppAdminPluginTab(appAdmin.activePluginTab);
+      const searchInput = document.getElementById("appAdminPluginSearchInput");
+      if (searchInput && document.activeElement !== searchInput && searchInput.value !== appAdmin.pluginSearch) searchInput.value = appAdmin.pluginSearch;
+      setAppAdminPluginStatusFilter(appAdmin.pluginStatusFilter, false);
       if (!list) return;
       if (!plugins.length) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
         return;
       }
-      const metadataSourcePlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source"));
-      const metadataReceiverPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver"));
-      const digitalPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "digital_media_source"));
-      const personalListPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "personal_list_source"));
-      const priceProviderPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "price_provider"));
-      const importPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source"));
-      const systemPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api"));
-      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...personalListPlugins, ...priceProviderPlugins, ...importPlugins, ...systemPlugins].map((plugin) => plugin.id));
-      const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
-      const sections = {
-        metadata_source: {
-          title: tNext("appAdmin.pluginTypeMetadataSources", "Metadata sources"),
-          plugins: metadataSourcePlugins
-        },
-        metadata_receiver: {
-          title: tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"),
-          plugins: metadataReceiverPlugins
-        },
-        digital_media_source: {
-          title: tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"),
-          plugins: digitalPlugins
-        },
-        personal_list_source: {
-          title: tNext("appAdmin.pluginTypePersonalListSources", "Personal list sources"),
-          plugins: personalListPlugins
-        },
-        price_provider: {
-          title: tNext("appAdmin.pluginTypePriceProviders", "Price providers"),
-          plugins: priceProviderPlugins
-        },
-        import_source: {
-          title: tNext("appAdmin.pluginTypeImportSources", "Import sources"),
-          plugins: importPlugins
-        },
-        system: {
-          title: tNext("appAdmin.pluginTypeSystem", "System integrations"),
-          plugins: systemPlugins
-        },
-        other: {
-          title: tNext("appAdmin.pluginTypeOther", "Other plugins"),
-          plugins: otherPlugins
-        }
-      };
+      const matchesFilters = (plugin) => appAdminPluginMatchesSearch(plugin, appAdmin.pluginSearch) && appAdminPluginMatchesStatusFilter(plugin, appAdmin.pluginStatusFilter);
+      const categoryDefs = [
+        ["metadata_source", (plugin) => appAdminPluginHasCategory(plugin, "metadata_source")],
+        ["metadata_receiver", (plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver")],
+        ["digital_media_source", (plugin) => appAdminPluginHasCategory(plugin, "digital_media_source")],
+        ["personal_list_source", (plugin) => appAdminPluginHasCategory(plugin, "personal_list_source")],
+        ["price_provider", (plugin) => appAdminPluginHasCategory(plugin, "price_provider")],
+        ["import_source", (plugin) => appAdminPluginHasCategory(plugin, "import_source")],
+        ["system", (plugin) => appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api")]
+      ];
+      const categorized = new Set();
+      categoryDefs.forEach(([, matches]) => plugins.filter(matches).forEach((plugin) => categorized.add(plugin.id)));
+      const allDefs = [...categoryDefs, ["other", (plugin) => !categorized.has(plugin.id)]];
+      const sections = {};
+      allDefs.forEach(([category, matches]) => {
+        sections[category] = {
+          title: appAdminPluginTypeLabel(category),
+          plugins: plugins.filter(matches).filter(matchesFilters)
+        };
+      });
       setAppAdminPluginTypeTab(appAdmin.activePluginTypeTab, false);
       renderAppAdminMetadataPriorityPanel();
-      const activeSection = sections[appAdmin.activePluginTypeTab] || sections.metadata_source;
-      list.innerHTML = renderAppAdminPluginSection(activeSection.title, activeSection.plugins, appAdmin.activePluginTypeTab)
-        || `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
+      const html = appAdmin.activePluginTypeTab === "all"
+        ? renderAppAdminPluginSection(
+          tNext("appAdmin.pluginTypeAll", "All types"),
+          plugins.filter(matchesFilters),
+          ""
+        )
+        : sections[appAdmin.activePluginTypeTab]
+          ? renderAppAdminPluginSection(
+            sections[appAdmin.activePluginTypeTab].title,
+            sections[appAdmin.activePluginTypeTab].plugins,
+            appAdmin.activePluginTypeTab
+          )
+          : "";
+      list.innerHTML = html || `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
     }
     function appAdminRbacModeLabel(mode) {
       return mode === "advanced"
@@ -18221,6 +19307,56 @@ def ui_preview_html(
     function appAdminCanManageRbac() {
       const rbac = appAdmin.rbac || {};
       return currentRole() === "owner" && rbac.mode === "advanced" && rbac.customRolesEnabled !== false;
+    }
+    function appAdminRoleKeySlug(name) {
+      return String(name || "")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    }
+    function appAdminAvailableRoleKey(name) {
+      const slug = appAdminRoleKeySlug(name);
+      if (!slug) return "";
+      const existingKeys = new Set(
+        (((appAdmin.rbac || {}).roles || appAdmin.roles || []))
+          .map((role) => String(role.key || "").toLowerCase())
+          .filter(Boolean)
+      );
+      const base = `cr_${slug}`.slice(0, 64).replace(/_+$/g, "");
+      let candidate = base;
+      let suffixNumber = 2;
+      while (existingKeys.has(candidate)) {
+        const suffix = `_${suffixNumber}`;
+        candidate = `${base.slice(0, 64 - suffix.length).replace(/_+$/g, "")}${suffix}`;
+        suffixNumber += 1;
+      }
+      return candidate;
+    }
+    function renderAppAdminRoleCreateForm() {
+      const form = document.getElementById("appAdminRoleCreateForm");
+      const nameInput = document.getElementById("appAdminRoleName");
+      const descriptionInput = document.getElementById("appAdminRoleDescription");
+      const keyInput = document.getElementById("appAdminRoleKey");
+      const button = document.getElementById("appAdminCreateRoleButton");
+      if (!form || !nameInput || !descriptionInput || !keyInput || !button) return;
+      const busy = !!(appAdmin.roleCreation || {}).busy;
+      const key = appAdminAvailableRoleKey(nameInput.value);
+      keyInput.value = key;
+      nameInput.disabled = busy;
+      descriptionInput.disabled = busy;
+      form.setAttribute("aria-busy", busy ? "true" : "false");
+      button.setAttribute("aria-busy", busy ? "true" : "false");
+      button.disabled = busy || !key;
+      button.textContent = busy
+        ? tNext("appAdmin.startingRoleWizard", "Starting role wizard...")
+        : tNext("appAdmin.startRoleWizardButton", "Start role wizard");
+    }
+    function setAppAdminRoleCreateBusy(busy, message = "", tone = "") {
+      appAdmin.roleCreation = {busy: !!busy};
+      renderAppAdminRoleCreateForm();
+      setAppAdminMessage("appAdminRoleCreateMessage", message, tone);
     }
     function appAdminPermissionDomains(permissions) {
       const grouped = {};
@@ -18244,26 +19380,144 @@ def ui_preview_html(
       }
       return shown.join("") || `<span class="tag">${escapeHtml(tNext("appAdmin.noPermissions", "No permissions found."))}</span>`;
     }
-    function appAdminPermissionCheckboxes(selectedPermissions, disabled = false) {
+    function appAdminPermissionDomainId(domain) {
+      return String(domain || "core").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase();
+    }
+    function appAdminPermissionDomainLabel(domain) {
+      return String(domain || "core").replaceAll("_", " ").replace(/\\b\\w/g, (letter) => letter.toUpperCase());
+    }
+    function appAdminPermissionCheckboxes(selectedPermissions, disabled = false, openDomains = []) {
       const selected = new Set((selectedPermissions || []).map(String));
+      const open = new Set((openDomains || []).map(String));
       const domains = appAdminPermissionDomains((appAdmin.rbac || {}).permissions || []);
       if (!domains.length) {
         return `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPermissions", "No permissions found."))}</div>`;
       }
       return `<div class="app-admin-permission-grid">${domains.map(([domain, permissions]) => `
         <div class="app-admin-permission-domain">
-          <h4>${escapeHtml(domain.replaceAll("_", " "))}</h4>
-          ${permissions.map((permission) => `
-            <label>
-              <input type="checkbox" data-app-admin-role-permission="${escapeHtml(permission.key)}" ${selected.has(permission.key) ? "checked" : ""} ${disabled ? "disabled" : ""}>
-              <span>
-                ${escapeHtml(permission.key)}
-                <small>${escapeHtml(permission.description || "")}</small>
-              </span>
-            </label>
-          `).join("")}
+          <button
+            type="button"
+            class="app-admin-permission-domain-toggle"
+            data-app-admin-permission-domain-toggle="${escapeHtml(domain)}"
+            aria-expanded="${open.has(domain) ? "true" : "false"}"
+            aria-controls="appAdminPermissionDomain-${escapeHtml(appAdminPermissionDomainId(domain))}"
+          >
+            <strong>${escapeHtml(appAdminPermissionDomainLabel(domain))}</strong>
+            <span class="tag" data-app-admin-permission-count="${escapeHtml(domain)}">${escapeHtml(tNext("appAdmin.permissionAssignedCount", "{assigned} of {total} assigned").replace("{assigned}", String(permissions.filter((permission) => selected.has(permission.key)).length)).replace("{total}", String(permissions.length)))}</span>
+            <span class="mdi mdi-chevron-down" aria-hidden="true"></span>
+          </button>
+          <div
+            class="app-admin-permission-domain-panel ${open.has(domain) ? "" : "hidden"}"
+            id="appAdminPermissionDomain-${escapeHtml(appAdminPermissionDomainId(domain))}"
+          >
+            <p class="app-admin-permission-domain-help">${escapeHtml(tNext("appAdmin.permissionDomainHelp", "These permissions control {domain} capabilities. Grant only the actions this role needs.").replace("{domain}", appAdminPermissionDomainLabel(domain)))}</p>
+            ${permissions.map((permission) => `
+              <label>
+                <input type="checkbox" data-app-admin-role-permission="${escapeHtml(permission.key)}" data-app-admin-role-permission-domain="${escapeHtml(domain)}" ${selected.has(permission.key) ? "checked" : ""} ${disabled ? "disabled" : ""}>
+                <span>
+                  <strong>${escapeHtml(permission.description || permission.key)}</strong>
+                  <code>${escapeHtml(permission.key)}</code>
+                  <small>${escapeHtml(tNext("appAdmin.permissionEffectHelp", "This grants access to the action described above within the {domain} category.").replace("{domain}", appAdminPermissionDomainLabel(domain)))}</small>
+                </span>
+              </label>
+            `).join("")}
+          </div>
         </div>
       `).join("")}</div>`;
+    }
+    function appAdminEnsureRoleWizard(role) {
+      const roleId = role ? String(role.id || "") : "";
+      const wizard = appAdmin.roleWizard || {};
+      if (String(wizard.roleId || "") !== roleId) {
+        appAdmin.roleWizard = {
+          roleId,
+          step: 1,
+          name: role ? String(role.name || "") : "",
+          description: role ? String(role.description || "") : "",
+          permissions: role ? [...(role.permissions || [])].map(String) : [],
+          openDomains: [],
+          dirty: false
+        };
+      }
+      return appAdmin.roleWizard;
+    }
+    function appAdminCaptureRoleWizardDraft() {
+      const wizard = appAdmin.roleWizard || {};
+      if (!wizard.roleId) return wizard;
+      const nameInput = document.getElementById("appAdminRoleEditName");
+      const descriptionInput = document.getElementById("appAdminRoleEditDescription");
+      if (nameInput) wizard.name = String(nameInput.value || "");
+      if (descriptionInput) wizard.description = String(descriptionInput.value || "");
+      const permissionInputs = [...document.querySelectorAll("#appAdminPermissionEditor [data-app-admin-role-permission]")];
+      if (permissionInputs.length) {
+        wizard.permissions = permissionInputs
+          .filter((input) => input.checked)
+          .map((input) => input.dataset.appAdminRolePermission)
+          .filter(Boolean);
+      }
+      const role = appAdminSelectedRole();
+      wizard.dirty = !!role && (
+        wizard.name.trim() !== String(role.name || "").trim()
+        || wizard.description.trim() !== String(role.description || "").trim()
+        || JSON.stringify([...wizard.permissions].sort()) !== JSON.stringify([...(role.permissions || [])].map(String).sort())
+      );
+      return wizard;
+    }
+    function appAdminRoleDraft(role) {
+      const wizard = appAdminEnsureRoleWizard(role);
+      return role ? {...role, name: wizard.name, description: wizard.description, permissions: [...wizard.permissions]} : null;
+    }
+    function appAdminRoleReviewHtml(role, draft) {
+      if (!role || !draft) return "";
+      const original = new Set((role.permissions || []).map(String));
+      const current = new Set((draft.permissions || []).map(String));
+      const added = [...current].filter((permission) => !original.has(permission)).sort();
+      const removed = [...original].filter((permission) => !current.has(permission)).sort();
+      const domainCounts = appAdminPermissionDomains((appAdmin.rbac || {}).permissions || [])
+        .map(([domain, permissions]) => ({
+          domain,
+          count: permissions.filter((permission) => current.has(permission.key)).length
+        }))
+        .filter((item) => item.count > 0);
+      const changeSummary = added.length || removed.length
+        ? `
+          <div class="app-admin-role-review-section">
+            <h4>${escapeHtml(tNext("appAdmin.roleWizardPermissionChanges", "Permission changes"))}</h4>
+            <p>${escapeHtml(tNext("appAdmin.roleWizardAddedRemoved", "{added} added, {removed} removed").replace("{added}", String(added.length)).replace("{removed}", String(removed.length)))}</p>
+            ${added.length ? `<div class="admin-member-cloud"><span class="tag good">${escapeHtml(tNext("appAdmin.roleWizardAdded", "Added"))}</span>${appAdminPermissionTags(added, 20)}</div>` : ""}
+            ${removed.length ? `<div class="admin-member-cloud"><span class="tag blue">${escapeHtml(tNext("appAdmin.roleWizardRemoved", "Removed"))}</span>${appAdminPermissionTags(removed, 20)}</div>` : ""}
+          </div>
+        `
+        : `
+          <div class="app-admin-role-review-section">
+            <h4>${escapeHtml(tNext("appAdmin.roleWizardPermissionChanges", "Permission changes"))}</h4>
+            <p>${escapeHtml(tNext("appAdmin.roleWizardNoPermissionChanges", "No permission assignments changed."))}</p>
+          </div>
+        `;
+      return `
+        <div class="app-admin-role-review-section">
+          <h4>${escapeHtml(tNext("appAdmin.roleWizardRoleDetails", "Role details"))}</h4>
+          <div class="app-admin-summary-grid">
+            <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.roleName", "Role name"))}</span><strong>${escapeHtml(draft.name || "-")}</strong></div>
+            <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.roleKey", "Role key"))}</span><strong>${escapeHtml(role.key || "-")}</strong></div>
+            <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.permissionCount", "Permissions"))}</span><strong>${escapeHtml(formatNumber(current.size))}</strong></div>
+          </div>
+          <p>${escapeHtml(draft.description || tNext("appAdmin.roleWizardNoDescription", "No description provided."))}</p>
+        </div>
+        <div class="app-admin-role-review-section">
+          <h4>${escapeHtml(tNext("appAdmin.roleWizardAssignedByCategory", "Assigned by category"))}</h4>
+          <div class="app-admin-role-review-domains">${domainCounts.length
+            ? domainCounts.map((item) => `<span class="tag">${escapeHtml(appAdminPermissionDomainLabel(item.domain))}: ${escapeHtml(formatNumber(item.count))}</span>`).join("")
+            : `<span class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.noPermissions", "No permissions found."))}</span>`
+          }</div>
+        </div>
+        ${role.custom ? changeSummary : `
+          <div class="app-admin-role-review-section">
+            <h4>${escapeHtml(tNext("appAdmin.systemRole", "System"))}</h4>
+            <p>${escapeHtml(tNext("appAdmin.roleWizardSystemReadOnly", "System roles are fixed and can be reviewed here, but they cannot be changed."))}</p>
+          </div>
+        `}
+      `;
     }
     function appAdminSelectedRole() {
       const roles = (appAdmin.rbac && appAdmin.rbac.roles) || appAdmin.roles || [];
@@ -18582,6 +19836,43 @@ def ui_preview_html(
       renderAppAdminRbac();
       refreshAppPermissionSurface();
     }
+    function setAppAdminRoleWizardStep(step, focus = false) {
+      const role = appAdminSelectedRole();
+      if (!role) return;
+      const wizard = appAdminCaptureRoleWizardDraft();
+      const nextStep = Math.min(3, Math.max(1, Number(step) || 1));
+      if (nextStep > 1 && !String(wizard.name || "").trim()) {
+        wizard.step = 1;
+        renderAppAdminRbac();
+        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleNameRequired", "Role name is required."), "bad");
+        document.getElementById("appAdminRoleEditName")?.focus();
+        return;
+      }
+      wizard.step = nextStep;
+      renderAppAdminRbac();
+      if (focus) {
+        requestAnimationFrame(() => {
+          const panel = document.querySelector(`[data-app-admin-role-wizard-panel="${nextStep}"]`);
+          (panel?.querySelector("h4") || document.getElementById("appAdminRoleWizardHeading"))?.focus?.();
+        });
+      }
+    }
+    function selectAppAdminRole(roleId, initialStep = 1) {
+      const role = appAdminRoleById(roleId);
+      if (!role) return;
+      appAdmin.selectedRoleId = role.id;
+      appAdmin.roleWizard = {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false};
+      const wizard = appAdminEnsureRoleWizard(role);
+      wizard.step = Math.min(3, Math.max(1, Number(initialStep) || 1));
+      setAppAdminRolesTab("permissions");
+      renderAppAdminRbac();
+      requestAnimationFrame(() => {
+        const editor = document.getElementById("appAdminRoleEditor");
+        editor?.scrollIntoView({behavior: "smooth", block: "start"});
+        const panelHeading = document.querySelector(`[data-app-admin-role-wizard-panel="${wizard.step}"] h4`);
+        (wizard.step > 1 ? panelHeading : document.getElementById("appAdminRoleWizardHeading"))?.focus();
+      });
+    }
     function renderAppAdminRbac() {
       const rbac = appAdmin.rbac || {};
       const roles = rbac.roles || appAdmin.roles || [];
@@ -18593,6 +19884,7 @@ def ui_preview_html(
       }
       const customRoles = roles.filter((role) => role.custom);
       const mode = rbac.mode || "basic";
+      const advanced = mode === "advanced";
       const canSwitch = currentRole() === "owner" && rbac.canSwitchMode !== false;
       const canManage = appAdminCanManageRbac();
       const modeNode = document.getElementById("appAdminRbacMode");
@@ -18606,12 +19898,14 @@ def ui_preview_html(
         button.classList.toggle("active", targetMode === mode);
         button.disabled = !canSwitch || targetMode === mode || (targetMode === "advanced" && rbac.advancedEnabled === false);
       });
-      const createForm = document.getElementById("appAdminRoleCreateForm");
-      if (createForm) setElementVisible(closestCard(createForm), canManage);
+      setElementVisible(document.getElementById("appAdminRoleCreateCard"), advanced && canManage);
+      renderAppAdminRoleCreateForm();
+      setAppAdminRolesTab(appAdmin.activeRolesTab);
       const rolesList = document.getElementById("appAdminRolesList");
       if (rolesList) {
         const simulatedRole = appAdminSimulatedRole();
-        rolesList.innerHTML = roles.length ? roles.map((role) => {
+        const visibleRoles = advanced ? roles : roles.filter((role) => !role.custom);
+        rolesList.innerHTML = visibleRoles.length ? visibleRoles.map((role) => {
           const selected = selectedRole && String(selectedRole.id) === String(role.id);
           const simulated = simulatedRole && String(simulatedRole.id) === String(role.id);
           const canEdit = canManage && role.custom;
@@ -18626,13 +19920,12 @@ def ui_preview_html(
                   ${escapeHtml(role.key)}
                   &middot;
                   ${escapeHtml(role.custom ? tNext("appAdmin.customRole", "Custom") : tNext("appAdmin.systemRole", "System"))}
-                  &middot;
-                  ${escapeHtml(formatNumber((role.permissions || []).length))} ${escapeHtml(tNext("appAdmin.permissions", "permissions"))}
+                  ${advanced ? `&middot; ${escapeHtml(formatNumber((role.permissions || []).length))} ${escapeHtml(tNext("appAdmin.permissions", "permissions"))}` : ""}
                 </div>
-                <div class="admin-member-cloud">${appAdminPermissionTags(role.permissions || [], 10)}</div>
+                ${advanced ? `<div class="admin-member-cloud">${appAdminPermissionTags(role.permissions || [], 10)}</div>` : ""}
               </div>
               <div class="profile-passkey-actions">
-                <button type="button" class="secondary-button" data-app-admin-role-select="${escapeHtml(role.id)}">${escapeHtml(tNext("common.view", "View"))}</button>
+                ${advanced ? `<button type="button" class="secondary-button" data-app-admin-role-select="${escapeHtml(role.id)}">${escapeHtml(tNext("common.view", "View"))}</button>` : ""}
                 ${canEdit ? `<button type="button" class="secondary-button" data-app-admin-role-delete="${escapeHtml(role.id)}">${escapeHtml(tNext("common.delete", "Delete"))}</button>` : ""}
               </div>
             </div>
@@ -18644,27 +19937,71 @@ def ui_preview_html(
       const nameInput = document.getElementById("appAdminRoleEditName");
       const descriptionInput = document.getElementById("appAdminRoleEditDescription");
       const saveButton = document.getElementById("appAdminSaveRoleButton");
+      const savePermissionsButton = document.getElementById("appAdminSavePermissionsButton");
       const selectAllButton = document.getElementById("appAdminSelectAllPermissionsButton");
       const clearButton = document.getElementById("appAdminClearPermissionsButton");
       const featurePreview = document.getElementById("appAdminRoleFeaturePreview");
-      if (editor) editor.classList.toggle("hidden", !selectedRole);
+      const wizardSummary = document.getElementById("appAdminRoleWizardSummary");
+      const wizardModeHelp = document.getElementById("appAdminRoleWizardModeHelp");
+      const roleReview = document.getElementById("appAdminRoleReview");
+      const wizard = appAdminEnsureRoleWizard(selectedRole);
+      const draftRole = appAdminRoleDraft(selectedRole);
+      const editable = !!(canManage && selectedRole?.custom);
+      if (editor) editor.classList.toggle("hidden", !advanced || !selectedRole);
+      if (wizardSummary) {
+        wizardSummary.innerHTML = selectedRole ? `
+          <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.selectedRole", "Selected role"))}</span><strong>${escapeHtml(draftRole.name || draftRole.key || "-")}</strong></div>
+          <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.roleKey", "Role key"))}</span><strong>${escapeHtml(draftRole.key || "-")}</strong></div>
+          <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.roleType", "Role type"))}</span><strong>${escapeHtml(draftRole.custom ? tNext("appAdmin.customRole", "Custom") : tNext("appAdmin.systemRole", "System"))}</strong></div>
+          <div class="app-admin-summary-item"><span>${escapeHtml(tNext("appAdmin.permissionCount", "Permissions"))}</span><strong>${escapeHtml(formatNumber((draftRole.permissions || []).length))}</strong></div>
+          <div class="app-admin-summary-item wide"><span>${escapeHtml(tNext("appAdmin.roleDescription", "Description"))}</span><strong>${escapeHtml(draftRole.description || tNext("appAdmin.roleWizardNoDescription", "No description provided."))}</strong></div>
+        ` : "";
+      }
+      if (wizardModeHelp) {
+        wizardModeHelp.textContent = editable
+          ? tNext("appAdmin.roleWizardCustomEditable", "Update the custom role details, then continue to its permissions.")
+          : tNext("appAdmin.roleWizardSystemReadOnly", "System roles are fixed and can be reviewed here, but they cannot be changed.");
+      }
       if (nameInput) {
-        nameInput.value = selectedRole ? (selectedRole.name || "") : "";
-        nameInput.disabled = !canManage || !selectedRole?.custom;
+        nameInput.value = draftRole ? (draftRole.name || "") : "";
+        nameInput.disabled = !editable;
       }
       if (descriptionInput) {
-        descriptionInput.value = selectedRole ? (selectedRole.description || "") : "";
-        descriptionInput.disabled = !canManage || !selectedRole?.custom;
+        descriptionInput.value = draftRole ? (draftRole.description || "") : "";
+        descriptionInput.disabled = !editable;
       }
-      if (saveButton) saveButton.disabled = !canManage || !selectedRole?.custom;
-      if (selectAllButton) selectAllButton.disabled = !canManage || !selectedRole?.custom;
-      if (clearButton) clearButton.disabled = !canManage || !selectedRole?.custom;
+      document.querySelectorAll("[data-app-admin-role-wizard-step]").forEach((button) => {
+        const active = Number(button.dataset.appAdminRoleWizardStep) === wizard.step;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-current", active ? "step" : "false");
+      });
+      document.querySelectorAll("[data-app-admin-role-wizard-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", Number(panel.dataset.appAdminRoleWizardPanel) !== wizard.step);
+      });
+      const backButton = document.getElementById("appAdminRoleWizardBackButton");
+      const nextButton = document.getElementById("appAdminRoleWizardNextButton");
+      if (backButton) backButton.classList.toggle("hidden", wizard.step === 1);
+      if (nextButton) nextButton.classList.toggle("hidden", wizard.step !== 1);
+      if (savePermissionsButton) savePermissionsButton.classList.toggle("hidden", wizard.step !== 2);
+      if (saveButton) {
+        saveButton.classList.toggle("hidden", wizard.step !== 3 || !editable);
+        saveButton.disabled = !editable;
+      }
+      if (selectAllButton) {
+        selectAllButton.disabled = !editable;
+        selectAllButton.classList.toggle("hidden", !editable);
+      }
+      if (clearButton) {
+        clearButton.disabled = !editable;
+        clearButton.classList.toggle("hidden", !editable);
+      }
       if (permissionEditor) {
-        permissionEditor.innerHTML = selectedRole
-          ? appAdminPermissionCheckboxes(selectedRole.permissions || [], !canManage || !selectedRole.custom)
+        permissionEditor.innerHTML = draftRole
+          ? appAdminPermissionCheckboxes(draftRole.permissions || [], !editable, wizard.openDomains)
           : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.selectRoleToEdit", "Select a role to edit."))}</div>`;
       }
-      if (featurePreview) featurePreview.innerHTML = appAdminRoleFeaturePreviewHtml(selectedRole);
+      if (featurePreview) featurePreview.innerHTML = appAdminRoleFeaturePreviewHtml(draftRole);
+      if (roleReview) roleReview.innerHTML = appAdminRoleReviewHtml(selectedRole, draftRole);
       renderAppAdminRoleSimulator(roles);
       renderAppAdminPermissionMatrix(roles);
       const message = document.getElementById("appAdminRbacMessage");
@@ -18734,17 +20071,23 @@ def ui_preview_html(
       if (legacyRoleSelect) legacyRoleSelect.innerHTML = appAdminRoleOptions("media_viewer");
       const canManageRegistration = isNativeAdminUser() && hasActualPermission("security.manage_invite_only");
       const canInviteUsers = isNativeAdminUser() && hasActualPermission("users.invite");
-      const canViewPasskeys = isNativeAdminUser() && hasActualPermission("users.manage_passkeys");
+      const canViewPasskeys = passkeyProcessAvailable() && isNativeAdminUser() && hasActualPermission("users.manage_passkeys");
       const canAssignRoles = isNativeAdminUser() && hasActualPermission("users.assign_roles");
       const canDisableUsers = isNativeAdminUser() && hasActualPermission("users.disable");
       const canViewUsers = isNativeAdminUser() && hasActualAnyPermission(["users.view", "users.assign_roles", "users.disable", "users.delete"]);
       const canViewGroups = hasActualAnyPermission(["groups.view", "groups.create", "groups.invite"]);
       const canManageGroups = hasActualAnyPermission(["groups.create", "groups.invite"]);
+      const canUsePeopleSettings = isNativeAdminUser() || canManageGroups;
       setElementVisible(closestCard(document.getElementById("appAdminUsersList")), canViewUsers);
       setElementVisible(closestCard(document.getElementById("appAdminGroupsList")), canViewGroups);
       setElementVisible(closestCard(document.getElementById("appAdminInviteForm")), canInviteUsers);
       setElementVisible(closestCard(document.getElementById("appAdminCredentialsList")), canViewPasskeys);
-      setElementVisible(document.getElementById("appAdminGroupForm"), canManageGroups);
+      setElementVisible(closestCard(document.getElementById("appAdminGroupForm")), canManageGroups);
+      setElementVisible(document.querySelector('[data-app-admin-users-tab="settings"]'), canUsePeopleSettings);
+      setElementVisible(document.querySelector('[data-app-admin-users-tab="users"]'), canViewUsers);
+      setElementVisible(document.querySelector('[data-app-admin-users-tab="groups"]'), canViewGroups);
+      setAppAdminUsersTab(appAdmin.activeUsersTab);
+      setAppAdminOperationsTab(appAdmin.activeOperationsTab);
       setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasActualPermission("admin.restore_functional"));
       setElementVisible(document.getElementById("appAdminRefreshBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
       setElementVisible(document.getElementById("appAdminExportBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
@@ -18784,7 +20127,7 @@ def ui_preview_html(
               ${legacy.available ? `<div class="profile-add-passkey app-admin-legacy-controls">
                 <input type="password" minlength="15" autocomplete="new-password" data-app-admin-legacy-password="${escapeHtml(user.id)}" placeholder="${escapeHtml(tNext("legacyAuth.temporaryPassword", "Temporary password"))}">
                 <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-mfa="${escapeHtml(user.id)}" ${user.legacy_mfa_required !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.requireMfa", "Require TOTP MFA"))}</label>
-                <label class="legacy-checkbox-row"><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
+                <label class="legacy-checkbox-row ${passkeyProcessAvailable() ? "" : "hidden"}"><input type="checkbox" data-app-admin-legacy-passkeys="${escapeHtml(user.id)}" ${user.passkey_registration_allowed !== false ? "checked" : ""}>${escapeHtml(tNext("legacyAuth.allowPasskeys", "Allow passkeys"))}</label>
                 <button type="button" class="secondary-button" data-app-admin-legacy-save="${escapeHtml(user.id)}">${escapeHtml(user.legacy_credential_count ? tNext("legacyAuth.resetPassword", "Reset password") : tNext("legacyAuth.addPassword", "Add password"))}</button>
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button" data-app-admin-legacy-policy="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.savePolicy", "Save policy"))}</button>` : ""}
                 ${user.legacy_credential_count ? `<button type="button" class="secondary-button danger" data-app-admin-legacy-remove="${escapeHtml(user.id)}">${escapeHtml(tNext("legacyAuth.removePassword", "Remove password"))}</button>` : ""}
@@ -19186,47 +20529,61 @@ def ui_preview_html(
     }
     async function createAppAdminRole(event) {
       if (event) event.preventDefault();
-      if (!appAdminCanManageRbac()) return;
-      const key = String(document.getElementById("appAdminRoleKey")?.value || "").trim();
+      if (!appAdminCanManageRbac() || (appAdmin.roleCreation || {}).busy) return;
       const name = String(document.getElementById("appAdminRoleName")?.value || "").trim();
       const description = String(document.getElementById("appAdminRoleDescription")?.value || "").trim();
-      if (!key || !name) {
-        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleKeyNameRequired", "Role key and name are required."), "bad");
+      const key = appAdminAvailableRoleKey(name);
+      if (!key) {
+        setAppAdminMessage("appAdminRoleCreateMessage", tNext("appAdmin.roleNameSlugRequired", "Enter a role name containing letters or numbers."), "bad");
+        document.getElementById("appAdminRoleName")?.focus();
         return;
       }
-      setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.creatingRole", "Creating role..."));
+      setAppAdminRoleCreateBusy(true, tNext("appAdmin.startingRoleWizard", "Starting role wizard..."));
       try {
         const payload = await authApiJson("/api/next/auth/roles", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({key, name, description, permissions: []})
         });
-        if (document.getElementById("appAdminRoleKey")) document.getElementById("appAdminRoleKey").value = "";
+        const roleId = payload.role?.id || "";
+        if (!roleId) throw new Error(tNext("appAdmin.roleWizardStartFailed", "The role was not returned by the server."));
         if (document.getElementById("appAdminRoleName")) document.getElementById("appAdminRoleName").value = "";
         if (document.getElementById("appAdminRoleDescription")) document.getElementById("appAdminRoleDescription").value = "";
-        appAdmin.selectedRoleId = payload.role?.id || "";
+        if (document.getElementById("appAdminRoleKey")) document.getElementById("appAdminRoleKey").value = "";
+        appAdmin.selectedRoleId = roleId;
         await loadAppAdmin();
-        setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleCreated", "Role created. Select permissions and save."), "good");
+        selectAppAdminRole(roleId, 2);
+        setAppAdminRoleCreateBusy(false);
+        setAppAdminMessage("appAdminRoleWizardMessage", tNext("appAdmin.roleWizardStarted", "Role created. Assign permissions to continue."), "good");
       } catch (error) {
-        setAppAdminMessage("appAdminRbacMessage", error.message || String(error), "bad");
+        setAppAdminRoleCreateBusy(false, error.message || String(error), "bad");
+        document.getElementById("appAdminRoleName")?.focus();
       }
     }
     function setAppAdminRolePermissionSelection(checked) {
       document.querySelectorAll("#appAdminPermissionEditor [data-app-admin-role-permission]").forEach((input) => {
         if (!input.disabled) input.checked = checked;
       });
+      appAdminCaptureRoleWizardDraft();
+      renderAppAdminRbac();
     }
     async function saveAppAdminRole(event) {
       if (event) event.preventDefault();
       const role = appAdminSelectedRole();
       if (!role || !role.custom || !appAdminCanManageRbac()) return;
-      const name = String(document.getElementById("appAdminRoleEditName")?.value || "").trim();
-      const description = String(document.getElementById("appAdminRoleEditDescription")?.value || "").trim();
-      const permissions = Array.from(document.querySelectorAll("#appAdminPermissionEditor [data-app-admin-role-permission]:checked"))
-        .map((input) => input.dataset.appAdminRolePermission)
-        .filter(Boolean);
+      const wizard = appAdminCaptureRoleWizardDraft();
+      if (wizard.step !== 3) {
+        setAppAdminRoleWizardStep(wizard.step === 1 ? 2 : 3, true);
+        return;
+      }
+      const name = String(wizard.name || "").trim();
+      const description = String(wizard.description || "").trim();
+      const permissions = [...(wizard.permissions || [])];
       if (!name) {
+        wizard.step = 1;
+        renderAppAdminRbac();
         setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleNameRequired", "Role name is required."), "bad");
+        document.getElementById("appAdminRoleEditName")?.focus();
         return;
       }
       setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.savingRole", "Saving role..."));
@@ -19237,7 +20594,10 @@ def ui_preview_html(
           body: JSON.stringify({name, description, permissions})
         });
         appAdmin.selectedRoleId = payload.role?.id || role.id;
+        appAdmin.roleWizard = {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false};
         await loadAppAdmin();
+        appAdminEnsureRoleWizard(appAdminSelectedRole()).step = 3;
+        renderAppAdminRbac();
         setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleSaved", "Role saved."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminRbacMessage", error.message || String(error), "bad");
@@ -19252,6 +20612,7 @@ def ui_preview_html(
       try {
         await authApiJson(`/api/next/auth/roles/${encodeURIComponent(roleId)}`, {method: "DELETE"});
         appAdmin.selectedRoleId = "";
+        appAdmin.roleWizard = {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false};
         await loadAppAdmin();
         setAppAdminMessage("appAdminRbacMessage", tNext("appAdmin.roleDeleted", "Role deleted."), "good");
       } catch (error) {
@@ -20311,12 +21672,57 @@ def ui_preview_html(
       anchor.click();
       URL.revokeObjectURL(url);
     }
+    function showStartupLegacyStage(stage) {
+      const progressStage = stage === "bootstrap_totp"
+        ? "mfa"
+        : stage === "recovery_codes"
+          ? "recovery"
+          : "account";
+      document.getElementById("startupLegacyAccountStep")?.classList.toggle("hidden", progressStage !== "account");
+      document.getElementById("startupLegacyTotpStep")?.classList.toggle("hidden", progressStage !== "mfa");
+      document.getElementById("startupLegacyRecoveryStep")?.classList.toggle("hidden", progressStage !== "recovery");
+      const order = {account: 0, mfa: 1, recovery: 2};
+      document.querySelectorAll("[data-startup-legacy-progress]").forEach((item) => {
+        const itemStage = String(item.getAttribute("data-startup-legacy-progress") || "");
+        item.classList.toggle("active", itemStage === progressStage);
+        item.classList.toggle("complete", order[itemStage] < order[progressStage]);
+      });
+      const button = document.getElementById("startupLegacyButton");
+      if (button) {
+        button.textContent = progressStage === "recovery"
+          ? tNext("legacyAuth.finishSetup", "Finish setup")
+          : progressStage === "mfa"
+            ? tNext("legacyAuth.verifyTotp", "Verify authenticator")
+            : tNext("legacyAuth.continue", "Continue");
+      }
+    }
+    function resetStartupLegacyWizard() {
+      startupLegacyStage = "";
+      startupLegacyFlowToken = "";
+      startupLegacyRecoveryCodes = [];
+      startupLegacyMfaOptional = Boolean(currentAuthStatus.legacy_bootstrap_mfa_optional);
+      const mfaEnabled = document.getElementById("startupLegacyMfaEnabled");
+      if (mfaEnabled) mfaEnabled.checked = false;
+      document.getElementById("startupLegacyMfaOption")?.classList.toggle("hidden", !startupLegacyMfaOptional);
+      document.getElementById("startupLegacyMfaOptionalHelp")?.classList.toggle("hidden", !startupLegacyMfaOptional);
+      const codes = document.getElementById("startupLegacyRecoveryCodes");
+      if (codes) codes.innerHTML = "";
+      showStartupLegacyStage("");
+    }
     async function runStartupLegacyBootstrap() {
       const fields = document.getElementById("startupLegacyFields");
       const button = document.getElementById("startupLegacyButton");
       if (fields?.classList.contains("hidden")) {
+        const usernameInput = document.getElementById("startupOwnerUsernameInput");
+        const username = String(usernameInput?.value || "").trim();
+        if (!username) {
+          setStartupGateMessage(tNext("auth.usernameRequired", "Username is required."), "bad");
+          usernameInput?.focus();
+          return;
+        }
+        resetStartupLegacyWizard();
         fields.classList.remove("hidden");
-        button.textContent = tNext("legacyAuth.continue", "Continue");
+        renderStartup(currentStartup);
         document.getElementById("startupLegacyPassword")?.focus();
         return;
       }
@@ -20325,10 +21731,16 @@ def ui_preview_html(
         let url = "/api/next/auth/legacy/bootstrap/start";
         let body = {};
         if (!startupLegacyStage) {
+          const password = String(document.getElementById("startupLegacyPassword")?.value || "");
+          const passwordConfirmation = String(document.getElementById("startupLegacyPasswordConfirm")?.value || "");
+          if (password !== passwordConfirmation) {
+            throw new Error(tNext("legacyAuth.passwordMismatch", "Passwords do not match."));
+          }
           body = {
             username: String(document.getElementById("startupOwnerUsernameInput")?.value || "").trim(),
-            password: String(document.getElementById("startupLegacyPassword")?.value || ""),
-            password_risk_accepted: !!document.getElementById("startupLegacyRiskAccepted")?.checked
+            password,
+            mfa_enabled: !startupLegacyMfaOptional
+              || !!document.getElementById("startupLegacyMfaEnabled")?.checked
           };
         } else if (startupLegacyStage === "bootstrap_totp") {
           url = "/api/next/auth/legacy/bootstrap/verify";
@@ -20358,32 +21770,24 @@ def ui_preview_html(
           const manual = document.getElementById("startupLegacyManualKey");
           if (manual) {
             manual.textContent = payload.manual_key || "";
-            manual.classList.remove("hidden");
+            manual.classList.toggle("hidden", !payload.manual_key);
           }
-          document.getElementById("startupLegacyCodeLabel")?.classList.remove("hidden");
-          if (button) button.textContent = tNext("legacyAuth.verifyTotp", "Verify authenticator");
         } else if (payload.stage === "recovery_codes") {
           startupLegacyRecoveryCodes = payload.recovery_codes || [];
           const codes = document.getElementById("startupLegacyRecoveryCodes");
           if (codes) {
             codes.innerHTML = startupLegacyRecoveryCodes.map((code) => `<code>${escapeHtml(code)}</code>`).join("");
-            codes.classList.remove("hidden");
           }
-          document.getElementById("startupLegacyRecoveryActions")?.classList.remove("hidden");
-          document.getElementById("startupLegacyAckLabel")?.classList.remove("hidden");
-          if (button) button.textContent = tNext("legacyAuth.finishSetup", "Finish setup");
         } else if (payload.stage === "complete") {
           if (payload.token) localStorage.setItem("dv_next_token", payload.token);
           startupLegacyFlowToken = "";
           startupLegacyStage = "";
           await refreshAppFlow();
         }
+        showStartupLegacyStage(startupLegacyStage);
       } catch (error) {
         if (startupLegacyStage === "bootstrap_totp") {
-          startupLegacyStage = "";
-          startupLegacyFlowToken = "";
-          document.getElementById("startupLegacyCodeLabel")?.classList.add("hidden");
-          if (button) button.textContent = tNext("legacyAuth.continue", "Continue");
+          resetStartupLegacyWizard();
         }
         setStartupGateMessage(error.message || tNext("legacyAuth.bootstrapFailed", "Password onboarding failed."), "bad");
       } finally {
@@ -20500,6 +21904,8 @@ def ui_preview_html(
       credentials?.classList.toggle("hidden", !!legacyStage);
       passwordChange?.classList.toggle("hidden", legacyStage !== "password_change");
       mfa?.classList.toggle("hidden", !["mfa_enrollment", "mfa_challenge"].includes(legacyStage));
+      const mfaChallenge = legacyStage === "mfa_challenge";
+      document.getElementById("appRecoveryToggleButton")?.classList.toggle("hidden", mfaChallenge);
       recoveryCodes?.classList.toggle("hidden", legacyStage !== "recovery_codes");
       document.getElementById("appLegacyRecoveryActions")?.classList.toggle("hidden", legacyStage !== "recovery_codes");
       ackLabel?.classList.toggle("hidden", legacyStage !== "recovery_codes");
@@ -20531,7 +21937,7 @@ def ui_preview_html(
         mfa_challenge: tNext("legacyAuth.verifyTotp", "Verify authenticator"),
         recovery_codes: tNext("legacyAuth.continue", "Continue")
       };
-      if (submit) submit.textContent = labels[legacyStage] || tNext("legacyAuth.signIn", "Sign in with password");
+      if (submit) submit.textContent = labels[legacyStage] || tNext("auth.signIn", "Sign in");
     }
     async function completeLegacyLogin(payload) {
       if (payload.callback_url || payload.callbackUrl) {
@@ -20574,12 +21980,10 @@ def ui_preview_html(
           url = "/api/next/auth/legacy/mfa/setup/verify";
           body = {flow_token: legacyFlowToken, code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim()};
         } else if (legacyStage === "mfa_challenge") {
-          const recoveryCode = String(document.getElementById("appLegacyRecoveryCode")?.value || "").trim();
-          url = recoveryCode ? "/api/next/auth/legacy/mfa/recovery" : "/api/next/auth/legacy/mfa/verify";
+          url = "/api/next/auth/legacy/mfa/verify";
           body = {
             flow_token: legacyFlowToken,
-            code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim(),
-            recovery_code: recoveryCode
+            code: String(document.getElementById("appLegacyTotpCode")?.value || "").trim()
           };
         } else if (legacyStage === "recovery_codes") {
           if (!document.getElementById("appLegacyRecoveryAck")?.checked) throw new Error(tNext("legacyAuth.saveCodesFirst", "Save and acknowledge the recovery codes first."));
@@ -36155,14 +37559,69 @@ def ui_preview_html(
       });
       tree.addEventListener("dragend", () => { locationDragId = ""; });
     }
+    function renderStartupAuthGuidance(startup) {
+      const canCreateOwner = Boolean(startup.canCreateOwner);
+      const configurationValid = Boolean(currentAuthStatus.passkey_configuration_valid);
+      const accessValid = Boolean(currentAuthStatus.passkey_access_valid);
+      const legacyAvailable = Boolean(currentAuthStatus.legacy_bootstrap_available);
+      const showInvalidConfiguration = canCreateOwner && !configurationValid && !legacyAvailable;
+      const showAccessMismatch = canCreateOwner && configurationValid && !accessValid;
+      const guidance = document.getElementById("startupAuthGuidance");
+      const showGuidance = showInvalidConfiguration || showAccessMismatch;
+      guidance?.classList.toggle("hidden", !showGuidance);
+      if (!showGuidance) return;
+
+      const title = document.getElementById("startupAuthGuidanceTitle");
+      const body = document.getElementById("startupAuthGuidanceBody");
+      if (title) {
+        title.textContent = showAccessMismatch
+          ? tNext("auth.passkeyConfiguredAddressTitle", "Open the configured address")
+          : tNext("auth.passkeyFqdnRequiredTitle", "Configure a fully qualified domain name");
+      }
+      if (body) {
+        body.textContent = showAccessMismatch
+          ? tNext("auth.passkeyConfiguredAddressBody", "Passkeys are configured, but this address does not match. Open DiscVault through the configured HTTPS address to continue.")
+          : tNext("auth.passkeyFqdnRequiredBody", "Passkey onboarding requires a valid RP_ID and HTTPS RP_ORIGIN for a fully qualified domain name. Configure these values and open DiscVault through that address.");
+      }
+
+      const configuredOriginLink = document.getElementById("startupConfiguredOriginLink");
+      configuredOriginLink?.classList.add("hidden");
+      if (showAccessMismatch && configuredOriginLink) {
+        const configuredOrigin = Array.isArray(currentAuthStatus.rp_origins)
+          ? String(currentAuthStatus.rp_origins[0] || "")
+          : "";
+        try {
+          const url = new URL(configuredOrigin);
+          if (url.protocol === "https:") {
+            configuredOriginLink.href = url.origin;
+            configuredOriginLink.textContent = tNext("auth.openConfiguredOrigin", "Open {origin}").replace("{origin}", url.origin);
+            configuredOriginLink.classList.remove("hidden");
+          }
+        } catch (_) { /* invalid origins are never linked */ }
+      }
+    }
     function renderStartup(startup) {
       const phase = startup.phase || "ready";
+      const legacyBootstrap = !!currentAuthStatus.legacy_bootstrap_available && !!startup.canCreateOwner;
+      const passkeyOnboardingAvailable = !!startup.canCreateOwner && passkeyProcessAvailable();
+      const legacyFields = document.getElementById("startupLegacyFields");
+      const legacyWizardOpen = phase === "owner_setup"
+        && legacyBootstrap
+        && !legacyFields?.classList.contains("hidden");
+      const ownerUsername = String(document.getElementById("startupOwnerUsernameInput")?.value || "").trim();
       const title = document.getElementById("startupTitle");
       const description = document.getElementById("startupDescription");
-      if (title) title.textContent = tNext(`startup.phase.${phase}`, startup.message || "DiscVault");
+      if (title) {
+        title.textContent = legacyWizardOpen && ownerUsername
+          ? tNext("startup.helloUser", "Hello, {username}").replace("{username}", ownerUsername)
+          : tNext(`startup.phase.${phase}`, startup.message || "DiscVault");
+        if (legacyWizardOpen && ownerUsername) title.title = ownerUsername;
+        else title.removeAttribute("title");
+      }
       if (description) description.textContent = tNext(`startup.description.${phase}`, startup.message || "");
       const steps = document.getElementById("startupSteps");
       if (steps) {
+        steps.classList.toggle("hidden", phase === "owner_setup");
         steps.innerHTML = (startup.steps || []).map((step) => `
           <div class="startup-step ${escapeHtml(step.state || "")}">
             <strong>${escapeHtml(tNext(`startup.step.${step.key}`, step.label || step.key))}</strong>
@@ -36172,22 +37631,45 @@ def ui_preview_html(
       }
       const migrationLink = document.getElementById("startupMigrationLink");
       if (migrationLink) migrationLink.classList.toggle("hidden", !startup.canStartMigration && !["migration_required", "migration_running", "migration_pending_non_admin"].includes(phase));
+      renderStartupAuthGuidance(startup);
       const ownerPasskeyButton = document.getElementById("startupOwnerPasskeyButton");
-      const ownerPasskeyUnavailable = startup.canCreateOwner ? webauthnUnavailableReason() : "";
+      const ownerPasskeyUnavailable = passkeyOnboardingAvailable ? webauthnUnavailableReason() : "";
+      const browserPasskeysUnsupported = !window.PublicKeyCredential || !navigator.credentials;
+      const ownerPasskeyMessage = legacyBootstrap && browserPasskeysUnsupported
+        ? ""
+        : ownerPasskeyUnavailable;
       if (ownerPasskeyButton) {
-        ownerPasskeyButton.classList.toggle("hidden", !startup.canCreateOwner);
+        ownerPasskeyButton.classList.toggle("hidden", !passkeyOnboardingAvailable);
         ownerPasskeyButton.disabled = !!ownerPasskeyUnavailable;
       }
       const ownerFields = document.getElementById("startupOwnerFields");
-      const legacyBootstrap = !!currentAuthStatus.legacy_bootstrap_available && !!startup.canCreateOwner;
       const legacyButton = document.getElementById("startupLegacyButton");
       if (legacyButton) legacyButton.classList.toggle("hidden", !legacyBootstrap);
       if (ownerFields) ownerFields.classList.toggle("hidden", !startup.canCreateOwner && !legacyBootstrap);
-      if (!legacyBootstrap && !startupLegacyStage) document.getElementById("startupLegacyFields")?.classList.add("hidden");
+      document.getElementById("startupOwnerUsernameField")?.classList.toggle("hidden", legacyWizardOpen);
+      if (!legacyBootstrap && !startupLegacyStage) legacyFields?.classList.add("hidden");
+      startupLegacyMfaOptional = Boolean(currentAuthStatus.legacy_bootstrap_mfa_optional);
+      document.getElementById("startupLegacyMfaOption")?.classList.toggle("hidden", !startupLegacyMfaOptional);
+      document.getElementById("startupLegacyMfaOptionalHelp")?.classList.toggle("hidden", !startupLegacyMfaOptional);
+      const bootstrapWarning = document.getElementById("startupLegacyBootstrapWarning");
+      if (bootstrapWarning) {
+        bootstrapWarning.textContent = startupLegacyMfaOptional
+          ? tNext("legacyAuth.bootstrapWarningOptional", "Password onboarding is less phishing-resistant. Authenticator MFA is optional for this local setup.")
+          : tNext("legacyAuth.bootstrapWarning", "Password onboarding is less phishing-resistant. Authenticator MFA is required.");
+      }
+      const refreshPhases = new Set([
+        "schema_blocked",
+        "migration_required",
+        "migration_running",
+        "migration_pending_non_admin",
+        "sign_in_required"
+      ]);
+      document.getElementById("startupRefreshButton")?.classList.toggle("hidden", !refreshPhases.has(phase));
+      document.getElementById("startupLogoutButton")?.classList.toggle("hidden", !currentAuthStatus.authenticated);
       const message = document.getElementById("startupMessage");
       if (message) {
-        message.textContent = ownerPasskeyUnavailable || startup.message || "";
-        message.className = `startup-message ${ownerPasskeyUnavailable ? "bad" : ""}`.trim();
+        message.textContent = ownerPasskeyMessage || (phase === "owner_setup" ? "" : startup.message || "");
+        message.className = `startup-message ${ownerPasskeyMessage ? "bad" : ""}`.trim();
       }
     }
     async function loadAppSnapshot() {
@@ -36266,6 +37748,7 @@ def ui_preview_html(
       if (removeAvatarButton) removeAvatarButton.disabled = !profile.avatarUrl;
       renderProfilePasskeys();
       renderProfileRecovery();
+      renderProfileLegacyMfa();
       renderProfileApiAccess();
       renderMemberGroups();
       renderContainerManager();
@@ -36506,6 +37989,195 @@ def ui_preview_html(
           </div>
         `;
       }).join("");
+    }
+    function setProfileLegacyMessage(message, tone) {
+      const node = document.getElementById("profileLegacyMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function resetProfileMfaEnrollment() {
+      profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
+      document.getElementById("profileLegacyMfaPasswordForm")?.reset();
+      document.getElementById("profileLegacyMfaTotpForm")?.reset();
+      const acknowledgement = document.getElementById("profileLegacyMfaRecoveryAck");
+      if (acknowledgement) acknowledgement.checked = false;
+      const qr = document.getElementById("profileLegacyMfaQr");
+      if (qr) {
+        qr.removeAttribute("src");
+        qr.classList.add("hidden");
+      }
+      const manualKey = document.getElementById("profileLegacyMfaManualKey");
+      if (manualKey) manualKey.textContent = "";
+      const recoveryCodes = document.getElementById("profileLegacyMfaRecoveryCodes");
+      if (recoveryCodes) recoveryCodes.replaceChildren();
+      renderProfileLegacyMfa();
+    }
+    function renderProfileLegacyMfa() {
+      const credential = profileLegacy.credential || {};
+      const enrolled = Boolean(credential.mfa_enrolled);
+      const enabled = Boolean(credential.mfa_required) && enrolled;
+      if (enabled && profileMfaEnrollment.stage) {
+        profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
+      }
+      const stage = profileMfaEnrollment.stage;
+      const canEnable = Boolean(profileLegacy.has_credential) && !enabled;
+      const status = document.getElementById("profileLegacyMfaStatus");
+      if (status) {
+        status.textContent = credential.mfa_required
+          ? (enabled ? tNext("legacyAuth.enabled", "Enabled") : tNext("legacyAuth.setupRequired", "Setup required"))
+          : tNext("legacyAuth.disabled", "Disabled");
+      }
+      document.getElementById("profileLegacyMfaActions")?.classList.toggle("hidden", !canEnable || Boolean(stage));
+      document.getElementById("profileLegacyMfaSetup")?.classList.toggle("hidden", !stage);
+      document.getElementById("profileLegacyMfaPasswordForm")?.classList.toggle("hidden", stage !== "password");
+      document.getElementById("profileLegacyMfaTotpStep")?.classList.toggle("hidden", stage !== "totp");
+      document.getElementById("profileLegacyMfaRecoveryStep")?.classList.toggle("hidden", stage !== "recovery");
+      document.querySelectorAll("#profileLegacyPasswordForm input, #profileLegacyPasswordForm button").forEach((control) => {
+        control.disabled = Boolean(stage);
+      });
+      const generateRecoveryButton = document.getElementById("profileGenerateRecoveryButton");
+      if (generateRecoveryButton) generateRecoveryButton.disabled = Boolean(stage);
+      const revokeRecoveryButton = document.getElementById("profileRevokeRecoveryButton");
+      if (revokeRecoveryButton) {
+        revokeRecoveryButton.disabled = Boolean(stage) || Number(profileRecovery.activeCount || 0) <= 0;
+      }
+    }
+    function openProfileMfaEnrollment() {
+      profileMfaEnrollment = {stage: "password", flowToken: "", recoveryCodes: []};
+      setProfileLegacyMessage("");
+      renderProfileLegacyMfa();
+      document.getElementById("profileLegacyMfaCurrentPassword")?.focus();
+    }
+    async function startProfileMfaEnrollment(event) {
+      event?.preventDefault();
+      const form = document.getElementById("profileLegacyMfaPasswordForm");
+      const button = form?.querySelector('button[type="submit"]');
+      const cancelButton = document.getElementById("profileLegacyMfaCancelButton");
+      const currentPassword = String(document.getElementById("profileLegacyMfaCurrentPassword")?.value || "");
+      if (!currentPassword) {
+        setProfileLegacyMessage(tNext("legacyAuth.currentPassword", "Current password"), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      if (cancelButton) cancelButton.disabled = true;
+      setProfileLegacyMessage(tNext("legacyAuth.stage.mfa_enrollment", "Set up your authenticator."));
+      try {
+        const payload = await authApiJson("/api/next/auth/legacy/mfa/enroll/start", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({current_password: currentPassword})
+        });
+        profileMfaEnrollment = {
+          stage: "totp",
+          flowToken: String(payload.flow_token || ""),
+          recoveryCodes: []
+        };
+        const qr = document.getElementById("profileLegacyMfaQr");
+        if (qr) {
+          qr.src = payload.qr_data_uri || "";
+          qr.alt = tNext("legacyAuth.qrAlt", "QR code for authenticator enrollment");
+          qr.classList.toggle("hidden", !payload.qr_data_uri);
+        }
+        const manualKey = document.getElementById("profileLegacyMfaManualKey");
+        if (manualKey) manualKey.textContent = payload.manual_key || "";
+        form?.reset();
+        renderProfileLegacyMfa();
+        setProfileLegacyMessage(tNext("legacyAuth.stage.mfa_enrollment", "Set up your authenticator."), "info");
+        document.getElementById("profileLegacyMfaCode")?.focus();
+      } catch (error) {
+        setProfileLegacyMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+        if (cancelButton) cancelButton.disabled = false;
+      }
+    }
+    async function verifyProfileMfaEnrollment(event) {
+      event?.preventDefault();
+      const form = document.getElementById("profileLegacyMfaTotpForm");
+      const button = form?.querySelector('button[type="submit"]');
+      const cancelButton = document.getElementById("profileLegacyMfaCancelButton");
+      const code = String(document.getElementById("profileLegacyMfaCode")?.value || "").trim();
+      if (!code) {
+        setProfileLegacyMessage(tNext("legacyAuth.totpPrompt", "Enter the six-digit code from your authenticator app."), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      if (cancelButton) cancelButton.disabled = true;
+      setProfileLegacyMessage(tNext("legacyAuth.verifyTotp", "Verify authenticator"));
+      try {
+        const payload = await authApiJson("/api/next/auth/legacy/mfa/setup/verify", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({flow_token: profileMfaEnrollment.flowToken, code})
+        });
+        const codes = Array.isArray(payload.recovery_codes) ? payload.recovery_codes : [];
+        profileMfaEnrollment = {
+          stage: "recovery",
+          flowToken: String(payload.flow_token || ""),
+          recoveryCodes: codes
+        };
+        const codesNode = document.getElementById("profileLegacyMfaRecoveryCodes");
+        if (codesNode) {
+          codesNode.innerHTML = `
+            <strong>${escapeHtml(tNext("profile.recoveryCodesGenerated", "Save these recovery codes now. They will not be shown again."))}</strong>
+            <div class="recovery-code-grid">
+              ${codes.map((recoveryCode) => `<span class="recovery-code">${escapeHtml(recoveryCode)}</span>`).join("")}
+            </div>
+          `;
+        }
+        renderProfileLegacyMfa();
+        setProfileLegacyMessage(tNext("legacyAuth.stage.recovery_codes", "Save your recovery codes."), "info");
+      } catch (error) {
+        resetProfileMfaEnrollment();
+        setProfileLegacyMessage(error.message || String(error), "bad");
+      } finally {
+        if (button) button.disabled = false;
+        if (cancelButton) cancelButton.disabled = false;
+      }
+    }
+    async function finishProfileMfaEnrollment() {
+      const button = document.getElementById("profileLegacyMfaFinishButton");
+      const cancelButton = document.getElementById("profileLegacyMfaCancelButton");
+      if (!document.getElementById("profileLegacyMfaRecoveryAck")?.checked) {
+        setProfileLegacyMessage(tNext("legacyAuth.saveCodesFirst", "Save and acknowledge the recovery codes first."), "bad");
+        return;
+      }
+      if (button) button.disabled = true;
+      if (cancelButton) cancelButton.disabled = true;
+      setProfileLegacyMessage(tNext("legacyAuth.finishSetup", "Finish setup"));
+      try {
+        const payload = await authApiJson("/api/next/auth/legacy/recovery-codes/ack", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            flow_token: profileMfaEnrollment.flowToken,
+            acknowledged: true
+          })
+        });
+        if (payload.token) localStorage.setItem("dv_next_token", payload.token);
+        profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
+        await loadProfileDetails();
+        setProfileLegacyMessage(tNext("legacyAuth.mfaEnabled", "Two-factor authentication is enabled."), "good");
+      } catch (error) {
+        await loadProfileDetails();
+        if (profileLegacy.credential?.mfa_enrolled) {
+          profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
+          renderProfileLegacyMfa();
+          setProfileLegacyMessage(tNext("legacyAuth.mfaEnabled", "Two-factor authentication is enabled."), "good");
+        } else {
+          setProfileLegacyMessage(error.message || String(error), "bad");
+        }
+      } finally {
+        if (button) button.disabled = false;
+        if (cancelButton) cancelButton.disabled = false;
+      }
+    }
+    async function cancelProfileMfaEnrollment() {
+      const refreshRecovery = profileMfaEnrollment.stage === "recovery";
+      resetProfileMfaEnrollment();
+      setProfileLegacyMessage("");
+      if (refreshRecovery) await loadProfileDetails();
     }
     function setProfileRecoveryMessage(message, tone) {
       const node = document.getElementById("profileRecoveryMessage");
@@ -36865,11 +38537,6 @@ def ui_preview_html(
         profileApiAccess = payload.apiAccess || profileApiAccess;
         if (currentAuthStatus.legacy_auth_enabled) {
           profileLegacy = await authApiJson("/api/next/auth/legacy/me").catch(() => ({}));
-          const credential = profileLegacy.credential || {};
-          const mfaStatus = document.getElementById("profileLegacyMfaStatus");
-          if (mfaStatus) mfaStatus.textContent = credential.mfa_required
-            ? (credential.mfa_enrolled ? tNext("legacyAuth.enabled", "Enabled") : tNext("legacyAuth.setupRequired", "Setup required"))
-            : tNext("legacyAuth.disabled", "Disabled");
         }
         renderProfile();
       } catch (error) {
@@ -37206,7 +38873,7 @@ def ui_preview_html(
       currentAuthStatus = auth || {};
       renderAppRegistrationMode(auth);
       if (auth.auth_enabled && !auth.authenticated) {
-        setLoginMessage(tNext("auth.loginDescription", "Log in with your Passkey"));
+        setLoginMessage("");
         setGate("auth");
         return;
       }
@@ -37677,11 +39344,30 @@ def ui_preview_html(
         button.addEventListener("click", () => setAppAdminTab(button.dataset.appAdminTab));
         button.addEventListener("keydown", (event) => handleAppAdminTabKeydown(button, event));
       });
+      window.addEventListener("resize", syncAppAdminSubmenuOrientation);
+      document.querySelectorAll("[data-app-admin-users-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminUsersTab(button.dataset.appAdminUsersTab));
+        button.addEventListener("keydown", (event) => handleAppAdminUsersTabKeydown(button, event));
+      });
+      document.querySelectorAll("[data-app-admin-roles-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminRolesTab(button.dataset.appAdminRolesTab));
+        button.addEventListener("keydown", (event) => handleAppAdminRolesTabKeydown(button, event));
+      });
+      document.querySelectorAll("[data-app-admin-operations-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminOperationsTab(button.dataset.appAdminOperationsTab));
+        button.addEventListener("keydown", (event) => handleAppAdminOperationsTabKeydown(button, event));
+      });
       document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminPluginTab(button.dataset.appAdminPluginTab));
+        button.addEventListener("keydown", (event) => handleAppAdminPluginTabKeydown(button, event));
       });
-      document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
-        button.addEventListener("click", () => setAppAdminPluginTypeTab(button.dataset.appAdminPluginTypeTab));
+      document.getElementById("appAdminPluginTypeFilter")?.addEventListener("change", (event) => setAppAdminPluginTypeTab(event.target.value));
+      document.getElementById("appAdminPluginStatusFilter")?.addEventListener("change", (event) => setAppAdminPluginStatusFilter(event.target.value));
+      document.getElementById("appAdminPluginSearchInput")?.addEventListener("input", (event) => setAppAdminPluginSearch(event.target.value));
+      document.getElementById("appAdminPluginAttention")?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-app-admin-plugin-attention-tab]");
+        if (!button) return;
+        setAppAdminPluginTab(button.dataset.appAdminPluginAttentionTab);
       });
       document.getElementById("appAdminFeatureClusters")?.addEventListener("click", (event) => {
         const button = event.target.closest("[data-app-admin-feature-tab]");
@@ -37700,9 +39386,53 @@ def ui_preview_html(
         button.addEventListener("click", () => setAppAdminRbacMode(button.dataset.appAdminRbacMode));
       });
       document.getElementById("appAdminRoleCreateForm")?.addEventListener("submit", (event) => createAppAdminRole(event));
+      document.getElementById("appAdminRoleName")?.addEventListener("input", () => {
+        setAppAdminMessage("appAdminRoleCreateMessage", "");
+        renderAppAdminRoleCreateForm();
+      });
       document.getElementById("appAdminRoleEditForm")?.addEventListener("submit", (event) => saveAppAdminRole(event));
+      document.getElementById("appAdminRoleEditName")?.addEventListener("input", () => appAdminCaptureRoleWizardDraft());
+      document.getElementById("appAdminRoleEditDescription")?.addEventListener("input", () => appAdminCaptureRoleWizardDraft());
+      document.querySelectorAll("[data-app-admin-role-wizard-step]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminRoleWizardStep(button.dataset.appAdminRoleWizardStep, true));
+      });
+      document.getElementById("appAdminRoleWizardBackButton")?.addEventListener("click", () => {
+        setAppAdminRoleWizardStep((appAdmin.roleWizard?.step || 1) - 1, true);
+      });
+      document.getElementById("appAdminRoleWizardNextButton")?.addEventListener("click", () => setAppAdminRoleWizardStep(2, true));
+      document.getElementById("appAdminSavePermissionsButton")?.addEventListener("click", () => setAppAdminRoleWizardStep(3, true));
       document.getElementById("appAdminSelectAllPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(true));
       document.getElementById("appAdminClearPermissionsButton")?.addEventListener("click", () => setAppAdminRolePermissionSelection(false));
+      document.getElementById("appAdminPermissionEditor")?.addEventListener("click", (event) => {
+        const toggle = event.target.closest("[data-app-admin-permission-domain-toggle]");
+        if (!toggle) return;
+        const domain = toggle.dataset.appAdminPermissionDomainToggle || "";
+        const wizard = appAdmin.roleWizard || {};
+        const openDomains = new Set((wizard.openDomains || []).map(String));
+        const expanded = !openDomains.has(domain);
+        if (expanded) openDomains.add(domain);
+        else openDomains.delete(domain);
+        wizard.openDomains = [...openDomains];
+        toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+        document.getElementById(toggle.getAttribute("aria-controls"))?.classList.toggle("hidden", !expanded);
+      });
+      document.getElementById("appAdminPermissionEditor")?.addEventListener("change", (event) => {
+        const input = event.target.closest("[data-app-admin-role-permission]");
+        if (!input) return;
+        const wizard = appAdminCaptureRoleWizardDraft();
+        const domain = input.dataset.appAdminRolePermissionDomain || "";
+        const domainInputs = [...document.querySelectorAll(`#appAdminPermissionEditor [data-app-admin-role-permission-domain="${CSS.escape(domain)}"]`)];
+        const count = domainInputs.filter((item) => item.checked).length;
+        const countNode = document.querySelector(`[data-app-admin-permission-count="${CSS.escape(domain)}"]`);
+        if (countNode) {
+          countNode.textContent = tNext("appAdmin.permissionAssignedCount", "{assigned} of {total} assigned")
+            .replace("{assigned}", String(count))
+            .replace("{total}", String(domainInputs.length));
+        }
+        const role = appAdminSelectedRole();
+        const preview = document.getElementById("appAdminRoleFeaturePreview");
+        if (preview && role) preview.innerHTML = appAdminRoleFeaturePreviewHtml({...role, permissions: [...wizard.permissions]});
+      });
       document.getElementById("appAdminRoleSimulationSelect")?.addEventListener("change", (event) => {
         appAdmin.simulation.roleId = event.target.value || "";
         if ((appAdmin.simulation || {}).active) refreshAppPermissionSurface();
@@ -37715,8 +39445,7 @@ def ui_preview_html(
         const selectButton = event.target.closest("[data-app-admin-role-select]");
         const deleteButton = event.target.closest("[data-app-admin-role-delete]");
         if (selectButton) {
-          appAdmin.selectedRoleId = selectButton.dataset.appAdminRoleSelect || "";
-          renderAppAdminRbac();
+          selectAppAdminRole(selectButton.dataset.appAdminRoleSelect || "");
         }
         if (deleteButton) deleteAppAdminRole(deleteButton.dataset.appAdminRoleDelete);
       });
@@ -38199,6 +39928,11 @@ def ui_preview_html(
         if (deleteButton) deleteProfilePasskey(deleteButton.dataset.profilePasskeyDelete);
       });
       document.getElementById("profileLegacyPasswordForm")?.addEventListener("submit", (event) => changeProfileLegacyPassword(event));
+      document.getElementById("profileLegacyMfaEnableButton")?.addEventListener("click", () => openProfileMfaEnrollment());
+      document.getElementById("profileLegacyMfaPasswordForm")?.addEventListener("submit", (event) => startProfileMfaEnrollment(event));
+      document.getElementById("profileLegacyMfaTotpForm")?.addEventListener("submit", (event) => verifyProfileMfaEnrollment(event));
+      document.getElementById("profileLegacyMfaFinishButton")?.addEventListener("click", () => finishProfileMfaEnrollment());
+      document.getElementById("profileLegacyMfaCancelButton")?.addEventListener("click", () => cancelProfileMfaEnrollment());
       document.getElementById("locationQrCloseButton")?.addEventListener("click", () => closeLocationQr());
       document.getElementById("locationQrCopyButton")?.addEventListener("click", () => copyLocationQrLink());
       document.getElementById("locationQrPrintButton")?.addEventListener("click", () => {

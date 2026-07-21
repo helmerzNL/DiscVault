@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -12,7 +13,7 @@ import struct
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from uuid import UUID, uuid4
 
 import cbor2
@@ -27,6 +28,16 @@ from cryptography.hazmat.primitives.hashes import SHA256
 from flask import Flask, jsonify, make_response, redirect, request
 from psycopg import Error as PsycopgError
 from psycopg.types.json import Jsonb
+
+
+SHIPPED_RP_IDS = frozenset({"localhost", "discvault.example.com"})
+SHIPPED_RP_ORIGINS = frozenset(
+    {"http://localhost:6080", "https://discvault.example.com"}
+)
+LOCAL_IPV4_NETWORKS = tuple(
+    ipaddress.ip_network(cidr) for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+)
+LEGACY_BOOTSTRAP_PENDING_STATUS = "pending_legacy_bootstrap"
 
 try:
     from .next_legacy_auth import (
@@ -260,6 +271,119 @@ def _rp_id() -> str:
     return request.host.split(":", 1)[0] if request else "localhost"
 
 
+def _configured_rp_origins() -> list[str]:
+    configured = os.environ.get("RP_ORIGINS") or os.environ.get("RP_ORIGIN") or ""
+    return [item.strip().rstrip("/") for item in configured.split(",") if item.strip()]
+
+
+def _normalized_origin(value: Any) -> str | None:
+    text = str(value or "").strip().rstrip("/")
+    try:
+        parsed = urlsplit(text)
+        port = parsed.port
+    except ValueError:
+        return None
+    hostname = str(parsed.hostname or "").lower()
+    if (
+        parsed.scheme.lower() not in {"http", "https"}
+        or not hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in {"", "/"}
+    ):
+        return None
+    if parsed.scheme.lower() != "https" and hostname != "localhost":
+        return None
+    default_port = (parsed.scheme.lower() == "http" and port == 80) or (
+        parsed.scheme.lower() == "https" and port == 443
+    )
+    port_suffix = f":{port}" if port and not default_port else ""
+    return f"{parsed.scheme.lower()}://{hostname}{port_suffix}"
+
+
+def _passkey_configuration_valid() -> bool:
+    rp_id = os.environ.get("RP_ID", "").strip().lower()
+    if (
+        not rp_id
+        or rp_id in SHIPPED_RP_IDS
+        or len(rp_id) > 253
+        or "." not in rp_id
+    ):
+        return False
+    labels = rp_id.split(".")
+    valid_rp_id = all(
+        0 < len(label) <= 63
+        and re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label)
+        for label in labels
+    ) and not all(label.isdigit() for label in labels)
+    if not valid_rp_id:
+        return False
+    origins = _configured_rp_origins()
+    if not origins:
+        return False
+    for origin in origins:
+        normalized = _normalized_origin(origin)
+        if not normalized or normalized in SHIPPED_RP_ORIGINS:
+            return False
+        origin_host = str(urlsplit(normalized).hostname or "").lower()
+        if origin_host != rp_id and not origin_host.endswith(f".{rp_id}"):
+            return False
+    return True
+
+
+def _request_hostname() -> str:
+    if not request:
+        return ""
+    host = str(request.host or "").strip()
+    try:
+        return str(urlsplit(f"//{host}").hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _local_ip_address(value: Any) -> bool:
+    try:
+        address = ipaddress.ip_address(str(value or "").strip())
+    except ValueError:
+        return False
+    if address.is_loopback:
+        return True
+    return isinstance(address, ipaddress.IPv4Address) and any(
+        address in network for network in LOCAL_IPV4_NETWORKS
+    )
+
+
+def _request_host_is_local_ip() -> bool:
+    if not request or not _local_ip_address(_request_hostname()):
+        return False
+    if not _local_ip_address(request.remote_addr):
+        return False
+    forwarded_for = str(request.headers.get("X-Forwarded-For") or "").split(",", 1)[0].strip()
+    return not forwarded_for or _local_ip_address(forwarded_for)
+
+
+def _passkey_access_valid() -> bool:
+    if not _passkey_configuration_valid():
+        return False
+    current_origin = _normalized_origin(_request_origin())
+    configured_origins = {
+        normalized
+        for origin in _configured_rp_origins()
+        if (normalized := _normalized_origin(origin))
+    }
+    return bool(current_origin and current_origin in configured_origins)
+
+
+def _legacy_bootstrap_mfa_optional() -> bool:
+    return (
+        legacy_auth_env_enabled()
+        and not _passkey_configuration_valid()
+        and _request_host_is_local_ip()
+    )
+
+
 def _rp_name() -> str:
     return os.environ.get("RP_NAME", "DiscVault").strip() or "DiscVault"
 
@@ -298,10 +422,9 @@ def _review_login_expires_at() -> datetime | None:
 
 
 def _rp_origins() -> list[str]:
-    configured = os.environ.get("RP_ORIGINS") or os.environ.get("RP_ORIGIN") or ""
-    origins = [item.strip().rstrip("/") for item in configured.split(",") if item.strip()]
+    origins = _configured_rp_origins()
     if origins:
-        return origins
+        return [_normalized_origin(origin) or origin for origin in origins]
     return [_request_origin()]
 
 
@@ -407,12 +530,32 @@ def next_auth_configured_enabled(conn, table_exists: TableExists) -> bool:
 
 
 def next_auth_ready(conn, table_exists: TableExists) -> bool:
-    credential_count = next_auth_count_table(conn, table_exists, "passkey_credentials")
-    # A stored password credential keeps the global auth wall active even when
-    # the ENV capability is turned off. Otherwise disabling Legacy auth on a
-    # password-only install would accidentally expose protected APIs.
-    credential_count += next_auth_count_table(conn, table_exists, "legacy_password_credentials")
-    return next_auth_count_table(conn, table_exists, "users") > 0 and credential_count > 0
+    if not table_exists(conn, "users"):
+        return False
+    credential_checks: list[str] = []
+    if table_exists(conn, "passkey_credentials"):
+        credential_checks.append(
+            "EXISTS (SELECT 1 FROM passkey_credentials p WHERE p.user_id=u.id)"
+        )
+    if table_exists(conn, "legacy_password_credentials"):
+        credential_checks.append(
+            "EXISTS (SELECT 1 FROM legacy_password_credentials l WHERE l.user_id=u.id)"
+        )
+    if not credential_checks:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT EXISTS (
+                SELECT 1
+                FROM users u
+                WHERE u.status='active'
+                  AND ({" OR ".join(credential_checks)})
+            ) AS ready
+            """
+        )
+        row = cur.fetchone()
+    return bool(row and row["ready"])
 
 
 def next_auth_effective_enabled(conn, table_exists: TableExists) -> bool:
@@ -907,12 +1050,17 @@ def register_next_auth_routes(
         return bool(setting_value(conn, "auth_enabled", False))
 
     def auth_ready(conn) -> bool:
-        credential_count = count_table(conn, "passkey_credentials")
-        credential_count += count_table(conn, "legacy_password_credentials")
-        return count_table(conn, "users") > 0 and credential_count > 0
+        return next_auth_ready(conn, table_exists)
 
     def auth_enabled(conn) -> bool:
         return configured_auth_enabled(conn) and auth_ready(conn)
+
+    def require_passkey_access() -> None:
+        if not _passkey_access_valid():
+            raise next_api_error(
+                "Passkeys require a valid RP_ID and HTTPS RP_ORIGIN, accessed through the configured origin",
+                403,
+            )
 
     def legacy_tables_available(conn) -> bool:
         return all(
@@ -1864,6 +2012,12 @@ def register_next_auth_routes(
         user_count = count_table(conn, "users")
         credential_count = count_table(conn, "passkey_credentials")
         legacy_credential_count = count_table(conn, "legacy_password_credentials")
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) AS count FROM users WHERE status<>%s",
+                (LEGACY_BOOTSTRAP_PENDING_STATUS,),
+            )
+            blocking_user_count = int((cur.fetchone() or {}).get("count") or 0)
         is_configured_auth_enabled = configured_auth_enabled(conn)
         is_auth_ready = auth_ready(conn)
         user = current_user(conn)
@@ -1872,6 +2026,14 @@ def register_next_auth_routes(
         legacy_available = legacy_auth_env_enabled() and legacy_tables_available(conn)
         effective_legacy = legacy_effective_enabled(conn)
         review_login_available = effective_legacy
+        passkey_configuration_valid = _passkey_configuration_valid()
+        passkey_access_valid = _passkey_access_valid()
+        legacy_bootstrap_available = bool(
+            legacy_available
+            and not is_auth_ready
+            and blocking_user_count == 0
+            and credential_count == 0
+        )
         try:
             review_expires_at = _review_login_expires_at()
         except ValueError:
@@ -1892,16 +2054,16 @@ def register_next_auth_routes(
             "legacy_auth_database_enabled": legacy_db_enabled(conn)
             if legacy_tables_available(conn)
             else False,
-            "legacy_bootstrap_available": bool(
-                legacy_available
-                and not is_auth_ready
-                and user_count == 0
-                and credential_count == 0
-                and legacy_credential_count == 0
+            "legacy_bootstrap_available": legacy_bootstrap_available,
+            "legacy_bootstrap_mfa_optional": bool(
+                legacy_bootstrap_available and _legacy_bootstrap_mfa_optional()
             ),
             "rp_id": _rp_id(),
             "rp_name": _rp_name(),
             "rp_origins": _rp_origins(),
+            "passkey_configuration_valid": passkey_configuration_valid,
+            "passkey_access_valid": passkey_access_valid,
+            "request_host_is_local_ip": _request_host_is_local_ip(),
             "authenticated": bool(user),
             "user_id": user["id"] if user else None,
             "username": user["username"] if user else None,
@@ -1957,6 +2119,7 @@ def register_next_auth_routes(
 
     @route("/api/next/auth/register/options", "/api/auth/register/options", methods=["POST"])
     def register_options():
+        require_passkey_access()
         body = request.get_json(silent=True) or {}
         try:
             username = _normalize_username(body.get("username") or "admin")
@@ -1969,7 +2132,21 @@ def register_next_auth_routes(
             if not table_exists(conn, "users") or not table_exists(conn, "passkey_credentials"):
                 raise next_api_error("Auth tables are not available", 503)
             has_users = count_table(conn, "users") > 0
-            has_credentials = count_table(conn, "passkey_credentials") > 0
+            has_credentials = (
+                count_table(conn, "passkey_credentials")
+                + count_table(conn, "legacy_password_credentials")
+            ) > 0
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) AS count FROM users WHERE status=%s",
+                    (LEGACY_BOOTSTRAP_PENDING_STATUS,),
+                )
+                pending_bootstrap = int((cur.fetchone() or {}).get("count") or 0)
+            if pending_bootstrap:
+                raise next_api_error(
+                    "Finish or restart the pending password onboarding before adding a passkey",
+                    409,
+                )
             caller = current_user(conn)
             if has_users and has_credentials and not caller and not registration_enabled(conn):
                 invite = validate_invite(conn, username, invite_code)
@@ -2027,6 +2204,7 @@ def register_next_auth_routes(
 
     @route("/api/next/auth/register/verify", "/api/auth/register/verify", methods=["POST"])
     def register_verify():
+        require_passkey_access()
         body = request.get_json(silent=True) or {}
         user_id = _parse_uuid(body.get("user_id"))
         if not user_id:
@@ -2067,8 +2245,26 @@ def register_next_auth_routes(
                 raise next_api_error(f"Verification failed: {exc}", 400) from exc
 
             with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT pg_advisory_xact_lock(hashtext('discvault-legacy-bootstrap'))"
+                    )
                 has_users = count_table(conn, "users") > 0
-                has_credentials = count_table(conn, "passkey_credentials") > 0
+                has_credentials = (
+                    count_table(conn, "passkey_credentials")
+                    + count_table(conn, "legacy_password_credentials")
+                ) > 0
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT COUNT(*) AS count FROM users WHERE status=%s",
+                        (LEGACY_BOOTSTRAP_PENDING_STATUS,),
+                    )
+                    pending_bootstrap = int((cur.fetchone() or {}).get("count") or 0)
+                if pending_bootstrap:
+                    raise next_api_error(
+                        "Finish or restart the pending password onboarding before adding a passkey",
+                        409,
+                    )
                 caller = current_user(conn)
                 with conn.cursor() as cur:
                     cur.execute("SELECT id FROM users WHERE id=%s", (user_id,))
@@ -2247,6 +2443,93 @@ def register_next_auth_routes(
         target = f"/?{urlencode({'mobile_flow': flow_id_str})}"
         return redirect(target, code=302)
 
+    def require_first_owner_bootstrap_available(
+        conn,
+        *,
+        cleanup_pending: bool = False,
+    ) -> None:
+        if cleanup_pending:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM users WHERE status=%s",
+                    (LEGACY_BOOTSTRAP_PENDING_STATUS,),
+                )
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS count FROM users")
+            blocking_users = int((cur.fetchone() or {}).get("count") or 0)
+        if blocking_users or count_table(conn, "passkey_credentials") or auth_ready(conn):
+            raise next_api_error("First-owner password onboarding is no longer available", 409)
+
+    def create_legacy_bootstrap_owner(
+        conn,
+        *,
+        payload: dict[str, Any],
+        mfa_required: bool,
+        accepted_step: int | None = None,
+    ) -> dict[str, Any]:
+        user_id = uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO users (id, username, display_name, status, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, now(), now())
+                """,
+                (
+                    user_id,
+                    payload["username"],
+                    payload["displayName"],
+                    LEGACY_BOOTSTRAP_PENDING_STATUS,
+                ),
+            )
+            cur.execute(
+                """
+                INSERT INTO legacy_password_credentials (
+                    user_id, password_hash, hash_version, must_change_password,
+                    mfa_required, passkey_registration_allowed
+                )
+                VALUES (%s, %s, %s, false, %s, true)
+                """,
+                (
+                    user_id,
+                    payload["passwordHash"],
+                    PASSWORD_HASH_VERSION,
+                    mfa_required,
+                ),
+            )
+            if mfa_required:
+                cur.execute(
+                    """
+                    INSERT INTO legacy_totp_credentials (
+                        user_id, encrypted_secret, nonce, confirmed_at, last_accepted_step
+                    )
+                    VALUES (%s, %s, %s, NULL, %s)
+                    """,
+                    (
+                        user_id,
+                        _b64url_decode(payload["encryptedSecret"]),
+                        _b64url_decode(payload["nonce"]),
+                        accepted_step,
+                    ),
+                )
+        assign_role(conn, user_id, "owner")
+        recovery_codes = next_generate_recovery_codes()
+        with conn.cursor() as cur:
+            next_replace_recovery_codes(cur, user_id, recovery_codes)
+        set_setting(conn, LEGACY_AUTH_SETTING, True)
+        set_setting(conn, "auth_enabled", True)
+        ack_token = issue_legacy_flow(
+            conn,
+            "bootstrap_recovery_ack",
+            user_id=user_id,
+            payload={"mfaRequired": mfa_required},
+        )
+        return {
+            "status": "ok",
+            "stage": "recovery_codes",
+            "recovery_codes": recovery_codes,
+            "flow_token": ack_token,
+        }
+
     @route(
         "/api/next/auth/legacy/bootstrap/start",
         "/api/auth/legacy/bootstrap/start",
@@ -2256,8 +2539,8 @@ def register_next_auth_routes(
         if not legacy_auth_env_enabled():
             raise next_api_error("Password onboarding is unavailable", 404)
         body = request.get_json(silent=True) or {}
-        if body.get("password_risk_accepted") is not True:
-            raise next_api_error("Password risk acknowledgement is required", 400)
+        mfa_optional = _legacy_bootstrap_mfa_optional()
+        mfa_required = body.get("mfa_enabled") is True if mfa_optional else True
         try:
             username = _normalize_username(body.get("username"))
             password = validate_password(body.get("password"), username)
@@ -2267,27 +2550,32 @@ def register_next_auth_routes(
         with connect() as conn:
             if not legacy_tables_available(conn):
                 raise next_api_error("Legacy authentication tables are not available", 503)
-            if (
-                count_table(conn, "users")
-                or count_table(conn, "passkey_credentials")
-                or count_table(conn, "legacy_password_credentials")
-                or auth_ready(conn)
-            ):
-                raise next_api_error("First-owner password onboarding is no longer available", 409)
-            secret_value = generate_totp_secret()
-            nonce, ciphertext = encrypt_totp_secret(secret_value)
             with conn.transaction():
-                token = issue_legacy_flow(
-                    conn,
-                    "bootstrap_totp",
-                    payload={
-                        "username": username,
-                        "displayName": display_name,
-                        "passwordHash": hash_password(password),
+                with conn.cursor() as cur:
+                    cur.execute("SELECT pg_advisory_xact_lock(hashtext('discvault-legacy-bootstrap'))")
+                require_first_owner_bootstrap_available(conn, cleanup_pending=True)
+                payload = {
+                    "username": username,
+                    "displayName": display_name,
+                    "passwordHash": hash_password(password),
+                }
+                if not mfa_required:
+                    return response(
+                        create_legacy_bootstrap_owner(
+                            conn,
+                            payload=payload,
+                            mfa_required=False,
+                        )
+                    )
+                secret_value = generate_totp_secret()
+                nonce, ciphertext = encrypt_totp_secret(secret_value)
+                payload.update(
+                    {
                         "nonce": _b64url_encode(nonce),
                         "encryptedSecret": _b64url_encode(ciphertext),
-                    },
+                    }
                 )
+                token = issue_legacy_flow(conn, "bootstrap_totp", payload=payload)
         return response(
             {
                 "status": "ok",
@@ -2320,13 +2608,7 @@ def register_next_auth_routes(
                     flow_types={"bootstrap_totp"},
                     consume=True,
                 )
-                if (
-                    count_table(conn, "users")
-                    or count_table(conn, "passkey_credentials")
-                    or count_table(conn, "legacy_password_credentials")
-                    or auth_ready(conn)
-                ):
-                    raise next_api_error("First-owner password onboarding is no longer available", 409)
+                require_first_owner_bootstrap_available(conn)
                 payload = flow["payload"]
                 secret_value = decrypt_totp_secret(
                     _b64url_decode(payload["nonce"]),
@@ -2344,62 +2626,13 @@ def register_next_auth_routes(
                         {"status": "error", "error": "Invalid authentication code"},
                         400,
                     )
-                user_id = uuid4()
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO users (id, username, display_name, status, created_at, updated_at)
-                        VALUES (%s, %s, %s, 'active', now(), now())
-                        """,
-                        (user_id, payload["username"], payload["displayName"]),
-                    )
-                    cur.execute(
-                        """
-                        INSERT INTO legacy_password_credentials (
-                            user_id, password_hash, hash_version, must_change_password,
-                            mfa_required, passkey_registration_allowed
-                        )
-                        VALUES (%s, %s, %s, false, true, true)
-                        """,
-                        (user_id, payload["passwordHash"], PASSWORD_HASH_VERSION),
-                    )
-                    cur.execute(
-                        """
-                        INSERT INTO legacy_totp_credentials (
-                            user_id, encrypted_secret, nonce, confirmed_at, last_accepted_step
-                        )
-                        VALUES (%s, %s, %s, NULL, %s)
-                        """,
-                        (user_id, _b64url_decode(payload["encryptedSecret"]), _b64url_decode(payload["nonce"]), accepted_step),
-                    )
-                assign_role(conn, user_id, "owner")
-                recovery_codes = next_generate_recovery_codes()
-                with conn.cursor() as cur:
-                    next_replace_recovery_codes(cur, user_id, recovery_codes)
-                set_setting(conn, LEGACY_AUTH_SETTING, True)
-                set_setting(conn, "auth_enabled", True)
-                ack_token = issue_legacy_flow(
+                result = create_legacy_bootstrap_owner(
                     conn,
-                    "bootstrap_recovery_ack",
-                    user_id=user_id,
+                    payload=payload,
+                    mfa_required=True,
+                    accepted_step=accepted_step,
                 )
-                audit_event(
-                    conn,
-                    event_type="auth.legacy_owner_bootstrapped",
-                    actor={"id": user_id, "username": payload["username"], "role": "owner"},
-                    target_type="user",
-                    target_id=user_id,
-                    summary="Created the first Owner with password and TOTP",
-                    metadata={"mfaRequired": True, "passkeyRegistrationAllowed": True},
-                )
-        return response(
-            {
-                "status": "ok",
-                "stage": "recovery_codes",
-                "recovery_codes": recovery_codes,
-                "flow_token": ack_token,
-            }
-        )
+        return response(result)
 
     @route(
         "/api/next/auth/legacy/recovery-codes/ack",
@@ -2419,21 +2652,89 @@ def register_next_auth_routes(
                     flow_types={"bootstrap_recovery_ack", "mfa_recovery_ack"},
                     consume=True,
                 )
-                user = legacy_user_row(conn, flow["user_id"])
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        UPDATE legacy_totp_credentials
-                        SET confirmed_at=now(), updated_at=now()
-                        WHERE user_id=%s
-                        """,
-                        (user["id"],),
+                if flow["flow_type"] == "bootstrap_recovery_ack":
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE users
+                            SET status='active', updated_at=now()
+                            WHERE id=%s AND status=%s
+                            RETURNING id, username, display_name, status
+                            """,
+                            (flow["user_id"], LEGACY_BOOTSTRAP_PENDING_STATUS),
+                        )
+                        user = cur.fetchone()
+                    if not user:
+                        raise next_api_error(
+                            "Password onboarding is expired or already completed",
+                            400,
+                        )
+                else:
+                    user = legacy_user_row(conn, flow["user_id"])
+                mfa_required = flow["payload"].get("mfaRequired", True) is True
+                if mfa_required:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE legacy_totp_credentials
+                            SET confirmed_at=now(), updated_at=now()
+                            WHERE user_id=%s
+                            """,
+                            (user["id"],),
+                        )
+                        if flow["flow_type"] == "mfa_recovery_ack":
+                            cur.execute(
+                                """
+                                UPDATE legacy_password_credentials
+                                SET mfa_required=true, updated_at=now()
+                                WHERE user_id=%s
+                                """,
+                                (user["id"],),
+                            )
+                if flow["flow_type"] == "bootstrap_recovery_ack":
+                    audit_event(
+                        conn,
+                        event_type="auth.legacy_owner_bootstrapped",
+                        actor={
+                            "id": user["id"],
+                            "username": user["username"],
+                            "role": "owner",
+                        },
+                        target_type="user",
+                        target_id=user["id"],
+                        summary=(
+                            "Created the first Owner with password and TOTP"
+                            if mfa_required
+                            else "Created the first Owner with password on a local address"
+                        ),
+                        metadata={
+                            "mfaRequired": mfa_required,
+                            "passkeyRegistrationAllowed": True,
+                            "localPasswordFallback": not mfa_required,
+                            "recoveryCodesAcknowledged": True,
+                        },
                     )
+                if flow["payload"].get("profileEnrollment") is True:
+                    audit_event(
+                        conn,
+                        event_type="auth.legacy_mfa_enabled",
+                        category="security",
+                        actor={
+                            "id": user["id"],
+                            "username": user["username"],
+                            "role": primary_role(conn, user["id"]),
+                        },
+                        target_type="user",
+                        target_id=user["id"],
+                        summary=f"Enabled two-factor authentication for {user['username']}",
+                        metadata={"recoveryCodesAcknowledged": True},
+                    )
+                    return response({"status": "ok", "stage": "complete"})
                 return legacy_complete_login(
                     conn,
                     user=user,
                     context=flow["payload"],
-                    method="totp_enrollment",
+                    method="totp_enrollment" if mfa_required else "password_bootstrap",
                 )
 
     @route("/api/next/auth/legacy/login", "/api/auth/legacy/login", methods=["POST"])
@@ -2666,6 +2967,94 @@ def register_next_auth_routes(
             }
         )
 
+    @route(
+        "/api/next/auth/legacy/mfa/enroll/start",
+        "/api/auth/legacy/mfa/enroll/start",
+        methods=["POST"],
+    )
+    def legacy_mfa_enroll_start():
+        body = request.get_json(silent=True) or {}
+        with connect() as conn:
+            require_legacy_enabled(conn)
+            with nullcontext():
+                if not _current_user_payload():
+                    raise next_api_error("Unauthorized", 401)
+                user = current_user(conn)
+                if not user:
+                    raise next_api_error("Unauthorized", 401)
+                identity_failures, ip_failures, identity_hash, ip_hash = recent_legacy_attempts(
+                    conn, user["username"]
+                )
+                if attempt_is_throttled(identity_failures, ip_failures):
+                    record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=False)
+                    conn.commit()
+                    raise next_api_error("Current password is invalid", 401)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT
+                            c.password_hash, c.must_change_password, c.mfa_required,
+                            c.failed_attempt_count, c.first_failed_at,
+                            c.locked_until, c.credential_expires_at,
+                            EXISTS (
+                                SELECT 1 FROM legacy_totp_credentials t
+                                WHERE t.user_id=c.user_id
+                                  AND t.confirmed_at IS NOT NULL
+                            ) AS mfa_enrolled
+                        FROM legacy_password_credentials c
+                        WHERE c.user_id=%s
+                        FOR UPDATE
+                        """,
+                        (user["id"],),
+                    )
+                    credential = cur.fetchone()
+                if not credential:
+                    raise next_api_error("Password credential not found", 404)
+                if credential.get("mfa_required") and credential.get("mfa_enrolled"):
+                    raise next_api_error("Two-factor authentication is already enabled", 409)
+                if credential.get("must_change_password"):
+                    raise next_api_error(
+                        "Change your password before enabling two-factor authentication",
+                        409,
+                    )
+                now = _utcnow()
+                credential_unavailable = (
+                    credential.get("locked_until")
+                    and credential["locked_until"] > now
+                ) or (
+                    credential.get("credential_expires_at")
+                    and credential["credential_expires_at"] <= now
+                )
+                password_verification = verify_password(
+                    credential["password_hash"], body.get("current_password")
+                )
+                if credential_unavailable or not password_verification.valid:
+                    failed_count, first_failed_at, new_locked_until = failed_attempt_state(
+                        int(credential.get("failed_attempt_count") or 0),
+                        credential.get("first_failed_at"),
+                        now,
+                    )
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE legacy_password_credentials
+                            SET failed_attempt_count=%s, first_failed_at=%s,
+                                locked_until=%s, updated_at=now()
+                            WHERE user_id=%s
+                            """,
+                            (
+                                failed_count,
+                                first_failed_at,
+                                new_locked_until or credential.get("locked_until"),
+                                user["id"],
+                            ),
+                        )
+                    record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=False)
+                    conn.commit()
+                    raise next_api_error("Current password is invalid", 401)
+                record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=True)
+                return issue_mfa_enrollment(conn, user, {"profileEnrollment": True})
+
     @route("/api/next/auth/legacy/mfa/setup", "/api/auth/legacy/mfa/setup", methods=["POST"])
     def legacy_mfa_setup():
         body = request.get_json(silent=True) or {}
@@ -2748,6 +3137,7 @@ def register_next_auth_routes(
                     payload={
                         "mobileFlow": flow["payload"].get("mobileFlow"),
                         "clientKind": flow["payload"].get("clientKind"),
+                        "profileEnrollment": flow["payload"].get("profileEnrollment") is True,
                     },
                 )
                 audit_event(
@@ -3060,6 +3450,7 @@ def register_next_auth_routes(
         methods=["POST"],
     )
     def login_options():
+        require_passkey_access()
         body = request.get_json(silent=True) or {}
         client_kind = str(body.get("client_kind") or body.get("clientKind") or "").strip().lower()
         username_raw = body.get("username")
@@ -3127,6 +3518,7 @@ def register_next_auth_routes(
         methods=["POST"],
     )
     def login_verify():
+        require_passkey_access()
         body = request.get_json(silent=True) or {}
         credential = body.get("credential") or {}
         client_kind = str(body.get("client_kind") or body.get("clientKind") or "").strip().lower()
@@ -3457,6 +3849,7 @@ def register_next_auth_routes(
 
     @route("/api/next/auth/owner/transfer/options", "/api/auth/owner/transfer/options", methods=["POST"])
     def ownership_transfer_options():
+        require_passkey_access()
         body = request.get_json(silent=True) or {}
         target_user_id = _parse_uuid(body.get("target_user_id") or body.get("targetUserId"))
         if not target_user_id:
@@ -3507,6 +3900,7 @@ def register_next_auth_routes(
 
     @route("/api/next/auth/owner/transfer/verify", "/api/auth/owner/transfer/verify", methods=["POST"])
     def ownership_transfer_verify():
+        require_passkey_access()
         body = request.get_json(silent=True) or {}
         target_user_id = _parse_uuid(body.get("target_user_id") or body.get("targetUserId"))
         if not target_user_id:
@@ -3828,6 +4222,7 @@ def register_next_auth_routes(
         methods=["POST"],
     )
     def legacy_settings_enable_options():
+        require_passkey_access()
         with connect() as conn:
             if not legacy_auth_env_enabled():
                 raise next_api_error("Password login is unavailable", 404)
@@ -3860,6 +4255,7 @@ def register_next_auth_routes(
         methods=["POST"],
     )
     def legacy_settings_enable_verify():
+        require_passkey_access()
         if not legacy_auth_env_enabled():
             raise next_api_error("Password login is unavailable", 404)
         body = request.get_json(silent=True) or {}

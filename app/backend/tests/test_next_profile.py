@@ -453,6 +453,21 @@ class NextProfileUiTests(unittest.TestCase):
             "profileLegacySecurity",
             "profileLegacyPasswordForm",
             "profileLegacyMfaStatus",
+            "profileLegacyMfaActions",
+            "profileLegacyMfaEnableButton",
+            "profileLegacyMfaSetup",
+            "profileLegacyMfaPasswordForm",
+            "profileLegacyMfaCurrentPassword",
+            "profileLegacyMfaTotpStep",
+            "profileLegacyMfaQr",
+            "profileLegacyMfaManualKey",
+            "profileLegacyMfaTotpForm",
+            "profileLegacyMfaCode",
+            "profileLegacyMfaRecoveryStep",
+            "profileLegacyMfaRecoveryCodes",
+            "profileLegacyMfaRecoveryAck",
+            "profileLegacyMfaFinishButton",
+            "profileLegacyMfaCancelButton",
             "profileRecoveryActiveCount",
             "profileRecoveryLastGenerated",
             "profileRecoveryCodes",
@@ -466,6 +481,14 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('id="profileSecurityMessage" aria-live="polite"', self.html)
         self.assertIn('id="profileRecoveryMessage" aria-live="polite"', self.html)
         self.assertIn(".profile-security-stats {", self.html)
+        self.assertIn("function renderProfileLegacyMfa()", self.html)
+        self.assertIn("const enabled = Boolean(credential.mfa_required) && enrolled;", self.html)
+        self.assertIn("function startProfileMfaEnrollment(event)", self.html)
+        self.assertIn("function verifyProfileMfaEnrollment(event)", self.html)
+        self.assertIn("function finishProfileMfaEnrollment()", self.html)
+        self.assertIn("/api/next/auth/legacy/mfa/enroll/start", self.html)
+        self.assertIn("/api/next/auth/legacy/mfa/setup/verify", self.html)
+        self.assertIn("/api/next/auth/legacy/recovery-codes/ack", self.html)
 
     def test_api_dashboard_uses_accessible_tabs_and_summary_cards(self):
         self.assertIn('class="profile-dashboard api-dashboard"', self.html)
@@ -548,6 +571,31 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('class="profile-passkey app-admin-entity-card app-admin-invite-card', self.html)
         self.assertIn('class="profile-passkey app-admin-entity-card app-admin-passkey-card"', self.html)
 
+    def test_admin_submenu_uses_responsive_icon_navigation(self):
+        self.assertIn('<div class="app-admin-workspace">', self.html)
+        self.assertIn('class="app-admin-submenu detail-submenu"', self.html)
+        self.assertIn(".app-admin-workspace {", self.html)
+        self.assertIn("grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);", self.html)
+        self.assertIn("@media (max-width: 860px)", self.html)
+        self.assertIn("function syncAppAdminSubmenuOrientation()", self.html)
+        self.assertIn("submenu.querySelector('[aria-selected=\"true\"]')?.scrollIntoView", self.html)
+        self.assertIn('"ArrowUp", "ArrowDown"', self.html)
+        self.assertIn("button.scrollIntoView({block: \"nearest\", inline: \"nearest\"});", self.html)
+        for tab in (
+            "Access",
+            "Users",
+            "Roles",
+            "Operations",
+            "Plugins",
+            "Digital",
+            "Metadata",
+            "Backup",
+            "Audit",
+        ):
+            self.assertIn(f'id="appAdminTab{tab}" role="tab"', self.html)
+        self.assertEqual(self.html.count('class="app-admin-tab-icon"'), 9)
+        self.assertEqual(self.html.count('class="app-admin-tab-label"'), 9)
+
     def test_admin_users_dashboard_preserves_user_and_group_management(self):
         self.assertIn(
             'id="appAdminPanelUsers" role="tabpanel" aria-labelledby="appAdminTabUsers"',
@@ -576,7 +624,276 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('class="profile-passkey app-admin-entity-card admin-group-row"', self.html)
         self.assertIn('class="profile-add-passkey app-admin-legacy-controls"', self.html)
         self.assertIn("function handleAppAdminTabKeydown(button, event)", self.html)
+        self.assertIn("function handleAppAdminUsersTabKeydown(button, event)", self.html)
         self.assertIn('panel.setAttribute("aria-hidden", active ? "false" : "true");', self.html)
+        for tab, panel in (
+            ("Settings", "Settings"),
+            ("Users", "Users"),
+            ("Groups", "Groups"),
+        ):
+            self.assertIn(
+                f'id="appAdminUsersTab{tab}" role="tab"',
+                self.html,
+            )
+            self.assertIn(
+                f'id="appAdminUsersPanel{panel}" role="tabpanel"',
+                self.html,
+            )
+
+    def test_admin_submenus_share_preferences_layout_and_accent_selection(self):
+        for class_name in (
+            "app-admin-people-tabs",
+            "app-admin-roles-tabs",
+            "app-admin-operations-tabs",
+            "app-admin-plugin-tabs",
+        ):
+            self.assertIn(
+                f"profile-dashboard-tabs app-admin-section-tabs {class_name}",
+                self.html,
+            )
+        self.assertEqual(
+            self.html.count(
+                'class="detail-submenu profile-dashboard-tabs app-admin-section-tabs'
+            ),
+            4,
+        )
+        self.assertIn(".app-admin-section-tabs button.active,", self.html)
+        self.assertIn('.app-admin-section-tabs button[aria-selected="true"] {', self.html)
+        self.assertIn("color: var(--accent-bright);", self.html)
+        self.assertIn(
+            "background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));",
+            self.html,
+        )
+
+    def test_admin_roles_dashboard_separates_basic_and_advanced_workflows(self):
+        self.assertIn(
+            'id="appAdminPanelRoles" role="tabpanel" aria-labelledby="appAdminTabRoles"',
+            self.html,
+        )
+        for tab in ("Overview", "Roles", "Permissions", "Simulator"):
+            self.assertIn(f'id="appAdminRolesTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminRolesPanel{tab}" role="tabpanel"', self.html)
+
+        for element_id in (
+            "appAdminRbacMode",
+            "appAdminRoleCreateForm",
+            "appAdminRolesList",
+            "appAdminRoleEditor",
+            "appAdminRoleEditForm",
+            "appAdminPermissionEditor",
+            "appAdminRoleFeaturePreview",
+            "appAdminPermissionMatrix",
+            "appAdminRoleSimulationSelect",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn("function handleAppAdminRolesTabKeydown(button, event)", self.html)
+        self.assertIn('button.dataset.appAdminRolesTab === "permissions"', self.html)
+        self.assertIn('const visibleRoles = advanced ? roles : roles.filter((role) => !role.custom);', self.html)
+
+    def test_admin_operations_dashboard_uses_focused_submenus(self):
+        self.assertIn(
+            'id="appAdminPanelOperations" role="tabpanel" aria-labelledby="appAdminTabOperations"',
+            self.html,
+        )
+        for tab in ("Overview", "Collection", "Readiness", "Policy", "Activity"):
+            self.assertIn(f'id="appAdminOperationsTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminOperationsPanel{tab}" role="tabpanel"', self.html)
+        self.assertEqual(self.html.count('data-app-admin-operations-tab='), 5)
+        self.assertEqual(self.html.count('aria-hidden="true">-</span></button>'), 5)
+
+        for element_id in (
+            "appAdminOperationsDashboard",
+            "appAdminCollectionHealthSummary",
+            "appAdminCollectionHealthIssues",
+            "appAdminOperationsFeatures",
+            "appAdminFeatureClusters",
+            "appAdminDuplicateCenter",
+            "appAdminProviderPolicy",
+            "appAdminApiTokenPresets",
+            "appAdminOperationsSignals",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn("activeOperationsTab: localStorage.getItem", self.html)
+        self.assertIn("function setAppAdminOperationsTab(tab)", self.html)
+        self.assertIn("function handleAppAdminOperationsTabKeydown(button, event)", self.html)
+        self.assertIn('localStorage.setItem("dv_next_admin_operations_tab"', self.html)
+        self.assertIn('data-app-admin-operations-panel="collection"', self.html)
+        self.assertEqual(self.html.count('class="tag app-admin-operations-tab-status"'), 5)
+        for tone in ("good", "bad", "blue"):
+            self.assertIn(
+                f'.app-admin-operations-tabs button[data-status-tone="{tone}"] .nav-symbol',
+                self.html,
+            )
+        self.assertIn('button.dataset.statusTone = tone || "neutral";', self.html)
+        self.assertIn(".app-admin-operations-tabs .app-admin-operations-tab-status {", self.html)
+        self.assertIn("grid-auto-columns: minmax(68px, 1fr);", self.html)
+        self.assertIn(".app-admin-operations-tabs::-webkit-scrollbar {", self.html)
+        self.assertNotIn(
+            ".app-admin-operations-tabs .app-admin-operations-tab-status {\n"
+            "        display: none;",
+            self.html,
+        )
+
+    def test_admin_plugins_dashboard_uses_task_oriented_subtabs(self):
+        self.assertIn(
+            'id="appAdminPanelPlugins" role="tabpanel" aria-labelledby="appAdminTabPlugins"',
+            self.html,
+        )
+        for tab in ("Overview", "Installed", "Packages", "Activity"):
+            self.assertIn(f'id="appAdminPluginTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminPluginPanel{tab}" role="tabpanel"', self.html)
+        self.assertEqual(self.html.count("data-app-admin-plugin-tab="), 4)
+        self.assertEqual(self.html.count('class="app-admin-plugin-tab-panel'), 4)
+
+        # No more wrapping 8-button type-tab submenu; a single compact filter set instead.
+        self.assertNotIn("data-app-admin-plugin-type-tab=", self.html)
+        self.assertIn('id="appAdminPluginTypeFilter"', self.html)
+        self.assertIn('id="appAdminPluginStatusFilter"', self.html)
+        self.assertIn('id="appAdminPluginSearchInput"', self.html)
+        for category in (
+            "all",
+            "metadata_source",
+            "metadata_receiver",
+            "digital_media_source",
+            "personal_list_source",
+            "price_provider",
+            "import_source",
+            "system",
+            "other",
+        ):
+            self.assertIn(f'value="{category}"', self.html)
+        for status in ("all", "enabled", "disabled", "config-needed", "update-available"):
+            self.assertIn(f'value="{status}"', self.html)
+
+        # Existing renderers/surfaces are reused, not duplicated.
+        for element_id in (
+            "appAdminPluginDashboard",
+            "appAdminPluginAttention",
+            "appAdminMetadataPriorityPanel",
+            "appAdminPluginExecutionDashboard",
+            "appAdminPluginPackageValidator",
+            "appAdminPersonalListSyncDashboard",
+            "appAdminContributionCenter",
+            "appAdminContributionQueue",
+            "appAdminPluginJobsList",
+            "appAdminPluginsList",
+            "appAdminPluginImportFile",
+            "appAdminImportPluginButton",
+            "appAdminPluginAutoUpdateToggle",
+            "appAdminRefreshPluginJobsButton",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "overview"', self.html)
+        self.assertIn('activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "all"', self.html)
+        self.assertIn("function setAppAdminPluginTab(tab)", self.html)
+        self.assertIn("function handleAppAdminPluginTabKeydown(button, event)", self.html)
+        self.assertIn('registry: "installed", jobs: "activity"', self.html)
+        self.assertIn("function appAdminPluginMatchesStatusFilter(plugin, filter)", self.html)
+        self.assertIn("function appAdminPluginMatchesSearch(plugin, term)", self.html)
+        self.assertIn("function renderAppAdminPluginAttention()", self.html)
+        self.assertIn('const canReorder = canManage && !!sectionCategory;', self.html)
+        self.assertIn('appAdmin.activePluginTypeTab === "all"', self.html)
+        self.assertIn('plugins.filter(matchesFilters)', self.html)
+        self.assertNotIn('tNext("appAdmin.failedPluginJobs"', self.html)
+
+        # Existing plugin action hooks are preserved unchanged.
+        for action in (
+            "data-app-admin-plugin-config-form=",
+            "data-app-admin-plugin-enable=",
+            "data-app-admin-plugin-update=",
+            "data-app-admin-plugin-rollback=",
+            "data-app-admin-plugin-export=",
+            "data-app-admin-plugin-delete=",
+        ):
+            self.assertIn(action, self.html)
+
+    def test_admin_role_creation_generates_key_and_starts_permission_wizard(self):
+        for element_id in (
+            "appAdminRoleName",
+            "appAdminRoleDescription",
+            "appAdminRoleKey",
+            "appAdminRoleKeyHelp",
+            "appAdminRoleCreateMessage",
+            "appAdminCreateRoleButton",
+            "appAdminRoleWizardMessage",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('id="appAdminRoleKey" autocomplete="off" maxlength="64" readonly', self.html)
+        self.assertIn('id="appAdminRoleCreateMessage" role="status" aria-live="polite"', self.html)
+        self.assertIn('id="appAdminRoleWizardMessage" role="status" aria-live="polite"', self.html)
+        self.assertIn("function appAdminRoleKeySlug(name)", self.html)
+        self.assertIn('.normalize("NFKD")', self.html)
+        self.assertIn('.replace(/[^a-z0-9]+/g, "_")', self.html)
+        self.assertIn('const base = `cr_${slug}`.slice(0, 64)', self.html)
+        self.assertIn("while (existingKeys.has(candidate))", self.html)
+        self.assertIn('const suffix = `_${suffixNumber}`;', self.html)
+        self.assertIn("function renderAppAdminRoleCreateForm()", self.html)
+        self.assertIn('form.setAttribute("aria-busy", busy ? "true" : "false");', self.html)
+        self.assertIn("button.disabled = busy || !key;", self.html)
+        self.assertIn('if (!appAdminCanManageRbac() || (appAdmin.roleCreation || {}).busy) return;', self.html)
+        self.assertIn("body: JSON.stringify({key, name, description, permissions: []})", self.html)
+        self.assertIn("selectAppAdminRole(roleId, 2);", self.html)
+        self.assertIn('setAppAdminMessage("appAdminRoleWizardMessage"', self.html)
+
+    def test_admin_role_view_opens_permission_wizard(self):
+        for element_id in (
+            "appAdminRoleWizardHeading",
+            "appAdminRoleWizardSummary",
+            "appAdminRoleWizardStep1",
+            "appAdminRoleWizardStep2",
+            "appAdminRoleWizardStep3",
+            "appAdminRoleWizardDetails",
+            "appAdminRoleWizardPermissions",
+            "appAdminRoleWizardReview",
+            "appAdminRoleWizardBackButton",
+            "appAdminRoleWizardNextButton",
+            "appAdminRoleReview",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        for step in ("1", "2", "3"):
+            self.assertIn(f'data-app-admin-role-wizard-step="{step}"', self.html)
+            self.assertIn(f'data-app-admin-role-wizard-panel="{step}"', self.html)
+            self.assertIn(f'aria-controls="appAdminRoleWizard', self.html)
+            self.assertIn(f'aria-labelledby="appAdminRoleWizardStep{step}"', self.html)
+
+        self.assertIn("function selectAppAdminRole(roleId, initialStep = 1)", self.html)
+        self.assertIn('setAppAdminRolesTab("permissions");', self.html)
+        self.assertIn('editor?.scrollIntoView({behavior: "smooth", block: "start"});', self.html)
+        self.assertIn(
+            '(wizard.step > 1 ? panelHeading : document.getElementById("appAdminRoleWizardHeading"))?.focus();',
+            self.html,
+        )
+        self.assertIn('<details class="app-admin-role-preview">', self.html)
+        self.assertIn('<summary data-next-i18n="appAdmin.featurePreview">', self.html)
+
+    def test_admin_role_wizard_preserves_draft_and_system_roles_are_read_only(self):
+        self.assertIn(
+            'roleWizard: {roleId: "", step: 1, name: "", description: "", permissions: [], openDomains: [], dirty: false}',
+            self.html,
+        )
+        self.assertIn("function appAdminEnsureRoleWizard(role)", self.html)
+        self.assertIn("function appAdminCaptureRoleWizardDraft()", self.html)
+        self.assertIn("function appAdminRoleReviewHtml(role, draft)", self.html)
+        self.assertIn("const editable = !!(canManage && selectedRole?.custom);", self.html)
+        self.assertIn("nameInput.disabled = !editable;", self.html)
+        self.assertIn('saveButton.classList.toggle("hidden", wizard.step !== 3 || !editable);', self.html)
+        self.assertIn("const permissions = [...(wizard.permissions || [])];", self.html)
+        self.assertIn("body: JSON.stringify({name, description, permissions})", self.html)
+
+    def test_admin_permission_categories_render_as_collapsed_accordions(self):
+        self.assertIn('class="app-admin-permission-domain-toggle"', self.html)
+        self.assertIn('data-app-admin-permission-domain-toggle=', self.html)
+        self.assertIn('aria-expanded="${open.has(domain) ? "true" : "false"}"', self.html)
+        self.assertIn('class="app-admin-permission-domain-panel ${open.has(domain) ? "" : "hidden"}"', self.html)
+        self.assertIn('data-app-admin-permission-count=', self.html)
+        self.assertIn("wizard.openDomains = [...openDomains];", self.html)
+        self.assertIn("appAdmin.permissionDomainHelp", self.html)
+        self.assertIn("appAdmin.permissionEffectHelp", self.html)
 
     def test_library_advanced_panel_groups_existing_controls(self):
         self.assertIn('id="advancedSearchToggleButton"', self.html)

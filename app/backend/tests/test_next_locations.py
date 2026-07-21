@@ -32,6 +32,7 @@ try:
     from app.backend.next_app import _location_depth_of
     from app.backend.next_app import _location_subtree_height
     from app.backend.next_app import _location_is_descendant
+    from app.backend.next_views_ui import ui_preview_html
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
     if exc.name != "flask":
         raise
@@ -53,6 +54,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     _location_depth_of = None
     _location_subtree_height = None
     _location_is_descendant = None
+    ui_preview_html = None
 
 
 def _build_index():
@@ -171,12 +173,11 @@ class LocationQrTests(unittest.TestCase):
 
 @unittest.skipIf(collection_dashboard_html is None, "Flask is not installed in this test environment")
 class UiShellScriptSyntaxTests(unittest.TestCase):
-    def test_collection_dashboard_executable_scripts_are_valid_javascript(self):
+    def assert_executable_scripts_are_valid_javascript(self, html):
         node_binary = shutil.which("node")
         if not node_binary:
             self.skipTest("node is not installed in this test environment")
 
-        html = collection_dashboard_html({})
         script_pattern = re.compile(r"<script([^>]*)>([\s\S]*?)</script>", re.IGNORECASE)
         script_blocks = list(script_pattern.finditer(html))
         self.assertGreater(len(script_blocks), 0)
@@ -205,6 +206,12 @@ class UiShellScriptSyntaxTests(unittest.TestCase):
                 )
 
         self.assertGreater(executable_scripts, 0)
+
+    def test_collection_dashboard_executable_scripts_are_valid_javascript(self):
+        self.assert_executable_scripts_are_valid_javascript(collection_dashboard_html({}))
+
+    def test_primary_ui_executable_scripts_are_valid_javascript(self):
+        self.assert_executable_scripts_are_valid_javascript(ui_preview_html({}, app_mode=True))
 
 
 if __name__ == "__main__":
