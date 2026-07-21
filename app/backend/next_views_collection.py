@@ -2083,12 +2083,12 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     }
     function startupDescription(phase, fallback) {
       const descriptions = {
-        owner_setup: tNext("startup.description.owner_setup", "Create the first owner passkey to finish setup."),
+        owner_setup: tNext("startup.description.owner_setup", "Follow the steps to create an owner account and complete setup."),
         migration_required: tNext("startup.description.migration_required", "Legacy DiscVault data is ready to migrate."),
         migration_running: tNext("startup.description.migration_running", "Legacy migration is running."),
         migration_pending_non_admin: tNext("startup.description.migration_pending_non_admin", "DiscVault Next is waiting for an owner or administrator to complete migration."),
         schema_blocked: tNext("startup.description.schema_blocked", "PostgreSQL migrations must finish before DiscVault Next can start."),
-        sign_in_required: tNext("startup.description.sign_in_required", "Sign in with a passkey to continue setup."),
+        sign_in_required: tNext("startup.description.sign_in_required", "Sign in to continue setup."),
         ready: tNext("startup.description.ready", "DiscVault Next is ready.")
       };
       return descriptions[phase] || fallback || tNext("startup.checking", "Checking startup state...");
@@ -2104,13 +2104,13 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!node) return;
       const rows = Array.isArray(steps) ? steps : [];
       const labels = {
-        auth: tNext("startup.step.auth", "Owner passkey"),
+        auth: tNext("startup.step.auth", "Owner account"),
         source: tNext("startup.step.source", "Legacy data"),
         migration: tNext("startup.step.migration", "Migration"),
         collection: tNext("startup.step.collection", "Collection")
       };
       const details = {
-        auth: tNext("startup.step.authDetail", "Passkeys protect this DiscVault Next environment."),
+        auth: tNext("startup.step.authDetail", "Authentication protects this DiscVault Next environment."),
         source: tNext("startup.step.sourceDetail", "DiscVault checks the configured import source."),
         migration: tNext("startup.step.migrationDetail", "Import the legacy database into PostgreSQL."),
         collection: tNext("startup.step.collectionDetail", "Browse the collection after setup is complete.")

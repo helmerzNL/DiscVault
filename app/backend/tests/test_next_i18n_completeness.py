@@ -21,6 +21,13 @@ NEXT_VIEWS_UI_PATH = os.path.abspath(
         "next_views_ui.py",
     )
 )
+NEXT_VIEWS_COLLECTION_PATH = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "next_views_collection.py",
+    )
+)
 SOURCE_LOCALE = "en-US.json"
 
 
@@ -192,6 +199,95 @@ class NextI18nCompletenessTests(unittest.TestCase):
         self.assertIn("metadata?.enrichment?.tmdb", source)
         self.assertIn('data-import-configure-tmdb="1"', source)
         self.assertIn("https://www.themoviedb.org/settings/api", source)
+
+    def test_startup_auth_copy_is_method_neutral(self):
+        """Startup auth copy must not name passkeys as the only method.
+
+        The startup gate accepts any owner authentication method (PR #354),
+        so these three keys must stay method-neutral in every catalog and in
+        the collection-view fallbacks, while genuine passkey-enrollment copy
+        stays passkey-specific.
+        """
+        neutral_keys = (
+            "startup.description.sign_in_required",
+            "startup.step.auth",
+            "startup.step.authDetail",
+        )
+
+        # English source carries the intended method-neutral wording.
+        self.assertEqual(
+            self.source["startup.description.sign_in_required"],
+            "Sign in to continue setup.",
+        )
+        self.assertEqual(self.source["startup.step.auth"], "Owner account")
+        self.assertEqual(
+            self.source["startup.step.authDetail"],
+            "Authentication protects this DiscVault Next environment.",
+        )
+
+        # No catalog may reintroduce passkey-specific wording for these keys.
+        # Besides the English literal, use each locale's own translated
+        # passkey noun (auth.passkey) as a marker so a passkey-only regression
+        # cannot slip through in non-Latin scripts (Chinese, Slavic, etc.).
+        base_markers = (
+            "passkey",  # en + several Latin-script locales
+            "passkeys",
+        )
+        problems = []
+        for path in [self.source_path, *self.locale_files]:
+            locale = os.path.basename(path)
+            data = _load(path)
+            markers = set(base_markers)
+            localized_passkey = data.get("auth.passkey", "").strip().lower()
+            if localized_passkey:
+                markers.add(localized_passkey)
+            for key in neutral_keys:
+                value = data.get(key, "")
+                if not value.strip():
+                    problems.append(f"{locale}: {key} empty")
+                    continue
+                lowered = value.lower()
+                if any(marker in lowered for marker in markers):
+                    problems.append(f"{locale}: {key} -> {value}")
+        self.assertEqual(
+            problems,
+            [],
+            "Passkey-specific startup copy remains:\n" + "\n".join(problems),
+        )
+
+        # Collection-view fallbacks must be method-neutral, not passkey-only.
+        with open(NEXT_VIEWS_COLLECTION_PATH, encoding="utf-8") as handle:
+            collection = handle.read()
+        self.assertIn(
+            'tNext("startup.description.sign_in_required", "Sign in to continue setup.")',
+            collection,
+        )
+        self.assertIn(
+            'tNext("startup.description.owner_setup", "Follow the steps to create an '
+            'owner account and complete setup.")',
+            collection,
+        )
+        self.assertIn('tNext("startup.step.auth", "Owner account")', collection)
+        self.assertIn(
+            'tNext("startup.step.authDetail", "Authentication protects this '
+            'DiscVault Next environment.")',
+            collection,
+        )
+        # Old passkey-specific fallbacks must be gone.
+        self.assertNotIn("Sign in with a passkey to continue setup.", collection)
+        self.assertNotIn("Create the first owner passkey to finish setup.", collection)
+        self.assertNotIn('tNext("startup.step.auth", "Owner passkey")', collection)
+        self.assertNotIn(
+            "Passkeys protect this DiscVault Next environment.", collection
+        )
+
+        # Genuine passkey enrollment copy stays passkey-specific.
+        self.assertEqual(self.source["auth.createOwnerPasskey"], "Create owner passkey")
+        self.assertEqual(self.source["auth.passkey"], "Passkey")
+        self.assertIn(
+            'data-next-i18n="auth.createOwnerPasskey">Create owner passkey', collection
+        )
+        self.assertIn('value="Owner passkey"', collection)
 
 
 if __name__ == "__main__":
