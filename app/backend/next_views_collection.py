@@ -1995,7 +1995,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const documentationLink = document.createElement("a");
       documentationLink.href = "https://docs.discvault.eu";
       documentationLink.target = "_blank";
-      documentationLink.rel = "noreferrer";
+      documentationLink.rel = "noopener noreferrer";
       documentationLink.textContent = tNext("auth.passkeyDocumentation", "Passkey documentation");
       description.append(" ", documentationLink);
     }

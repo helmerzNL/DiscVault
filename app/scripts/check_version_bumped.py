@@ -250,12 +250,13 @@ def main() -> int:
         print("DiscVault version guard failed.", file=sys.stderr)
         print(f"Every app/runtime change must bump {VERSION_FILE} to a new, valid semver value.", file=sys.stderr)
         for commit, reason in failures:
-            label = commit if commit == "WORKTREE" else commit[:12]
+            label = commit if commit == "WORKTREE" or "..." in commit else commit[:12]
             print(f"- {label}: {reason}", file=sys.stderr)
         print("", file=sys.stderr)
+        target_branch = args.base_ref or "release/v26-beta"
         print("To fix:", file=sys.stderr)
-        print("  1. Update/rebase from release/v26-beta so app/VERSION reflects the real base:", file=sys.stderr)
-        print("     git fetch origin release/v26-beta && git rebase origin/release/v26-beta", file=sys.stderr)
+        print(f"  1. Update/rebase from {target_branch} so app/VERSION reflects the real base:", file=sys.stderr)
+        print(f"     git fetch origin {target_branch} && git rebase origin/{target_branch}", file=sys.stderr)
         print("  2. Re-run the bump helper so app/VERSION moves strictly past the (new) base:", file=sys.stderr)
         print("     python app/scripts/bump_version.py", file=sys.stderr)
         return 1
