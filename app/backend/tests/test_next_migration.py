@@ -158,6 +158,44 @@ class NextMigrationContractTests(unittest.TestCase):
         self.assertFalse(payload["migration"]["legacyData"]["found"])
 
     @unittest.skipIf(next_app is None, "PostgreSQL dependencies are not installed")
+    def test_startup_auth_ready_status_is_method_neutral(self):
+        readiness = {
+            "state": "not_required",
+            "canStart": False,
+            "requiresConfirmation": False,
+            "requiredActions": [],
+            "activeJob": None,
+            "latestRun": None,
+            "legacyData": {
+                "found": False,
+                "readable": False,
+                "sourceCounts": {},
+                "mediaExtensions": {},
+            },
+            "importSources": [],
+            "migrations": {"state": "ready"},
+        }
+
+        with (
+            patch.object(next_app, "migration_readiness", return_value=readiness),
+            patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+            patch.object(next_app, "next_auth_ready", return_value=True),
+            patch.object(
+                next_app,
+                "count_table",
+                side_effect=lambda _, table: 1 if table in {"users", "legacy_password_credentials"} else 0,
+            ),
+            patch.object(next_app, "next_auth_current_user", return_value=None),
+        ):
+            payload = next_app.startup_status_payload(object())
+
+        auth_step = payload["steps"][0]
+        self.assertEqual(auth_step["label"], "Owner account")
+        self.assertEqual(auth_step["detail"], "1 user(s), 1 authentication credential(s)")
+        self.assertEqual(payload["auth"]["credentialCount"], 1)
+        self.assertNotIn("passkey", auth_step["detail"].lower())
+
+    @unittest.skipIf(next_app is None, "PostgreSQL dependencies are not installed")
     def test_startup_uses_legacy_passkeys_before_owner_setup(self):
         readiness = {
             "state": "ready_for_confirmation",
