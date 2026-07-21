@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Delete '{name}'? Shared movie links and pending invites will also be removed.",
   "groups.deleted": "Group deleted.",
   "groups.renamed": "Group renamed.",
-  "groups.renamePrompt": "New group name"
+  "groups.renamePrompt": "New group name",
+  "appAdmin.pluginTabInstalled": "Installed",
+  "appAdmin.pluginTabActivity": "Activity",
+  "appAdmin.pluginOverviewHelp": "Installed and enabled totals, runtime health, and jobs that need attention.",
+  "appAdmin.pluginSearchLabel": "Search",
+  "appAdmin.pluginSearchPlaceholder": "Search plugins by name or key",
+  "appAdmin.pluginTypeFilterLabel": "Type",
+  "appAdmin.pluginTypeAll": "All types",
+  "appAdmin.pluginStatusFilterLabel": "Status",
+  "appAdmin.pluginStatusAll": "All statuses",
+  "appAdmin.pluginLifecycleHelp": "Per-plugin update, rollback and export actions stay on each plugin card under Installed.",
+  "appAdmin.pluginAttentionTitle": "Needs attention",
+  "appAdmin.pluginAttentionEmpty": "Nothing needs attention right now.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} plugins need configuration",
+  "appAdmin.pluginAttentionFailedJobs": "{count} failed plugin jobs",
+  "appAdmin.pluginAttentionUpdates": "{count} plugin updates available"
 }

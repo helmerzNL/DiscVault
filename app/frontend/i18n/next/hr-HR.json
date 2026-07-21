@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Izbrisati „{name}”? Uklonit će se i poveznice dijeljenih filmova te pozivnice na čekanju.",
   "groups.deleted": "Grupa je izbrisana.",
   "groups.renamed": "Grupa je preimenovana.",
-  "groups.renamePrompt": "Novi naziv grupe"
+  "groups.renamePrompt": "Novi naziv grupe",
+  "appAdmin.pluginTabInstalled": "Instalirano",
+  "appAdmin.pluginTabActivity": "Aktivnost",
+  "appAdmin.pluginOverviewHelp": "Ukupan broj instaliranih i omogućenih dodataka, stanje rada i zadaci koji zahtijevaju pažnju.",
+  "appAdmin.pluginSearchLabel": "Pretraga",
+  "appAdmin.pluginSearchPlaceholder": "Pretraži dodatke po nazivu ili ključu",
+  "appAdmin.pluginTypeFilterLabel": "Vrsta",
+  "appAdmin.pluginTypeAll": "Sve vrste",
+  "appAdmin.pluginStatusFilterLabel": "Status",
+  "appAdmin.pluginStatusAll": "Svi statusi",
+  "appAdmin.pluginLifecycleHelp": "Radnje ažuriranja, vraćanja i izvoza za pojedini dodatak ostaju na njegovoj kartici u odjeljku Instalirano.",
+  "appAdmin.pluginAttentionTitle": "Zahtijeva pažnju",
+  "appAdmin.pluginAttentionEmpty": "Trenutačno ništa ne zahtijeva pažnju.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} dodataka treba konfiguraciju",
+  "appAdmin.pluginAttentionFailedJobs": "{count} neuspjelih zadataka dodataka",
+  "appAdmin.pluginAttentionUpdates": "{count} dostupnih ažuriranja dodataka"
 }

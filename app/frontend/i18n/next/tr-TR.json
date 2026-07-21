@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "“{name}” silinsin mi? Paylaşılan film bağlantıları ve bekleyen davetler de kaldırılacak.",
   "groups.deleted": "Grup silindi.",
   "groups.renamed": "Grup yeniden adlandırıldı.",
-  "groups.renamePrompt": "Yeni grup adı"
+  "groups.renamePrompt": "Yeni grup adı",
+  "appAdmin.pluginTabInstalled": "Yüklü",
+  "appAdmin.pluginTabActivity": "Etkinlik",
+  "appAdmin.pluginOverviewHelp": "Yüklü ve etkinleştirilmiş eklenti sayıları, çalışma durumu ve dikkat gerektiren işler.",
+  "appAdmin.pluginSearchLabel": "Ara",
+  "appAdmin.pluginSearchPlaceholder": "Eklentileri ada veya anahtara göre ara",
+  "appAdmin.pluginTypeFilterLabel": "Tür",
+  "appAdmin.pluginTypeAll": "Tüm türler",
+  "appAdmin.pluginStatusFilterLabel": "Durum",
+  "appAdmin.pluginStatusAll": "Tüm durumlar",
+  "appAdmin.pluginLifecycleHelp": "Her eklentiye özel güncelleme, geri alma ve dışa aktarma işlemleri, Yüklü sekmesindeki eklenti kartında kalır.",
+  "appAdmin.pluginAttentionTitle": "Dikkat gerekiyor",
+  "appAdmin.pluginAttentionEmpty": "Şu anda dikkat gerektiren bir şey yok.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} eklenti yapılandırma gerektiriyor",
+  "appAdmin.pluginAttentionFailedJobs": "{count} başarısız eklenti işi",
+  "appAdmin.pluginAttentionUpdates": "{count} eklenti güncellemesi mevcut"
 }

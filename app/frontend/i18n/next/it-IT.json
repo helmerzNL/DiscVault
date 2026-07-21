@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Eliminare «{name}»? Verranno rimossi anche i collegamenti ai film condivisi e gli inviti in sospeso.",
   "groups.deleted": "Gruppo eliminato.",
   "groups.renamed": "Gruppo rinominato.",
-  "groups.renamePrompt": "Nuovo nome del gruppo"
+  "groups.renamePrompt": "Nuovo nome del gruppo",
+  "appAdmin.pluginTabInstalled": "Installati",
+  "appAdmin.pluginTabActivity": "Attivita",
+  "appAdmin.pluginOverviewHelp": "Totali di installati e attivi, stato del runtime e job che richiedono attenzione.",
+  "appAdmin.pluginSearchLabel": "Cerca",
+  "appAdmin.pluginSearchPlaceholder": "Cerca plugin per nome o chiave",
+  "appAdmin.pluginTypeFilterLabel": "Tipo",
+  "appAdmin.pluginTypeAll": "Tutti i tipi",
+  "appAdmin.pluginStatusFilterLabel": "Stato",
+  "appAdmin.pluginStatusAll": "Tutti gli stati",
+  "appAdmin.pluginLifecycleHelp": "Le azioni di aggiornamento, rollback ed esportazione per plugin restano sulla card del plugin in Installati.",
+  "appAdmin.pluginAttentionTitle": "Richiede attenzione",
+  "appAdmin.pluginAttentionEmpty": "Al momento nulla richiede attenzione.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} plugin richiedono configurazione",
+  "appAdmin.pluginAttentionFailedJobs": "{count} job plugin non riusciti",
+  "appAdmin.pluginAttentionUpdates": "{count} aggiornamenti plugin disponibili"
 }

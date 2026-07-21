@@ -10173,6 +10173,57 @@ def ui_preview_html(
         justify-content: flex-start;
       }
     }
+    .app-admin-plugin-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      margin: 12px 0;
+    }
+    .app-admin-plugin-filter {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1 1 160px;
+      min-width: 0;
+    }
+    .app-admin-plugin-filter > span {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 760;
+    }
+    .app-admin-plugin-filter input,
+    .app-admin-plugin-filter select {
+      min-width: 0;
+      width: 100%;
+      max-width: none;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      color: var(--text);
+      font: inherit;
+    }
+    .app-admin-plugin-attention {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .app-admin-plugin-attention h4 {
+      margin: 0;
+      font-size: .9rem;
+    }
+    .app-admin-plugin-attention-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+      border-radius: 14px;
+      padding: 9px 10px;
+      background: color-mix(in srgb, var(--field) 54%, transparent);
+      min-width: 0;
+    }
     .app-admin-plugin-tab-panel {
       display: none;
       min-width: 0;
@@ -10382,15 +10433,6 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .8rem;
       margin-top: 3px;
-    }
-    .plugin-submenu {
-      width: 100%;
-      max-width: 100%;
-      flex-wrap: wrap;
-    }
-    .plugin-submenu button {
-      flex: 1 1 148px;
-      min-width: 0;
     }
     .app-admin-plugin-meta,
     .app-admin-plugin-actions {
@@ -12256,7 +12298,8 @@ def ui_preview_html(
       }
       .app-admin-plugin-dashboard,
       .app-admin-priority-dashboard,
-      .app-admin-priority-row {
+      .app-admin-priority-row,
+      .app-admin-plugin-attention-row {
         grid-template-columns: 1fr;
       }
       .app-admin-plugin-config {
@@ -15854,15 +15897,23 @@ def ui_preview_html(
                   <strong id="appAdminDigitalSourceCount">-</strong>
                 </div>
               </div>
-              <div class="app-admin-plugin-dashboard" id="appAdminPluginDashboard"></div>
-              <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin sections" data-next-i18n-aria="appAdmin.plugins">
-                <button type="button" class="active" data-app-admin-plugin-tab="registry" data-next-i18n="appAdmin.plugins">Plugins</button>
-                <button type="button" data-app-admin-plugin-tab="packages" data-next-i18n="appAdmin.pluginPackages">Plugin packages</button>
-                <button type="button" data-app-admin-plugin-tab="jobs" data-next-i18n="appAdmin.pluginJobs">Plugin jobs</button>
-              </div>
+              <nav class="detail-submenu profile-dashboard-tabs" role="tablist" aria-label="Plugin sections" data-next-i18n-aria="appAdmin.plugins">
+                <button type="button" class="active" id="appAdminPluginTabOverview" role="tab" aria-label="Overview" data-next-i18n-aria="appAdmin.rolesTabOverview" aria-selected="true" aria-controls="appAdminPluginPanelOverview" tabindex="0" data-app-admin-plugin-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+                <button type="button" id="appAdminPluginTabInstalled" role="tab" aria-label="Installed" data-next-i18n-aria="appAdmin.pluginTabInstalled" aria-selected="false" aria-controls="appAdminPluginPanelInstalled" tabindex="-1" data-app-admin-plugin-tab="installed">""" + nav_icon("structure") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.pluginTabInstalled">Installed</span></button>
+                <button type="button" id="appAdminPluginTabPackages" role="tab" aria-label="Packages" data-next-i18n-aria="appAdmin.pluginPackages" aria-selected="false" aria-controls="appAdminPluginPanelPackages" tabindex="-1" data-app-admin-plugin-tab="packages">""" + nav_icon("import") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.pluginPackages">Plugin packages</span></button>
+                <button type="button" id="appAdminPluginTabActivity" role="tab" aria-label="Activity" data-next-i18n-aria="appAdmin.pluginTabActivity" aria-selected="false" aria-controls="appAdminPluginPanelActivity" tabindex="-1" data-app-admin-plugin-tab="activity">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.pluginTabActivity">Activity</span></button>
+              </nav>
               <div class="login-message" id="appAdminPluginsMessage"></div>
             </div>
-            <div class="app-admin-plugin-tab-panel active full" data-app-admin-plugin-panel="registry">
+            <div class="app-admin-plugin-tab-panel active full" id="appAdminPluginPanelOverview" role="tabpanel" aria-labelledby="appAdminPluginTabOverview" aria-hidden="false" data-app-admin-plugin-panel="overview">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.rolesTabOverview">Overview</h3>
+                <p data-next-i18n="appAdmin.pluginOverviewHelp">Installed and enabled totals, runtime health, and jobs that need attention.</p>
+                <div class="app-admin-plugin-dashboard" id="appAdminPluginDashboard"></div>
+                <div class="app-admin-plugin-attention" id="appAdminPluginAttention"></div>
+              </div>
+            </div>
+            <div class="app-admin-plugin-tab-panel full" id="appAdminPluginPanelInstalled" role="tabpanel" aria-labelledby="appAdminPluginTabInstalled" aria-hidden="true" data-app-admin-plugin-panel="installed">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginRegistry">Plugin registry</h3>
                 <label class="app-admin-plugin-auto-update" for="appAdminPluginAutoUpdateToggle" style="display:flex;align-items:center;gap:8px;margin:4px 0 12px;">
@@ -15873,24 +15924,44 @@ def ui_preview_html(
                   </span>
                 </label>
                 <div id="appAdminMetadataPriorityPanel"></div>
-                <div class="plugin-operation-panel" id="appAdminPluginExecutionDashboard"></div>
-                <div class="segmented profile-submenu plugin-submenu" role="tablist" aria-label="Plugin types" data-next-i18n-aria="appAdmin.pluginRegistry">
-                  <button type="button" class="active" data-app-admin-plugin-type-tab="metadata_source" data-next-i18n="appAdmin.pluginTypeMetadataSources">Metadata sources</button>
-                  <button type="button" data-app-admin-plugin-type-tab="metadata_receiver" data-next-i18n="appAdmin.pluginTypeMetadataReceivers">Metadata receivers</button>
-                  <button type="button" data-app-admin-plugin-type-tab="digital_media_source" data-next-i18n="appAdmin.pluginTypeDigitalSources">Digital media sources</button>
-                  <button type="button" data-app-admin-plugin-type-tab="personal_list_source" data-next-i18n="appAdmin.pluginTypePersonalListSources">Personal list sources</button>
-                  <button type="button" data-app-admin-plugin-type-tab="price_provider" data-next-i18n="appAdmin.pluginTypePriceProviders">Price providers</button>
-                  <button type="button" data-app-admin-plugin-type-tab="import_source" data-next-i18n="appAdmin.pluginTypeImportSources">Import sources</button>
-                  <button type="button" data-app-admin-plugin-type-tab="system" data-next-i18n="appAdmin.pluginTypeSystem">System integrations</button>
-                  <button type="button" data-app-admin-plugin-type-tab="other" data-next-i18n="appAdmin.pluginTypeOther">Other plugins</button>
+                <div class="app-admin-plugin-filters">
+                  <label class="app-admin-plugin-filter" for="appAdminPluginSearchInput">
+                    <span data-next-i18n="appAdmin.pluginSearchLabel">Search</span>
+                    <input type="search" id="appAdminPluginSearchInput" data-next-i18n-placeholder="appAdmin.pluginSearchPlaceholder" placeholder="Search plugins by name or key">
+                  </label>
+                  <label class="app-admin-plugin-filter" for="appAdminPluginTypeFilter">
+                    <span data-next-i18n="appAdmin.pluginTypeFilterLabel">Type</span>
+                    <select id="appAdminPluginTypeFilter">
+                      <option value="all" data-next-i18n="appAdmin.pluginTypeAll">All types</option>
+                      <option value="metadata_source" data-next-i18n="appAdmin.pluginTypeMetadataSources">Metadata sources</option>
+                      <option value="metadata_receiver" data-next-i18n="appAdmin.pluginTypeMetadataReceivers">Metadata receivers</option>
+                      <option value="digital_media_source" data-next-i18n="appAdmin.pluginTypeDigitalSources">Digital media sources</option>
+                      <option value="personal_list_source" data-next-i18n="appAdmin.pluginTypePersonalListSources">Personal list sources</option>
+                      <option value="price_provider" data-next-i18n="appAdmin.pluginTypePriceProviders">Price providers</option>
+                      <option value="import_source" data-next-i18n="appAdmin.pluginTypeImportSources">Import sources</option>
+                      <option value="system" data-next-i18n="appAdmin.pluginTypeSystem">System integrations</option>
+                      <option value="other" data-next-i18n="appAdmin.pluginTypeOther">Other plugins</option>
+                    </select>
+                  </label>
+                  <label class="app-admin-plugin-filter" for="appAdminPluginStatusFilter">
+                    <span data-next-i18n="appAdmin.pluginStatusFilterLabel">Status</span>
+                    <select id="appAdminPluginStatusFilter">
+                      <option value="all" data-next-i18n="appAdmin.pluginStatusAll">All statuses</option>
+                      <option value="enabled" data-next-i18n="appAdmin.enabled">Enabled</option>
+                      <option value="disabled" data-next-i18n="appAdmin.disabled">Disabled</option>
+                      <option value="config-needed" data-next-i18n="appAdmin.configurationNeeded">Configuration needed</option>
+                      <option value="update-available" data-next-i18n="appAdmin.updateAvailable">Update available</option>
+                    </select>
+                  </label>
                 </div>
                 <div class="profile-passkey-list" id="appAdminPluginsList"></div>
               </div>
             </div>
-            <div class="app-admin-plugin-tab-panel full" data-app-admin-plugin-panel="packages">
+            <div class="app-admin-plugin-tab-panel full" id="appAdminPluginPanelPackages" role="tabpanel" aria-labelledby="appAdminPluginTabPackages" aria-hidden="true" data-app-admin-plugin-panel="packages">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginPackages">Plugin packages</h3>
                 <p data-next-i18n="appAdmin.pluginPackagesHelp">Export installed plugins or install a compatible DiscVault plugin ZIP.</p>
+                <p class="profile-passkey-meta" data-next-i18n="appAdmin.pluginLifecycleHelp">Per-plugin update, rollback and export actions stay on each plugin card under Installed.</p>
                 <div class="app-admin-plugin-import">
                   <input type="file" id="appAdminPluginImportFile" accept=".zip,application/zip">
                   <button type="button" class="secondary-button" id="appAdminImportPluginButton" data-next-i18n="appAdmin.importPlugin">Import plugin</button>
@@ -15899,12 +15970,13 @@ def ui_preview_html(
                 <div class="plugin-operation-panel" id="appAdminPluginPackageValidator"></div>
               </div>
             </div>
-            <div class="app-admin-plugin-tab-panel full" data-app-admin-plugin-panel="jobs">
+            <div class="app-admin-plugin-tab-panel full" id="appAdminPluginPanelActivity" role="tabpanel" aria-labelledby="appAdminPluginTabActivity" aria-hidden="true" data-app-admin-plugin-panel="activity">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.pluginJobs">Plugin jobs</h3>
                 <div class="profile-action-row">
                   <button type="button" class="secondary-button" id="appAdminRefreshPluginJobsButton" data-next-i18n="appAdmin.refreshPluginJobs">Refresh plugin jobs</button>
                 </div>
+                <div class="plugin-operation-panel" id="appAdminPluginExecutionDashboard"></div>
                 <div class="plugin-operation-panel" id="appAdminPersonalListSyncDashboard"></div>
                 <div class="plugin-operation-panel" id="appAdminContributionCenter"></div>
                 <div class="app-admin-contribution-list" id="appAdminContributionQueue"></div>
@@ -16278,8 +16350,10 @@ def ui_preview_html(
       activeUsersTab: localStorage.getItem("dv_next_admin_users_tab") || "settings",
       activeRolesTab: localStorage.getItem("dv_next_admin_roles_tab") || "overview",
       activeOperationsTab: localStorage.getItem("dv_next_admin_operations_tab") || "overview",
-      activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "registry",
-      activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "metadata_source",
+      activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "overview",
+      activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "all",
+      pluginSearch: "",
+      pluginStatusFilter: "all",
       auditCategory: "",
       auditEvents: [],
       backup: null,
@@ -17511,28 +17585,70 @@ def ui_preview_html(
       nextButton.focus();
     }
     function setAppAdminPluginTab(tab) {
-      const allowed = ["registry", "packages", "jobs"];
-      appAdmin.activePluginTab = allowed.includes(tab) ? tab : "registry";
+      const allowed = ["overview", "installed", "packages", "activity"];
+      const aliases = {registry: "installed", jobs: "activity"};
+      const resolved = aliases[tab] || tab;
+      appAdmin.activePluginTab = allowed.includes(resolved) ? resolved : "overview";
       localStorage.setItem("dv_next_admin_plugin_tab", appAdmin.activePluginTab);
       document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
         const active = button.dataset.appAdminPluginTab === appAdmin.activePluginTab;
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
       });
       document.querySelectorAll("[data-app-admin-plugin-panel]").forEach((panel) => {
-        panel.classList.toggle("active", panel.dataset.appAdminPluginPanel === appAdmin.activePluginTab);
+        const active = panel.dataset.appAdminPluginPanel === appAdmin.activePluginTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
       });
+      renderAppAdminPluginExecutionDashboard();
+    }
+    function handleAppAdminPluginTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-plugin-tab]")];
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminPluginTab(nextButton.dataset.appAdminPluginTab);
+      nextButton.focus();
     }
     function setAppAdminPluginTypeTab(tab, render = true) {
-      const allowed = ["metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "price_provider", "import_source", "system", "other"];
-      appAdmin.activePluginTypeTab = allowed.includes(tab) ? tab : "metadata_source";
+      const allowed = ["all", "metadata_source", "metadata_receiver", "digital_media_source", "personal_list_source", "price_provider", "import_source", "system", "other"];
+      appAdmin.activePluginTypeTab = allowed.includes(tab) ? tab : "all";
       localStorage.setItem("dv_next_admin_plugin_type_tab", appAdmin.activePluginTypeTab);
-      document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
-        const active = button.dataset.appAdminPluginTypeTab === appAdmin.activePluginTypeTab;
-        button.classList.toggle("active", active);
-        button.setAttribute("aria-selected", active ? "true" : "false");
-      });
+      const select = document.getElementById("appAdminPluginTypeFilter");
+      if (select && select.value !== appAdmin.activePluginTypeTab) select.value = appAdmin.activePluginTypeTab;
       if (render) renderAppAdminPlugins();
+    }
+    function setAppAdminPluginStatusFilter(value, render = true) {
+      const allowed = ["all", "enabled", "disabled", "config-needed", "update-available"];
+      appAdmin.pluginStatusFilter = allowed.includes(value) ? value : "all";
+      const select = document.getElementById("appAdminPluginStatusFilter");
+      if (select && select.value !== appAdmin.pluginStatusFilter) select.value = appAdmin.pluginStatusFilter;
+      if (render) renderAppAdminPlugins();
+    }
+    function setAppAdminPluginSearch(value, render = true) {
+      appAdmin.pluginSearch = String(value || "");
+      if (render) renderAppAdminPlugins();
+    }
+    function appAdminPluginMatchesStatusFilter(plugin, filter) {
+      if (filter === "enabled") return !!plugin.enabled;
+      if (filter === "disabled") return !plugin.enabled;
+      if (filter === "config-needed") return appAdminPluginNeedsConfiguration(plugin);
+      if (filter === "update-available") return !!plugin.updateAvailable;
+      return true;
+    }
+    function appAdminPluginMatchesSearch(plugin, term) {
+      const needle = String(term || "").trim().toLowerCase();
+      if (!needle) return true;
+      const haystacks = [pluginDisplayName(plugin), plugin.id, appAdminPluginCategoryLabel(plugin)];
+      return haystacks.some((value) => String(value || "").toLowerCase().includes(needle));
     }
     function appAdminPluginHasCategory(plugin, category) {
       return (plugin.categories || []).includes(category);
@@ -17602,12 +17718,14 @@ def ui_preview_html(
       const jobs = appAdmin.pluginJobs || [];
       const healthStates = plugins.map(appAdminPluginHealthState);
       const activeJobs = jobs.filter((job) => ["pending", "running"].includes(String(job.status || ""))).length;
+      const failedJobs = jobs.filter((job) => String(job.status || "") === "failed").length;
       const cards = [
         [tNext("appAdmin.pluginTotal", "Installed"), plugins.length],
         [tNext("appAdmin.enabledPlugins", "Enabled"), plugins.filter((plugin) => plugin.enabled).length],
         [tNext("appAdmin.configNeeded", "Configuration needed"), plugins.filter(appAdminPluginNeedsConfiguration).length],
         [tNext("appAdmin.pluginHealthOk", "Runtime ready"), healthStates.filter((state) => ["ok", "loaded", "ready"].includes(String(state))).length],
         [tNext("appAdmin.pluginJobsActive", "Active jobs"), activeJobs],
+        [tNext("appAdmin.failedJobs", "Failed jobs"), failedJobs],
         [tNext("appAdmin.pluginReceivers", "Receivers"), plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver")).length],
         [tNext("appAdmin.pluginSources", "Sources"), plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source")).length],
         [tNext("appAdmin.pluginImporters", "Importers"), plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source")).length]
@@ -17624,7 +17742,7 @@ def ui_preview_html(
       if (!node) return;
       const jobs = appAdmin.pluginJobs || [];
       const plugins = appAdmin.plugins || [];
-      const visible = appAdmin.activePluginTab === "registry";
+      const visible = appAdmin.activePluginTab === "activity";
       if (!visible) {
         node.innerHTML = "";
         return;
@@ -17643,10 +17761,42 @@ def ui_preview_html(
             <span>${escapeHtml(formatNumber(activeJobs.length))}</span>
           </div>
           <div class="plugin-operation-row">
-            <strong>${escapeHtml(tNext("appAdmin.failedPluginJobs", "Failed plugin jobs"))}</strong>
+            <strong>${escapeHtml(tNext("appAdmin.failedJobs", "Failed jobs"))}</strong>
             <span>${escapeHtml(formatNumber(failedJobs.length))}</span>
           </div>
         </section>
+      `;
+    }
+    function renderAppAdminPluginAttention() {
+      const node = document.getElementById("appAdminPluginAttention");
+      if (!node) return;
+      const plugins = appAdmin.plugins || [];
+      const jobs = appAdmin.pluginJobs || [];
+      const configNeeded = plugins.filter(appAdminPluginNeedsConfiguration).length;
+      const updatesAvailable = plugins.filter((plugin) => plugin.updateAvailable).length;
+      const failedJobs = jobs.filter((job) => String(job.status || "") === "failed").length;
+      const items = [
+        configNeeded ? {
+          text: tNext("appAdmin.pluginAttentionConfigNeeded", "{count} plugins need configuration").replace("{count}", String(configNeeded)),
+          tab: "installed"
+        } : null,
+        updatesAvailable ? {
+          text: tNext("appAdmin.pluginAttentionUpdates", "{count} plugin updates available").replace("{count}", String(updatesAvailable)),
+          tab: "installed"
+        } : null,
+        failedJobs ? {
+          text: tNext("appAdmin.pluginAttentionFailedJobs", "{count} failed plugin jobs").replace("{count}", String(failedJobs)),
+          tab: "activity"
+        } : null
+      ].filter(Boolean);
+      node.innerHTML = `
+        <h4>${escapeHtml(tNext("appAdmin.pluginAttentionTitle", "Needs attention"))}</h4>
+        ${items.length ? items.map((item) => `
+          <div class="app-admin-plugin-attention-row">
+            <span>${escapeHtml(item.text)}</span>
+            <button type="button" class="secondary-button" data-app-admin-plugin-attention-tab="${escapeHtml(item.tab)}">${escapeHtml(tNext("appAdmin.openFeatureSurface", "Open"))}</button>
+          </div>
+        `).join("") : `<div class="preview-empty good">${escapeHtml(tNext("appAdmin.pluginAttentionEmpty", "Nothing needs attention right now."))}</div>`}
       `;
     }
     function renderAppAdminMetadataPriorityPanel() {
@@ -17655,7 +17805,7 @@ def ui_preview_html(
       const sources = (appAdmin.plugins || [])
         .filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source"))
         .sort(appAdminPluginSort);
-      if (!sources.length || appAdmin.activePluginTypeTab !== "metadata_source") {
+      if (!sources.length || !["metadata_source", "all"].includes(appAdmin.activePluginTypeTab)) {
         node.innerHTML = "";
         return;
       }
@@ -17694,6 +17844,8 @@ def ui_preview_html(
       const plugins = appAdmin.plugins || [];
       const exportable = plugins.filter(appAdminCanExportPlugin).length;
       const importable = hasActualPermission("plugins.import") || hasActualPermission("metadata.manage_plugins");
+      const updatesAvailable = plugins.filter((plugin) => plugin.updateAvailable).length;
+      const rollbacksAvailable = plugins.filter((plugin) => plugin.canRollback).length;
       node.innerHTML = `
         <section class="plugin-operation-grid">
           <div class="plugin-operation-row">
@@ -17707,6 +17859,14 @@ def ui_preview_html(
           <div class="plugin-operation-row">
             <strong>${escapeHtml(tNext("appAdmin.importPermission", "Import permission"))}</strong>
             <span>${escapeHtml(importable ? tNext("appAdmin.allowed", "Allowed") : tNext("appAdmin.featureBlocked", "Blocked"))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.updateAvailable", "Update available"))}</strong>
+            <span>${escapeHtml(formatNumber(updatesAvailable))}</span>
+          </div>
+          <div class="plugin-operation-row">
+            <strong>${escapeHtml(tNext("appAdmin.rollbackAvailable", "Rollback available"))}</strong>
+            <span>${escapeHtml(formatNumber(rollbacksAvailable))}</span>
           </div>
         </section>
       `;
@@ -17968,6 +18128,7 @@ def ui_preview_html(
       const canMoveUp = pluginIndex > 0;
       const canMoveDown = pluginIndex >= 0 && pluginIndex < orderedSection.length - 1;
       const canManage = appAdminCanManagePlugin(plugin);
+      const canReorder = canManage && !!sectionCategory;
       const canViewHealth = appAdminCanViewPluginHealth(plugin);
       const version = plugin.version || (plugin.manifest || {}).version || "0.0.0";
       return `
@@ -17978,8 +18139,8 @@ def ui_preview_html(
               <div class="profile-passkey-meta">${escapeHtml(tNext("appAdmin.pluginKey", "Plugin key"))}: ${escapeHtml(plugin.id)} &middot; ${escapeHtml(tNext("appAdmin.version", "Version"))} ${escapeHtml(version)} &middot; ${escapeHtml(appAdminPluginCategoryLabel(plugin))} &middot; ${escapeHtml(tNext("appAdmin.order", "order"))} ${escapeHtml(plugin.orderIndex || "-")}</div>
             </div>
             <div class="app-admin-plugin-order">
-              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>` : ""}
-              ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="down" ${canMoveDown ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveDown", "Down"))}</button>` : ""}
+              ${canReorder ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="up" ${canMoveUp ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveUp", "Up"))}</button>` : ""}
+              ${canReorder ? `<button type="button" class="secondary-button" data-app-admin-plugin-move="${escapeHtml(plugin.id)}" data-section-category="${escapeHtml(sectionCategory)}" data-direction="down" ${canMoveDown ? "" : "disabled"}>${escapeHtml(tNext("appAdmin.moveDown", "Down"))}</button>` : ""}
             </div>
             <span class="tag ${plugin.enabled ? "good" : ""}">${escapeHtml(plugin.enabled ? tNext("appAdmin.enabled", "Enabled") : tNext("appAdmin.disabled", "Disabled"))}</span>
           </div>
@@ -19045,6 +19206,7 @@ def ui_preview_html(
       if (configNode) configNode.textContent = String(configNeeded);
       if (digitalNode) digitalNode.textContent = String(digitalSources.length);
       renderAppAdminPluginDashboard();
+      renderAppAdminPluginAttention();
       const autoUpdateToggle = document.getElementById("appAdminPluginAutoUpdateToggle");
       if (autoUpdateToggle) autoUpdateToggle.checked = appAdmin.pluginAutoUpdate !== false;
       renderAppAdminPluginExecutionDashboard();
@@ -19056,59 +19218,50 @@ def ui_preview_html(
       renderAppAdminMetadataJobs();
       renderAppAdminDigitalSources();
       setAppAdminPluginTab(appAdmin.activePluginTab);
+      const searchInput = document.getElementById("appAdminPluginSearchInput");
+      if (searchInput && document.activeElement !== searchInput && searchInput.value !== appAdmin.pluginSearch) searchInput.value = appAdmin.pluginSearch;
+      setAppAdminPluginStatusFilter(appAdmin.pluginStatusFilter, false);
       if (!list) return;
       if (!plugins.length) {
         list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
         return;
       }
-      const metadataSourcePlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_source"));
-      const metadataReceiverPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver"));
-      const digitalPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "digital_media_source"));
-      const personalListPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "personal_list_source"));
-      const priceProviderPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "price_provider"));
-      const importPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "import_source"));
-      const systemPlugins = plugins.filter((plugin) => appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api"));
-      const shown = new Set([...metadataSourcePlugins, ...metadataReceiverPlugins, ...digitalPlugins, ...personalListPlugins, ...priceProviderPlugins, ...importPlugins, ...systemPlugins].map((plugin) => plugin.id));
-      const otherPlugins = plugins.filter((plugin) => !shown.has(plugin.id));
-      const sections = {
-        metadata_source: {
-          title: tNext("appAdmin.pluginTypeMetadataSources", "Metadata sources"),
-          plugins: metadataSourcePlugins
-        },
-        metadata_receiver: {
-          title: tNext("appAdmin.pluginTypeMetadataReceivers", "Metadata receivers"),
-          plugins: metadataReceiverPlugins
-        },
-        digital_media_source: {
-          title: tNext("appAdmin.pluginTypeDigitalSources", "Digital media sources"),
-          plugins: digitalPlugins
-        },
-        personal_list_source: {
-          title: tNext("appAdmin.pluginTypePersonalListSources", "Personal list sources"),
-          plugins: personalListPlugins
-        },
-        price_provider: {
-          title: tNext("appAdmin.pluginTypePriceProviders", "Price providers"),
-          plugins: priceProviderPlugins
-        },
-        import_source: {
-          title: tNext("appAdmin.pluginTypeImportSources", "Import sources"),
-          plugins: importPlugins
-        },
-        system: {
-          title: tNext("appAdmin.pluginTypeSystem", "System integrations"),
-          plugins: systemPlugins
-        },
-        other: {
-          title: tNext("appAdmin.pluginTypeOther", "Other plugins"),
-          plugins: otherPlugins
-        }
-      };
+      const matchesFilters = (plugin) => appAdminPluginMatchesSearch(plugin, appAdmin.pluginSearch) && appAdminPluginMatchesStatusFilter(plugin, appAdmin.pluginStatusFilter);
+      const categoryDefs = [
+        ["metadata_source", (plugin) => appAdminPluginHasCategory(plugin, "metadata_source")],
+        ["metadata_receiver", (plugin) => appAdminPluginHasCategory(plugin, "metadata_receiver")],
+        ["digital_media_source", (plugin) => appAdminPluginHasCategory(plugin, "digital_media_source")],
+        ["personal_list_source", (plugin) => appAdminPluginHasCategory(plugin, "personal_list_source")],
+        ["price_provider", (plugin) => appAdminPluginHasCategory(plugin, "price_provider")],
+        ["import_source", (plugin) => appAdminPluginHasCategory(plugin, "import_source")],
+        ["system", (plugin) => appAdminPluginHasCategory(plugin, "system") || appAdminPluginHasCategory(plugin, "mcp") || appAdminPluginHasCategory(plugin, "api")]
+      ];
+      const categorized = new Set();
+      categoryDefs.forEach(([, matches]) => plugins.filter(matches).forEach((plugin) => categorized.add(plugin.id)));
+      const allDefs = [...categoryDefs, ["other", (plugin) => !categorized.has(plugin.id)]];
+      const sections = {};
+      allDefs.forEach(([category, matches]) => {
+        sections[category] = {
+          title: appAdminPluginTypeLabel(category),
+          plugins: plugins.filter(matches).filter(matchesFilters)
+        };
+      });
       setAppAdminPluginTypeTab(appAdmin.activePluginTypeTab, false);
       renderAppAdminMetadataPriorityPanel();
-      const activeSection = sections[appAdmin.activePluginTypeTab] || sections.metadata_source;
-      list.innerHTML = renderAppAdminPluginSection(activeSection.title, activeSection.plugins, appAdmin.activePluginTypeTab)
-        || `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
+      const html = appAdmin.activePluginTypeTab === "all"
+        ? renderAppAdminPluginSection(
+          tNext("appAdmin.pluginTypeAll", "All types"),
+          plugins.filter(matchesFilters),
+          ""
+        )
+        : sections[appAdmin.activePluginTypeTab]
+          ? renderAppAdminPluginSection(
+            sections[appAdmin.activePluginTypeTab].title,
+            sections[appAdmin.activePluginTypeTab].plugins,
+            appAdmin.activePluginTypeTab
+          )
+          : "";
+      list.innerHTML = html || `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noPlugins", "No plugins found."))}</div>`;
     }
     function appAdminRbacModeLabel(mode) {
       return mode === "advanced"
@@ -39170,9 +39323,15 @@ def ui_preview_html(
       });
       document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminPluginTab(button.dataset.appAdminPluginTab));
+        button.addEventListener("keydown", (event) => handleAppAdminPluginTabKeydown(button, event));
       });
-      document.querySelectorAll("[data-app-admin-plugin-type-tab]").forEach((button) => {
-        button.addEventListener("click", () => setAppAdminPluginTypeTab(button.dataset.appAdminPluginTypeTab));
+      document.getElementById("appAdminPluginTypeFilter")?.addEventListener("change", (event) => setAppAdminPluginTypeTab(event.target.value));
+      document.getElementById("appAdminPluginStatusFilter")?.addEventListener("change", (event) => setAppAdminPluginStatusFilter(event.target.value));
+      document.getElementById("appAdminPluginSearchInput")?.addEventListener("input", (event) => setAppAdminPluginSearch(event.target.value));
+      document.getElementById("appAdminPluginAttention")?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-app-admin-plugin-attention-tab]");
+        if (!button) return;
+        setAppAdminPluginTab(button.dataset.appAdminPluginAttentionTab);
       });
       document.getElementById("appAdminFeatureClusters")?.addEventListener("click", (event) => {
         const button = event.target.closest("[data-app-admin-feature-tab]");

@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Supprimer « {name} » ? Les liens vers les films partagés et les invitations en attente seront également supprimés.",
   "groups.deleted": "Groupe supprimé.",
   "groups.renamed": "Groupe renommé.",
-  "groups.renamePrompt": "Nouveau nom du groupe"
+  "groups.renamePrompt": "Nouveau nom du groupe",
+  "appAdmin.pluginTabInstalled": "Installes",
+  "appAdmin.pluginTabActivity": "Activite",
+  "appAdmin.pluginOverviewHelp": "Totaux installes et actives, etat du runtime et taches necessitant une attention.",
+  "appAdmin.pluginSearchLabel": "Rechercher",
+  "appAdmin.pluginSearchPlaceholder": "Rechercher des plugins par nom ou cle",
+  "appAdmin.pluginTypeFilterLabel": "Type",
+  "appAdmin.pluginTypeAll": "Tous les types",
+  "appAdmin.pluginStatusFilterLabel": "Statut",
+  "appAdmin.pluginStatusAll": "Tous les statuts",
+  "appAdmin.pluginLifecycleHelp": "Les actions de mise a jour, restauration et export de chaque plugin restent sur sa carte dans Installes.",
+  "appAdmin.pluginAttentionTitle": "Necessite une attention",
+  "appAdmin.pluginAttentionEmpty": "Rien ne necessite d'attention pour le moment.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} plugins necessitent une configuration",
+  "appAdmin.pluginAttentionFailedJobs": "{count} taches plugin en echec",
+  "appAdmin.pluginAttentionUpdates": "{count} mises a jour de plugin disponibles"
 }

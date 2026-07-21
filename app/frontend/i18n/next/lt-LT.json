@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Ištrinti „{name}“? Taip pat bus pašalintos bendrinamų filmų nuorodos ir laukiantys kvietimai.",
   "groups.deleted": "Grupė ištrinta.",
   "groups.renamed": "Grupė pervadinta.",
-  "groups.renamePrompt": "Naujas grupės pavadinimas"
+  "groups.renamePrompt": "Naujas grupės pavadinimas",
+  "appAdmin.pluginTabInstalled": "Įdiegti",
+  "appAdmin.pluginTabActivity": "Veikla",
+  "appAdmin.pluginOverviewHelp": "Įdiegtų ir įjungtų papildinių skaičius, veikimo būsena ir dėmesio reikalaujančios užduotys.",
+  "appAdmin.pluginSearchLabel": "Paieška",
+  "appAdmin.pluginSearchPlaceholder": "Ieškoti papildinių pagal pavadinimą arba raktą",
+  "appAdmin.pluginTypeFilterLabel": "Tipas",
+  "appAdmin.pluginTypeAll": "Visi tipai",
+  "appAdmin.pluginStatusFilterLabel": "Būsena",
+  "appAdmin.pluginStatusAll": "Visos būsenos",
+  "appAdmin.pluginLifecycleHelp": "Kiekvieno papildinio atnaujinimo, atkūrimo ir eksportavimo veiksmai lieka jo kortelėje skiltyje „Įdiegti“.",
+  "appAdmin.pluginAttentionTitle": "Reikia dėmesio",
+  "appAdmin.pluginAttentionEmpty": "Šiuo metu dėmesio nereikia.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} papildiniams reikia konfigūracijos",
+  "appAdmin.pluginAttentionFailedJobs": "{count} nepavykusios papildinių užduotys",
+  "appAdmin.pluginAttentionUpdates": "{count} galimi papildinių atnaujinimai"
 }

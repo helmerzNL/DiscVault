@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "‘{name}’을(를) 삭제하시겠습니까? 공유 영화 연결과 대기 중인 초대도 삭제됩니다.",
   "groups.deleted": "그룹을 삭제했습니다.",
   "groups.renamed": "그룹 이름을 변경했습니다.",
-  "groups.renamePrompt": "새 그룹 이름"
+  "groups.renamePrompt": "새 그룹 이름",
+  "appAdmin.pluginTabInstalled": "설치됨",
+  "appAdmin.pluginTabActivity": "활동",
+  "appAdmin.pluginOverviewHelp": "설치 및 활성화된 총 수, 런타임 상태, 주의가 필요한 작업을 확인하세요.",
+  "appAdmin.pluginSearchLabel": "검색",
+  "appAdmin.pluginSearchPlaceholder": "이름 또는 키로 플러그인 검색",
+  "appAdmin.pluginTypeFilterLabel": "유형",
+  "appAdmin.pluginTypeAll": "모든 유형",
+  "appAdmin.pluginStatusFilterLabel": "상태",
+  "appAdmin.pluginStatusAll": "모든 상태",
+  "appAdmin.pluginLifecycleHelp": "플러그인별 업데이트, 롤백, 내보내기 작업은 설치됨 탭의 각 플러그인 카드에 있습니다.",
+  "appAdmin.pluginAttentionTitle": "주의 필요",
+  "appAdmin.pluginAttentionEmpty": "현재 주의가 필요한 항목이 없습니다.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count}개 플러그인에 설정이 필요합니다",
+  "appAdmin.pluginAttentionFailedJobs": "{count}개의 실패한 플러그인 작업",
+  "appAdmin.pluginAttentionUpdates": "{count}개의 플러그인 업데이트 사용 가능"
 }

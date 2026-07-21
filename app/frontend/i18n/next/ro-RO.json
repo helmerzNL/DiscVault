@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Ștergi „{name}”? Legăturile filmelor partajate și invitațiile în așteptare vor fi eliminate și ele.",
   "groups.deleted": "Grup șters.",
   "groups.renamed": "Grup redenumit.",
-  "groups.renamePrompt": "Noul nume al grupului"
+  "groups.renamePrompt": "Noul nume al grupului",
+  "appAdmin.pluginTabInstalled": "Instalate",
+  "appAdmin.pluginTabActivity": "Activitate",
+  "appAdmin.pluginOverviewHelp": "Totalurile pluginurilor instalate și activate, starea de funcționare și sarcinile care necesită atenție.",
+  "appAdmin.pluginSearchLabel": "Căutare",
+  "appAdmin.pluginSearchPlaceholder": "Caută pluginuri după nume sau cheie",
+  "appAdmin.pluginTypeFilterLabel": "Tip",
+  "appAdmin.pluginTypeAll": "Toate tipurile",
+  "appAdmin.pluginStatusFilterLabel": "Stare",
+  "appAdmin.pluginStatusAll": "Toate stările",
+  "appAdmin.pluginLifecycleHelp": "Acțiunile de actualizare, restaurare și export pentru fiecare plugin rămân pe cardul acestuia, în secțiunea Instalate.",
+  "appAdmin.pluginAttentionTitle": "Necesită atenție",
+  "appAdmin.pluginAttentionEmpty": "În acest moment nu este nevoie de atenție.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} pluginuri necesită configurare",
+  "appAdmin.pluginAttentionFailedJobs": "{count} sarcini de plugin nereușite",
+  "appAdmin.pluginAttentionUpdates": "{count} actualizări de plugin disponibile"
 }

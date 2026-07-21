@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Poistetaanko ”{name}”? Myös jaettujen elokuvien linkit ja odottavat kutsut poistetaan.",
   "groups.deleted": "Ryhmä poistettu.",
   "groups.renamed": "Ryhmän nimi muutettu.",
-  "groups.renamePrompt": "Ryhmän uusi nimi"
+  "groups.renamePrompt": "Ryhmän uusi nimi",
+  "appAdmin.pluginTabInstalled": "Asennetut",
+  "appAdmin.pluginTabActivity": "Toiminta",
+  "appAdmin.pluginOverviewHelp": "Asennettujen ja kaytossa olevien maarat, ajonaikainen tila ja tyot, jotka vaativat huomiota.",
+  "appAdmin.pluginSearchLabel": "Haku",
+  "appAdmin.pluginSearchPlaceholder": "Hae lisaosia nimella tai avaimella",
+  "appAdmin.pluginTypeFilterLabel": "Tyyppi",
+  "appAdmin.pluginTypeAll": "Kaikki tyypit",
+  "appAdmin.pluginStatusFilterLabel": "Tila",
+  "appAdmin.pluginStatusAll": "Kaikki tilat",
+  "appAdmin.pluginLifecycleHelp": "Lisaosakohtaiset paivitys-, palautus- ja vientitoiminnot pysyvat lisaosan kortilla kohdassa Asennetut.",
+  "appAdmin.pluginAttentionTitle": "Vaatii huomiota",
+  "appAdmin.pluginAttentionEmpty": "Mikaan ei vaadi huomiota juuri nyt.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} lisaosaa tarvitsee maarityksen",
+  "appAdmin.pluginAttentionFailedJobs": "{count} epaonnistunutta lisaosatyota",
+  "appAdmin.pluginAttentionUpdates": "{count} lisaosapaivitysta saatavilla"
 }

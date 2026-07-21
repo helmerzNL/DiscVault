@@ -697,6 +697,80 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('data-app-admin-operations-panel="collection"', self.html)
         self.assertEqual(self.html.count('class="tag app-admin-operations-tab-status"'), 5)
 
+    def test_admin_plugins_dashboard_uses_task_oriented_subtabs(self):
+        self.assertIn(
+            'id="appAdminPanelPlugins" role="tabpanel" aria-labelledby="appAdminTabPlugins"',
+            self.html,
+        )
+        for tab in ("Overview", "Installed", "Packages", "Activity"):
+            self.assertIn(f'id="appAdminPluginTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminPluginPanel{tab}" role="tabpanel"', self.html)
+        self.assertEqual(self.html.count("data-app-admin-plugin-tab="), 4)
+        self.assertEqual(self.html.count('class="app-admin-plugin-tab-panel'), 4)
+
+        # No more wrapping 8-button type-tab submenu; a single compact filter set instead.
+        self.assertNotIn("data-app-admin-plugin-type-tab=", self.html)
+        self.assertIn('id="appAdminPluginTypeFilter"', self.html)
+        self.assertIn('id="appAdminPluginStatusFilter"', self.html)
+        self.assertIn('id="appAdminPluginSearchInput"', self.html)
+        for category in (
+            "all",
+            "metadata_source",
+            "metadata_receiver",
+            "digital_media_source",
+            "personal_list_source",
+            "price_provider",
+            "import_source",
+            "system",
+            "other",
+        ):
+            self.assertIn(f'value="{category}"', self.html)
+        for status in ("all", "enabled", "disabled", "config-needed", "update-available"):
+            self.assertIn(f'value="{status}"', self.html)
+
+        # Existing renderers/surfaces are reused, not duplicated.
+        for element_id in (
+            "appAdminPluginDashboard",
+            "appAdminPluginAttention",
+            "appAdminMetadataPriorityPanel",
+            "appAdminPluginExecutionDashboard",
+            "appAdminPluginPackageValidator",
+            "appAdminPersonalListSyncDashboard",
+            "appAdminContributionCenter",
+            "appAdminContributionQueue",
+            "appAdminPluginJobsList",
+            "appAdminPluginsList",
+            "appAdminPluginImportFile",
+            "appAdminImportPluginButton",
+            "appAdminPluginAutoUpdateToggle",
+            "appAdminRefreshPluginJobsButton",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "overview"', self.html)
+        self.assertIn('activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "all"', self.html)
+        self.assertIn("function setAppAdminPluginTab(tab)", self.html)
+        self.assertIn("function handleAppAdminPluginTabKeydown(button, event)", self.html)
+        self.assertIn('registry: "installed", jobs: "activity"', self.html)
+        self.assertIn("function appAdminPluginMatchesStatusFilter(plugin, filter)", self.html)
+        self.assertIn("function appAdminPluginMatchesSearch(plugin, term)", self.html)
+        self.assertIn("function renderAppAdminPluginAttention()", self.html)
+        self.assertIn('const canReorder = canManage && !!sectionCategory;', self.html)
+        self.assertIn('appAdmin.activePluginTypeTab === "all"', self.html)
+        self.assertIn('plugins.filter(matchesFilters)', self.html)
+        self.assertNotIn('tNext("appAdmin.failedPluginJobs"', self.html)
+
+        # Existing plugin action hooks are preserved unchanged.
+        for action in (
+            "data-app-admin-plugin-config-form=",
+            "data-app-admin-plugin-enable=",
+            "data-app-admin-plugin-update=",
+            "data-app-admin-plugin-rollback=",
+            "data-app-admin-plugin-export=",
+            "data-app-admin-plugin-delete=",
+        ):
+            self.assertIn(action, self.html)
+
     def test_admin_role_creation_generates_key_and_starts_permission_wizard(self):
         for element_id in (
             "appAdminRoleName",

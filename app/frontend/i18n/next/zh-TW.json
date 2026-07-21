@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "要刪除「{name}」嗎？共享電影連結和待處理邀請也會一併移除。",
   "groups.deleted": "群組已刪除。",
   "groups.renamed": "群組已重新命名。",
-  "groups.renamePrompt": "新的群組名稱"
+  "groups.renamePrompt": "新的群組名稱",
+  "appAdmin.pluginTabInstalled": "已安裝",
+  "appAdmin.pluginTabActivity": "活動",
+  "appAdmin.pluginOverviewHelp": "已安裝與已啟用外掛程式的總數、執行狀態，以及需要注意的工作。",
+  "appAdmin.pluginSearchLabel": "搜尋",
+  "appAdmin.pluginSearchPlaceholder": "依名稱或金鑰搜尋外掛程式",
+  "appAdmin.pluginTypeFilterLabel": "類型",
+  "appAdmin.pluginTypeAll": "所有類型",
+  "appAdmin.pluginStatusFilterLabel": "狀態",
+  "appAdmin.pluginStatusAll": "所有狀態",
+  "appAdmin.pluginLifecycleHelp": "個別外掛程式的更新、回復和匯出操作，仍保留在「已安裝」下對應的外掛程式卡片中。",
+  "appAdmin.pluginAttentionTitle": "需要注意",
+  "appAdmin.pluginAttentionEmpty": "目前沒有需要注意的項目。",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} 個外掛程式需要設定",
+  "appAdmin.pluginAttentionFailedJobs": "{count} 個外掛程式工作失敗",
+  "appAdmin.pluginAttentionUpdates": "{count} 個外掛程式更新可用"
 }

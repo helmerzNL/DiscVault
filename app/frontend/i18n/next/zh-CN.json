@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "删除“{name}”吗？共享影片链接和待处理邀请也将被删除。",
   "groups.deleted": "群组已删除。",
   "groups.renamed": "群组已重命名。",
-  "groups.renamePrompt": "新的群组名称"
+  "groups.renamePrompt": "新的群组名称",
+  "appAdmin.pluginTabInstalled": "已安装",
+  "appAdmin.pluginTabActivity": "活动",
+  "appAdmin.pluginOverviewHelp": "已安装和已启用的插件总数、运行状态以及需要关注的任务。",
+  "appAdmin.pluginSearchLabel": "搜索",
+  "appAdmin.pluginSearchPlaceholder": "按名称或密钥搜索插件",
+  "appAdmin.pluginTypeFilterLabel": "类型",
+  "appAdmin.pluginTypeAll": "所有类型",
+  "appAdmin.pluginStatusFilterLabel": "状态",
+  "appAdmin.pluginStatusAll": "所有状态",
+  "appAdmin.pluginLifecycleHelp": "每个插件的更新、回滚和导出操作都保留在「已安装」下的对应插件卡片中。",
+  "appAdmin.pluginAttentionTitle": "需要关注",
+  "appAdmin.pluginAttentionEmpty": "目前没有需要关注的内容。",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} 个插件需要配置",
+  "appAdmin.pluginAttentionFailedJobs": "{count} 个插件任务失败",
+  "appAdmin.pluginAttentionUpdates": "{count} 个插件更新可用"
 }

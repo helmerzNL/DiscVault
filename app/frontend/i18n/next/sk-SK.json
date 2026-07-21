@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Odstrániť „{name}“? Odstránia sa aj odkazy na zdieľané filmy a čakajúce pozvánky.",
   "groups.deleted": "Skupina odstránená.",
   "groups.renamed": "Skupina premenovaná.",
-  "groups.renamePrompt": "Nový názov skupiny"
+  "groups.renamePrompt": "Nový názov skupiny",
+  "appAdmin.pluginTabInstalled": "Nainštalované",
+  "appAdmin.pluginTabActivity": "Aktivita",
+  "appAdmin.pluginOverviewHelp": "Celkový počet nainštalovaných a povolených pluginov, stav chodu a úlohy, ktoré vyžadujú pozornosť.",
+  "appAdmin.pluginSearchLabel": "Hľadať",
+  "appAdmin.pluginSearchPlaceholder": "Hľadať pluginy podľa názvu alebo kľúča",
+  "appAdmin.pluginTypeFilterLabel": "Typ",
+  "appAdmin.pluginTypeAll": "Všetky typy",
+  "appAdmin.pluginStatusFilterLabel": "Stav",
+  "appAdmin.pluginStatusAll": "Všetky stavy",
+  "appAdmin.pluginLifecycleHelp": "Akcie aktualizácie, vrátenia a exportu pre jednotlivé pluginy zostávajú na karte daného pluginu v časti Nainštalované.",
+  "appAdmin.pluginAttentionTitle": "Vyžaduje pozornosť",
+  "appAdmin.pluginAttentionEmpty": "Momentálne nič nevyžaduje pozornosť.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} pluginov vyžaduje konfiguráciu",
+  "appAdmin.pluginAttentionFailedJobs": "{count} neúspešných úloh pluginov",
+  "appAdmin.pluginAttentionUpdates": "{count} dostupných aktualizácií pluginov"
 }
