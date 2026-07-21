@@ -640,6 +640,31 @@ class NextProfileUiTests(unittest.TestCase):
                 self.html,
             )
 
+    def test_admin_submenus_share_preferences_layout_and_accent_selection(self):
+        for class_name in (
+            "app-admin-people-tabs",
+            "app-admin-roles-tabs",
+            "app-admin-operations-tabs",
+            "app-admin-plugin-tabs",
+        ):
+            self.assertIn(
+                f"profile-dashboard-tabs app-admin-section-tabs {class_name}",
+                self.html,
+            )
+        self.assertEqual(
+            self.html.count(
+                'class="detail-submenu profile-dashboard-tabs app-admin-section-tabs'
+            ),
+            4,
+        )
+        self.assertIn(".app-admin-section-tabs button.active,", self.html)
+        self.assertIn('.app-admin-section-tabs button[aria-selected="true"] {', self.html)
+        self.assertIn("color: var(--accent-bright);", self.html)
+        self.assertIn(
+            "background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));",
+            self.html,
+        )
+
     def test_admin_roles_dashboard_separates_basic_and_advanced_workflows(self):
         self.assertIn(
             'id="appAdminPanelRoles" role="tabpanel" aria-labelledby="appAdminTabRoles"',
@@ -696,6 +721,20 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('localStorage.setItem("dv_next_admin_operations_tab"', self.html)
         self.assertIn('data-app-admin-operations-panel="collection"', self.html)
         self.assertEqual(self.html.count('class="tag app-admin-operations-tab-status"'), 5)
+        for tone in ("good", "bad", "blue"):
+            self.assertIn(
+                f'.app-admin-operations-tabs button[data-status-tone="{tone}"] .nav-symbol',
+                self.html,
+            )
+        self.assertIn('button.dataset.statusTone = tone || "neutral";', self.html)
+        self.assertIn(".app-admin-operations-tabs .app-admin-operations-tab-status {", self.html)
+        self.assertIn("grid-auto-columns: minmax(68px, 1fr);", self.html)
+        self.assertIn(".app-admin-operations-tabs::-webkit-scrollbar {", self.html)
+        self.assertNotIn(
+            ".app-admin-operations-tabs .app-admin-operations-tab-status {\n"
+            "        display: none;",
+            self.html,
+        )
 
     def test_admin_plugins_dashboard_uses_task_oriented_subtabs(self):
         self.assertIn(

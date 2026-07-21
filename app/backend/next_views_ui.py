@@ -8460,6 +8460,17 @@ def ui_preview_html(
       height: 20px;
       flex: 0 0 auto;
     }
+    .app-admin-section-tabs button {
+      transition: color .18s ease, background .18s ease, box-shadow .18s ease;
+    }
+    .app-admin-section-tabs button.active,
+    .app-admin-section-tabs button[aria-selected="true"] {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+        0 8px 20px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
     .profile-dashboard-tab-label {
       min-width: 0;
       overflow: hidden;
@@ -9349,6 +9360,15 @@ def ui_preview_html(
     .app-admin-operations-tab-status {
       min-width: 24px;
       justify-content: center;
+    }
+    .app-admin-operations-tabs button[data-status-tone="good"] .nav-symbol {
+      color: var(--green);
+    }
+    .app-admin-operations-tabs button[data-status-tone="bad"] .nav-symbol {
+      color: var(--red);
+    }
+    .app-admin-operations-tabs button[data-status-tone="blue"] .nav-symbol {
+      color: var(--accent);
     }
     .app-admin-summary-grid {
       display: grid;
@@ -12416,9 +12436,13 @@ def ui_preview_html(
         grid-template-columns: repeat(3, minmax(52px, 1fr));
       }
       .app-admin-operations-tabs {
-        grid-template-columns: repeat(5, minmax(48px, 1fr));
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(68px, 1fr);
+        overflow-x: auto;
+        scrollbar-width: none;
       }
-      .app-admin-operations-tabs .app-admin-operations-tab-status {
+      .app-admin-operations-tabs::-webkit-scrollbar {
         display: none;
       }
       .profile-dashboard-tabs button,
@@ -12427,6 +12451,16 @@ def ui_preview_html(
         max-width: none;
         min-height: 50px;
         padding: 0 10px;
+      }
+      .app-admin-operations-tabs button {
+        gap: 6px;
+        padding: 0 7px;
+      }
+      .app-admin-operations-tabs .app-admin-operations-tab-status {
+        min-width: 22px;
+        min-height: 22px;
+        padding: 0 6px;
+        font-size: .68rem;
       }
       .profile-dashboard-tab-label {
         display: none;
@@ -15467,7 +15501,7 @@ def ui_preview_html(
                 <p data-next-i18n="appAdmin.usersAndRolesHelp">Review users, switch their Basic role and disable accounts when needed.</p>
               </div>
             </header>
-            <nav class="detail-submenu profile-dashboard-tabs app-admin-people-tabs" role="tablist" aria-label="Users and groups sections" data-next-i18n-aria="appAdmin.tabPeople">
+            <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-people-tabs" role="tablist" aria-label="Users and groups sections" data-next-i18n-aria="appAdmin.tabPeople">
               <button type="button" class="active" id="appAdminUsersTabSettings" role="tab" aria-selected="true" aria-controls="appAdminUsersPanelSettings" tabindex="0" data-app-admin-users-tab="settings">""" + nav_icon("preferences") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.peopleTabSettingsCreate">Settings / Create</span></button>
               <button type="button" id="appAdminUsersTabUsers" role="tab" aria-selected="false" aria-controls="appAdminUsersPanelUsers" tabindex="-1" data-app-admin-users-tab="users">""" + nav_icon("profile") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.tabUsers">Users</span></button>
               <button type="button" id="appAdminUsersTabGroups" role="tab" aria-selected="false" aria-controls="appAdminUsersPanelGroups" tabindex="-1" data-app-admin-users-tab="groups">""" + nav_icon("groups") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.groups">Groups</span></button>
@@ -15573,7 +15607,7 @@ def ui_preview_html(
                 <p data-next-i18n="appAdmin.rbacModeHelp">Basic keeps DiscVault roles simple. Advanced unlocks custom roles and exact permission sets.</p>
               </div>
             </header>
-            <nav class="detail-submenu profile-dashboard-tabs app-admin-roles-tabs" role="tablist" aria-label="Role management sections" data-next-i18n-aria="appAdmin.tabRoles">
+            <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-roles-tabs" role="tablist" aria-label="Role management sections" data-next-i18n-aria="appAdmin.tabRoles">
               <button type="button" class="active" id="appAdminRolesTabOverview" role="tab" aria-selected="true" aria-controls="appAdminRolesPanelOverview" tabindex="0" data-app-admin-roles-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
               <button type="button" id="appAdminRolesTabRoles" role="tab" aria-selected="false" aria-controls="appAdminRolesPanelRoles" tabindex="-1" data-app-admin-roles-tab="roles">""" + nav_icon("groups") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.roles">Roles</span></button>
               <button type="button" id="appAdminRolesTabPermissions" role="tab" aria-selected="false" aria-controls="appAdminRolesPanelPermissions" tabindex="-1" data-app-admin-roles-tab="permissions">""" + nav_icon("security") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabPermissions">Permissions</span></button>
@@ -15771,7 +15805,7 @@ def ui_preview_html(
                 <p data-next-i18n="appAdmin.operationsHelp">A compact control room for metadata, plugins, imports, duplicates and automation readiness.</p>
               </div>
             </header>
-            <nav class="detail-submenu profile-dashboard-tabs app-admin-operations-tabs" role="tablist" aria-label="Operations sections" data-next-i18n-aria="appAdmin.operationsTitle">
+            <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-operations-tabs" role="tablist" aria-label="Operations sections" data-next-i18n-aria="appAdmin.operationsTitle">
               <button type="button" class="active" id="appAdminOperationsTabOverview" role="tab" aria-label="Overview" data-next-i18n-aria="appAdmin.rolesTabOverview" aria-selected="true" aria-controls="appAdminOperationsPanelOverview" tabindex="0" data-app-admin-operations-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabHealth" aria-hidden="true">-</span></button>
               <button type="button" id="appAdminOperationsTabCollection" role="tab" aria-label="Collection Health" data-next-i18n-aria="appAdmin.collectionHealthTitle" aria-selected="false" aria-controls="appAdminOperationsPanelCollection" tabindex="-1" data-app-admin-operations-tab="collection">""" + nav_icon("library_preferences") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.collectionHealthTitle">Collection Health</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabIssues" aria-hidden="true">-</span></button>
               <button type="button" id="appAdminOperationsTabReadiness" role="tab" aria-label="Feature readiness" data-next-i18n-aria="appAdmin.operationsFeatures" aria-selected="false" aria-controls="appAdminOperationsPanelReadiness" tabindex="-1" data-app-admin-operations-tab="readiness">""" + nav_icon("devices") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.operationsFeatures">Feature readiness</span><span class="tag app-admin-operations-tab-status" id="appAdminOperationsTabReady" aria-hidden="true">-</span></button>
@@ -15897,7 +15931,7 @@ def ui_preview_html(
                   <strong id="appAdminDigitalSourceCount">-</strong>
                 </div>
               </div>
-              <nav class="detail-submenu profile-dashboard-tabs" role="tablist" aria-label="Plugin sections" data-next-i18n-aria="appAdmin.plugins">
+              <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-plugin-tabs" role="tablist" aria-label="Plugin sections" data-next-i18n-aria="appAdmin.plugins">
                 <button type="button" class="active" id="appAdminPluginTabOverview" role="tab" aria-label="Overview" data-next-i18n-aria="appAdmin.rolesTabOverview" aria-selected="true" aria-controls="appAdminPluginPanelOverview" tabindex="0" data-app-admin-plugin-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
                 <button type="button" id="appAdminPluginTabInstalled" role="tab" aria-label="Installed" data-next-i18n-aria="appAdmin.pluginTabInstalled" aria-selected="false" aria-controls="appAdminPluginPanelInstalled" tabindex="-1" data-app-admin-plugin-tab="installed">""" + nav_icon("structure") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.pluginTabInstalled">Installed</span></button>
                 <button type="button" id="appAdminPluginTabPackages" role="tab" aria-label="Packages" data-next-i18n-aria="appAdmin.pluginPackages" aria-selected="false" aria-controls="appAdminPluginPanelPackages" tabindex="-1" data-app-admin-plugin-tab="packages">""" + nav_icon("import") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.pluginPackages">Plugin packages</span></button>
@@ -19028,6 +19062,8 @@ def ui_preview_html(
         if (!node) return;
         node.textContent = label;
         node.className = `tag app-admin-operations-tab-status ${tone || ""}`.trim();
+        const button = node.closest("button");
+        if (button) button.dataset.statusTone = tone || "neutral";
       });
       renderAppAdminCollectionHealth();
       dashboard.innerHTML = operations.status === undefined && !operations.counts
