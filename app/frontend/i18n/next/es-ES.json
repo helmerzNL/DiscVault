@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "¿Eliminar «{name}»? También se eliminarán los enlaces a películas compartidas y las invitaciones pendientes.",
   "groups.deleted": "Grupo eliminado.",
   "groups.renamed": "Grupo renombrado.",
-  "groups.renamePrompt": "Nuevo nombre del grupo"
+  "groups.renamePrompt": "Nuevo nombre del grupo",
+  "appAdmin.pluginTabInstalled": "Instalados",
+  "appAdmin.pluginTabActivity": "Actividad",
+  "appAdmin.pluginOverviewHelp": "Totales de instalados y activados, estado del runtime y tareas que requieren atencion.",
+  "appAdmin.pluginSearchLabel": "Buscar",
+  "appAdmin.pluginSearchPlaceholder": "Buscar plugins por nombre o clave",
+  "appAdmin.pluginTypeFilterLabel": "Tipo",
+  "appAdmin.pluginTypeAll": "Todos los tipos",
+  "appAdmin.pluginStatusFilterLabel": "Estado",
+  "appAdmin.pluginStatusAll": "Todos los estados",
+  "appAdmin.pluginLifecycleHelp": "Las acciones de actualizar, revertir y exportar de cada plugin permanecen en su tarjeta dentro de Instalados.",
+  "appAdmin.pluginAttentionTitle": "Requiere atencion",
+  "appAdmin.pluginAttentionEmpty": "Nada requiere atencion en este momento.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} plugins necesitan configuracion",
+  "appAdmin.pluginAttentionFailedJobs": "{count} tareas de plugin fallidas",
+  "appAdmin.pluginAttentionUpdates": "{count} actualizaciones de plugin disponibles"
 }

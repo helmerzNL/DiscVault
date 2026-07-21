@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Usunąć „{name}”? Łącza do udostępnionych filmów i oczekujące zaproszenia również zostaną usunięte.",
   "groups.deleted": "Grupa usunięta.",
   "groups.renamed": "Nazwa grupy zmieniona.",
-  "groups.renamePrompt": "Nowa nazwa grupy"
+  "groups.renamePrompt": "Nowa nazwa grupy",
+  "appAdmin.pluginTabInstalled": "Zainstalowane",
+  "appAdmin.pluginTabActivity": "Aktywność",
+  "appAdmin.pluginOverviewHelp": "Łączna liczba zainstalowanych i włączonych wtyczek, stan działania oraz zadania wymagające uwagi.",
+  "appAdmin.pluginSearchLabel": "Szukaj",
+  "appAdmin.pluginSearchPlaceholder": "Szukaj wtyczek według nazwy lub klucza",
+  "appAdmin.pluginTypeFilterLabel": "Typ",
+  "appAdmin.pluginTypeAll": "Wszystkie typy",
+  "appAdmin.pluginStatusFilterLabel": "Status",
+  "appAdmin.pluginStatusAll": "Wszystkie statusy",
+  "appAdmin.pluginLifecycleHelp": "Działania aktualizacji, przywracania i eksportu dla poszczególnych wtyczek pozostają na karcie wtyczki w zakładce Zainstalowane.",
+  "appAdmin.pluginAttentionTitle": "Wymaga uwagi",
+  "appAdmin.pluginAttentionEmpty": "Obecnie nic nie wymaga uwagi.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} wtyczek wymaga konfiguracji",
+  "appAdmin.pluginAttentionFailedJobs": "{count} nieudanych zadań wtyczek",
+  "appAdmin.pluginAttentionUpdates": "{count} dostępnych aktualizacji wtyczek"
 }

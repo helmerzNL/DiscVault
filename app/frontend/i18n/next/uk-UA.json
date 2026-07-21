@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Видалити «{name}»? Посилання на спільні фільми та запрошення, що очікують, також буде видалено.",
   "groups.deleted": "Групу видалено.",
   "groups.renamed": "Групу перейменовано.",
-  "groups.renamePrompt": "Нова назва групи"
+  "groups.renamePrompt": "Нова назва групи",
+  "appAdmin.pluginTabInstalled": "Встановлені",
+  "appAdmin.pluginTabActivity": "Активність",
+  "appAdmin.pluginOverviewHelp": "Загальна кількість встановлених і увімкнених плагінів, стан роботи та завдання, що потребують уваги.",
+  "appAdmin.pluginSearchLabel": "Пошук",
+  "appAdmin.pluginSearchPlaceholder": "Пошук плагінів за назвою або ключем",
+  "appAdmin.pluginTypeFilterLabel": "Тип",
+  "appAdmin.pluginTypeAll": "Усі типи",
+  "appAdmin.pluginStatusFilterLabel": "Статус",
+  "appAdmin.pluginStatusAll": "Усі статуси",
+  "appAdmin.pluginLifecycleHelp": "Дії з оновлення, відкату та експорту для окремого плагіна залишаються на його картці в розділі «Встановлені».",
+  "appAdmin.pluginAttentionTitle": "Потребує уваги",
+  "appAdmin.pluginAttentionEmpty": "Зараз немає нічого, що потребує уваги.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} плагінів потребують налаштування",
+  "appAdmin.pluginAttentionFailedJobs": "{count} невдалих завдань плагінів",
+  "appAdmin.pluginAttentionUpdates": "{count} доступних оновлень плагінів"
 }

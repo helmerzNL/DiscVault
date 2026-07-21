@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Vai dzēst “{name}”? Tiks noņemtas arī kopīgoto filmu saites un neapstiprinātie uzaicinājumi.",
   "groups.deleted": "Grupa izdzēsta.",
   "groups.renamed": "Grupa pārdēvēta.",
-  "groups.renamePrompt": "Jauns grupas nosaukums"
+  "groups.renamePrompt": "Jauns grupas nosaukums",
+  "appAdmin.pluginTabInstalled": "Instalēti",
+  "appAdmin.pluginTabActivity": "Aktivitāte",
+  "appAdmin.pluginOverviewHelp": "Instalēto un iespējoto spraudņu kopskaits, darbības stāvoklis un uzmanību pieprasoši darbi.",
+  "appAdmin.pluginSearchLabel": "Meklēšana",
+  "appAdmin.pluginSearchPlaceholder": "Meklēt spraudņus pēc nosaukuma vai atslēgas",
+  "appAdmin.pluginTypeFilterLabel": "Tips",
+  "appAdmin.pluginTypeAll": "Visi tipi",
+  "appAdmin.pluginStatusFilterLabel": "Statuss",
+  "appAdmin.pluginStatusAll": "Visi statusi",
+  "appAdmin.pluginLifecycleHelp": "Atsevišķa spraudņa atjaunināšanas, atgriešanas un eksportēšanas darbības ir pieejamas tā kartītē sadaļā Instalēti.",
+  "appAdmin.pluginAttentionTitle": "Pieprasa uzmanību",
+  "appAdmin.pluginAttentionEmpty": "Šobrīd nav nekā, kam vajadzīga uzmanība.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} spraudņiem nepieciešama konfigurācija",
+  "appAdmin.pluginAttentionFailedJobs": "{count} neizdevušies spraudņu darbi",
+  "appAdmin.pluginAttentionUpdates": "{count} pieejami spraudņu atjauninājumi"
 }

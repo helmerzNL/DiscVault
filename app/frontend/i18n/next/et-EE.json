@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Kas kustutada „{name}“? Samuti eemaldatakse jagatud filmide lingid ja ootel kutsed.",
   "groups.deleted": "Grupp kustutatud.",
   "groups.renamed": "Grupp ümber nimetatud.",
-  "groups.renamePrompt": "Uus rühma nimi"
+  "groups.renamePrompt": "Uus rühma nimi",
+  "appAdmin.pluginTabInstalled": "Installitud",
+  "appAdmin.pluginTabActivity": "Tegevus",
+  "appAdmin.pluginOverviewHelp": "Installitud ja lubatud pluginate koguarv, töökeskkonna olek ja tähelepanu vajavad tööd.",
+  "appAdmin.pluginSearchLabel": "Otsing",
+  "appAdmin.pluginSearchPlaceholder": "Otsi pluginaid nime või võtme järgi",
+  "appAdmin.pluginTypeFilterLabel": "Tüüp",
+  "appAdmin.pluginTypeAll": "Kõik tüübid",
+  "appAdmin.pluginStatusFilterLabel": "Olek",
+  "appAdmin.pluginStatusAll": "Kõik olekud",
+  "appAdmin.pluginLifecycleHelp": "Ühe plugina värskendamine, taastamine ja eksportimine toimub jaotises Installitud selle plugina kaardil.",
+  "appAdmin.pluginAttentionTitle": "Vajab tähelepanu",
+  "appAdmin.pluginAttentionEmpty": "Praegu ei vaja midagi tähelepanu.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} pluginat vajavad seadistamist",
+  "appAdmin.pluginAttentionFailedJobs": "{count} ebaõnnestunud plugina tööd",
+  "appAdmin.pluginAttentionUpdates": "{count} plugina värskendust saadaval"
 }

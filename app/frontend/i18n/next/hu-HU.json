@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Törlöd ezt: „{name}”? A megosztott filmek hivatkozásai és a függőben lévő meghívók is törlődnek.",
   "groups.deleted": "Csoport törölve.",
   "groups.renamed": "Csoport átnevezve.",
-  "groups.renamePrompt": "Új csoportnév"
+  "groups.renamePrompt": "Új csoportnév",
+  "appAdmin.pluginTabInstalled": "Telepítve",
+  "appAdmin.pluginTabActivity": "Tevékenység",
+  "appAdmin.pluginOverviewHelp": "Telepített és engedélyezett bővítmények száma, futásidejű állapot és figyelmet igénylő feladatok.",
+  "appAdmin.pluginSearchLabel": "Keresés",
+  "appAdmin.pluginSearchPlaceholder": "Bővítmények keresése név vagy kulcs szerint",
+  "appAdmin.pluginTypeFilterLabel": "Típus",
+  "appAdmin.pluginTypeAll": "Minden típus",
+  "appAdmin.pluginStatusFilterLabel": "Állapot",
+  "appAdmin.pluginStatusAll": "Minden állapot",
+  "appAdmin.pluginLifecycleHelp": "Az egyes bővítmények frissítési, visszaállítási és exportálási műveletei a bővítmény kártyáján maradnak a Telepítve nézetben.",
+  "appAdmin.pluginAttentionTitle": "Figyelmet igényel",
+  "appAdmin.pluginAttentionEmpty": "Jelenleg semmi nem igényel figyelmet.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} bővítmény konfigurációt igényel",
+  "appAdmin.pluginAttentionFailedJobs": "{count} sikertelen bővítményfeladat",
+  "appAdmin.pluginAttentionUpdates": "{count} elérhető bővítményfrissítés"
 }

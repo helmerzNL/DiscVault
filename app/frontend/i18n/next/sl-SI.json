@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Izbrišem »{name}«? Odstranjene bodo tudi povezave do filmov v skupni rabi in čakajoča povabila.",
   "groups.deleted": "Skupina je izbrisana.",
   "groups.renamed": "Skupina je preimenovana.",
-  "groups.renamePrompt": "Novo ime skupine"
+  "groups.renamePrompt": "Novo ime skupine",
+  "appAdmin.pluginTabInstalled": "Nameščeno",
+  "appAdmin.pluginTabActivity": "Dejavnost",
+  "appAdmin.pluginOverviewHelp": "Skupno število nameščenih in omogočenih vtičnikov, stanje delovanja in opravila, ki potrebujejo pozornost.",
+  "appAdmin.pluginSearchLabel": "Iskanje",
+  "appAdmin.pluginSearchPlaceholder": "Iskanje vtičnikov po imenu ali ključu",
+  "appAdmin.pluginTypeFilterLabel": "Vrsta",
+  "appAdmin.pluginTypeAll": "Vse vrste",
+  "appAdmin.pluginStatusFilterLabel": "Stanje",
+  "appAdmin.pluginStatusAll": "Vsa stanja",
+  "appAdmin.pluginLifecycleHelp": "Dejanja posodobitve, povrnitve in izvoza za posamezen vtičnik ostanejo na njegovi kartici v razdelku Nameščeno.",
+  "appAdmin.pluginAttentionTitle": "Potrebuje pozornost",
+  "appAdmin.pluginAttentionEmpty": "Trenutno nič ne potrebuje pozornosti.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} vtičnikov potrebuje konfiguracijo",
+  "appAdmin.pluginAttentionFailedJobs": "{count} neuspešnih opravil vtičnikov",
+  "appAdmin.pluginAttentionUpdates": "{count} razpoložljivih posodobitev vtičnikov"
 }

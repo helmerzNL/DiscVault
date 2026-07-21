@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Да се изтрие ли „{name}“? Връзките към споделени филми и чакащите покани също ще бъдат премахнати.",
   "groups.deleted": "Групата е изтрита.",
   "groups.renamed": "Групата е преименувана.",
-  "groups.renamePrompt": "Ново име на групата"
+  "groups.renamePrompt": "Ново име на групата",
+  "appAdmin.pluginTabInstalled": "Инсталирани",
+  "appAdmin.pluginTabActivity": "Активност",
+  "appAdmin.pluginOverviewHelp": "Общ брой инсталирани и активирани плъгини, състояние на изпълнението и задачи, изискващи внимание.",
+  "appAdmin.pluginSearchLabel": "Търсене",
+  "appAdmin.pluginSearchPlaceholder": "Търсене на плъгини по име или ключ",
+  "appAdmin.pluginTypeFilterLabel": "Тип",
+  "appAdmin.pluginTypeAll": "Всички типове",
+  "appAdmin.pluginStatusFilterLabel": "Състояние",
+  "appAdmin.pluginStatusAll": "Всички състояния",
+  "appAdmin.pluginLifecycleHelp": "Действията за обновяване, връщане назад и експортиране за отделен плъгин остават на съответната карта в „Инсталирани“.",
+  "appAdmin.pluginAttentionTitle": "Изисква внимание",
+  "appAdmin.pluginAttentionEmpty": "В момента нищо не изисква внимание.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} плъгини се нуждаят от конфигуриране",
+  "appAdmin.pluginAttentionFailedJobs": "{count} неуспешни задачи на плъгини",
+  "appAdmin.pluginAttentionUpdates": "{count} налични актуализации на плъгини"
 }

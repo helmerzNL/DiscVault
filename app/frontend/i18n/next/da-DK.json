@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Slet \"{name}\"? Links til delte film og afventende invitationer fjernes også.",
   "groups.deleted": "Gruppe slettet.",
   "groups.renamed": "Gruppe omdøbt.",
-  "groups.renamePrompt": "Nyt gruppenavn"
+  "groups.renamePrompt": "Nyt gruppenavn",
+  "appAdmin.pluginTabInstalled": "Installeret",
+  "appAdmin.pluginTabActivity": "Aktivitet",
+  "appAdmin.pluginOverviewHelp": "Antal installeret og aktiveret, runtime-status og jobs der kraever handling.",
+  "appAdmin.pluginSearchLabel": "Sog",
+  "appAdmin.pluginSearchPlaceholder": "Sog efter plugins pa navn eller nogle",
+  "appAdmin.pluginTypeFilterLabel": "Type",
+  "appAdmin.pluginTypeAll": "Alle typer",
+  "appAdmin.pluginStatusFilterLabel": "Status",
+  "appAdmin.pluginStatusAll": "Alle statusser",
+  "appAdmin.pluginLifecycleHelp": "Opdaterings-, rollback- og eksporthandlinger pr. plugin forbliver pa plugin-kortet under Installeret.",
+  "appAdmin.pluginAttentionTitle": "Kraever handling",
+  "appAdmin.pluginAttentionEmpty": "Intet kraever handling lige nu.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} plugins kraever konfiguration",
+  "appAdmin.pluginAttentionFailedJobs": "{count} mislykkede plugin-jobs",
+  "appAdmin.pluginAttentionUpdates": "{count} plugin-opdateringer tilgaengelige"
 }

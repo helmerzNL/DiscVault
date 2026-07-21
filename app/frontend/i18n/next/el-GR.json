@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Διαγραφή του «{name}»; Θα αφαιρεθούν επίσης οι σύνδεσμοι κοινόχρηστων ταινιών και οι εκκρεμείς προσκλήσεις.",
   "groups.deleted": "Η ομάδα διαγράφηκε.",
   "groups.renamed": "Η ομάδα μετονομάστηκε.",
-  "groups.renamePrompt": "Νέο όνομα ομάδας"
+  "groups.renamePrompt": "Νέο όνομα ομάδας",
+  "appAdmin.pluginTabInstalled": "Εγκατεστημένα",
+  "appAdmin.pluginTabActivity": "Δραστηριότητα",
+  "appAdmin.pluginOverviewHelp": "Συνολικά εγκατεστημένα και ενεργοποιημένα πρόσθετα, κατάσταση λειτουργίας και εργασίες που απαιτούν προσοχή.",
+  "appAdmin.pluginSearchLabel": "Αναζήτηση",
+  "appAdmin.pluginSearchPlaceholder": "Αναζήτηση προσθέτων κατά όνομα ή κλειδί",
+  "appAdmin.pluginTypeFilterLabel": "Τύπος",
+  "appAdmin.pluginTypeAll": "Όλοι οι τύποι",
+  "appAdmin.pluginStatusFilterLabel": "Κατάσταση",
+  "appAdmin.pluginStatusAll": "Όλες οι καταστάσεις",
+  "appAdmin.pluginLifecycleHelp": "Οι ενέργειες ενημέρωσης, επαναφοράς και εξαγωγής για κάθε πρόσθετο παραμένουν στην κάρτα του, στην ενότητα Εγκατεστημένα.",
+  "appAdmin.pluginAttentionTitle": "Απαιτεί προσοχή",
+  "appAdmin.pluginAttentionEmpty": "Αυτήν τη στιγμή δεν υπάρχει κάτι που απαιτεί προσοχή.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} πρόσθετα χρειάζονται διαμόρφωση",
+  "appAdmin.pluginAttentionFailedJobs": "{count} αποτυχημένες εργασίες προσθέτων",
+  "appAdmin.pluginAttentionUpdates": "{count} διαθέσιμες ενημερώσεις προσθέτων"
 }

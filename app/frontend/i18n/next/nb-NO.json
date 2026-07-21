@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "Slette «{name}»? Koblinger til delte filmer og ventende invitasjoner fjernes også.",
   "groups.deleted": "Gruppe slettet.",
   "groups.renamed": "Gruppe omdøpt.",
-  "groups.renamePrompt": "Nytt gruppenavn"
+  "groups.renamePrompt": "Nytt gruppenavn",
+  "appAdmin.pluginTabInstalled": "Installert",
+  "appAdmin.pluginTabActivity": "Aktivitet",
+  "appAdmin.pluginOverviewHelp": "Antall installert og aktivert, kjoretidsstatus og jobber som krever oppfolging.",
+  "appAdmin.pluginSearchLabel": "Sok",
+  "appAdmin.pluginSearchPlaceholder": "Sok etter plugins pa navn eller nokkel",
+  "appAdmin.pluginTypeFilterLabel": "Type",
+  "appAdmin.pluginTypeAll": "Alle typer",
+  "appAdmin.pluginStatusFilterLabel": "Status",
+  "appAdmin.pluginStatusAll": "Alle statuser",
+  "appAdmin.pluginLifecycleHelp": "Oppdaterings-, rollback- og eksporthandlinger per plugin forblir pa plugin-kortet under Installert.",
+  "appAdmin.pluginAttentionTitle": "Krever oppfolging",
+  "appAdmin.pluginAttentionEmpty": "Ingenting krever oppfolging na.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} plugins krever konfigurasjon",
+  "appAdmin.pluginAttentionFailedJobs": "{count} mislykkede plugin-jobber",
+  "appAdmin.pluginAttentionUpdates": "{count} plugin-oppdateringer tilgjengelige"
 }

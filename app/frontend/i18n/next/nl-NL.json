@@ -2493,5 +2493,20 @@
   "groups.deleteConfirm": "'{name}' verwijderen? Gedeelde filmkoppelingen en openstaande uitnodigingen worden ook verwijderd.",
   "groups.deleted": "Groep verwijderd.",
   "groups.renamed": "Groep hernoemd.",
-  "groups.renamePrompt": "Nieuwe groepsnaam"
+  "groups.renamePrompt": "Nieuwe groepsnaam",
+  "appAdmin.pluginTabInstalled": "Geinstalleerd",
+  "appAdmin.pluginTabActivity": "Activiteit",
+  "appAdmin.pluginOverviewHelp": "Totalen voor geinstalleerd en ingeschakeld, runtime status en taken die aandacht nodig hebben.",
+  "appAdmin.pluginSearchLabel": "Zoeken",
+  "appAdmin.pluginSearchPlaceholder": "Zoek plugins op naam of key",
+  "appAdmin.pluginTypeFilterLabel": "Type",
+  "appAdmin.pluginTypeAll": "Alle types",
+  "appAdmin.pluginStatusFilterLabel": "Status",
+  "appAdmin.pluginStatusAll": "Alle statussen",
+  "appAdmin.pluginLifecycleHelp": "Update-, rollback- en exportacties per plugin blijven op de pluginkaart onder Geinstalleerd.",
+  "appAdmin.pluginAttentionTitle": "Aandacht nodig",
+  "appAdmin.pluginAttentionEmpty": "Niets vereist momenteel aandacht.",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} plugins hebben configuratie nodig",
+  "appAdmin.pluginAttentionFailedJobs": "{count} mislukte plugintaken",
+  "appAdmin.pluginAttentionUpdates": "{count} plugin-updates beschikbaar"
 }
