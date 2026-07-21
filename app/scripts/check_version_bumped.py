@@ -33,7 +33,7 @@ PROTECTED_PREFIXES = (
     "dist/plugins/",
 )
 IGNORED_SUFFIXES = (".md", ".txt")
-SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
 def git(*args: str) -> str:

@@ -209,6 +209,27 @@ class TestVersionGuardCLI(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("semver", result.stderr)
 
+    def test_aggregate_fails_semver_with_leading_zeroes(self) -> None:
+        """SemVer numeric identifiers must not contain leading zeroes."""
+        for version in ("01.2.3", "1.02.3", "1.2.03"):
+            with self.subTest(version=version), TempRepo() as repo:
+                repo.write("app/VERSION", "1.0.0")
+                root_sha = repo.commit("app/VERSION", message="init")
+
+                repo.write("app/backend/foo.py", "# foo")
+                repo.write("app/VERSION", version)
+                sha_a = repo.commit("app/backend/foo.py", "app/VERSION", message="feat+bad bump")
+
+                result = subprocess.run(
+                    [sys.executable, SCRIPT, "--base", root_sha, "--head", sha_a, "--aggregate"],
+                    cwd=repo.path,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("semver", result.stderr)
+
     def test_aggregate_fails_when_head_version_equals_base(self) -> None:
         """Merely re-writing the same version value must not satisfy the guard."""
         with TempRepo() as repo:
