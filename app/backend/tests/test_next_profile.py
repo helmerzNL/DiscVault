@@ -606,7 +606,7 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn(".app-admin-submenu .app-admin-tab-label {\n        display: none;", self.html)
         self.assertIn('id="profileMenuStyleAdminHelp"', self.html)
         self.assertIn(
-            'profileMenuStyleAdminHelp")?.classList.toggle("hidden", !isNativeAdminUser())',
+            'profileMenuStyleAdminHelp")?.classList.toggle("hidden", !allowed)',
             self.html,
         )
 
