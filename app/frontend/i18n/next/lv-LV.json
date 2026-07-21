@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Atlasītā loma",
   "preferences.profileMenuStyle": "Profila izvēlne",
   "preferences.profileMenuStyleHelp": "Izvēlieties, vai profila izvēlnē lielos ekrānos rādīt etiķetes. Tālruņos vienmēr tiek rādītas tikai ikonas.",
+  "preferences.profileMenuStyleAdminHelp": "Šī izvēle attiecas arī uz administratora izvēlni.",
   "preferences.profileMenuIconOnly": "Tikai ikonas",
   "preferences.profileMenuIconText": "Ikonas un teksts",
   "appAdmin.activeInvites": "Active invites",

@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Odabrana uloga",
   "preferences.profileMenuStyle": "Izbornik profila",
   "preferences.profileMenuStyleHelp": "Odaberite prikazuje li izbornik profila oznake na velikim zaslonima. Na telefonima se uvijek prikazuju samo ikone.",
+  "preferences.profileMenuStyleAdminHelp": "Ovaj odabir vrijedi i za administratorski izbornik.",
   "preferences.profileMenuIconOnly": "Samo ikone",
   "preferences.profileMenuIconText": "Ikone i tekst",
   "appAdmin.activeInvites": "Active invites",

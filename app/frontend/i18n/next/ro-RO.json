@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Rol selectat",
   "preferences.profileMenuStyle": "Meniu profil",
   "preferences.profileMenuStyleHelp": "Alegeți dacă meniul profilului afișează etichete pe ecrane mari. Pe telefoane sunt afișate întotdeauna doar pictograme.",
+  "preferences.profileMenuStyleAdminHelp": "Această alegere se aplică și meniului de administrare.",
   "preferences.profileMenuIconOnly": "Doar pictograme",
   "preferences.profileMenuIconText": "Pictograme și text",
   "appAdmin.activeInvites": "Active invites",

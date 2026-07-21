@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Valittu rooli",
   "preferences.profileMenuStyle": "Profiilivalikko",
   "preferences.profileMenuStyleHelp": "Valitse, näyttääkö profiilivalikko tekstit suurilla näytöillä. Puhelimissa näytetään aina vain kuvakkeet.",
+  "preferences.profileMenuStyleAdminHelp": "Tämä valinta koskee myös Admin-valikkoa.",
   "preferences.profileMenuIconOnly": "Vain kuvakkeet",
   "preferences.profileMenuIconText": "Kuvakkeet ja teksti",
   "appAdmin.activeInvites": "Aktiiviset kutsut",

@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Selected role",
   "preferences.profileMenuStyle": "Profile menu",
   "preferences.profileMenuStyleHelp": "Choose whether the Profile menu shows labels on large screens. Phones always show icons only.",
+  "preferences.profileMenuStyleAdminHelp": "This choice also applies to the Admin menu.",
   "preferences.profileMenuIconOnly": "Icons only",
   "preferences.profileMenuIconText": "Icons and text",
   "appAdmin.activeInvites": "Active invites",

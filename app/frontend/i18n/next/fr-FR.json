@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Rôle sélectionné",
   "preferences.profileMenuStyle": "Menu du profil",
   "preferences.profileMenuStyleHelp": "Choisissez si le menu du profil affiche les libellés sur les grands écrans. Sur téléphone, seules les icônes sont toujours affichées.",
+  "preferences.profileMenuStyleAdminHelp": "Ce choix s’applique également au menu Admin.",
   "preferences.profileMenuIconOnly": "Icônes uniquement",
   "preferences.profileMenuIconText": "Icônes et texte",
   "appAdmin.activeInvites": "Invitations actives",

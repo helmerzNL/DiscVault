@@ -8270,6 +8270,17 @@ def ui_preview_html(
     html[data-profile-menu-style="icon_only"] .profile-navigation .profile-tab-label {
       display: none;
     }
+    html[data-profile-menu-style="icon_only"] .app-admin-workspace {
+      grid-template-columns: 72px minmax(0, 1fr);
+    }
+    html[data-profile-menu-style="icon_only"] .app-admin-submenu button {
+      grid-template-columns: 34px;
+      justify-content: center;
+      padding-inline: 0;
+    }
+    html[data-profile-menu-style="icon_only"] .app-admin-submenu .app-admin-tab-label {
+      display: none;
+    }
     .profile-panel {
       display: grid;
       gap: 16px;
@@ -9305,10 +9316,14 @@ def ui_preview_html(
         width: auto;
         min-height: 40px;
         flex: 0 0 auto;
-        grid-template-columns: 22px auto;
-        gap: 7px;
-        padding: 4px 12px;
+        grid-template-columns: 22px;
+        justify-content: center;
+        gap: 0;
+        padding: 4px 10px;
         white-space: nowrap;
+      }
+      .app-admin-submenu .app-admin-tab-label {
+        display: none;
       }
       .app-admin-tab-icon {
         width: 22px;
@@ -10327,6 +10342,18 @@ def ui_preview_html(
     .operations-dashboard-card strong,
     .operations-feature-card strong {
       overflow-wrap: anywhere;
+    }
+    .operations-attention-icon {
+      width: 24px;
+      height: 24px;
+      display: inline-grid;
+      place-items: center;
+      color: var(--red);
+    }
+    .operations-attention-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: currentColor;
     }
     .operations-feature-head {
       display: flex;
@@ -14814,6 +14841,7 @@ def ui_preview_html(
                           <span>
                             <strong data-next-i18n="preferences.profileMenuStyle">Profile menu</strong>
                             <span data-next-i18n="preferences.profileMenuStyleHelp">Choose whether the Profile menu shows labels on large screens. Phones always show icons only.</span>
+                            <span class="hidden" id="profileMenuStyleAdminHelp" data-next-i18n="preferences.profileMenuStyleAdminHelp">This choice also applies to the Admin menu.</span>
                           </span>
                           <div class="segmented" role="group" aria-label="Profile menu" data-next-i18n-aria="preferences.profileMenuStyle">
                             <button type="button" data-profile-menu-style-choice="icon_text" aria-pressed="true" data-next-i18n="preferences.profileMenuIconText">Icons and text</button>
@@ -17287,6 +17315,7 @@ def ui_preview_html(
     function renderAppAdminVisibility() {
       const allowed = isNativeAdminUser() && canUseAppAdmin();
       document.getElementById("profileOpenAdminButton")?.classList.toggle("hidden", !allowed);
+      document.getElementById("profileMenuStyleAdminHelp")?.classList.toggle("hidden", !isNativeAdminUser());
     }
     function applyAppPermissionVisibility() {
       const collectorsEnabled = collectorsModeEnabled();
@@ -18821,6 +18850,12 @@ def ui_preview_html(
       };
       return labels[value] || status || "OK";
     }
+    function appAdminOperationsOverviewStatusHtml(status) {
+      const value = String(status || "ok").toLowerCase();
+      if (value !== "attention") return escapeHtml(appAdminOperationsStatusLabel(status));
+      const label = escapeHtml(appAdminOperationsStatusLabel(status));
+      return `<span class="operations-attention-icon" role="img" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M13 14H11V10H13M13 18H11V16H13M1 21H23L12 2L1 21Z"></path></svg></span>`;
+    }
     function appAdminOperationsFeatureLabel(key) {
       const labels = {
         migration_recovery_ui: ["appAdmin.featureMigrationRecoveryUi", "Migration Recovery UI"],
@@ -19071,7 +19106,7 @@ def ui_preview_html(
         : `
           <div class="operations-dashboard-card">
             <span>${escapeHtml(tNext("appAdmin.health", "Health"))}</span>
-            <strong>${escapeHtml(appAdminOperationsStatusLabel(health.status || "ok"))}</strong>
+            <strong>${appAdminOperationsOverviewStatusHtml(health.status || "ok")}</strong>
             <span>${escapeHtml(formatNumber(health.pendingJobs || 0))} ${escapeHtml(tNext("appAdmin.pendingJobs", "pending jobs"))} · ${escapeHtml(formatNumber(health.failedJobs || 0))} ${escapeHtml(tNext("appAdmin.failedJobs", "failed jobs"))}</span>
           </div>
           <div class="operations-dashboard-card">
