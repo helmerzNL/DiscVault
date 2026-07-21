@@ -662,6 +662,8 @@ class NextProfileUiTests(unittest.TestCase):
             "app-admin-plugin-tabs",
             "app-admin-digital-tabs",
             "app-admin-metadata-tabs",
+            "app-admin-backup-tabs",
+            "app-admin-audit-tabs",
         ):
             self.assertIn(
                 f"profile-dashboard-tabs app-admin-section-tabs {class_name}",
@@ -671,7 +673,7 @@ class NextProfileUiTests(unittest.TestCase):
             self.html.count(
                 'class="detail-submenu profile-dashboard-tabs app-admin-section-tabs'
             ),
-            6,
+            8,
         )
         self.assertIn(".app-admin-section-tabs button.active,", self.html)
         self.assertIn('.app-admin-section-tabs button[aria-selected="true"] {', self.html)
@@ -873,6 +875,55 @@ class NextProfileUiTests(unittest.TestCase):
             "data-app-admin-plugin-delete=",
         ):
             self.assertIn(action, self.html)
+
+    def test_admin_backup_and_audit_dashboards_use_task_oriented_subtabs(self):
+        for tab, panel in (
+            ("Overview", "Overview"),
+            ("Create", "Create"),
+            ("Restore", "Restore"),
+            ("Activity", "Activity"),
+        ):
+            self.assertIn(f'id="appAdminBackupTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminBackupPanel{panel}" role="tabpanel"', self.html)
+        for tab, panel in (("Overview", "Overview"), ("Events", "Events")):
+            self.assertIn(f'id="appAdminAuditTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminAuditPanel{panel}" role="tabpanel"', self.html)
+
+        for element_id in (
+            "appAdminBackupState",
+            "appAdminBackupArchiveCount",
+            "appAdminBackupJobCount",
+            "appAdminBackupReportState",
+            "appAdminBackupScopes",
+            "appAdminBackupForm",
+            "appAdminBackupList",
+            "appAdminBackupReport",
+            "appAdminBackupJobs",
+            "appAdminAuditTotal",
+            "appAdminAuditSecurityCount",
+            "appAdminAuditAdminCount",
+            "appAdminAuditBackupCount",
+            "appAdminAuditCategory",
+            "appAdminAuditList",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('activeBackupTab: localStorage.getItem("dv_next_admin_backup_tab") || "overview"', self.html)
+        self.assertIn('activeAuditTab: localStorage.getItem("dv_next_admin_audit_tab") || "overview"', self.html)
+        self.assertIn("function setAppAdminBackupTab(tab)", self.html)
+        self.assertIn("function handleAppAdminBackupTabKeydown(button, event)", self.html)
+        self.assertIn("function setAppAdminAuditTab(tab)", self.html)
+        self.assertIn("function handleAppAdminAuditTabKeydown(button, event)", self.html)
+        self.assertIn(
+            'setElementVisible(document.querySelector(\'[data-app-admin-backup-tab="create"]\')',
+            self.html,
+        )
+        self.assertIn(
+            'setElementVisible(document.querySelector(\'[data-app-admin-backup-tab="restore"]\')',
+            self.html,
+        )
+        self.assertIn("appAdmin.auditCounts = payload.counts", self.html)
+        self.assertIn("Number(byCategory.security || 0)", self.html)
 
     def test_admin_role_creation_generates_key_and_starts_permission_wizard(self):
         for element_id in (

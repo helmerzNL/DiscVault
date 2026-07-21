@@ -357,6 +357,22 @@ def audit_api_interaction(
     )
 
 
+def audit_event_counts(conn) -> dict[str, Any]:
+    if not table_exists(conn, "audit_events"):
+        return {"total": 0, "byCategory": {}}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT category, COUNT(*)::int AS count
+            FROM audit_events
+            GROUP BY category
+            """
+        )
+        rows = cur.fetchall()
+    by_category = {str(row.get("category") or "system"): int(row.get("count") or 0) for row in rows}
+    return {"total": sum(by_category.values()), "byCategory": by_category}
+
+
 def register_next_audit_routes(flask_app: Flask, *, connect) -> None:  # pragma: no cover - Flask integration
     """Register the admin audit-events route on *flask_app*.
 
@@ -372,7 +388,8 @@ def register_next_audit_routes(flask_app: Flask, *, connect) -> None:  # pragma:
         with connect() as conn:
             _next_app().require_next_permission(conn, "admin.view_audit")
             if not table_exists(conn, "audit_events"):
-                return response({"status": "ok", "events": []})
+                return response({"status": "ok", "events": [], "counts": {"total": 0, "byCategory": {}}})
+            counts = audit_event_counts(conn)
             clauses: list[str] = []
             params: list[Any] = []
             if category:
@@ -404,4 +421,4 @@ def register_next_audit_routes(flask_app: Flask, *, connect) -> None:  # pragma:
                     (*params, limit),
                 )
                 rows = cur.fetchall()
-        return response({"status": "ok", "events": [audit_event_row(row) for row in rows]})
+        return response({"status": "ok", "events": [audit_event_row(row) for row in rows], "counts": counts})
