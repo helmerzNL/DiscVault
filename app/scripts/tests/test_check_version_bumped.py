@@ -23,15 +23,22 @@ def _git_available() -> bool:
         return False
 
 
-def _run_script(repo_dir: str, *extra_args: str) -> int:
-    """Run the version-guard script in repo_dir and return the exit code."""
-    result = subprocess.run(
+def _run_script_result(
+    repo_dir: str, *extra_args: str
+) -> subprocess.CompletedProcess[str]:
+    """Run the version-guard script in repo_dir and capture its result."""
+    return subprocess.run(
         [sys.executable, SCRIPT, *extra_args],
         cwd=repo_dir,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        text=True,
     )
-    return result.returncode
+
+
+def _run_script(repo_dir: str, *extra_args: str) -> int:
+    """Run the version-guard script in repo_dir and return the exit code."""
+    return _run_script_result(repo_dir, *extra_args).returncode
 
 
 class TempRepo:
@@ -290,6 +297,31 @@ class TestVersionGuardCLI(unittest.TestCase):
             # Without --base-ref, the stale base alone looks fine (regression guard).
             rc_without_base_ref = repo.run("--base", root_sha, "--head", sha_b, "--aggregate")
             self.assertEqual(rc_without_base_ref, 0)
+
+    def test_failure_reports_full_range_and_actual_target_branch(self) -> None:
+        """Failure output keeps the aggregate range and uses --base-ref guidance."""
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            root_sha = repo.commit("app/VERSION", message="init")
+
+            repo.write("app/backend/foo.py", "# foo")
+            head_sha = repo.commit("app/backend/foo.py", message="feat: no bump")
+
+            result = _run_script_result(
+                repo.path,
+                "--base",
+                root_sha,
+                "--head",
+                head_sha,
+                "--base-ref",
+                "main",
+                "--aggregate",
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(f"{root_sha[:12]}...{head_sha[:12]}", result.stderr)
+            self.assertIn("git fetch origin main && git rebase origin/main", result.stderr)
+            self.assertNotIn("origin/release/v26-beta", result.stderr)
 
 
 if __name__ == "__main__":
