@@ -17315,7 +17315,7 @@ def ui_preview_html(
     function renderAppAdminVisibility() {
       const allowed = isNativeAdminUser() && canUseAppAdmin();
       document.getElementById("profileOpenAdminButton")?.classList.toggle("hidden", !allowed);
-      document.getElementById("profileMenuStyleAdminHelp")?.classList.toggle("hidden", !isNativeAdminUser());
+      document.getElementById("profileMenuStyleAdminHelp")?.classList.toggle("hidden", !allowed);
     }
     function applyAppPermissionVisibility() {
       const collectorsEnabled = collectorsModeEnabled();
