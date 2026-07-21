@@ -2496,10 +2496,10 @@
   "groups.renamed": "Gruppe umbenannt.",
   "groups.renamePrompt": "Neuer Gruppenname",
   "appAdmin.pluginTabInstalled": "Installiert",
-  "appAdmin.pluginTabActivity": "Aktivitaet",
-  "appAdmin.pluginOverviewHelp": "Summen fuer installiert und aktiviert, Laufzeitstatus und Jobs, die Aufmerksamkeit brauchen.",
+  "appAdmin.pluginTabActivity": "Aktivität",
+  "appAdmin.pluginOverviewHelp": "Summen für installiert und aktiviert, Laufzeitstatus und Jobs, die Aufmerksamkeit brauchen.",
   "appAdmin.pluginSearchLabel": "Suche",
-  "appAdmin.pluginSearchPlaceholder": "Plugins nach Name oder Schluessel suchen",
+  "appAdmin.pluginSearchPlaceholder": "Plugins nach Name oder Schlüssel suchen",
   "appAdmin.pluginTypeFilterLabel": "Typ",
   "appAdmin.pluginTypeAll": "Alle Typen",
   "appAdmin.pluginStatusFilterLabel": "Status",
@@ -2507,7 +2507,7 @@
   "appAdmin.pluginLifecycleHelp": "Update-, Rollback- und Exportaktionen je Plugin bleiben auf der Plugin-Karte unter Installiert.",
   "appAdmin.pluginAttentionTitle": "Erfordert Aufmerksamkeit",
   "appAdmin.pluginAttentionEmpty": "Derzeit erfordert nichts Aufmerksamkeit.",
-  "appAdmin.pluginAttentionConfigNeeded": "{count} Plugins benoetigen eine Konfiguration",
+  "appAdmin.pluginAttentionConfigNeeded": "{count} Plugins benötigen eine Konfiguration",
   "appAdmin.pluginAttentionFailedJobs": "{count} fehlgeschlagene Plugin-Jobs",
-  "appAdmin.pluginAttentionUpdates": "{count} Plugin-Updates verfuegbar"
+  "appAdmin.pluginAttentionUpdates": "{count} Plugin-Updates verfügbar"
 }

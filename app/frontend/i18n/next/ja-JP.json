@@ -2507,7 +2507,7 @@
   "appAdmin.pluginLifecycleHelp": "プラグインごとの更新・ロールバック・エクスポート操作は、「インストール済み」内の各プラグインカードに表示されます。",
   "appAdmin.pluginAttentionTitle": "対応が必要",
   "appAdmin.pluginAttentionEmpty": "現在、対応が必要な項目はありません。",
-  "appAdmin.pluginAttentionConfigNeeded": "{count}個のプラグインに設定が必要です",
-  "appAdmin.pluginAttentionFailedJobs": "{count}件の失敗したプラグインジョブ",
-  "appAdmin.pluginAttentionUpdates": "{count}件のプラグイン更新が利用可能です"
+  "appAdmin.pluginAttentionConfigNeeded": "{count} 個のプラグインに設定が必要です",
+  "appAdmin.pluginAttentionFailedJobs": "{count} 件の失敗したプラグインジョブ",
+  "appAdmin.pluginAttentionUpdates": "{count} 件のプラグイン更新が利用可能です"
 }

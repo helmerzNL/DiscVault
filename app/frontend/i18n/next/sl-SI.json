@@ -1,7 +1,7 @@
 {
   "appAdmin.createCustomRoleWizardHelp": "Vnesite podrobnosti vloge. DiscVault ustvari tehnični ključ in odpre čarovnika za dovoljenja.",
   "appAdmin.roleKeyGenerated": "Ustvarjeni ključ vloge",
-  "appAdmin.roleKeyGeneratedHelp": "Ključ je ustvarjen iz imena vloge in ga po ustvarjanju ni mogoče spremeniti.",
+  "appAdmin.roleKeyGeneratedHelp": "Ključ je ustvarjen iz imena vloge in ga po ustvaritvi ni mogoče spremeniti.",
   "appAdmin.roleNameSlugRequired": "Vnesite ime vloge, ki vsebuje črke ali številke.",
   "appAdmin.roleWizardStartFailed": "Strežnik ni vrnil vloge.",
   "appAdmin.roleWizardStarted": "Vloga je ustvarjena. Za nadaljevanje dodelite dovoljenja.",
@@ -29,7 +29,7 @@
   "appAdmin.roleWizardStepDetails": "Podrobnosti vloge",
   "appAdmin.roleWizardStepPermissions": "Dovoljenja",
   "appAdmin.roleWizardStepReview": "Preglej in shrani",
-  "appAdmin.roleWizardSystemReadOnly": "Sistemske vloge so nespremenljive in si jih lahko ogledate tukaj, vendar jih ni mogoče spremeniti.",
+  "appAdmin.roleWizardSystemReadOnly": "Sistemske vloge so vnaprej določene in si jih lahko ogledate tukaj, vendar jih ni mogoče spremeniti.",
   "appAdmin.roleWizardTitle": "Dovoljenja vloge",
   "appAdmin.selectedRole": "Izbrana vloga",
   "preferences.profileMenuStyle": "Meni profila",

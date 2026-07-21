@@ -209,6 +209,48 @@ class TestVersionGuardCLI(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("semver", result.stderr)
 
+    def test_aggregate_fails_semver_with_leading_zeroes(self) -> None:
+        """SemVer numeric identifiers must not contain leading zeroes."""
+        for version in ("01.2.3", "1.02.3", "1.2.03"):
+            with self.subTest(version=version), TempRepo() as repo:
+                repo.write("app/VERSION", "1.0.0")
+                root_sha = repo.commit("app/VERSION", message="init")
+
+                repo.write("app/backend/foo.py", "# foo")
+                repo.write("app/VERSION", version)
+                sha_a = repo.commit("app/backend/foo.py", "app/VERSION", message="feat+bad bump")
+
+                result = subprocess.run(
+                    [sys.executable, SCRIPT, "--base", root_sha, "--head", sha_a, "--aggregate"],
+                    cwd=repo.path,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("semver", result.stderr)
+
+    def test_aggregate_fails_invalid_semver_at_base(self) -> None:
+        """An invalid version at the actual base must fail closed."""
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "not-a-version")
+            root_sha = repo.commit("app/VERSION", message="invalid base")
+
+            repo.write("app/backend/foo.py", "# foo")
+            repo.write("app/VERSION", "2.0.0")
+            sha_a = repo.commit("app/backend/foo.py", "app/VERSION", message="feat+valid bump")
+
+            result = subprocess.run(
+                [sys.executable, SCRIPT, "--base", root_sha, "--head", sha_a, "--aggregate"],
+                cwd=repo.path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("actual base", result.stderr)
+            self.assertIn("not valid", result.stderr)
+
     def test_aggregate_fails_when_head_version_equals_base(self) -> None:
         """Merely re-writing the same version value must not satisfy the guard."""
         with TempRepo() as repo:
@@ -280,7 +322,7 @@ class TestVersionGuardCLI(unittest.TestCase):
             repo.write("app/VERSION", "1.0.1")
             sha_a = repo.commit("app/backend/a.py", "app/VERSION", message="feat A + bump")
             # Simulate the target branch ("main") having already moved to sha_a.
-            subprocess.check_call(["git", "-C", repo.path, "branch", "main", sha_a])
+            subprocess.check_call(["git", "-C", repo.path, "branch", "-f", "main", sha_a])
 
             subprocess.check_call(
                 ["git", "-C", repo.path, "checkout", "-q", root_sha, "-b", "branch-b"]
