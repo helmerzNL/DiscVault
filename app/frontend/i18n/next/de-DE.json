@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Ausgewählte Rolle",
   "preferences.profileMenuStyle": "Profilmenü",
   "preferences.profileMenuStyleHelp": "Wähle, ob das Profilmenü auf großen Bildschirmen Beschriftungen anzeigt. Auf Smartphones werden immer nur Symbole angezeigt.",
+  "preferences.profileMenuStyleAdminHelp": "Diese Auswahl gilt auch für das Admin-Menü.",
   "preferences.profileMenuIconOnly": "Nur Symbole",
   "preferences.profileMenuIconText": "Symbole und Text",
   "appAdmin.activeInvites": "Aktive Einladungen",

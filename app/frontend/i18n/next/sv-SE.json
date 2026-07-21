@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Vald roll",
   "preferences.profileMenuStyle": "Profilmeny",
   "preferences.profileMenuStyleHelp": "Välj om profilmenyn ska visa etiketter på stora skärmar. På telefoner visas alltid endast ikoner.",
+  "preferences.profileMenuStyleAdminHelp": "Det här valet gäller även Admin-menyn.",
   "preferences.profileMenuIconOnly": "Endast ikoner",
   "preferences.profileMenuIconText": "Ikoner och text",
   "appAdmin.activeInvites": "Aktiva inbjudningar",

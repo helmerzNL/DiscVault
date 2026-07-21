@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Kiválasztott szerepkör",
   "preferences.profileMenuStyle": "Profilmenü",
   "preferences.profileMenuStyleHelp": "Válassza ki, hogy a profilmenü megjelenítse-e a címkéket nagy képernyőkön. Telefonokon mindig csak ikonok jelennek meg.",
+  "preferences.profileMenuStyleAdminHelp": "Ez a választás az Admin menüre is vonatkozik.",
   "preferences.profileMenuIconOnly": "Csak ikonok",
   "preferences.profileMenuIconText": "Ikonok és szöveg",
   "appAdmin.activeInvites": "Active invites",

@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Geselecteerde rol",
   "preferences.profileMenuStyle": "Profielmenu",
   "preferences.profileMenuStyleHelp": "Kies of het profielmenu op grote schermen labels toont. Op telefoons worden altijd alleen iconen getoond.",
+  "preferences.profileMenuStyleAdminHelp": "Deze keuze geldt ook voor het Admin-menu.",
   "preferences.profileMenuIconOnly": "Alleen iconen",
   "preferences.profileMenuIconText": "Iconen en tekst",
   "appAdmin.activeInvites": "Actieve uitnodigingen",

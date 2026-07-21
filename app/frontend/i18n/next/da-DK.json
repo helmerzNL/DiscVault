@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Valgt rolle",
   "preferences.profileMenuStyle": "Profilmenu",
   "preferences.profileMenuStyleHelp": "Vælg, om profilmenuen skal vise etiketter på store skærme. Telefoner viser altid kun ikoner.",
+  "preferences.profileMenuStyleAdminHelp": "Dette valg gælder også for Admin-menuen.",
   "preferences.profileMenuIconOnly": "Kun ikoner",
   "preferences.profileMenuIconText": "Ikoner og tekst",
   "appAdmin.activeInvites": "Aktive invitationer",

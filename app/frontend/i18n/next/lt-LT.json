@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Pasirinktas vaidmuo",
   "preferences.profileMenuStyle": "Profilio meniu",
   "preferences.profileMenuStyleHelp": "Pasirinkite, ar profilio meniu dideliuose ekranuose rodyti etiketes. Telefonuose visada rodomos tik piktogramos.",
+  "preferences.profileMenuStyleAdminHelp": "Šis pasirinkimas taip pat taikomas administratoriaus meniu.",
   "preferences.profileMenuIconOnly": "Tik piktogramos",
   "preferences.profileMenuIconText": "Piktogramos ir tekstas",
   "appAdmin.activeInvites": "Active invites",

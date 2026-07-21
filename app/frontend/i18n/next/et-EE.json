@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Valitud roll",
   "preferences.profileMenuStyle": "Profiilimenüü",
   "preferences.profileMenuStyleHelp": "Vali, kas profiilimenüü kuvab suurtel ekraanidel silte. Telefonides kuvatakse alati ainult ikoone.",
+  "preferences.profileMenuStyleAdminHelp": "See valik kehtib ka administraatori menüüle.",
   "preferences.profileMenuIconOnly": "Ainult ikoonid",
   "preferences.profileMenuIconText": "Ikoonid ja tekst",
   "appAdmin.activeInvites": "Active invites",

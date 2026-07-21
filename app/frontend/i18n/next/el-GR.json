@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Επιλεγμένος ρόλος",
   "preferences.profileMenuStyle": "Μενού προφίλ",
   "preferences.profileMenuStyleHelp": "Επιλέξτε αν το μενού προφίλ θα εμφανίζει ετικέτες σε μεγάλες οθόνες. Στα τηλέφωνα εμφανίζονται πάντα μόνο εικονίδια.",
+  "preferences.profileMenuStyleAdminHelp": "Αυτή η επιλογή ισχύει και για το μενού διαχείρισης.",
   "preferences.profileMenuIconOnly": "Μόνο εικονίδια",
   "preferences.profileMenuIconText": "Εικονίδια και κείμενο",
   "appAdmin.activeInvites": "Active invites",

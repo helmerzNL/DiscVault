@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Vybraná rola",
   "preferences.profileMenuStyle": "Ponuka profilu",
   "preferences.profileMenuStyleHelp": "Vyberte, či má ponuka profilu na veľkých obrazovkách zobrazovať popisy. Na telefónoch sa vždy zobrazujú iba ikony.",
+  "preferences.profileMenuStyleAdminHelp": "Táto voľba platí aj pre ponuku administrácie.",
   "preferences.profileMenuIconOnly": "Iba ikony",
   "preferences.profileMenuIconText": "Ikony a text",
   "appAdmin.activeInvites": "Active invites",

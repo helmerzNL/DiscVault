@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Função selecionada",
   "preferences.profileMenuStyle": "Menu do perfil",
   "preferences.profileMenuStyleHelp": "Escolha se o menu do perfil mostra etiquetas em ecrãs grandes. Nos telemóveis são sempre apresentados apenas ícones.",
+  "preferences.profileMenuStyleAdminHelp": "Esta escolha também se aplica ao menu de Administração.",
   "preferences.profileMenuIconOnly": "Apenas ícones",
   "preferences.profileMenuIconText": "Ícones e texto",
   "appAdmin.activeInvites": "Convites ativos",

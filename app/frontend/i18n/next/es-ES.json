@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Rol seleccionado",
   "preferences.profileMenuStyle": "Menú de perfil",
   "preferences.profileMenuStyleHelp": "Elige si el menú de perfil muestra etiquetas en pantallas grandes. En los teléfonos siempre se muestran solo iconos.",
+  "preferences.profileMenuStyleAdminHelp": "Esta opción también se aplica al menú de administración.",
   "preferences.profileMenuIconOnly": "Solo iconos",
   "preferences.profileMenuIconText": "Iconos y texto",
   "appAdmin.activeInvites": "Invitaciones activas",

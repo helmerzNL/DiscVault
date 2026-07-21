@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "選取的角色",
   "preferences.profileMenuStyle": "個人資料選單",
   "preferences.profileMenuStyleHelp": "選擇個人資料選單是否在大螢幕上顯示文字標籤。手機上固定只顯示圖示。",
+  "preferences.profileMenuStyleAdminHelp": "此選擇也適用於管理選單。",
   "preferences.profileMenuIconOnly": "僅圖示",
   "preferences.profileMenuIconText": "圖示與文字",
   "appAdmin.activeInvites": "Active invites",
