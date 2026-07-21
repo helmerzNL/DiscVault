@@ -153,6 +153,7 @@ try:
     from .next_mcp_activity import register_next_mcp_routes
     from .next_audit import audit_api_interaction
     from .next_audit import audit_event
+    from .next_audit import audit_event_counts
     from .next_audit import audit_event_row
     from .next_audit import api_audit_metadata
     from .next_audit import api_request_query_payload
@@ -365,6 +366,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_mcp_activity import register_next_mcp_routes
     from next_audit import audit_api_interaction
     from next_audit import audit_event
+    from next_audit import audit_event_counts
     from next_audit import audit_event_row
     from next_audit import api_audit_metadata
     from next_audit import api_request_query_payload
