@@ -318,6 +318,11 @@ class LegacyAuthContractTests(unittest.TestCase):
         cls.app_source = (REPO_ROOT / "app/backend/next_app.py").read_text(
             encoding="utf-8"
         )
+        cls.en_us = json.loads(
+            (
+                REPO_ROOT / "app/frontend/i18n/next/en-US.json"
+            ).read_text(encoding="utf-8")
+        )
         cls.migration = (
             REPO_ROOT / "app/backend/migrations_next/041_legacy_auth.sql"
         ).read_text(encoding="utf-8")
@@ -337,6 +342,37 @@ class LegacyAuthContractTests(unittest.TestCase):
         self.assertNotIn("confirmed_at               timestamptz NOT NULL", self.migration)
         self.assertIn("identity_digest", self.migration)
         self.assertNotIn("plaintext", self.migration.lower())
+
+    def test_startup_auth_copy_is_method_neutral_without_changing_enrollment_copy(self):
+        self.assertEqual(
+            self.en_us["startup.description.sign_in_required"],
+            "Sign in to continue setup.",
+        )
+        self.assertEqual(self.en_us["startup.step.auth"], "Owner account")
+        self.assertEqual(
+            self.en_us["startup.step.authDetail"],
+            "Authentication protects this DiscVault Next environment.",
+        )
+        for value in (
+            self.en_us["startup.description.sign_in_required"],
+            self.en_us["startup.step.auth"],
+            self.en_us["startup.step.authDetail"],
+        ):
+            self.assertNotIn("passkey", value.lower())
+
+        for fallback in (
+            'tNext("startup.description.owner_setup", "Follow the steps to create an owner account and complete setup.")',
+            'tNext("startup.description.sign_in_required", "Sign in to continue setup.")',
+            'tNext("startup.step.auth", "Owner account")',
+            'tNext("startup.step.authDetail", "Authentication protects this DiscVault Next environment.")',
+        ):
+            self.assertIn(fallback, self.collection_source)
+
+        self.assertIn('value="Owner passkey"', self.collection_source)
+        self.assertIn(
+            'tNext("auth.ownerCreateFailed", "Owner passkey could not be created.")',
+            self.collection_source,
+        )
 
     def test_routes_cover_bootstrap_password_mfa_admin_and_mobile_context(self):
         for route in (
