@@ -2506,7 +2506,7 @@
   "appAdmin.pluginLifecycleHelp": "플러그인별 업데이트, 롤백, 내보내기 작업은 설치됨 탭의 각 플러그인 카드에 있습니다.",
   "appAdmin.pluginAttentionTitle": "주의 필요",
   "appAdmin.pluginAttentionEmpty": "현재 주의가 필요한 항목이 없습니다.",
-  "appAdmin.pluginAttentionConfigNeeded": "{count}개 플러그인에 설정이 필요합니다",
+  "appAdmin.pluginAttentionConfigNeeded": "{count}개의 플러그인에 설정이 필요합니다",
   "appAdmin.pluginAttentionFailedJobs": "{count}개의 실패한 플러그인 작업",
   "appAdmin.pluginAttentionUpdates": "{count}개의 플러그인 업데이트 사용 가능"
 }
