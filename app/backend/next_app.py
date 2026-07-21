@@ -16947,6 +16947,30 @@ def metadata_refresh_jobs(
     return [job_row(row) for row in rows]
 
 
+def metadata_refresh_job_counts(conn, *, movie_id: UUID | None = None) -> dict[str, Any]:
+    if not table_exists(conn, "background_jobs"):
+        return {"total": 0, "byStatus": {}}
+    clauses = ["job_type = %s"]
+    params: list[Any] = [METADATA_REFRESH_JOB_TYPE]
+    if movie_id:
+        clauses.append("payload->>'movieId' = %s")
+        params.append(str(movie_id))
+    where = " AND ".join(clauses)
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT status, COUNT(*)::int AS count
+            FROM background_jobs
+            WHERE {where}
+            GROUP BY status
+            """,
+            params,
+        )
+        rows = cur.fetchall()
+    by_status = {str(row.get("status") or "unknown"): int(row.get("count") or 0) for row in rows}
+    return {"total": sum(by_status.values()), "byStatus": by_status}
+
+
 ADMIN_OPERATIONS_PERMISSIONS = (
     "admin.view_settings",
     "admin.view_audit",
@@ -27220,7 +27244,8 @@ def register_routes(flask_app: Flask) -> None:
             if movie_id and not actor_has_permission(actor, "admin.view_jobs") and not actor_can_view_movie(conn, actor, movie_id):
                 raise NextApiError("Movie not found", 404)
             jobs = metadata_refresh_jobs(conn, movie_id=movie_id, status=status, limit=limit)
-        return response({"status": "ok", "jobs": jobs})
+            counts = metadata_refresh_job_counts(conn, movie_id=movie_id)
+        return response({"status": "ok", "jobs": jobs, "counts": counts})
 
     @flask_app.post("/api/next/metadata/jobs")
     def queue_metadata_refresh_jobs():

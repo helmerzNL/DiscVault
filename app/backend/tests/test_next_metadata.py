@@ -44,6 +44,7 @@ from app.backend.next_metadata import query_from_payload
 from app.backend.next_metadata import receiver_contribution_payload
 from app.backend.next_metadata import run_metadata_source_pipeline
 from app.backend.next_metadata import summarize_metadata_execution
+from app.backend.next_app import metadata_refresh_job_counts
 from app.backend.next_plugins.bluray_com import plugin as bluray_com_plugin
 from app.backend.next_plugins.tmdb import plugin as tmdb_plugin
 
@@ -72,6 +73,35 @@ class _HiddenArtworkConnection:
     def cursor(self):
         return _HiddenArtworkCursor()
 
+
+class _MetadataJobCountCursor:
+    def __init__(self, rows):
+        self.rows = rows
+        self.query = ""
+        self.params = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, query, params):
+        self.query = query
+        self.params = params
+
+    def fetchall(self):
+        return self.rows
+
+
+class _MetadataJobCountConnection:
+    def __init__(self, rows):
+        self.cursor_instance = _MetadataJobCountCursor(rows)
+
+    def cursor(self):
+        return self.cursor_instance
+
+
 try:
     from bs4 import BeautifulSoup
 except Exception:  # pragma: no cover
@@ -79,6 +109,23 @@ except Exception:  # pragma: no cover
 
 
 class NextScannedTitleTests(unittest.TestCase):
+    def test_metadata_refresh_job_counts_are_not_limited_to_recent_jobs(self):
+        connection = _MetadataJobCountConnection(
+            [
+                {"status": "completed", "count": 37},
+                {"status": "pending", "count": 2},
+                {"status": "failed", "count": 4},
+            ]
+        )
+
+        with mock.patch("app.backend.next_app.table_exists", return_value=True):
+            counts = metadata_refresh_job_counts(connection)
+
+        self.assertEqual(counts["total"], 43)
+        self.assertEqual(counts["byStatus"], {"completed": 37, "pending": 2, "failed": 4})
+        self.assertIn("GROUP BY status", connection.cursor_instance.query)
+        self.assertNotIn("LIMIT", connection.cursor_instance.query)
+
     def test_hidden_artwork_cannot_be_reselected_by_metadata_refresh(self):
         with mock.patch("app.backend.next_metadata.table_exists", return_value=True):
             metadata, media = filter_hidden_artwork_updates(
