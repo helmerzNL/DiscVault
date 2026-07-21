@@ -4010,7 +4010,11 @@ def startup_status_payload(conn) -> dict[str, Any]:
     readiness = migration_readiness(conn)
     auth_effective = next_auth_effective_enabled(conn, table_exists)
     user_count = count_table(conn, "users")
-    credential_count = count_table(conn, "passkey_credentials")
+    passkey_credential_count = count_table(conn, "passkey_credentials")
+    auth_credential_count = (
+        passkey_credential_count
+        + count_table(conn, "legacy_password_credentials")
+    )
     auth_ready = next_auth_ready(conn, table_exists)
     user = next_auth_current_user(conn) if auth_effective else None
     role = next_user_primary_role(conn, user["id"]) if user else None
@@ -4039,14 +4043,14 @@ def startup_status_payload(conn) -> dict[str, Any]:
         message = "Legacy DiscVault data is ready to migrate."
     elif not auth_ready:
         phase = "owner_setup"
-        message = "Create the first owner passkey to finish setup."
+        message = "Create the first owner account to finish setup."
     elif migration_blocks_collection:
         if readiness["state"] == "running":
             phase = "migration_running"
             message = "Legacy migration is running."
         elif auth_effective and not user:
             phase = "sign_in_required"
-            message = "Sign in with a passkey to continue setup."
+            message = "Sign in to continue setup."
         elif auth_effective and user and not can_manage_migration:
             phase = "migration_pending_non_admin"
             message = "DiscVault Next is waiting for an owner or administrator to complete migration."
@@ -4061,14 +4065,14 @@ def startup_status_payload(conn) -> dict[str, Any]:
     steps = [
         {
             "key": "auth",
-            "label": "Owner passkey",
+            "label": "Owner account",
             "state": "complete" if auth_ready else ("active" if phase == "owner_setup" else "pending"),
             "detail": (
-                f"{user_count} user(s), {credential_count} passkey(s)"
+                f"{user_count} user(s), {auth_credential_count} authentication credential(s)"
                 if auth_ready
                 else "Use the legacy owner/admin passkey to approve migration."
                 if legacy_auth_waiting
-                else "Create the first owner passkey for this DiscVault Next environment."
+                else "Create the first owner account for this DiscVault Next environment."
             ),
         },
         {
@@ -4163,7 +4167,7 @@ def startup_status_payload(conn) -> dict[str, Any]:
             "role": role,
             "username": user.get("username") if user else None,
             "userCount": user_count,
-            "credentialCount": credential_count,
+            "credentialCount": passkey_credential_count,
         },
         "migration": migration_payload,
     }
