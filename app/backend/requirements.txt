@@ -6,7 +6,7 @@ PyJWT==2.13.0
 cbor2==5.9.0
 cryptography==48.0.1
 argon2-cffi==25.1.0
-Pillow==12.2.0
+Pillow==12.3.0
 beautifulsoup4==4.12.3
 dnspython==2.8.0
 pywebpush==2.0.0
