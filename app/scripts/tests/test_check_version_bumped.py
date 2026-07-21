@@ -280,7 +280,7 @@ class TestVersionGuardCLI(unittest.TestCase):
             repo.write("app/VERSION", "1.0.1")
             sha_a = repo.commit("app/backend/a.py", "app/VERSION", message="feat A + bump")
             # Simulate the target branch ("main") having already moved to sha_a.
-            subprocess.check_call(["git", "-C", repo.path, "branch", "main", sha_a])
+            subprocess.check_call(["git", "-C", repo.path, "branch", "-f", "main", sha_a])
 
             subprocess.check_call(
                 ["git", "-C", repo.path, "checkout", "-q", root_sha, "-b", "branch-b"]
