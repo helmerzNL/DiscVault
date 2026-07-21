@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Вибрана роль",
   "preferences.profileMenuStyle": "Меню профілю",
   "preferences.profileMenuStyleHelp": "Виберіть, чи показувати підписи в меню профілю на великих екранах. На телефонах завжди відображаються лише піктограми.",
+  "preferences.profileMenuStyleAdminHelp": "Цей вибір також застосовується до меню адміністратора.",
   "preferences.profileMenuIconOnly": "Лише піктограми",
   "preferences.profileMenuIconText": "Піктограми й текст",
   "appAdmin.activeInvites": "Active invites",

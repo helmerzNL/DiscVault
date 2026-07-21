@@ -34,6 +34,7 @@
   "appAdmin.selectedRole": "Seçili rol",
   "preferences.profileMenuStyle": "Profil menüsü",
   "preferences.profileMenuStyleHelp": "Profil menüsünün büyük ekranlarda etiketleri gösterip göstermeyeceğini seçin. Telefonlarda her zaman yalnızca simgeler gösterilir.",
+  "preferences.profileMenuStyleAdminHelp": "Bu seçim Yönetici menüsü için de geçerlidir.",
   "preferences.profileMenuIconOnly": "Yalnızca simgeler",
   "preferences.profileMenuIconText": "Simgeler ve metin",
   "appAdmin.activeInvites": "Active invites",
