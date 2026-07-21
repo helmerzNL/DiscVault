@@ -660,6 +660,8 @@ class NextProfileUiTests(unittest.TestCase):
             "app-admin-roles-tabs",
             "app-admin-operations-tabs",
             "app-admin-plugin-tabs",
+            "app-admin-digital-tabs",
+            "app-admin-metadata-tabs",
         ):
             self.assertIn(
                 f"profile-dashboard-tabs app-admin-section-tabs {class_name}",
@@ -669,7 +671,7 @@ class NextProfileUiTests(unittest.TestCase):
             self.html.count(
                 'class="detail-submenu profile-dashboard-tabs app-admin-section-tabs'
             ),
-            4,
+            6,
         )
         self.assertIn(".app-admin-section-tabs button.active,", self.html)
         self.assertIn('.app-admin-section-tabs button[aria-selected="true"] {', self.html)
@@ -819,6 +821,47 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn('appAdmin.activePluginTypeTab === "all"', self.html)
         self.assertIn('plugins.filter(matchesFilters)', self.html)
         self.assertNotIn('tNext("appAdmin.failedPluginJobs"', self.html)
+
+    def test_admin_digital_and_metadata_dashboards_use_task_oriented_subtabs(self):
+        for tab, panel in (("Overview", "Overview"), ("Sources", "Sources")):
+            self.assertIn(f'id="appAdminDigitalTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminDigitalPanel{panel}" role="tabpanel"', self.html)
+        for tab, panel in (("Overview", "Overview"), ("Artwork", "Artwork"), ("Jobs", "Jobs")):
+            self.assertIn(f'id="appAdminMetadataTab{tab}" role="tab"', self.html)
+            self.assertIn(f'id="appAdminMetadataPanel{panel}" role="tabpanel"', self.html)
+
+        for element_id in (
+            "appAdminDigitalSourceTotal",
+            "appAdminDigitalSourceActive",
+            "appAdminDigitalSourceItems",
+            "appAdminDigitalSourceMatched",
+            "appAdminDigitalSourcesList",
+            "appAdminMetadataJobTotal",
+            "appAdminMetadataJobActive",
+            "appAdminMetadataJobFailed",
+            "appAdminMetadataArtworkTotal",
+            "appAdminArtworkTrashList",
+            "appAdminMetadataJobsList",
+        ):
+            self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
+
+        self.assertIn('activeDigitalTab: localStorage.getItem("dv_next_admin_digital_tab") || "overview"', self.html)
+        self.assertIn('activeMetadataTab: localStorage.getItem("dv_next_admin_metadata_tab") || "overview"', self.html)
+        self.assertIn("function setAppAdminDigitalTab(tab)", self.html)
+        self.assertIn("function handleAppAdminDigitalTabKeydown(button, event)", self.html)
+        self.assertIn("function setAppAdminMetadataTab(tab)", self.html)
+        self.assertIn("function handleAppAdminMetadataTabKeydown(button, event)", self.html)
+        self.assertIn(
+            'setElementVisible(document.querySelector(\'[data-app-admin-metadata-tab="artwork"]\')',
+            self.html,
+        )
+        self.assertIn("sources.reduce((total, source) => total + sourceItems(source), 0)", self.html)
+        self.assertIn("source.matchedItemCount ?? source.matchedCount", self.html)
+        self.assertIn("source.last_status || source.status", self.html)
+        self.assertIn("source.enabled !== false && activeStatuses.has", self.html)
+        self.assertIn("metadataJobCounts: {total: 0, byStatus: {}}", self.html)
+        self.assertIn("appAdmin.metadataJobCounts = payload.counts", self.html)
+        self.assertIn("Object.entries(statusCounts).reduce(", self.html)
 
         # Existing plugin action hooks are preserved unchanged.
         for action in (

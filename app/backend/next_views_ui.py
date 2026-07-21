@@ -9351,8 +9351,12 @@ def ui_preview_html(
     }
     .app-admin-people-tabs,
     .app-admin-roles-tabs,
-    .app-admin-operations-tabs {
+    .app-admin-operations-tabs,
+    .app-admin-metadata-tabs {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .app-admin-digital-tabs {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .app-admin-roles-tabs {
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -9362,13 +9366,17 @@ def ui_preview_html(
     }
     .app-admin-people-panel,
     .app-admin-roles-panel,
-    .app-admin-operations-panel {
+    .app-admin-operations-panel,
+    .app-admin-digital-panel,
+    .app-admin-metadata-panel {
       display: none;
       min-width: 0;
     }
     .app-admin-people-panel.active,
     .app-admin-roles-panel.active,
-    .app-admin-operations-panel.active {
+    .app-admin-operations-panel.active,
+    .app-admin-digital-panel.active,
+    .app-admin-metadata-panel.active {
       display: grid;
       gap: 14px;
     }
@@ -10278,6 +10286,10 @@ def ui_preview_html(
       width: 100%;
     }
     .app-admin-panel[data-app-admin-panel="operations"] .profile-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .app-admin-panel[data-app-admin-panel="digital"] .profile-grid,
+    .app-admin-panel[data-app-admin-panel="metadata"] .profile-grid {
       grid-template-columns: minmax(0, 1fr);
     }
     .operations-dashboard,
@@ -12460,6 +12472,12 @@ def ui_preview_html(
       }
       .profile-api-submenu,
       .app-admin-people-tabs {
+        grid-template-columns: repeat(3, minmax(52px, 1fr));
+      }
+      .app-admin-digital-tabs {
+        grid-template-columns: repeat(2, minmax(52px, 1fr));
+      }
+      .app-admin-metadata-tabs {
         grid-template-columns: repeat(3, minmax(52px, 1fr));
       }
       .app-admin-operations-tabs {
@@ -16049,63 +16067,126 @@ def ui_preview_html(
         </section>
         <section class="app-admin-panel" id="appAdminPanelDigital" role="tabpanel" aria-labelledby="appAdminTabDigital" aria-hidden="true" tabindex="0" data-app-admin-panel="digital">
           <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.digitalOperations">Digital sources</h3>
-              <p data-next-i18n="appAdmin.digitalOperationsHelp">Review connected Plex and Jellyfin libraries and their latest sync state.</p>
-              <div class="profile-meta">
-                <div class="profile-meta-row">
-                  <span data-next-i18n="appAdmin.digitalSources">Digital sources</span>
-                  <strong id="appAdminDigitalSourceTotal">-</strong>
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("devices") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.digitalOperations">Digital sources</h3>
+                    <p data-next-i18n="appAdmin.digitalOperationsHelp">Review connected Plex and Jellyfin libraries and their latest sync state.</p>
+                  </div>
                 </div>
               </div>
+              <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-digital-tabs" role="tablist" aria-label="Digital source sections" data-next-i18n-aria="appAdmin.digitalOperations">
+                <button type="button" class="active" id="appAdminDigitalTabOverview" role="tab" aria-selected="true" aria-controls="appAdminDigitalPanelOverview" tabindex="0" data-app-admin-digital-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+                <button type="button" id="appAdminDigitalTabSources" role="tab" aria-selected="false" aria-controls="appAdminDigitalPanelSources" tabindex="-1" data-app-admin-digital-tab="sources">""" + nav_icon("devices") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.digitalMediaSources">Digital media sources</span></button>
+              </nav>
               <div class="profile-action-row">
                 <button type="button" class="secondary-button" id="appAdminRefreshDigitalSourcesButton" data-next-i18n="appAdmin.refreshDigitalSources">Refresh digital sources</button>
               </div>
               <div class="login-message" id="appAdminDigitalMessage"></div>
+            </section>
+            <div class="app-admin-digital-panel active full" id="appAdminDigitalPanelOverview" role="tabpanel" aria-labelledby="appAdminDigitalTabOverview" aria-hidden="false" data-app-admin-digital-panel="overview">
+              <div class="app-admin-summary-grid">
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.digitalSources">Digital sources</span>
+                  <strong id="appAdminDigitalSourceTotal">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="profile.active">Active</span>
+                  <strong id="appAdminDigitalSourceActive">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.digitalSourceItems">Items</span>
+                  <strong id="appAdminDigitalSourceItems">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.digitalSourceMatched">Matched</span>
+                  <strong id="appAdminDigitalSourceMatched">-</strong>
+                </article>
+              </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.digitalMediaSources">Digital media sources</h3>
-              <div class="profile-passkey-list" id="appAdminDigitalSourcesList"></div>
+            <div class="app-admin-digital-panel full" id="appAdminDigitalPanelSources" role="tabpanel" aria-labelledby="appAdminDigitalTabSources" aria-hidden="true" data-app-admin-digital-panel="sources">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.digitalMediaSources">Digital media sources</h3>
+                <div class="profile-passkey-list" id="appAdminDigitalSourcesList"></div>
+              </div>
             </div>
           </section>
         </section>
         <section class="app-admin-panel" id="appAdminPanelMetadata" role="tabpanel" aria-labelledby="appAdminTabMetadata" aria-hidden="true" tabindex="0" data-app-admin-panel="metadata">
           <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.metadataOperations">Metadata</h3>
-              <p data-next-i18n="appAdmin.metadataOperationsHelp">Review metadata refresh jobs and source activity away from the import workflow.</p>
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("library_preferences") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.metadataOperations">Metadata</h3>
+                    <p data-next-i18n="appAdmin.metadataOperationsHelp">Review metadata refresh jobs and source activity away from the import workflow.</p>
+                  </div>
+                </div>
+              </div>
+              <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-metadata-tabs" role="tablist" aria-label="Metadata sections" data-next-i18n-aria="appAdmin.metadataOperations">
+                <button type="button" class="active" id="appAdminMetadataTabOverview" role="tab" aria-selected="true" aria-controls="appAdminMetadataPanelOverview" tabindex="0" data-app-admin-metadata-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+                <button type="button" id="appAdminMetadataTabArtwork" role="tab" aria-selected="false" aria-controls="appAdminMetadataPanelArtwork" tabindex="-1" data-app-admin-metadata-tab="artwork">""" + nav_icon("appearance") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.deletedArtwork">Deleted artwork</span></button>
+                <button type="button" id="appAdminMetadataTabJobs" role="tab" aria-selected="false" aria-controls="appAdminMetadataPanelJobs" tabindex="-1" data-app-admin-metadata-tab="jobs">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.metadataJobs">Metadata jobs</span></button>
+              </nav>
               <div class="profile-action-row">
                 <button type="button" class="secondary-button" id="appAdminRefreshMetadataJobsButton" data-next-i18n="appAdmin.refreshMetadataJobs">Refresh metadata jobs</button>
               </div>
               <div class="login-message" id="appAdminMetadataMessage"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.deletedArtwork">Deleted artwork</h3>
-              <p data-next-i18n="appAdmin.deletedArtworkHelp">Restore removed posters and backdrops, or let DiscVault permanently clean them after a retention period.</p>
-              <div class="profile-form">
-                <label class="profile-checkbox-row" for="appAdminArtworkTrashPurgeEnabled">
-                  <input id="appAdminArtworkTrashPurgeEnabled" type="checkbox">
-                  <span data-next-i18n="appAdmin.enableArtworkCleanup">Automatically purge deleted artwork</span>
-                </label>
-                <label for="appAdminArtworkTrashRetention">
-                  <span data-next-i18n="appAdmin.artworkRetention">Permanently delete after</span>
-                  <select id="appAdminArtworkTrashRetention">
-                    <option value="1h" data-next-i18n="appAdmin.artworkRetention1h">1 hour</option>
-                    <option value="1d" data-next-i18n="appAdmin.artworkRetention1d">1 day</option>
-                    <option value="7d" data-next-i18n="appAdmin.artworkRetention7d">7 days</option>
-                    <option value="30d" data-next-i18n="appAdmin.artworkRetention30d">30 days</option>
-                  </select>
-                </label>
-                <div class="profile-form-actions">
-                  <button type="button" class="secondary-button" id="appAdminSaveArtworkTrashSettingsButton" data-next-i18n="appAdmin.saveArtworkCleanup">Save cleanup settings</button>
-                  <button type="button" class="secondary-button" id="appAdminPurgeArtworkTrashButton" data-next-i18n="appAdmin.purgeExpiredArtwork">Purge expired now</button>
-                </div>
+            </section>
+            <div class="app-admin-metadata-panel active full" id="appAdminMetadataPanelOverview" role="tabpanel" aria-labelledby="appAdminMetadataTabOverview" aria-hidden="false" data-app-admin-metadata-panel="overview">
+              <div class="app-admin-summary-grid">
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.metadataJobs">Metadata jobs</span>
+                  <strong id="appAdminMetadataJobTotal">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="profile.active">Active</span>
+                  <strong id="appAdminMetadataJobActive">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.statusError">Error</span>
+                  <strong id="appAdminMetadataJobFailed">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.deletedArtwork">Deleted artwork</span>
+                  <strong id="appAdminMetadataArtworkTotal">-</strong>
+                </article>
               </div>
-              <div class="profile-passkey-list" id="appAdminArtworkTrashList"></div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.metadataJobs">Metadata jobs</h3>
-              <div class="profile-passkey-list" id="appAdminMetadataJobsList"></div>
+            <div class="app-admin-metadata-panel full" id="appAdminMetadataPanelArtwork" role="tabpanel" aria-labelledby="appAdminMetadataTabArtwork" aria-hidden="true" data-app-admin-metadata-panel="artwork">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.deletedArtwork">Deleted artwork</h3>
+                <p data-next-i18n="appAdmin.deletedArtworkHelp">Restore removed posters and backdrops, or let DiscVault permanently clean them after a retention period.</p>
+                <div class="profile-form">
+                  <label class="profile-checkbox-row" for="appAdminArtworkTrashPurgeEnabled">
+                    <input id="appAdminArtworkTrashPurgeEnabled" type="checkbox">
+                    <span data-next-i18n="appAdmin.enableArtworkCleanup">Automatically purge deleted artwork</span>
+                  </label>
+                  <label for="appAdminArtworkTrashRetention">
+                    <span data-next-i18n="appAdmin.artworkRetention">Permanently delete after</span>
+                    <select id="appAdminArtworkTrashRetention">
+                      <option value="1h" data-next-i18n="appAdmin.artworkRetention1h">1 hour</option>
+                      <option value="1d" data-next-i18n="appAdmin.artworkRetention1d">1 day</option>
+                      <option value="7d" data-next-i18n="appAdmin.artworkRetention7d">7 days</option>
+                      <option value="30d" data-next-i18n="appAdmin.artworkRetention30d">30 days</option>
+                    </select>
+                  </label>
+                  <div class="profile-form-actions">
+                    <button type="button" class="secondary-button" id="appAdminSaveArtworkTrashSettingsButton" data-next-i18n="appAdmin.saveArtworkCleanup">Save cleanup settings</button>
+                    <button type="button" class="secondary-button" id="appAdminPurgeArtworkTrashButton" data-next-i18n="appAdmin.purgeExpiredArtwork">Purge expired now</button>
+                  </div>
+                </div>
+                <div class="profile-passkey-list" id="appAdminArtworkTrashList"></div>
+              </div>
+            </div>
+            <div class="app-admin-metadata-panel full" id="appAdminMetadataPanelJobs" role="tabpanel" aria-labelledby="appAdminMetadataTabJobs" aria-hidden="true" data-app-admin-metadata-panel="jobs">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.metadataJobs">Metadata jobs</h3>
+                <div class="profile-passkey-list" id="appAdminMetadataJobsList"></div>
+              </div>
             </div>
           </section>
         </section>
@@ -16413,6 +16494,8 @@ def ui_preview_html(
       activeRolesTab: localStorage.getItem("dv_next_admin_roles_tab") || "overview",
       activeOperationsTab: localStorage.getItem("dv_next_admin_operations_tab") || "overview",
       activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "overview",
+      activeDigitalTab: localStorage.getItem("dv_next_admin_digital_tab") || "overview",
+      activeMetadataTab: localStorage.getItem("dv_next_admin_metadata_tab") || "overview",
       activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "all",
       pluginSearch: "",
       pluginStatusFilter: "all",
@@ -16433,6 +16516,7 @@ def ui_preview_html(
       movieVaultConnections: {},
       metadataArtworkTrash: {items: [], settings: {}, purge: {}},
       metadataJobs: [],
+      metadataJobCounts: {total: 0, byStatus: {}},
       operations: null,
       plugins: [],
       rbac: {},
@@ -17521,6 +17605,8 @@ def ui_preview_html(
       if (appAdmin.activeTab === "users") setAppAdminUsersTab(appAdmin.activeUsersTab);
       if (appAdmin.activeTab === "roles") setAppAdminRolesTab(appAdmin.activeRolesTab);
       if (appAdmin.activeTab === "operations") setAppAdminOperationsTab(appAdmin.activeOperationsTab);
+      if (appAdmin.activeTab === "digital") setAppAdminDigitalTab(appAdmin.activeDigitalTab);
+      if (appAdmin.activeTab === "metadata") setAppAdminMetadataTab(appAdmin.activeMetadataTab);
     }
     function handleAppAdminTabKeydown(button, event) {
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
@@ -17679,6 +17765,73 @@ def ui_preview_html(
       if (event.key === "End") nextIndex = buttons.length - 1;
       const nextButton = buttons[nextIndex];
       setAppAdminPluginTab(nextButton.dataset.appAdminPluginTab);
+      nextButton.focus();
+    }
+    function setAppAdminDigitalTab(tab) {
+      const allowed = ["overview", "sources"];
+      appAdmin.activeDigitalTab = allowed.includes(tab) ? tab : "overview";
+      localStorage.setItem("dv_next_admin_digital_tab", appAdmin.activeDigitalTab);
+      document.querySelectorAll("[data-app-admin-digital-tab]").forEach((button) => {
+        const active = button.dataset.appAdminDigitalTab === appAdmin.activeDigitalTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-digital-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminDigitalPanel === appAdmin.activeDigitalTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminDigitalTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-digital-tab]")];
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminDigitalTab(nextButton.dataset.appAdminDigitalTab);
+      nextButton.focus();
+    }
+    function setAppAdminMetadataTab(tab) {
+      const buttons = [...document.querySelectorAll("[data-app-admin-metadata-tab]")];
+      const visibleButtons = buttons.filter((button) => !button.classList.contains("hidden"));
+      const selectedButton = visibleButtons.find((button) => button.dataset.appAdminMetadataTab === tab)
+        || visibleButtons[0]
+        || buttons[0];
+      appAdmin.activeMetadataTab = selectedButton?.dataset.appAdminMetadataTab || "overview";
+      localStorage.setItem("dv_next_admin_metadata_tab", appAdmin.activeMetadataTab);
+      buttons.forEach((button) => {
+        const active = button.dataset.appAdminMetadataTab === appAdmin.activeMetadataTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-metadata-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminMetadataPanel === appAdmin.activeMetadataTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminMetadataTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-metadata-tab]")]
+        .filter((item) => !item.classList.contains("hidden"));
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminMetadataTab(nextButton.dataset.appAdminMetadataTab);
       nextButton.focus();
     }
     function setAppAdminPluginTypeTab(tab, render = true) {
@@ -18344,10 +18497,12 @@ def ui_preview_html(
       const list = document.getElementById("appAdminArtworkTrashList");
       const enabledInput = document.getElementById("appAdminArtworkTrashPurgeEnabled");
       const retentionSelect = document.getElementById("appAdminArtworkTrashRetention");
-      if (!list) return;
       const trash = appAdmin.metadataArtworkTrash || {items: [], settings: {}, purge: {}};
       const settings = trash.settings || {};
       const items = trash.items || [];
+      const totalNode = document.getElementById("appAdminMetadataArtworkTotal");
+      if (totalNode) totalNode.textContent = formatNumber(items.length);
+      if (!list) return;
       if (enabledInput) enabledInput.checked = !!settings.purgeEnabled;
       if (retentionSelect) {
         retentionSelect.value = settings.retention || "7d";
@@ -18390,8 +18545,22 @@ def ui_preview_html(
     }
     function renderAppAdminMetadataJobs() {
       const node = document.getElementById("appAdminMetadataJobsList");
-      if (!node) return;
       const jobs = appAdmin.metadataJobs || [];
+      const counts = appAdmin.metadataJobCounts || {};
+      const statusCounts = counts.byStatus || {};
+      const activeStatuses = new Set(["queued", "running", "pending", "processing", "in_progress", "started"]);
+      const failedStatuses = new Set(["failed", "error"]);
+      const totalNode = document.getElementById("appAdminMetadataJobTotal");
+      const activeNode = document.getElementById("appAdminMetadataJobActive");
+      const failedNode = document.getElementById("appAdminMetadataJobFailed");
+      const countStatuses = (statuses) => Object.entries(statusCounts).reduce(
+        (total, [status, count]) => total + (statuses.has(String(status).toLowerCase()) ? Number(count || 0) : 0),
+        0
+      );
+      if (totalNode) totalNode.textContent = formatNumber(Number(counts.total || 0));
+      if (activeNode) activeNode.textContent = formatNumber(countStatuses(activeStatuses));
+      if (failedNode) failedNode.textContent = formatNumber(countStatuses(failedStatuses));
+      if (!node) return;
       node.innerHTML = jobs.length ? jobs.map((job) => {
         const payload = job.payload || {};
         const result = job.result || {};
@@ -18605,7 +18774,18 @@ def ui_preview_html(
       const list = document.getElementById("appAdminDigitalSourcesList");
       const countNode = document.getElementById("appAdminDigitalSourceTotal");
       const sources = appAdmin.digitalSources || [];
-      if (countNode) countNode.textContent = String(sources.length || 0);
+      const activeStatuses = new Set(["active", "completed", "ok", "healthy", "ready"]);
+      const sourceStatus = (source) => String(source.last_status || source.status || source.sync_status || source.state || "active").toLowerCase();
+      const sourceIsActive = (source) => source.enabled !== false && activeStatuses.has(sourceStatus(source));
+      const sourceItems = (source) => Number(source.itemCount ?? source.item_count ?? source.items ?? 0) || 0;
+      const sourceMatched = (source) => Number(source.matchedItemCount ?? source.matchedCount ?? source.matched_count ?? source.matched ?? 0) || 0;
+      if (countNode) countNode.textContent = formatNumber(sources.length);
+      const activeNode = document.getElementById("appAdminDigitalSourceActive");
+      const itemsNode = document.getElementById("appAdminDigitalSourceItems");
+      const matchedNode = document.getElementById("appAdminDigitalSourceMatched");
+      if (activeNode) activeNode.textContent = formatNumber(sources.filter(sourceIsActive).length);
+      if (itemsNode) itemsNode.textContent = formatNumber(sources.reduce((total, source) => total + sourceItems(source), 0));
+      if (matchedNode) matchedNode.textContent = formatNumber(sources.reduce((total, source) => total + sourceMatched(source), 0));
       if (!list) return;
       list.innerHTML = sources.length ? sources.map((source) => {
         const pluginId = source.plugin_id || source.pluginId || source.source_type || source.type || "-";
@@ -20121,8 +20301,11 @@ def ui_preview_html(
       setElementVisible(document.querySelector('[data-app-admin-users-tab="settings"]'), canUsePeopleSettings);
       setElementVisible(document.querySelector('[data-app-admin-users-tab="users"]'), canViewUsers);
       setElementVisible(document.querySelector('[data-app-admin-users-tab="groups"]'), canViewGroups);
+      setElementVisible(document.querySelector('[data-app-admin-metadata-tab="artwork"]'), hasActualPermission("metadata.manage_artwork_trash"));
       setAppAdminUsersTab(appAdmin.activeUsersTab);
       setAppAdminOperationsTab(appAdmin.activeOperationsTab);
+      setAppAdminDigitalTab(appAdmin.activeDigitalTab);
+      setAppAdminMetadataTab(appAdmin.activeMetadataTab);
       setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasActualPermission("admin.restore_functional"));
       setElementVisible(document.getElementById("appAdminRefreshBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
       setElementVisible(document.getElementById("appAdminExportBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
@@ -21124,6 +21307,7 @@ def ui_preview_html(
             : Promise.resolve({items: [], settings: {}, purge: {}})
         ]);
         appAdmin.metadataJobs = payload.jobs || [];
+        appAdmin.metadataJobCounts = payload.counts || {total: 0, byStatus: {}};
         appAdmin.metadataArtworkTrash = trashPayload || {items: [], settings: {}, purge: {}};
         renderAppAdminArtworkTrash();
         renderAppAdminMetadataJobs();
@@ -39395,6 +39579,14 @@ def ui_preview_html(
       document.querySelectorAll("[data-app-admin-plugin-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminPluginTab(button.dataset.appAdminPluginTab));
         button.addEventListener("keydown", (event) => handleAppAdminPluginTabKeydown(button, event));
+      });
+      document.querySelectorAll("[data-app-admin-digital-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminDigitalTab(button.dataset.appAdminDigitalTab));
+        button.addEventListener("keydown", (event) => handleAppAdminDigitalTabKeydown(button, event));
+      });
+      document.querySelectorAll("[data-app-admin-metadata-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminMetadataTab(button.dataset.appAdminMetadataTab));
+        button.addEventListener("keydown", (event) => handleAppAdminMetadataTabKeydown(button, event));
       });
       document.getElementById("appAdminPluginTypeFilter")?.addEventListener("change", (event) => setAppAdminPluginTypeTab(event.target.value));
       document.getElementById("appAdminPluginStatusFilter")?.addEventListener("change", (event) => setAppAdminPluginStatusFilter(event.target.value));
