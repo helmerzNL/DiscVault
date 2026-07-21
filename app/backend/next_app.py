@@ -4010,8 +4010,9 @@ def startup_status_payload(conn) -> dict[str, Any]:
     readiness = migration_readiness(conn)
     auth_effective = next_auth_effective_enabled(conn, table_exists)
     user_count = count_table(conn, "users")
-    credential_count = (
-        count_table(conn, "passkey_credentials")
+    passkey_credential_count = count_table(conn, "passkey_credentials")
+    auth_credential_count = (
+        passkey_credential_count
         + count_table(conn, "legacy_password_credentials")
     )
     auth_ready = next_auth_ready(conn, table_exists)
@@ -4067,7 +4068,7 @@ def startup_status_payload(conn) -> dict[str, Any]:
             "label": "Owner account",
             "state": "complete" if auth_ready else ("active" if phase == "owner_setup" else "pending"),
             "detail": (
-                f"{user_count} user(s), {credential_count} authentication credential(s)"
+                f"{user_count} user(s), {auth_credential_count} authentication credential(s)"
                 if auth_ready
                 else "Use the legacy owner/admin passkey to approve migration."
                 if legacy_auth_waiting
@@ -4166,7 +4167,7 @@ def startup_status_payload(conn) -> dict[str, Any]:
             "role": role,
             "username": user.get("username") if user else None,
             "userCount": user_count,
-            "credentialCount": credential_count,
+            "credentialCount": passkey_credential_count,
         },
         "migration": migration_payload,
     }

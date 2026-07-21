@@ -202,8 +202,9 @@ class NextMigrationContractTests(unittest.TestCase):
             auth_step["detail"],
             "1 user(s), 1 authentication credential(s)",
         )
+        self.assertNotIn("passkey", auth_step["detail"].lower())
         self.assertTrue(payload["auth"]["ready"])
-        self.assertEqual(payload["auth"]["credentialCount"], 1)
+        self.assertEqual(payload["auth"]["credentialCount"], 0)
 
     @unittest.skipIf(next_app is None, "PostgreSQL dependencies are not installed")
     def test_startup_uses_legacy_passkeys_before_owner_setup(self):
