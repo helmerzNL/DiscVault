@@ -47,8 +47,6 @@ from app.backend.next_worker import import_release_date
 from app.backend.next_worker import import_year
 from app.backend.next_plugins._collection_import_base import CollectionImportPlugin
 from app.backend.next_plugins._collection_import_base import parse_release_date
-from app.backend.next_plugins.bluray_com.plugin import _movie_title_from_release_title
-from app.backend.next_plugins.bluray_com import plugin as bluray_com_plugin
 from app.backend.next_plugins.trakt import plugin as trakt_plugin
 from app.backend.next_plugin_runtime import (
     _plugin_is_active,
@@ -469,137 +467,16 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(proposals[0]["provider"], "movievault_26")
         self.assertEqual(len(proposals[0]["members"]), 3)
 
-    def test_bluray_release_title_is_cleaned_for_movie_identity(self):
-        self.assertEqual(
-            _movie_title_from_release_title("A Minecraft Movie 4K Blu-ray (SteelBook) (France)"),
-            "A Minecraft Movie",
-        )
-        self.assertEqual(_movie_title_from_release_title("Back to the Future DVD"), "Back to the Future")
-
-    def test_bluray_dvd_section_search_ignores_bluray_cross_links(self):
-        captured_sections = []
-
-        def fake_post(url, data=None, headers=None, timeout=None, allow_redirects=None):
-            captured_sections.append((data or {}).get("section"))
-            text = (
-                "var urls = new Array("
-                "'/movies/Lethal-Weapon-2-Blu-ray/12345/',"
-                "'/dvd/Lethal-Weapon-2-DVD/67890/'"
-                ")"
-            )
-            return types.SimpleNamespace(status_code=200, text=text)
-
-        original_requests = bluray_com_plugin.requests
-        try:
-            bluray_com_plugin.requests = types.SimpleNamespace(post=fake_post)
-            urls = bluray_com_plugin._release_urls("Lethal Weapon 2", preferred_format="DVD", limit=8)
-        finally:
-            bluray_com_plugin.requests = original_requests
-
-        self.assertEqual(captured_sections, ["dvdmovies"])
-        self.assertEqual(urls, ["https://www.blu-ray.com/dvd/Lethal-Weapon-2-DVD/67890/"])
-
-    def test_bluray_bluray_section_search_ignores_dvd_cross_links(self):
-        def fake_post(url, data=None, headers=None, timeout=None, allow_redirects=None):
-            text = (
-                "var urls = new Array("
-                "'/dvd/Heat-DVD/111/',"
-                "'/movies/Heat-Blu-ray/222/'"
-                ")"
-            )
-            return types.SimpleNamespace(status_code=200, text=text)
-
-        original_requests = bluray_com_plugin.requests
-        try:
-            bluray_com_plugin.requests = types.SimpleNamespace(post=fake_post)
-            urls = bluray_com_plugin._release_urls("Heat", preferred_format="Blu-ray", limit=8)
-        finally:
-            bluray_com_plugin.requests = original_requests
-
-        self.assertEqual(urls, ["https://www.blu-ray.com/movies/Heat-Blu-ray/222/"])
-
-    def test_bluray_search_title_is_skipped_without_release_variant_switch(self):
-        def fail_release_urls(*args, **kwargs):
-            raise AssertionError("_release_urls should not run without the switch")
-
-        original = bluray_com_plugin._release_urls
-        try:
-            bluray_com_plugin._release_urls = fail_release_urls
-            result = bluray_com_plugin.search_title({"title": "E.T. the Extra-Terrestrial"})
-        finally:
-            bluray_com_plugin._release_urls = original
-
-        self.assertEqual(result["status"], "skipped")
-        self.assertEqual(result["items"], [])
-
-    def test_bluray_search_title_lists_release_variants_when_switch_enabled(self):
-        urls = [
-            "https://www.blu-ray.com/movies/ET-40th-Anniversary-Edition-4K-Blu-ray/300/",
-            "https://www.blu-ray.com/movies/ET-Steelbook-Blu-ray/301/",
-            "https://www.blu-ray.com/movies/ET-Box-Set-Blu-ray/302/",
-        ]
-
-        def fake_release_urls(query, preferred_format="", limit=8):
-            return urls
-
-        pages = {
-            urls[0]: {
-                "status": "hit",
-                "releaseTitle": "E.T. the Extra-Terrestrial (1982) 40th Anniversary Edition 4K Blu-ray",
-                "movie": {"title": "E.T. the Extra-Terrestrial", "year": "1982", "posterUrl": "p0"},
-                "format": "4K UHD",
-                "isBoxSetCandidate": False,
-            },
-            urls[1]: {
-                "status": "hit",
-                "releaseTitle": "E.T. the Extra-Terrestrial (1982) SteelBook Blu-ray",
-                "movie": {"title": "E.T. the Extra-Terrestrial", "year": "1982", "posterUrl": "p1"},
-                "format": "Blu-ray",
-                "isBoxSetCandidate": False,
-            },
-            urls[2]: {
-                "status": "hit",
-                "releaseTitle": "E.T. Collection Box Set",
-                "movie": {"title": "E.T. Collection", "year": "1982"},
-                "isBoxSetCandidate": True,
-            },
-        }
-
-        original_urls = bluray_com_plugin._release_urls
-        original_parse = bluray_com_plugin._parse_page
-        try:
-            bluray_com_plugin._release_urls = fake_release_urls
-            bluray_com_plugin._parse_page = lambda url: pages[url]
-            result = bluray_com_plugin.search_title(
-                {"title": "E.T. the Extra-Terrestrial", "releaseVariants": True}
-            )
-        finally:
-            bluray_com_plugin._release_urls = original_urls
-            bluray_com_plugin._parse_page = original_parse
-
-        self.assertEqual(result["status"], "hit")
-        # In release-variants mode box sets are kept as pickable editions, so
-        # all three releases survive and the box set is flagged.
-        self.assertEqual(len(result["items"]), 3)
-        release_titles = [item.get("releaseTitle") for item in result["items"]]
-        self.assertIn(
-            "E.T. the Extra-Terrestrial (1982) 40th Anniversary Edition 4K Blu-ray",
-            release_titles,
-        )
-        self.assertIn("E.T. the Extra-Terrestrial (1982) SteelBook Blu-ray", release_titles)
-        box_set_items = [item for item in result["items"] if item.get("isBoxSetCandidate")]
-        self.assertEqual(len(box_set_items), 1)
-        self.assertEqual(box_set_items[0].get("releaseTitle"), "E.T. Collection Box Set")
-        single_items = [item for item in result["items"] if not item.get("isBoxSetCandidate")]
-        for item in single_items:
-            self.assertEqual(item["title"], "E.T. the Extra-Terrestrial")
-
     def test_legacy_import_plugin_is_not_bundled(self):
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
 
         self.assertNotIn("discvault_legacy_import", plugins)
         self.assertNotIn("movievault", plugins)
+
+    def test_local_bluray_provider_is_retired_but_importer_remains_bundled(self):
+        self.assertFalse((DEFAULT_PLUGIN_DIR / "bluray_com" / "manifest.json").exists())
+        self.assertTrue((DEFAULT_PLUGIN_DIR / "import_bluray_com" / "manifest.json").exists())
 
     def test_plugin_install_dir_defaults_to_data_plugins(self):
         with tempfile.TemporaryDirectory() as data_dir:
@@ -1249,7 +1126,8 @@ class UnconfiguredIntegrationPluginsTests(unittest.TestCase):
             "plugins": [
                 # tmdb fully configured -> excluded
                 self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=True),
-                # bluray disabled -> included
+                # Retired local provider must not be surfaced even if a stale
+                # registry row still exists after an upgrade.
                 self._plugin("bluray_com", "Blu-ray.com", enabled=False),
                 # plex enabled but missing secrets -> included
                 self._plugin("plex", "Plex", requires_secrets=True, secrets_configured=False),
@@ -1268,7 +1146,6 @@ class UnconfiguredIntegrationPluginsTests(unittest.TestCase):
         self.assertEqual(
             result,
             [
-                {"id": "bluray_com", "name": "Blu-ray.com"},
                 {"id": "plex", "name": "Plex"},
                 {"id": "trakt", "name": "Trakt"},
             ],
@@ -1278,7 +1155,6 @@ class UnconfiguredIntegrationPluginsTests(unittest.TestCase):
         snapshot = {
             "plugins": [
                 self._plugin("tmdb", "TMDb", requires_secrets=True, secrets_configured=True),
-                self._plugin("bluray_com", "Blu-ray.com"),
                 self._plugin(
                     "plex", "Plex", requires_secrets=True, secrets_configured=True,
                 ),
