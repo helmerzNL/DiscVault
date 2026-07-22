@@ -369,6 +369,31 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         }
         self.assertEqual(set(poll_headers), {"accept", "user-agent"})
 
+    def test_release_details_accepts_external_hit_without_optional_identifiers(self):
+        payload = release_details_hit(external=True)
+        payload["film"]["identifiers"] = {}
+        payload["film"]["links"] = {}
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "external_hit")
+        self.assertEqual(result["film"]["title"], "Example Film")
+        self.assertEqual(result["film"]["identifiers"], {})
+        self.assertEqual(result["film"]["links"], {})
+
+    def test_release_details_rejects_link_without_matching_identifier(self):
+        payload = release_details_hit(external=True)
+        payload["film"]["identifiers"] = {}
+        payload["film"]["links"] = {
+            "tmdb": "https://www.themoviedb.org/movie/123",
+        }
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
     def test_release_details_rejects_provider_owned_or_unknown_fields(self):
         payload = release_details_hit(external=True)
         payload["release"]["description"] = "provider-owned prose"

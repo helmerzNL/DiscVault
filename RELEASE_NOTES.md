@@ -1,5 +1,20 @@
 # DiscVault Release Notes
 
+## 26.6.18 - Exact TMDb enrichment for MovieVault barcode hits
+
+- TMDb preview enrichment now requires an exact normalized title match and,
+  when available, the requested release year. DiscVault no longer attaches
+  metadata or artwork from a similarly named film when MovieVault supplied the
+  correct barcode identity.
+
+## 26.6.17 - MovieVault barcode fallback without external IDs
+
+- MovieVault v2 release-detail hits no longer require a TMDb or IMDb identifier
+  when a valid film title and physical-release result are present. Strict link,
+  field, and provider-content validation remains enforced.
+- This fixes valid unreviewed Blu-ray.com results appearing as an unrecognized
+  barcode in the DiscVault Import Center.
+
 ## 26.6.15 - Blu-ray.com provider moves to MovieVault v2
 
 - Removed DiscVault's bundled `bluray_com` metadata scraper, package builder,
