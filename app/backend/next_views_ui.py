@@ -31542,6 +31542,8 @@ def ui_preview_html(
         || movieResultCards.length
         || document.getElementById("importTitleInput")?.value
         || document.getElementById("importBarcodeInput")?.value
+        || document.getElementById("importTmdbIdInput")?.value
+        || document.getElementById("importImdbIdInput")?.value
       );
       const primaryImportMode = selectedBoxSetForAction ? "box-set" : "movie";
       const inBatchContext = Boolean(importCenter.activeBatchBarcode);
