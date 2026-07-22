@@ -107,21 +107,14 @@ def _year_key(value):
 
 
 def _barcode_conflicts(left, right):
-    """Detect barcode conflicts: mismatches or null/non-null mismatch.
-    
-    Returns True if:
-    - One is null and the other is not (mixed null/non-null always conflicts)
-    - Both are non-null and different
+    """Detect hard barcode conflicts.
+
+    Missing data must not block an otherwise sound merge candidate, so only
+    two *different non-empty* barcodes are considered incompatible.
     """
     left_code = normalize_barcode(left)
     right_code = normalize_barcode(right)
-    # Mixed null/non-null is always a conflict
-    if bool(left_code) != bool(right_code):
-        return True
-    # Both non-null: conflict if different
-    if left_code and right_code and left_code != right_code:
-        return True
-    return False
+    return bool(left_code and right_code and left_code != right_code)
 
 
 def _tmdb_sanity_conflicts(left_movie, right_movie):
