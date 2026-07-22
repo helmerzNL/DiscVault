@@ -17137,6 +17137,7 @@ def admin_operations_duplicate_summary(conn) -> dict[str, Any]:
                 SELECT barcode, COUNT(*)::int AS count, array_agg(title ORDER BY title) AS titles
                 FROM movies
                 WHERE NULLIF(BTRIM(COALESCE(barcode, '')), '') IS NOT NULL
+                  AND deleted_at IS NULL
                 GROUP BY barcode
                 HAVING COUNT(*) > 1
                 ORDER BY COUNT(*) DESC, barcode
@@ -17156,6 +17157,7 @@ def admin_operations_duplicate_summary(conn) -> dict[str, Any]:
                     array_agg(title ORDER BY title) AS titles
                 FROM movies
                 WHERE NULLIF(BTRIM(COALESCE(original_title, title, '')), '') IS NOT NULL
+                  AND deleted_at IS NULL
                 GROUP BY LOWER(BTRIM(COALESCE(original_title, title, ''))), COALESCE(year, '')
                 HAVING COUNT(*) > 1
                 ORDER BY COUNT(*) DESC, key
@@ -17170,12 +17172,13 @@ def admin_operations_duplicate_summary(conn) -> dict[str, Any]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT provider_id, identifier_type, identifier, COUNT(*)::int AS count
-                FROM movie_identifiers
-                WHERE NULLIF(BTRIM(COALESCE(identifier, '')), '') IS NOT NULL
-                GROUP BY provider_id, identifier_type, identifier
+                SELECT mi.provider_id, mi.identifier_type, mi.identifier, COUNT(*)::int AS count
+                FROM movie_identifiers mi
+                JOIN movies m ON m.id = mi.movie_id AND m.deleted_at IS NULL
+                WHERE NULLIF(BTRIM(COALESCE(mi.identifier, '')), '') IS NOT NULL
+                GROUP BY mi.provider_id, mi.identifier_type, mi.identifier
                 HAVING COUNT(*) > 1
-                ORDER BY COUNT(*) DESC, provider_id, identifier
+                ORDER BY COUNT(*) DESC, mi.provider_id, mi.identifier
                 LIMIT 12
                 """
             )
