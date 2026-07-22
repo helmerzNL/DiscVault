@@ -1331,7 +1331,6 @@ def plugin_registry_row(row: dict[str, Any]) -> dict[str, Any]:
 # message. Adding a future integration is a single extra entry here.
 INTEGRATION_PLUGIN_NOTICE_IDS: tuple[str, ...] = (
     "tmdb",
-    "bluray_com",
     "plex",
     "jellyfin",
     "trakt",
@@ -1342,7 +1341,6 @@ INTEGRATION_PLUGIN_NOTICE_IDS: tuple[str, ...] = (
 # of the notice.
 INTEGRATION_PLUGIN_FALLBACK_NAMES: dict[str, str] = {
     "tmdb": "TMDb",
-    "bluray_com": "Blu-ray.com",
     "plex": "Plex",
     "jellyfin": "Jellyfin",
     "trakt": "Trakt",
