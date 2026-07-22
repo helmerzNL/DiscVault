@@ -924,6 +924,12 @@ class NextProfileUiTests(unittest.TestCase):
         )
         self.assertIn("appAdmin.auditCounts = payload.counts", self.html)
         self.assertIn("Number(byCategory.security || 0)", self.html)
+        self.assertGreaterEqual(
+            self.html.count('tNext("appAdmin.backupZipValid", "ZIP is valid")'),
+            4,
+        )
+        self.assertNotIn('tNext("appAdmin.valid"', self.html)
+        self.assertNotIn('tNext("appAdmin.invalid"', self.html)
 
     def test_admin_role_creation_generates_key_and_starts_permission_wizard(self):
         for element_id in (

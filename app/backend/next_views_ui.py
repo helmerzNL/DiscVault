@@ -19060,7 +19060,9 @@ def ui_preview_html(
       if (jobCountNode) jobCountNode.textContent = formatNumber(jobs.length);
       if (reportStateNode) {
         reportStateNode.textContent = appAdmin.backupReport
-          ? (appAdmin.backupReport.valid ? tNext("appAdmin.valid", "Valid") : tNext("appAdmin.invalid", "Invalid"))
+          ? (appAdmin.backupReport.valid
+            ? tNext("appAdmin.backupZipValid", "ZIP is valid")
+            : tNext("appAdmin.backupZipInvalid", "ZIP has validation issues"))
           : "-";
       }
       renderAppAdminBackupReport(appAdmin.backupReport);
@@ -19076,7 +19078,9 @@ def ui_preview_html(
             <div class="profile-passkey">
               <div class="profile-passkey-head">
                 <strong>${escapeHtml(item.description || item.fileName || tNext("appAdmin.backupArchive", "Backup archive"))}</strong>
-                <span class="tag ${item.valid ? "good" : "bad"}">${escapeHtml(item.valid ? tNext("appAdmin.valid", "Valid") : tNext("appAdmin.invalid", "Invalid"))}</span>
+                <span class="tag ${item.valid ? "good" : "bad"}">${escapeHtml(item.valid
+                  ? tNext("appAdmin.backupZipValid", "ZIP is valid")
+                  : tNext("appAdmin.backupZipInvalid", "ZIP has validation issues"))}</span>
               </div>
               <div class="profile-passkey-meta">
                 ${escapeHtml(item.fileName || "-")}
