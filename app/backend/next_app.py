@@ -26656,8 +26656,10 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Movie import body must be an object", 400)
         barcode = clean_text(body.get("barcode")) or ""
         title = clean_text(body.get("title") or body.get("query")) or ""
-        if not barcode and not title:
-            raise NextApiError("barcode or title is required", 400)
+        tmdb_id = clean_text(body.get("tmdbId") or body.get("tmdb_id")) or ""
+        imdb_id = clean_text(body.get("imdbId") or body.get("imdb_id")) or ""
+        if not barcode and not title and not tmdb_id and not imdb_id:
+            raise NextApiError("barcode, title, tmdbId or imdbId is required", 400)
         target_container_id_raw = clean_text(body.get("targetContainerId") or body.get("target_container_id"))
         target_container_uuid = parse_uuid(target_container_id_raw, "targetContainerId") if target_container_id_raw else None
         import_mode = (clean_text(body.get("importMode") or body.get("import_mode")) or "").casefold().replace("_", "-")

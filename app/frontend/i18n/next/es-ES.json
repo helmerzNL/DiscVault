@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Introduce los detalles del rol. DiscVault genera la clave técnica y abre el asistente de permisos.",
   "appAdmin.roleKeyGenerated": "Clave de rol generada",
   "appAdmin.roleKeyGeneratedHelp": "La clave se genera a partir del nombre del rol y no se puede cambiar después de la creación.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Busqueda manual",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Ano",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "mapped fields",
   "importCenter.mapping.actor": "Actores",
   "importCenter.mapping.backdrop": "Fondo",

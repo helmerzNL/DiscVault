@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Adja meg a szerepkör adatait. A DiscVault létrehozza a technikai kulcsot, és megnyitja az engedélyvarázslót.",
   "appAdmin.roleKeyGenerated": "Létrehozott szerepkörkulcs",
   "appAdmin.roleKeyGeneratedHelp": "A kulcs a szerepkör nevéből jön létre, és létrehozás után nem módosítható.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Év",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "leképezett mezők",
   "importCenter.mapping.actor": "színész",
   "importCenter.mapping.backdrop": "Backdrop",

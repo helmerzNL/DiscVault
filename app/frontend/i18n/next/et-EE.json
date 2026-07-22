@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Sisestage rolli andmed. DiscVault loob tehnilise võtme ja avab õiguste viisardi.",
   "appAdmin.roleKeyGenerated": "Loodud rollivõti",
   "appAdmin.roleKeyGeneratedHelp": "Võti luuakse rolli nime põhjal ja seda ei saa pärast loomist muuta.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Aasta",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "vastendatud väljad",
   "importCenter.mapping.actor": "Näitlejad",
   "importCenter.mapping.backdrop": "Backdrop",

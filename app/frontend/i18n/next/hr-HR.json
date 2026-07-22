@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Unesite pojedinosti uloge. DiscVault generira tehnički ključ i otvara čarobnjak za dopuštenja.",
   "appAdmin.roleKeyGenerated": "Generirani ključ uloge",
   "appAdmin.roleKeyGeneratedHelp": "Ključ se generira iz naziva uloge i ne može se promijeniti nakon izrade.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Godina",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "mapirana polja",
   "importCenter.mapping.actor": "Sudionici",
   "importCenter.mapping.backdrop": "Backdrop",

@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Įveskite vaidmens informaciją. DiscVault sugeneruos techninį raktą ir atvers leidimų vediklį.",
   "appAdmin.roleKeyGenerated": "Sugeneruotas vaidmens raktas",
   "appAdmin.roleKeyGeneratedHelp": "Raktas generuojamas pagal vaidmens pavadinimą ir sukūrus jo keisti nebegalima.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Metai",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "susieti laukai",
   "importCenter.mapping.actor": "Aktoriai",
   "importCenter.mapping.backdrop": "Backdrop",

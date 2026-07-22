@@ -13724,6 +13724,14 @@ def ui_preview_html(
                     <input id="importYearInput" autocomplete="off" inputmode="numeric" maxlength="40" data-next-i18n-placeholder="importCenter.yearPlaceholder" placeholder="2026">
                   </label>
                   <label>
+                    <span data-next-i18n="importCenter.manualTmdbId">TMDB ID</span>
+                    <input id="importTmdbIdInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.tmdbIdPlaceholder" placeholder="e.g. 12345">
+                  </label>
+                  <label>
+                    <span data-next-i18n="importCenter.manualImdbId">IMDB ID</span>
+                    <input id="importImdbIdInput" autocomplete="off" data-next-i18n-placeholder="importCenter.imdbIdPlaceholder" placeholder="tt0123456">
+                  </label>
+                  <label>
                     <span data-next-i18n="importCenter.manualFormat">Format</span>
                     <select id="importFormatInput" autocomplete="off"></select>
                   </label>
@@ -31723,9 +31731,11 @@ def ui_preview_html(
       const title = String(titleInput?.value || "").trim();
       const year = String(document.getElementById("importYearInput")?.value || "").trim();
       const format = String(document.getElementById("importFormatInput")?.value || "").trim();
-      if (!barcode && !title) {
-        setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
-        setImportLookupPreviewMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
+      const tmdbId = String(document.getElementById("importTmdbIdInput")?.value || "").trim();
+      const imdbId = String(document.getElementById("importImdbIdInput")?.value || "").trim();
+      if (!barcode && !title && !tmdbId && !imdbId) {
+        setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode, title, TMDB ID or IMDB ID."), "bad");
+        setImportLookupPreviewMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode, title, TMDB ID or IMDB ID."), "bad");
         return;
       }
       setImportCenterMessage(tNext("importCenter.previewingLookup", "Searching metadata..."));
@@ -31742,7 +31752,7 @@ def ui_preview_html(
           method: "POST",
           headers: {"Content-Type": "application/json"},
           timeoutMs: 30000,
-          body: JSON.stringify({barcode, title, year, format, detectBoxSets: true, previewMode: true})
+          body: JSON.stringify({barcode, title, year, format, tmdbId, imdbId, detectBoxSets: true, previewMode: true})
         });
         importCenter.barcodeLookup = payload;
         importCenter.selectedMovieCandidateKey = "";
@@ -31795,8 +31805,10 @@ def ui_preview_html(
       const title = String(document.getElementById("importTitleInput")?.value || "").trim();
       const year = String(document.getElementById("importYearInput")?.value || "").trim();
       const format = String(document.getElementById("importFormatInput")?.value || "").trim();
-      if (!barcode && !title) {
-        setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode or title first."), "bad");
+      const tmdbId = String(document.getElementById("importTmdbIdInput")?.value || "").trim();
+      const imdbId = String(document.getElementById("importImdbIdInput")?.value || "").trim();
+      if (!barcode && !title && !tmdbId && !imdbId) {
+        setImportCenterMessage(tNext("importCenter.searchOrBarcodeRequired", "Enter a barcode, title, TMDB ID or IMDB ID."), "bad");
         return;
       }
       setImportCenterMessage(
@@ -31859,6 +31871,8 @@ def ui_preview_html(
             title,
             year,
             format,
+            tmdbId,
+            imdbId,
             importMode: wantsBoxSet ? "box-set" : "movie",
             detectBoxSets: wantsBoxSet,
             selectedMovieCandidateKey: wantsBoxSet ? "" : (importCenter.selectedMovieCandidateKey || selectedMovieCandidate?.candidateKey || ""),

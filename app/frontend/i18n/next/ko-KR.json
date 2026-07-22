@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "역할 세부 정보를 입력하세요. DiscVault에서 기술 키를 생성하고 권한 마법사를 엽니다.",
   "appAdmin.roleKeyGenerated": "생성된 역할 키",
   "appAdmin.roleKeyGeneratedHelp": "키는 역할 이름으로부터 생성되며 생성 후에는 변경할 수 없습니다.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "연도",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "매핑된 필드",
   "importCenter.mapping.actor": "배우",
   "importCenter.mapping.backdrop": "Backdrop",

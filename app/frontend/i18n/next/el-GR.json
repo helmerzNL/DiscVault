@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Εισαγάγετε τα στοιχεία του ρόλου. Το DiscVault δημιουργεί το τεχνικό κλειδί και ανοίγει τον οδηγό δικαιωμάτων.",
   "appAdmin.roleKeyGenerated": "Κλειδί ρόλου που δημιουργήθηκε",
   "appAdmin.roleKeyGeneratedHelp": "Το κλειδί δημιουργείται από το όνομα του ρόλου και δεν μπορεί να αλλάξει μετά τη δημιουργία.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Έτος",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "αντιστοιχισμένα πεδία",
   "importCenter.mapping.actor": "Παράγοντες",
   "importCenter.mapping.backdrop": "Backdrop",

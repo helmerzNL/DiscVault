@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "输入角色详细信息。DiscVault 将生成技术键并打开权限向导。",
   "appAdmin.roleKeyGenerated": "生成的角色键",
   "appAdmin.roleKeyGeneratedHelp": "该键根据角色名称生成，创建后无法更改。",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "年份",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "已映射字段",
   "importCenter.mapping.actor": "演员",
   "importCenter.mapping.backdrop": "Backdrop",
