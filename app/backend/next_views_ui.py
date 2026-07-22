@@ -15907,14 +15907,18 @@ def ui_preview_html(
                   <div class="operations-row-list" id="appAdminCollectionHealthIssues"></div>
                 </section>
                 <section class="profile-dashboard-card full">
-                  <div class="profile-dashboard-card-title">
-                    <span class="profile-dashboard-card-icon">""" + nav_icon("discover") + """</span>
-                    <div>
-                      <h4 data-next-i18n="appAdmin.duplicateCenter">Duplicate detection</h4>
-                      <p data-next-i18n="appAdmin.duplicateCenterHelp">Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.</p>
+                  <div class="profile-dashboard-card-head">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("discover") + """</span>
+                      <div>
+                        <h4 data-next-i18n="appAdmin.duplicateCenter">Duplicate detection</h4>
+                        <p data-next-i18n="appAdmin.duplicateCenterHelp">Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.</p>
+                      </div>
                     </div>
+                    <button type="button" class="secondary-button small" id="appAdminDedupScanBtn" onclick="startDedupScan()" data-next-i18n="appAdmin.dedupScan">Scan &amp; merge</button>
                   </div>
                   <div class="operations-row-list" id="appAdminDuplicateCenter"></div>
+                  <div id="appAdminDedupWizardArea"></div>
                 </section>
               </div>
             </div>
@@ -19637,6 +19641,118 @@ def ui_preview_html(
           "blue"
         ));
         signalsNode.innerHTML = [...latestJobs, ...receiverEvents].join("") || `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noOperationsSignals", "No recent operations signals."))}</div>`;
+      }
+    }
+    let _dedupReport = null;
+    function renderAppAdminDedupWizard(state, data) {
+      const area = document.getElementById("appAdminDedupWizardArea");
+      const scanBtn = document.getElementById("appAdminDedupScanBtn");
+      if (!area) return;
+      if (state === "scanning") {
+        if (scanBtn) { scanBtn.disabled = true; scanBtn.textContent = tNext("appAdmin.dedupScanning", "Scanning\u2026"); }
+        area.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.dedupScanning", "Scanning\u2026"))}</div>`;
+      } else if (state === "error") {
+        if (scanBtn) { scanBtn.disabled = false; scanBtn.textContent = tNext("appAdmin.dedupScan", "Scan & merge"); }
+        area.innerHTML = `<div class="preview-empty bad">${escapeHtml(tNext("appAdmin.dedupScanError", "Scan failed. Please try again."))}</div>`;
+      } else if (state === "results") {
+        const report = data || {};
+        const groups = report.groups || [];
+        if (scanBtn) { scanBtn.disabled = false; scanBtn.textContent = tNext("appAdmin.dedupScan", "Scan & merge"); }
+        if (!groups.length) {
+          area.innerHTML = `<div class="preview-empty good">${escapeHtml(tNext("appAdmin.dedupNoGroups", "No duplicates found. Your collection is clean."))}</div>`;
+          return;
+        }
+        const groupsHtml = groups.map((group) => {
+          const winner = (group.members || []).find((m) => m.id === group.winner) || {};
+          const losers = (group.members || []).filter((m) => m.id !== group.winner);
+          return `
+            <div class="dedup-group-card">
+              <div class="dedup-group-head">
+                <span class="tag blue">${escapeHtml(tNext("appAdmin.dedupTier", "Tier"))}: ${escapeHtml(group.tier || "")}</span>
+                <span>${escapeHtml(group.winner_reason || "")}</span>
+              </div>
+              <div class="dedup-group-member winner">
+                <strong>${escapeHtml(tNext("appAdmin.dedupWinner", "Keep"))}</strong>
+                <span>${escapeHtml(winner.title || "")}${winner.year ? ` (${escapeHtml(String(winner.year))})` : ""}${winner.format ? ` \u00b7 ${escapeHtml(winner.format)}` : ""}</span>
+                ${winner.barcode ? `<span class="tag good">${escapeHtml(winner.barcode)}</span>` : ""}
+              </div>
+              ${losers.map((loser) => `
+                <div class="dedup-group-member loser">
+                  <strong>${escapeHtml(tNext("appAdmin.dedupLosers", "Remove"))}</strong>
+                  <span>${escapeHtml(loser.title || "")}${loser.year ? ` (${escapeHtml(String(loser.year))})` : ""}${loser.format ? ` \u00b7 ${escapeHtml(loser.format)}` : ""}</span>
+                  ${loser.barcode ? `<span class="tag">${escapeHtml(loser.barcode)}</span>` : ""}
+                </div>
+              `).join("")}
+            </div>
+          `;
+        }).join("");
+        const countMsg = tNext("appAdmin.dedupGroupCount", "Duplicate groups found: {count}").replace("{count}", String(groups.length));
+        area.innerHTML = `
+          <div class="dedup-wizard-summary"><p>${escapeHtml(countMsg)}</p></div>
+          <div class="dedup-group-list">${groupsHtml}</div>
+          <div class="profile-action-row">
+            <button type="button" class="primary-button" id="appAdminDedupExecuteBtn" onclick="executeDedupMerge()">${escapeHtml(tNext("appAdmin.dedupMergeButton", "Merge duplicates"))}</button>
+          </div>
+        `;
+      } else if (state === "executing") {
+        const execBtn = document.getElementById("appAdminDedupExecuteBtn");
+        if (execBtn) { execBtn.disabled = true; execBtn.textContent = tNext("appAdmin.dedupExecuting", "Merging\u2026"); }
+      } else if (state === "done") {
+        if (scanBtn) { scanBtn.disabled = false; scanBtn.textContent = tNext("appAdmin.dedupScan", "Scan & merge"); }
+        const tombstoned = data || 0;
+        const doneMsg = tNext("appAdmin.dedupDone", "Done! {count} duplicate(s) removed.").replace("{count}", String(tombstoned));
+        area.innerHTML = `<div class="preview-empty good">${escapeHtml(doneMsg)}</div>`;
+        _dedupReport = null;
+      }
+    }
+    async function startDedupScan() {
+      renderAppAdminDedupWizard("scanning");
+      try {
+        const result = await authApiJson("/api/next/admin/dedup/report");
+        if (!result || !result.report) throw new Error("Empty report");
+        _dedupReport = result.report;
+        renderAppAdminDedupWizard("results", _dedupReport);
+      } catch (err) {
+        console.error("Dedup scan failed", err);
+        renderAppAdminDedupWizard("error");
+      }
+    }
+    async function executeDedupMerge() {
+      if (!_dedupReport) { renderAppAdminDedupWizard("error"); return; }
+      if (!confirm(tNext("appAdmin.dedupConfirm", "This will permanently merge duplicate movies. Are you sure?"))) return;
+      renderAppAdminDedupWizard("executing");
+      try {
+        if (!window.PublicKeyCredential) {
+          alert(tNext("appAdmin.dedupNoPasskeys", "No passkeys available. Register a passkey to use this feature."));
+          renderAppAdminDedupWizard("results", _dedupReport);
+          return;
+        }
+        const optRes = await authApiJson("/api/next/admin/dedup/options", { method: "POST" });
+        if (!optRes || !optRes.options) throw new Error("No options returned");
+        const opts = optRes.options;
+        opts.challenge = base64urlToBuffer(opts.challenge);
+        opts.allowCredentials = (opts.allowCredentials || []).map((item) => ({ ...item, id: base64urlToBuffer(item.id) }));
+        const assertion = await navigator.credentials.get({ publicKey: opts });
+        const credential = {
+          id: assertion.id,
+          rawId: bufferToBase64url(assertion.rawId),
+          type: assertion.type,
+          response: {
+            authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+            clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+            signature: bufferToBase64url(assertion.response.signature),
+            userHandle: assertion.response.userHandle ? bufferToBase64url(assertion.response.userHandle) : null,
+          },
+        };
+        const execRes = await authApiJson("/api/next/admin/dedup/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ report: _dedupReport, credential }),
+        });
+        renderAppAdminDedupWizard("done", execRes.tombstoned || 0);
+      } catch (err) {
+        console.error("Dedup execute failed", err);
+        renderAppAdminDedupWizard("results", _dedupReport);
       }
     }
     function renderAppAdminPlugins() {

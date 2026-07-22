@@ -67,6 +67,10 @@ try:
         verify_totp,
     )
     from .next_runtime_secrets import jwt_secret
+    from .scripts.sync_dedup_merge import (
+        build_report as _dedup_build_report,
+        execute_merge as _dedup_execute_merge,
+    )
 except ImportError:  # pragma: no cover - direct module execution compatibility
     from next_legacy_auth import (
         FLOW_TTL_SECONDS,
@@ -95,6 +99,10 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         verify_totp,
     )
     from next_runtime_secrets import jwt_secret
+    from scripts.sync_dedup_merge import (
+        build_report as _dedup_build_report,
+        execute_merge as _dedup_execute_merge,
+    )
 
 
 ConnectFactory = Callable[[], Any]
@@ -4944,6 +4952,92 @@ def register_next_auth_routes(
                     metadata={},
                 )
         return response({"status": "deleted"})
+
+    @route("/api/next/admin/dedup/report", methods=["GET"])
+    def admin_dedup_report():
+        with connect() as conn:
+            require_admin(conn)
+            report = _dedup_build_report(conn)
+        return response({"status": "ok", "report": _json_ready(report)})
+
+    @route("/api/next/admin/dedup/options", methods=["POST"])
+    def admin_dedup_options():
+        require_passkey_access()
+        with connect() as conn:
+            actor = require_authenticated_admin(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM passkey_credentials
+                    WHERE user_id=%s
+                    ORDER BY created_at
+                    """,
+                    (actor["id"],),
+                )
+                credentials = cur.fetchall()
+            if not credentials:
+                raise next_api_error("No passkeys registered for your account", 400)
+            challenge = _make_challenge()
+            challenge_key = f"admin_dedup:{actor['id']}"
+            with conn.transaction():
+                store_challenge(conn, challenge_key, challenge)
+        options = {
+            "challenge": _b64url_encode(challenge),
+            "timeout": 60000,
+            "rpId": _rp_id(),
+            "allowCredentials": [
+                {"type": "public-key", "id": row["id"]} for row in credentials
+            ],
+            "userVerification": "preferred",
+        }
+        return response({"status": "ok", "options": options})
+
+    @route("/api/next/admin/dedup/execute", methods=["POST"])
+    def admin_dedup_execute():
+        require_passkey_access()
+        body = request.get_json(silent=True) or {}
+        report = body.get("report")
+        if not isinstance(report, dict) or not isinstance(report.get("groups"), list):
+            raise next_api_error("A valid dedup report is required", 400)
+        credential = body.get("credential") or {}
+        if not credential:
+            raise next_api_error("credential is required", 400)
+        with connect() as conn:
+            actor = require_authenticated_admin(conn)
+            challenge_key = f"admin_dedup:{actor['id']}"
+            stored = verify_step_up_assertion(
+                conn,
+                challenge_key=challenge_key,
+                expected_user_id=actor["id"],
+                credential=credential,
+            )
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE passkey_credentials
+                    SET sign_count=%s, last_used_at=now()
+                    WHERE id=%s
+                    """,
+                    (stored["new_sign_count"], stored["id"]),
+                )
+            tombstoned = _dedup_execute_merge(conn, report)
+            # _dedup_execute_merge commits its own transaction; audit in a new one
+            with conn.transaction():
+                audit_event(
+                    conn,
+                    event_type="admin.dedup_executed",
+                    category="operations",
+                    actor=actor,
+                    target_type="movies",
+                    target_id=None,
+                    summary=f"Dedup merge executed: {tombstoned} movie(s) tombstoned",
+                    metadata={
+                        "tombstoned": tombstoned,
+                        "mergeGroupCount": len(report.get("groups", [])),
+                    },
+                )
+        return response({"status": "ok", "tombstoned": tombstoned})
 
     if legacy_auth_env_enabled() and _env_flag("REVIEW_LOGIN_ENABLED", default=False):
         try:
