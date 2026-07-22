@@ -17590,6 +17590,8 @@ def ui_preview_html(
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
       const reviewForm = document.getElementById("appReviewForm");
+      const inviteForm = document.getElementById("appInviteForm");
+      const recoveryForm = document.getElementById("appRecoveryForm");
       const legacyLoginWarning = document.getElementById("appLegacyLoginWarning");
       const authGuidance = document.getElementById("appAuthGuidance");
       const showAuthGuidance = passkeyConfigurationGuidanceVisible();
@@ -17641,7 +17643,13 @@ def ui_preview_html(
         toggleButton.textContent = tNext(key, publicRegistration ? "Create account" : "Invite-only access");
       }
       if (reviewToggleButton) reviewToggleButton.classList.toggle("hidden", !reviewLoginAvailable);
-      if (!reviewLoginAvailable) reviewForm?.classList.add("hidden");
+      if (reviewLoginAvailable) {
+        const alternateLoginOpen = [inviteForm, recoveryForm]
+          .some((form) => form && !form.classList.contains("hidden"));
+        reviewForm?.classList.toggle("hidden", alternateLoginOpen);
+      } else {
+        reviewForm?.classList.add("hidden");
+      }
       legacyLoginWarning?.classList.toggle("hidden", reviewLoginAvailable);
       document.getElementById("profileLegacySecurity")?.classList.toggle("hidden", !currentAuthStatus.legacy_auth_enabled);
       if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
