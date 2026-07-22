@@ -4250,6 +4250,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                     LIMIT 1
                 ) backdrop_asset ON true
                 WHERE {visibility_where}
+                  AND m.deleted_at IS NULL
                 ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
                 LIMIT %s
                 """,
@@ -4300,6 +4301,7 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 m.updated_at
             FROM movies m
             WHERE {visibility_where}
+              AND m.deleted_at IS NULL
             ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
             LIMIT %s
             """,
@@ -7683,7 +7685,7 @@ def actor_collection_visibility_scope(actor: dict[str, Any] | None) -> dict[str,
 def visible_movie_where_sql(conn, actor: dict[str, Any] | None, alias: str = "m") -> tuple[str, list[Any]]:
     scope = actor_collection_visibility_scope(actor)
     if scope["all"]:
-        return "TRUE", []
+        return f"{alias}.deleted_at IS NULL", []
     actor_id = actor.get("id") if actor else None
     clauses: list[str] = []
     params: list[Any] = []
@@ -7705,7 +7707,7 @@ def visible_movie_where_sql(conn, actor: dict[str, Any] | None, alias: str = "m"
         params.append(actor_id)
     if not clauses:
         return "FALSE", []
-    return "(" + " OR ".join(clauses) + ")", params
+    return f"({' OR '.join(clauses)}) AND {alias}.deleted_at IS NULL", params
 
 
 def visible_container_where_sql(conn, actor: dict[str, Any] | None, alias: str = "c") -> tuple[str, list[Any]]:
