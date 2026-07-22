@@ -28,6 +28,9 @@ class NormalizationParityTests(unittest.TestCase):
         self.assertEqual(merge.normalize_barcode("0-051-89"), "005189")
         self.assertIsNone(merge.normalize_barcode(""))
 
+    def test_format_normalization_collapses_underscore_and_space(self):
+        self.assertEqual(merge.normalize_format("4K_UHD"), merge.normalize_format("4K UHD"))
+
 
 class DedupPlanTests(unittest.TestCase):
     def test_first_tier_claims_members_so_losers_tombstone_once(self):
@@ -53,6 +56,60 @@ class DedupPlanTests(unittest.TestCase):
     def test_singletons_are_not_merged(self):
         groups = {"barcode": {"x": ["a"]}, "tmdbEdition": {}, "titleYear": {}}
         self.assertEqual(merge._dedup_group_members(groups), [])
+
+
+class GroupDetectionSafetyTests(unittest.TestCase):
+    def _detect_with(self, movies, tmdb_map):
+        original_movies = merge._fetch_live_movies
+        original_tmdb = merge._fetch_tmdb_ids
+        merge._fetch_live_movies = lambda _conn: movies
+        merge._fetch_tmdb_ids = lambda _conn: tmdb_map
+        try:
+            groups, _by_id, _tmdb = merge.detect_groups(conn=None)
+        finally:
+            merge._fetch_live_movies = original_movies
+            merge._fetch_tmdb_ids = original_tmdb
+        return groups
+
+    def test_tmdb_tier_blocks_materially_different_title_or_year(self):
+        a = {
+            "id": "a",
+            "barcode": None,
+            "title": "Harry Potter and the Deathly Hallows: Part 1",
+            "year": "2010",
+            "format": "4K UHD",
+            "edition": "",
+        }
+        b = {
+            "id": "b",
+            "barcode": None,
+            "title": "Harry Potter and the Deathly Hallows: Part 2",
+            "year": "2011",
+            "format": "4K_UHD",
+            "edition": "",
+        }
+        groups = self._detect_with([a, b], {"a": "12444", "b": "12444"})
+        self.assertEqual(groups["tmdbEdition"], {})
+
+    def test_titleyear_tier_blocks_conflicting_barcodes(self):
+        a = {
+            "id": "a",
+            "barcode": "1111111111111",
+            "title": "The Matrix",
+            "year": "1999",
+            "format": "Blu-ray",
+            "edition": "",
+        }
+        b = {
+            "id": "b",
+            "barcode": "2222222222222",
+            "title": "Matrix",
+            "year": "1999",
+            "format": "Blu ray",
+            "edition": "",
+        }
+        groups = self._detect_with([a, b], {})
+        self.assertEqual(groups["titleYear"], {})
 
 
 class _FakeCursor:
@@ -92,7 +149,9 @@ class WinnerSelectionTests(unittest.TestCase):
         # 'rich' has more related rows in every relation table.
         counts = {"rich": 5, "poor": 0}
         conn = _FakeConn(counts)
-        winner, losers, _scores = merge._choose_winner(conn, ["poor", "rich"], by_id)
+        winner, losers, _scores, _reasons, _decision = merge._choose_winner(
+            conn, ["poor", "rich"], by_id
+        )
         self.assertEqual(winner, "rich")
         self.assertEqual(losers, ["poor"])
 
@@ -102,9 +161,23 @@ class WinnerSelectionTests(unittest.TestCase):
             "new": {"id": "new", "created_at": 2},
         }
         conn = _FakeConn({"old": 0, "new": 0})
-        winner, losers, _scores = merge._choose_winner(conn, ["new", "old"], by_id)
+        winner, losers, _scores, _reasons, _decision = merge._choose_winner(
+            conn, ["new", "old"], by_id
+        )
         self.assertEqual(winner, "old")
         self.assertEqual(losers, ["new"])
+
+    def test_watch_history_outweighs_created_at_tie_breaker(self):
+        by_id = {
+            "old": {"id": "old", "created_at": 1, "_signals": {"watch_history_count": 0}},
+            "new": {"id": "new", "created_at": 2, "_signals": {"watch_history_count": 2}},
+        }
+        conn = _FakeConn({"old": 0, "new": 0})
+        winner, losers, _scores, _reasons, _decision = merge._choose_winner(
+            conn, ["old", "new"], by_id
+        )
+        self.assertEqual(winner, "new")
+        self.assertEqual(losers, ["old"])
 
 
 if __name__ == "__main__":

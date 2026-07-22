@@ -166,17 +166,17 @@ Alle nieuwe kolommen zijn nullable; oude clients blijven werken.
 
 ### Payload-velden (input) — movie-upsert in `mutations[]`
 
-Elke variant wordt geaccepteerd (camelCase + snake_case), eerste niet-lege wint:
+Definitief contract (geen dual-key fallback meer):
 
-| Concept | Geaccepteerde sleutels |
+| Concept | Definitieve sleutel |
 |---|---|
-| Persistente per-record clientId (UUID) | `clientId` / `client_id` (in `payload`) |
-| TMDB-id | `tmdbId` / `tmdb_id` / `tmdbID` |
-| Bewuste tweede kopie | `duplicateCopy` / `duplicate_copy` (bool) |
-| Client-edittijd (H4 resurrection-beslissing) | `updatedAt` / `updated_at` / `clientUpdatedAt` |
+| Persistente per-record clientId (UUID) | `payload.client_id` |
+| TMDB-id voor trede 3 | `payload.metadata.tmdb_id` |
+| Bewuste tweede kopie | `payload.duplicate_copy` (bool) |
+| Client-edittijd (H4 resurrection-beslissing) | `payload.updated_at` |
 
 > De top-level batch-`clientId` (request-body, niet payload) blijft het **device/installatie-id**
-> en is losstaand van de per-record `clientId` in de payload.
+> en is losstaand van de per-record `payload.client_id`.
 
 ### Responsvelden (output) — per `results[]`-item van een movie-upsert
 
@@ -189,8 +189,8 @@ delta-`payload` van de emitted `sync_change`.
 
 ### Reconcile (`/api/next/sync/reconcile`)
 
-Request: `{ "clientId": "<device>", "items": [ { clientId, barcode, tmdbId, format, edition,
-title, year } ] }` (max 1000 items). Response `results[]` per item: `{ clientId, status:
+Request: `{ "clientId": "<device>", "items": [ { client_id, barcode, tmdb_id, format, edition,
+title, year } ] }` (max 1000 items). Response `results[]` per item: `{ client_id, status:
 "matched"|"unknown"|"invalid", matched: bool, entityId?, matchedBy? }`. Dit is het **enige** pad
 waar trede 4 (titel+jaar) actief is.
 
@@ -201,7 +201,7 @@ waar trede 4 (titel+jaar) actief is.
       én box-set containers + partiële live-indexen; `idx_movies_titleyear_live`.
 - [x] **P2** Identiteitsladder in `apply_movie_upsert` (`match_existing_movie`): clientId →
       barcode → tmdb+formaat+editie; `created`/`matchedBy`/`recordClientId` in `results[]`;
-      over-merge-bescherming + `duplicateCopy`; batch-lokale clientId-dedup
+      over-merge-bescherming + `duplicate_copy`; batch-lokale clientId-dedup
       (`SyncBatchContext.claimed_client_ids`). Ladder draait alléén in het batch-pad voor echt
       nieuwe records (box-set-import ongemoeid).
 - [x] **P3** Soft delete (`apply_movie_delete`, `apply_container_delete` zetten `deleted_at`);

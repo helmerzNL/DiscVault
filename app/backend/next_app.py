@@ -15527,6 +15527,17 @@ def normalize_barcode(barcode: str | None) -> str | None:
     return digits or None
 
 
+def _barcode_conflicts(incoming_barcode: Any, candidate_barcode: Any) -> bool:
+    incoming = normalize_barcode(clean_text(incoming_barcode))
+    candidate = normalize_barcode(clean_text(candidate_barcode))
+    return bool(incoming and candidate and incoming != candidate)
+
+
+def _year_key(value: Any) -> str | None:
+    text = clean_text(value)
+    return text or None
+
+
 def find_movie_by_client_id(conn, client_id: str | None) -> UUID | None:
     """Trede 1: a live movie already carrying this persistent clientId."""
     if not client_id:
@@ -15568,36 +15579,53 @@ def find_movie_by_tmdb_edition(
     tmdb_id: str | None,
     fmt: str | None,
     edition: str | None,
+    incoming_title: str | None = None,
+    incoming_year: Any = None,
+    incoming_barcode: Any = None,
 ) -> UUID | None:
     """Trede 3: same TMDB id AND physical format AND edition (all three).
 
-    Over-merge protection: format must be present and equal on both sides, so a
-    DVD and a 4K UHD of the same film never collapse into one record.
+    Over-merge protection:
+    - format must normalize equal on both sides (4K_UHD == 4K UHD),
+    - both barcodes present but different is a hard mismatch,
+    - materially different title/year never matches on tmdb alone.
     """
-    if not tmdb_id or not fmt:
+    format_key = physical_media_format_key(fmt)
+    if not tmdb_id or not format_key:
         return None
     if not table_exists(conn, "movie_identifiers"):
         return None
+    incoming_title_key = normalize_title(incoming_title)
+    incoming_year_key = _year_key(incoming_year)
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT m.id
+            SELECT m.id, m.title, m.year, m.barcode, m.format
             FROM movies m
             JOIN movie_identifiers mi ON mi.movie_id = m.id
             WHERE m.deleted_at IS NULL
               AND lower(mi.provider_id) = 'tmdb'
               AND mi.identifier_type = 'movie_id'
               AND mi.identifier = %s
-              AND m.format IS NOT NULL
-              AND lower(m.format) = lower(%s)
               AND lower(coalesce(m.edition, '')) = lower(coalesce(%s, ''))
             ORDER BY m.created_at
-            LIMIT 1
             """,
-            (str(tmdb_id), fmt, edition),
+            (str(tmdb_id), edition),
         )
-        row = cur.fetchone()
-    return row["id"] if row else None
+        rows = cur.fetchall()
+    for row in rows:
+        if physical_media_format_key(row.get("format")) != format_key:
+            continue
+        if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
+        candidate_title_key = normalize_title(row.get("title"))
+        if incoming_title_key and candidate_title_key and incoming_title_key != candidate_title_key:
+            continue
+        candidate_year_key = _year_key(row.get("year"))
+        if incoming_year_key and candidate_year_key and incoming_year_key != candidate_year_key:
+            continue
+        return row["id"]
+    return None
 
 
 def parse_client_timestamp(value: Any) -> datetime | None:
@@ -15745,6 +15773,7 @@ def find_movie_by_title_year(
     title: str | None,
     year: Any,
     fmt: str | None,
+    incoming_barcode: Any = None,
 ) -> UUID | None:
     """Trede 4 (adoption-only): normalized title + exact year + matching format.
 
@@ -15754,23 +15783,26 @@ def find_movie_by_title_year(
     """
     normalized = normalize_title(title)
     year_text = clean_text(year)
-    if not normalized or not year_text or not fmt:
+    format_key = physical_media_format_key(fmt)
+    if not normalized or not year_text or not format_key:
         return None
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT m.id, m.title, m.year
+            SELECT m.id, m.title, m.year, m.barcode, m.format
             FROM movies m
             WHERE m.deleted_at IS NULL
               AND m.year = %s
-              AND m.format IS NOT NULL
-              AND lower(m.format) = lower(%s)
             ORDER BY m.created_at
             """,
-            (year_text, fmt),
+            (year_text,),
         )
         rows = cur.fetchall()
     for row in rows:
+        if physical_media_format_key(row.get("format")) != format_key:
+            continue
+        if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
         if normalize_title(row.get("title")) == normalized:
             return row["id"]
     return None
@@ -15886,15 +15918,12 @@ def apply_movie_upsert(
     fields = movie_payload_fields(payload)
 
     # Persistent per-record identity fields (contract Deel 1). These are distinct
-    # from the throwaway clientEntityId/clientMutationId: clientId is a stable
+    # from the throwaway clientEntityId/clientMutationId: client_id is a stable
     # UUID minted once at record creation and reused across devices/retries.
-    persistent_client_id = clean_text(
-        payload.get("clientId") or payload.get("client_id")
-    )
-    tmdb_id = clean_text(
-        payload.get("tmdbId") or payload.get("tmdb_id") or payload.get("tmdbID")
-    )
-    duplicate_copy = bool(payload.get("duplicateCopy") or payload.get("duplicate_copy"))
+    persistent_client_id = clean_text(payload.get("client_id"))
+    metadata_payload = fields["metadata"] if isinstance(fields.get("metadata"), dict) else {}
+    tmdb_id = clean_text(metadata_payload.get("tmdb_id"))
+    duplicate_copy = bool(payload.get("duplicate_copy"))
 
     matched_by: str | None = None
     ladder_entity_id: UUID | None = None
@@ -15943,6 +15972,9 @@ def apply_movie_upsert(
                     tmdb_id=tmdb_id,
                     fmt=fields["format"],
                     edition=fields["edition"],
+                    incoming_title=fields["title"],
+                    incoming_year=fields["year"],
+                    incoming_barcode=fields["barcode"],
                 ),
             )
 
@@ -15962,11 +15994,7 @@ def apply_movie_upsert(
             )
             if tomb is not None:
                 matched_by = tomb["matched_by"]
-                client_ts = parse_client_timestamp(
-                    payload.get("updatedAt")
-                    or payload.get("updated_at")
-                    or payload.get("clientUpdatedAt")
-                )
+                client_ts = parse_client_timestamp(payload.get("updated_at"))
                 deleted_at = tomb.get("deleted_at")
                 resurrect = (
                     client_ts is not None
@@ -28884,14 +28912,10 @@ def register_routes(flask_app: Flask) -> None:
                 if not isinstance(item, dict):
                     results.append({"status": "invalid", "matched": False})
                     continue
-                persistent_client_id = clean_text(
-                    item.get("clientId") or item.get("client_id")
-                )
+                persistent_client_id = clean_text(item.get("client_id"))
                 barcode = item.get("barcode")
                 barcode_normalized = normalize_barcode(barcode)
-                tmdb_id = clean_text(
-                    item.get("tmdbId") or item.get("tmdb_id") or item.get("tmdbID")
-                )
+                tmdb_id = clean_text(item.get("tmdb_id"))
                 fmt = clean_text(item.get("format"))
                 edition = clean_text(item.get("edition"))
                 title = item.get("title")
@@ -28908,16 +28932,26 @@ def register_routes(flask_app: Flask) -> None:
                     ),
                     find_by_barcode=lambda: find_movie_by_barcode_match(conn, barcode),
                     find_by_tmdb_edition=lambda: find_movie_by_tmdb_edition(
-                        conn, tmdb_id=tmdb_id, fmt=fmt, edition=edition
+                        conn,
+                        tmdb_id=tmdb_id,
+                        fmt=fmt,
+                        edition=edition,
+                        incoming_title=title,
+                        incoming_year=year,
+                        incoming_barcode=barcode,
                     ),
                     find_by_title_year=lambda: find_movie_by_title_year(
-                        conn, title=title, year=year, fmt=fmt
+                        conn,
+                        title=title,
+                        year=year,
+                        fmt=fmt,
+                        incoming_barcode=barcode,
                     ),
                 )
                 if matched_id is not None:
                     results.append(
                         {
-                            "clientId": persistent_client_id,
+                            "client_id": persistent_client_id,
                             "status": "matched",
                             "matched": True,
                             "entityId": str(matched_id),
@@ -28927,7 +28961,7 @@ def register_routes(flask_app: Flask) -> None:
                 else:
                     results.append(
                         {
-                            "clientId": persistent_client_id,
+                            "client_id": persistent_client_id,
                             "status": "unknown",
                             "matched": False,
                         }
