@@ -1,5 +1,17 @@
 # DiscVault Release Notes
 
+## 26.6.15 - Blu-ray.com provider moves to MovieVault v2
+
+- Removed DiscVault's bundled `bluray_com` metadata scraper, package builder,
+  package artifacts, and provider-specific tests. Blu-ray.com release-detail
+  fallback now runs only inside MovieVault and reaches DiscVault through the
+  standalone `movievault_v2` plugin and anonymous core bridge.
+- Removed the retired provider from the unconfigured-integration notice.
+- Existing installations must disable and uninstall the old `bluray_com`
+  metadata provider before enabling the MovieVault v2 route. The separate
+  `import_bluray_com` collection importer, the legacy `movievault_26`
+  connector, and historical provider provenance remain supported.
+
 ## 26.4.70 - Modern Library, Legacy authentication, MovieVault posters, and owned containers
 
 This release promotes the complete `release/v26-beta` feature train from

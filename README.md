@@ -207,13 +207,13 @@ deterministic `movievault_v2` 1.1.0 feature package is also available under
 `distribution-2`; v3 is selected only when both the plugin manifest and core
 declare support.
 
-The deterministic `bluray_com` 1.0.6 metadata-source package and SHA-256 file
-are also available under `dist/plugins/`. This package replaces opaque runtime
-exceptions with bounded timeout, transport, HTTP, access, rate-limit, redirect,
-and parser failures. Its results exclude source URLs, artwork, and raw provider
-content. MovieVault operators must verify the checksum and use its explicit
-audited unsigned-import acknowledgement; live fallback remains subject to
-MovieVault source-policy approval and kill switches.
+DiscVault no longer bundles or distributes a local `bluray_com` metadata
+provider. Blu-ray.com release-detail fallback is owned by MovieVault v2 and is
+reached only through the standalone `movievault_v2` plugin and DiscVault's
+anonymous core bridge. Existing installations must disable and uninstall the
+old `bluray_com` metadata provider before enabling this route. The separate
+`import_bluray_com` collection-import plugin and the legacy `movievault_26`
+connector remain available and unchanged.
 
 DiscVault `26.4.61` adds core consumer support for `distribution-4` (a
 strict `distribution-3` superset that adds a required-nullable primary
