@@ -1,5 +1,13 @@
 # DiscVault Release Notes
 
+## 26.6.17 - MovieVault barcode fallback without external IDs
+
+- MovieVault v2 release-detail hits no longer require a TMDb or IMDb identifier
+  when a valid film title and physical-release result are present. Strict link,
+  field, and provider-content validation remains enforced.
+- This fixes valid unreviewed Blu-ray.com results appearing as an unrecognized
+  barcode in the DiscVault Import Center.
+
 ## 26.6.15 - Blu-ray.com provider moves to MovieVault v2
 
 - Removed DiscVault's bundled `bluray_com` metadata scraper, package builder,
