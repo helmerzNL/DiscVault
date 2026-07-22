@@ -593,6 +593,23 @@ class LegacyAuthContractTests(unittest.TestCase):
             self.assertIn('panel?.classList.remove("hidden");', body)
             self.assertNotIn('panel?.classList.toggle("hidden");', body)
 
+    def test_legacy_login_form_is_visible_by_default(self):
+        registration_start = self.ui_source.index(
+            "function renderAppRegistrationMode(auth)"
+        )
+        registration_body = self.ui_source[
+            registration_start : registration_start + 5000
+        ]
+
+        self.assertIn(
+            "const alternateLoginOpen = [inviteForm, recoveryForm]",
+            registration_body,
+        )
+        self.assertIn(
+            'reviewForm?.classList.toggle("hidden", alternateLoginOpen);',
+            registration_body,
+        )
+
     def test_legacy_login_hides_the_passkey_recommendation(self):
         registration_start = self.ui_source.index(
             "function renderAppRegistrationMode(auth)"
