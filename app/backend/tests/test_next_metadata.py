@@ -558,6 +558,56 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertEqual(details["genreIds"], [])
 
+    @mock.patch("app.backend.next_plugins.tmdb.plugin._details")
+    @mock.patch("app.backend.next_plugins.tmdb.plugin.search_title")
+    def test_tmdb_movie_details_selects_exact_title_instead_of_first_result(self, search_title, details):
+        search_title.return_value = {
+            "status": "hit",
+            "items": [
+                {"tmdbId": 361743, "title": "Top Gun: Maverick", "year": "2022"},
+                {"tmdbId": 744, "title": "Top Gun", "year": "1986"},
+            ],
+        }
+        details.return_value = {"id": 744, "title": "Top Gun", "release_date": "1986-05-16"}
+
+        result = tmdb_plugin.movie_details({"title": "Top Gun"}, {})
+
+        details.assert_called_once_with({}, 744)
+        self.assertEqual(result["movie"]["title"], "Top Gun")
+        self.assertEqual(result["tmdbId"], 744)
+
+    @mock.patch("app.backend.next_plugins.tmdb.plugin._details")
+    @mock.patch("app.backend.next_plugins.tmdb.plugin.search_title")
+    def test_tmdb_movie_details_rejects_different_title(self, search_title, details):
+        search_title.return_value = {
+            "status": "hit",
+            "items": [
+                {"tmdbId": 361743, "title": "Top Gun: Maverick", "year": "2022"},
+            ],
+        }
+
+        result = tmdb_plugin.movie_details({"title": "Top Gun"}, {})
+
+        details.assert_not_called()
+        self.assertEqual(result, {"status": "miss", "provider": "tmdb"})
+
+    @mock.patch("app.backend.next_plugins.tmdb.plugin._details")
+    @mock.patch("app.backend.next_plugins.tmdb.plugin.search_title")
+    def test_tmdb_movie_details_requires_requested_year(self, search_title, details):
+        search_title.return_value = {
+            "status": "hit",
+            "items": [
+                {"tmdbId": 100, "title": "The Thing", "year": "2011"},
+                {"tmdbId": 1091, "title": "The Thing", "year": "1982"},
+            ],
+        }
+        details.return_value = {"id": 1091, "title": "The Thing", "release_date": "1982-06-25"}
+
+        result = tmdb_plugin.movie_details({"title": "The Thing", "year": "1982"}, {})
+
+        details.assert_called_once_with({}, 1091)
+        self.assertEqual(result["tmdbId"], 1091)
+
     def test_release_specs_do_not_upgrade_across_formats(self):
         current = {
             "title": "Example",
