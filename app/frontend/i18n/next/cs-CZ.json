@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Zadejte údaje role. DiscVault vygeneruje technický klíč a otevře průvodce oprávněními.",
   "appAdmin.roleKeyGenerated": "Vygenerovaný klíč role",
   "appAdmin.roleKeyGeneratedHelp": "Klíč se generuje z názvu role a po vytvoření jej nelze změnit.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Rok",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "namapovaná pole",
   "importCenter.mapping.actor": "Herci",
   "importCenter.mapping.backdrop": "Backdrop",

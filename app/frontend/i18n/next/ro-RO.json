@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Introduceți detaliile rolului. DiscVault generează cheia tehnică și deschide expertul pentru permisiuni.",
   "appAdmin.roleKeyGenerated": "Cheie de rol generată",
   "appAdmin.roleKeyGeneratedHelp": "Cheia este generată din numele rolului și nu poate fi modificată după creare.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "An",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "câmpuri mapate",
   "importCenter.mapping.actor": "Actori",
   "importCenter.mapping.backdrop": "Backdrop",

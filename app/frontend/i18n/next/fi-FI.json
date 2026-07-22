@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Anna roolin tiedot. DiscVault luo teknisen avaimen ja avaa käyttöoikeuksien ohjatun määrityksen.",
   "appAdmin.roleKeyGenerated": "Luotu rooliavain",
   "appAdmin.roleKeyGeneratedHelp": "Avain luodaan roolin nimestä, eikä sitä voi muuttaa luomisen jälkeen.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manuaalinen haku",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Vuosi",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "mapped fields",
   "importCenter.mapping.actor": "Nayttelijat",
   "importCenter.mapping.backdrop": "Taustakuva",

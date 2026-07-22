@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Geben Sie die Rollendetails ein. DiscVault generiert den technischen Schlüssel und öffnet den Berechtigungsassistenten.",
   "appAdmin.roleKeyGenerated": "Generierter Rollenschlüssel",
   "appAdmin.roleKeyGeneratedHelp": "Der Schlüssel wird aus dem Rollennamen generiert und kann nach der Erstellung nicht mehr geändert werden.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manuelle Suche",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Jahr",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "mapped fields",
   "importCenter.mapping.actor": "Schauspieler",
   "importCenter.mapping.backdrop": "Backdrop",

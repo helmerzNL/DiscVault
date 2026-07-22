@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Введіть відомості про роль. DiscVault згенерує технічний ключ і відкриє майстер дозволів.",
   "appAdmin.roleKeyGenerated": "Згенерований ключ ролі",
   "appAdmin.roleKeyGeneratedHelp": "Ключ генерується з назви ролі, і його не можна змінити після створення.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Рік",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "зіставлені поля",
   "importCenter.mapping.actor": "Суб'єкти",
   "importCenter.mapping.backdrop": "Backdrop",

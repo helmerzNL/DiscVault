@@ -928,6 +928,9 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
 
     base_payload = dict(query)
     if query.get("previewMode"):
+        if tmdb_id or imdb_id:
+            add("lookup_external_id", base_payload)
+            return plan
         if title:
             # A title search should drive the preview results even when a barcode
             # is also supplied. Strip the barcode so the title lookup mirrors a

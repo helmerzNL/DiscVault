@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Angi rolledetaljene. DiscVault genererer den tekniske nøkkelen og åpner tillatelsesveiviseren.",
   "appAdmin.roleKeyGenerated": "Generert rollenøkkel",
   "appAdmin.roleKeyGeneratedHelp": "Nøkkelen genereres fra rollenavnet og kan ikke endres etter opprettelsen.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manuelt sok",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Aar",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "mapped fields",
   "importCenter.mapping.actor": "Skuespillere",
   "importCenter.mapping.backdrop": "Backdrop",

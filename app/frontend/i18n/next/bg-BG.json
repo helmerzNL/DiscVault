@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Въведете данните за ролята. DiscVault генерира техническия ключ и отваря съветника за разрешения.",
   "appAdmin.roleKeyGenerated": "Генериран ключ на ролята",
   "appAdmin.roleKeyGeneratedHelp": "Ключът се генерира от името на ролята и не може да се променя след създаването.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Година",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "съпоставени полета",
   "importCenter.mapping.actor": "Актьор",
   "importCenter.mapping.backdrop": "Backdrop",

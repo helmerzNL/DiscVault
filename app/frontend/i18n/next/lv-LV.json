@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Ievadiet lomas informāciju. DiscVault ģenerēs tehnisko atslēgu un atvērs atļauju vedni.",
   "appAdmin.roleKeyGenerated": "Ģenerētā lomas atslēga",
   "appAdmin.roleKeyGeneratedHelp": "Atslēga tiek ģenerēta no lomas nosaukuma, un pēc izveides to nevar mainīt.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manual search",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Gads",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "kartētie lauki",
   "importCenter.mapping.actor": "Aktieri",
   "importCenter.mapping.backdrop": "Backdrop",

@@ -1,4 +1,4 @@
-{
+﻿{
   "appAdmin.createCustomRoleWizardHelp": "Ange rollinformationen. DiscVault genererar den tekniska nyckeln och öppnar behörighetsguiden.",
   "appAdmin.roleKeyGenerated": "Genererad rollnyckel",
   "appAdmin.roleKeyGeneratedHelp": "Nyckeln genereras från rollnamnet och kan inte ändras efter att rollen har skapats.",
@@ -1208,6 +1208,10 @@
   "importCenter.manualTitleCard": "Manuell sokning",
   "importCenter.manualTmdb": "TMDb ID",
   "importCenter.manualYear": "Ar",
+  "importCenter.manualTmdbId": "TMDB ID",
+  "importCenter.manualImdbId": "IMDB ID",
+  "importCenter.tmdbIdPlaceholder": "e.g. 12345",
+  "importCenter.imdbIdPlaceholder": "tt0123456",,
   "importCenter.mappedFields": "mapped fields",
   "importCenter.mapping.actor": "Skadespelare",
   "importCenter.mapping.backdrop": "Backdrop",
