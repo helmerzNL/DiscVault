@@ -76,10 +76,13 @@ def normalize_barcode(barcode):
 
 
 def normalize_format(value):
+    # Unify separators: underscores, hyphens, slashes → spaces
     text = str(value or "").strip().lower().replace("-", " ").replace("_", " ").replace("/", " ")
+    # Normalize repeated spaces
     text = " ".join(text.split())
     if not text:
         return ""
+    # Check for known formats (order matters: check longer patterns first)
     if "ultra hd" in text or "uhd" in text or "4k" in text:
         return "ultra_hd_blu_ray"
     if "blu ray" in text or "bluray" in text or text == "bd":
@@ -92,6 +95,7 @@ def normalize_format(value):
         return "laserdisc"
     if "svcd" in text or "vcd" in text:
         return "vcd_svcd"
+    # Return the normalized text (space-separated, lowercase)
     return text
 
 
@@ -103,9 +107,21 @@ def _year_key(value):
 
 
 def _barcode_conflicts(left, right):
+    """Detect barcode conflicts: mismatches or null/non-null mismatch.
+    
+    Returns True if:
+    - One is null and the other is not (mixed null/non-null always conflicts)
+    - Both are non-null and different
+    """
     left_code = normalize_barcode(left)
     right_code = normalize_barcode(right)
-    return bool(left_code and right_code and left_code != right_code)
+    # Mixed null/non-null is always a conflict
+    if bool(left_code) != bool(right_code):
+        return True
+    # Both non-null: conflict if different
+    if left_code and right_code and left_code != right_code:
+        return True
+    return False
 
 
 def _tmdb_sanity_conflicts(left_movie, right_movie):
@@ -263,10 +279,24 @@ def _target_database_name():
 
 
 def _report_metadata():
+    """Extract report metadata from environment variables.
+    
+    Fallbacks cover local dev (BUILD_VERSION), Docker compose (DISCVAULT_*),
+    and CI/CD (BUILD_SHA) environments.
+    """
+    script_commit = (
+        os.environ.get("BUILD_SHA")
+        or os.environ.get("DISCVAULT_BUILD_SHA")
+        or os.environ.get("GITHUB_SHA")
+    )
+    backend_version = (
+        os.environ.get("DISCVAULT_BACKEND_VERSION")
+        or os.environ.get("BUILD_VERSION")
+    )
     return {
-        "script_commit": os.environ.get("BUILD_SHA") or os.environ.get("DISCVAULT_BUILD_SHA"),
+        "script_commit": script_commit,
         "target_database": _target_database_name(),
-        "backend_version": os.environ.get("DISCVAULT_BACKEND_VERSION") or os.environ.get("BUILD_VERSION"),
+        "backend_version": backend_version,
     }
 
 
@@ -337,7 +367,7 @@ def detect_groups(conn):
 
         norm = normalize_title(m.get("title"))
         year = _year_key(m.get("year")) or ""
-        if norm and year and fmt:
+        if norm and fmt:
             titleyear_groups.setdefault((norm, year, fmt), []).append(mid)
 
     def _dups(groups):

@@ -533,6 +533,109 @@ class NextIdentityLadderTests(unittest.TestCase):
 
 
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextTmdbEditionSafetyTests(unittest.TestCase):
+    def _tmdb_conn(self, rows):
+        class _Cur:
+            def __enter__(self_inner):
+                return self_inner
+
+            def __exit__(self_inner, *a):
+                return False
+
+            def execute(self_inner, sql, params=()):
+                if "to_regclass" in sql:
+                    self_inner._one = {"table_name": "public.movie_identifiers"}
+                    self_inner._rows = []
+                    return
+                self_inner._rows = list(rows)
+                self_inner._one = None
+
+            def fetchall(self_inner):
+                return list(self_inner._rows)
+
+            def fetchone(self_inner):
+                return self_inner._one
+
+        class _Conn:
+            def cursor(self_inner):
+                return _Cur()
+
+        return _Conn()
+
+    def test_tmdb_tier_blocks_conflicting_barcodes(self):
+        target = uuid.uuid4()
+        conn = self._tmdb_conn(
+            [
+                {
+                    "id": target,
+                    "title": "The Matrix",
+                    "year": "1999",
+                    "barcode": "2222222222222",
+                    "format": "4K UHD",
+                }
+            ]
+        )
+        found = next_app.find_movie_by_tmdb_edition(
+            conn,
+            tmdb_id="603",
+            fmt="4K UHD",
+            edition="",
+            incoming_title="The Matrix",
+            incoming_year="1999",
+            incoming_barcode="1111111111111",
+        )
+        self.assertIsNone(found)
+
+    def test_tmdb_tier_blocks_materially_different_title_or_year(self):
+        target = uuid.uuid4()
+        conn = self._tmdb_conn(
+            [
+                {
+                    "id": target,
+                    "title": "Harry Potter and the Deathly Hallows: Part 1",
+                    "year": "2010",
+                    "barcode": None,
+                    "format": "4K UHD",
+                }
+            ]
+        )
+        found = next_app.find_movie_by_tmdb_edition(
+            conn,
+            tmdb_id="12444",
+            fmt="4K UHD",
+            edition="",
+            incoming_title="Harry Potter and the Deathly Hallows: Part 2",
+            incoming_year="2011",
+            incoming_barcode=None,
+        )
+        self.assertIsNone(found)
+
+    def test_tmdb_tier_normalizes_format_variants(self):
+        target = uuid.uuid4()
+        conn = self._tmdb_conn(
+            [
+                {
+                    "id": target,
+                    "title": "The Matrix",
+                    "year": "1999",
+                    "barcode": "1111111111111",
+                    "format": "4K_UHD",
+                }
+            ]
+        )
+        found = next_app.find_movie_by_tmdb_edition(
+            conn,
+            tmdb_id="603",
+            fmt="4K UHD",
+            edition="",
+            incoming_title="The Matrix",
+            incoming_year="1999",
+            incoming_barcode="1111111111111",
+        )
+        self.assertEqual(found, target)
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class NextTitleNormalizationTests(unittest.TestCase):
     """normalize_title + find_movie_by_title_year (trede 4, adoption-only)."""
 
@@ -541,6 +644,8 @@ class NextTitleNormalizationTests(unittest.TestCase):
         self.assertEqual(
             next_app.normalize_title("The Matrix"), next_app.normalize_title("matrix")
         )
+        self.assertEqual(next_app.normalize_title("Die Hard"), "die hard")
+        self.assertEqual(next_app.normalize_title("De Aanslag"), "de aanslag")
 
     def test_punctuation_and_case_collapse(self):
         self.assertEqual(
@@ -573,21 +678,50 @@ class NextTitleNormalizationTests(unittest.TestCase):
 
     def test_missing_format_refuses_to_match(self):
         # Over-merge protection: no incoming format -> no match, always create.
-        conn = self._title_year_conn([{"id": uuid.uuid4(), "title": "The Matrix", "year": "1999"}])
+        conn = self._title_year_conn(
+            [{"id": uuid.uuid4(), "title": "The Matrix", "year": "1999", "format": "Blu-ray"}]
+        )
         self.assertIsNone(
             next_app.find_movie_by_title_year(conn, title="The Matrix", year="1999", fmt=None)
         )
 
     def test_normalized_title_and_year_match(self):
         target = uuid.uuid4()
-        conn = self._title_year_conn([{"id": target, "title": "Amélie", "year": "2001"}])
+        conn = self._title_year_conn(
+            [{"id": target, "title": "Amélie", "year": "2001", "format": "Blu_ray", "barcode": None}]
+        )
         found = next_app.find_movie_by_title_year(
             conn, title="amelie", year="2001", fmt="Blu-ray"
         )
         self.assertEqual(found, target)
 
+    def test_title_year_tier_blocks_conflicting_barcodes(self):
+        target = uuid.uuid4()
+        conn = self._title_year_conn(
+            [
+                {
+                    "id": target,
+                    "title": "The Matrix",
+                    "year": "1999",
+                    "format": "4K UHD",
+                    "barcode": "2222222222222",
+                }
+            ]
+        )
+        self.assertIsNone(
+            next_app.find_movie_by_title_year(
+                conn,
+                title="The Matrix",
+                year="1999",
+                fmt="4K_UHD",
+                incoming_barcode="1111111111111",
+            )
+        )
+
     def test_no_row_matches_returns_none(self):
-        conn = self._title_year_conn([{"id": uuid.uuid4(), "title": "Different", "year": "2001"}])
+        conn = self._title_year_conn(
+            [{"id": uuid.uuid4(), "title": "Different", "year": "2001", "format": "Blu-ray"}]
+        )
         self.assertIsNone(
             next_app.find_movie_by_title_year(conn, title="Amelie", year="2001", fmt="Blu-ray")
         )

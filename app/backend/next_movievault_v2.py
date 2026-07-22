@@ -729,8 +729,6 @@ def _release_details_identifiers(value: Any) -> dict[str, str]:
             maximum=18,
             pattern=r"^tt[0-9]{1,16}$",
         )
-    if not result:
-        raise MovieVaultV2Error("release_details_response_invalid")
     return result
 
 
