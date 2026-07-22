@@ -583,6 +583,46 @@ class LegacyAuthContractTests(unittest.TestCase):
             self.collection_source,
         )
 
+    def test_login_method_buttons_keep_the_selected_form_open(self):
+        review_start = self.ui_source.index("function toggleReviewLogin()")
+        review_body = self.ui_source[review_start : review_start + 700]
+        recovery_start = self.ui_source.index("function toggleRecoveryLogin()")
+        recovery_body = self.ui_source[recovery_start : recovery_start + 700]
+
+        for body in (review_body, recovery_body):
+            self.assertIn('panel?.classList.remove("hidden");', body)
+            self.assertNotIn('panel?.classList.toggle("hidden");', body)
+
+    def test_legacy_login_form_is_visible_by_default(self):
+        registration_start = self.ui_source.index(
+            "function renderAppRegistrationMode(auth)"
+        )
+        registration_body = self.ui_source[
+            registration_start : registration_start + 5000
+        ]
+
+        self.assertIn(
+            "const alternateLoginOpen = [inviteForm, recoveryForm]",
+            registration_body,
+        )
+        self.assertIn(
+            'reviewForm?.classList.toggle("hidden", alternateLoginOpen);',
+            registration_body,
+        )
+
+    def test_legacy_login_hides_the_passkey_recommendation(self):
+        registration_start = self.ui_source.index(
+            "function renderAppRegistrationMode(auth)"
+        )
+        registration_body = self.ui_source[
+            registration_start : registration_start + 5000
+        ]
+        self.assertIn('id="appLegacyLoginWarning"', self.ui_source)
+        self.assertIn(
+            'legacyLoginWarning?.classList.toggle("hidden", reviewLoginAvailable);',
+            registration_body,
+        )
+
     def test_totp_challenge_only_accepts_an_authenticator_code(self):
         self.assertNotIn('id="appLegacyRecoveryCodeToggle"', self.ui_source)
         self.assertNotIn('id="appLegacyRecoveryCodeField"', self.ui_source)

@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from unittest import mock
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -20,11 +21,38 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit o
     next_audit = None
 
 
+class _AuditCountCursor:
+    def __init__(self, rows):
+        self.rows = rows
+        self.query = ""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, query):
+        self.query = query
+
+    def fetchall(self):
+        return self.rows
+
+
+class _AuditCountConnection:
+    def __init__(self, rows):
+        self.cursor_instance = _AuditCountCursor(rows)
+
+    def cursor(self):
+        return self.cursor_instance
+
+
 @unittest.skipIf(next_audit is None, "Flask is not installed in this test environment")
 class NextAuditHelperTests(unittest.TestCase):
     def test_audit_helpers_are_reexported_from_next_app(self):
         names = [
             "audit_event",
+            "audit_event_counts",
             "audit_event_row",
             "audit_api_interaction",
             "api_audit_metadata",
@@ -42,6 +70,23 @@ class NextAuditHelperTests(unittest.TestCase):
         ]
         for name in names:
             self.assertIs(getattr(next_app, name), getattr(next_audit, name), name)
+
+    def test_audit_event_counts_are_not_limited_to_recent_events(self):
+        connection = _AuditCountConnection(
+            [
+                {"category": "security", "count": 14},
+                {"category": "admin", "count": 7},
+                {"category": "backup", "count": 3},
+            ]
+        )
+
+        with mock.patch("app.backend.next_audit.table_exists", return_value=True):
+            counts = next_audit.audit_event_counts(connection)
+
+        self.assertEqual(counts["total"], 24)
+        self.assertEqual(counts["byCategory"], {"security": 14, "admin": 7, "backup": 3})
+        self.assertIn("GROUP BY category", connection.cursor_instance.query)
+        self.assertNotIn("LIMIT", connection.cursor_instance.query)
 
     def test_redact_sensitive_payload_masks_secret_like_keys(self):
         redacted = next_audit.redact_sensitive_payload(

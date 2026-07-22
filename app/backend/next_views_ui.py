@@ -9351,10 +9351,18 @@ def ui_preview_html(
     }
     .app-admin-people-tabs,
     .app-admin-roles-tabs,
-    .app-admin-operations-tabs {
+    .app-admin-operations-tabs,
+    .app-admin-metadata-tabs {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+    .app-admin-digital-tabs,
+    .app-admin-audit-tabs {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
     .app-admin-roles-tabs {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .app-admin-backup-tabs {
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
     .app-admin-operations-tabs {
@@ -9362,13 +9370,21 @@ def ui_preview_html(
     }
     .app-admin-people-panel,
     .app-admin-roles-panel,
-    .app-admin-operations-panel {
+    .app-admin-operations-panel,
+    .app-admin-digital-panel,
+    .app-admin-metadata-panel,
+    .app-admin-backup-panel,
+    .app-admin-audit-panel {
       display: none;
       min-width: 0;
     }
     .app-admin-people-panel.active,
     .app-admin-roles-panel.active,
-    .app-admin-operations-panel.active {
+    .app-admin-operations-panel.active,
+    .app-admin-digital-panel.active,
+    .app-admin-metadata-panel.active,
+    .app-admin-backup-panel.active,
+    .app-admin-audit-panel.active {
       display: grid;
       gap: 14px;
     }
@@ -10278,6 +10294,12 @@ def ui_preview_html(
       width: 100%;
     }
     .app-admin-panel[data-app-admin-panel="operations"] .profile-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .app-admin-panel[data-app-admin-panel="digital"] .profile-grid,
+    .app-admin-panel[data-app-admin-panel="metadata"] .profile-grid,
+    .app-admin-panel[data-app-admin-panel="backup"] .profile-grid,
+    .app-admin-panel[data-app-admin-panel="audit"] .profile-grid {
       grid-template-columns: minmax(0, 1fr);
     }
     .operations-dashboard,
@@ -12462,6 +12484,18 @@ def ui_preview_html(
       .app-admin-people-tabs {
         grid-template-columns: repeat(3, minmax(52px, 1fr));
       }
+      .app-admin-digital-tabs {
+        grid-template-columns: repeat(2, minmax(52px, 1fr));
+      }
+      .app-admin-backup-tabs {
+        grid-template-columns: repeat(4, minmax(52px, 1fr));
+      }
+      .app-admin-audit-tabs {
+        grid-template-columns: repeat(2, minmax(52px, 1fr));
+      }
+      .app-admin-metadata-tabs {
+        grid-template-columns: repeat(3, minmax(52px, 1fr));
+      }
       .app-admin-operations-tabs {
         grid-template-columns: none;
         grid-auto-flow: column;
@@ -12827,7 +12861,7 @@ def ui_preview_html(
         <button type="button" class="secondary-button" id="appRecoveryToggleButton" data-next-i18n="auth.recovery">Recovery</button>
       </div>
       <form class="recovery-login-panel hidden" id="appReviewForm">
-        <p data-next-i18n="legacyAuth.warning">Passwords are less phishing-resistant than passkeys.</p>
+        <p id="appLegacyLoginWarning" data-next-i18n="legacyAuth.warning">Passwords are less phishing-resistant than passkeys.</p>
         <div id="appLegacyCredentials">
         <label for="appReviewUsername">
           <span data-next-i18n="auth.username">Username</span>
@@ -16049,81 +16083,180 @@ def ui_preview_html(
         </section>
         <section class="app-admin-panel" id="appAdminPanelDigital" role="tabpanel" aria-labelledby="appAdminTabDigital" aria-hidden="true" tabindex="0" data-app-admin-panel="digital">
           <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.digitalOperations">Digital sources</h3>
-              <p data-next-i18n="appAdmin.digitalOperationsHelp">Review connected Plex and Jellyfin libraries and their latest sync state.</p>
-              <div class="profile-meta">
-                <div class="profile-meta-row">
-                  <span data-next-i18n="appAdmin.digitalSources">Digital sources</span>
-                  <strong id="appAdminDigitalSourceTotal">-</strong>
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("devices") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.digitalOperations">Digital sources</h3>
+                    <p data-next-i18n="appAdmin.digitalOperationsHelp">Review connected Plex and Jellyfin libraries and their latest sync state.</p>
+                  </div>
                 </div>
               </div>
+              <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-digital-tabs" role="tablist" aria-label="Digital source sections" data-next-i18n-aria="appAdmin.digitalOperations">
+                <button type="button" class="active" id="appAdminDigitalTabOverview" role="tab" aria-selected="true" aria-controls="appAdminDigitalPanelOverview" tabindex="0" data-app-admin-digital-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+                <button type="button" id="appAdminDigitalTabSources" role="tab" aria-selected="false" aria-controls="appAdminDigitalPanelSources" tabindex="-1" data-app-admin-digital-tab="sources">""" + nav_icon("devices") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.digitalMediaSources">Digital media sources</span></button>
+              </nav>
               <div class="profile-action-row">
                 <button type="button" class="secondary-button" id="appAdminRefreshDigitalSourcesButton" data-next-i18n="appAdmin.refreshDigitalSources">Refresh digital sources</button>
               </div>
               <div class="login-message" id="appAdminDigitalMessage"></div>
+            </section>
+            <div class="app-admin-digital-panel active full" id="appAdminDigitalPanelOverview" role="tabpanel" aria-labelledby="appAdminDigitalTabOverview" aria-hidden="false" data-app-admin-digital-panel="overview">
+              <div class="app-admin-summary-grid">
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.digitalSources">Digital sources</span>
+                  <strong id="appAdminDigitalSourceTotal">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="profile.active">Active</span>
+                  <strong id="appAdminDigitalSourceActive">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.digitalSourceItems">Items</span>
+                  <strong id="appAdminDigitalSourceItems">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.digitalSourceMatched">Matched</span>
+                  <strong id="appAdminDigitalSourceMatched">-</strong>
+                </article>
+              </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.digitalMediaSources">Digital media sources</h3>
-              <div class="profile-passkey-list" id="appAdminDigitalSourcesList"></div>
+            <div class="app-admin-digital-panel full" id="appAdminDigitalPanelSources" role="tabpanel" aria-labelledby="appAdminDigitalTabSources" aria-hidden="true" data-app-admin-digital-panel="sources">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.digitalMediaSources">Digital media sources</h3>
+                <div class="profile-passkey-list" id="appAdminDigitalSourcesList"></div>
+              </div>
             </div>
           </section>
         </section>
         <section class="app-admin-panel" id="appAdminPanelMetadata" role="tabpanel" aria-labelledby="appAdminTabMetadata" aria-hidden="true" tabindex="0" data-app-admin-panel="metadata">
           <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.metadataOperations">Metadata</h3>
-              <p data-next-i18n="appAdmin.metadataOperationsHelp">Review metadata refresh jobs and source activity away from the import workflow.</p>
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("library_preferences") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.metadataOperations">Metadata</h3>
+                    <p data-next-i18n="appAdmin.metadataOperationsHelp">Review metadata refresh jobs and source activity away from the import workflow.</p>
+                  </div>
+                </div>
+              </div>
+              <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-metadata-tabs" role="tablist" aria-label="Metadata sections" data-next-i18n-aria="appAdmin.metadataOperations">
+                <button type="button" class="active" id="appAdminMetadataTabOverview" role="tab" aria-selected="true" aria-controls="appAdminMetadataPanelOverview" tabindex="0" data-app-admin-metadata-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+                <button type="button" id="appAdminMetadataTabArtwork" role="tab" aria-selected="false" aria-controls="appAdminMetadataPanelArtwork" tabindex="-1" data-app-admin-metadata-tab="artwork">""" + nav_icon("appearance") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.deletedArtwork">Deleted artwork</span></button>
+                <button type="button" id="appAdminMetadataTabJobs" role="tab" aria-selected="false" aria-controls="appAdminMetadataPanelJobs" tabindex="-1" data-app-admin-metadata-tab="jobs">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.metadataJobs">Metadata jobs</span></button>
+              </nav>
               <div class="profile-action-row">
                 <button type="button" class="secondary-button" id="appAdminRefreshMetadataJobsButton" data-next-i18n="appAdmin.refreshMetadataJobs">Refresh metadata jobs</button>
               </div>
               <div class="login-message" id="appAdminMetadataMessage"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.deletedArtwork">Deleted artwork</h3>
-              <p data-next-i18n="appAdmin.deletedArtworkHelp">Restore removed posters and backdrops, or let DiscVault permanently clean them after a retention period.</p>
-              <div class="profile-form">
-                <label class="profile-checkbox-row" for="appAdminArtworkTrashPurgeEnabled">
-                  <input id="appAdminArtworkTrashPurgeEnabled" type="checkbox">
-                  <span data-next-i18n="appAdmin.enableArtworkCleanup">Automatically purge deleted artwork</span>
-                </label>
-                <label for="appAdminArtworkTrashRetention">
-                  <span data-next-i18n="appAdmin.artworkRetention">Permanently delete after</span>
-                  <select id="appAdminArtworkTrashRetention">
-                    <option value="1h" data-next-i18n="appAdmin.artworkRetention1h">1 hour</option>
-                    <option value="1d" data-next-i18n="appAdmin.artworkRetention1d">1 day</option>
-                    <option value="7d" data-next-i18n="appAdmin.artworkRetention7d">7 days</option>
-                    <option value="30d" data-next-i18n="appAdmin.artworkRetention30d">30 days</option>
-                  </select>
-                </label>
-                <div class="profile-form-actions">
-                  <button type="button" class="secondary-button" id="appAdminSaveArtworkTrashSettingsButton" data-next-i18n="appAdmin.saveArtworkCleanup">Save cleanup settings</button>
-                  <button type="button" class="secondary-button" id="appAdminPurgeArtworkTrashButton" data-next-i18n="appAdmin.purgeExpiredArtwork">Purge expired now</button>
-                </div>
+            </section>
+            <div class="app-admin-metadata-panel active full" id="appAdminMetadataPanelOverview" role="tabpanel" aria-labelledby="appAdminMetadataTabOverview" aria-hidden="false" data-app-admin-metadata-panel="overview">
+              <div class="app-admin-summary-grid">
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.metadataJobs">Metadata jobs</span>
+                  <strong id="appAdminMetadataJobTotal">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="profile.active">Active</span>
+                  <strong id="appAdminMetadataJobActive">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.statusError">Error</span>
+                  <strong id="appAdminMetadataJobFailed">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.deletedArtwork">Deleted artwork</span>
+                  <strong id="appAdminMetadataArtworkTotal">-</strong>
+                </article>
               </div>
-              <div class="profile-passkey-list" id="appAdminArtworkTrashList"></div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.metadataJobs">Metadata jobs</h3>
-              <div class="profile-passkey-list" id="appAdminMetadataJobsList"></div>
+            <div class="app-admin-metadata-panel full" id="appAdminMetadataPanelArtwork" role="tabpanel" aria-labelledby="appAdminMetadataTabArtwork" aria-hidden="true" data-app-admin-metadata-panel="artwork">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.deletedArtwork">Deleted artwork</h3>
+                <p data-next-i18n="appAdmin.deletedArtworkHelp">Restore removed posters and backdrops, or let DiscVault permanently clean them after a retention period.</p>
+                <div class="profile-form">
+                  <label class="profile-checkbox-row" for="appAdminArtworkTrashPurgeEnabled">
+                    <input id="appAdminArtworkTrashPurgeEnabled" type="checkbox">
+                    <span data-next-i18n="appAdmin.enableArtworkCleanup">Automatically purge deleted artwork</span>
+                  </label>
+                  <label for="appAdminArtworkTrashRetention">
+                    <span data-next-i18n="appAdmin.artworkRetention">Permanently delete after</span>
+                    <select id="appAdminArtworkTrashRetention">
+                      <option value="1h" data-next-i18n="appAdmin.artworkRetention1h">1 hour</option>
+                      <option value="1d" data-next-i18n="appAdmin.artworkRetention1d">1 day</option>
+                      <option value="7d" data-next-i18n="appAdmin.artworkRetention7d">7 days</option>
+                      <option value="30d" data-next-i18n="appAdmin.artworkRetention30d">30 days</option>
+                    </select>
+                  </label>
+                  <div class="profile-form-actions">
+                    <button type="button" class="secondary-button" id="appAdminSaveArtworkTrashSettingsButton" data-next-i18n="appAdmin.saveArtworkCleanup">Save cleanup settings</button>
+                    <button type="button" class="secondary-button" id="appAdminPurgeArtworkTrashButton" data-next-i18n="appAdmin.purgeExpiredArtwork">Purge expired now</button>
+                  </div>
+                </div>
+                <div class="profile-passkey-list" id="appAdminArtworkTrashList"></div>
+              </div>
+            </div>
+            <div class="app-admin-metadata-panel full" id="appAdminMetadataPanelJobs" role="tabpanel" aria-labelledby="appAdminMetadataTabJobs" aria-hidden="true" data-app-admin-metadata-panel="jobs">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.metadataJobs">Metadata jobs</h3>
+                <div class="profile-passkey-list" id="appAdminMetadataJobsList"></div>
+              </div>
             </div>
           </section>
         </section>
         <section class="app-admin-panel" id="appAdminPanelBackup" role="tabpanel" aria-labelledby="appAdminTabBackup" aria-hidden="true" tabindex="0" data-app-admin-panel="backup">
           <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.backupOperations">Backup & restore</h3>
-              <p data-next-i18n="appAdmin.backupOperationsHelp">Export or restore only functional collection data. Auth, passkeys, plugins and secrets stay outside the backup.</p>
-              <div class="profile-meta">
-                <div class="profile-meta-row">
-                  <span data-next-i18n="appAdmin.backupStatus">Backup status</span>
-                  <strong id="appAdminBackupState">-</strong>
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("backup") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.backupOperations">Backup & restore</h3>
+                    <p data-next-i18n="appAdmin.backupOperationsHelp">Export or restore only functional collection data. Auth, passkeys, plugins and secrets stay outside the backup.</p>
+                  </div>
                 </div>
               </div>
+              <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-backup-tabs" role="tablist" aria-label="Backup and restore sections" data-next-i18n-aria="appAdmin.backupOperations">
+                <button type="button" class="active" id="appAdminBackupTabOverview" role="tab" aria-label="Overview" data-next-i18n-aria="appAdmin.rolesTabOverview" aria-selected="true" aria-controls="appAdminBackupPanelOverview" tabindex="0" data-app-admin-backup-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+                <button type="button" id="appAdminBackupTabCreate" role="tab" aria-label="Create backup" data-next-i18n-aria="appAdmin.createBackup" aria-selected="false" aria-controls="appAdminBackupPanelCreate" tabindex="-1" data-app-admin-backup-tab="create">""" + nav_icon("backup") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.createBackup">Create backup</span></button>
+                <button type="button" id="appAdminBackupTabRestore" role="tab" aria-label="Restore ZIP" data-next-i18n-aria="appAdmin.backupUpload" aria-selected="false" aria-controls="appAdminBackupPanelRestore" tabindex="-1" data-app-admin-backup-tab="restore">""" + nav_icon("import") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.backupUpload">Restore ZIP</span></button>
+                <button type="button" id="appAdminBackupTabActivity" role="tab" aria-label="Activity" data-next-i18n-aria="appAdmin.pluginTabActivity" aria-selected="false" aria-controls="appAdminBackupPanelActivity" tabindex="-1" data-app-admin-backup-tab="activity">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.pluginTabActivity">Activity</span></button>
+              </nav>
               <div class="profile-action-row">
-                <button type="button" class="secondary-button" id="appAdminRefreshBackupButton" data-next-i18n="appAdmin.createBackup">Create backup</button>
-                <button type="button" class="secondary-button" id="appAdminExportBackupButton" data-next-i18n="appAdmin.exportBackup">Export ZIP</button>
+                <button type="button" class="secondary-button" id="appAdminRefreshBackupStatusButton" data-next-i18n="appAdmin.backupStatus">Backup status</button>
               </div>
+              <div class="login-message" id="appAdminBackupMessage"></div>
+            </section>
+            <div class="app-admin-backup-panel active full" id="appAdminBackupPanelOverview" role="tabpanel" aria-labelledby="appAdminBackupTabOverview" aria-hidden="false" data-app-admin-backup-panel="overview">
+              <div class="app-admin-summary-grid">
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.backupStatus">Backup status</span>
+                  <strong id="appAdminBackupState">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.recentBackups">Recent backups</span>
+                  <strong id="appAdminBackupArchiveCount">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.backupJobs">Restore jobs</span>
+                  <strong id="appAdminBackupJobCount">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.backupReport">Backup report</span>
+                  <strong id="appAdminBackupReportState">-</strong>
+                </article>
+              </div>
+            </div>
+            <div class="app-admin-backup-panel full" id="appAdminBackupPanelCreate" role="tabpanel" aria-labelledby="appAdminBackupTabCreate" aria-hidden="true" data-app-admin-backup-panel="create">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.createBackup">Create backup</h3>
+                <p data-next-i18n="appAdmin.backupOperationsHelp">Export or restore only functional collection data. Auth, passkeys, plugins and secrets stay outside the backup.</p>
+                <div class="profile-action-row">
+                  <button type="button" class="secondary-button" id="appAdminRefreshBackupButton" data-next-i18n="appAdmin.createBackup">Create backup</button>
+                  <button type="button" class="secondary-button" id="appAdminExportBackupButton" data-next-i18n="appAdmin.exportBackup">Export ZIP</button>
+                </div>
               <fieldset class="profile-scope-fieldset" id="appAdminBackupScopes">
                 <legend data-next-i18n="appAdmin.backupScopeTitle">Include in backup</legend>
                 <label class="profile-checkbox-row">
@@ -16155,12 +16288,13 @@ def ui_preview_html(
                   <span data-next-i18n="appAdmin.includePersonalLists">Include watchlist and watched history</span>
                 </label>
               </fieldset>
-              <div class="login-message" id="appAdminBackupMessage"></div>
+              </div>
             </div>
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.backupUpload">Restore ZIP</h3>
-              <p data-next-i18n="appAdmin.backupUploadHelp">Validate a DiscVault backup ZIP before restoring it.</p>
-              <form class="profile-form" id="appAdminBackupForm">
+            <div class="app-admin-backup-panel full" id="appAdminBackupPanelRestore" role="tabpanel" aria-labelledby="appAdminBackupTabRestore" aria-hidden="true" data-app-admin-backup-panel="restore">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.backupUpload">Restore ZIP</h3>
+                <p data-next-i18n="appAdmin.backupUploadHelp">Validate a DiscVault backup ZIP before restoring it.</p>
+                <form class="profile-form" id="appAdminBackupForm">
                 <label for="appAdminBackupFile">
                   <span data-next-i18n="appAdmin.backupFile">Backup ZIP</span>
                   <input id="appAdminBackupFile" type="file" accept=".zip,application/zip">
@@ -16211,51 +16345,87 @@ def ui_preview_html(
                   <button type="button" class="secondary-button" id="appAdminValidateBackupButton" data-next-i18n="appAdmin.validateBackup">Validate ZIP</button>
                   <button type="button" class="secondary-button danger" id="appAdminRestoreBackupButton" data-next-i18n="appAdmin.startRestore">Start restore</button>
                 </div>
-              </form>
+                </form>
+              </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.recentBackups">Recent backups</h3>
-              <div class="profile-passkey-list" id="appAdminBackupList"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.backupReport">Backup report</h3>
-              <div class="profile-passkey-list" id="appAdminBackupReport"></div>
-            </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.backupJobs">Restore jobs</h3>
-              <div class="profile-passkey-list" id="appAdminBackupJobs"></div>
+            <div class="app-admin-backup-panel full" id="appAdminBackupPanelActivity" role="tabpanel" aria-labelledby="appAdminBackupTabActivity" aria-hidden="true" data-app-admin-backup-panel="activity">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.recentBackups">Recent backups</h3>
+                <div class="profile-passkey-list" id="appAdminBackupList"></div>
+              </div>
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.backupReport">Backup report</h3>
+                <div class="profile-passkey-list" id="appAdminBackupReport"></div>
+              </div>
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.backupJobs">Restore jobs</h3>
+                <div class="profile-passkey-list" id="appAdminBackupJobs"></div>
+              </div>
             </div>
           </section>
         </section>
         <section class="app-admin-panel" id="appAdminPanelAudit" role="tabpanel" aria-labelledby="appAdminTabAudit" aria-hidden="true" tabindex="0" data-app-admin-panel="audit">
           <section class="profile-grid">
-            <div class="detail-card profile-card">
-              <h3 data-next-i18n="appAdmin.auditLog">Audit log</h3>
-              <p data-next-i18n="appAdmin.auditLogHelp">Review recent security, admin, import, metadata, plugin and backup actions.</p>
-              <div class="profile-form">
-                <label for="appAdminAuditCategory">
-                  <span data-next-i18n="appAdmin.auditCategory">Category</span>
-                  <select id="appAdminAuditCategory">
-                    <option value="" data-next-i18n="appAdmin.auditAllCategories">All categories</option>
-                    <option value="security" data-next-i18n="appAdmin.auditSecurity">Security</option>
-                    <option value="admin" data-next-i18n="appAdmin.auditAdmin">Admin</option>
-                    <option value="import" data-next-i18n="importCenter.title">Import</option>
-                    <option value="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</option>
-                    <option value="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</option>
-                    <option value="backup" data-next-i18n="appAdmin.tabBackup">Backup</option>
-                    <option value="migration" data-next-i18n="migration.title">Migration</option>
-                    <option value="jobs" data-next-i18n="appAdmin.jobs">Jobs</option>
-                  </select>
-                </label>
-                <div class="profile-form-actions">
-                  <button type="button" class="secondary-button" id="appAdminRefreshAuditButton" data-next-i18n="appAdmin.refreshAudit">Refresh audit</button>
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("audit") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.auditLog">Audit log</h3>
+                    <p data-next-i18n="appAdmin.auditLogHelp">Review recent security, admin, import, metadata, plugin and backup actions.</p>
+                  </div>
                 </div>
               </div>
+              <nav class="detail-submenu profile-dashboard-tabs app-admin-section-tabs app-admin-audit-tabs" role="tablist" aria-label="Audit sections" data-next-i18n-aria="appAdmin.auditLog">
+                <button type="button" class="active" id="appAdminAuditTabOverview" role="tab" aria-label="Overview" data-next-i18n-aria="appAdmin.rolesTabOverview" aria-selected="true" aria-controls="appAdminAuditPanelOverview" tabindex="0" data-app-admin-audit-tab="overview">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.rolesTabOverview">Overview</span></button>
+                <button type="button" id="appAdminAuditTabEvents" role="tab" aria-label="Recent events" data-next-i18n-aria="appAdmin.auditEvents" aria-selected="false" aria-controls="appAdminAuditPanelEvents" tabindex="-1" data-app-admin-audit-tab="events">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="appAdmin.auditEvents">Recent events</span></button>
+              </nav>
+              <div class="profile-action-row">
+                <button type="button" class="secondary-button" id="appAdminRefreshAuditButton" data-next-i18n="appAdmin.refreshAudit">Refresh audit</button>
+              </div>
               <div class="login-message" id="appAdminAuditMessage"></div>
+            </section>
+            <div class="app-admin-audit-panel active full" id="appAdminAuditPanelOverview" role="tabpanel" aria-labelledby="appAdminAuditTabOverview" aria-hidden="false" data-app-admin-audit-panel="overview">
+              <div class="app-admin-summary-grid">
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.auditLog">Audit log</span>
+                  <strong id="appAdminAuditTotal">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.auditSecurity">Security</span>
+                  <strong id="appAdminAuditSecurityCount">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.auditAdmin">Admin</span>
+                  <strong id="appAdminAuditAdminCount">-</strong>
+                </article>
+                <article class="profile-dashboard-card">
+                  <span data-next-i18n="appAdmin.tabBackup">Backup</span>
+                  <strong id="appAdminAuditBackupCount">-</strong>
+                </article>
+              </div>
             </div>
-            <div class="detail-card profile-card full">
-              <h3 data-next-i18n="appAdmin.auditEvents">Recent events</h3>
-              <div class="profile-passkey-list" id="appAdminAuditList"></div>
+            <div class="app-admin-audit-panel full" id="appAdminAuditPanelEvents" role="tabpanel" aria-labelledby="appAdminAuditTabEvents" aria-hidden="true" data-app-admin-audit-panel="events">
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.auditEvents">Recent events</h3>
+                <div class="profile-form">
+                  <label for="appAdminAuditCategory">
+                    <span data-next-i18n="appAdmin.auditCategory">Category</span>
+                    <select id="appAdminAuditCategory">
+                      <option value="" data-next-i18n="appAdmin.auditAllCategories">All categories</option>
+                      <option value="security" data-next-i18n="appAdmin.auditSecurity">Security</option>
+                      <option value="admin" data-next-i18n="appAdmin.auditAdmin">Admin</option>
+                      <option value="import" data-next-i18n="importCenter.title">Import</option>
+                      <option value="metadata" data-next-i18n="appAdmin.tabMetadata">Metadata</option>
+                      <option value="plugins" data-next-i18n="appAdmin.tabPlugins">Plugins</option>
+                      <option value="backup" data-next-i18n="appAdmin.tabBackup">Backup</option>
+                      <option value="migration" data-next-i18n="migration.title">Migration</option>
+                      <option value="jobs" data-next-i18n="appAdmin.jobs">Jobs</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="profile-passkey-list" id="appAdminAuditList"></div>
+              </div>
             </div>
           </section>
         </section>
@@ -16413,11 +16583,16 @@ def ui_preview_html(
       activeRolesTab: localStorage.getItem("dv_next_admin_roles_tab") || "overview",
       activeOperationsTab: localStorage.getItem("dv_next_admin_operations_tab") || "overview",
       activePluginTab: localStorage.getItem("dv_next_admin_plugin_tab") || "overview",
+      activeDigitalTab: localStorage.getItem("dv_next_admin_digital_tab") || "overview",
+      activeMetadataTab: localStorage.getItem("dv_next_admin_metadata_tab") || "overview",
+      activeBackupTab: localStorage.getItem("dv_next_admin_backup_tab") || "overview",
+      activeAuditTab: localStorage.getItem("dv_next_admin_audit_tab") || "overview",
       activePluginTypeTab: localStorage.getItem("dv_next_admin_plugin_type_tab") || "all",
       pluginSearch: "",
       pluginStatusFilter: "all",
       auditCategory: "",
       auditEvents: [],
+      auditCounts: {total: 0, byCategory: {}},
       backup: null,
       backupReport: null,
       contributionEvents: [],
@@ -16433,6 +16608,7 @@ def ui_preview_html(
       movieVaultConnections: {},
       metadataArtworkTrash: {items: [], settings: {}, purge: {}},
       metadataJobs: [],
+      metadataJobCounts: {total: 0, byStatus: {}},
       operations: null,
       plugins: [],
       rbac: {},
@@ -17414,6 +17590,9 @@ def ui_preview_html(
       const codeInput = document.getElementById("appInviteCode");
       const submitButton = document.getElementById("appInviteJoinButton");
       const reviewForm = document.getElementById("appReviewForm");
+      const inviteForm = document.getElementById("appInviteForm");
+      const recoveryForm = document.getElementById("appRecoveryForm");
+      const legacyLoginWarning = document.getElementById("appLegacyLoginWarning");
       const authGuidance = document.getElementById("appAuthGuidance");
       const showAuthGuidance = passkeyConfigurationGuidanceVisible();
       authGuidance?.classList.toggle("hidden", !showAuthGuidance);
@@ -17464,7 +17643,14 @@ def ui_preview_html(
         toggleButton.textContent = tNext(key, publicRegistration ? "Create account" : "Invite-only access");
       }
       if (reviewToggleButton) reviewToggleButton.classList.toggle("hidden", !reviewLoginAvailable);
-      if (!reviewLoginAvailable) reviewForm?.classList.add("hidden");
+      if (reviewLoginAvailable) {
+        const alternateLoginOpen = [inviteForm, recoveryForm]
+          .some((form) => form && !form.classList.contains("hidden"));
+        reviewForm?.classList.toggle("hidden", alternateLoginOpen);
+      } else {
+        reviewForm?.classList.add("hidden");
+      }
+      legacyLoginWarning?.classList.toggle("hidden", reviewLoginAvailable);
       document.getElementById("profileLegacySecurity")?.classList.toggle("hidden", !currentAuthStatus.legacy_auth_enabled);
       if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
       if (codeInput) {
@@ -17521,6 +17707,10 @@ def ui_preview_html(
       if (appAdmin.activeTab === "users") setAppAdminUsersTab(appAdmin.activeUsersTab);
       if (appAdmin.activeTab === "roles") setAppAdminRolesTab(appAdmin.activeRolesTab);
       if (appAdmin.activeTab === "operations") setAppAdminOperationsTab(appAdmin.activeOperationsTab);
+      if (appAdmin.activeTab === "digital") setAppAdminDigitalTab(appAdmin.activeDigitalTab);
+      if (appAdmin.activeTab === "metadata") setAppAdminMetadataTab(appAdmin.activeMetadataTab);
+      if (appAdmin.activeTab === "backup") setAppAdminBackupTab(appAdmin.activeBackupTab);
+      if (appAdmin.activeTab === "audit") setAppAdminAuditTab(appAdmin.activeAuditTab);
     }
     function handleAppAdminTabKeydown(button, event) {
       if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
@@ -17679,6 +17869,140 @@ def ui_preview_html(
       if (event.key === "End") nextIndex = buttons.length - 1;
       const nextButton = buttons[nextIndex];
       setAppAdminPluginTab(nextButton.dataset.appAdminPluginTab);
+      nextButton.focus();
+    }
+    function setAppAdminDigitalTab(tab) {
+      const allowed = ["overview", "sources"];
+      appAdmin.activeDigitalTab = allowed.includes(tab) ? tab : "overview";
+      localStorage.setItem("dv_next_admin_digital_tab", appAdmin.activeDigitalTab);
+      document.querySelectorAll("[data-app-admin-digital-tab]").forEach((button) => {
+        const active = button.dataset.appAdminDigitalTab === appAdmin.activeDigitalTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-digital-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminDigitalPanel === appAdmin.activeDigitalTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminDigitalTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-digital-tab]")];
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminDigitalTab(nextButton.dataset.appAdminDigitalTab);
+      nextButton.focus();
+    }
+    function setAppAdminMetadataTab(tab) {
+      const buttons = [...document.querySelectorAll("[data-app-admin-metadata-tab]")];
+      const visibleButtons = buttons.filter((button) => !button.classList.contains("hidden"));
+      const selectedButton = visibleButtons.find((button) => button.dataset.appAdminMetadataTab === tab)
+        || visibleButtons[0]
+        || buttons[0];
+      appAdmin.activeMetadataTab = selectedButton?.dataset.appAdminMetadataTab || "overview";
+      localStorage.setItem("dv_next_admin_metadata_tab", appAdmin.activeMetadataTab);
+      buttons.forEach((button) => {
+        const active = button.dataset.appAdminMetadataTab === appAdmin.activeMetadataTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-metadata-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminMetadataPanel === appAdmin.activeMetadataTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminMetadataTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-metadata-tab]")]
+        .filter((item) => !item.classList.contains("hidden"));
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminMetadataTab(nextButton.dataset.appAdminMetadataTab);
+      nextButton.focus();
+    }
+    function setAppAdminBackupTab(tab) {
+      const buttons = [...document.querySelectorAll("[data-app-admin-backup-tab]")];
+      const visibleButtons = buttons.filter((button) => !button.classList.contains("hidden"));
+      const selectedButton = visibleButtons.find((button) => button.dataset.appAdminBackupTab === tab)
+        || visibleButtons[0]
+        || buttons[0];
+      appAdmin.activeBackupTab = selectedButton?.dataset.appAdminBackupTab || "overview";
+      localStorage.setItem("dv_next_admin_backup_tab", appAdmin.activeBackupTab);
+      buttons.forEach((button) => {
+        const active = button.dataset.appAdminBackupTab === appAdmin.activeBackupTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-backup-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminBackupPanel === appAdmin.activeBackupTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminBackupTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-backup-tab]")]
+        .filter((item) => !item.classList.contains("hidden"));
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminBackupTab(nextButton.dataset.appAdminBackupTab);
+      nextButton.focus();
+    }
+    function setAppAdminAuditTab(tab) {
+      const allowed = ["overview", "events"];
+      appAdmin.activeAuditTab = allowed.includes(tab) ? tab : "overview";
+      localStorage.setItem("dv_next_admin_audit_tab", appAdmin.activeAuditTab);
+      document.querySelectorAll("[data-app-admin-audit-tab]").forEach((button) => {
+        const active = button.dataset.appAdminAuditTab === appAdmin.activeAuditTab;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+        button.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll("[data-app-admin-audit-panel]").forEach((panel) => {
+        const active = panel.dataset.appAdminAuditPanel === appAdmin.activeAuditTab;
+        panel.classList.toggle("active", active);
+        panel.setAttribute("aria-hidden", active ? "false" : "true");
+      });
+    }
+    function handleAppAdminAuditTabKeydown(button, event) {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const buttons = [...document.querySelectorAll("[data-app-admin-audit-tab]")];
+      if (!buttons.length) return;
+      event.preventDefault();
+      const currentIndex = Math.max(0, buttons.indexOf(button));
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+      if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % buttons.length;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = buttons.length - 1;
+      const nextButton = buttons[nextIndex];
+      setAppAdminAuditTab(nextButton.dataset.appAdminAuditTab);
       nextButton.focus();
     }
     function setAppAdminPluginTypeTab(tab, render = true) {
@@ -18344,10 +18668,12 @@ def ui_preview_html(
       const list = document.getElementById("appAdminArtworkTrashList");
       const enabledInput = document.getElementById("appAdminArtworkTrashPurgeEnabled");
       const retentionSelect = document.getElementById("appAdminArtworkTrashRetention");
-      if (!list) return;
       const trash = appAdmin.metadataArtworkTrash || {items: [], settings: {}, purge: {}};
       const settings = trash.settings || {};
       const items = trash.items || [];
+      const totalNode = document.getElementById("appAdminMetadataArtworkTotal");
+      if (totalNode) totalNode.textContent = formatNumber(items.length);
+      if (!list) return;
       if (enabledInput) enabledInput.checked = !!settings.purgeEnabled;
       if (retentionSelect) {
         retentionSelect.value = settings.retention || "7d";
@@ -18390,8 +18716,22 @@ def ui_preview_html(
     }
     function renderAppAdminMetadataJobs() {
       const node = document.getElementById("appAdminMetadataJobsList");
-      if (!node) return;
       const jobs = appAdmin.metadataJobs || [];
+      const counts = appAdmin.metadataJobCounts || {};
+      const statusCounts = counts.byStatus || {};
+      const activeStatuses = new Set(["queued", "running", "pending", "processing", "in_progress", "started"]);
+      const failedStatuses = new Set(["failed", "error"]);
+      const totalNode = document.getElementById("appAdminMetadataJobTotal");
+      const activeNode = document.getElementById("appAdminMetadataJobActive");
+      const failedNode = document.getElementById("appAdminMetadataJobFailed");
+      const countStatuses = (statuses) => Object.entries(statusCounts).reduce(
+        (total, [status, count]) => total + (statuses.has(String(status).toLowerCase()) ? Number(count || 0) : 0),
+        0
+      );
+      if (totalNode) totalNode.textContent = formatNumber(Number(counts.total || 0));
+      if (activeNode) activeNode.textContent = formatNumber(countStatuses(activeStatuses));
+      if (failedNode) failedNode.textContent = formatNumber(countStatuses(failedStatuses));
+      if (!node) return;
       node.innerHTML = jobs.length ? jobs.map((job) => {
         const payload = job.payload || {};
         const result = job.result || {};
@@ -18605,7 +18945,18 @@ def ui_preview_html(
       const list = document.getElementById("appAdminDigitalSourcesList");
       const countNode = document.getElementById("appAdminDigitalSourceTotal");
       const sources = appAdmin.digitalSources || [];
-      if (countNode) countNode.textContent = String(sources.length || 0);
+      const activeStatuses = new Set(["active", "completed", "ok", "healthy", "ready"]);
+      const sourceStatus = (source) => String(source.last_status || source.status || source.sync_status || source.state || "active").toLowerCase();
+      const sourceIsActive = (source) => source.enabled !== false && activeStatuses.has(sourceStatus(source));
+      const sourceItems = (source) => Number(source.itemCount ?? source.item_count ?? source.items ?? 0) || 0;
+      const sourceMatched = (source) => Number(source.matchedItemCount ?? source.matchedCount ?? source.matched_count ?? source.matched ?? 0) || 0;
+      if (countNode) countNode.textContent = formatNumber(sources.length);
+      const activeNode = document.getElementById("appAdminDigitalSourceActive");
+      const itemsNode = document.getElementById("appAdminDigitalSourceItems");
+      const matchedNode = document.getElementById("appAdminDigitalSourceMatched");
+      if (activeNode) activeNode.textContent = formatNumber(sources.filter(sourceIsActive).length);
+      if (itemsNode) itemsNode.textContent = formatNumber(sources.reduce((total, source) => total + sourceItems(source), 0));
+      if (matchedNode) matchedNode.textContent = formatNumber(sources.reduce((total, source) => total + sourceMatched(source), 0));
       if (!list) return;
       list.innerHTML = sources.length ? sources.map((source) => {
         const pluginId = source.plugin_id || source.pluginId || source.source_type || source.type || "-";
@@ -18695,15 +19046,28 @@ def ui_preview_html(
     function renderAppAdminBackups(backup) {
       const statusNode = document.getElementById("appAdminBackupState");
       const jobsNode = document.getElementById("appAdminBackupJobs");
+      const backups = (backup && backup.backups) || [];
+      const jobs = (backup && backup.latestJobs) || [];
       if (statusNode) {
         statusNode.textContent = backup && backup.status === "ok"
-          ? `${backup.scope || "functional_collection"}; ${appAdminBackupCountsLine(backup.counts || {})}`
+          ? tNext("appAdmin.statusReady", "Ready")
           : tNext("appAdmin.noBackupStatus", "No backup status loaded.");
+      }
+      const archiveCountNode = document.getElementById("appAdminBackupArchiveCount");
+      const jobCountNode = document.getElementById("appAdminBackupJobCount");
+      const reportStateNode = document.getElementById("appAdminBackupReportState");
+      if (archiveCountNode) archiveCountNode.textContent = formatNumber(backups.length);
+      if (jobCountNode) jobCountNode.textContent = formatNumber(jobs.length);
+      if (reportStateNode) {
+        reportStateNode.textContent = appAdmin.backupReport
+          ? (appAdmin.backupReport.valid
+            ? tNext("appAdmin.backupZipValid", "ZIP is valid")
+            : tNext("appAdmin.backupZipInvalid", "ZIP has validation issues"))
+          : "-";
       }
       renderAppAdminBackupReport(appAdmin.backupReport);
       const backupsNode = document.getElementById("appAdminBackupList");
       if (backupsNode) {
-        const backups = (backup && backup.backups) || [];
         backupsNode.innerHTML = backups.length ? backups.map((item) => {
           const tables = item.tables || {};
           const includePersonal = appAdminBackupTableCount(tables, "watchlist_items") || appAdminBackupTableCount(tables, "watch_history");
@@ -18714,7 +19078,9 @@ def ui_preview_html(
             <div class="profile-passkey">
               <div class="profile-passkey-head">
                 <strong>${escapeHtml(item.description || item.fileName || tNext("appAdmin.backupArchive", "Backup archive"))}</strong>
-                <span class="tag ${item.valid ? "good" : "bad"}">${escapeHtml(item.valid ? tNext("appAdmin.valid", "Valid") : tNext("appAdmin.invalid", "Invalid"))}</span>
+                <span class="tag ${item.valid ? "good" : "bad"}">${escapeHtml(item.valid
+                  ? tNext("appAdmin.backupZipValid", "ZIP is valid")
+                  : tNext("appAdmin.backupZipInvalid", "ZIP has validation issues"))}</span>
               </div>
               <div class="profile-passkey-meta">
                 ${escapeHtml(item.fileName || "-")}
@@ -18738,7 +19104,6 @@ def ui_preview_html(
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("appAdmin.noStoredBackups", "No stored backups yet."))}</div>`;
       }
       if (!jobsNode) return;
-      const jobs = (backup && backup.latestJobs) || [];
       jobsNode.innerHTML = jobs.length ? jobs.map((job) => `
         <div class="profile-passkey">
           <div class="profile-passkey-head">
@@ -18757,6 +19122,16 @@ def ui_preview_html(
     function renderAppAdminAudit() {
       const list = document.getElementById("appAdminAuditList");
       const categorySelect = document.getElementById("appAdminAuditCategory");
+      const counts = appAdmin.auditCounts || {};
+      const byCategory = counts.byCategory || {};
+      const totalNode = document.getElementById("appAdminAuditTotal");
+      const securityNode = document.getElementById("appAdminAuditSecurityCount");
+      const adminNode = document.getElementById("appAdminAuditAdminCount");
+      const backupNode = document.getElementById("appAdminAuditBackupCount");
+      if (totalNode) totalNode.textContent = formatNumber(Number(counts.total || 0));
+      if (securityNode) securityNode.textContent = formatNumber(Number(byCategory.security || 0));
+      if (adminNode) adminNode.textContent = formatNumber(Number(byCategory.admin || 0));
+      if (backupNode) backupNode.textContent = formatNumber(Number(byCategory.backup || 0));
       if (categorySelect && categorySelect.value !== appAdmin.auditCategory) {
         categorySelect.value = appAdmin.auditCategory || "";
       }
@@ -20121,8 +20496,15 @@ def ui_preview_html(
       setElementVisible(document.querySelector('[data-app-admin-users-tab="settings"]'), canUsePeopleSettings);
       setElementVisible(document.querySelector('[data-app-admin-users-tab="users"]'), canViewUsers);
       setElementVisible(document.querySelector('[data-app-admin-users-tab="groups"]'), canViewGroups);
+      setElementVisible(document.querySelector('[data-app-admin-metadata-tab="artwork"]'), hasActualPermission("metadata.manage_artwork_trash"));
+      setElementVisible(document.querySelector('[data-app-admin-backup-tab="create"]'), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
+      setElementVisible(document.querySelector('[data-app-admin-backup-tab="restore"]'), hasActualPermission("admin.restore_functional"));
       setAppAdminUsersTab(appAdmin.activeUsersTab);
       setAppAdminOperationsTab(appAdmin.activeOperationsTab);
+      setAppAdminDigitalTab(appAdmin.activeDigitalTab);
+      setAppAdminMetadataTab(appAdmin.activeMetadataTab);
+      setAppAdminBackupTab(appAdmin.activeBackupTab);
+      setAppAdminAuditTab(appAdmin.activeAuditTab);
       setElementVisible(closestCard(document.getElementById("appAdminBackupFile")), hasActualPermission("admin.restore_functional"));
       setElementVisible(document.getElementById("appAdminRefreshBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
       setElementVisible(document.getElementById("appAdminExportBackupButton"), hasActualAnyPermission(["admin.backup", "collection.export_functional"]));
@@ -20303,6 +20685,7 @@ def ui_preview_html(
         appAdmin.metadataJobs = metadataJobsPayload.jobs || [];
         appAdmin.metadataArtworkTrash = metadataTrashPayload || {items: [], settings: {}, purge: {}};
         appAdmin.auditEvents = auditPayload.events || [];
+        appAdmin.auditCounts = auditPayload.counts || {total: 0, byCategory: {}};
         appAdmin.contributionEvents = (contributionPayload.events || []).filter((event) => event.eventType === "metadata.receiver_pushed");
         appAdmin.operations = operationsPayload.operations || null;
         appAdmin.legacy = canLoadUsers
@@ -21124,6 +21507,7 @@ def ui_preview_html(
             : Promise.resolve({items: [], settings: {}, purge: {}})
         ]);
         appAdmin.metadataJobs = payload.jobs || [];
+        appAdmin.metadataJobCounts = payload.counts || {total: 0, byStatus: {}};
         appAdmin.metadataArtworkTrash = trashPayload || {items: [], settings: {}, purge: {}};
         renderAppAdminArtworkTrash();
         renderAppAdminMetadataJobs();
@@ -21211,6 +21595,7 @@ def ui_preview_html(
       try {
         const payload = await authApiJson(`/api/next/audit/events${query}`);
         appAdmin.auditEvents = payload.events || [];
+        appAdmin.auditCounts = payload.counts || {total: 0, byCategory: {}};
         renderAppAdminAudit();
         setAppAdminMessage("appAdminAuditMessage", tNext("appAdmin.auditLoaded", "Audit log loaded."), "good");
       } catch (error) {
@@ -21845,7 +22230,7 @@ def ui_preview_html(
       const recoveryPanel = document.getElementById("appRecoveryForm");
       invitePanel?.classList.add("hidden");
       recoveryPanel?.classList.add("hidden");
-      panel?.classList.toggle("hidden");
+      panel?.classList.remove("hidden");
       setLoginMessage("");
     }
     async function registerInviteAccount(event) {
@@ -21924,7 +22309,7 @@ def ui_preview_html(
       const reviewPanel = document.getElementById("appReviewForm");
       invitePanel?.classList.add("hidden");
       reviewPanel?.classList.add("hidden");
-      panel?.classList.toggle("hidden");
+      panel?.classList.remove("hidden");
       setLoginMessage("");
     }
     function renderLegacyLoginStage(payload = {}) {
@@ -39396,6 +39781,22 @@ def ui_preview_html(
         button.addEventListener("click", () => setAppAdminPluginTab(button.dataset.appAdminPluginTab));
         button.addEventListener("keydown", (event) => handleAppAdminPluginTabKeydown(button, event));
       });
+      document.querySelectorAll("[data-app-admin-digital-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminDigitalTab(button.dataset.appAdminDigitalTab));
+        button.addEventListener("keydown", (event) => handleAppAdminDigitalTabKeydown(button, event));
+      });
+      document.querySelectorAll("[data-app-admin-metadata-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminMetadataTab(button.dataset.appAdminMetadataTab));
+        button.addEventListener("keydown", (event) => handleAppAdminMetadataTabKeydown(button, event));
+      });
+      document.querySelectorAll("[data-app-admin-backup-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminBackupTab(button.dataset.appAdminBackupTab));
+        button.addEventListener("keydown", (event) => handleAppAdminBackupTabKeydown(button, event));
+      });
+      document.querySelectorAll("[data-app-admin-audit-tab]").forEach((button) => {
+        button.addEventListener("click", () => setAppAdminAuditTab(button.dataset.appAdminAuditTab));
+        button.addEventListener("keydown", (event) => handleAppAdminAuditTabKeydown(button, event));
+      });
       document.getElementById("appAdminPluginTypeFilter")?.addEventListener("change", (event) => setAppAdminPluginTypeTab(event.target.value));
       document.getElementById("appAdminPluginStatusFilter")?.addEventListener("change", (event) => setAppAdminPluginStatusFilter(event.target.value));
       document.getElementById("appAdminPluginSearchInput")?.addEventListener("input", (event) => setAppAdminPluginSearch(event.target.value));
@@ -39542,6 +39943,7 @@ def ui_preview_html(
         }
       });
       document.getElementById("appAdminRefreshDigitalSourcesButton")?.addEventListener("click", () => refreshAppAdminDigitalSources());
+      document.getElementById("appAdminRefreshBackupStatusButton")?.addEventListener("click", () => refreshAppAdminBackupStatus());
       document.getElementById("appAdminRefreshBackupButton")?.addEventListener("click", () => createAppAdminBackup());
       document.getElementById("appAdminExportBackupButton")?.addEventListener("click", () => exportAppAdminBackupZip());
       document.getElementById("appAdminValidateBackupButton")?.addEventListener("click", () => validateAppAdminBackupZip());

@@ -479,7 +479,7 @@ class NextPluginRuntimeTests(unittest.TestCase):
     def test_bluray_dvd_section_search_ignores_bluray_cross_links(self):
         captured_sections = []
 
-        def fake_post(url, data=None, headers=None, timeout=None):
+        def fake_post(url, data=None, headers=None, timeout=None, allow_redirects=None):
             captured_sections.append((data or {}).get("section"))
             text = (
                 "var urls = new Array("
@@ -500,7 +500,7 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(urls, ["https://www.blu-ray.com/dvd/Lethal-Weapon-2-DVD/67890/"])
 
     def test_bluray_bluray_section_search_ignores_dvd_cross_links(self):
-        def fake_post(url, data=None, headers=None, timeout=None):
+        def fake_post(url, data=None, headers=None, timeout=None, allow_redirects=None):
             text = (
                 "var urls = new Array("
                 "'/dvd/Heat-DVD/111/',"
