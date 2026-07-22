@@ -1,12 +1,89 @@
 import re
-from urllib.parse import quote_plus
+import time
+from urllib.parse import quote_plus, urlparse
 
 import requests
+
+try:
+    from requests.exceptions import RequestException as RequestFailure
+    from requests.exceptions import Timeout as RequestTimeout
+except ImportError:  # Test stubs may expose only the request methods.
+    class RequestFailure(Exception):
+        pass
+
+    class RequestTimeout(RequestFailure):
+        pass
 
 try:
     from bs4 import BeautifulSoup
 except Exception:  # pragma: no cover - dependency is present in the container image.
     BeautifulSoup = None
+
+
+_REQUEST_INTERVAL_SECONDS = 5.0
+_SOURCE_HOSTS = frozenset({"blu-ray.com", "www.blu-ray.com"})
+_last_request_at = None
+
+
+class ProviderError(RuntimeError):
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def _failure(code):
+    return {
+        "status": "failed",
+        "provider": "bluray_com",
+        "errorCode": str(code or "provider_failed"),
+    }
+
+
+def _source_url(url):
+    parsed = urlparse(str(url or ""))
+    return parsed.scheme == "https" and parsed.hostname in _SOURCE_HOSTS
+
+
+def _pace_request():
+    global _last_request_at
+    now = time.monotonic()
+    if _last_request_at is not None:
+        delay = _REQUEST_INTERVAL_SECONDS - (now - _last_request_at)
+        if delay > 0:
+            time.sleep(delay)
+    _last_request_at = time.monotonic()
+
+
+def _request(method, url, **kwargs):
+    if not _source_url(url):
+        raise ProviderError("provider_url_rejected")
+    _pace_request()
+    try:
+        caller = requests.post if method == "POST" else requests.get
+        response = caller(
+            url,
+            allow_redirects=False,
+            headers=_headers(),
+            timeout=(3.05, 10),
+            **kwargs,
+        )
+    except RequestTimeout as exc:
+        raise ProviderError("provider_timeout") from exc
+    except RequestFailure as exc:
+        raise ProviderError("provider_transport_error") from exc
+
+    status_code = int(getattr(response, "status_code", 200))
+    if status_code == 429:
+        raise ProviderError("provider_rate_limited")
+    if status_code in {401, 403}:
+        raise ProviderError("provider_access_denied")
+    if 300 <= status_code < 400:
+        raise ProviderError("provider_redirect_rejected")
+    if status_code >= 500:
+        raise ProviderError("provider_http_5xx")
+    if status_code >= 400:
+        raise ProviderError("provider_http_error")
+    return response
 
 
 def _normalize_format(value):
@@ -22,7 +99,7 @@ def _normalize_format(value):
 
 def _headers():
     return {
-        "User-Agent": "Mozilla/5.0 (DiscVault Next; +https://discvault.eu)",
+        "User-Agent": "VaultStack-Metadata/1.0.6 (+https://github.com/helmerzNL/DiscVault)",
         "X-Requested-With": "XMLHttpRequest",
         "Referer": "https://www.blu-ray.com/",
     }
@@ -64,7 +141,9 @@ def _sections(query, preferred_format=""):
     if preferred in {"Blu-ray", "4K UHD"}:
         return ["bluraymovies"]
     text = str(query or "").lower()
-    if re.fullmatch(r"\d{8,14}", text) or re.search(r"\bdvd\b", text):
+    if re.fullmatch(r"\d{8,14}", text):
+        return ["bluraymovies", "dvdmovies"]
+    if re.search(r"\bdvd\b", text):
         return ["dvdmovies", "bluraymovies"]
     return ["bluraymovies", "dvdmovies"]
 
@@ -78,42 +157,39 @@ def _release_urls(query, preferred_format="", limit=8):
             urls.append(value)
 
     for section in _sections(query, preferred_format):
-        try:
-            response = requests.post(
-                "https://www.blu-ray.com/search/quicksearch.php",
-                data={"section": section, "userid": "-1", "country": "all", "keyword": str(query or "").strip()},
-                headers=_headers(),
-                timeout=8,
-            )
-            if response.status_code == 200:
-                match = re.search(r"var\s+urls\s*=\s*new\s+Array\(([^)]+)\)", response.text)
-                if match:
-                    for item in match.group(1).split(","):
-                        add_url(item, section)
-            if urls:
-                break
-        except Exception:
-            pass
+        response = _request(
+            "POST",
+            "https://www.blu-ray.com/search/quicksearch.php",
+            data={
+                "section": section,
+                "userid": "-1",
+                "country": "all",
+                "keyword": str(query or "").strip(),
+            },
+        )
+        match = re.search(r"var\s+urls\s*=\s*new\s+Array\(([^)]+)\)", response.text)
+        if match:
+            for item in match.group(1).split(","):
+                add_url(item, section)
+        if urls:
+            break
 
     if not urls:
         for section in _sections(query, preferred_format):
-            try:
-                response = requests.get(
-                    "https://www.blu-ray.com/search/?quicksearch=1"
-                    f"&quicksearch_country=all&section={section}&quicksearch_keyword={quote_plus(str(query or '').strip())}",
-                    headers=_headers(),
-                    timeout=8,
-                )
-                if response.status_code == 200 and BeautifulSoup is not None:
-                    soup = BeautifulSoup(response.text, "html.parser")
-                    for link in soup.select('a[href*="/movies/"], a[href*="/dvd/"]'):
-                        add_url(link.get("href") or "", section)
-                        if len(urls) >= limit:
-                            break
-                if urls:
+            response = _request(
+                "GET",
+                "https://www.blu-ray.com/search/?quicksearch=1"
+                f"&quicksearch_country=all&section={section}&quicksearch_keyword={quote_plus(str(query or '').strip())}",
+            )
+            if BeautifulSoup is None:
+                raise ProviderError("provider_parser_unavailable")
+            soup = BeautifulSoup(response.text, "html.parser")
+            for link in soup.select('a[href*="/movies/"], a[href*="/dvd/"]'):
+                add_url(link.get("href") or "", section)
+                if len(urls) >= limit:
                     break
-            except Exception:
-                pass
+            if urls:
+                break
     return urls[:limit]
 
 
@@ -177,6 +253,11 @@ def _member_title_from_url(value):
     if not match:
         return ""
     return _movie_title_from_release_title(re.sub(r"[-_]+", " ", match.group(1)).strip())
+
+
+def _release_id(value):
+    match = re.search(r"/(?:movies|dvd)/[^/]+/(\d+)", str(value or ""), flags=re.I)
+    return match.group(1) if match else ""
 
 
 def _is_box_set_candidate(title, page_text=None):
@@ -257,7 +338,6 @@ def _extract_explicit_box_set_members(soup, *, current_url="", parent_title="", 
         image = link.find("img")
         if image is None:
             return
-        poster = _abs_url(image.get("src") or image.get("data-src") or image.get("data-original") or "")
         title = _movie_title_from_release_title(
             link.get("title")
             or image.get("alt")
@@ -284,11 +364,9 @@ def _extract_explicit_box_set_members(soup, *, current_url="", parent_title="", 
             {
                 "title": title,
                 "year": (re.search(r"\((\d{4})\)", link.get("title") or image.get("alt") or label or "") or ["", ""])[1],
-                "posterUrl": poster,
                 "format": release_format,
                 "source": "Blu-ray.com",
-                "sourceUrl": href,
-                "sourceRef": match.group(1) if match else href,
+                "sourceRef": match.group(1) if match else "",
                 "sortOrder": index,
                 "sort_order": index,
                 "discNumber": disc_match.group(1) if disc_match else "",
@@ -308,7 +386,7 @@ def _extract_explicit_box_set_members(soup, *, current_url="", parent_title="", 
     return [member for member in members if member.get("title")][:30]
 
 
-def _candidate_members_from_search(title, preferred_format="", current_url=""):
+def _candidate_members_from_search(title, preferred_format="", current_ref=""):
     clean_title = _movie_title_from_release_title(title)
     if not clean_title:
         return []
@@ -316,7 +394,8 @@ def _candidate_members_from_search(title, preferred_format="", current_url=""):
     seen = set()
     for url in _release_urls(clean_title, preferred_format, limit=12):
         url = _abs_url(url)
-        if current_url and url == _abs_url(current_url):
+        release_id = _release_id(url)
+        if current_ref and release_id == str(current_ref):
             continue
         member_title = _member_title_from_url(url)
         if not member_title:
@@ -325,14 +404,12 @@ def _candidate_members_from_search(title, preferred_format="", current_url=""):
         if key in seen:
             continue
         seen.add(key)
-        match = re.search(r"/(?:movies|dvd)/[^/]+/(\d+)", url, flags=re.I)
         members.append(
             {
                 "title": member_title,
                 "format": _normalize_format(url) or _normalize_format(preferred_format),
                 "source": "Blu-ray.com candidate search",
-                "sourceUrl": url,
-                "sourceRef": match.group(1) if match else url,
+                "sourceRef": release_id,
                 "sortOrder": len(members) + 1,
                 "sort_order": len(members) + 1,
                 "memberConfidence": "candidate",
@@ -344,7 +421,7 @@ def _candidate_members_from_search(title, preferred_format="", current_url=""):
 def _box_set_evidence(*, members, result, payload=None, explicit=False, candidate=False):
     payload = payload or {}
     members = members if isinstance(members, list) else []
-    source_ref = result.get("sourceRef") or result.get("sourceUrl") or result.get("source_url") or ""
+    source_ref = result.get("sourceRef") or ""
     return {
         "barcodeMatch": False,
         "entityType": "box_set",
@@ -403,16 +480,15 @@ def _format_from_url_title_text(url, title, text):
 
 def _parse_page(url):
     if BeautifulSoup is None:
-        raise RuntimeError("BeautifulSoup is required for Blu-ray.com page parsing.")
-    response = requests.get(url, headers=_headers(), timeout=10)
-    response.raise_for_status()
+        raise ProviderError("provider_parser_unavailable")
+    response = _request("GET", url)
     soup = BeautifulSoup(response.text, "html.parser")
     og_title = soup.find("meta", attrs={"property": "og:title"})
     title = _clean_text(og_title.get("content") if og_title else "")
     if not title and soup.find("h1"):
         title = _clean_text(soup.find("h1").get_text(" ", strip=True))
-    og_image = soup.find("meta", attrs={"property": "og:image"})
-    poster = _abs_url(og_image.get("content") if og_image else "")
+    if not title:
+        raise ProviderError("provider_parser_drift")
     audio = _page_text_by_id(soup, "shortaudio", "longaudio")
     subs = _page_text_by_id(soup, "shortsubs", "longsubs")
     video = _page_text_by_id(soup, "shortvideo", "longvideo")
@@ -454,20 +530,17 @@ def _parse_page(url):
         "status": "hit",
         "provider": "bluray_com",
         "sourceLabel": "Blu-ray.com",
-        "sourceRef": url,
-        "sourceUrl": url,
+        "sourceRef": _release_id(url),
         "format": release_format,
         "releaseTitle": title,
         "movie": {
             "title": _movie_title_from_release_title(title),
             "year": year,
-            "posterUrl": poster,
             "format": release_format,
         },
         "release": {
             "title": title,
             "format": release_format,
-            "posterUrl": poster,
         },
         "technicalSpecs": {
             "format": release_format,
@@ -550,26 +623,20 @@ def search_title(payload, context=None):
         limit = max(1, min(requested, 12))
 
     items = []
-    for url in _release_urls(query, preferred_format, limit=limit):
-        match = re.search(r"/(?:movies|dvd)/([^/]+)/(\d+)", url)
-        slug_title = re.sub(r"[-_]+", " ", match.group(1)).strip() if match else ""
-        item = {
-            "provider": "bluray_com",
-            "providerLabel": "Blu-ray.com",
-            "id": match.group(2) if match else url,
-            "title": slug_title,
-            "sourceUrl": url,
-            "sourceRef": url,
-            "format": _normalize_format(url),
-        }
-        try:
+    try:
+        release_urls = _release_urls(query, preferred_format, limit=limit)
+        for url in release_urls:
+            match = re.search(r"/(?:movies|dvd)/([^/]+)/(\d+)", url)
+            slug_title = re.sub(r"[-_]+", " ", match.group(1)).strip() if match else ""
+            item = {
+                "provider": "bluray_com",
+                "providerLabel": "Blu-ray.com",
+                "id": match.group(2) if match else url,
+                "title": slug_title,
+                "sourceRef": match.group(2) if match else "",
+                "format": _normalize_format(url),
+            }
             parsed = _parse_page(url)
-        except Exception:
-            parsed = None
-        if isinstance(parsed, dict) and parsed.get("status") == "hit":
-            # In release-variants (wishlist edition picker) mode box sets and
-            # anniversary/trilogy editions are legitimate pickable editions, so
-            # keep them and flag them for the frontend to label.
             if parsed.get("isBoxSetCandidate"):
                 item["isBoxSetCandidate"] = True
             release_title = _clean_text(parsed.get("releaseTitle"))
@@ -581,13 +648,15 @@ def search_title(payload, context=None):
                 item["releaseTitle"] = release_title
             if movie.get("year"):
                 item["year"] = str(movie.get("year"))
-            if movie.get("posterUrl"):
-                item["posterUrl"] = movie.get("posterUrl")
             if parsed.get("format"):
                 item["format"] = parsed.get("format")
-        if not str(item.get("title") or "").strip():
-            continue
-        items.append(item)
+            if not str(item.get("title") or "").strip():
+                continue
+            items.append(item)
+    except ProviderError as exc:
+        return _failure(exc.code)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return _failure("provider_parser_drift")
     return {"status": "hit" if items else "miss", "provider": "bluray_com", "items": items}
 
 
@@ -596,10 +665,15 @@ def search_barcode(payload, context=None):
     preferred_format = str((payload or {}).get("format") or "").strip()
     if not barcode:
         return {"status": "skipped", "provider": "bluray_com"}
-    url = _first_page(barcode, preferred_format)
-    if not url:
-        return {"status": "miss", "provider": "bluray_com", "barcode": barcode}
-    return _parse_page(url)
+    try:
+        url = _first_page(barcode, preferred_format)
+        if not url:
+            return {"status": "miss", "provider": "bluray_com", "barcode": barcode}
+        return _parse_page(url)
+    except ProviderError as exc:
+        return _failure(exc.code)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return _failure("provider_parser_drift")
 
 
 def technical_specs(payload, context=None):
@@ -610,18 +684,23 @@ def technical_specs(payload, context=None):
     query = barcode or f"{title} {year}".strip()
     if not query:
         return {"status": "skipped", "provider": "bluray_com"}
-    url = _first_page(query, preferred_format)
-    if not url:
-        for box_set in (payload or {}).get("parentBoxSets") or []:
-            parent_barcode = str((box_set or {}).get("barcode") or "").strip()
-            if parent_barcode:
-                url = _first_page(parent_barcode, preferred_format)
-                if url:
-                    parsed = _parse_page(url)
-                    parsed["sourceContext"] = "box_set_parent"
-                    return parsed
-        return {"status": "miss", "provider": "bluray_com"}
-    return _parse_page(url)
+    try:
+        url = _first_page(query, preferred_format)
+        if not url:
+            for box_set in (payload or {}).get("parentBoxSets") or []:
+                parent_barcode = str((box_set or {}).get("barcode") or "").strip()
+                if parent_barcode:
+                    url = _first_page(parent_barcode, preferred_format)
+                    if url:
+                        parsed = _parse_page(url)
+                        parsed["sourceContext"] = "box_set_parent"
+                        return parsed
+            return {"status": "miss", "provider": "bluray_com"}
+        return _parse_page(url)
+    except ProviderError as exc:
+        return _failure(exc.code)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return _failure("provider_parser_drift")
 
 
 def movie_details(payload, context=None):
@@ -638,7 +717,11 @@ def box_set_candidates(payload, context=None):
         return {"status": "miss", "provider": "bluray_com", "boxSetProposal": {}}
     members = result.get("boxSetMembers") or []
     if len(members) < 2:
-        members = _candidate_members_from_search(title, result.get("format") or (payload or {}).get("format"), result.get("sourceUrl"))
+        members = _candidate_members_from_search(
+            title,
+            result.get("format") or (payload or {}).get("format"),
+            result.get("sourceRef"),
+        )
         if len(members) < 2:
             return {"status": "miss", "provider": "bluray_com", "boxSetProposal": {}}
         evidence = _box_set_evidence(members=members, result=result, payload=payload, candidate=True)
@@ -648,10 +731,7 @@ def box_set_candidates(payload, context=None):
             "boxSetProposal": {
                 "title": title,
                 "source": "Blu-ray.com",
-                "detailUrl": result.get("sourceUrl"),
-                "posterUrl": result.get("movie", {}).get("posterUrl") or result.get("release", {}).get("posterUrl"),
-                "poster_url": result.get("movie", {}).get("posterUrl") or result.get("release", {}).get("posterUrl"),
-                "poster": result.get("movie", {}).get("posterUrl") or result.get("release", {}).get("posterUrl"),
+                "sourceRef": result.get("sourceRef") or "",
                 "detectedWithoutMembers": True,
                 "memberConfidence": "candidate",
                 "memberSource": "metadata_candidates",
@@ -674,10 +754,7 @@ def box_set_candidates(payload, context=None):
         "boxSetProposal": {
             "title": title,
             "source": "Blu-ray.com",
-            "detailUrl": result.get("sourceUrl"),
-            "posterUrl": result.get("movie", {}).get("posterUrl") or result.get("release", {}).get("posterUrl"),
-            "poster_url": result.get("movie", {}).get("posterUrl") or result.get("release", {}).get("posterUrl"),
-            "poster": result.get("movie", {}).get("posterUrl") or result.get("release", {}).get("posterUrl"),
+            "sourceRef": result.get("sourceRef") or "",
             "detectedWithoutMembers": False,
             "memberConfidence": "needs_member_confirmation",
             "memberSource": "Blu-ray.com release page",
