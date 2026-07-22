@@ -315,6 +315,35 @@ def search_title(payload, context=None):
     return {"status": "hit" if items else "miss", "provider": "tmdb", "items": items[:8]}
 
 
+def _normalized_title(value):
+    import re
+    import unicodedata
+
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    return " ".join(re.sub(r"[^\w]+", " ", text).replace("_", " ").split())
+
+
+def _exact_title_match(payload, items):
+    expected_title = _normalized_title((payload or {}).get("title"))
+    expected_year = str((payload or {}).get("year") or "").strip()
+    if not expected_title:
+        return None
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        titles = {
+            _normalized_title(item.get("title")),
+            _normalized_title(item.get("originalTitle") or item.get("original_title")),
+        }
+        if expected_title not in titles:
+            continue
+        item_year = str(item.get("year") or "").strip()
+        if expected_year and item_year != expected_year:
+            continue
+        return item
+    return None
+
+
 def lookup_external_id(payload, context=None):
     tmdb_id = str((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id") or "").strip()
     imdb_id = str((payload or {}).get("imdbId") or (payload or {}).get("imdb_id") or "").strip()
@@ -333,10 +362,13 @@ def movie_details(payload, context=None):
     if direct.get("status") == "hit":
         return direct
     search = search_title(payload or {}, context or {})
-    items = search.get("items") or []
-    if not items:
+    matched = _exact_title_match(payload or {}, search.get("items") or [])
+    if not matched:
         return {"status": "miss", "provider": "tmdb"}
-    return _normalize_details(_details(context or {}, items[0]["tmdbId"]))
+    tmdb_id = matched.get("tmdbId") or matched.get("id")
+    if not tmdb_id:
+        return {"status": "miss", "provider": "tmdb"}
+    return _normalize_details(_details(context or {}, tmdb_id))
 
 
 def _import_wikidata_awards():
