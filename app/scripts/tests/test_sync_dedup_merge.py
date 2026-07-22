@@ -22,6 +22,8 @@ class NormalizationParityTests(unittest.TestCase):
         self.assertEqual(
             merge.normalize_title("WALL·E"), merge.normalize_title("wall e")
         )
+        self.assertEqual(merge.normalize_title("Die Hard"), "die hard")
+        self.assertEqual(merge.normalize_title("De Aanslag"), "de aanslag")
         self.assertIsNone(merge.normalize_title("   "))
 
     def test_barcode_normalization_keeps_digits(self):

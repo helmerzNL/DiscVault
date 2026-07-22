@@ -15741,16 +15741,17 @@ def match_existing_movie(
     return None, None
 
 
-_TITLE_ARTICLES = {"the", "a", "an", "de", "het", "een", "le", "la", "les", "el", "los", "las"}
+_TITLE_ARTICLES = {"the"}
 
 
 def normalize_title(title: str | None) -> str | None:
     """Normalize a title for last-resort title+year matching.
 
-    Lowercase, fold diacritics, strip punctuation, drop a leading article, and
-    collapse whitespace. Intentionally aggressive because trede 4 is only used
-    for first-connect adoption where false negatives (a needless create) are
-    safer than false positives, and always gated by an exact year + format match.
+    Lowercase, fold diacritics, strip punctuation, drop a leading English
+    article ("the"), and collapse whitespace. Kept intentionally conservative
+    for cross-client ladder parity: false negatives are safer than false
+    positives, and titles like "Die Hard" / "De Aanslag" must not lose their
+    first word.
     """
     text = clean_text(title)
     if not text:

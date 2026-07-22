@@ -41,6 +41,7 @@ import re
 import sys
 import unicodedata
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +49,7 @@ from datetime import datetime, timezone
 # so the merge groups the exact same records the live ladder would match.
 # ---------------------------------------------------------------------------
 
-_TITLE_ARTICLES = {"the", "a", "an", "de", "het", "een", "le", "la", "les", "el", "los", "las"}
+_TITLE_ARTICLES = {"the"}
 
 
 def normalize_title(title):
@@ -250,6 +251,23 @@ def _connect():
         print("psycopg is required to run the merge script.", file=sys.stderr)
         raise SystemExit(2)
     return psycopg.connect(url, autocommit=False, row_factory=dict_row)
+
+
+def _target_database_name():
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if not url:
+        return None
+    parsed = urlparse(url)
+    path = (parsed.path or "").lstrip("/")
+    return path or None
+
+
+def _report_metadata():
+    return {
+        "script_commit": os.environ.get("BUILD_SHA") or os.environ.get("DISCVAULT_BUILD_SHA"),
+        "target_database": _target_database_name(),
+        "backend_version": os.environ.get("DISCVAULT_BACKEND_VERSION") or os.environ.get("BUILD_VERSION"),
+    }
 
 
 def _fetch_live_movies(conn):
@@ -526,6 +544,7 @@ def build_report(conn):
             }
         )
     return {
+        **_report_metadata(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "group_counts": {tier: len(groups[tier]) for tier in groups},
         "merge_group_count": len(report_groups),

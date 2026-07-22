@@ -644,6 +644,8 @@ class NextTitleNormalizationTests(unittest.TestCase):
         self.assertEqual(
             next_app.normalize_title("The Matrix"), next_app.normalize_title("matrix")
         )
+        self.assertEqual(next_app.normalize_title("Die Hard"), "die hard")
+        self.assertEqual(next_app.normalize_title("De Aanslag"), "de aanslag")
 
     def test_punctuation_and_case_collapse(self):
         self.assertEqual(

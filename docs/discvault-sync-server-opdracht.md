@@ -47,9 +47,11 @@ de (gedeelde) collectie:
 1. `clientId` — bestaat er al een record met deze clientId? → **bestaand record retourneren.**
 2. Barcode/EAN — exacte match (genormaliseerd: alleen cijfers, leading zeros behouden).
 3. TMDB-id + fysiek formaat + editie — alle drie moeten matchen.
-4. Genormaliseerde titel + jaar — lowercase, interpunctie/lidwoorden gestript, diacrieten
-   gevouwen. Alleen als laatste redmiddel én alleen bij first-connect-adoptie (zie 1.4); niet
-   bij reguliere creates.
+4. Genormaliseerde titel + jaar — lowercase, interpunctie gestript, diacrieten gevouwen, en
+   alleen een leidend Engels lidwoord `"the"` gestript (bewust conservatief; geen generieke
+   meertalige artikelstrip omdat titels als `"Die Hard"` en `"De Aanslag"` anders foutief
+   zouden matchen). Alleen als laatste redmiddel én alleen bij first-connect-adoptie (zie 1.4);
+   niet bij reguliere creates.
 
 **Transport & responsesemantiek (hard onderdeel van het contract):**
 
@@ -119,8 +121,9 @@ creates en maakt trede 4 beheersbaar (alleen hier actief).
 Eenmalig merge-script, want de bestaande duplicaten van barcode-films staan juist op de server:
 
 1. **Dry-run eerst**: detecteer duplicaatgroepen via dezelfde ladder (barcode → tmdb+formaat+
-   editie → titel+jaar-binnen-zelfde-formaat) en rapporteer aantallen + voorbeelden. Geen
-   mutaties tot akkoord.
+   editie → titel+jaar-binnen-zelfde-formaat) en rapporteer aantallen + voorbeelden. Zet
+   bovenaan elk rapport: `script_commit`, `target_database`, `backend_version`. Geen mutaties
+   tot akkoord.
 2. Merge-regel: winnaar = record met de meeste user-data (eigen artwork, locked fields, watch
    history, notities); relaties van verliezers omhangen naar de winnaar.
 3. Verliezers krijgen een **tombstone** (Deel 2), geen harde delete — anders pusht een client met
