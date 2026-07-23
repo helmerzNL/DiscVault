@@ -113,6 +113,26 @@ class GroupDetectionSafetyTests(unittest.TestCase):
         groups = self._detect_with([a, b], {})
         self.assertEqual(groups["titleYear"], {})
 
+    def test_titleyear_tier_allows_missing_barcode_on_one_side(self):
+        a = {
+            "id": "a",
+            "barcode": "8713045201470",
+            "title": "What Women Want",
+            "year": None,
+            "format": "DVD",
+            "edition": "",
+        }
+        b = {
+            "id": "b",
+            "barcode": None,
+            "title": "What Women Want",
+            "year": None,
+            "format": "DVD",
+            "edition": "",
+        }
+        groups = self._detect_with([a, b], {})
+        self.assertEqual(groups["titleYear"], {("what women want", "", "dvd"): ["a", "b"]})
+
 
 class _FakeCursor:
     def __init__(self, counts):

@@ -17137,6 +17137,7 @@ def admin_operations_duplicate_summary(conn) -> dict[str, Any]:
                 SELECT barcode, COUNT(*)::int AS count, array_agg(title ORDER BY title) AS titles
                 FROM movies
                 WHERE NULLIF(BTRIM(COALESCE(barcode, '')), '') IS NOT NULL
+                  AND deleted_at IS NULL
                 GROUP BY barcode
                 HAVING COUNT(*) > 1
                 ORDER BY COUNT(*) DESC, barcode
@@ -17156,6 +17157,7 @@ def admin_operations_duplicate_summary(conn) -> dict[str, Any]:
                     array_agg(title ORDER BY title) AS titles
                 FROM movies
                 WHERE NULLIF(BTRIM(COALESCE(original_title, title, '')), '') IS NOT NULL
+                  AND deleted_at IS NULL
                 GROUP BY LOWER(BTRIM(COALESCE(original_title, title, ''))), COALESCE(year, '')
                 HAVING COUNT(*) > 1
                 ORDER BY COUNT(*) DESC, key
@@ -17170,12 +17172,13 @@ def admin_operations_duplicate_summary(conn) -> dict[str, Any]:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT provider_id, identifier_type, identifier, COUNT(*)::int AS count
-                FROM movie_identifiers
-                WHERE NULLIF(BTRIM(COALESCE(identifier, '')), '') IS NOT NULL
-                GROUP BY provider_id, identifier_type, identifier
+                SELECT mi.provider_id, mi.identifier_type, mi.identifier, COUNT(*)::int AS count
+                FROM movie_identifiers mi
+                JOIN movies m ON m.id = mi.movie_id AND m.deleted_at IS NULL
+                WHERE NULLIF(BTRIM(COALESCE(mi.identifier, '')), '') IS NOT NULL
+                GROUP BY mi.provider_id, mi.identifier_type, mi.identifier
                 HAVING COUNT(*) > 1
-                ORDER BY COUNT(*) DESC, provider_id, identifier
+                ORDER BY COUNT(*) DESC, mi.provider_id, mi.identifier
                 LIMIT 12
                 """
             )
@@ -26653,8 +26656,10 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Movie import body must be an object", 400)
         barcode = clean_text(body.get("barcode")) or ""
         title = clean_text(body.get("title") or body.get("query")) or ""
-        if not barcode and not title:
-            raise NextApiError("barcode or title is required", 400)
+        tmdb_id = clean_text(body.get("tmdbId") or body.get("tmdb_id")) or ""
+        imdb_id = clean_text(body.get("imdbId") or body.get("imdb_id")) or ""
+        if not barcode and not title and not tmdb_id and not imdb_id:
+            raise NextApiError("barcode, title, tmdbId or imdbId is required", 400)
         target_container_id_raw = clean_text(body.get("targetContainerId") or body.get("target_container_id"))
         target_container_uuid = parse_uuid(target_container_id_raw, "targetContainerId") if target_container_id_raw else None
         import_mode = (clean_text(body.get("importMode") or body.get("import_mode")) or "").casefold().replace("_", "-")
@@ -26898,21 +26903,60 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 if not metadata_result:
                     metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": False}, actor)
-                proposal = metadata_result.get("proposal") if isinstance(metadata_result.get("proposal"), dict) else {}
                 selected_movie_candidate = selected_import_movie_candidate_from_body(body)
-                if selected_movie_candidate:
-                    proposal = merge_selected_import_movie_candidate(proposal, selected_movie_candidate)
-                movie_updates = proposal.get("movieUpdates") if isinstance(proposal.get("movieUpdates"), dict) else {}
-                metadata_updates = proposal.get("metadataUpdates") if isinstance(proposal.get("metadataUpdates"), dict) else {}
-                fallback_candidate = metadata_import_candidate(metadata_result)
-                if selected_movie_candidate:
-                    fallback_candidate = {**fallback_candidate, **selected_movie_candidate}
-                import_title = clean_text(
-                    movie_updates.get("title")
-                    or movie_updates.get("original_title")
-                    or fallback_candidate.get("title")
-                    or title
+
+                def resolve_import_selection(
+                    lookup_result: dict[str, Any],
+                ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str]:
+                    resolved_proposal = (
+                        lookup_result.get("proposal")
+                        if isinstance(lookup_result.get("proposal"), dict)
+                        else {}
+                    )
+                    if selected_movie_candidate:
+                        resolved_proposal = merge_selected_import_movie_candidate(
+                            resolved_proposal,
+                            selected_movie_candidate,
+                        )
+                    resolved_movie_updates = (
+                        resolved_proposal.get("movieUpdates")
+                        if isinstance(resolved_proposal.get("movieUpdates"), dict)
+                        else {}
+                    )
+                    resolved_metadata_updates = (
+                        resolved_proposal.get("metadataUpdates")
+                        if isinstance(resolved_proposal.get("metadataUpdates"), dict)
+                        else {}
+                    )
+                    resolved_fallback = metadata_import_candidate(lookup_result)
+                    if selected_movie_candidate:
+                        resolved_fallback = {**resolved_fallback, **selected_movie_candidate}
+                    resolved_title = clean_text(
+                        resolved_movie_updates.get("title")
+                        or resolved_movie_updates.get("original_title")
+                        or resolved_fallback.get("title")
+                        or title
+                    )
+                    return (
+                        resolved_proposal,
+                        resolved_movie_updates,
+                        resolved_metadata_updates,
+                        resolved_fallback,
+                        resolved_title,
+                    )
+
+                proposal, movie_updates, metadata_updates, fallback_candidate, import_title = (
+                    resolve_import_selection(metadata_result)
                 )
+                if not import_title and (tmdb_id or imdb_id):
+                    metadata_result = lookup_metadata_sources(
+                        conn,
+                        {**body, "detectBoxSets": False, "previewMode": False},
+                        actor,
+                    )
+                    proposal, movie_updates, metadata_updates, fallback_candidate, import_title = (
+                        resolve_import_selection(metadata_result)
+                    )
                 if not import_title:
                     raise NextApiError("No movie title was found for this import.", 422)
 

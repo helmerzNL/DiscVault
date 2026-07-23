@@ -103,6 +103,11 @@ def _year_key(value):
 
 
 def _barcode_conflicts(left, right):
+    """Detect hard barcode conflicts.
+
+    Missing data must not block an otherwise sound merge candidate, so only
+    two *different non-empty* barcodes are considered incompatible.
+    """
     left_code = normalize_barcode(left)
     right_code = normalize_barcode(right)
     return bool(left_code and right_code and left_code != right_code)
@@ -337,7 +342,7 @@ def detect_groups(conn):
 
         norm = normalize_title(m.get("title"))
         year = _year_key(m.get("year")) or ""
-        if norm and year and fmt:
+        if norm and fmt:
             titleyear_groups.setdefault((norm, year, fmt), []).append(mid)
 
     def _dups(groups):
