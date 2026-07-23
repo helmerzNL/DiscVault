@@ -31843,6 +31843,21 @@ def ui_preview_html(
           ? (boxSetProposalByKey(importCenter.selectedBoxSetProposalKey) || selectedBoxSetProposal())
           : null;
         const selectedMovieCandidate = wantsBoxSet ? null : selectedLookupMovieCandidate();
+        const lookupMetadata = importLookupMetadata();
+        const lookupProposal = lookupMetadata?.proposal && typeof lookupMetadata.proposal === "object"
+          ? lookupMetadata.proposal
+          : {};
+        const lookupMovieUpdates = lookupProposal?.movieUpdates && typeof lookupProposal.movieUpdates === "object"
+          ? lookupProposal.movieUpdates
+          : {};
+        const fallbackImportTitle = String(
+          selectedMovieCandidate?.title
+          || selectedMovieCandidate?.originalTitle
+          || selectedMovieCandidate?.original_title
+          || lookupMovieUpdates.title
+          || lookupMovieUpdates.original_title
+          || ""
+        ).trim();
         if (wantsBoxSet && !selectedProposal) {
           setImportLookupActionMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
           setImportCenterMessage(tNext("importCenter.boxSetNoMembersPreviewHelp", "A box-set was found, but the member films still need confirmation from MovieVault or another metadata source."), "bad");
@@ -31876,7 +31891,7 @@ def ui_preview_html(
           timeoutMs: 45000,
           body: JSON.stringify({
             barcode,
-            title,
+            title: title || fallbackImportTitle,
             year,
             format,
             tmdbId,
