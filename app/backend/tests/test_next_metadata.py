@@ -2077,6 +2077,165 @@ box_set_candidates = _lookup
         self.assertNotIn("overview", by_lang["fr"])
         self.assertNotIn("es", by_lang)
 
+    @mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={})
+    @mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={"apiKey": "configured"})
+    @mock.patch("app.backend.next_metadata.metadata_source_plugins")
+    @mock.patch("app.backend.next_metadata.run_plugin_entrypoint")
+    def test_preview_tmdb_id_surfaces_titled_candidate_via_lookup_external_id(
+        self,
+        run_entrypoint,
+        source_plugins,
+        _plugin_config,
+        _execution_context,
+        _requires_config,
+        _overwrite,
+    ):
+        # Bug 1: a tmdbId-only preview must resolve the title straight from the
+        # TMDB response (via lookup_external_id) so the "Add Movie" import has a
+        # title instead of failing with "No movie title was found".
+        source_plugins.return_value = [
+            {
+                "id": "tmdb",
+                "name": "TMDb",
+                "categories": ["metadata_source"],
+                "capabilities": ["search_title", "lookup_external_id", "movie_details"],
+                "manifest": {"capabilities": ["search_title", "lookup_external_id", "movie_details"]},
+                "order_index": 10,
+            },
+            {
+                "id": "movievault_26",
+                "name": "MovieVault",
+                "categories": ["metadata_source"],
+                "capabilities": ["search_title"],
+                "manifest": {"capabilities": ["search_title"]},
+                "order_index": 51,
+            },
+        ]
+
+        def execute(plugin_id, entrypoint, payload, _context):
+            self.assertFalse(
+                plugin_id == "tmdb" and entrypoint == "movie_details",
+                "movie_details must not run for a tmdbId preview lookup",
+            )
+            if plugin_id == "tmdb" and entrypoint == "lookup_external_id":
+                self.assertEqual(payload.get("tmdbId"), "348")
+                return {
+                    "status": "ok",
+                    "state": "available",
+                    "elapsedMs": 3,
+                    "result": {
+                        "status": "hit",
+                        "provider": "tmdb",
+                        "movie": {"title": "Alien", "year": "1979", "overview": "TMDb plot"},
+                        "tmdbId": "348",
+                    },
+                }
+            return {"status": "ok", "state": "available", "elapsedMs": 1, "result": {"status": "miss"}}
+
+        run_entrypoint.side_effect = execute
+        result = run_metadata_source_pipeline(
+            object(),
+            query=query_from_payload({"tmdbId": "348", "previewMode": True}),
+            current={"metadata": {}},
+            technical_current={},
+        )
+
+        calls = [(call.args[0], call.args[1]) for call in run_entrypoint.call_args_list]
+        self.assertIn(("tmdb", "lookup_external_id"), calls)
+        self.assertNotIn(("tmdb", "movie_details"), calls)
+        tmdb_results = [item for item in result["results"] if item.get("pluginId") == "tmdb"]
+        self.assertTrue(tmdb_results)
+        # The enrichment policy strips the title from movieUpdates for TMDB, but
+        # preview must still surface a selectable candidate carrying the title
+        # straight from the TMDB response so the "Add Movie" import succeeds.
+        candidate_titles = [
+            str(candidate.get("title") or "").strip()
+            for item in tmdb_results
+            for candidate in (item.get("candidates") or [])
+        ]
+        self.assertIn("Alien", candidate_titles)
+        self.assertEqual(result["enrichment"]["tmdb"]["state"], "enriched")
+
+    @mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={})
+    @mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={"apiKey": "configured"})
+    @mock.patch("app.backend.next_metadata.metadata_source_plugins")
+    @mock.patch("app.backend.next_metadata.run_plugin_entrypoint")
+    def test_preview_partial_title_surfaces_all_tmdb_matches_via_search_title(
+        self,
+        run_entrypoint,
+        source_plugins,
+        _plugin_config,
+        _execution_context,
+        _requires_config,
+        _overwrite,
+    ):
+        # Bug 2: a partial-title preview must surface EVERY TMDB match (the
+        # multi-result search_title), not just one fuzzy match. The redundant
+        # exact-match movie_details detail call is dropped for title queries.
+        source_plugins.return_value = [
+            {
+                "id": "tmdb",
+                "name": "TMDb",
+                "categories": ["metadata_source"],
+                "capabilities": ["search_title", "lookup_external_id", "movie_details"],
+                "manifest": {"capabilities": ["search_title", "lookup_external_id", "movie_details"]},
+                "order_index": 10,
+            },
+            {
+                "id": "movievault_26",
+                "name": "MovieVault",
+                "categories": ["metadata_source"],
+                "capabilities": ["search_title"],
+                "manifest": {"capabilities": ["search_title"]},
+                "order_index": 51,
+            },
+        ]
+
+        matches = [
+            {"title": "The Devil Wears Prada", "tmdbId": "782", "year": "2006", "provider": "tmdb"},
+            {"title": "The Devil Wears Prada 2", "tmdbId": "1195506", "year": "2026", "provider": "tmdb"},
+            {"title": "The Devil Wears Nada", "tmdbId": "55555", "year": "2009", "provider": "tmdb"},
+        ]
+
+        def execute(plugin_id, entrypoint, payload, _context):
+            self.assertFalse(
+                plugin_id == "tmdb" and entrypoint == "movie_details",
+                "movie_details must not run when search_title covers a title preview",
+            )
+            if plugin_id == "tmdb" and entrypoint == "search_title":
+                self.assertEqual(payload.get("title"), "The Devil Wears")
+                return {
+                    "status": "ok",
+                    "state": "available",
+                    "elapsedMs": 4,
+                    "result": {"status": "hit", "provider": "tmdb", "items": matches},
+                }
+            return {"status": "ok", "state": "available", "elapsedMs": 1, "result": {"status": "miss"}}
+
+        run_entrypoint.side_effect = execute
+        result = run_metadata_source_pipeline(
+            object(),
+            query=query_from_payload({"title": "The Devil Wears", "previewMode": True}),
+            current={"metadata": {}},
+            technical_current={},
+        )
+
+        calls = [(call.args[0], call.args[1]) for call in run_entrypoint.call_args_list]
+        self.assertIn(("tmdb", "search_title"), calls)
+        self.assertNotIn(("tmdb", "movie_details"), calls)
+        tmdb_results = [
+            item
+            for item in result["results"]
+            if item.get("pluginId") == "tmdb" and item.get("entrypoint") == "search_title"
+        ]
+        self.assertTrue(tmdb_results)
+        self.assertEqual(len(tmdb_results[0]["candidates"]), 3)
+        self.assertEqual(result["enrichment"]["tmdb"]["state"], "enriched")
+
 
 class NextArtworkLockTests(unittest.TestCase):
     def test_poster_and_backdrop_are_lockable_fields(self):

@@ -3381,32 +3381,111 @@ def run_metadata_source_pipeline(
                 tmdb_enrichment["state"] = "missing_identity"
             else:
                 tmdb_enrichment["enabled"] = True
-                execution = run_plugin_entrypoint(TMDB_PLUGIN_ID, "movie_details", enrichment_payload, context)
-                execution_item.update(
-                    {
-                        "status": execution.get("status"),
-                        "state": execution.get("state") or "tmdb_enrichment",
-                        "elapsedMs": execution.get("elapsedMs"),
-                        "error": execution.get("error"),
-                    }
-                )
-                if execution.get("status") == "ok":
-                    normalized = canonicalize_plugin_result(
-                        TMDB_PLUGIN_ID,
-                        "movie_details",
-                        execution.get("result") or {},
-                    )
-                    normalized = metadata_source_policy_result(normalized)
-                    execution_item["resultStatus"] = normalized.get("status")
-                    execution_item["candidateCount"] = len(normalized.get("candidates") or [])
-                    execution_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
-                    if normalized.get("status") not in {"miss", "not_found", "needs_configuration"}:
+                tmdb_plan = []
+                if query.get("previewMode"):
+                    # Preview: let TMDB run its own search so every match surfaces
+                    # with a title taken straight from the TMDB/IMDB response. A
+                    # title query uses the multi-result `search_title` (all matches
+                    # become selectable candidates); a tmdbId/imdbId query uses
+                    # `lookup_external_id`. This replaces the single exact-match
+                    # `movie_details` call, which silently dropped partial-title
+                    # searches and hid multi-result matches.
+                    tmdb_query = dict(query)
+                    tmdb_query["previewMode"] = True
+                    for key in ("title", "fallbackTitle", "year", "tmdbId", "imdbId"):
+                        value = enrichment_payload.get(key)
+                        if value and not clean_text(tmdb_query.get(key)):
+                            tmdb_query[key] = value
+                    tmdb_plan = [
+                        planned
+                        for planned in plugin_execution_plan(tmdb_plugin, tmdb_query)
+                        if planned.get("entrypoint") != "box_set_candidates"
+                    ]
+                    # A title query plans both `search_title` and `movie_details`;
+                    # the multi-result search already covers every match with a
+                    # title, so drop the redundant single exact-match detail call to
+                    # avoid duplicate candidate cards (full details fetched on import).
+                    if any(planned["entrypoint"] == "search_title" for planned in tmdb_plan):
+                        tmdb_plan = [planned for planned in tmdb_plan if planned["entrypoint"] != "movie_details"]
+                if tmdb_plan:
+                    preview_candidate_total = 0
+                    appended = False
+                    for planned in tmdb_plan:
+                        entrypoint = planned["entrypoint"]
+                        plan_execution = run_plugin_entrypoint(
+                            TMDB_PLUGIN_ID, entrypoint, planned["payload"], context
+                        )
+                        plan_item = {
+                            "pluginId": TMDB_PLUGIN_ID,
+                            "entrypoint": entrypoint,
+                            "status": plan_execution.get("status"),
+                            "state": plan_execution.get("state") or "tmdb_enrichment",
+                            "elapsedMs": plan_execution.get("elapsedMs"),
+                            "error": plan_execution.get("error"),
+                            "configured": True,
+                            "resultStatus": None,
+                            "candidateCount": 0,
+                            "normalizedSourceFormat": "",
+                            "tmdbEnrichment": True,
+                        }
+                        executions.append(plan_item)
+                        if plan_execution.get("status") != "ok":
+                            continue
+                        canonical = canonicalize_plugin_result(
+                            TMDB_PLUGIN_ID,
+                            entrypoint,
+                            plan_execution.get("result") or {},
+                        )
+                        # Preview surfaces TMDB's own search results as selectable
+                        # candidates. The enrichment policy strips them (TMDB does
+                        # not own identity while enriching an already-identified
+                        # movie), but in preview these candidates ARE the movies the
+                        # user picks from -- each carries its title straight from the
+                        # TMDB/IMDB response -- so keep them for the frontend list.
+                        preview_candidates = canonical.get("candidates") or []
+                        normalized = metadata_source_policy_result(canonical)
+                        if preview_candidates:
+                            normalized["candidates"] = preview_candidates
+                        plan_item["resultStatus"] = normalized.get("status")
+                        plan_item["candidateCount"] = len(normalized.get("candidates") or [])
+                        plan_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
+                        if normalized.get("status") in {"miss", "not_found", "needs_configuration"}:
+                            continue
                         normalized_results.append(normalized)
-                        tmdb_enrichment["state"] = "enriched"
-                    else:
-                        tmdb_enrichment["state"] = "no_match"
+                        preview_candidate_total += plan_item["candidateCount"]
+                        appended = True
+                    execution_item["status"] = "ok"
+                    execution_item["state"] = "enriched" if appended else "no_match"
+                    execution_item["resultStatus"] = "hit" if appended else "miss"
+                    execution_item["candidateCount"] = preview_candidate_total
+                    tmdb_enrichment["state"] = "enriched" if appended else "no_match"
                 else:
-                    tmdb_enrichment["state"] = execution_item.get("state") or "error"
+                    execution = run_plugin_entrypoint(TMDB_PLUGIN_ID, "movie_details", enrichment_payload, context)
+                    execution_item.update(
+                        {
+                            "status": execution.get("status"),
+                            "state": execution.get("state") or "tmdb_enrichment",
+                            "elapsedMs": execution.get("elapsedMs"),
+                            "error": execution.get("error"),
+                        }
+                    )
+                    if execution.get("status") == "ok":
+                        normalized = canonicalize_plugin_result(
+                            TMDB_PLUGIN_ID,
+                            "movie_details",
+                            execution.get("result") or {},
+                        )
+                        normalized = metadata_source_policy_result(normalized)
+                        execution_item["resultStatus"] = normalized.get("status")
+                        execution_item["candidateCount"] = len(normalized.get("candidates") or [])
+                        execution_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
+                        if normalized.get("status") not in {"miss", "not_found", "needs_configuration"}:
+                            normalized_results.append(normalized)
+                            tmdb_enrichment["state"] = "enriched"
+                        else:
+                            tmdb_enrichment["state"] = "no_match"
+                    else:
+                        tmdb_enrichment["state"] = execution_item.get("state") or "error"
 
     preview_enrichment = {
         "enabled": bool(tmdb_enrichment.get("enabled")),
