@@ -26903,21 +26903,60 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 if not metadata_result:
                     metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": False}, actor)
-                proposal = metadata_result.get("proposal") if isinstance(metadata_result.get("proposal"), dict) else {}
                 selected_movie_candidate = selected_import_movie_candidate_from_body(body)
-                if selected_movie_candidate:
-                    proposal = merge_selected_import_movie_candidate(proposal, selected_movie_candidate)
-                movie_updates = proposal.get("movieUpdates") if isinstance(proposal.get("movieUpdates"), dict) else {}
-                metadata_updates = proposal.get("metadataUpdates") if isinstance(proposal.get("metadataUpdates"), dict) else {}
-                fallback_candidate = metadata_import_candidate(metadata_result)
-                if selected_movie_candidate:
-                    fallback_candidate = {**fallback_candidate, **selected_movie_candidate}
-                import_title = clean_text(
-                    movie_updates.get("title")
-                    or movie_updates.get("original_title")
-                    or fallback_candidate.get("title")
-                    or title
+
+                def resolve_import_selection(
+                    lookup_result: dict[str, Any],
+                ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str]:
+                    resolved_proposal = (
+                        lookup_result.get("proposal")
+                        if isinstance(lookup_result.get("proposal"), dict)
+                        else {}
+                    )
+                    if selected_movie_candidate:
+                        resolved_proposal = merge_selected_import_movie_candidate(
+                            resolved_proposal,
+                            selected_movie_candidate,
+                        )
+                    resolved_movie_updates = (
+                        resolved_proposal.get("movieUpdates")
+                        if isinstance(resolved_proposal.get("movieUpdates"), dict)
+                        else {}
+                    )
+                    resolved_metadata_updates = (
+                        resolved_proposal.get("metadataUpdates")
+                        if isinstance(resolved_proposal.get("metadataUpdates"), dict)
+                        else {}
+                    )
+                    resolved_fallback = metadata_import_candidate(lookup_result)
+                    if selected_movie_candidate:
+                        resolved_fallback = {**resolved_fallback, **selected_movie_candidate}
+                    resolved_title = clean_text(
+                        resolved_movie_updates.get("title")
+                        or resolved_movie_updates.get("original_title")
+                        or resolved_fallback.get("title")
+                        or title
+                    )
+                    return (
+                        resolved_proposal,
+                        resolved_movie_updates,
+                        resolved_metadata_updates,
+                        resolved_fallback,
+                        resolved_title,
+                    )
+
+                proposal, movie_updates, metadata_updates, fallback_candidate, import_title = (
+                    resolve_import_selection(metadata_result)
                 )
+                if not import_title and (tmdb_id or imdb_id):
+                    metadata_result = lookup_metadata_sources(
+                        conn,
+                        {**body, "detectBoxSets": False, "previewMode": False},
+                        actor,
+                    )
+                    proposal, movie_updates, metadata_updates, fallback_candidate, import_title = (
+                        resolve_import_selection(metadata_result)
+                    )
                 if not import_title:
                     raise NextApiError("No movie title was found for this import.", 422)
 

@@ -31535,15 +31535,21 @@ def ui_preview_html(
           ${movieResultCards.slice(0, 8).map(compactResultCard).join("")}
         </div>
       ` : "";
+      const titleInput = String(document.getElementById("importTitleInput")?.value || "").trim();
+      const barcodeInput = String(document.getElementById("importBarcodeInput")?.value || "").trim();
+      const hasLookupPreview = Boolean(
+        importCenter.barcodeLookup
+        && importLookupMetadata()
+        && Object.keys(importLookupMetadata()).length
+      );
       const hasMovieCandidate = Boolean(
         selectedMovieCandidate
         || selectedBoxSetForAction
         || proposedTitle
         || movieResultCards.length
-        || document.getElementById("importTitleInput")?.value
-        || document.getElementById("importBarcodeInput")?.value
-        || document.getElementById("importTmdbIdInput")?.value
-        || document.getElementById("importImdbIdInput")?.value
+        || hasLookupPreview
+        || titleInput
+        || barcodeInput
       );
       const primaryImportMode = selectedBoxSetForAction ? "box-set" : "movie";
       const inBatchContext = Boolean(importCenter.activeBatchBarcode);
