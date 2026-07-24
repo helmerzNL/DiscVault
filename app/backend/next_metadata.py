@@ -641,8 +641,9 @@ def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entry
         return False
     plugin_id = str(plugin.get("id") or "")
     if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
-        settings = config.get("settings")
-        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+        # The v2 endpoint is enforced (not user-supplied), so v2 never requires
+        # user configuration.
+        return False
     if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}

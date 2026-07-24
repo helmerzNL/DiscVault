@@ -7,6 +7,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import os
 import re
 import socket
 import time
@@ -99,6 +100,34 @@ def normalize_origin(value: Any) -> str:
         host = f"[{host}]"
     netloc = f"{host}:{port}" if port is not None else host
     return f"{parsed.scheme.lower()}://{netloc}"
+
+
+# The MovieVault v2 instance endpoint is enforced by DiscVault and is NOT
+# user-editable. The value is fixed to a hardcoded default and may only be
+# overridden out-of-band via the MOVIEVAULT_V2_ORIGIN environment variable
+# (validated with normalize_origin; an invalid override falls back to the
+# default). Any origin stored in plugin settings is ignored at runtime.
+DEFAULT_MOVIEVAULT_V2_ORIGIN = "https://movies2.vaultstack.eu"
+MOVIEVAULT_V2_ORIGIN_ENV = "MOVIEVAULT_V2_ORIGIN"
+
+
+def enforced_origin() -> str:
+    """Return the enforced MovieVault v2 origin.
+
+    Resolution order:
+    1. ``MOVIEVAULT_V2_ORIGIN`` environment variable, if set and valid.
+    2. ``DEFAULT_MOVIEVAULT_V2_ORIGIN`` otherwise.
+
+    An invalid environment override is ignored in favour of the default so a
+    misconfigured deployment can never break origin resolution.
+    """
+    override = os.environ.get(MOVIEVAULT_V2_ORIGIN_ENV)
+    if override and override.strip():
+        try:
+            return normalize_origin(override)
+        except MovieVaultV2Error:
+            pass
+    return normalize_origin(DEFAULT_MOVIEVAULT_V2_ORIGIN)
 
 
 def _integer(value: Any, *, minimum: int, maximum: int | None = None) -> int:
@@ -1255,7 +1284,7 @@ def resolve_release_details(
     *,
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
-    origin = normalize_origin(settings.get("origin"))
+    origin = enforced_origin()
     timeout_seconds = _bounded_setting(
         settings.get("requestTimeoutSeconds"),
         default=DEFAULT_TIMEOUT_SECONDS,
@@ -1881,7 +1910,7 @@ def run_sync(
 ) -> dict[str, Any]:
     if contract_version not in SUPPORTED_CONTRACTS:
         raise MovieVaultV2Error("contract_incompatible")
-    origin = normalize_origin(settings.get("origin"))
+    origin = enforced_origin()
     timeout_seconds = _bounded_setting(
         settings.get("requestTimeoutSeconds"),
         default=DEFAULT_TIMEOUT_SECONDS,
@@ -2395,7 +2424,7 @@ def bucket_lookup(
     lookup_hash = request.get("hash")
     if not isinstance(lookup_hash, str) or not HASH_PATTERN.fullmatch(lookup_hash):
         raise MovieVaultV2Error("lookup_invalid")
-    origin = normalize_origin(settings.get("origin"))
+    origin = enforced_origin()
     timeout_seconds = _bounded_setting(
         settings.get("requestTimeoutSeconds"),
         default=DEFAULT_TIMEOUT_SECONDS,

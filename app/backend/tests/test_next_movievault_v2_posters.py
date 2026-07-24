@@ -19,6 +19,21 @@ from PIL import Image
 from app.backend import next_movievault_v2_posters as posters
 from app.backend.next_movievault_v2 import MovieVaultV2Error
 
+# The MovieVault v2 origin is now enforced at runtime (never read from stored
+# settings). Inject the test origin via the MOVIEVAULT_V2_ORIGIN env override so
+# existing URL assertions built from "https://movievault.example" stay valid.
+_MOVIEVAULT_V2_ORIGIN_ENV_PATCH = patch.dict(
+    os.environ, {"MOVIEVAULT_V2_ORIGIN": "https://movievault.example"}
+)
+
+
+def setUpModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.start()
+
+
+def tearDownModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.stop()
+
 
 def _png_bytes(size=(10, 10)) -> bytes:
     buffer = io.BytesIO()

@@ -134,9 +134,8 @@ try:
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_connection import refresh_movievault_connection
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
-    from .next_movievault_v2 import MovieVaultV2Error
     from .next_movievault_v2 import movievault_v2_plugin_context
-    from .next_movievault_v2 import normalize_origin as normalize_movievault_v2_origin
+    from .next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
     from .next_common import NextApiError
@@ -347,9 +346,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_connection import refresh_movievault_connection
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
-    from next_movievault_v2 import MovieVaultV2Error
     from next_movievault_v2 import movievault_v2_plugin_context
-    from next_movievault_v2 import normalize_origin as normalize_movievault_v2_origin
+    from next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
     from next_common import NextApiError
@@ -8415,8 +8413,9 @@ def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[s
         return False
     plugin_id = str(plugin.get("id") or "")
     if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
-        settings = config.get("settings")
-        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+        # The v2 endpoint is enforced (not user-supplied), so v2 never requires
+        # user configuration.
+        return False
     if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
@@ -8612,10 +8611,10 @@ def update_plugin_config(
         except ValueError as exc:
             raise NextApiError(str(exc), 400) from exc
         if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
-            try:
-                settings["origin"] = normalize_movievault_v2_origin(settings.get("origin"))
-            except MovieVaultV2Error as exc:
-                raise NextApiError("MovieVault v2 origin must be a root HTTP(S) origin", 400) from exc
+            # The MovieVault v2 endpoint is enforced by DiscVault and is not
+            # user-editable. Discard any client-supplied origin and store the
+            # enforced value so config-complete checks continue to pass.
+            settings["origin"] = enforced_movievault_v2_origin()
 
     with conn.transaction():
         with conn.cursor() as cur:
@@ -21891,13 +21890,6 @@ def register_routes(flask_app: Flask) -> None:
                 config = plugin_config_from_db(conn, plugin_id)
                 if not config["settingsConfigured"]:
                     raise NextApiError("Plugin configuration is incomplete", 409)
-                try:
-                    normalize_movievault_v2_origin(config["settings"].get("origin"))
-                except MovieVaultV2Error as exc:
-                    raise NextApiError(
-                        "MovieVault v2 origin must be a root HTTP(S) origin",
-                        409,
-                    ) from exc
 
             initial_job = None
             initial_duplicate = False
