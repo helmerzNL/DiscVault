@@ -221,6 +221,19 @@ class NextScannedTitleTests(unittest.TestCase):
         # A bare noise-only edition group still never collapses to empty.
         self.assertTrue(_clean_scanned_title("(Collector's Edition)"))
 
+    def test_clean_scanned_title_strips_generic_cut(self):
+        # A generic "<qualifier> Cut" is recognised beyond the named cuts,
+        # covering release-specific cuts such as "Assembly Cut" / "Rogue Cut".
+        self.assertEqual(
+            _clean_scanned_title("Aliens (Special Edition) [Assembly Cut]"), "Aliens"
+        )
+        self.assertEqual(_clean_scanned_title("X-Men (Rogue Cut)"), "X-Men")
+        # Whole-title films that merely end in "... Cut" have no leading
+        # separator before the phrase and must be preserved.
+        self.assertEqual(_clean_scanned_title("Short Cuts"), "Short Cuts")
+        self.assertEqual(_clean_scanned_title("The Cut"), "The Cut")
+        self.assertEqual(_clean_scanned_title("Final Cut"), "Final Cut")
+
     def test_clean_scanned_title_strips_local_original_title_paren(self):
         # Fallback A: a short standalone local title in a trailing group is
         # stripped when packaging noise is present in the same title.

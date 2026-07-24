@@ -1672,11 +1672,13 @@ _SCANNED_TITLE_NOISE_RE = re.compile(
     r'|digibook|mediabook|slipcover|slipcase|box\s*set|boxset|gift\s*set'
     r'|\bimport\b|region[\s-]*(?:free|locked|[abc]|[0-9])'
     r'|\bpal\b|\bntsc\b|remaster|uncut'
-    r"|director['\u2019]?s?\s+cut|theatrical\s+cut|final\s+cut|international\s+cut"
-    r'|extended\s+cut|\bunrated\b'
-    # Generic "<qualifier> Edition" (e.g. "X-treme Edition", "Deluxe Edition",
-    # "Limited Edition") so editions are recognised even without a format token.
+    r'|\bunrated\b'
+    # Generic "<qualifier> Edition"/"<qualifier> Cut" (e.g. "X-treme Edition",
+    # "Deluxe Edition", "Director's Cut", "Final Cut") so editions/cuts are
+    # recognised even without a format token. These subsume the specific
+    # edition/cut phrases (limited/special/.../director's/theatrical/final/...).
     r"|\b[\w'\u2019-]+\s+editions?\b"
+    r"|\b[\w'\u2019-]+\s+cut\b"
     r'|\bocard\b|o[- ]card|amaray|digipack|digipak',
     re.I,
 )
