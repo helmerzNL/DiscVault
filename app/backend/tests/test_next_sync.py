@@ -2,6 +2,7 @@ import os
 import sys
 import unittest
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 
@@ -775,6 +776,177 @@ class NextReconcileLadderTests(unittest.TestCase):
         entity_id, matched_by = self._match(title="Ghost", year="1990", fmt="DVD")
         self.assertIsNone(entity_id)
         self.assertIsNone(matched_by)
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextTombstoneResponseContractTests(unittest.TestCase):
+    def _fields(self):
+        return {
+            "metadata": {},
+            "barcode": "5051890000000",
+            "format": "4K UHD",
+            "edition": "",
+            "title": "The Matrix",
+            "year": "1999",
+        }
+
+    def _mutation(self, *, record_client_id="record-client-1", entity_id=None):
+        mutation = {
+            "clientMutationId": "mutation-1",
+            "clientEntityId": "local-1",
+            "payload": {
+                "client_id": record_client_id,
+                "barcode": "5051890000000",
+                "updated_at": "2020-01-01T00:00:00Z",
+            },
+        }
+        if entity_id is not None:
+            mutation["entityId"] = str(entity_id)
+        return mutation
+
+    def _assert_deleted_shape(self, result, *, entity_id, matched_by):
+        self.assertEqual(result["entityId"], entity_id)
+        self.assertFalse(result["created"])
+        self.assertEqual(result["matchedBy"], matched_by)
+        self.assertIs(result["deleted"], True)
+        self.assertIs(result["tombstoned"], True)
+        self.assertEqual(
+            result["deletedAt"],
+            datetime(2026, 7, 24, 18, 0, tzinfo=timezone.utc),
+        )
+
+    def test_same_record_client_id_returns_the_existing_tombstone(self):
+        entity_id = uuid.uuid4()
+        deleted_at = datetime(2026, 7, 24, 18, 0, tzinfo=timezone.utc)
+        tombstone = {
+            "id": entity_id,
+            "deleted_at": deleted_at,
+            "client_id": "record-client-1",
+            "matched_by": "clientId",
+        }
+        with (
+            patch.object(next_app, "movie_payload_fields", return_value=self._fields()),
+            patch.object(next_app, "client_entity_mapping", return_value=None),
+            patch.object(next_app, "match_existing_movie", return_value=(None, None)),
+            patch.object(
+                next_app,
+                "find_tombstoned_movie_by_identity",
+                return_value=tombstone,
+            ),
+            patch.object(
+                next_app,
+                "movie_entity",
+                return_value={
+                    "id": entity_id,
+                    "deleted_at": deleted_at,
+                    "client_id": "record-client-1",
+                },
+            ),
+            patch.object(next_app, "store_client_entity_mapping") as store_mapping,
+            patch.object(next_app, "next_revision", return_value=42),
+        ):
+            result = next_app.apply_movie_upsert(
+                object(),
+                client_id="device-a",
+                idem_key="idem-1",
+                mutation=self._mutation(),
+                batch_ctx=next_app.SyncBatchContext(),
+            )
+
+        self._assert_deleted_shape(
+            result,
+            entity_id=entity_id,
+            matched_by="clientId",
+        )
+        self.assertEqual(result["recordClientId"], "record-client-1")
+        store_mapping.assert_called_once()
+
+    def test_new_device_token_matching_by_barcode_returns_canonical_tombstone(self):
+        entity_id = uuid.uuid4()
+        deleted_at = datetime(2026, 7, 24, 18, 0, tzinfo=timezone.utc)
+        tombstone = {
+            "id": entity_id,
+            "deleted_at": deleted_at,
+            "client_id": "canonical-record-client",
+            "matched_by": "barcode",
+        }
+        with (
+            patch.object(next_app, "movie_payload_fields", return_value=self._fields()),
+            patch.object(next_app, "client_entity_mapping", return_value=None),
+            patch.object(next_app, "match_existing_movie", return_value=(None, None)),
+            patch.object(
+                next_app,
+                "find_tombstoned_movie_by_identity",
+                return_value=tombstone,
+            ),
+            patch.object(
+                next_app,
+                "movie_entity",
+                return_value={
+                    "id": entity_id,
+                    "deleted_at": deleted_at,
+                    "client_id": "canonical-record-client",
+                },
+            ),
+            patch.object(next_app, "store_client_entity_mapping") as store_mapping,
+            patch.object(next_app, "next_revision", return_value=43),
+        ):
+            result = next_app.apply_movie_upsert(
+                object(),
+                client_id="new-device-token",
+                idem_key="idem-2",
+                mutation=self._mutation(record_client_id="new-record-client"),
+                batch_ctx=next_app.SyncBatchContext(),
+            )
+
+        self._assert_deleted_shape(
+            result,
+            entity_id=entity_id,
+            matched_by="barcode",
+        )
+        self.assertEqual(result["recordClientId"], "canonical-record-client")
+        self.assertEqual(
+            store_mapping.call_args.kwargs["client_id"],
+            "new-device-token",
+        )
+
+    def test_update_intent_for_tombstoned_row_is_delete_wins(self):
+        entity_id = uuid.uuid4()
+        deleted_at = datetime(2026, 7, 24, 18, 0, tzinfo=timezone.utc)
+        mutation = self._mutation(entity_id=entity_id)
+        mutation["payload"]["updated_at"] = "2026-07-25T00:00:00Z"
+        with (
+            patch.object(next_app, "movie_payload_fields", return_value=self._fields()),
+            patch.object(
+                next_app,
+                "movie_entity",
+                return_value={
+                    "id": entity_id,
+                    "deleted_at": deleted_at,
+                    "client_id": "record-client-1",
+                },
+            ),
+            patch.object(
+                next_app,
+                "find_tombstoned_movie_by_identity",
+            ) as find_tombstone,
+            patch.object(next_app, "store_client_entity_mapping"),
+            patch.object(next_app, "next_revision", return_value=44),
+        ):
+            result = next_app.apply_movie_upsert(
+                object(),
+                client_id="device-a",
+                idem_key="idem-3",
+                mutation=mutation,
+                batch_ctx=next_app.SyncBatchContext(),
+            )
+
+        self._assert_deleted_shape(
+            result,
+            entity_id=entity_id,
+            matched_by=None,
+        )
+        find_tombstone.assert_not_called()
 
 
 if __name__ == "__main__":

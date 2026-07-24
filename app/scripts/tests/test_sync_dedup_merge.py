@@ -1,16 +1,10 @@
-"""Tests for app/scripts/sync_dedup_merge.py (pure/plan logic, no live DB)."""
+"""Tests for the canonical backend dedup implementation (no live DB)."""
 
 from __future__ import annotations
 
-import importlib.util
-import os
 import unittest
 
-
-_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "sync_dedup_merge.py")
-_spec = importlib.util.spec_from_file_location("sync_dedup_merge", _SCRIPT)
-merge = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(merge)
+from app.backend.scripts import sync_dedup_merge as merge
 
 
 class NormalizationParityTests(unittest.TestCase):
@@ -163,6 +157,14 @@ class _FakeConn:
 
 
 class WinnerSelectionTests(unittest.TestCase):
+    def test_candidate_state_hash_changes_for_nonempty_user_data_edits(self):
+        first = {"id": "movie-1", "notes": "first"}
+        second = {"id": "movie-1", "notes": "second"}
+        self.assertNotEqual(
+            merge._movie_state_hash(first),
+            merge._movie_state_hash(second),
+        )
+
     def test_movie_with_more_user_data_wins(self):
         by_id = {
             "poor": {"id": "poor", "notes": None, "created_at": 1},
