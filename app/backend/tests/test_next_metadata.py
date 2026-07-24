@@ -47,6 +47,21 @@ from app.backend.next_metadata import summarize_metadata_execution
 from app.backend.next_app import metadata_refresh_job_counts
 from app.backend.next_plugins.tmdb import plugin as tmdb_plugin
 
+# The MovieVault v2 origin is now enforced at runtime (never read from stored
+# settings). Inject the test origin via the MOVIEVAULT_V2_ORIGIN env override so
+# existing URL assertions built from "https://movievault.example" stay valid.
+_MOVIEVAULT_V2_ORIGIN_ENV_PATCH = mock.patch.dict(
+    os.environ, {"MOVIEVAULT_V2_ORIGIN": "https://movievault.example"}
+)
+
+
+def setUpModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.start()
+
+
+def tearDownModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.stop()
+
 
 class _HiddenArtworkCursor:
     def __enter__(self):

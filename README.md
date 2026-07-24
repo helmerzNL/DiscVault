@@ -192,10 +192,14 @@ verify the SHA-256 checksum, and extract its `movievault_v2/` root folder into
 `DISCVAULT_PLUGIN_INSTALL_DIR` (normally `/data/plugins` in the persistent
 volume).
 
-Restart DiscVault or refresh its plugin registry. The plugin supplies the
-standard `https://movies2.vaultstack.eu` origin and safe operational defaults
-while remaining disabled. Review or override those settings, then enable the
-plugin; DiscVault queues the first synchronization automatically. Normal barcode,
+Restart DiscVault or refresh its plugin registry. The plugin ships with safe
+operational defaults while remaining disabled. The MovieVault v2 endpoint is
+**fixed** and no longer editable in the plugin-settings UI: DiscVault always
+uses the enforced origin `https://movies2.vaultstack.eu`. Self-hosted operators
+who need a different instance can override it out-of-band with the
+`MOVIEVAULT_V2_ORIGIN` environment variable (an invalid or empty value falls
+back to the default). Review the remaining defaults, then enable the plugin;
+DiscVault queues the first synchronization automatically. Normal barcode,
 title, release, and box-set queries then use the derived PostgreSQL index. The
 existing `movievault_26` plugin remains independently available for MovieVault
 Next. Its attributed contribution connection is not used for MovieVault v2

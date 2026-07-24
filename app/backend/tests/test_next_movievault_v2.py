@@ -21,6 +21,21 @@ SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "distribution-
 FIXTURE_SHA256 = "fac6de561e22bc7f95dbab61fc6746e5887865e07152acd844b8b42fb723341e"
 SCHEMA_SHA256 = "9f25a2b1ccd76dd4f7de89c33beea3250498fc96367bb0540c911bf53267948f"
 
+# The MovieVault v2 origin is now enforced at runtime (never read from stored
+# settings). Inject the test origin via the MOVIEVAULT_V2_ORIGIN env override so
+# existing URL assertions built from "https://movievault.example" stay valid.
+_MOVIEVAULT_V2_ORIGIN_ENV_PATCH = patch.dict(
+    os.environ, {"MOVIEVAULT_V2_ORIGIN": "https://movievault.example"}
+)
+
+
+def setUpModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.start()
+
+
+def tearDownModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.stop()
+
 
 class FakeResponse:
     def __init__(
@@ -566,14 +581,17 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         ):
             decorated["movievaultV2Sync"]({})
 
-    def test_origin_is_required_for_non_health_entrypoints(self):
+    def test_origin_is_not_user_required_for_any_entrypoint(self):
         plugin = {
             "id": "movievault_v2",
             "manifest": {"requiresSecrets": False},
         }
 
-        self.assertTrue(next_metadata.plugin_requires_config(plugin, {"settings": {}}, "search_title"))
-        self.assertTrue(next_worker.plugin_requires_config(plugin, {"settings": {}}, "sync_index"))
+        # Origin is enforced (default + optional MOVIEVAULT_V2_ORIGIN env), never
+        # user-supplied, so v2 requires no user config for any entrypoint — with or
+        # without a stored origin.
+        self.assertFalse(next_metadata.plugin_requires_config(plugin, {"settings": {}}, "search_title"))
+        self.assertFalse(next_worker.plugin_requires_config(plugin, {"settings": {}}, "sync_index"))
         self.assertFalse(
             next_metadata.plugin_requires_config(
                 plugin,

@@ -19,6 +19,21 @@ from app.backend import next_movievault_v2
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+# The MovieVault v2 origin is now enforced at runtime (never read from stored
+# settings). Inject the test origin via the MOVIEVAULT_V2_ORIGIN env override so
+# existing URL assertions built from "https://movievault.example" stay valid.
+_MOVIEVAULT_V2_ORIGIN_ENV_PATCH = patch.dict(
+    os.environ, {"MOVIEVAULT_V2_ORIGIN": "https://movievault.example"}
+)
+
+
+def setUpModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.start()
+
+
+def tearDownModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.stop()
+
 
 def digest_headers(content: bytes) -> dict[str, str]:
     raw = hashlib.sha256(content).digest()
