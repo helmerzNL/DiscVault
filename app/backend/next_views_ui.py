@@ -19652,6 +19652,7 @@ def ui_preview_html(
       }
     }
     let _dedupReport = null;
+    let _dedupExecuteEnabled = false;
     function renderAppAdminDedupWizard(state, data) {
       const area = document.getElementById("appAdminDedupWizardArea");
       const scanBtn = document.getElementById("appAdminDedupScanBtn");
@@ -19698,9 +19699,11 @@ def ui_preview_html(
         area.innerHTML = `
           <div class="dedup-wizard-summary"><p>${escapeHtml(countMsg)}</p></div>
           <div class="dedup-group-list">${groupsHtml}</div>
-          <div class="profile-action-row">
-            <button type="button" class="primary-button" id="appAdminDedupExecuteBtn" onclick="executeDedupMerge()">${escapeHtml(tNext("appAdmin.dedupMergeButton", "Merge duplicates"))}</button>
-          </div>
+          ${_dedupExecuteEnabled ? `
+            <div class="profile-action-row">
+              <button type="button" class="primary-button" id="appAdminDedupExecuteBtn" onclick="executeDedupMerge()">${escapeHtml(tNext("appAdmin.dedupMergeButton", "Merge duplicates"))}</button>
+            </div>
+          ` : ""}
         `;
       } else if (state === "executing") {
         const execBtn = document.getElementById("appAdminDedupExecuteBtn");
@@ -19718,6 +19721,7 @@ def ui_preview_html(
       try {
         const result = await authApiJson("/api/next/admin/dedup/report");
         if (!result || !result.report) throw new Error("Empty report");
+        _dedupExecuteEnabled = result.executeEnabled === true;
         _dedupReport = result.report;
         renderAppAdminDedupWizard("results", _dedupReport);
       } catch (err) {
