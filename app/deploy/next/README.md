@@ -104,6 +104,18 @@ expiry. The old review-login endpoint is retained only as a compatibility alias
 to the shared Legacy flow, including mobile PKCE continuation. New deployments
 should use the normal Legacy login endpoint and UI.
 
+## Admin dedup execution safety gate
+
+`DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED` defaults to `false`. With that safe
+default, authorized admins can still request
+`GET /api/next/admin/dedup/report`, but the UI hides the destructive merge
+action and `POST /api/next/admin/dedup/execute` returns HTTP 403 with
+`errorCode: "admin_dedup_execute_disabled"`.
+
+Only set the value to `true` for a release whose matching logic and generated
+report have been explicitly reviewed. Enabling it does not bypass the existing
+authenticated admin and passkey step-up requirements.
+
 Auth status:
 
 ```bash
