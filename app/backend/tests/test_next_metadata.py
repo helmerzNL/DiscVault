@@ -207,6 +207,20 @@ class NextScannedTitleTests(unittest.TestCase):
             "Kingdom of Heaven",
         )
 
+    def test_clean_scanned_title_strips_generic_edition_without_format_token(self):
+        # A generic "<qualifier> Edition" is recognised even when no packaging
+        # format token (Blu-ray/DVD/4K/...) is present in the title. The real
+        # report that motivated this: "X-treme Edition" left in the display title.
+        self.assertEqual(
+            _clean_scanned_title("SomeFilm (X-treme Edition)"), "SomeFilm"
+        )
+        self.assertEqual(_clean_scanned_title("Blade (Extreme Edition)"), "Blade")
+        self.assertEqual(
+            _clean_scanned_title("The Matrix Special Edition"), "The Matrix"
+        )
+        # A bare noise-only edition group still never collapses to empty.
+        self.assertTrue(_clean_scanned_title("(Collector's Edition)"))
+
     def test_clean_scanned_title_strips_local_original_title_paren(self):
         # Fallback A: a short standalone local title in a trailing group is
         # stripped when packaging noise is present in the same title.

@@ -1668,12 +1668,15 @@ def normalize_localization_entries(
 # packaging/format/edition/region noise rather than part of the film title.
 _SCANNED_TITLE_NOISE_RE = re.compile(
     r'blu[- ]?ray|ultra\s*hd|\buhd\b|\b4k\b|\bdvd\b|\b3d\b|\bvhs\b|\bhddvd\b|hd[- ]?dvd'
-    r'|steel\s*book|steelbook|limited\s+edition|collector|special\s+edition'
+    r'|steel\s*book|steelbook|collector'
     r'|digibook|mediabook|slipcover|slipcase|box\s*set|boxset|gift\s*set'
     r'|\bimport\b|region[\s-]*(?:free|locked|[abc]|[0-9])'
-    r'|\bpal\b|\bntsc\b|remaster|anniversary\s+edition|uncut|extended\s+edition'
+    r'|\bpal\b|\bntsc\b|remaster|uncut'
     r"|director['\u2019]?s?\s+cut|theatrical\s+cut|final\s+cut|international\s+cut"
-    r'|extended\s+cut|\bunrated\b|deluxe\s+edition|definitive\s+edition|ultimate\s+edition'
+    r'|extended\s+cut|\bunrated\b'
+    # Generic "<qualifier> Edition" (e.g. "X-treme Edition", "Deluxe Edition",
+    # "Limited Edition") so editions are recognised even without a format token.
+    r"|\b[\w'\u2019-]+\s+editions?\b"
     r'|\bocard\b|o[- ]card|amaray|digipack|digipak',
     re.I,
 )
