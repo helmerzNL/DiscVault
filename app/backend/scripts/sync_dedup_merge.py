@@ -35,6 +35,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -206,6 +207,14 @@ USER_DATA_COLUMNS = [
     "edition_type",
 ]
 
+COLLECTION_LOCK_KEY = 293225158992
+COLLECTION_STATE_TABLES = [
+    "movies",
+    *(table for table, _fk, _conflict in MOVIE_RELATIONS),
+    "entity_media",
+    "media_assets",
+]
+
 
 def _table_exists(conn, table_name):
     with conn.cursor() as cur:
@@ -232,6 +241,19 @@ def _column_exists(conn, table_name, column_name):
     return bool(row.get("ok"))
 
 
+def lock_collection_snapshot(conn):
+    """Block collection writes while an Admin execution revalidates and merges."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (COLLECTION_LOCK_KEY,))
+    tables = [
+        table_name
+        for table_name in COLLECTION_STATE_TABLES
+        if _table_exists(conn, table_name)
+    ]
+    with conn.cursor() as cur:
+        cur.execute(f"LOCK TABLE {', '.join(tables)} IN SHARE ROW EXCLUSIVE MODE")
+
+
 def _locked_fields(metadata):
     if not isinstance(metadata, dict):
         return []
@@ -246,6 +268,24 @@ def _locked_fields(metadata):
         return []
     out = sorted({str(value or "").strip() for value in values if str(value or "").strip()})
     return out
+
+
+def _movie_state_hash(movie):
+    snapshot = movie.get("canonical_state")
+    if not isinstance(snapshot, dict):
+        snapshot = {
+            key: value
+            for key, value in movie.items()
+            if key not in {"_signals", "canonical_state"}
+        }
+    serialized = json.dumps(
+        snapshot,
+        default=str,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def _connect():
@@ -297,24 +337,10 @@ def _fetch_live_movies(conn):
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT
-                id,
-                client_id,
-                barcode,
-                title,
-                year,
-                format,
-                edition,
-                edition_type,
-                notes,
-                rating,
-                purchase_date,
-                purchase_price,
-                location,
-                metadata,
-                created_at
+            SELECT movies.*, to_jsonb(movies) AS canonical_state
             FROM movies
             WHERE deleted_at IS NULL
+            ORDER BY id
             """
         )
         return cur.fetchall()
@@ -327,6 +353,7 @@ def _fetch_tmdb_ids(conn):
             SELECT movie_id, identifier
             FROM movie_identifiers
             WHERE provider_id = 'tmdb'
+            ORDER BY movie_id, identifier
             """
         )
         rows = cur.fetchall()
@@ -487,7 +514,7 @@ def _choose_winner(conn, members, by_id):
         scored.append((score, created, mid))
         reasons[mid] = breakdown
     # Highest score first, then earliest creation.
-    scored.sort(key=lambda t: (-t[0], t[1]))
+    scored.sort(key=lambda t: (-t[0], t[1], str(t[2])))
     winner = scored[0][2]
     losers = [t[2] for t in scored[1:]]
     top_score = scored[0][0]
@@ -553,6 +580,7 @@ def build_report(conn):
                     "artwork_count": int(member_signals.get("artwork_count", 0)),
                     "artwork_provider_ids": member_signals.get("artwork_provider_ids", []),
                     "score_breakdown": reasons.get(member_id, {}),
+                    "state_hash": _movie_state_hash(movie),
                 }
             )
         report_groups.append(
@@ -609,7 +637,7 @@ def _rehang_relations(cur, winner, loser):
         )
 
 
-def execute_merge(conn, report):
+def execute_merge(conn, report, *, commit=True):
     """Apply the merge plan from ``report`` inside one transaction."""
     tombstoned = 0
     with conn.cursor() as cur:
@@ -638,7 +666,8 @@ def execute_merge(conn, report):
                         """,
                         (revision, str(loser), json.dumps({"mergedInto": str(winner)})),
                     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return tombstoned
 
 

@@ -15697,6 +15697,47 @@ def find_tombstoned_movie_by_identity(
     return None
 
 
+def tombstoned_movie_upsert_result(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+    client_entity_id: str | None,
+    tombstone: dict[str, Any],
+    matched_by: str | None,
+    persistent_client_id: str | None,
+) -> dict[str, Any]:
+    entity_id = tombstone["id"]
+    store_client_entity_mapping(
+        conn,
+        client_id=client_id,
+        client_entity_id=client_entity_id,
+        entity_type="movie",
+        entity_id=entity_id,
+        idem_key=idem_key,
+    )
+    entity = movie_entity(conn, entity_id) or {}
+    deleted_at = entity.get("deleted_at") or tombstone.get("deleted_at")
+    revision = next_revision(conn)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "movie",
+        "operation": "upsert",
+        "entityId": entity_id,
+        "clientEntityId": client_entity_id,
+        "revision": revision,
+        "entity": entity,
+        "created": False,
+        "matchedBy": matched_by,
+        "recordClientId": tombstone.get("client_id") or persistent_client_id,
+        "deleted": True,
+        "deletedAt": deleted_at,
+        "tombstoned": True,
+    }
+
+
 def match_existing_movie(
     *,
     persistent_client_id: str | None,
@@ -15927,6 +15968,20 @@ def apply_movie_upsert(
     tmdb_id = clean_text(metadata_payload.get("tmdb_id"))
     duplicate_copy = bool(payload.get("duplicate_copy"))
 
+    if provided_entity_id is not None:
+        provided_entity = movie_entity(conn, provided_entity_id)
+        if provided_entity and provided_entity.get("deleted_at") is not None:
+            return tombstoned_movie_upsert_result(
+                conn,
+                client_id=client_id,
+                idem_key=idem_key,
+                mutation=mutation,
+                client_entity_id=client_entity_id,
+                tombstone=provided_entity,
+                matched_by=None,
+                persistent_client_id=persistent_client_id,
+            )
+
     matched_by: str | None = None
     ladder_entity_id: UUID | None = None
     resurrect_tombstone = False
@@ -16007,30 +16062,16 @@ def apply_movie_upsert(
                     # Delete wins: do not touch the tombstone. Map the client's
                     # temp id to it and return the deleted record so the client
                     # learns (via response + delta) that it is gone.
-                    store_client_entity_mapping(
+                    return tombstoned_movie_upsert_result(
                         conn,
                         client_id=client_id,
-                        client_entity_id=client_entity_id,
-                        entity_type="movie",
-                        entity_id=tomb["id"],
                         idem_key=idem_key,
+                        mutation=mutation,
+                        client_entity_id=client_entity_id,
+                        tombstone=tomb,
+                        matched_by=matched_by,
+                        persistent_client_id=persistent_client_id,
                     )
-                    entity = movie_entity(conn, tomb["id"]) or {}
-                    revision = next_revision(conn)
-                    return {
-                        "clientMutationId": mutation["clientMutationId"],
-                        "status": "applied",
-                        "entityType": "movie",
-                        "operation": "upsert",
-                        "entityId": tomb["id"],
-                        "clientEntityId": client_entity_id,
-                        "revision": revision,
-                        "entity": entity,
-                        "created": False,
-                        "matchedBy": matched_by,
-                        "recordClientId": persistent_client_id,
-                        "tombstoned": True,
-                    }
                 # Resurrection: reuse the tombstoned id and clear deleted_at below.
                 entity_id = tomb["id"]
                 healed_barcode = fields["barcode"]
