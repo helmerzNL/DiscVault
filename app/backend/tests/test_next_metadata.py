@@ -185,6 +185,57 @@ class NextScannedTitleTests(unittest.TestCase):
         # Never return an empty string when only noise is present.
         self.assertTrue(_clean_scanned_title("(Blu-ray)"))
 
+    def test_clean_scanned_title_strips_edition_and_cut_vocab(self):
+        # Edition/cut phrases belong in the edition fields, not the display title.
+        self.assertEqual(
+            _clean_scanned_title("Blade Runner (Director's Cut)"), "Blade Runner"
+        )
+        # Typographic apostrophe variant.
+        self.assertEqual(
+            _clean_scanned_title("Blade Runner (Director\u2019s Cut)"), "Blade Runner"
+        )
+        self.assertEqual(_clean_scanned_title("Se7en - Unrated"), "Se7en")
+        self.assertEqual(
+            _clean_scanned_title("Apocalypse Now [Final Cut]"), "Apocalypse Now"
+        )
+        self.assertEqual(_clean_scanned_title("Dune (Deluxe Edition)"), "Dune")
+        self.assertEqual(
+            _clean_scanned_title("Nightmare Alley (Theatrical Cut)"), "Nightmare Alley"
+        )
+        self.assertEqual(
+            _clean_scanned_title("Kingdom of Heaven (Ultimate Edition)"),
+            "Kingdom of Heaven",
+        )
+
+    def test_clean_scanned_title_strips_local_original_title_paren(self):
+        # Fallback A: a short standalone local title in a trailing group is
+        # stripped when packaging noise is present in the same title.
+        self.assertEqual(
+            _clean_scanned_title("Downfall Blu-ray (Der Untergang)"), "Downfall"
+        )
+        # Path B: an explicit original-title match strips the group even without
+        # a format token (and regardless of length).
+        self.assertEqual(
+            _clean_scanned_title(
+                "Downfall (Der Untergang)", alt_titles=["Der Untergang"]
+            ),
+            "Downfall",
+        )
+        # Regression: without noise and without a metadata match, a genuine
+        # bracketed subtitle is preserved.
+        narnia = "The Chronicles of Narnia (The Lion, the Witch and the Wardrobe)"
+        self.assertEqual(_clean_scanned_title(narnia), narnia)
+        # A trailing continuation subtitle is not mistaken for a local title even
+        # when packaging noise is present.
+        self.assertEqual(
+            _clean_scanned_title("Fantastic Beasts [Blu-ray] (and Where to Find Them)"),
+            "Fantastic Beasts (and Where to Find Them)",
+        )
+        # Year tags in a trailing group are always preserved.
+        self.assertEqual(
+            _clean_scanned_title("Old (2005) Blu-ray"), "Old (2005)"
+        )
+
     def test_parse_import_country_maps_known_hints(self):
         self.assertEqual(_parse_import_country("John Wick (UK Import)"), ("United Kingdom", ""))
         self.assertEqual(_parse_import_country("Suspiria (Italian Import)"), ("Italy", ""))
