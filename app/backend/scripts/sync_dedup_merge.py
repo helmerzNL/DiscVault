@@ -42,7 +42,21 @@ import re
 import sys
 import unicodedata
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlparse
+
+if __package__ and __package__ != "scripts":
+    from ..dedup_identity import title_year_identity_compatible
+    from ..versioning import backend_version, build_sha
+elif __package__ == "scripts":  # pragma: no cover - gunicorn top-level imports
+    from dedup_identity import title_year_identity_compatible
+    from versioning import backend_version, build_sha
+else:  # pragma: no cover - exercised by the published-image CLI path
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    from dedup_identity import title_year_identity_compatible
+    from versioning import backend_version, build_sha
 
 
 # ---------------------------------------------------------------------------
@@ -130,22 +144,46 @@ def _tmdb_sanity_conflicts(left_movie, right_movie):
     return False
 
 
-def _members_are_compatible(left_movie, right_movie, *, enforce_tmdb_sanity):
+def _members_are_compatible(
+    left_movie,
+    right_movie,
+    *,
+    enforce_tmdb_sanity,
+    enforce_titleyear_identity,
+):
     if _barcode_conflicts(left_movie.get("barcode"), right_movie.get("barcode")):
         return False
     if enforce_tmdb_sanity and _tmdb_sanity_conflicts(left_movie, right_movie):
         return False
+    if enforce_titleyear_identity and not title_year_identity_compatible(
+        left_edition=left_movie.get("edition"),
+        right_edition=right_movie.get("edition"),
+        left_container_ids=left_movie.get("container_ids"),
+        right_container_ids=right_movie.get("container_ids"),
+    ):
+        return False
     return True
 
 
-def _split_group_members(members, by_id, *, enforce_tmdb_sanity):
+def _split_group_members(
+    members,
+    by_id,
+    *,
+    enforce_tmdb_sanity,
+    enforce_titleyear_identity,
+):
     clusters = []
     for movie_id in members:
         movie = by_id.get(movie_id) or {}
         placed = False
         for cluster in clusters:
             if all(
-                _members_are_compatible(movie, by_id.get(existing_id) or {}, enforce_tmdb_sanity=enforce_tmdb_sanity)
+                _members_are_compatible(
+                    movie,
+                    by_id.get(existing_id) or {},
+                    enforce_tmdb_sanity=enforce_tmdb_sanity,
+                    enforce_titleyear_identity=enforce_titleyear_identity,
+                )
                 for existing_id in cluster
             ):
                 cluster.append(movie_id)
@@ -156,13 +194,20 @@ def _split_group_members(members, by_id, *, enforce_tmdb_sanity):
     return [cluster for cluster in clusters if len(cluster) > 1]
 
 
-def _split_group_map(groups, by_id, *, enforce_tmdb_sanity):
+def _split_group_map(
+    groups,
+    by_id,
+    *,
+    enforce_tmdb_sanity,
+    enforce_titleyear_identity=False,
+):
     split = {}
     for key, members in groups.items():
         compatible_clusters = _split_group_members(
             members,
             by_id,
             enforce_tmdb_sanity=enforce_tmdb_sanity,
+            enforce_titleyear_identity=enforce_titleyear_identity,
         )
         if len(compatible_clusters) == 1 and len(compatible_clusters[0]) == len(members):
             split[key] = compatible_clusters[0]
@@ -271,13 +316,19 @@ def _locked_fields(metadata):
 
 
 def _movie_state_hash(movie):
-    snapshot = movie.get("canonical_state")
-    if not isinstance(snapshot, dict):
-        snapshot = {
+    movie_snapshot = movie.get("canonical_state")
+    if not isinstance(movie_snapshot, dict):
+        movie_snapshot = {
             key: value
             for key, value in movie.items()
-            if key not in {"_signals", "canonical_state"}
+            if key not in {"_signals", "canonical_state", "container_ids"}
         }
+    snapshot = {
+        "movie": movie_snapshot,
+        "container_ids": sorted(
+            str(value) for value in movie.get("container_ids") or ()
+        ),
+    }
     serialized = json.dumps(
         snapshot,
         default=str,
@@ -312,24 +363,11 @@ def _target_database_name():
 
 
 def _report_metadata():
-    """Extract report metadata from environment variables.
-    
-    Fallbacks cover local dev (BUILD_VERSION), Docker compose (DISCVAULT_*),
-    and CI/CD (BUILD_SHA) environments.
-    """
-    script_commit = (
-        os.environ.get("BUILD_SHA")
-        or os.environ.get("DISCVAULT_BUILD_SHA")
-        or os.environ.get("GITHUB_SHA")
-    )
-    backend_version = (
-        os.environ.get("DISCVAULT_BACKEND_VERSION")
-        or os.environ.get("BUILD_VERSION")
-    )
+    """Return immutable image provenance with source-checkout fallbacks."""
     return {
-        "script_commit": script_commit,
+        "script_commit": build_sha(),
         "target_database": _target_database_name(),
-        "backend_version": backend_version,
+        "backend_version": backend_version(),
     }
 
 
@@ -337,7 +375,14 @@ def _fetch_live_movies(conn):
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT movies.*, to_jsonb(movies) AS canonical_state
+            SELECT movies.*,
+                   to_jsonb(movies) AS canonical_state,
+                   ARRAY(
+                       SELECT cm.container_id::text
+                       FROM container_movies cm
+                       WHERE cm.movie_id = movies.id
+                       ORDER BY cm.container_id
+                   ) AS container_ids
             FROM movies
             WHERE deleted_at IS NULL
             ORDER BY id
@@ -395,8 +440,17 @@ def detect_groups(conn):
 
     return {
         "barcode": _dups(barcode_groups),
-        "tmdbEdition": _split_group_map(_dups(tmdb_groups), by_id, enforce_tmdb_sanity=True),
-        "titleYear": _split_group_map(_dups(titleyear_groups), by_id, enforce_tmdb_sanity=False),
+        "tmdbEdition": _split_group_map(
+            _dups(tmdb_groups),
+            by_id,
+            enforce_tmdb_sanity=True,
+        ),
+        "titleYear": _split_group_map(
+            _dups(titleyear_groups),
+            by_id,
+            enforce_tmdb_sanity=False,
+            enforce_titleyear_identity=True,
+        ),
     }, by_id, tmdb
 
 
@@ -580,6 +634,9 @@ def build_report(conn):
                     "artwork_count": int(member_signals.get("artwork_count", 0)),
                     "artwork_provider_ids": member_signals.get("artwork_provider_ids", []),
                     "score_breakdown": reasons.get(member_id, {}),
+                    "container_ids": sorted(
+                        str(value) for value in movie.get("container_ids") or ()
+                    ),
                     "state_hash": _movie_state_hash(movie),
                 }
             )

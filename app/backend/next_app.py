@@ -136,6 +136,7 @@ try:
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import movievault_v2_plugin_context
     from .next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from .dedup_identity import title_year_identity_compatible
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
     from .next_common import NextApiError
@@ -348,6 +349,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import movievault_v2_plugin_context
     from next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from dedup_identity import title_year_identity_compatible
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
     from next_common import NextApiError
@@ -15817,6 +15819,8 @@ def find_movie_by_title_year(
     year: Any,
     fmt: str | None,
     incoming_barcode: Any = None,
+    incoming_edition: Any = None,
+    incoming_container_ids: list[Any] | tuple[Any, ...] | None = None,
 ) -> UUID | None:
     """Trede 4 (adoption-only): normalized title + exact year + matching format.
 
@@ -15832,7 +15836,13 @@ def find_movie_by_title_year(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT m.id, m.title, m.year, m.barcode, m.format
+            SELECT m.id, m.title, m.year, m.barcode, m.format, m.edition,
+                   ARRAY(
+                       SELECT cm.container_id::text
+                       FROM container_movies cm
+                       WHERE cm.movie_id = m.id
+                       ORDER BY cm.container_id
+                   ) AS container_ids
             FROM movies m
             WHERE m.deleted_at IS NULL
               AND m.year = %s
@@ -15845,6 +15855,13 @@ def find_movie_by_title_year(
         if physical_media_format_key(row.get("format")) != format_key:
             continue
         if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
+        if not title_year_identity_compatible(
+            left_edition=incoming_edition,
+            right_edition=row.get("edition"),
+            left_container_ids=incoming_container_ids,
+            right_container_ids=row.get("container_ids"),
+        ):
             continue
         if normalize_title(row.get("title")) == normalized:
             return row["id"]
@@ -28998,6 +29015,30 @@ def register_routes(flask_app: Flask) -> None:
                 tmdb_id = clean_text(item.get("tmdb_id"))
                 fmt = clean_text(item.get("format"))
                 edition = clean_text(item.get("edition"))
+                raw_container_ids = item.get("container_ids")
+                if raw_container_ids is None:
+                    container_ids: list[str] = []
+                elif isinstance(raw_container_ids, list):
+                    try:
+                        container_ids = [str(UUID(str(value))) for value in raw_container_ids]
+                    except (TypeError, ValueError, AttributeError):
+                        results.append(
+                            {
+                                "client_id": persistent_client_id,
+                                "status": "invalid",
+                                "matched": False,
+                            }
+                        )
+                        continue
+                else:
+                    results.append(
+                        {
+                            "client_id": persistent_client_id,
+                            "status": "invalid",
+                            "matched": False,
+                        }
+                    )
+                    continue
                 title = item.get("title")
                 year = item.get("year")
                 matched_id, matched_by = match_reconcile_item(
@@ -29026,6 +29067,8 @@ def register_routes(flask_app: Flask) -> None:
                         year=year,
                         fmt=fmt,
                         incoming_barcode=barcode,
+                        incoming_edition=edition,
+                        incoming_container_ids=container_ids,
                     ),
                 )
                 if matched_id is not None:

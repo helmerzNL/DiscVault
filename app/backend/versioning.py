@@ -13,11 +13,14 @@ def _clean(value: str | None) -> str:
 
 def _version_file_candidates() -> list[Path]:
     here = Path(__file__).resolve()
-    return [
-        here.parents[1] / "VERSION",
-        here.parents[2] / "app" / "VERSION",
-        Path.cwd() / "VERSION",
-    ]
+    parents = list(here.parents)
+    candidates = [here.parent / "VERSION"]
+    if len(parents) > 1:
+        candidates.append(parents[1] / "VERSION")
+    if len(parents) > 2:
+        candidates.append(parents[2] / "app" / "VERSION")
+    candidates.append(Path.cwd() / "VERSION")
+    return candidates
 
 
 def packaged_version() -> str:
@@ -32,7 +35,14 @@ def packaged_version() -> str:
 
 
 def build_sha() -> str:
-    for key in ("DISCVAULT_BUILD_SHA", "BUILD_SHA", "GITHUB_SHA", "COMMIT_SHA", "SOURCE_COMMIT"):
+    for key in (
+        "DISCVAULT_IMAGE_SHA",
+        "DISCVAULT_BUILD_SHA",
+        "BUILD_SHA",
+        "GITHUB_SHA",
+        "COMMIT_SHA",
+        "SOURCE_COMMIT",
+    ):
         value = _clean(os.environ.get(key))
         if value and value.lower() not in {"dev", "unknown"}:
             return value
@@ -53,7 +63,13 @@ def build_sha() -> str:
 
 
 def backend_version() -> str:
-    for key in ("DISCVAULT_BACKEND_VERSION", "BUILD_VERSION", "APP_VERSION", "VERSION"):
+    for key in (
+        "DISCVAULT_IMAGE_VERSION",
+        "DISCVAULT_BACKEND_VERSION",
+        "BUILD_VERSION",
+        "APP_VERSION",
+        "VERSION",
+    ):
         value = _clean(os.environ.get(key))
         if value and value.lower() not in PLACEHOLDER_VERSIONS:
             return value

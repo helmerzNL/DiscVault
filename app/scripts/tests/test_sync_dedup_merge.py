@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+import subprocess
+import sys
 import unittest
+from unittest import mock
 
+from app.backend import versioning
 from app.backend.scripts import sync_dedup_merge as merge
 
 
@@ -127,6 +132,170 @@ class GroupDetectionSafetyTests(unittest.TestCase):
         groups = self._detect_with([a, b], {})
         self.assertEqual(groups["titleYear"], {("what women want", "", "dvd"): ["a", "b"]})
 
+    def test_titleyear_tier_blocks_box_set_members_from_standalone_copies(self):
+        cases = (
+            ("Jurassic Park", "1993"),
+            ("Jurassic Park III", "2001"),
+            ("The Dark Knight Rises", "2012"),
+            ("The Lost World: Jurassic Park", "1997"),
+        )
+        for index, (title, year) in enumerate(cases):
+            with self.subTest(title=title):
+                member = {
+                    "id": f"member-{index}",
+                    "barcode": None,
+                    "title": title,
+                    "year": year,
+                    "format": "4K_UHD",
+                    "edition": "Box-set member",
+                    "container_ids": [f"box-{index}"],
+                }
+                standalone = {
+                    "id": f"standalone-{index}",
+                    "barcode": None,
+                    "title": title,
+                    "year": year,
+                    "format": "4K UHD",
+                    "edition": None,
+                    "container_ids": [],
+                }
+                groups = self._detect_with([member, standalone], {})
+                self.assertEqual(groups["titleYear"], {})
+
+    def test_titleyear_tier_blocks_members_of_different_containers(self):
+        first = {
+            "id": "first",
+            "barcode": None,
+            "title": "Jurassic Park",
+            "year": "1993",
+            "format": "4K UHD",
+            "edition": None,
+            "container_ids": ["box-a"],
+        }
+        second = {**first, "id": "second", "container_ids": ["box-b"]}
+        groups = self._detect_with([first, second], {})
+        self.assertEqual(groups["titleYear"], {})
+
+    def test_titleyear_tier_allows_same_container_duplicate_stubs(self):
+        first = {
+            "id": "first",
+            "barcode": None,
+            "title": "Jurassic Park",
+            "year": "1993",
+            "format": "4K UHD",
+            "edition": None,
+            "container_ids": ["box-a"],
+        }
+        second = {**first, "id": "second", "format": "4K_UHD"}
+        groups = self._detect_with([first, second], {})
+        self.assertEqual(
+            groups["titleYear"],
+            {("jurassic park", "1993", "ultra_hd_blu_ray"): ["first", "second"]},
+        )
+
+    def test_titleyear_tier_blocks_partial_edition_inside_same_container(self):
+        first = {
+            "id": "first",
+            "barcode": None,
+            "title": "Jurassic Park",
+            "year": "1993",
+            "format": "4K UHD",
+            "edition": "Box-set member",
+            "container_ids": ["box-a"],
+        }
+        second = {**first, "id": "second", "edition": None}
+        groups = self._detect_with([first, second], {})
+        self.assertEqual(groups["titleYear"], {})
+
+    def test_titleyear_tier_blocks_conflicting_explicit_editions(self):
+        first = {
+            "id": "first",
+            "barcode": None,
+            "title": "Blade Runner",
+            "year": "1982",
+            "format": "4K UHD",
+            "edition": "Final Cut",
+        }
+        second = {**first, "id": "second", "edition": "Theatrical Cut"}
+        groups = self._detect_with([first, second], {})
+        self.assertEqual(groups["titleYear"], {})
+
+    def test_titleyear_tier_preserves_bourne_missing_edition_adoption(self):
+        complete = {
+            "id": "complete",
+            "barcode": None,
+            "title": "The Bourne Identity",
+            "year": "2002",
+            "format": "4K UHD",
+            "edition": "The Bourne Identity",
+        }
+        stub = {**complete, "id": "stub", "edition": None}
+        groups = self._detect_with([complete, stub], {})
+        self.assertEqual(
+            groups["titleYear"],
+            {("bourne identity", "2002", "ultra_hd_blu_ray"): ["complete", "stub"]},
+        )
+
+    def test_titleyear_tier_preserves_greatest_showman_stub_adoption(self):
+        complete = {
+            "id": "complete",
+            "barcode": None,
+            "title": "The Greatest Showman",
+            "year": "2017",
+            "format": "4K UHD",
+            "edition": "Standalone release",
+        }
+        first_stub = {**complete, "id": "stub-a", "edition": None}
+        second_stub = {**complete, "id": "stub-b", "edition": ""}
+        groups = self._detect_with([complete, first_stub, second_stub], {})
+        self.assertEqual(
+            groups["titleYear"],
+            {
+                ("greatest showman", "2017", "ultra_hd_blu_ray"): [
+                    "complete",
+                    "stub-a",
+                    "stub-b",
+                ]
+            },
+        )
+
+
+class ReportProvenanceTests(unittest.TestCase):
+    def test_immutable_image_provenance_overrides_mutable_runtime_values(self):
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "DISCVAULT_IMAGE_VERSION": "26.6.33",
+                "DISCVAULT_IMAGE_SHA": "immutable-sha",
+                "DISCVAULT_BACKEND_VERSION": "next-dev",
+                "BUILD_VERSION": "next-dev",
+                "DISCVAULT_BUILD_SHA": "runtime-sha",
+                "BUILD_SHA": "runtime-sha",
+            },
+            clear=False,
+        ):
+            metadata = merge._report_metadata()
+
+        self.assertEqual(metadata["backend_version"], "26.6.33")
+        self.assertEqual(metadata["script_commit"], "immutable-sha")
+
+    def test_shallow_backend_image_path_has_safe_version_fallbacks(self):
+        with mock.patch.object(versioning, "__file__", "/app/versioning.py"):
+            candidates = versioning._version_file_candidates()
+
+        self.assertTrue(candidates)
+        self.assertTrue(all(candidate.name == "VERSION" for candidate in candidates))
+
+    def test_gunicorn_top_level_package_import(self):
+        backend_dir = Path(__file__).resolve().parents[2] / "backend"
+        subprocess.run(
+            [sys.executable, "-c", "import scripts.sync_dedup_merge"],
+            cwd=backend_dir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
 
 class _FakeCursor:
     def __init__(self, counts):
@@ -160,6 +329,21 @@ class WinnerSelectionTests(unittest.TestCase):
     def test_candidate_state_hash_changes_for_nonempty_user_data_edits(self):
         first = {"id": "movie-1", "notes": "first"}
         second = {"id": "movie-1", "notes": "second"}
+        self.assertNotEqual(
+            merge._movie_state_hash(first),
+            merge._movie_state_hash(second),
+        )
+
+    def test_candidate_state_hash_changes_for_container_membership_edits(self):
+        canonical_state = {"id": "movie-1", "notes": None}
+        first = {
+            "canonical_state": canonical_state,
+            "container_ids": ["container-a"],
+        }
+        second = {
+            "canonical_state": canonical_state,
+            "container_ids": ["container-b"],
+        }
         self.assertNotEqual(
             merge._movie_state_hash(first),
             merge._movie_state_hash(second),

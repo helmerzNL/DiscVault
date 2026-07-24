@@ -719,6 +719,194 @@ class NextTitleNormalizationTests(unittest.TestCase):
             )
         )
 
+    def test_title_year_tier_blocks_box_set_members_from_standalone_copies(self):
+        cases = (
+            ("Jurassic Park", "1993"),
+            ("Jurassic Park III", "2001"),
+            ("The Dark Knight Rises", "2012"),
+            ("The Lost World: Jurassic Park", "1997"),
+        )
+        for title, year in cases:
+            with self.subTest(title=title):
+                conn = self._title_year_conn(
+                    [
+                        {
+                            "id": uuid.uuid4(),
+                            "title": title,
+                            "year": year,
+                            "format": "4K_UHD",
+                            "barcode": None,
+                            "edition": "Box-set member",
+                            "container_ids": [str(uuid.uuid4())],
+                        }
+                    ]
+                )
+                self.assertIsNone(
+                    next_app.find_movie_by_title_year(
+                        conn,
+                        title=title,
+                        year=year,
+                        fmt="4K UHD",
+                        incoming_edition=None,
+                        incoming_container_ids=[],
+                    )
+                )
+
+    def test_title_year_tier_blocks_different_container_memberships(self):
+        first_container = str(uuid.uuid4())
+        second_container = str(uuid.uuid4())
+        conn = self._title_year_conn(
+            [
+                {
+                    "id": uuid.uuid4(),
+                    "title": "Jurassic Park",
+                    "year": "1993",
+                    "format": "4K UHD",
+                    "barcode": None,
+                    "edition": None,
+                    "container_ids": [first_container],
+                }
+            ]
+        )
+        self.assertIsNone(
+            next_app.find_movie_by_title_year(
+                conn,
+                title="Jurassic Park",
+                year="1993",
+                fmt="4K UHD",
+                incoming_container_ids=[second_container],
+            )
+        )
+
+    def test_title_year_tier_allows_same_container_duplicate_stub(self):
+        target = uuid.uuid4()
+        container_id = str(uuid.uuid4())
+        conn = self._title_year_conn(
+            [
+                {
+                    "id": target,
+                    "title": "Jurassic Park",
+                    "year": "1993",
+                    "format": "4K_UHD",
+                    "barcode": None,
+                    "edition": None,
+                    "container_ids": [container_id],
+                }
+            ]
+        )
+        self.assertEqual(
+            next_app.find_movie_by_title_year(
+                conn,
+                title="Jurassic Park",
+                year="1993",
+                fmt="4K UHD",
+                incoming_container_ids=[container_id],
+            ),
+            target,
+        )
+
+    def test_title_year_tier_blocks_partial_edition_inside_same_container(self):
+        container_id = str(uuid.uuid4())
+        conn = self._title_year_conn(
+            [
+                {
+                    "id": uuid.uuid4(),
+                    "title": "Jurassic Park",
+                    "year": "1993",
+                    "format": "4K UHD",
+                    "barcode": None,
+                    "edition": "Box-set member",
+                    "container_ids": [container_id],
+                }
+            ]
+        )
+        self.assertIsNone(
+            next_app.find_movie_by_title_year(
+                conn,
+                title="Jurassic Park",
+                year="1993",
+                fmt="4K UHD",
+                incoming_edition=None,
+                incoming_container_ids=[container_id],
+            )
+        )
+
+    def test_title_year_tier_blocks_conflicting_explicit_editions(self):
+        conn = self._title_year_conn(
+            [
+                {
+                    "id": uuid.uuid4(),
+                    "title": "Blade Runner",
+                    "year": "1982",
+                    "format": "4K UHD",
+                    "barcode": None,
+                    "edition": "Final Cut",
+                    "container_ids": [],
+                }
+            ]
+        )
+        self.assertIsNone(
+            next_app.find_movie_by_title_year(
+                conn,
+                title="Blade Runner",
+                year="1982",
+                fmt="4K UHD",
+                incoming_edition="Theatrical Cut",
+            )
+        )
+
+    def test_title_year_tier_preserves_bourne_missing_edition_adoption(self):
+        target = uuid.uuid4()
+        conn = self._title_year_conn(
+            [
+                {
+                    "id": target,
+                    "title": "The Bourne Identity",
+                    "year": "2002",
+                    "format": "4K UHD",
+                    "barcode": None,
+                    "edition": "The Bourne Identity",
+                    "container_ids": [],
+                }
+            ]
+        )
+        self.assertEqual(
+            next_app.find_movie_by_title_year(
+                conn,
+                title="The Bourne Identity",
+                year="2002",
+                fmt="4K_UHD",
+                incoming_edition=None,
+            ),
+            target,
+        )
+
+    def test_title_year_tier_preserves_greatest_showman_stub_adoption(self):
+        targets = [uuid.uuid4(), uuid.uuid4()]
+        rows = [
+            {
+                "id": target,
+                "title": "The Greatest Showman",
+                "year": "2017",
+                "format": "4K UHD",
+                "barcode": None,
+                "edition": None,
+                "container_ids": [],
+            }
+            for target in targets
+        ]
+        conn = self._title_year_conn(rows)
+        self.assertIn(
+            next_app.find_movie_by_title_year(
+                conn,
+                title="The Greatest Showman",
+                year="2017",
+                fmt="4K_UHD",
+                incoming_edition="Standalone release",
+            ),
+            targets,
+        )
+
     def test_no_row_matches_returns_none(self):
         conn = self._title_year_conn(
             [{"id": uuid.uuid4(), "title": "Different", "year": "2001", "format": "Blu-ray"}]
