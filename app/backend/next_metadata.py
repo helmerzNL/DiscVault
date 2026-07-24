@@ -1669,12 +1669,17 @@ def normalize_localization_entries(
 # packaging/format/edition/region noise rather than part of the film title.
 _SCANNED_TITLE_NOISE_RE = re.compile(
     r'blu[- ]?ray|ultra\s*hd|\buhd\b|\b4k\b|\bdvd\b|\b3d\b|\bvhs\b|\bhddvd\b|hd[- ]?dvd'
-    r'|steel\s*book|steelbook|limited\s+edition|collector|special\s+edition'
+    r'|steel\s*book|steelbook|collector'
     r'|digibook|mediabook|slipcover|slipcase|box\s*set|boxset|gift\s*set'
     r'|\bimport\b|region[\s-]*(?:free|locked|[abc]|[0-9])'
-    r'|\bpal\b|\bntsc\b|remaster|anniversary\s+edition|uncut|extended\s+edition'
-    r"|director['\u2019]?s?\s+cut|theatrical\s+cut|final\s+cut|international\s+cut"
-    r'|extended\s+cut|\bunrated\b|deluxe\s+edition|definitive\s+edition|ultimate\s+edition'
+    r'|\bpal\b|\bntsc\b|remaster|uncut'
+    r'|\bunrated\b'
+    # Generic "<qualifier> Edition"/"<qualifier> Cut" (e.g. "X-treme Edition",
+    # "Deluxe Edition", "Director's Cut", "Final Cut") so editions/cuts are
+    # recognised even without a format token. These subsume the specific
+    # edition/cut phrases (limited/special/.../director's/theatrical/final/...).
+    r"|\b[\w'\u2019-]+\s+editions?\b"
+    r"|\b[\w'\u2019-]+\s+cut\b"
     r'|\bocard\b|o[- ]card|amaray|digipack|digipak',
     re.I,
 )
@@ -1790,6 +1795,64 @@ def _clean_scanned_title(raw_title: str, *, alt_titles: "list[str] | None" = Non
 
     cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip(' -_/|,;:+&')
     return cleaned or title
+
+
+# Edition/cut phrases that should be *promoted* into the structured `edition`
+# field when they appear in a scanned packaging title. This is the extraction
+# counterpart to the display-stripping done by `_clean_scanned_title`: the same
+# edition/cut vocabulary, but captured rather than discarded. Kept deliberately
+# narrow (only the edition/cut subset, no format/region noise) so a genuine
+# film title is never mislabelled as an edition.
+_EDITION_CUT_PHRASE = (
+    r"[\w'\u2019-]+\s+editions?"
+    r"|[\w'\u2019-]+\s+cut"
+    r"|uncut|unrated|remaster(?:ed)?"
+)
+_EDITION_CUT_PHRASE_RE = re.compile(r"(?:" + _EDITION_CUT_PHRASE + r")", re.I)
+# A trailing edition/cut segment must be introduced by a *structural* separator
+# (dash/slash/pipe/comma/colon/…), never a bare space, so a whole-title phrase
+# like "The Final Cut" or "Short Cuts" is not mistaken for a trailing edition.
+_EDITION_CUT_TAIL_RE = re.compile(
+    r"[,;:/+&|\u00b7-][\s,;:/+&|\u00b7-]*(" + _EDITION_CUT_PHRASE + r")\s*$",
+    re.I,
+)
+_BRACKET_GROUP_RE = re.compile(r"[\(\[\{]([^\(\)\[\]\{\}]*)[\)\]\}]")
+
+
+def _normalize_edition_phrase(phrase: str) -> str:
+    """Collapse whitespace and normalise SHOUTING/lowercase packaging text to
+    word-initial caps while preserving intra-word punctuation (e.g.
+    "X-TREME EDITION"/"director's cut" -> "X-treme Edition"/"Director's Cut").
+    Mixed-case input is returned untouched."""
+    text = re.sub(r"\s+", " ", phrase or "").strip()
+    if not text:
+        return ""
+    if text.isupper() or text.islower():
+        return " ".join(w[:1].upper() + w[1:].lower() for w in text.split(" "))
+    return text
+
+
+def _extract_edition_from_title(raw_title: str) -> "str | None":
+    """Extract an edition/cut label (e.g. "Director's Cut", "X-treme Edition",
+    "Unrated") from a scanned packaging title, mirroring the vocabulary stripped
+    from the display title by `_clean_scanned_title`. Only inspects bracketed
+    groups or a trailing segment introduced by a structural separator, so a
+    genuine film title such as "The Final Cut" or "Short Cuts" is never treated
+    as an edition. Returns ``None`` when no edition/cut phrase is present in
+    those zones."""
+    text = (raw_title or "").strip()
+    if not text:
+        return None
+    # 1) Prefer an explicit bracketed group, e.g. "(Director's Cut)".
+    for match in _BRACKET_GROUP_RE.finditer(text):
+        inner = _EDITION_CUT_PHRASE_RE.search(match.group(1))
+        if inner:
+            return _normalize_edition_phrase(inner.group(0)) or None
+    # 2) Fall back to a trailing "- Unrated" / ", Director's Cut" style segment.
+    tail = _EDITION_CUT_TAIL_RE.search(text)
+    if tail:
+        return _normalize_edition_phrase(tail.group(1)) or None
+    return None
 
 
 # Map nationality/country adjectives or codes from "<X> Import" packaging hints to
@@ -1970,6 +2033,12 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
                 or _SCANNED_TITLE_NOISE_RE.search(current_title)
             ):
                 movie_updates["title"] = cleaned_title
+        extracted_edition = _extract_edition_from_title(raw_release_title)
+        if extracted_edition and not value_present(movie_updates.get("edition")):
+            # Promote a scanned "(Director's Cut)"/"- Unrated" style edition into
+            # the structured field, but never clobber a richer plugin-provided
+            # edition value.
+            movie_updates["edition"] = extracted_edition
         import_country, import_region = _parse_import_country(raw_release_title)
         if import_country and not value_present(movie_updates.get("country")):
             movie_updates["country"] = import_country
