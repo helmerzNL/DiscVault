@@ -265,7 +265,7 @@ class ReportProvenanceTests(unittest.TestCase):
         with mock.patch.dict(
             "os.environ",
             {
-                "DISCVAULT_IMAGE_VERSION": "26.6.33",
+                "DISCVAULT_IMAGE_VERSION": "26.6.34",
                 "DISCVAULT_IMAGE_SHA": "immutable-sha",
                 "DISCVAULT_BACKEND_VERSION": "next-dev",
                 "BUILD_VERSION": "next-dev",
@@ -276,7 +276,7 @@ class ReportProvenanceTests(unittest.TestCase):
         ):
             metadata = merge._report_metadata()
 
-        self.assertEqual(metadata["backend_version"], "26.6.33")
+        self.assertEqual(metadata["backend_version"], "26.6.34")
         self.assertEqual(metadata["script_commit"], "immutable-sha")
 
     def test_shallow_backend_image_path_has_safe_version_fallbacks(self):
