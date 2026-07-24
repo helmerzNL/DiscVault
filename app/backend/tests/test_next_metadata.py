@@ -25,6 +25,7 @@ from app.backend.next_metadata import count_update_fields
 from app.backend.next_metadata import flat_credit_entries
 from app.backend.next_metadata import plugin_credit_updates
 from app.backend.next_metadata import _clean_scanned_title
+from app.backend.next_metadata import _extract_edition_from_title
 from app.backend.next_metadata import _parse_import_country
 from app.backend.next_metadata import external_metadata_barcode
 from app.backend.next_metadata import filter_locked_artwork_updates
@@ -234,6 +235,47 @@ class NextScannedTitleTests(unittest.TestCase):
         self.assertEqual(_clean_scanned_title("The Cut"), "The Cut")
         self.assertEqual(_clean_scanned_title("Final Cut"), "Final Cut")
 
+    def test_extract_edition_from_title_bracketed_and_trailing(self):
+        # The scanned edition/cut phrase must be promoted into a dedicated
+        # value so it can populate the structured `edition` field. Extraction
+        # only fires from bracket groups or a structurally-separated trailing
+        # tail (never a bare mid-title space), and casing is normalized.
+        self.assertEqual(
+            _extract_edition_from_title("SomeFilm (X-treme Edition)"), "X-treme Edition"
+        )
+        self.assertEqual(
+            _extract_edition_from_title("Blade Runner (Director's Cut)"),
+            "Director's Cut",
+        )
+        self.assertEqual(
+            _extract_edition_from_title("Blade Runner (Director\u2019s Cut)"),
+            "Director\u2019s Cut",
+        )
+        self.assertEqual(_extract_edition_from_title("Se7en - Unrated"), "Unrated")
+        self.assertEqual(_extract_edition_from_title("Alien, uncut"), "Uncut")
+        # ALL-CAPS scan noise is title-cased back to a readable label.
+        self.assertEqual(
+            _extract_edition_from_title("DVD (X-TREME EDITION)"), "X-treme Edition"
+        )
+        # A real edition/cut still surfaces even when format noise precedes it.
+        self.assertEqual(
+            _extract_edition_from_title("Inception 4K Blu-ray (Director's Cut)"),
+            "Director's Cut",
+        )
+
+    def test_extract_edition_from_title_ignores_whole_title_cuts(self):
+        # Whole-title films whose name merely ends in "... Cut"/"... Edition"
+        # (no bracket group, no structural separator) must NOT be mistaken for
+        # an edition — the title itself is the film.
+        self.assertIsNone(_extract_edition_from_title("The Final Cut"))
+        self.assertIsNone(_extract_edition_from_title("Short Cuts"))
+        self.assertIsNone(_extract_edition_from_title("The Cut"))
+        self.assertIsNone(_extract_edition_from_title("The Remastered"))
+        # A plain title carries no edition at all.
+        self.assertIsNone(_extract_edition_from_title("Inception"))
+        # A trailing local/original title in brackets is not an edition.
+        self.assertIsNone(_extract_edition_from_title("Narnia (Der Untergang)"))
+
     def test_clean_scanned_title_strips_local_original_title_paren(self):
         # Fallback A: a short standalone local title in a trailing group is
         # stripped when packaging noise is present in the same title.
@@ -347,6 +389,40 @@ class NextScannedTitleTests(unittest.TestCase):
         # `regions` must be a JSONB-friendly list, not a bare string.
         self.assertEqual(normalized["technicalUpdates"]["regions"], ["Region B"])
         self.assertEqual(normalized["movieUpdates"]["title"], "Some Film")
+
+    def test_canonicalize_promotes_scanned_edition_into_edition_field(self):
+        # A barcode scan without plugin edition metadata must still surface the
+        # edition/cut in the structured `edition` field, derived from the raw
+        # release title, while the display title stays clean.
+        normalized = canonicalize_plugin_result(
+            "bluray_com",
+            "movie_details",
+            {
+                "status": "hit",
+                "releaseTitle": "Blade Runner (Director's Cut)",
+                "movie": {"title": "Blade Runner (Director's Cut)"},
+            },
+        )
+        movie_updates = normalized["movieUpdates"]
+        self.assertEqual(movie_updates["title"], "Blade Runner")
+        self.assertEqual(movie_updates["edition"], "Director's Cut")
+
+    def test_canonicalize_does_not_overwrite_plugin_edition(self):
+        # A plugin-provided edition is authoritative and must never be clobbered
+        # by the title-derived fallback.
+        normalized = canonicalize_plugin_result(
+            "bluray_com",
+            "movie_details",
+            {
+                "status": "hit",
+                "releaseTitle": "Blade Runner (Director's Cut)",
+                "movie": {
+                    "title": "Blade Runner (Director's Cut)",
+                    "edition": "Special Edition",
+                },
+            },
+        )
+        self.assertEqual(normalized["movieUpdates"]["edition"], "Special Edition")
 
 
 class NextMetadataPolicyTests(unittest.TestCase):
