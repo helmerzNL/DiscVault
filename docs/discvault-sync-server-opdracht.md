@@ -308,9 +308,14 @@ nullable en bepaalt geen sync-identiteit. De ladder zoekt daarom collectiebreed:
    (`4K_UHD`, `4K UHD`, `UHD` → `ultra_hd_blu_ray`). Blockers: verschillende niet-lege
    barcodes, materieel verschillende genormaliseerde titels, of verschillende niet-lege jaren.
 4. Genormaliseerde titel + jaar + hetzelfde niet-lege formaat: uitsluitend in
-   `/api/next/sync/reconcile`, nooit in reguliere creates. Blocker: verschillende niet-lege
-   barcodes. Alleen het leidende Engelse `"the"` wordt verwijderd; `"Die Hard"` en
-   `"De Aanslag"` blijven intact.
+   `/api/next/sync/reconcile`, nooit in reguliere creates. Blockers: verschillende niet-lege
+   barcodes; structureel verschillende containerlidmaatschappen; of twee verschillende
+   niet-lege expliciete edities. Containerlidmaatschap is fysieke-copy-identiteit: zodra één
+   kandidaat lid is van een box-set/container moeten de genormaliseerde sets container-id's
+   exact gelijk zijn. Lid-versus-standalone en leden van verschillende containers matchen dus
+   nooit; twee stubs in dezelfde container mogen matchen. Een ontbrekende editie mag alleen
+   een niet-lege editie adopteren wanneer beide kandidaten standalone zijn. Alleen het leidende
+   Engelse `"the"` wordt verwijderd; `"Die Hard"` en `"De Aanslag"` blijven intact.
 
 Een blocker betekent geen foutresponse maar **geen match**: de create maakt dan een afzonderlijk
 record. Een expliciete tombstone-match wordt vóór een nieuwe insert afgehandeld en volgt de
@@ -388,6 +393,12 @@ fingerprint, verifieert de passkey, voert uitsluitend de opgeslagen payload uit 
 report in dezelfde transactie consumed. Legacy `report:{...}`-payloads worden expliciet
 geweigerd.
 
+`backend_version` en `script_commit` in de immutable payload komen in een gepubliceerde image
+eerst uit de tijdens de Docker-build vastgelegde `DISCVAULT_IMAGE_VERSION` en
+`DISCVAULT_IMAGE_SHA`. Runtime-Composewaarden zoals `BUILD_VERSION=next-dev` mogen deze
+imageprovenance niet overschrijven. Een source checkout valt terug op `app/VERSION`, de bestaande
+build/commit-omgevingsvariabelen en uiteindelijk de lokale Git-commit.
+
 Stabiele `errorCode`-waarden:
 
 | Situatie | `errorCode` | HTTP |
@@ -417,7 +428,10 @@ mergelogica bestaan uitsluitend in de canonical backendbron.
 ### Reconcile (`/api/next/sync/reconcile`)
 
 Request: `{ "clientId": "<device>", "items": [ { client_id, barcode, tmdb_id, format, edition,
-title, year } ] }` (max 1000 items). Response `results[]` per item: `{ client_id, status:
+title, year, container_ids? } ] }` (max 1000 items). `container_ids`, indien aanwezig, is een
+lijst canonical server-UUID's voor structurele box-set/containerlidmaatschappen; ontbrekend of
+leeg betekent standalone. Een malformed waarde maakt dat item `invalid`. Response `results[]`
+per item: `{ client_id, status:
 "matched"|"unknown"|"invalid", matched: bool, entityId?, matchedBy? }`. Dit is het **enige** pad
 waar trede 4 (titel+jaar) actief is.
 
