@@ -307,6 +307,13 @@ nullable en bepaalt geen sync-identiteit. De ladder zoekt daarom collectiebreed:
 3. TMDB + formaat + editie: alle drie moeten matchen. Formaat wordt genormaliseerd
    (`4K_UHD`, `4K UHD`, `UHD` → `ultra_hd_blu_ray`). Blockers: verschillende niet-lege
    barcodes, materieel verschillende genormaliseerde titels, of verschillende niet-lege jaren.
+   TMDB-extractie uit `movie_identifiers` vergelijkt `provider_id` en `identifier_type`
+   hoofdletterongevoelig en geeft `identifier_type=movie_id` voorrang. Lege/alleen-whitespace
+   identifierwaarden zijn afwezig. Zonder `movie_id` wint de eerste TMDB-rij in de stabiele
+   opslagvolgorde `provider_id, identifier_type, identifier`. De selector trimt de identifierwaarde,
+   maar niet de provider/type-sleutels: alle server-writepaden trimmen die sleutels al vóór opslag,
+   en dit behoudt pariteit met de clientextractie. `movievault_26/movie_id` wordt via dezelfde
+   gedeelde extractie hoofdletterongevoelig gelezen; ook daar geldt dat een lege waarde afwezig is.
 4. Genormaliseerde titel + jaar + hetzelfde niet-lege formaat: uitsluitend in
    `/api/next/sync/reconcile`, nooit in reguliere creates. Blockers: verschillende niet-lege
    barcodes; structureel verschillende containerlidmaatschappen; of twee verschillende
@@ -455,5 +462,9 @@ waar trede 4 (titel+jaar) actief is.
       checkoutwrapper. Dry-run is default; detectie gebruikt dezelfde ladder; winnaar = meeste
       user-data (tie → oudste `created_at`, daarna stabiele id); relaties worden omgehangen;
       verliezers krijgen tombstone; geen client_id-backfill.
-- [x] **P6** Tests (`test_next_sync.py` DoD-suite + `app/scripts/tests/test_sync_dedup_merge.py`)
-      + versie-bump `app/VERSION`.
+- [x] **P6** Tests (`test_next_sync.py` DoD-suite +
+      `app/scripts/tests/test_sync_dedup_merge.py` +
+      `test_identity_identifier_extraction.py`) + versie-bump `app/VERSION`.
+      De gedeelde App-Guidance-fixture wordt pas toegevoegd nadat de vijf
+      `identifier_cases` upstream zijn gepubliceerd; de huidige upstreamfixture
+      bevat alleen `cases` en `merge_winner_cases`.

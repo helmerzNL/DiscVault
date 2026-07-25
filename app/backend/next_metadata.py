@@ -21,6 +21,7 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
             self.value = value
 
 try:
+    from .dedup_identity import extract_identity_identifiers
     from .next_import import clean_text
     from .next_genres import genre_keys_from_tmdb_ids
     from .next_genres import normalize_genre_keys
@@ -34,6 +35,7 @@ try:
     from .next_plugin_runtime import sync_plugin_registry
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
 except ImportError:  # pragma: no cover - supports direct module execution
+    from dedup_identity import extract_identity_identifiers
     from next_import import clean_text
     from next_genres import genre_keys_from_tmdb_ids
     from next_genres import normalize_genre_keys
@@ -660,23 +662,25 @@ def movie_identifiers(conn, movie_id: UUID) -> dict[str, str]:
             SELECT provider_id, identifier_type, identifier
             FROM movie_identifiers
             WHERE movie_id=%s
+            ORDER BY provider_id, identifier_type, identifier
             """,
             (movie_id,),
         )
         rows = cur.fetchall()
+    selected = extract_identity_identifiers(rows)
     values = {}
+    if selected["tmdb"] is not None:
+        values["tmdb_id"] = selected["tmdb"]
+        values["tmdbId"] = selected["tmdb"]
+    if selected["movievault"] is not None:
+        values["movievault_id"] = selected["movievault"]
+        values["movieVaultId"] = selected["movievault"]
     for row in rows:
         provider = str(row["provider_id"])
         identifier_type = str(row["identifier_type"])
-        if provider == "tmdb" and identifier_type == "movie_id":
-            values["tmdb_id"] = row["identifier"]
-            values["tmdbId"] = row["identifier"]
-        elif provider == "imdb" and identifier_type == "movie_id":
+        if provider == "imdb" and identifier_type == "movie_id":
             values["imdb_id"] = row["identifier"]
             values["imdbId"] = row["identifier"]
-        elif provider in MOVIEVAULT_PLUGIN_IDS and identifier_type == "movie_id":
-            values["movievault_id"] = row["identifier"]
-            values["movieVaultId"] = row["identifier"]
     return values
 
 
