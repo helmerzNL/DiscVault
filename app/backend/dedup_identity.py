@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 
 def normalize_edition_identity(value: object) -> str:
@@ -47,3 +47,40 @@ def title_year_identity_compatible(
         and right_edition_key
         and left_edition_key != right_edition_key
     )
+
+
+def select_tmdb_identifier(
+    identifiers: Iterable[Mapping[str, object]],
+) -> str | None:
+    """Select the tier-3 TMDB value from an ordered identifier row set.
+
+    Provider and identifier-type comparisons are case-insensitive, matching the
+    client contract. They are deliberately not whitespace-trimmed: server write
+    paths already trim these storage keys, and preserving exact-key semantics
+    keeps this selector aligned with the iOS implementation. Identifier values
+    are trimmed and blank values are absent.
+
+    A ``movie_id`` row wins when present. Otherwise the first TMDB row in the
+    caller's deterministic order is the compatibility fallback.
+    """
+    tmdb_rows = []
+    for row in identifiers:
+        if str(row.get("provider_id") or "").casefold() != "tmdb":
+            continue
+        value = str(row.get("identifier") or "").strip()
+        if value:
+            tmdb_rows.append((row, value))
+    selected = next(
+        (
+            candidate
+            for candidate in tmdb_rows
+            if str(candidate[0].get("identifier_type") or "").casefold()
+            == "movie_id"
+        ),
+        None,
+    )
+    if selected is None and tmdb_rows:
+        selected = tmdb_rows[0]
+    if selected is None:
+        return None
+    return selected[1]

@@ -1,0 +1,231 @@
+{
+  "$schema_note": "Server fixture coverage for the DiscVault identity ladder. cases, merge_winner_cases, and identifier_cases are mandatory test categories.",
+  "version": "1.1",
+  "generated_from": "App-Guidance identity-ladder 1.0 plus the established iOS TMDB identifier extraction contract",
+  "cases": [
+    {
+      "id": "tier1-same-token",
+      "context": "create",
+      "a": {"client_id": "tok-1", "title": "Dune", "year": 2021, "format": "4K UHD"},
+      "b": {"client_id": "tok-1", "title": "Dune", "year": 2021, "format": "4K UHD"},
+      "expected": "match",
+      "match_tier": "clientId"
+    },
+    {
+      "id": "tier2-same-barcode",
+      "context": "create",
+      "a": {"barcode": "5051891155794", "title": "Interstellar", "year": 2014, "format": "4K UHD"},
+      "b": {"barcode": "5051891155794", "title": "Interstellar", "year": 2014, "format": "4K UHD"},
+      "expected": "match",
+      "match_tier": "barcode"
+    },
+    {
+      "id": "tier2-diff-barcode-blocks-endgame",
+      "context": "reconcile",
+      "a": {"barcode": "786936863680", "tmdb_id": "299534", "title": "Avengers: Endgame", "year": 2019, "format": "4K UHD"},
+      "b": {"barcode": "8717418549893", "tmdb_id": "299534", "title": "Avengers: Endgame", "year": 2019, "format": "4K UHD"},
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier2-diff-barcode-blocks-interstellar",
+      "context": "reconcile",
+      "a": {"barcode": "032429300478", "title": "Interstellar", "year": 2014, "format": "4K UHD"},
+      "b": {"barcode": "5051891155794", "title": "Interstellar", "year": 2014, "format": "4K UHD"},
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier3-tmdb-format-edition",
+      "context": "create",
+      "a": {"tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD", "edition": "Standard"},
+      "b": {"tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD", "edition": "Standard"},
+      "expected": "match",
+      "match_tier": "tmdbEdition"
+    },
+    {
+      "id": "tier3-sanity-check-harry-potter",
+      "context": "create",
+      "a": {"tmdb_id": "12444", "title": "Harry Potter and the Deathly Hallows: Part 1", "year": 2010, "format": "4K UHD"},
+      "b": {"tmdb_id": "12444", "title": "Harry Potter and the Deathly Hallows Part 2", "year": 2011, "format": "4K UHD"},
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier3-diff-format-not-match",
+      "context": "create",
+      "a": {"tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "DVD"},
+      "b": {"tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD"},
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier3-diff-edition-not-match",
+      "context": "create",
+      "a": {"tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD", "edition": "Steelbook"},
+      "b": {"tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD", "edition": "Standard"},
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier4-title-year-reconcile",
+      "context": "reconcile",
+      "a": {"title": "The Bourne Identity", "year": 2002, "format": "DVD"},
+      "b": {"title": "The Bourne Identity", "year": 2002, "format": "DVD"},
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "tier4-inactive-on-create",
+      "context": "create",
+      "a": {"title": "The Bourne Identity", "year": 2002, "format": "DVD"},
+      "b": {"title": "The Bourne Identity", "year": 2002, "format": "DVD"},
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier4-remake-missing-year",
+      "context": "reconcile",
+      "a": {"title": "A Star Is Born", "year": null, "format": "Blu-ray"},
+      "b": {"title": "A Star Is Born", "year": 2018, "format": "Blu-ray"},
+      "expected": "no_match_or_candidate",
+      "match_tier": null
+    },
+    {
+      "id": "norm-punctuation",
+      "context": "reconcile",
+      "a": {"title": "Avengers: Endgame", "year": 2019, "format": "4K UHD"},
+      "b": {"title": "Avengers Endgame", "year": 2019, "format": "4K UHD"},
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "norm-diacritics",
+      "context": "reconcile",
+      "a": {"title": "Amélie", "year": 2001, "format": "Blu-ray"},
+      "b": {"title": "Amelie", "year": 2001, "format": "Blu-ray"},
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "norm-english-the-stripped",
+      "context": "reconcile",
+      "a": {"title": "The Batman", "year": 2022, "format": "4K UHD"},
+      "b": {"title": "Batman", "year": 2022, "format": "4K UHD"},
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "norm-dutch-article-not-stripped",
+      "context": "reconcile",
+      "a": {"title": "De Aanslag", "year": 1986, "format": "DVD"},
+      "b": {"title": "Aanslag", "year": 1986, "format": "DVD"},
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "norm-die-hard-not-stripped",
+      "context": "reconcile",
+      "a": {"title": "Die Hard", "year": 1988, "format": "Blu-ray"},
+      "b": {"title": "Hard", "year": 1988, "format": "Blu-ray"},
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "format-underscore-equals-space",
+      "context": "reconcile",
+      "a": {"title": "The Greatest Showman", "year": 2017, "format": "4K_UHD"},
+      "b": {"title": "The Greatest Showman", "year": 2017, "format": "4K UHD"},
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "second-client-adoption",
+      "context": "reconcile",
+      "a": {"client_id": "local-android-xyz", "barcode": "786936863680", "title": "Avengers: Endgame", "year": 2019, "format": "4K UHD"},
+      "b": {"client_id": "server-existing-abc", "barcode": "786936863680", "title": "Avengers: Endgame", "year": 2019, "format": "4K UHD"},
+      "expected": "match",
+      "match_tier": "barcode"
+    },
+    {
+      "id": "boxset-member-shares-container-ean",
+      "context": "create",
+      "a": {"barcode": "5051888240816", "title": "The Lord of the Rings: The Fellowship of the Ring", "year": 2001, "format": "4K UHD", "barcode_claimed_in_batch": true},
+      "b": {"barcode": "5051888240816", "title": "The Lord of the Rings: The Two Towers", "year": 2002, "format": "4K UHD"},
+      "expected": "no_match",
+      "match_tier": null
+    }
+  ],
+  "merge_winner_cases": [
+    {
+      "id": "winner-most-userdata",
+      "records": [
+        {"id": "complete", "own_artwork": true, "locked_fields": false, "watch_history": 0, "barcode": "3259190276925", "created_at": "2026-07-12T04:17:18Z"},
+        {"id": "stub", "own_artwork": false, "locked_fields": false, "watch_history": 0, "barcode": null, "created_at": "2026-07-13T12:43:59Z"}
+      ],
+      "expected_winner": "complete"
+    },
+    {
+      "id": "winner-watch-history-beats-oldest",
+      "records": [
+        {"id": "older-no-history", "own_artwork": true, "locked_fields": false, "watch_history": 0, "created_at": "2026-07-12T14:08:54Z"},
+        {"id": "newer-with-history", "own_artwork": false, "locked_fields": false, "watch_history": 2, "created_at": "2026-07-12T19:29:48Z"}
+      ],
+      "expected_winner": "newer-with-history"
+    },
+    {
+      "id": "winner-tiebreak-oldest",
+      "records": [
+        {"id": "first", "own_artwork": false, "locked_fields": false, "watch_history": 0, "created_at": "2026-07-13T12:43:58.805Z"},
+        {"id": "second", "own_artwork": false, "locked_fields": false, "watch_history": 0, "created_at": "2026-07-13T12:43:58.888Z"}
+      ],
+      "expected_winner": "first"
+    }
+  ],
+  "identifier_cases": [
+    {
+      "id": "identifier-tmdb-movie-id",
+      "description": "Extract the TMDB movie id from mixed providers.",
+      "identifiers": [
+        {"provider_id": "movievault_26", "identifier_type": "movie_id", "identifier": "mv-9"},
+        {"provider_id": "tmdb", "identifier_type": "movie_id", "identifier": "157336"},
+        {"provider_id": "imdb", "identifier_type": "title_id", "identifier": "tt0816692"}
+      ],
+      "expected_tmdb_id": "157336"
+    },
+    {
+      "id": "identifier-provider-case-insensitive",
+      "description": "Provider and identifier type comparisons are case-insensitive.",
+      "identifiers": [
+        {"provider_id": "TMDB", "identifier_type": "MOVIE_ID", "identifier": "603"}
+      ],
+      "expected_tmdb_id": "603"
+    },
+    {
+      "id": "identifier-prefers-movie-id",
+      "description": "movie_id wins even when another TMDB identifier appears first.",
+      "identifiers": [
+        {"provider_id": "tmdb", "identifier_type": "collection_id", "identifier": "999"},
+        {"provider_id": "tmdb", "identifier_type": "movie_id", "identifier": "27205"}
+      ],
+      "expected_tmdb_id": "27205"
+    },
+    {
+      "id": "identifier-blank-is-absent",
+      "description": "A whitespace-only selected identifier is absent.",
+      "identifiers": [
+        {"provider_id": "tmdb", "identifier_type": "movie_id", "identifier": "   "}
+      ],
+      "expected_tmdb_id": null
+    },
+    {
+      "id": "identifier-fallback-first-tmdb",
+      "description": "Without movie_id, the first TMDB row in deterministic input order wins.",
+      "identifiers": [
+        {"provider_id": "tmdb", "identifier_type": "collection_id", "identifier": "420"},
+        {"provider_id": "tmdb", "identifier_type": "person_id", "identifier": "31"}
+      ],
+      "expected_tmdb_id": "420"
+    }
+  ]
+}

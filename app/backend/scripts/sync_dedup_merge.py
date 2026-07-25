@@ -46,16 +46,16 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 if __package__ and __package__ != "scripts":
-    from ..dedup_identity import title_year_identity_compatible
+    from ..dedup_identity import select_tmdb_identifier, title_year_identity_compatible
     from ..versioning import backend_version, build_sha
 elif __package__ == "scripts":  # pragma: no cover - gunicorn top-level imports
-    from dedup_identity import title_year_identity_compatible
+    from dedup_identity import select_tmdb_identifier, title_year_identity_compatible
     from versioning import backend_version, build_sha
 else:  # pragma: no cover - exercised by the published-image CLI path
     backend_dir = Path(__file__).resolve().parents[1]
     if str(backend_dir) not in sys.path:
         sys.path.insert(0, str(backend_dir))
-    from dedup_identity import title_year_identity_compatible
+    from dedup_identity import select_tmdb_identifier, title_year_identity_compatible
     from versioning import backend_version, build_sha
 
 
@@ -395,16 +395,21 @@ def _fetch_tmdb_ids(conn):
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT movie_id, identifier
+            SELECT movie_id, provider_id, identifier_type, identifier
             FROM movie_identifiers
-            WHERE provider_id = 'tmdb'
-            ORDER BY movie_id, identifier
+            WHERE lower(provider_id) = 'tmdb'
+            ORDER BY movie_id, provider_id, identifier_type, identifier
             """
         )
         rows = cur.fetchall()
-    out = {}
+    by_movie = {}
     for row in rows:
-        out.setdefault(row["movie_id"], row["identifier"])
+        by_movie.setdefault(row["movie_id"], []).append(row)
+    out = {}
+    for movie_id, identifiers in by_movie.items():
+        selected = select_tmdb_identifier(identifiers)
+        if selected is not None:
+            out[movie_id] = selected
     return out
 
 
