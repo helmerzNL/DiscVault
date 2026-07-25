@@ -15,8 +15,10 @@ on:
       - "app/backend/next_import.py"
       - "app/backend/next_app.py"
       - "app/backend/dedup_identity.py"
+      - "app/backend/identity_fixture_contract.py"
       - "app/backend/next_metadata.py"
       - "app/backend/scripts/sync_dedup_merge.py"
+      - "app/backend/scripts/validate_identity_ladder_fixture.py"
       - "app/backend/next_auth.py"
       - "app/backend/next_runtime_secrets.py"
       - "app/backend/next_plugin_runtime.py"
@@ -26,12 +28,15 @@ on:
       - "app/backend/tests/fixtures/distribution-v2*"
       - "app/backend/tests/__init__.py"
       - "app/backend/tests/test_identity_identifier_extraction.py"
+      - "app/backend/tests/test_identity_ladder_fixture.py"
+      - "app/backend/tests/test_identity_ladder_validator.py"
       - "app/backend/tests/test_next_movievault_v2*.py"
       - "app/backend/tests/test_next_movievault_v3.py"
       - "app/backend/tests/test_next_runtime_secrets.py"
       - "app/backend/next_worker.py"
       - "app/backend/migrations_next/**"
       - "app/backend/requirements.txt"
+      - "sync/fixtures/identity-ladder.json"
 
 jobs:
   postgres-smoke:
@@ -74,10 +79,13 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile dedup_identity.py next_metadata.py scripts/sync_dedup_merge.py next_database.py next_import.py next_app.py next_auth.py next_legacy_auth.py next_movievault_connection.py next_runtime_secrets.py next_plugin_runtime.py next_movievault_v2.py next_worker.py
+        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_legacy_auth.py next_movievault_connection.py next_runtime_secrets.py next_plugin_runtime.py next_movievault_v2.py next_worker.py
 
-      - name: Test identity identifier extraction
-        run: python -m unittest tests.test_identity_identifier_extraction
+      - name: Validate pinned identity-ladder fixture coverage
+        run: python scripts/validate_identity_ladder_fixture.py
+
+      - name: Test identity fixture and identifier extraction
+        run: python -m unittest tests.test_identity_ladder_fixture tests.test_identity_ladder_validator tests.test_identity_identifier_extraction
 
       - name: Test runtime secret configuration
         run: python -m unittest tests.test_next_runtime_secrets

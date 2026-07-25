@@ -314,6 +314,12 @@ nullable en bepaalt geen sync-identiteit. De ladder zoekt daarom collectiebreed:
    maar niet de provider/type-sleutels: alle server-writepaden trimmen die sleutels al vóór opslag,
    en dit behoudt pariteit met de clientextractie. `movievault_26/movie_id` wordt via dezelfde
    gedeelde extractie hoofdletterongevoelig gelezen; ook daar geldt dat een lege waarde afwezig is.
+   De normatieve bron is App-Guidance PR
+   [#17](https://github.com/Flux76HQ/App-Guidance/pull/17), gepind op commit
+   `fb78a04cdc1908757becf88e3a551da9ff7c7ffe`. De vendored fixture heeft versie `1.1`
+   en canonieke CRLF SHA-256
+   `afa4f3c00877cce61fb4237e4ccf0a93f99c3149adab8b6b2466365182b550d6`.
+   Die upstream-PR was bij het toevoegen nog open en ongemergd.
 4. Genormaliseerde titel + jaar + hetzelfde niet-lege formaat: uitsluitend in
    `/api/next/sync/reconcile`, nooit in reguliere creates. Blockers: verschillende niet-lege
    barcodes; structureel verschillende containerlidmaatschappen; of twee verschillende
@@ -464,7 +470,9 @@ waar trede 4 (titel+jaar) actief is.
       verliezers krijgen tombstone; geen client_id-backfill.
 - [x] **P6** Tests (`test_next_sync.py` DoD-suite +
       `app/scripts/tests/test_sync_dedup_merge.py` +
-      `test_identity_identifier_extraction.py`) + versie-bump `app/VERSION`.
-      De gedeelde App-Guidance-fixture wordt pas toegevoegd nadat de vijf
-      `identifier_cases` upstream zijn gepubliceerd; de huidige upstreamfixture
-      bevat alleen `cases` en `merge_winner_cases`.
+      `test_identity_identifier_extraction.py` +
+      fail-closed `test_identity_ladder_fixture.py` en
+      `test_identity_ladder_validator.py`) + aparte CI-validator
+      `scripts/validate_identity_ladder_fixture.py`. De validator voert alle
+      categorieën uit (`cases`, `identifier_cases`, `merge_winner_cases`), weigert
+      schema-/dispatchdrift en controleert de gepinde fixture-SHA.
