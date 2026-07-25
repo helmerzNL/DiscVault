@@ -84,3 +84,31 @@ def select_tmdb_identifier(
     if selected is None:
         return None
     return selected[1]
+
+
+def select_movievault_identifier(
+    identifiers: Iterable[Mapping[str, object]],
+) -> str | None:
+    """Select the first nonblank MovieVault movie identifier."""
+    for row in identifiers:
+        provider = str(row.get("provider_id") or "").casefold()
+        identifier_type = str(row.get("identifier_type") or "").casefold()
+        value = str(row.get("identifier") or "").strip()
+        if (
+            provider in {"movievault", "movievault_26"}
+            and identifier_type == "movie_id"
+            and value
+        ):
+            return value
+    return None
+
+
+def extract_identity_identifiers(
+    identifiers: Iterable[Mapping[str, object]],
+) -> dict[str, str | None]:
+    """Extract the server identity providers from one ordered identifier set."""
+    rows = list(identifiers)
+    return {
+        "tmdb": select_tmdb_identifier(rows),
+        "movievault": select_movievault_identifier(rows),
+    }

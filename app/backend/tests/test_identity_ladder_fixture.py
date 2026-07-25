@@ -7,21 +7,35 @@ from datetime import datetime
 import json
 from pathlib import Path
 import unittest
+from unittest import mock
 
 try:
-    from .. import next_app
+    from .. import next_app, next_metadata
     from ..dedup_identity import (
+        extract_identity_identifiers,
         normalize_edition_identity,
+        select_movievault_identifier,
         select_tmdb_identifier,
         title_year_identity_compatible,
+    )
+    from ..identity_fixture_contract import (
+        IDENTITY_FIXTURE_METADATA_KEYS,
+        IDENTITY_FIXTURE_RUNNERS,
     )
     from ..scripts import sync_dedup_merge as merge
 except ImportError:  # pragma: no cover - backend working-directory CI imports
     import next_app
+    import next_metadata
     from dedup_identity import (
+        extract_identity_identifiers,
         normalize_edition_identity,
+        select_movievault_identifier,
         select_tmdb_identifier,
         title_year_identity_compatible,
+    )
+    from identity_fixture_contract import (
+        IDENTITY_FIXTURE_METADATA_KEYS,
+        IDENTITY_FIXTURE_RUNNERS,
     )
     from scripts import sync_dedup_merge as merge
 
@@ -53,19 +67,9 @@ class _ScoreConnection:
 class IdentityLadderFixtureRunner:
     """Dispatch every declared fixture category to its production-backed runner."""
 
-    SUPPORTED_CATEGORIES = (
-        "cases",
-        "merge_winner_cases",
-        "identifier_cases",
-    )
-    ALLOWED_METADATA_KEYS = frozenset(
-        {"$schema_note", "version", "generated_from"}
-    )
-    DEFAULT_RUNNERS = {
-        "cases": "_run_ladder_cases",
-        "merge_winner_cases": "_run_merge_winner_cases",
-        "identifier_cases": "_run_identifier_cases",
-    }
+    SUPPORTED_CATEGORIES = tuple(IDENTITY_FIXTURE_RUNNERS)
+    ALLOWED_METADATA_KEYS = IDENTITY_FIXTURE_METADATA_KEYS
+    DEFAULT_RUNNERS = dict(IDENTITY_FIXTURE_RUNNERS)
 
     def __init__(self, payload, *, runners=None):
         self.payload = payload
@@ -318,11 +322,15 @@ class IdentityLadderFixtureRunner:
     def _run_identifier_cases(cases):
         executed = []
         for case in cases:
-            actual = select_tmdb_identifier(case["identifiers"])
-            if actual != case["expected_tmdb_id"]:
+            actual = extract_identity_identifiers(case["identifiers"])
+            expected = {
+                "tmdb": case.get("expected_tmdb_id"),
+                "movievault": case.get("expected_movievault_id"),
+            }
+            if actual != expected:
                 raise AssertionError(
-                    f"[{case['id']}] expected TMDB id "
-                    f"{case['expected_tmdb_id']!r}, got {actual!r}."
+                    f"[{case['id']}] expected identifiers {expected!r}, "
+                    f"got {actual!r}."
                 )
             executed.append(case["id"])
         return executed
@@ -341,11 +349,11 @@ class FixtureCategoryCoverageTests(unittest.TestCase):
         self.assertEqual(
             executed["identifier_cases"],
             [
-                "identifier-tmdb-movie-id",
-                "identifier-provider-case-insensitive",
-                "identifier-prefers-movie-id",
-                "identifier-blank-is-absent",
-                "identifier-fallback-first-tmdb",
+                "ident-tmdb-movie-id",
+                "ident-case-insensitive-provider",
+                "ident-prefers-movie-id",
+                "ident-blank-is-absent",
+                "ident-no-tmdb-provider",
             ],
         )
 
@@ -391,6 +399,25 @@ class FixtureCategoryCoverageTests(unittest.TestCase):
 
 
 class TmdbIdentifierSelectionTests(unittest.TestCase):
+    def test_extracts_tmdb_and_movievault_identifiers(self):
+        self.assertEqual(
+            extract_identity_identifiers(
+                [
+                    {
+                        "provider_id": "movievault_26",
+                        "identifier_type": "movie_id",
+                        "identifier": "mv-9",
+                    },
+                    {
+                        "provider_id": "tmdb",
+                        "identifier_type": "movie_id",
+                        "identifier": "157336",
+                    },
+                ]
+            ),
+            {"tmdb": "157336", "movievault": "mv-9"},
+        )
+
     def test_provider_and_identifier_type_are_case_insensitive(self):
         self.assertEqual(
             select_tmdb_identifier(
@@ -488,6 +515,20 @@ class TmdbIdentifierSelectionTests(unittest.TestCase):
             )
         )
 
+    def test_movievault_provider_and_type_are_case_insensitive(self):
+        self.assertEqual(
+            select_movievault_identifier(
+                [
+                    {
+                        "provider_id": "MOVIEVAULT_26",
+                        "identifier_type": "MOVIE_ID",
+                        "identifier": " mv-9 ",
+                    }
+                ]
+            ),
+            "mv-9",
+        )
+
 
 class _IdentifierCursor:
     def __init__(self, rows):
@@ -513,6 +554,41 @@ class _IdentifierConnection:
 
     def cursor(self):
         return self.cursor_instance
+
+
+class MetadataIdentifierExtractionIntegrationTests(unittest.TestCase):
+    def test_metadata_path_uses_shared_identity_extractor(self):
+        connection = _IdentifierConnection(
+            [
+                {
+                    "provider_id": "TMDB",
+                    "identifier_type": "MOVIE_ID",
+                    "identifier": "603",
+                },
+                {
+                    "provider_id": "movievault_26",
+                    "identifier_type": "movie_id",
+                    "identifier": " mv-9 ",
+                },
+                {
+                    "provider_id": "tmdb",
+                    "identifier_type": "collection_id",
+                    "identifier": "99999",
+                },
+            ]
+        )
+
+        with mock.patch.object(next_metadata, "table_exists", return_value=True):
+            values = next_metadata.movie_identifiers(connection, "movie-a")
+
+        self.assertEqual(values["tmdb_id"], "603")
+        self.assertEqual(values["tmdbId"], "603")
+        self.assertEqual(values["movievault_id"], "mv-9")
+        self.assertEqual(values["movieVaultId"], "mv-9")
+        self.assertIn(
+            "ORDER BY provider_id, identifier_type, identifier",
+            connection.cursor_instance.sql,
+        )
 
 
 class MergeTmdbExtractionIntegrationTests(unittest.TestCase):

@@ -184,48 +184,52 @@
   ],
   "identifier_cases": [
     {
-      "id": "identifier-tmdb-movie-id",
-      "description": "Extract the TMDB movie id from mixed providers.",
+      "id": "ident-tmdb-movie-id",
+      "description": "Extract TMDB and MovieVault movie ids from mixed providers.",
       "identifiers": [
         {"provider_id": "movievault_26", "identifier_type": "movie_id", "identifier": "mv-9"},
         {"provider_id": "tmdb", "identifier_type": "movie_id", "identifier": "157336"},
         {"provider_id": "imdb", "identifier_type": "title_id", "identifier": "tt0816692"}
       ],
-      "expected_tmdb_id": "157336"
+      "expected_tmdb_id": "157336",
+      "expected_movievault_id": "mv-9"
     },
     {
-      "id": "identifier-provider-case-insensitive",
+      "id": "ident-case-insensitive-provider",
       "description": "Provider and identifier type comparisons are case-insensitive.",
       "identifiers": [
         {"provider_id": "TMDB", "identifier_type": "MOVIE_ID", "identifier": "603"}
       ],
-      "expected_tmdb_id": "603"
+      "expected_tmdb_id": "603",
+      "expected_movievault_id": null
     },
     {
-      "id": "identifier-prefers-movie-id",
+      "id": "ident-prefers-movie-id",
       "description": "movie_id wins even when another TMDB identifier appears first.",
       "identifiers": [
-        {"provider_id": "tmdb", "identifier_type": "collection_id", "identifier": "999"},
-        {"provider_id": "tmdb", "identifier_type": "movie_id", "identifier": "27205"}
+        {"provider_id": "tmdb", "identifier_type": "collection_id", "identifier": "99999"},
+        {"provider_id": "tmdb", "identifier_type": "movie_id", "identifier": "157336"}
       ],
-      "expected_tmdb_id": "27205"
+      "expected_tmdb_id": "157336",
+      "expected_movievault_id": null
     },
     {
-      "id": "identifier-blank-is-absent",
+      "id": "ident-blank-is-absent",
       "description": "A whitespace-only selected identifier is absent.",
       "identifiers": [
-        {"provider_id": "tmdb", "identifier_type": "movie_id", "identifier": "   "}
+        {"provider_id": "tmdb", "identifier_type": "movie_id", "identifier": " "}
       ],
-      "expected_tmdb_id": null
+      "expected_tmdb_id": null,
+      "expected_movievault_id": null
     },
     {
-      "id": "identifier-fallback-first-tmdb",
-      "description": "Without movie_id, the first TMDB row in deterministic input order wins.",
+      "id": "ident-no-tmdb-provider",
+      "description": "An identifier set without a TMDB provider has no TMDB identity.",
       "identifiers": [
-        {"provider_id": "tmdb", "identifier_type": "collection_id", "identifier": "420"},
-        {"provider_id": "tmdb", "identifier_type": "person_id", "identifier": "31"}
+        {"provider_id": "wikidata", "identifier_type": "item", "identifier": "Q42"}
       ],
-      "expected_tmdb_id": "420"
+      "expected_tmdb_id": null,
+      "expected_movievault_id": null
     }
   ]
 }

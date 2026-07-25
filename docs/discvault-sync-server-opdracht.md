@@ -312,7 +312,8 @@ nullable en bepaalt geen sync-identiteit. De ladder zoekt daarom collectiebreed:
    identifierwaarden zijn afwezig. Zonder `movie_id` wint de eerste TMDB-rij in de stabiele
    opslagvolgorde `provider_id, identifier_type, identifier`. De selector trimt de identifierwaarde,
    maar niet de provider/type-sleutels: alle server-writepaden trimmen die sleutels al vóór opslag,
-   en dit behoudt pariteit met de clientextractie.
+   en dit behoudt pariteit met de clientextractie. `movievault_26/movie_id` wordt via dezelfde
+   gedeelde extractie hoofdletterongevoelig gelezen; ook daar geldt dat een lege waarde afwezig is.
 4. Genormaliseerde titel + jaar + hetzelfde niet-lege formaat: uitsluitend in
    `/api/next/sync/reconcile`, nooit in reguliere creates. Blockers: verschillende niet-lege
    barcodes; structureel verschillende containerlidmaatschappen; of twee verschillende
@@ -463,4 +464,5 @@ waar trede 4 (titel+jaar) actief is.
       verliezers krijgen tombstone; geen client_id-backfill.
 - [x] **P6** Tests (`test_next_sync.py` DoD-suite + `app/scripts/tests/test_sync_dedup_merge.py`
       + fail-closed `test_identity_ladder_fixture.py` voor alle categorieën in
-      `sync/fixtures/identity-ladder.json`) + versie-bump `app/VERSION`.
+      `sync/fixtures/identity-ladder.json`) plus de aparte CI-validator
+      `scripts/validate_identity_ladder_fixture.py` + versie-bump `app/VERSION`.
