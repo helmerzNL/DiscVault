@@ -1,0 +1,257 @@
+{
+  "$schema_note": "Taalonafhankelijke fixtures voor de DiscVault-identiteitsladder (sync-contract.md §2). Server, iOS en Android draaien alle top-level testcategorieën en falen gesloten op onbekende categorieën. 'expected' is het verwachte laddereindresultaat voor het paar (a, b). match_tier geeft de trede die het besluit neemt; null bij no-match. context 'create' = gewone create-pad (trede 4 inactief); 'reconcile' = first-connect-adoptiepad (trede 4 actief). 'identifier_cases' pinnen hoe de TMDB- en MovieVault-id uit identifier-records worden gehaald. Divergentie tussen implementaties hoort hier een falende test te zijn, niet een duplicaat in een collectie.",
+  "version": "1.1",
+  "generated_from": "productie dry-run 2026-07-22 + contract-randgevallen",
+  "cases": [
+    {
+      "id": "tier1-same-token",
+      "description": "Zelfde per-record token is altijd hetzelfde record.",
+      "context": "create",
+      "a": { "client_id": "tok-1", "title": "Dune", "year": 2021, "format": "4K UHD" },
+      "b": { "client_id": "tok-1", "title": "Dune", "year": 2021, "format": "4K UHD" },
+      "expected": "match",
+      "match_tier": "clientId"
+    },
+    {
+      "id": "tier2-same-barcode",
+      "description": "Gelijke barcode matcht.",
+      "context": "create",
+      "a": { "barcode": "5051891155794", "title": "Interstellar", "year": 2014, "format": "4K UHD" },
+      "b": { "barcode": "5051891155794", "title": "Interstellar", "year": 2014, "format": "4K UHD" },
+      "expected": "match",
+      "match_tier": "barcode"
+    },
+    {
+      "id": "tier2-diff-barcode-blocks-endgame",
+      "description": "Twee verschillende barcodes = twee releases (US vs Benelux). Definitief geen match, ook niet via lagere tredes. Productie-groep 2.",
+      "context": "reconcile",
+      "a": { "barcode": "786936863680", "tmdb_id": "299534", "title": "Avengers: Endgame", "year": 2019, "format": "4K UHD" },
+      "b": { "barcode": "8717418549893", "tmdb_id": "299534", "title": "Avengers: Endgame", "year": 2019, "format": "4K UHD" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier2-diff-barcode-blocks-interstellar",
+      "description": "Interstellar US vs UK/EU. Verschillende barcodes blokkeren. Productie-groep 3.",
+      "context": "reconcile",
+      "a": { "barcode": "032429300478", "title": "Interstellar", "year": 2014, "format": "4K UHD" },
+      "b": { "barcode": "5051891155794", "title": "Interstellar", "year": 2014, "format": "4K UHD" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier3-tmdb-format-edition",
+      "description": "Zelfde tmdb-id, formaat en editie, consistente titel/jaar: match.",
+      "context": "create",
+      "a": { "tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD", "edition": "Standard" },
+      "b": { "tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD", "edition": "Standard" },
+      "expected": "match",
+      "match_tier": "tmdbEdition"
+    },
+    {
+      "id": "tier3-sanity-check-harry-potter",
+      "description": "Zelfde (foute) tmdb-id 12444 op twee verschillende films: Deathly Hallows Part 1 (2010) en Part 2 (2011). Titel en jaar wijken af, dus de sanity-check blokkeert de merge. Productie-groep 1 — de gevaarlijkste.",
+      "context": "create",
+      "a": { "tmdb_id": "12444", "title": "Harry Potter and the Deathly Hallows: Part 1", "year": 2010, "format": "4K UHD" },
+      "b": { "tmdb_id": "12444", "title": "Harry Potter and the Deathly Hallows Part 2", "year": 2011, "format": "4K UHD" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier3-diff-format-not-match",
+      "description": "Zelfde film, ander formaat (DVD vs 4K UHD): terecht twee records.",
+      "context": "create",
+      "a": { "tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "DVD" },
+      "b": { "tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier3-diff-edition-not-match",
+      "description": "Zelfde film en formaat, andere editie (steelbook vs standaard): twee records, geen over-merge.",
+      "context": "create",
+      "a": { "tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD", "edition": "Steelbook" },
+      "b": { "tmdb_id": "157336", "title": "Interstellar", "year": 2014, "format": "4K UHD", "edition": "Standard" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier4-title-year-reconcile",
+      "description": "Geen token/barcode/tmdb, maar zelfde genormaliseerde titel + jaar + formaat, in reconcile-context: match op trede 4.",
+      "context": "reconcile",
+      "a": { "title": "The Bourne Identity", "year": 2002, "format": "DVD" },
+      "b": { "title": "The Bourne Identity", "year": 2002, "format": "DVD" },
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "tier4-inactive-on-create",
+      "description": "Zelfde titel+jaar maar op het create-pad: trede 4 is daar inactief, dus geen match (wordt een nieuw record).",
+      "context": "create",
+      "a": { "title": "The Bourne Identity", "year": 2002, "format": "DVD" },
+      "b": { "title": "The Bourne Identity", "year": 2002, "format": "DVD" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "tier4-remake-missing-year",
+      "description": "Zelfde titel, één kant zonder jaar: mag geen firm match zijn (remake-veiligheid, bv. A Star Is Born 1976 vs 2018). Hooguit kandidaat.",
+      "context": "reconcile",
+      "a": { "title": "A Star Is Born", "year": null, "format": "Blu-ray" },
+      "b": { "title": "A Star Is Born", "year": 2018, "format": "Blu-ray" },
+      "expected": "no_match_or_candidate",
+      "match_tier": null
+    },
+    {
+      "id": "norm-punctuation",
+      "description": "Interpunctie mag matching niet breken: 'Avengers: Endgame' == 'Avengers Endgame'.",
+      "context": "reconcile",
+      "a": { "title": "Avengers: Endgame", "year": 2019, "format": "4K UHD" },
+      "b": { "title": "Avengers Endgame", "year": 2019, "format": "4K UHD" },
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "norm-diacritics",
+      "description": "Diacrieten vouwen: 'Amélie' == 'Amelie'.",
+      "context": "reconcile",
+      "a": { "title": "Amélie", "year": 2001, "format": "Blu-ray" },
+      "b": { "title": "Amelie", "year": 2001, "format": "Blu-ray" },
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "norm-english-the-stripped",
+      "description": "Engels lidwoord 'The' wordt gestript: 'The Batman' == 'Batman'.",
+      "context": "reconcile",
+      "a": { "title": "The Batman", "year": 2022, "format": "4K UHD" },
+      "b": { "title": "Batman", "year": 2022, "format": "4K UHD" },
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "norm-dutch-article-not-stripped",
+      "description": "Nederlands lidwoord NIET strippen: 'De Aanslag' != 'Aanslag'. Conservatieve keuze, voorkomt over-matching.",
+      "context": "reconcile",
+      "a": { "title": "De Aanslag", "year": 1986, "format": "DVD" },
+      "b": { "title": "Aanslag", "year": 1986, "format": "DVD" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "norm-die-hard-not-stripped",
+      "description": "'Die' is geen te strippen lidwoord: 'Die Hard' mag nooit 'hard' worden.",
+      "context": "reconcile",
+      "a": { "title": "Die Hard", "year": 1988, "format": "Blu-ray" },
+      "b": { "title": "Hard", "year": 1988, "format": "Blu-ray" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "format-underscore-equals-space",
+      "description": "'4K_UHD' en '4K UHD' zijn hetzelfde formaat. Productie-groep 5 gebruikte de underscore-variant.",
+      "context": "reconcile",
+      "a": { "title": "The Greatest Showman", "year": 2017, "format": "4K_UHD" },
+      "b": { "title": "The Greatest Showman", "year": 2017, "format": "4K UHD" },
+      "expected": "match",
+      "match_tier": "titleYear"
+    },
+    {
+      "id": "second-client-adoption",
+      "description": "Tweede client tegen een gevulde server: lokaal token onbekend bij de server (trede 1 faalt), match komt van barcode. Meest voorkomende scenario bij iemand met zowel iOS als Android.",
+      "context": "reconcile",
+      "a": { "client_id": "local-android-xyz", "barcode": "786936863680", "title": "Avengers: Endgame", "year": 2019, "format": "4K UHD" },
+      "b": { "client_id": "server-existing-abc", "barcode": "786936863680", "title": "Avengers: Endgame", "year": 2019, "format": "4K UHD" },
+      "expected": "match",
+      "match_tier": "barcode"
+    },
+    {
+      "id": "boxset-member-shares-container-ean",
+      "description": "Een box-set-lid deelt de container-EAN maar is een aparte film; mag niet met andere leden mergen op barcode als de barcode al door een eerder lid in de batch is geclaimd.",
+      "context": "create",
+      "a": { "barcode": "5051888240816", "title": "The Lord of the Rings: The Fellowship of the Ring", "year": 2001, "format": "4K UHD", "barcode_claimed_in_batch": true },
+      "b": { "barcode": "5051888240816", "title": "The Lord of the Rings: The Two Towers", "year": 2002, "format": "4K UHD" },
+      "expected": "no_match",
+      "match_tier": null
+    }
+  ],
+  "identifier_cases": [
+    {
+      "id": "ident-tmdb-movie-id",
+      "description": "TMDB- en MovieVault-film-id worden uit hun movie_id-records gehaald.",
+      "identifiers": [
+        { "provider_id": "movievault_26", "identifier_type": "movie_id", "identifier": "mv-9" },
+        { "provider_id": "tmdb", "identifier_type": "movie_id", "identifier": "157336" },
+        { "provider_id": "imdb", "identifier_type": "title_id", "identifier": "tt0816692" }
+      ],
+      "expected_tmdb_id": "157336",
+      "expected_movievault_id": "mv-9"
+    },
+    {
+      "id": "ident-case-insensitive-provider",
+      "description": "Provider-id en identifier-type worden case-insensitief vergeleken.",
+      "identifiers": [
+        { "provider_id": "TMDB", "identifier_type": "MOVIE_ID", "identifier": "603" }
+      ],
+      "expected_tmdb_id": "603",
+      "expected_movievault_id": null
+    },
+    {
+      "id": "ident-prefers-movie-id",
+      "description": "TMDB movie_id wint van andere TMDB-identifier-types, ongeacht opslagvolgorde.",
+      "identifiers": [
+        { "provider_id": "tmdb", "identifier_type": "collection_id", "identifier": "99999" },
+        { "provider_id": "tmdb", "identifier_type": "movie_id", "identifier": "157336" }
+      ],
+      "expected_tmdb_id": "157336",
+      "expected_movievault_id": null
+    },
+    {
+      "id": "ident-blank-is-absent",
+      "description": "Een lege of whitespace-only identifier geldt als afwezig.",
+      "identifiers": [
+        { "provider_id": "tmdb", "identifier_type": "movie_id", "identifier": " " }
+      ],
+      "expected_tmdb_id": null,
+      "expected_movievault_id": null
+    },
+    {
+      "id": "ident-no-tmdb-provider",
+      "description": "Zonder TMDB- of MovieVault-provider zijn beide extractiewaarden afwezig.",
+      "identifiers": [
+        { "provider_id": "wikidata", "identifier_type": "item", "identifier": "Q42" }
+      ],
+      "expected_tmdb_id": null,
+      "expected_movievault_id": null
+    }
+  ],
+  "merge_winner_cases": [
+    {
+      "id": "winner-most-userdata",
+      "description": "Bij een terechte merge wint het record met de meeste user-data. Productie-groep 4: compleet record vs lege stub.",
+      "records": [
+        { "id": "complete", "own_artwork": true, "locked_fields": false, "watch_history": 0, "barcode": "3259190276925", "created_at": "2026-07-12T04:17:18Z" },
+        { "id": "stub", "own_artwork": false, "locked_fields": false, "watch_history": 0, "barcode": null, "created_at": "2026-07-13T12:43:59Z" }
+      ],
+      "expected_winner": "complete"
+    },
+    {
+      "id": "winner-watch-history-beats-oldest",
+      "description": "Watch history weegt zwaar: een record met watch history verliest niet van een record zonder, ook al is dat laatste ouder. (In de oude scoring won 'oudste' hier ten onrechte — Interstellar productie-groep 3.)",
+      "records": [
+        { "id": "older-no-history", "own_artwork": true, "locked_fields": false, "watch_history": 0, "created_at": "2026-07-12T14:08:54Z" },
+        { "id": "newer-with-history", "own_artwork": false, "locked_fields": false, "watch_history": 2, "created_at": "2026-07-12T19:29:48Z" }
+      ],
+      "expected_winner": "newer-with-history"
+    },
+    {
+      "id": "winner-tiebreak-oldest",
+      "description": "Gelijke user-data-score: oudste created_at wint als tiebreaker. Productie-groep 5, twee lege records 83 ms uit elkaar.",
+      "records": [
+        { "id": "first", "own_artwork": false, "locked_fields": false, "watch_history": 0, "created_at": "2026-07-13T12:43:58.805Z" },
+        { "id": "second", "own_artwork": false, "locked_fields": false, "watch_history": 0, "created_at": "2026-07-13T12:43:58.888Z" }
+      ],
+      "expected_winner": "first"
+    }
+  ]
+}
