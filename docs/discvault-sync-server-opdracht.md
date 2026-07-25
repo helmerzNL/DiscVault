@@ -462,7 +462,9 @@ waar trede 4 (titel+jaar) actief is.
       checkoutwrapper. Dry-run is default; detectie gebruikt dezelfde ladder; winnaar = meeste
       user-data (tie → oudste `created_at`, daarna stabiele id); relaties worden omgehangen;
       verliezers krijgen tombstone; geen client_id-backfill.
-- [x] **P6** Tests (`test_next_sync.py` DoD-suite + `app/scripts/tests/test_sync_dedup_merge.py`
-      + fail-closed `test_identity_ladder_fixture.py` voor alle categorieën in
-      `sync/fixtures/identity-ladder.json`) plus de aparte CI-validator
-      `scripts/validate_identity_ladder_fixture.py` + versie-bump `app/VERSION`.
+- [x] **P6** Tests (`test_next_sync.py` DoD-suite +
+      `app/scripts/tests/test_sync_dedup_merge.py` +
+      `test_identity_identifier_extraction.py`) + versie-bump `app/VERSION`.
+      De gedeelde App-Guidance-fixture wordt pas toegevoegd nadat de vijf
+      `identifier_cases` upstream zijn gepubliceerd; de huidige upstreamfixture
+      bevat alleen `cases` en `merge_winner_cases`.
