@@ -60,6 +60,24 @@ curl http://localhost:6180/api/next/health
 curl http://localhost:6180/api/next/stats
 ```
 
+### First start takes longer
+
+On a clean installation PostgreSQL runs `initdb` and `next-api` applies every
+migration before Gunicorn binds. Both containers therefore have a 120s
+`start_period`: failures inside that window do not mark them unhealthy, so
+`docker compose up` no longer aborts with
+`dependency failed to start: container ...-postgres-1 is unhealthy` while the
+database is still initializing.
+
+The PostgreSQL health check probes TCP on `127.0.0.1:5432` rather than the Unix
+socket, because `initdb` briefly runs a temporary socket-only server. Probing
+TCP keeps the check correctly negative until the real server accepts
+connections, so dependent services never start against the temporary server.
+
+`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` are required. Leaving
+one out fails the `up` immediately with a message naming the missing variable
+instead of producing a container that never becomes healthy.
+
 When this service is published directly behind a reverse proxy, the Next
 collection UI is available at `/`, `/app`, and `/api/next/app`.
 

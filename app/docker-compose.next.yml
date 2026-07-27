@@ -10,10 +10,13 @@ services:
     volumes:
       - ${DISCVAULT_NEXT_POSTGRES_DATA:-./.local/postgres-next}:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-discvault_next} -d ${POSTGRES_DB:-discvault_next}"]
+      test:
+        - CMD-SHELL
+        - 'pg_isready -h 127.0.0.1 -p 5432 -U "$${POSTGRES_USER:-discvault_next}" -d "$${POSTGRES_DB:-discvault_next}"'
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 120s
     networks:
       - discvault-next-net
 
@@ -50,7 +53,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 120s
     networks:
       - discvault-next-net
 
