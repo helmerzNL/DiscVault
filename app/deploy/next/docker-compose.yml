@@ -3,21 +3,26 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env (see .env.example)}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env (see .env.example)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
       TZ: ${TZ}
     volumes:
       - ${DISCVAULT_NEXT_POSTGRES_DATA:-./postgres-data}:/var/lib/postgresql/data
     healthcheck:
+      # Resolved inside the container, not by Compose on the host, so a missing
+      # host-side variable cannot turn this into an invalid command that fails
+      # forever. Probing TCP instead of the Unix socket keeps the check false
+      # during initdb, when a temporary socket-only server is briefly running.
       test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"
-        ]
+        - CMD-SHELL
+        - 'pg_isready -h 127.0.0.1 -p 5432 -U "$${POSTGRES_USER:-postgres}" -d "$${POSTGRES_DB:-postgres}"'
       interval: 10s
       timeout: 5s
       retries: 10
+      # First start runs initdb and can be slow on NAS storage. Without this,
+      # early failures mark the container unhealthy and abort the whole `up`.
+      start_period: 120s
     networks:
       - discvault-next
 
@@ -63,7 +68,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      # Runs pending migrations before Gunicorn binds. A first start on a fresh
+      # database applies every migration, so keep this generous.
+      start_period: 120s
     networks:
       - discvault-next
 
