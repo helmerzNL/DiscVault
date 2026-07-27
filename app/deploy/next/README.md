@@ -60,6 +60,24 @@ curl http://localhost:6180/api/next/health
 curl http://localhost:6180/api/next/stats
 ```
 
+### First start takes longer
+
+On a clean installation PostgreSQL runs `initdb` and `next-api` applies every
+migration before Gunicorn binds. Both containers therefore have a 120s
+`start_period`: failures inside that window do not mark them unhealthy, so
+`docker compose up` no longer aborts with
+`dependency failed to start: container ...-postgres-1 is unhealthy` while the
+database is still initializing.
+
+The PostgreSQL health check probes TCP on `127.0.0.1:5432` rather than the Unix
+socket, because `initdb` briefly runs a temporary socket-only server. Probing
+TCP keeps the check correctly negative until the real server accepts
+connections, so dependent services never start against the temporary server.
+
+`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` are required. Leaving
+one out fails the `up` immediately with a message naming the missing variable
+instead of producing a container that never becomes healthy.
+
 When this service is published directly behind a reverse proxy, the Next
 collection UI is available at `/`, `/app`, and `/api/next/app`.
 
@@ -103,6 +121,18 @@ as an ordinary `media_viewer` password user with MFA disabled and the configured
 expiry. The old review-login endpoint is retained only as a compatibility alias
 to the shared Legacy flow, including mobile PKCE continuation. New deployments
 should use the normal Legacy login endpoint and UI.
+
+## Admin dedup execution safety gate
+
+`DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED` defaults to `false`. With that safe
+default, authorized admins can still request
+`GET /api/next/admin/dedup/report`, but the UI hides the destructive merge
+action and `POST /api/next/admin/dedup/execute` returns HTTP 403 with
+`errorCode: "admin_dedup_execute_disabled"`.
+
+Only set the value to `true` for a release whose matching logic and generated
+report have been explicitly reviewed. Enabling it does not bypass the existing
+authenticated admin and passkey step-up requirements.
 
 Auth status:
 

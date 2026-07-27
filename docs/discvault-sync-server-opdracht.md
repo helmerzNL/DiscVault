@@ -32,7 +32,7 @@ gedeelde contract vast.
 
 ### 1.1 Stabiele client-identifier
 
-- De client stuurt bij elke movie-create een **persistente `clientId`** (UUID) mee:
+- De client stuurt bij elke movie-create een **persistente `payload.client_id`** (UUID) mee:
   aangemaakt bij het lokale record, onveranderlijk, hergebruikt bij élke retry.
   (Nu: payload-`id` = `remoteID`, dus leeg bij create; `clientMutationId` is
   wegwerp-per-poging — die semantiek vervalt.)
@@ -72,8 +72,10 @@ De semantiek van "nieuw aangemaakt" vs. "bestond al" wordt niet via HTTP-status 
 - `entity` (+ `entityId`) — het **canonieke server-record**, zodat de client bij een match het
   bestaande server-`id` als `remoteID` adopteert. Bij een nieuwe create idem: het net
   aangemaakte record.
-- `tombstoned: true` — extra vlag wanneer de ladder/H4-guard een **getombstoned** record
-  teruggeeft (delete-wins bij re-push, zie Deel 2), zodat de client leert dat het record weg is.
+- `deleted: true` + `deletedAt: "<RFC3339 timestamp>"` — het definitieve deleted-signaal
+  wanneer de ladder/H4-guard een **getombstoned** record teruggeeft (delete-wins bij re-push,
+  zie Deel 2). `tombstoned: true` blijft voorlopig als backward-compatible alias; nieuwe clients
+  sturen uitsluitend op `deleted === true`.
 
 De client adopteert in beide gevallen het geretourneerde server-`id` als `remoteID`.
 
@@ -85,7 +87,8 @@ De client adopteert in beide gevallen het geretourneerde server-`id` als `remote
   hetzelfde batch voorkomt, lost op naar **één** record; de tweede voorkomst krijgt
   `created:false`.
 
-> Veldnamen (`created`, `matchedBy`, `recordClientId`, `entity`, `tombstoned`) zijn
+> Veldnamen (`created`, `matchedBy`, `recordClientId`, `entity`, `deleted`, `deletedAt`,
+> `tombstoned`) zijn
 > geïmplementeerd zoals hierboven; zie de Implementatiestatus onderaan voor de definitieve
 > payload-veldnamen (input) en responsvelden (output).
 
@@ -115,6 +118,10 @@ creates en maakt trede 4 beheersbaar (alleen hier actief).
   van `deleted_at` vs. client-timestamp.
 - Retentie: tombstones minimaal 90 dagen bewaren (langer dan de langste realistische
   offline-periode van een device).
+- Een expliciete update op een bekend getombstoned `entityId` is altijd delete-wins en geeft het
+  deleted-signaal terug; die update maakt het record niet opnieuw live. Alleen een create-intent
+  zonder `entityId` kan volgens de bestaande H4-regel herleven wanneer `payload.updated_at`
+  aantoonbaar later is dan `deleted_at`.
 
 ## Deel 3 — Opschonen bestaande duplicaten (server-side)
 
@@ -180,20 +187,264 @@ Definitief contract (geen dual-key fallback meer):
 
 > De top-level batch-`clientId` (request-body, niet payload) blijft het **device/installatie-id**
 > en is losstaand van de per-record `payload.client_id`.
+>
+> **Naamgevingswaarschuwing:** `clientId` = device/installatie op de batch; `client_id` =
+> persistente recordidentiteit in de mutation-payload; `recordClientId` = canonieke
+> recordidentiteit in de itemresponse. Deze drie namen zijn niet uitwisselbaar.
 
 ### Responsvelden (output) — per `results[]`-item van een movie-upsert
 
 `status`, `entityType`, `operation`, `entityId`, `clientEntityId`, `revision`, `entity`,
 `clientMutationId`, plus dedup-specifiek: `created` (bool), `matchedBy`
-(`clientId|barcode|tmdbEdition|titleYear`, alleen bij `created:false`), `recordClientId`
-(echo van de per-record clientId), en `tombstoned:true` wanneer een getombstoned record wordt
-teruggegeven (delete-wins). Dezelfde `created`/`matchedBy`/`recordClientId` staan ook in de
-delta-`payload` van de emitted `sync_change`.
+(`clientId|barcode|tmdbEdition|titleYear`, alleen bij `created:false`) en `recordClientId`
+(de canonieke persistente recordidentiteit).
+
+Bij delete-wins komen exact deze extra velden mee:
+
+- `deleted: true` — het normatieve signaal; ontbreekt bij een live response (nooit
+  `deleted:false`).
+- `deletedAt: "<RFC3339 timestamp>"` — de server-tombstonetijd.
+- `tombstoned: true` — tijdelijke compatibility-alias voor reeds uitgebrachte clients.
+- `operation: "upsert"` blijft staan, omdat dit het antwoord op de geweigerde upsert-intent is.
+- `created:false`; `matchedBy:"clientId"|"barcode"` bij identity-match en `matchedBy:null` bij
+  een expliciete update van het getombstonede `entityId`.
+- `entity` bevat het canonieke serverrecord inclusief `deleted_at`; de client verwijdert zijn
+  lokale record en adopteert het geretourneerde `entityId` niet als live item.
+
+Dezelfde `created`/`matchedBy`/`recordClientId` staan ook in de delta-`payload` van een normale
+upsert-change. Een tombstone zelf verschijnt als `operation:"delete"` in de delta-feed.
+
+### Exact batchvoorbeeld — create en tombstone
+
+Request:
+
+```json
+{
+  "clientId": "device-installation-a",
+  "mutations": [
+    {
+      "clientMutationId": "mutation-001",
+      "clientEntityId": "local-movie-001",
+      "entityType": "movie",
+      "operation": "upsert",
+      "payload": {
+        "client_id": "record-6b159c32",
+        "title": "The Matrix",
+        "year": "1999",
+        "format": "4K_UHD",
+        "barcode": "5051890000000",
+        "metadata": {"tmdb_id": "603"},
+        "duplicate_copy": false,
+        "updated_at": "2026-07-24T18:00:00Z"
+      }
+    }
+  ]
+}
+```
+
+Live match:
+
+```json
+{
+  "status": "ok",
+  "results": [
+    {
+      "clientMutationId": "mutation-001",
+      "status": "applied",
+      "entityType": "movie",
+      "operation": "upsert",
+      "entityId": "2f89df4f-0d24-4e86-94ee-921b4de61f23",
+      "clientEntityId": "local-movie-001",
+      "revision": 411,
+      "created": false,
+      "matchedBy": "clientId",
+      "recordClientId": "record-6b159c32",
+      "entity": {"id": "2f89df4f-0d24-4e86-94ee-921b4de61f23", "deleted_at": null}
+    }
+  ]
+}
+```
+
+Delete-wins match (hetzelfde resultaat geldt bij een nieuw top-level device-`clientId`):
+
+```json
+{
+  "status": "ok",
+  "results": [
+    {
+      "clientMutationId": "mutation-001",
+      "status": "applied",
+      "entityType": "movie",
+      "operation": "upsert",
+      "entityId": "2f89df4f-0d24-4e86-94ee-921b4de61f23",
+      "clientEntityId": "local-movie-001",
+      "revision": 412,
+      "created": false,
+      "matchedBy": "clientId",
+      "recordClientId": "record-6b159c32",
+      "deleted": true,
+      "deletedAt": "2026-07-24T18:30:00+00:00",
+      "tombstoned": true,
+      "entity": {
+        "id": "2f89df4f-0d24-4e86-94ee-921b4de61f23",
+        "client_id": "record-6b159c32",
+        "deleted_at": "2026-07-24T18:30:00+00:00"
+      }
+    }
+  ]
+}
+```
+
+### Volledige identiteitsladder en blockers
+
+De gedeelde catalogus heeft geen per-user ownership-scope voor films: `movies.owner_id` is
+nullable en bepaalt geen sync-identiteit. De ladder zoekt daarom collectiebreed:
+
+1. `payload.client_id`: live exact match; altijd eerste trede.
+2. Barcode: digits-only vergelijking met behoud van leading zeroes. Overgeslagen bij
+   `payload.duplicate_copy:true` en wanneer dezelfde barcode al door een eerdere nieuwe create
+   in dezelfde batch is geclaimd.
+3. TMDB + formaat + editie: alle drie moeten matchen. Formaat wordt genormaliseerd
+   (`4K_UHD`, `4K UHD`, `UHD` → `ultra_hd_blu_ray`). Blockers: verschillende niet-lege
+   barcodes, materieel verschillende genormaliseerde titels, of verschillende niet-lege jaren.
+   TMDB-extractie uit `movie_identifiers` vergelijkt `provider_id` en `identifier_type`
+   hoofdletterongevoelig en geeft `identifier_type=movie_id` voorrang. Lege/alleen-whitespace
+   identifierwaarden zijn afwezig. Zonder `movie_id` wint de eerste TMDB-rij in de stabiele
+   opslagvolgorde `provider_id, identifier_type, identifier`. De selector trimt de identifierwaarde,
+   maar niet de provider/type-sleutels: alle server-writepaden trimmen die sleutels al vóór opslag,
+   en dit behoudt pariteit met de clientextractie. `movievault_26/movie_id` wordt via dezelfde
+   gedeelde extractie hoofdletterongevoelig gelezen; ook daar geldt dat een lege waarde afwezig is.
+   De normatieve bron is App-Guidance PR
+   [#17](https://github.com/Flux76HQ/App-Guidance/pull/17), gepind op commit
+   `fb78a04cdc1908757becf88e3a551da9ff7c7ffe`. De vendored fixture heeft versie `1.1`
+   en canonieke CRLF SHA-256
+   `afa4f3c00877cce61fb4237e4ccf0a93f99c3149adab8b6b2466365182b550d6`.
+   Die upstream-PR was bij het toevoegen nog open en ongemergd.
+4. Genormaliseerde titel + jaar + hetzelfde niet-lege formaat: uitsluitend in
+   `/api/next/sync/reconcile`, nooit in reguliere creates. Blockers: verschillende niet-lege
+   barcodes; structureel verschillende containerlidmaatschappen; of twee verschillende
+   niet-lege expliciete edities. Containerlidmaatschap is fysieke-copy-identiteit: zodra één
+   kandidaat lid is van een box-set/container moeten de genormaliseerde sets container-id's
+   exact gelijk zijn. Lid-versus-standalone en leden van verschillende containers matchen dus
+   nooit; twee stubs in dezelfde container mogen matchen. Een ontbrekende editie mag alleen
+   een niet-lege editie adopteren wanneer beide kandidaten standalone zijn. Alleen het leidende
+   Engelse `"the"` wordt verwijderd; `"Die Hard"` en `"De Aanslag"` blijven intact.
+
+Een blocker betekent geen foutresponse maar **geen match**: de create maakt dan een afzonderlijk
+record. Een expliciete tombstone-match wordt vóór een nieuwe insert afgehandeld en volgt de
+deleted-semantiek hierboven.
+
+### Merge-winnaar en scoreformule
+
+De canonical dedup-implementatie berekent per kandidaat:
+
+```text
+score =
+  1 × elk niet-leeg movieveld
+    (notes, rating, purchase_date, purchase_price, location, edition, edition_type)
+  + 1 × elke relation-row in MOVIE_RELATIONS
+  + 3 × elke watch_history-row (extra behoudbonus bovenop de relation-row)
+  + 3 wanneer eigen/niet-TMDB artwork bestaat
+  + 3 wanneer metadata field_locks bevat
+```
+
+`MOVIE_RELATIONS` omvat identifiers, localizations, technical specs, credits, genres,
+container/group links, watchlist, watch history, tags, digital media en loan requests. Hoogste
+score wint; bij gelijkstand wint oudste `created_at`; bij een volledig gelijke timestamp is de
+laagste stabiele record-id de deterministische laatste tie-break. Een geldige Admin-selectie mag
+alleen een ander bestaand lid van dezelfde canonical groep aanwijzen.
+
+### Canonical Admin dedup-contract (§8.3)
+
+De browser levert nooit een rapportbody aan voor options of execute. PostgreSQL bewaart elke
+preview immutable met UUID, SHA-256 reporthash, aparte collection fingerprint, issued/expiry,
+payload en consumption-state. De reporthash dekt de exacte canonical payload; de collection
+fingerprint negeert alleen vluchtige top-level metadata (`generated_at`, build/scriptmetadata)
+en detecteert wijzigingen in groepen, volledige movie-row-state, signalen en scores.
+
+`GET /api/next/admin/dedup/report` (Owner/Admin):
+
+```json
+{
+  "status": "ok",
+  "reportId": "11111111-1111-4111-8111-111111111111",
+  "reportHash": "<64 lowercase hex>",
+  "expiresAt": "2026-07-24T20:15:00+00:00",
+  "executeEnabled": false,
+  "report": {"groups": []}
+}
+```
+
+`POST /api/next/admin/dedup/options` accepteert uitsluitend:
+
+```json
+{
+  "reportId": "11111111-1111-4111-8111-111111111111",
+  "winnerSelections": [
+    {"groupId": "<canonical group_id>", "winnerId": "<member movie id>"}
+  ]
+}
+```
+
+`winnerSelections` mag ontbreken/leeg zijn. Elke selectie moet exact bij de opgeslagen groep
+horen. De response bevat WebAuthn `options` plus een **nieuw** immutable `reportId`,
+`reportHash` en `expiresAt`; execute gebruikt dat nieuwe ID.
+
+`POST /api/next/admin/dedup/execute` accepteert uitsluitend:
+
+```json
+{
+  "reportId": "22222222-2222-4222-8222-222222222222",
+  "credential": {"id": "<passkey assertion id>", "response": {}}
+}
+```
+
+De server serialiseert executions met een PostgreSQL transaction advisory lock, blokkeert
+collection-writes met `SHARE ROW EXCLUSIVE` locks, lockt het report, controleert
+expiry/consumption/integriteit, bouwt de actuele preview opnieuw, vergelijkt de collection
+fingerprint, verifieert de passkey, voert uitsluitend de opgeslagen payload uit en markeert het
+report in dezelfde transactie consumed. Legacy `report:{...}`-payloads worden expliciet
+geweigerd.
+
+`backend_version` en `script_commit` in de immutable payload komen in een gepubliceerde image
+eerst uit de tijdens de Docker-build vastgelegde `DISCVAULT_IMAGE_VERSION` en
+`DISCVAULT_IMAGE_SHA`. Runtime-Composewaarden zoals `BUILD_VERSION=next-dev` mogen deze
+imageprovenance niet overschrijven. Een source checkout valt terug op `app/VERSION`, de bestaande
+build/commit-omgevingsvariabelen en uiteindelijk de lokale Git-commit.
+
+Stabiele `errorCode`-waarden:
+
+| Situatie | `errorCode` | HTTP |
+|---|---|---:|
+| Uitvoering feature-flag uit | `admin_dedup_execute_disabled` | 403 |
+| Legacy/browser rapportbody | `admin_dedup_legacy_report_rejected` | 400 |
+| Malformed report-ID | `admin_dedup_report_id_malformed` | 400 |
+| Onbekend report-ID | `admin_dedup_report_unknown` | 404 |
+| Verlopen report | `admin_dedup_report_expired` | 410 |
+| Collectie gewijzigd | `admin_dedup_report_stale` | 409 |
+| Reeds consumed/replay | `admin_dedup_report_consumed` | 409 |
+| Ongeldige winner-selectie | `admin_dedup_selection_invalid` | 400 |
+
+Canonical CLI-bron: `app/backend/scripts/sync_dedup_merge.py`. Reproduceerbare dry-runpaden:
+
+```text
+# source checkout
+python app/scripts/sync_dedup_merge.py
+
+# published v26 image
+python /opt/discvault/backend/scripts/sync_dedup_merge.py
+```
+
+`app/scripts/sync_dedup_merge.py` is alleen een dunne source-checkoutwrapper; ladder-, report- en
+mergelogica bestaan uitsluitend in de canonical backendbron.
 
 ### Reconcile (`/api/next/sync/reconcile`)
 
 Request: `{ "clientId": "<device>", "items": [ { client_id, barcode, tmdb_id, format, edition,
-title, year } ] }` (max 1000 items). Response `results[]` per item: `{ client_id, status:
+title, year, container_ids? } ] }` (max 1000 items). `container_ids`, indien aanwezig, is een
+lijst canonical server-UUID's voor structurele box-set/containerlidmaatschappen; ontbrekend of
+leeg betekent standalone. Een malformed waarde maakt dat item `invalid`. Response `results[]`
+per item: `{ client_id, status:
 "matched"|"unknown"|"invalid", matched: bool, entityId?, matchedBy? }`. Dit is het **enige** pad
 waar trede 4 (titel+jaar) actief is.
 
@@ -212,8 +463,16 @@ waar trede 4 (titel+jaar) actief is.
       (`find_tombstoned_movie_by_identity` + delete-wins/resurrect op client-edittijd);
       retentie ≥ 90 dagen (Deel 2).
 - [x] **P4** `POST /api/next/sync/reconcile` (adoptie, read-only, titel+jaar-trede alleen hier).
-- [x] **P5** Merge-script `app/scripts/sync_dedup_merge.py` (dry-run default, `--execute`
-      guarded). Detectie via dezelfde ladder; winnaar = meeste user-data (tie → oudste
-      `created_at`); relaties omgehangen; verliezers krijgen tombstone; geen client_id-backfill.
-- [x] **P6** Tests (`test_next_sync.py` DoD-suite + `app/scripts/tests/test_sync_dedup_merge.py`)
-      + versie-bump `app/VERSION`.
+- [x] **P5** Canonical merge-implementatie
+      `app/backend/scripts/sync_dedup_merge.py`; `app/scripts/sync_dedup_merge.py` is alleen de
+      checkoutwrapper. Dry-run is default; detectie gebruikt dezelfde ladder; winnaar = meeste
+      user-data (tie → oudste `created_at`, daarna stabiele id); relaties worden omgehangen;
+      verliezers krijgen tombstone; geen client_id-backfill.
+- [x] **P6** Tests (`test_next_sync.py` DoD-suite +
+      `app/scripts/tests/test_sync_dedup_merge.py` +
+      `test_identity_identifier_extraction.py` +
+      fail-closed `test_identity_ladder_fixture.py` en
+      `test_identity_ladder_validator.py`) + aparte CI-validator
+      `scripts/validate_identity_ladder_fixture.py`. De validator voert alle
+      categorieën uit (`cases`, `identifier_cases`, `merge_winner_cases`), weigert
+      schema-/dispatchdrift en controleert de gepinde fixture-SHA.

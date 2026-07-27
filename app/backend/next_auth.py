@@ -38,8 +38,18 @@ LOCAL_IPV4_NETWORKS = tuple(
     ipaddress.ip_network(cidr) for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 )
 LEGACY_BOOTSTRAP_PENDING_STATUS = "pending_legacy_bootstrap"
+ADMIN_DEDUP_EXECUTE_ENV = "DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED"
+ADMIN_DEDUP_EXECUTE_DISABLED_CODE = "admin_dedup_execute_disabled"
 
 try:
+    from .admin_dedup_reports import (
+        CanonicalReportError,
+        apply_winner_selections as _dedup_apply_winner_selections,
+        collection_fingerprint as _dedup_collection_fingerprint,
+        consume_report as _dedup_consume_report,
+        create_report as _dedup_create_canonical_report,
+        load_report as _dedup_load_canonical_report,
+    )
     from .next_legacy_auth import (
         FLOW_TTL_SECONDS,
         LEGACY_AUTH_SETTING,
@@ -70,8 +80,17 @@ try:
     from .scripts.sync_dedup_merge import (
         build_report as _dedup_build_report,
         execute_merge as _dedup_execute_merge,
+        lock_collection_snapshot as _dedup_lock_collection_snapshot,
     )
 except ImportError:  # pragma: no cover - direct module execution compatibility
+    from admin_dedup_reports import (
+        CanonicalReportError,
+        apply_winner_selections as _dedup_apply_winner_selections,
+        collection_fingerprint as _dedup_collection_fingerprint,
+        consume_report as _dedup_consume_report,
+        create_report as _dedup_create_canonical_report,
+        load_report as _dedup_load_canonical_report,
+    )
     from next_legacy_auth import (
         FLOW_TTL_SECONDS,
         LEGACY_AUTH_SETTING,
@@ -102,6 +121,7 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
     from scripts.sync_dedup_merge import (
         build_report as _dedup_build_report,
         execute_merge as _dedup_execute_merge,
+        lock_collection_snapshot as _dedup_lock_collection_snapshot,
     )
 
 
@@ -410,6 +430,249 @@ def _env_flag(name: str, *, default: bool = False) -> bool:
     if raw is None:
         return default
     return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def admin_dedup_execute_enabled() -> bool:
+    return _env_flag(ADMIN_DEDUP_EXECUTE_ENV, default=False)
+
+
+def _register_admin_dedup_routes(
+    *,
+    route: Callable[..., Any],
+    connect: ConnectFactory,
+    response: ResponseFactory,
+    next_api_error: type[Exception],
+    require_admin: Callable[[Any], dict[str, Any]],
+    require_authenticated_admin: Callable[[Any], dict[str, Any]],
+    require_passkey_access: Callable[[], None],
+    verify_step_up_assertion: Callable[..., dict[str, Any]],
+    audit_event: Callable[..., None],
+    make_challenge: Callable[[], bytes],
+    store_challenge: Callable[[Any, str, bytes], None],
+    b64url_encode: Callable[[bytes], str],
+    rp_id: Callable[[], str],
+) -> None:
+    def canonical_error(error: CanonicalReportError):
+        raise next_api_error(
+            str(error),
+            error.status_code,
+            code=error.code,
+        ) from error
+
+    def request_body(*, allowed_keys: set[str]) -> dict[str, Any]:
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise next_api_error(
+                "Admin dedup request body must be an object",
+                400,
+                code="admin_dedup_request_invalid",
+            )
+        if "report" in body:
+            raise next_api_error(
+                "Browser-supplied dedup reports are not accepted",
+                400,
+                code="admin_dedup_legacy_report_rejected",
+            )
+        if set(body) - allowed_keys:
+            raise next_api_error(
+                "Admin dedup request contains unsupported fields",
+                400,
+                code="admin_dedup_request_invalid",
+            )
+        return body
+
+    @route("/api/next/admin/dedup/report", methods=["GET"])
+    def admin_dedup_report():
+        with connect() as conn:
+            actor = require_admin(conn)
+            with conn.transaction():
+                report = _dedup_build_report(conn)
+                canonical = _dedup_create_canonical_report(
+                    conn,
+                    report,
+                    created_by=actor.get("id"),
+                )
+        return response(
+            {
+                "status": "ok",
+                "reportId": canonical["id"],
+                "reportHash": canonical["reportHash"],
+                "expiresAt": canonical["expiresAt"],
+                "report": canonical["report"],
+                "executeEnabled": admin_dedup_execute_enabled(),
+            }
+        )
+
+    @route("/api/next/admin/dedup/options", methods=["POST"])
+    def admin_dedup_options():
+        require_passkey_access()
+        body = request_body(allowed_keys={"reportId", "winnerSelections"})
+        report_id = body.get("reportId")
+        if not report_id:
+            raise next_api_error(
+                "reportId is required",
+                400,
+                code="admin_dedup_report_id_malformed",
+            )
+        try:
+            with connect() as conn:
+                actor = require_authenticated_admin(conn)
+                with conn.transaction():
+                    source = _dedup_load_canonical_report(
+                        conn,
+                        report_id,
+                        for_update=True,
+                    )
+                    selected_report = _dedup_apply_winner_selections(
+                        source["report"],
+                        body.get("winnerSelections"),
+                    )
+                    canonical = _dedup_create_canonical_report(
+                        conn,
+                        selected_report,
+                        created_by=actor["id"],
+                        source_report_id=source["id"],
+                        collection_hash=source["collectionHash"],
+                    )
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            SELECT id
+                            FROM passkey_credentials
+                            WHERE user_id=%s
+                            ORDER BY created_at
+                            """,
+                            (actor["id"],),
+                        )
+                        credentials = cur.fetchall()
+                    if not credentials:
+                        raise next_api_error(
+                            "No passkeys registered for your account",
+                            400,
+                        )
+                    challenge = make_challenge()
+                    challenge_key = f"admin_dedup:{actor['id']}:{canonical['id']}"
+                    store_challenge(conn, challenge_key, challenge)
+        except CanonicalReportError as error:
+            canonical_error(error)
+        options = {
+            "challenge": b64url_encode(challenge),
+            "timeout": 60000,
+            "rpId": rp_id(),
+            "allowCredentials": [
+                {"type": "public-key", "id": row["id"]} for row in credentials
+            ],
+            "userVerification": "preferred",
+        }
+        return response(
+            {
+                "status": "ok",
+                "reportId": canonical["id"],
+                "reportHash": canonical["reportHash"],
+                "expiresAt": canonical["expiresAt"],
+                "options": options,
+            }
+        )
+
+    @route("/api/next/admin/dedup/execute", methods=["POST"])
+    def admin_dedup_execute():
+        if not admin_dedup_execute_enabled():
+            raise next_api_error(
+                "Admin dedup execution is disabled",
+                403,
+                code=ADMIN_DEDUP_EXECUTE_DISABLED_CODE,
+            )
+        require_passkey_access()
+        body = request_body(allowed_keys={"reportId", "credential"})
+        report_id = body.get("reportId")
+        if not report_id:
+            raise next_api_error(
+                "reportId is required",
+                400,
+                code="admin_dedup_report_id_malformed",
+            )
+        credential = body.get("credential") or {}
+        if not credential:
+            raise next_api_error("credential is required", 400)
+        try:
+            with connect() as conn:
+                actor = require_authenticated_admin(conn)
+                with conn.transaction():
+                    _dedup_lock_collection_snapshot(conn)
+                    canonical = _dedup_load_canonical_report(
+                        conn,
+                        report_id,
+                        for_update=True,
+                    )
+                    current_report = _dedup_build_report(conn)
+                    if (
+                        _dedup_collection_fingerprint(current_report)
+                        != canonical["collectionHash"]
+                    ):
+                        raise CanonicalReportError(
+                            "The collection changed after this dedup report was generated",
+                            code="admin_dedup_report_stale",
+                            status_code=409,
+                        )
+                    challenge_key = (
+                        f"admin_dedup:{actor['id']}:{canonical['id']}"
+                    )
+                    stored = verify_step_up_assertion(
+                        conn,
+                        challenge_key=challenge_key,
+                        expected_user_id=actor["id"],
+                        credential=credential,
+                    )
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            UPDATE passkey_credentials
+                            SET sign_count=%s, last_used_at=now()
+                            WHERE id=%s
+                            """,
+                            (stored["new_sign_count"], stored["id"]),
+                        )
+                    tombstoned = _dedup_execute_merge(
+                        conn,
+                        canonical["report"],
+                        commit=False,
+                    )
+                    consumed_at = _dedup_consume_report(
+                        conn,
+                        canonical["id"],
+                        consumed_by=actor["id"],
+                    )
+                    audit_event(
+                        conn,
+                        event_type="admin.dedup_executed",
+                        category="operations",
+                        actor=actor,
+                        target_type="movies",
+                        target_id=None,
+                        summary=(
+                            f"Dedup merge executed: {tombstoned} movie(s) "
+                            "tombstoned"
+                        ),
+                        metadata={
+                            "canonicalReportId": canonical["id"],
+                            "canonicalReportHash": canonical["reportHash"],
+                            "tombstoned": tombstoned,
+                            "mergeGroupCount": len(
+                                canonical["report"].get("groups", [])
+                            ),
+                        },
+                    )
+        except CanonicalReportError as error:
+            canonical_error(error)
+        return response(
+            {
+                "status": "ok",
+                "reportId": canonical["id"],
+                "reportHash": canonical["reportHash"],
+                "consumedAt": consumed_at,
+                "tombstoned": tombstoned,
+            }
+        )
 
 
 def _parse_review_login_expires_at(raw: Any) -> datetime | None:
@@ -4953,91 +5216,21 @@ def register_next_auth_routes(
                 )
         return response({"status": "deleted"})
 
-    @route("/api/next/admin/dedup/report", methods=["GET"])
-    def admin_dedup_report():
-        with connect() as conn:
-            require_admin(conn)
-            report = _dedup_build_report(conn)
-        return response({"status": "ok", "report": _json_ready(report)})
-
-    @route("/api/next/admin/dedup/options", methods=["POST"])
-    def admin_dedup_options():
-        require_passkey_access()
-        with connect() as conn:
-            actor = require_authenticated_admin(conn)
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT id
-                    FROM passkey_credentials
-                    WHERE user_id=%s
-                    ORDER BY created_at
-                    """,
-                    (actor["id"],),
-                )
-                credentials = cur.fetchall()
-            if not credentials:
-                raise next_api_error("No passkeys registered for your account", 400)
-            challenge = _make_challenge()
-            challenge_key = f"admin_dedup:{actor['id']}"
-            with conn.transaction():
-                store_challenge(conn, challenge_key, challenge)
-        options = {
-            "challenge": _b64url_encode(challenge),
-            "timeout": 60000,
-            "rpId": _rp_id(),
-            "allowCredentials": [
-                {"type": "public-key", "id": row["id"]} for row in credentials
-            ],
-            "userVerification": "preferred",
-        }
-        return response({"status": "ok", "options": options})
-
-    @route("/api/next/admin/dedup/execute", methods=["POST"])
-    def admin_dedup_execute():
-        require_passkey_access()
-        body = request.get_json(silent=True) or {}
-        report = body.get("report")
-        if not isinstance(report, dict) or not isinstance(report.get("groups"), list):
-            raise next_api_error("A valid dedup report is required", 400)
-        credential = body.get("credential") or {}
-        if not credential:
-            raise next_api_error("credential is required", 400)
-        with connect() as conn:
-            actor = require_authenticated_admin(conn)
-            challenge_key = f"admin_dedup:{actor['id']}"
-            stored = verify_step_up_assertion(
-                conn,
-                challenge_key=challenge_key,
-                expected_user_id=actor["id"],
-                credential=credential,
-            )
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE passkey_credentials
-                    SET sign_count=%s, last_used_at=now()
-                    WHERE id=%s
-                    """,
-                    (stored["new_sign_count"], stored["id"]),
-                )
-            tombstoned = _dedup_execute_merge(conn, report)
-            # _dedup_execute_merge commits its own transaction; audit in a new one
-            with conn.transaction():
-                audit_event(
-                    conn,
-                    event_type="admin.dedup_executed",
-                    category="operations",
-                    actor=actor,
-                    target_type="movies",
-                    target_id=None,
-                    summary=f"Dedup merge executed: {tombstoned} movie(s) tombstoned",
-                    metadata={
-                        "tombstoned": tombstoned,
-                        "mergeGroupCount": len(report.get("groups", [])),
-                    },
-                )
-        return response({"status": "ok", "tombstoned": tombstoned})
+    _register_admin_dedup_routes(
+        route=route,
+        connect=connect,
+        response=response,
+        next_api_error=next_api_error,
+        require_admin=require_admin,
+        require_authenticated_admin=require_authenticated_admin,
+        require_passkey_access=require_passkey_access,
+        verify_step_up_assertion=verify_step_up_assertion,
+        audit_event=audit_event,
+        make_challenge=_make_challenge,
+        store_challenge=store_challenge,
+        b64url_encode=_b64url_encode,
+        rp_id=_rp_id,
+    )
 
     if legacy_auth_env_enabled() and _env_flag("REVIEW_LOGIN_ENABLED", default=False):
         try:

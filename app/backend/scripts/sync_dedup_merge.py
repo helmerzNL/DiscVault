@@ -35,13 +35,28 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import sys
 import unicodedata
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlparse
+
+if __package__ and __package__ != "scripts":
+    from ..dedup_identity import select_tmdb_identifier, title_year_identity_compatible
+    from ..versioning import backend_version, build_sha
+elif __package__ == "scripts":  # pragma: no cover - gunicorn top-level imports
+    from dedup_identity import select_tmdb_identifier, title_year_identity_compatible
+    from versioning import backend_version, build_sha
+else:  # pragma: no cover - exercised by the published-image CLI path
+    backend_dir = Path(__file__).resolve().parents[1]
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    from dedup_identity import select_tmdb_identifier, title_year_identity_compatible
+    from versioning import backend_version, build_sha
 
 
 # ---------------------------------------------------------------------------
@@ -129,22 +144,46 @@ def _tmdb_sanity_conflicts(left_movie, right_movie):
     return False
 
 
-def _members_are_compatible(left_movie, right_movie, *, enforce_tmdb_sanity):
+def _members_are_compatible(
+    left_movie,
+    right_movie,
+    *,
+    enforce_tmdb_sanity,
+    enforce_titleyear_identity,
+):
     if _barcode_conflicts(left_movie.get("barcode"), right_movie.get("barcode")):
         return False
     if enforce_tmdb_sanity and _tmdb_sanity_conflicts(left_movie, right_movie):
         return False
+    if enforce_titleyear_identity and not title_year_identity_compatible(
+        left_edition=left_movie.get("edition"),
+        right_edition=right_movie.get("edition"),
+        left_container_ids=left_movie.get("container_ids"),
+        right_container_ids=right_movie.get("container_ids"),
+    ):
+        return False
     return True
 
 
-def _split_group_members(members, by_id, *, enforce_tmdb_sanity):
+def _split_group_members(
+    members,
+    by_id,
+    *,
+    enforce_tmdb_sanity,
+    enforce_titleyear_identity,
+):
     clusters = []
     for movie_id in members:
         movie = by_id.get(movie_id) or {}
         placed = False
         for cluster in clusters:
             if all(
-                _members_are_compatible(movie, by_id.get(existing_id) or {}, enforce_tmdb_sanity=enforce_tmdb_sanity)
+                _members_are_compatible(
+                    movie,
+                    by_id.get(existing_id) or {},
+                    enforce_tmdb_sanity=enforce_tmdb_sanity,
+                    enforce_titleyear_identity=enforce_titleyear_identity,
+                )
                 for existing_id in cluster
             ):
                 cluster.append(movie_id)
@@ -155,13 +194,20 @@ def _split_group_members(members, by_id, *, enforce_tmdb_sanity):
     return [cluster for cluster in clusters if len(cluster) > 1]
 
 
-def _split_group_map(groups, by_id, *, enforce_tmdb_sanity):
+def _split_group_map(
+    groups,
+    by_id,
+    *,
+    enforce_tmdb_sanity,
+    enforce_titleyear_identity=False,
+):
     split = {}
     for key, members in groups.items():
         compatible_clusters = _split_group_members(
             members,
             by_id,
             enforce_tmdb_sanity=enforce_tmdb_sanity,
+            enforce_titleyear_identity=enforce_titleyear_identity,
         )
         if len(compatible_clusters) == 1 and len(compatible_clusters[0]) == len(members):
             split[key] = compatible_clusters[0]
@@ -206,6 +252,14 @@ USER_DATA_COLUMNS = [
     "edition_type",
 ]
 
+COLLECTION_LOCK_KEY = 293225158992
+COLLECTION_STATE_TABLES = [
+    "movies",
+    *(table for table, _fk, _conflict in MOVIE_RELATIONS),
+    "entity_media",
+    "media_assets",
+]
+
 
 def _table_exists(conn, table_name):
     with conn.cursor() as cur:
@@ -232,6 +286,19 @@ def _column_exists(conn, table_name, column_name):
     return bool(row.get("ok"))
 
 
+def lock_collection_snapshot(conn):
+    """Block collection writes while an Admin execution revalidates and merges."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (COLLECTION_LOCK_KEY,))
+    tables = [
+        table_name
+        for table_name in COLLECTION_STATE_TABLES
+        if _table_exists(conn, table_name)
+    ]
+    with conn.cursor() as cur:
+        cur.execute(f"LOCK TABLE {', '.join(tables)} IN SHARE ROW EXCLUSIVE MODE")
+
+
 def _locked_fields(metadata):
     if not isinstance(metadata, dict):
         return []
@@ -246,6 +313,30 @@ def _locked_fields(metadata):
         return []
     out = sorted({str(value or "").strip() for value in values if str(value or "").strip()})
     return out
+
+
+def _movie_state_hash(movie):
+    movie_snapshot = movie.get("canonical_state")
+    if not isinstance(movie_snapshot, dict):
+        movie_snapshot = {
+            key: value
+            for key, value in movie.items()
+            if key not in {"_signals", "canonical_state", "container_ids"}
+        }
+    snapshot = {
+        "movie": movie_snapshot,
+        "container_ids": sorted(
+            str(value) for value in movie.get("container_ids") or ()
+        ),
+    }
+    serialized = json.dumps(
+        snapshot,
+        default=str,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def _connect():
@@ -272,24 +363,11 @@ def _target_database_name():
 
 
 def _report_metadata():
-    """Extract report metadata from environment variables.
-    
-    Fallbacks cover local dev (BUILD_VERSION), Docker compose (DISCVAULT_*),
-    and CI/CD (BUILD_SHA) environments.
-    """
-    script_commit = (
-        os.environ.get("BUILD_SHA")
-        or os.environ.get("DISCVAULT_BUILD_SHA")
-        or os.environ.get("GITHUB_SHA")
-    )
-    backend_version = (
-        os.environ.get("DISCVAULT_BACKEND_VERSION")
-        or os.environ.get("BUILD_VERSION")
-    )
+    """Return immutable image provenance with source-checkout fallbacks."""
     return {
-        "script_commit": script_commit,
+        "script_commit": build_sha(),
         "target_database": _target_database_name(),
-        "backend_version": backend_version,
+        "backend_version": backend_version(),
     }
 
 
@@ -297,24 +375,17 @@ def _fetch_live_movies(conn):
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT
-                id,
-                client_id,
-                barcode,
-                title,
-                year,
-                format,
-                edition,
-                edition_type,
-                notes,
-                rating,
-                purchase_date,
-                purchase_price,
-                location,
-                metadata,
-                created_at
+            SELECT movies.*,
+                   to_jsonb(movies) AS canonical_state,
+                   ARRAY(
+                       SELECT cm.container_id::text
+                       FROM container_movies cm
+                       WHERE cm.movie_id = movies.id
+                       ORDER BY cm.container_id
+                   ) AS container_ids
             FROM movies
             WHERE deleted_at IS NULL
+            ORDER BY id
             """
         )
         return cur.fetchall()
@@ -324,15 +395,21 @@ def _fetch_tmdb_ids(conn):
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT movie_id, identifier
+            SELECT movie_id, provider_id, identifier_type, identifier
             FROM movie_identifiers
-            WHERE provider_id = 'tmdb'
+            WHERE lower(provider_id) = 'tmdb'
+            ORDER BY movie_id, provider_id, identifier_type, identifier
             """
         )
         rows = cur.fetchall()
-    out = {}
+    by_movie = {}
     for row in rows:
-        out.setdefault(row["movie_id"], row["identifier"])
+        by_movie.setdefault(row["movie_id"], []).append(row)
+    out = {}
+    for movie_id, identifiers in by_movie.items():
+        selected = select_tmdb_identifier(identifiers)
+        if selected is not None:
+            out[movie_id] = selected
     return out
 
 
@@ -368,8 +445,17 @@ def detect_groups(conn):
 
     return {
         "barcode": _dups(barcode_groups),
-        "tmdbEdition": _split_group_map(_dups(tmdb_groups), by_id, enforce_tmdb_sanity=True),
-        "titleYear": _split_group_map(_dups(titleyear_groups), by_id, enforce_tmdb_sanity=False),
+        "tmdbEdition": _split_group_map(
+            _dups(tmdb_groups),
+            by_id,
+            enforce_tmdb_sanity=True,
+        ),
+        "titleYear": _split_group_map(
+            _dups(titleyear_groups),
+            by_id,
+            enforce_tmdb_sanity=False,
+            enforce_titleyear_identity=True,
+        ),
     }, by_id, tmdb
 
 
@@ -487,7 +573,7 @@ def _choose_winner(conn, members, by_id):
         scored.append((score, created, mid))
         reasons[mid] = breakdown
     # Highest score first, then earliest creation.
-    scored.sort(key=lambda t: (-t[0], t[1]))
+    scored.sort(key=lambda t: (-t[0], t[1], str(t[2])))
     winner = scored[0][2]
     losers = [t[2] for t in scored[1:]]
     top_score = scored[0][0]
@@ -553,6 +639,10 @@ def build_report(conn):
                     "artwork_count": int(member_signals.get("artwork_count", 0)),
                     "artwork_provider_ids": member_signals.get("artwork_provider_ids", []),
                     "score_breakdown": reasons.get(member_id, {}),
+                    "container_ids": sorted(
+                        str(value) for value in movie.get("container_ids") or ()
+                    ),
+                    "state_hash": _movie_state_hash(movie),
                 }
             )
         report_groups.append(
@@ -609,7 +699,7 @@ def _rehang_relations(cur, winner, loser):
         )
 
 
-def execute_merge(conn, report):
+def execute_merge(conn, report, *, commit=True):
     """Apply the merge plan from ``report`` inside one transaction."""
     tombstoned = 0
     with conn.cursor() as cur:
@@ -638,7 +728,8 @@ def execute_merge(conn, report):
                         """,
                         (revision, str(loser), json.dumps({"mergedInto": str(winner)})),
                     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return tombstoned
 
 

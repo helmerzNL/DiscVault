@@ -19652,6 +19652,8 @@ def ui_preview_html(
       }
     }
     let _dedupReport = null;
+    let _dedupReportId = null;
+    let _dedupExecuteEnabled = false;
     function renderAppAdminDedupWizard(state, data) {
       const area = document.getElementById("appAdminDedupWizardArea");
       const scanBtn = document.getElementById("appAdminDedupScanBtn");
@@ -19698,9 +19700,11 @@ def ui_preview_html(
         area.innerHTML = `
           <div class="dedup-wizard-summary"><p>${escapeHtml(countMsg)}</p></div>
           <div class="dedup-group-list">${groupsHtml}</div>
-          <div class="profile-action-row">
-            <button type="button" class="primary-button" id="appAdminDedupExecuteBtn" onclick="executeDedupMerge()">${escapeHtml(tNext("appAdmin.dedupMergeButton", "Merge duplicates"))}</button>
-          </div>
+          ${_dedupExecuteEnabled ? `
+            <div class="profile-action-row">
+              <button type="button" class="primary-button" id="appAdminDedupExecuteBtn" onclick="executeDedupMerge()">${escapeHtml(tNext("appAdmin.dedupMergeButton", "Merge duplicates"))}</button>
+            </div>
+          ` : ""}
         `;
       } else if (state === "executing") {
         const execBtn = document.getElementById("appAdminDedupExecuteBtn");
@@ -19711,14 +19715,17 @@ def ui_preview_html(
         const doneMsg = tNext("appAdmin.dedupDone", "Done! {count} duplicate(s) removed.").replace("{count}", String(tombstoned));
         area.innerHTML = `<div class="preview-empty good">${escapeHtml(doneMsg)}</div>`;
         _dedupReport = null;
+        _dedupReportId = null;
       }
     }
     async function startDedupScan() {
       renderAppAdminDedupWizard("scanning");
       try {
         const result = await authApiJson("/api/next/admin/dedup/report");
-        if (!result || !result.report) throw new Error("Empty report");
+        if (!result || !result.report || !result.reportId) throw new Error("Empty report");
+        _dedupExecuteEnabled = result.executeEnabled === true;
         _dedupReport = result.report;
+        _dedupReportId = result.reportId;
         renderAppAdminDedupWizard("results", _dedupReport);
       } catch (err) {
         console.error("Dedup scan failed", err);
@@ -19726,7 +19733,7 @@ def ui_preview_html(
       }
     }
     async function executeDedupMerge() {
-      if (!_dedupReport) { renderAppAdminDedupWizard("error"); return; }
+      if (!_dedupReport || !_dedupReportId) { renderAppAdminDedupWizard("error"); return; }
       if (!confirm(tNext("appAdmin.dedupConfirm", "This will permanently merge duplicate movies. Are you sure?"))) return;
       renderAppAdminDedupWizard("executing");
       try {
@@ -19735,8 +19742,13 @@ def ui_preview_html(
           renderAppAdminDedupWizard("results", _dedupReport);
           return;
         }
-        const optRes = await authApiJson("/api/next/admin/dedup/options", { method: "POST" });
-        if (!optRes || !optRes.options) throw new Error("No options returned");
+        const optRes = await authApiJson("/api/next/admin/dedup/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reportId: _dedupReportId }),
+        });
+        if (!optRes || !optRes.options || !optRes.reportId) throw new Error("No options returned");
+        _dedupReportId = optRes.reportId;
         const opts = optRes.options;
         opts.challenge = base64urlToBuffer(opts.challenge);
         opts.allowCredentials = (opts.allowCredentials || []).map((item) => ({ ...item, id: base64urlToBuffer(item.id) }));
@@ -19755,7 +19767,7 @@ def ui_preview_html(
         const execRes = await authApiJson("/api/next/admin/dedup/execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ report: _dedupReport, credential }),
+          body: JSON.stringify({ reportId: _dedupReportId, credential }),
         });
         renderAppAdminDedupWizard("done", execRes.tombstoned || 0);
       } catch (err) {

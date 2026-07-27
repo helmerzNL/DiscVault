@@ -6,6 +6,7 @@ import json
 import hashlib
 import os
 import re
+import unicodedata
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -20,6 +21,7 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
             self.value = value
 
 try:
+    from .dedup_identity import extract_identity_identifiers
     from .next_import import clean_text
     from .next_genres import genre_keys_from_tmdb_ids
     from .next_genres import normalize_genre_keys
@@ -33,6 +35,7 @@ try:
     from .next_plugin_runtime import sync_plugin_registry
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
 except ImportError:  # pragma: no cover - supports direct module execution
+    from dedup_identity import extract_identity_identifiers
     from next_import import clean_text
     from next_genres import genre_keys_from_tmdb_ids
     from next_genres import normalize_genre_keys
@@ -641,8 +644,9 @@ def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entry
         return False
     plugin_id = str(plugin.get("id") or "")
     if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
-        settings = config.get("settings")
-        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+        # The v2 endpoint is enforced (not user-supplied), so v2 never requires
+        # user configuration.
+        return False
     if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
@@ -658,23 +662,25 @@ def movie_identifiers(conn, movie_id: UUID) -> dict[str, str]:
             SELECT provider_id, identifier_type, identifier
             FROM movie_identifiers
             WHERE movie_id=%s
+            ORDER BY provider_id, identifier_type, identifier
             """,
             (movie_id,),
         )
         rows = cur.fetchall()
+    selected = extract_identity_identifiers(rows)
     values = {}
+    if selected["tmdb"] is not None:
+        values["tmdb_id"] = selected["tmdb"]
+        values["tmdbId"] = selected["tmdb"]
+    if selected["movievault"] is not None:
+        values["movievault_id"] = selected["movievault"]
+        values["movieVaultId"] = selected["movievault"]
     for row in rows:
         provider = str(row["provider_id"])
         identifier_type = str(row["identifier_type"])
-        if provider == "tmdb" and identifier_type == "movie_id":
-            values["tmdb_id"] = row["identifier"]
-            values["tmdbId"] = row["identifier"]
-        elif provider == "imdb" and identifier_type == "movie_id":
+        if provider == "imdb" and identifier_type == "movie_id":
             values["imdb_id"] = row["identifier"]
             values["imdbId"] = row["identifier"]
-        elif provider in MOVIEVAULT_PLUGIN_IDS and identifier_type == "movie_id":
-            values["movievault_id"] = row["identifier"]
-            values["movieVaultId"] = row["identifier"]
     return values
 
 
@@ -1667,25 +1673,70 @@ def normalize_localization_entries(
 # packaging/format/edition/region noise rather than part of the film title.
 _SCANNED_TITLE_NOISE_RE = re.compile(
     r'blu[- ]?ray|ultra\s*hd|\buhd\b|\b4k\b|\bdvd\b|\b3d\b|\bvhs\b|\bhddvd\b|hd[- ]?dvd'
-    r'|steel\s*book|steelbook|limited\s+edition|collector|special\s+edition'
+    r'|steel\s*book|steelbook|collector'
     r'|digibook|mediabook|slipcover|slipcase|box\s*set|boxset|gift\s*set'
     r'|\bimport\b|region[\s-]*(?:free|locked|[abc]|[0-9])'
-    r'|\bpal\b|\bntsc\b|remaster|anniversary\s+edition|uncut|extended\s+edition'
+    r'|\bpal\b|\bntsc\b|remaster|uncut'
+    r'|\bunrated\b'
+    # Generic "<qualifier> Edition"/"<qualifier> Cut" (e.g. "X-treme Edition",
+    # "Deluxe Edition", "Director's Cut", "Final Cut") so editions/cuts are
+    # recognised even without a format token. These subsume the specific
+    # edition/cut phrases (limited/special/.../director's/theatrical/final/...).
+    r"|\b[\w'\u2019-]+\s+editions?\b"
+    r"|\b[\w'\u2019-]+\s+cut\b"
     r'|\bocard\b|o[- ]card|amaray|digipack|digipak',
     re.I,
 )
 
 
-def _clean_scanned_title(raw_title: str) -> str:
+# Short connector/function words that usually signal a *continuation subtitle*
+# in a trailing bracket group (e.g. "(and Where to Find Them)") rather than a
+# standalone local/original title (e.g. "(Der Untergang)"). Used to keep the
+# heuristic fallback from stripping genuine subtitles.
+_SUBTITLE_CONNECTOR_WORDS = {
+    "and", "or", "the", "a", "an", "of", "to", "in", "for", "with", "part",
+}
+
+
+def _norm_alt_title(value: str) -> str:
+    """Casefold + diacritics-fold a title down to a comparable identity key."""
+    text = unicodedata.normalize("NFKD", value or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = re.sub(r"[^a-z0-9]+", " ", text.casefold())
+    return text.strip()
+
+
+def _looks_like_local_title(inner: str) -> bool:
+    """Heuristic: does a trailing bracket group look like a standalone local/
+    original title (short, not a continuation subtitle) rather than a genuine
+    subtitle we must keep? Used only as the fallback when no metadata match is
+    available."""
+    words = re.findall(r"[^\W_]+", inner or "", flags=re.UNICODE)
+    if not words or len(words) > 4:
+        return False
+    if words[0].casefold() in _SUBTITLE_CONNECTOR_WORDS:
+        return False
+    return True
+
+
+def _clean_scanned_title(raw_title: str, *, alt_titles: "list[str] | None" = None) -> str:
     """Return the bare film title from a UPC/EAN packaging title.
 
     Strips bracket/parenthetical groups and trailing segments that contain
     format/edition/region noise (e.g. "(4K Ultra HD + Blu-ray)", "[UK Import]",
-    "- Steelbook"). Keeps a subtitle after a colon. Returns the original title
-    when nothing recognisable remains."""
+    "- Steelbook"). Also strips a trailing local/original-title group (e.g.
+    "Downfall Blu-ray (Der Untergang)" -> "Downfall") when it matches a known
+    alternate/original title (``alt_titles``) or, as a fallback, when the title
+    already carried packaging noise and the group looks like a standalone local
+    title. Keeps a subtitle after a colon. Returns the original title when
+    nothing recognisable remains."""
     title = (raw_title or "").strip()
     if not title:
         return ""
+
+    noise_present = bool(_SCANNED_TITLE_NOISE_RE.search(title))
+    alt_norm = {_norm_alt_title(t) for t in (alt_titles or []) if t}
+    alt_norm.discard("")
 
     def _strip_groups(text: str, open_ch: str, close_ch: str) -> str:
         pattern = re.compile(re.escape(open_ch) + r'[^' + re.escape(open_ch + close_ch) + r']*' + re.escape(close_ch))
@@ -1704,7 +1755,9 @@ def _clean_scanned_title(raw_title: str) -> str:
         # leaves these behind because a bare country name carries no format
         # keyword, yet they strand a preceding bare format token (e.g. the
         # "4K Blu-ray" in "Inception 4K Blu-ray (4K Ultra HD + Blu-ray) (France)")
-        # so it can no longer be recognised as a trailing token.
+        # so it can no longer be recognised as a trailing token. Also strips a
+        # trailing local/original-title group (metadata match, or heuristic
+        # fallback when packaging noise was present).
         pattern = re.compile(r'\s*[\(\[\{]([^\(\)\[\]\{\}]*)[\)\]\}]\s*$')
         prev_inner = None
         while prev_inner != text:
@@ -1713,7 +1766,12 @@ def _clean_scanned_title(raw_title: str) -> str:
             if not match:
                 break
             inner = match.group(1)
-            if _SCANNED_TITLE_NOISE_RE.search(inner) or _group_is_region_meta(inner):
+            inner_norm = _norm_alt_title(inner)
+            is_year = bool(re.fullmatch(r"\d{4}", inner.strip()))
+            is_local_title = (inner_norm and inner_norm in alt_norm) or (
+                noise_present and not is_year and _looks_like_local_title(inner)
+            )
+            if _SCANNED_TITLE_NOISE_RE.search(inner) or _group_is_region_meta(inner) or is_local_title:
                 text = text[: match.start()].rstrip()
         return text
 
@@ -1741,6 +1799,64 @@ def _clean_scanned_title(raw_title: str) -> str:
 
     cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip(' -_/|,;:+&')
     return cleaned or title
+
+
+# Edition/cut phrases that should be *promoted* into the structured `edition`
+# field when they appear in a scanned packaging title. This is the extraction
+# counterpart to the display-stripping done by `_clean_scanned_title`: the same
+# edition/cut vocabulary, but captured rather than discarded. Kept deliberately
+# narrow (only the edition/cut subset, no format/region noise) so a genuine
+# film title is never mislabelled as an edition.
+_EDITION_CUT_PHRASE = (
+    r"[\w'\u2019-]+\s+editions?"
+    r"|[\w'\u2019-]+\s+cut"
+    r"|uncut|unrated|remaster(?:ed)?"
+)
+_EDITION_CUT_PHRASE_RE = re.compile(r"(?:" + _EDITION_CUT_PHRASE + r")", re.I)
+# A trailing edition/cut segment must be introduced by a *structural* separator
+# (dash/slash/pipe/comma/colon/…), never a bare space, so a whole-title phrase
+# like "The Final Cut" or "Short Cuts" is not mistaken for a trailing edition.
+_EDITION_CUT_TAIL_RE = re.compile(
+    r"[,;:/+&|\u00b7-][\s,;:/+&|\u00b7-]*(" + _EDITION_CUT_PHRASE + r")\s*$",
+    re.I,
+)
+_BRACKET_GROUP_RE = re.compile(r"[\(\[\{]([^\(\)\[\]\{\}]*)[\)\]\}]")
+
+
+def _normalize_edition_phrase(phrase: str) -> str:
+    """Collapse whitespace and normalise SHOUTING/lowercase packaging text to
+    word-initial caps while preserving intra-word punctuation (e.g.
+    "X-TREME EDITION"/"director's cut" -> "X-treme Edition"/"Director's Cut").
+    Mixed-case input is returned untouched."""
+    text = re.sub(r"\s+", " ", phrase or "").strip()
+    if not text:
+        return ""
+    if text.isupper() or text.islower():
+        return " ".join(w[:1].upper() + w[1:].lower() for w in text.split(" "))
+    return text
+
+
+def _extract_edition_from_title(raw_title: str) -> "str | None":
+    """Extract an edition/cut label (e.g. "Director's Cut", "X-treme Edition",
+    "Unrated") from a scanned packaging title, mirroring the vocabulary stripped
+    from the display title by `_clean_scanned_title`. Only inspects bracketed
+    groups or a trailing segment introduced by a structural separator, so a
+    genuine film title such as "The Final Cut" or "Short Cuts" is never treated
+    as an edition. Returns ``None`` when no edition/cut phrase is present in
+    those zones."""
+    text = (raw_title or "").strip()
+    if not text:
+        return None
+    # 1) Prefer an explicit bracketed group, e.g. "(Director's Cut)".
+    for match in _BRACKET_GROUP_RE.finditer(text):
+        inner = _EDITION_CUT_PHRASE_RE.search(match.group(1))
+        if inner:
+            return _normalize_edition_phrase(inner.group(0)) or None
+    # 2) Fall back to a trailing "- Unrated" / ", Director's Cut" style segment.
+    tail = _EDITION_CUT_TAIL_RE.search(text)
+    if tail:
+        return _normalize_edition_phrase(tail.group(1)) or None
+    return None
 
 
 # Map nationality/country adjectives or codes from "<X> Import" packaging hints to
@@ -1906,13 +2022,27 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
             # and don't let the raw release title collected afterwards clobber it.
             movie_updates["title"] = movie_source_title
         else:
-            cleaned_title = _clean_scanned_title(raw_release_title)
+            alt_titles = [
+                movie_updates.get("original_title"),
+                metadata_updates.get("original_title"),
+                movie_source.get("original_title") if isinstance(movie_source, dict) else None,
+                movie_source.get("originalTitle") if isinstance(movie_source, dict) else None,
+                result.get("original_title"),
+                result.get("originalTitle"),
+            ]
+            cleaned_title = _clean_scanned_title(raw_release_title, alt_titles=alt_titles)
             if cleaned_title and (
                 not current_title
                 or current_title == raw_release_title
                 or _SCANNED_TITLE_NOISE_RE.search(current_title)
             ):
                 movie_updates["title"] = cleaned_title
+        extracted_edition = _extract_edition_from_title(raw_release_title)
+        if extracted_edition and not value_present(movie_updates.get("edition")):
+            # Promote a scanned "(Director's Cut)"/"- Unrated" style edition into
+            # the structured field, but never clobber a richer plugin-provided
+            # edition value.
+            movie_updates["edition"] = extracted_edition
         import_country, import_region = _parse_import_country(raw_release_title)
         if import_country and not value_present(movie_updates.get("country")):
             movie_updates["country"] = import_country

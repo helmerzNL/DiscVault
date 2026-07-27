@@ -50,7 +50,13 @@ Optional:
 OMDB_API_KEY=...
 TMDB_API_KEY=...
 MCP_API_KEY=...
+DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED=false
 ```
+
+`DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED` is a fail-closed safety gate for the
+destructive admin duplicate merge endpoint. Leave it `false`; authorized admins
+can still generate and inspect duplicate reports while execution remains hidden
+in the UI and rejected by the API.
 
 ### Start stack
 

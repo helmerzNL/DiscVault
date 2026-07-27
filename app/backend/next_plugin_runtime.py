@@ -578,6 +578,49 @@ def _setting_name(field: dict[str, Any]) -> str:
     return str(field.get("name") or field.get("key") or "").strip()
 
 
+# DiscVault enforces certain plugin endpoint/settings server-side (a fixed value
+# or an env override) so they must not render as editable fields in the generic
+# admin plugin-settings UI. Any field named here is stripped from the plugin's
+# settingsSchema at sync time, which removes it from the UI and from the
+# required-settings validation set. Runtime always resolves the enforced value
+# itself (e.g. movievault_v2 via enforced_origin()), regardless of stored data.
+ENFORCED_PLUGIN_SETTINGS: dict[str, frozenset[str]] = {
+    "movievault_v2": frozenset({"origin"}),
+}
+
+
+def enforced_settings_schema(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Return the manifest settingsSchema with DiscVault-enforced fields removed.
+
+    For plugins whose endpoint is fixed by DiscVault (e.g. the MovieVault v2
+    origin), the enforced field(s) are dropped from a shallow copy of the schema
+    so they never reach ``plugins.settings_schema`` and therefore never appear as
+    editable inputs. Non-dict / unlisted schemas pass through unchanged.
+    """
+    schema = manifest.get("settingsSchema")
+    if not isinstance(schema, dict):
+        return {} if schema is None else schema
+    enforced = ENFORCED_PLUGIN_SETTINGS.get(str(manifest.get("id") or ""))
+    if not enforced:
+        return schema
+    result = dict(schema)
+    for kind in ("settings", "secrets"):
+        raw_items = schema.get(kind)
+        if isinstance(raw_items, list):
+            result[kind] = [
+                item
+                for item in raw_items
+                if not (isinstance(item, dict) and _setting_name(item) in enforced)
+            ]
+        elif isinstance(raw_items, dict):
+            result[kind] = {
+                name: item
+                for name, item in raw_items.items()
+                if str(name).strip() not in enforced
+            }
+    return result
+
+
 def _setting_present(value: Any) -> bool:
     if value is None:
         return False
@@ -1065,6 +1108,8 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                 for plugin in plugins:
                     manifest = plugin.manifest
                     manifest_payload = manifest_with_runtime(plugin)
+                    settings_schema = enforced_settings_schema(manifest)
+                    manifest_payload["settingsSchema"] = settings_schema
                     categories = manifest["categories"]
                     capabilities = manifest["capabilities"]
                     cur.execute(
@@ -1108,13 +1153,13 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                             Jsonb(capabilities),
                             int(manifest.get("orderIndex") or 100),
                             Jsonb(manifest_payload),
-                            Jsonb(manifest["settingsSchema"]),
+                            Jsonb(settings_schema),
                             manifest.get("premiumFeatureKey"),
                             str(plugin.path),
                             str(plugin.module_path) if plugin.module_path else None,
                         ),
                     )
-                    defaults = plugin_setting_defaults(manifest["settingsSchema"])
+                    defaults = plugin_setting_defaults(settings_schema)
                     if has_plugin_settings_table and defaults:
                         cur.execute(
                             """
@@ -1148,6 +1193,8 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                 for plugin in plugins:
                     manifest = plugin.manifest
                     manifest_payload = manifest_with_runtime(plugin)
+                    settings_schema = enforced_settings_schema(manifest)
+                    manifest_payload["settingsSchema"] = settings_schema
                     categories = manifest["categories"]
                     if not {"metadata_source", "metadata_receiver"}.intersection(categories):
                         continue
@@ -1182,11 +1229,11 @@ def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -
                             bool(manifest.get("defaultEnabled", False)),
                             int(manifest.get("orderIndex") or 100),
                             Jsonb(manifest_payload),
-                            Jsonb(manifest["settingsSchema"]),
+                            Jsonb(settings_schema),
                             manifest.get("premiumFeatureKey"),
                         ),
                     )
-                    defaults = plugin_setting_defaults(manifest["settingsSchema"])
+                    defaults = plugin_setting_defaults(settings_schema)
                     if has_metadata_plugin_settings_table and defaults:
                         cur.execute(
                             """

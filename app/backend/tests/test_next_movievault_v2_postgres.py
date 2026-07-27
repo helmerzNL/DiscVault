@@ -42,6 +42,21 @@ V4_FULL_PATH = Path(__file__).parent / "fixtures" / "distribution-v4-full.ndjson
 V4_DELTA_PATH = Path(__file__).parent / "fixtures" / "distribution-v4-delta.ndjson"
 DATASET_CHECKSUM = hashlib.sha256(b"approved lookup hash dataset").hexdigest()
 
+# The MovieVault v2 origin is now enforced at runtime (never read from stored
+# settings). Inject the test origin via the MOVIEVAULT_V2_ORIGIN env override so
+# existing URL assertions built from "https://movievault.example" stay valid.
+_MOVIEVAULT_V2_ORIGIN_ENV_PATCH = patch.dict(
+    os.environ, {"MOVIEVAULT_V2_ORIGIN": "https://movievault.example"}
+)
+
+
+def setUpModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.start()
+
+
+def tearDownModule():
+    _MOVIEVAULT_V2_ORIGIN_ENV_PATCH.stop()
+
 
 def _v4_manifest(*, revision=42, cursor="fixture-distribution-4-r42", checksum=None):
     return {

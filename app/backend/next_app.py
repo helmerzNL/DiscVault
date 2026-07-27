@@ -134,9 +134,9 @@ try:
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_connection import refresh_movievault_connection
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
-    from .next_movievault_v2 import MovieVaultV2Error
     from .next_movievault_v2 import movievault_v2_plugin_context
-    from .next_movievault_v2 import normalize_origin as normalize_movievault_v2_origin
+    from .next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from .dedup_identity import title_year_identity_compatible
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
     from .next_common import NextApiError
@@ -347,9 +347,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_connection import refresh_movievault_connection
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
-    from next_movievault_v2 import MovieVaultV2Error
     from next_movievault_v2 import movievault_v2_plugin_context
-    from next_movievault_v2 import normalize_origin as normalize_movievault_v2_origin
+    from next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from dedup_identity import title_year_identity_compatible
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
     from next_common import NextApiError
@@ -8415,8 +8415,9 @@ def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[s
         return False
     plugin_id = str(plugin.get("id") or "")
     if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
-        settings = config.get("settings")
-        return not isinstance(settings, dict) or not clean_text(settings.get("origin"))
+        # The v2 endpoint is enforced (not user-supplied), so v2 never requires
+        # user configuration.
+        return False
     if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
@@ -8612,10 +8613,10 @@ def update_plugin_config(
         except ValueError as exc:
             raise NextApiError(str(exc), 400) from exc
         if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
-            try:
-                settings["origin"] = normalize_movievault_v2_origin(settings.get("origin"))
-            except MovieVaultV2Error as exc:
-                raise NextApiError("MovieVault v2 origin must be a root HTTP(S) origin", 400) from exc
+            # The MovieVault v2 endpoint is enforced by DiscVault and is not
+            # user-editable. Discard any client-supplied origin and store the
+            # enforced value so config-complete checks continue to pass.
+            settings["origin"] = enforced_movievault_v2_origin()
 
     with conn.transaction():
         with conn.cursor() as cur:
@@ -15698,6 +15699,47 @@ def find_tombstoned_movie_by_identity(
     return None
 
 
+def tombstoned_movie_upsert_result(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+    client_entity_id: str | None,
+    tombstone: dict[str, Any],
+    matched_by: str | None,
+    persistent_client_id: str | None,
+) -> dict[str, Any]:
+    entity_id = tombstone["id"]
+    store_client_entity_mapping(
+        conn,
+        client_id=client_id,
+        client_entity_id=client_entity_id,
+        entity_type="movie",
+        entity_id=entity_id,
+        idem_key=idem_key,
+    )
+    entity = movie_entity(conn, entity_id) or {}
+    deleted_at = entity.get("deleted_at") or tombstone.get("deleted_at")
+    revision = next_revision(conn)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "movie",
+        "operation": "upsert",
+        "entityId": entity_id,
+        "clientEntityId": client_entity_id,
+        "revision": revision,
+        "entity": entity,
+        "created": False,
+        "matchedBy": matched_by,
+        "recordClientId": tombstone.get("client_id") or persistent_client_id,
+        "deleted": True,
+        "deletedAt": deleted_at,
+        "tombstoned": True,
+    }
+
+
 def match_existing_movie(
     *,
     persistent_client_id: str | None,
@@ -15777,6 +15819,8 @@ def find_movie_by_title_year(
     year: Any,
     fmt: str | None,
     incoming_barcode: Any = None,
+    incoming_edition: Any = None,
+    incoming_container_ids: list[Any] | tuple[Any, ...] | None = None,
 ) -> UUID | None:
     """Trede 4 (adoption-only): normalized title + exact year + matching format.
 
@@ -15792,7 +15836,13 @@ def find_movie_by_title_year(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT m.id, m.title, m.year, m.barcode, m.format
+            SELECT m.id, m.title, m.year, m.barcode, m.format, m.edition,
+                   ARRAY(
+                       SELECT cm.container_id::text
+                       FROM container_movies cm
+                       WHERE cm.movie_id = m.id
+                       ORDER BY cm.container_id
+                   ) AS container_ids
             FROM movies m
             WHERE m.deleted_at IS NULL
               AND m.year = %s
@@ -15805,6 +15855,13 @@ def find_movie_by_title_year(
         if physical_media_format_key(row.get("format")) != format_key:
             continue
         if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
+        if not title_year_identity_compatible(
+            left_edition=incoming_edition,
+            right_edition=row.get("edition"),
+            left_container_ids=incoming_container_ids,
+            right_container_ids=row.get("container_ids"),
+        ):
             continue
         if normalize_title(row.get("title")) == normalized:
             return row["id"]
@@ -15928,6 +15985,20 @@ def apply_movie_upsert(
     tmdb_id = clean_text(metadata_payload.get("tmdb_id"))
     duplicate_copy = bool(payload.get("duplicate_copy"))
 
+    if provided_entity_id is not None:
+        provided_entity = movie_entity(conn, provided_entity_id)
+        if provided_entity and provided_entity.get("deleted_at") is not None:
+            return tombstoned_movie_upsert_result(
+                conn,
+                client_id=client_id,
+                idem_key=idem_key,
+                mutation=mutation,
+                client_entity_id=client_entity_id,
+                tombstone=provided_entity,
+                matched_by=None,
+                persistent_client_id=persistent_client_id,
+            )
+
     matched_by: str | None = None
     ladder_entity_id: UUID | None = None
     resurrect_tombstone = False
@@ -16008,30 +16079,16 @@ def apply_movie_upsert(
                     # Delete wins: do not touch the tombstone. Map the client's
                     # temp id to it and return the deleted record so the client
                     # learns (via response + delta) that it is gone.
-                    store_client_entity_mapping(
+                    return tombstoned_movie_upsert_result(
                         conn,
                         client_id=client_id,
-                        client_entity_id=client_entity_id,
-                        entity_type="movie",
-                        entity_id=tomb["id"],
                         idem_key=idem_key,
+                        mutation=mutation,
+                        client_entity_id=client_entity_id,
+                        tombstone=tomb,
+                        matched_by=matched_by,
+                        persistent_client_id=persistent_client_id,
                     )
-                    entity = movie_entity(conn, tomb["id"]) or {}
-                    revision = next_revision(conn)
-                    return {
-                        "clientMutationId": mutation["clientMutationId"],
-                        "status": "applied",
-                        "entityType": "movie",
-                        "operation": "upsert",
-                        "entityId": tomb["id"],
-                        "clientEntityId": client_entity_id,
-                        "revision": revision,
-                        "entity": entity,
-                        "created": False,
-                        "matchedBy": matched_by,
-                        "recordClientId": persistent_client_id,
-                        "tombstoned": True,
-                    }
                 # Resurrection: reuse the tombstoned id and clear deleted_at below.
                 entity_id = tomb["id"]
                 healed_barcode = fields["barcode"]
@@ -21891,13 +21948,6 @@ def register_routes(flask_app: Flask) -> None:
                 config = plugin_config_from_db(conn, plugin_id)
                 if not config["settingsConfigured"]:
                     raise NextApiError("Plugin configuration is incomplete", 409)
-                try:
-                    normalize_movievault_v2_origin(config["settings"].get("origin"))
-                except MovieVaultV2Error as exc:
-                    raise NextApiError(
-                        "MovieVault v2 origin must be a root HTTP(S) origin",
-                        409,
-                    ) from exc
 
             initial_job = None
             initial_duplicate = False
@@ -28965,6 +29015,30 @@ def register_routes(flask_app: Flask) -> None:
                 tmdb_id = clean_text(item.get("tmdb_id"))
                 fmt = clean_text(item.get("format"))
                 edition = clean_text(item.get("edition"))
+                raw_container_ids = item.get("container_ids")
+                if raw_container_ids is None:
+                    container_ids: list[str] = []
+                elif isinstance(raw_container_ids, list):
+                    try:
+                        container_ids = [str(UUID(str(value))) for value in raw_container_ids]
+                    except (TypeError, ValueError, AttributeError):
+                        results.append(
+                            {
+                                "client_id": persistent_client_id,
+                                "status": "invalid",
+                                "matched": False,
+                            }
+                        )
+                        continue
+                else:
+                    results.append(
+                        {
+                            "client_id": persistent_client_id,
+                            "status": "invalid",
+                            "matched": False,
+                        }
+                    )
+                    continue
                 title = item.get("title")
                 year = item.get("year")
                 matched_id, matched_by = match_reconcile_item(
@@ -28993,6 +29067,8 @@ def register_routes(flask_app: Flask) -> None:
                         year=year,
                         fmt=fmt,
                         incoming_barcode=barcode,
+                        incoming_edition=edition,
+                        incoming_container_ids=container_ids,
                     ),
                 )
                 if matched_id is not None:
