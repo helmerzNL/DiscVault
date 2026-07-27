@@ -20,6 +20,7 @@ try:
         normalize_discover_mode,
         normalize_locale,
     )
+    from app.backend.next_views_ui import ui_preview_html
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
     if exc.name not in {"flask", "psycopg"}:
         raise
@@ -31,6 +32,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit o
     discover_feed = None
     normalize_discover_mode = None
     normalize_locale = None
+    ui_preview_html = None
 
 
 class _FakeConn:
@@ -144,6 +146,49 @@ class NextDiscoverLogicTests(unittest.TestCase):
                     )
                 self.assertEqual(payload["mode"], mode)
                 self.assertEqual(request_mock.call_args.args[1], path)
+
+
+@unittest.skipIf(ui_preview_html is None, "backend UI module unavailable")
+class DiscoverWishlistBadgeUiTests(unittest.TestCase):
+    """Guard the Discover wishlist affordances that mirror the iOS/Android apps."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = ui_preview_html(None, app_mode=True)
+
+    def test_wish_badge_is_styled_as_a_red_top_right_overlay(self):
+        self.assertIn(".discover-wish-badge {", self.html)
+        badge_css = self.html.split(".discover-wish-badge {", 1)[1].split("}", 1)[0]
+        self.assertIn("position: absolute", badge_css)
+        self.assertIn("top: 6px", badge_css)
+        self.assertIn("right: 6px", badge_css)
+        self.assertIn("pointer-events: none", badge_css)
+        self.assertIn(".discover-wish-badge svg {", self.html)
+        svg_css = self.html.split(".discover-wish-badge svg {", 1)[1].split("}", 1)[0]
+        self.assertIn("#ef4444", svg_css)
+
+    def test_discover_cards_render_the_badge_only_for_wishlisted_items(self):
+        self.assertIn('class="discover-wish-badge"', self.html)
+        self.assertIn('const onWishlist = isDiscoverItemOnWishlist(item);', self.html)
+        self.assertIn('${onWishlist ? " on-wishlist" : ""}', self.html)
+
+    def test_wishlist_matching_falls_back_to_title_and_year(self):
+        for symbol in (
+            "function normalizeDiscoverTitleKey(",
+            "function normalizeDiscoverYear(",
+            "function discoverMatchesWishlistTitleYear(",
+            "function findDiscoverWishlistEntry(",
+        ):
+            self.assertIn(symbol, self.html)
+
+    def test_discover_preloads_wishlist_state(self):
+        self.assertIn("async function ensureDiscoverWishlistLoaded()", self.html)
+        self.assertIn("ensureDiscoverWishlistLoaded();", self.html)
+        self.assertIn("function mergeWishlistEntryIntoState(", self.html)
+
+    def test_duplicate_wishlist_adds_are_blocked_in_the_ui(self):
+        self.assertIn("disabled: alreadyOnWishlist", self.html)
+        self.assertIn(".lists-actionsheet-btn:disabled {", self.html)
 
 
 if __name__ == "__main__":
