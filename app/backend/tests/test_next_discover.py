@@ -13,15 +13,23 @@ try:
 
     from app.backend.next_common import NextApiError
     from app.backend.next_discover import register_next_discover_routes
-    from app.backend.next_tmdb_discover import discover_detail, discover_feed, normalize_locale
+    from app.backend.next_tmdb_discover import (
+        DISCOVER_PILL_MODES,
+        discover_detail,
+        discover_feed,
+        normalize_discover_mode,
+        normalize_locale,
+    )
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
     if exc.name not in {"flask", "psycopg"}:
         raise
     Flask = None
     NextApiError = None
     register_next_discover_routes = None
+    DISCOVER_PILL_MODES = None
     discover_detail = None
     discover_feed = None
+    normalize_discover_mode = None
     normalize_locale = None
 
 
@@ -105,6 +113,37 @@ class NextDiscoverLogicTests(unittest.TestCase):
         self.assertEqual(normalize_locale(""), "en-US")
         self.assertEqual(normalize_locale("nl_nl"), "nl-NL")
         self.assertEqual(normalize_locale("fr"), "fr")
+
+    def test_discover_mode_normalization_accepts_aliases_and_falls_back(self):
+        self.assertEqual(normalize_discover_mode(None), "popular")
+        self.assertEqual(normalize_discover_mode("bogus"), "popular")
+        self.assertEqual(normalize_discover_mode("Now Playing"), "now_playing")
+        self.assertEqual(normalize_discover_mode("nowplaying"), "now_playing")
+        self.assertEqual(normalize_discover_mode("top-rated"), "top_rated")
+        self.assertEqual(normalize_discover_mode("soon"), "upcoming")
+
+    def test_pill_modes_hit_their_dedicated_tmdb_endpoints(self):
+        expected = {
+            "popular": "/discover/movie",
+            "now_playing": "/movie/now_playing",
+            "upcoming": "/movie/upcoming",
+            "top_rated": "/movie/top_rated",
+        }
+        self.assertEqual(set(DISCOVER_PILL_MODES), set(expected))
+        for mode, path in expected.items():
+            with self.subTest(mode=mode):
+                with mock.patch(
+                    "app.backend.next_tmdb_discover.tmdb_plugin._request",
+                    return_value={"results": [], "total_pages": 1},
+                ) as request_mock:
+                    payload = discover_feed(
+                        {"settings": {"language": "en-US"}},
+                        media_type="movie",
+                        mode=mode,
+                        page=1,
+                    )
+                self.assertEqual(payload["mode"], mode)
+                self.assertEqual(request_mock.call_args.args[1], path)
 
 
 if __name__ == "__main__":
