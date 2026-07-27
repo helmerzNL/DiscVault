@@ -89,7 +89,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         # bumping this version — which silently strands the fix in the image —
         # is caught, while future bumps don't require editing this test.
         version_tuple = tuple(int(part) for part in manifest["version"].split(".")[:3])
-        self.assertGreaterEqual(version_tuple, (1, 6, 0))
+        self.assertGreaterEqual(version_tuple, (1, 8, 1))
         self.assertIn("connection_request", manifest["capabilities"])
         self.assertIn("connection_recovery_action", manifest["capabilities"])
         self.assertIn("describe_payload", manifest["capabilities"])
@@ -1372,6 +1372,28 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertNotIn("mv_live_secret", str(result))
         self.assertNotIn("must-not-leak", str(result))
 
+    def test_activity_summary_reports_receiver_runtime_error(self):
+        result = movievault_26.activity_summary(
+            {
+                "payload": {
+                    "entityType": "movie",
+                    "identity": "tt0078748",
+                    "payload": {"title": "Alien"},
+                },
+                "execution": {},
+                "runtime": {
+                    "status": "error",
+                    "state": "runtime_error",
+                    "error": "MovieVault signed recovery failed: Recovery body is invalid",
+                },
+            },
+            {},
+        )
+
+        self.assertEqual(result["state"], "runtime_error")
+        self.assertEqual(result["reason"], "MovieVault signed recovery failed: Recovery body is invalid")
+        self.assertIn("runtime_error", result["summary"])
+
 
 class MovieVault26SignedContributionTests(unittest.TestCase):
     def _run_contribution(self, context, fake_request, payload=None):
@@ -1555,6 +1577,18 @@ class MovieVault26SignedContributionTests(unittest.TestCase):
         self.assertEqual(posts[1]["headers"]["Authorization"], "Bearer mv_new")
         # Both attempts sign-then-send identical bytes.
         self.assertEqual(posts[0]["data"], posts[1]["data"])
+
+    def test_nested_validation_error_is_detected(self):
+        self.assertTrue(
+            movievault_26._validation_error(
+                {
+                    "error": {
+                        "code": "validation_error",
+                        "message": "payload rejected",
+                    },
+                }
+            )
+        )
 
 
 class MovieVault26ClientVersionGateTests(unittest.TestCase):

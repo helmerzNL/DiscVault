@@ -53,7 +53,16 @@ class MovieVaultV3ClientTests(unittest.TestCase):
         self.store = {}  # key -> (value, is_secret)
         self._orig = {
             name: getattr(mv, name)
-            for name in ("_setting_value", "_set_setting", "_delete_setting", "_table_exists", "_http_request")
+            for name in (
+                "_setting_value",
+                "_set_setting",
+                "_delete_setting",
+                "_table_exists",
+                "_http_request",
+                "_post_json",
+                "_store_plugin_token",
+                "_delete_token",
+            )
         }
 
         def fake_setting_value(_conn, key, default=None, *, include_secret=False):
@@ -70,10 +79,24 @@ class MovieVaultV3ClientTests(unittest.TestCase):
         def fake_delete_setting(_conn, key):
             self.store.pop(key, None)
 
+        def fake_store_plugin_token(_conn, token, *, plugin_id=None, actor_id=None):
+            self.store[mv._plugin_token_secret_key(plugin_id)] = (token, True)
+
+        def fake_delete_token(_conn):
+            for key in (
+                mv._plugin_token_secret_key(mv.MOVIEVAULT_PLUGIN_ID),
+                mv._plugin_token_secret_key(mv.MOVIEVAULT_NEXT_PLUGIN_ID),
+                "movievault_api_token",
+                "movievault_api_key",
+            ):
+                self.store.pop(key, None)
+
         mv._setting_value = fake_setting_value
         mv._set_setting = fake_set_setting
         mv._delete_setting = fake_delete_setting
         mv._table_exists = lambda _conn, _name: False
+        mv._store_plugin_token = fake_store_plugin_token
+        mv._delete_token = fake_delete_token
 
     def tearDown(self):
         for name, value in self._orig.items():
@@ -83,6 +106,15 @@ class MovieVaultV3ClientTests(unittest.TestCase):
     def _install_sender(self, responses):
         sender = _FakeSender(responses)
         mv._http_request = sender
+        return sender
+
+    def _install_post_sender(self, responses):
+        sender = _FakeSender(responses)
+
+        def post_json(url, raw_body, headers):
+            return sender("POST", url, headers, raw_body.encode("utf-8"))
+
+        mv._post_json = post_json
         return sender
 
     def _raw_setting(self, key):
@@ -190,6 +222,16 @@ class MovieVaultV3ClientTests(unittest.TestCase):
         message = (headers["X-MV-Timestamp"] + "." + headers["X-MV-Nonce"] + ".").encode("utf-8") + body_bytes
         self._load_public_key().verify(sig_bytes, message)  # raises on mismatch
 
+    def _verify_legacy(self, headers, body_bytes):
+        signature = headers["X-DiscVault-Signature"]
+        self.assertTrue(signature.startswith("key-v1="))
+        raw_sig = signature[len("key-v1="):]
+        sig_bytes = base64.urlsafe_b64decode(raw_sig + "=" * (-len(raw_sig) % 4))
+        message = (
+            headers["X-DiscVault-Timestamp"] + "." + headers["X-DiscVault-Nonce"] + "."
+        ).encode("utf-8") + body_bytes
+        self._load_public_key().verify(sig_bytes, message)
+
     def test_signature_headers_present_and_verify_empty_body(self):
         mv._instance_key_pair(None)
         self.store[mv.V3_KEY_ID_KEY] = ("iosk_abc", False)
@@ -215,6 +257,9 @@ class MovieVaultV3ClientTests(unittest.TestCase):
     # --- bootstrap ---------------------------------------------------------
 
     def test_bootstrap_v3_body_shape_and_storage(self):
+        mv._instance_key_pair(None)
+        legacy_key_id = self._raw_setting(mv.INSTANCE_PUBLIC_KEY_ID_KEY)
+        self.assertTrue(legacy_key_id.startswith("dvpk_"))
         sender = self._install_sender([
             _resp(200, {
                 "status": "linked",
@@ -246,6 +291,8 @@ class MovieVaultV3ClientTests(unittest.TestCase):
         self.assertEqual(mv._v3_key_id(None), "iosk_from_server")
         self.assertEqual(mv._v3_token(None), "mv_live_secrettoken")
         self.assertEqual(self.store[mv.V3_INSTANCE_ID_KEY][0], "web_server_x")
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PUBLIC_KEY_ID_KEY), legacy_key_id)
+        self.assertNotEqual(self._raw_setting(mv.V3_KEY_ID_KEY), legacy_key_id)
         # Token encrypted at rest.
         self.assertTrue(self._raw_setting(mv.V3_API_TOKEN_KEY).startswith(mv.SECRET_ENC_PREFIX))
 
@@ -318,6 +365,129 @@ class MovieVaultV3ClientTests(unittest.TestCase):
             mv.bootstrap_v3(None)
         # Exactly one relink retry — no infinite recursion.
         self.assertEqual(len(sender.calls), 2)
+
+    # --- legacy signed recovery --------------------------------------------
+
+    def test_recovery_signs_exact_finalized_body_with_client_version(self):
+        mv._instance_key_pair(None)
+        sender = self._install_post_sender([
+            _resp(200, {
+                "client": {
+                    "apiToken": "mv_live_recovered",
+                    "tokenPrefix": "mv_live_reco",
+                    "scopes": ["contributions:write"],
+                },
+                "instance": {"keyId": self._raw_setting(mv.INSTANCE_PUBLIC_KEY_ID_KEY)},
+            }),
+        ])
+
+        mv._recover(None, plugin_id=mv.MOVIEVAULT_NEXT_PLUGIN_ID)
+
+        self.assertEqual(len(sender.calls), 1)
+        call = sender.calls[0]
+        body_bytes = call["data"]
+        body = json.loads(body_bytes.decode("utf-8"))
+        self.assertEqual(body["clientVersion"], mv._software_version())
+        self.assertEqual(body_bytes, mv._raw_json_body(body).encode("utf-8"))
+        self._verify_legacy(call["headers"], body_bytes)
+
+    def test_poisoned_legacy_v3_key_id_bootstraps_with_existing_keypair(self):
+        mv._instance_key_pair(None)
+        instance_id = mv._instance_id(None)
+        private_key = self._raw_setting(mv.INSTANCE_PRIVATE_KEY_KEY)
+        public_key = self._raw_setting(mv.INSTANCE_PUBLIC_KEY_KEY)
+        self.store[mv.INSTANCE_PUBLIC_KEY_ID_KEY] = ("iosk_poisoned", False)
+        self.store[mv.V3_KEY_ID_KEY] = ("iosk_poisoned", False)
+        self.store[mv._plugin_token_secret_key(mv.MOVIEVAULT_NEXT_PLUGIN_ID)] = ("mv_old", True)
+        sender = self._install_post_sender([
+            _resp(400, {
+                "error": {
+                    "code": "validation_error",
+                    "message": "DiscVault instance is already linked; use signed recovery",
+                },
+            }),
+            _resp(200, {
+                "client": {
+                    "apiToken": "mv_live_restored",
+                    "tokenPrefix": "mv_live_rest",
+                    "scopes": ["contributions:write"],
+                },
+                "instance": {"keyId": mv._legacy_public_key_id(public_key)},
+            }),
+        ])
+
+        mv.refresh_movievault_connection(None, plugin_id=mv.MOVIEVAULT_NEXT_PLUGIN_ID)
+
+        self.assertEqual(len(sender.calls), 2)
+        self.assertTrue(sender.calls[0]["url"].endswith(mv.BOOTSTRAP_PATH))
+        bootstrap_body = json.loads(sender.calls[0]["data"].decode("utf-8"))
+        self.assertEqual(bootstrap_body["publicKey"], public_key)
+        self.assertTrue(sender.calls[1]["url"].endswith(mv.HANDSHAKE_PATH))
+        self.assertEqual(sender.calls[1]["headers"]["X-DiscVault-Key-Id"], mv._legacy_public_key_id(public_key))
+        self.assertEqual(self._raw_setting(mv.INSTANCE_ID_KEY), instance_id)
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PRIVATE_KEY_KEY), private_key)
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PUBLIC_KEY_KEY), public_key)
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PUBLIC_KEY_ID_KEY), mv._legacy_public_key_id(public_key))
+        self.assertEqual(self._raw_setting(mv.V3_KEY_ID_KEY), "iosk_poisoned")
+        self.assertEqual(
+            self._raw_setting(mv._plugin_token_secret_key(mv.MOVIEVAULT_NEXT_PLUGIN_ID)),
+            "mv_live_restored",
+        )
+
+    def test_legacy_key_id_equal_to_v3_slot_uses_safe_bootstrap(self):
+        mv._instance_key_pair(None)
+        private_key = self._raw_setting(mv.INSTANCE_PRIVATE_KEY_KEY)
+        public_key = self._raw_setting(mv.INSTANCE_PUBLIC_KEY_KEY)
+        self.store[mv.INSTANCE_PUBLIC_KEY_ID_KEY] = ("shared_server_key_id", False)
+        self.store[mv.V3_KEY_ID_KEY] = ("shared_server_key_id", False)
+        sender = self._install_post_sender([
+            _resp(200, {
+                "client": {
+                    "apiToken": "mv_live_restored",
+                    "scopes": ["contributions:write"],
+                },
+                "instance": {"keyId": "dvpk_restored"},
+            }),
+        ])
+
+        mv.refresh_movievault_connection(None, plugin_id=mv.MOVIEVAULT_NEXT_PLUGIN_ID)
+
+        self.assertEqual(len(sender.calls), 1)
+        self.assertTrue(sender.calls[0]["url"].endswith(mv.BOOTSTRAP_PATH))
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PRIVATE_KEY_KEY), private_key)
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PUBLIC_KEY_KEY), public_key)
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PUBLIC_KEY_ID_KEY), "dvpk_restored")
+        self.assertEqual(self._raw_setting(mv.V3_KEY_ID_KEY), "shared_server_key_id")
+
+    def test_unrecognized_recovery_validation_error_surfaces_safe_server_details_once(self):
+        mv._instance_key_pair(None)
+        private_key = self._raw_setting(mv.INSTANCE_PRIVATE_KEY_KEY)
+        public_key = self._raw_setting(mv.INSTANCE_PUBLIC_KEY_KEY)
+        public_key_id = self._raw_setting(mv.INSTANCE_PUBLIC_KEY_ID_KEY)
+        sender = self._install_post_sender([
+            _resp(400, {
+                "error": {
+                    "code": "validation_error",
+                    "message": "Recovery body is invalid",
+                    "details": [
+                        {"field": "clientVersion", "message": "must be included in the signed body"},
+                        {"field": "token", "message": "mv_live_secret"},
+                    ],
+                },
+            }),
+        ])
+
+        with self.assertRaises(mv.MovieVaultConnectionError) as caught:
+            mv._recover(None, plugin_id=mv.MOVIEVAULT_NEXT_PLUGIN_ID)
+
+        message = str(caught.exception)
+        self.assertIn("Recovery body is invalid", message)
+        self.assertIn("clientVersion: must be included in the signed body", message)
+        self.assertNotIn("mv_live_secret", message)
+        self.assertEqual(len(sender.calls), 1)
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PRIVATE_KEY_KEY), private_key)
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PUBLIC_KEY_KEY), public_key)
+        self.assertEqual(self._raw_setting(mv.INSTANCE_PUBLIC_KEY_ID_KEY), public_key_id)
 
     # --- signed transport --------------------------------------------------
 
