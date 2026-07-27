@@ -595,6 +595,7 @@ def _request(
     accept: str,
     timeout_seconds: int,
     maximum_bytes: int,
+    passthrough_statuses: frozenset[int] = frozenset(),
 ) -> tuple[int, bytes, dict[str, str]]:
     request = urllib.request.Request(
         url,
@@ -611,7 +612,7 @@ def _request(
             content = response.read(maximum_bytes + 1)
             headers = {key.lower(): value for key, value in response.headers.items()}
     except urllib.error.HTTPError as exc:
-        if exc.code in {204, 409}:
+        if exc.code in {204, 409} or exc.code in passthrough_statuses:
             return exc.code, b"", {key.lower(): value for key, value in exc.headers.items()}
         if 300 <= exc.code < 400:
             raise MovieVaultV2Error("redirect_rejected") from exc
@@ -1070,6 +1071,23 @@ def _release_details_box_set(value: Any) -> dict[str, Any]:
     return result
 
 
+def _release_details_poster(value: Any) -> dict[str, Any]:
+    """Validate an approved catalog poster carried by a release-details
+    response.
+
+    MovieVault reuses the `distribution-4` poster reference verbatim here, so
+    the bulk-sync parser is reused unchanged rather than declaring a second
+    model; only the stable, value-free error code is remapped onto the
+    release-details namespace so callers keep a single failure vocabulary."""
+    try:
+        poster = _poster(value, MOVIEVAULT_V4_CONTRACT)
+    except MovieVaultV2Error as exc:
+        raise MovieVaultV2Error("release_details_response_invalid") from exc
+    if poster is None:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return poster
+
+
 def validate_release_details_response(value: Any) -> dict[str, Any]:
     item = _release_details_object(
         value,
@@ -1079,6 +1097,8 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             "film",
             "release",
             "boxSet",
+            "poster",
+            "boxSetPoster",
             "moderation",
             "resolutionId",
             "retryAfterSeconds",
@@ -1121,7 +1141,7 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
         _release_details_object(
             item,
             required=required,
-            optional={"boxSet"},
+            optional={"boxSet", "poster", "boxSetPoster"},
         )
         expected_verification = (
             "canonical" if status == "canonical_hit" else "unreviewed_external"
@@ -1137,6 +1157,16 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
         }
         if item.get("boxSet") is not None:
             result["boxSet"] = _release_details_box_set(item["boxSet"])
+        # The approved catalog poster is resolved from the canonical entity the
+        # requested barcode points at, never from a plugin result, so it is read
+        # for `external_hit` exactly like `canonical_hit` - `verificationStatus`
+        # describes the provenance of the technical data only (issue #402).
+        if item.get("poster") is not None:
+            result["poster"] = _release_details_poster(item["poster"])
+        if item.get("boxSetPoster") is not None:
+            if "boxSet" not in result:
+                raise MovieVaultV2Error("release_details_response_invalid")
+            result["boxSetPoster"] = _release_details_poster(item["boxSetPoster"])
         if status == "external_hit":
             moderation = _release_details_object(
                 item["moderation"],
@@ -2107,28 +2137,26 @@ def _local_media_asset_url(media_asset_id: Any) -> str | None:
     return f"/api/next/movievault-v2/posters/{media_asset_id}"
 
 
+POSTER_FIELDS_UNAVAILABLE: dict[str, Any] = {
+    "posterUrl": None,
+    "posterStatus": "unavailable",
+    "posterChecksum": None,
+    "posterRevision": None,
+}
+
+
 def _poster_status_fields(conn: Any, poster: dict[str, Any] | None) -> dict[str, Any]:
     """Map a persisted MovieVault poster descriptor onto authenticated,
     DiscVault-local fields. The raw poster object (remote MovieVault asset
     paths) is never returned to a caller; only a local media-asset URL,
     cache status, checksum, and a checksum-derived revision are exposed."""
     if poster is None:
-        return {
-            "posterUrl": None,
-            "posterStatus": "unavailable",
-            "posterChecksum": None,
-            "posterRevision": None,
-        }
+        return dict(POSTER_FIELDS_UNAVAILABLE)
     asset_id = poster.get("assetId")
     display = poster.get("display") or {}
     checksum = display.get("checksum")
     if not asset_id or not checksum:
-        return {
-            "posterUrl": None,
-            "posterStatus": "unavailable",
-            "posterChecksum": None,
-            "posterRevision": None,
-        }
+        return dict(POSTER_FIELDS_UNAVAILABLE)
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -2154,6 +2182,80 @@ def _poster_status_fields(conn: Any, poster: dict[str, Any] | None) -> dict[str,
         "posterChecksum": checksum,
         "posterRevision": checksum[:16] if poster_url else None,
     }
+
+
+def _release_details_poster_fields(
+    conn: Any,
+    origin: str,
+    poster: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Reuse the bulk-sync poster cache for a poster carried by a
+    release-details response: enqueue the same bounded, anonymous caching job
+    (idempotent on ``assetId``/variant/checksum, so an already-cached poster
+    never re-downloads) and return only DiscVault-local poster fields."""
+    if poster is None:
+        return dict(POSTER_FIELDS_UNAVAILABLE)
+    with conn.transaction():
+        with conn.cursor() as cur:
+            _enqueue_poster_cache(cur, origin, poster)
+    return _poster_status_fields(conn, poster)
+
+
+def localize_release_details_posters(
+    conn: Any,
+    origin: str,
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    """Replace the optional remote poster references on a release-details
+    result with authenticated, DiscVault-local poster fields.
+
+    ``poster`` describes the resolved release and ``boxSetPoster`` the box set,
+    so each is attached to its own object and never shared with a member
+    release. The release -> poster association is taken exclusively from this
+    response: when a later response omits ``poster`` the fields fall back to
+    ``unavailable``, so a withdrawn or replaced poster stops being shown
+    instead of lingering from an earlier lookup."""
+    if not isinstance(result, dict) or result.get("status") not in {
+        "canonical_hit",
+        "external_hit",
+    }:
+        return result
+    localized = dict(result)
+    poster = localized.pop("poster", None)
+    box_set_poster = localized.pop("boxSetPoster", None)
+    release = localized.get("release")
+    if isinstance(release, dict):
+        localized["release"] = {
+            **release,
+            **_release_details_poster_fields(conn, origin, poster),
+        }
+    box_set = localized.get("boxSet")
+    if isinstance(box_set, dict):
+        localized["boxSet"] = {
+            **box_set,
+            **_release_details_poster_fields(conn, origin, box_set_poster),
+        }
+    return localized
+
+
+def _release_details_without_posters(result: dict[str, Any]) -> dict[str, Any]:
+    """Fallback used when the local poster cache cannot be reached: drop the
+    remote poster references (they are never exposed to a caller) and report
+    the poster as unavailable. The technical release data is returned intact so
+    a poster failure never fails the surrounding barcode lookup."""
+    if not isinstance(result, dict) or result.get("status") not in {
+        "canonical_hit",
+        "external_hit",
+    }:
+        return result
+    stripped = dict(result)
+    stripped.pop("poster", None)
+    stripped.pop("boxSetPoster", None)
+    for key in ("release", "boxSet"):
+        section = stripped.get(key)
+        if isinstance(section, dict):
+            stripped[key] = {**section, **POSTER_FIELDS_UNAVAILABLE}
+    return stripped
 
 
 def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
@@ -2535,13 +2637,24 @@ def movievault_v2_plugin_context(
 
     def release_details_callback(request: dict[str, Any]) -> dict[str, Any]:
         try:
-            return resolve_release_details(safe_settings, request)
+            result = resolve_release_details(safe_settings, request)
         except MovieVaultV2Error as exc:
             return {
                 "contractVersion": RELEASE_DETAILS_CONTRACT,
                 "status": "failed",
                 "errorCode": exc.code,
             }
+        try:
+            with _connection_scope(conn, connection_factory) as active_conn:
+                return localize_release_details_posters(
+                    active_conn,
+                    enforced_origin(),
+                    result,
+                )
+        except Exception:
+            # Poster caching is best effort: an unavailable poster must never
+            # fail a barcode lookup that already produced technical data.
+            return _release_details_without_posters(result)
 
     return {
         **context,
