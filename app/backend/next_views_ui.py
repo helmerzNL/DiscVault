@@ -12734,6 +12734,68 @@ def ui_preview_html(
       justify-content: space-between;
       gap: 10px;
     }
+    .discover-submenu {
+      display: flex;
+      align-self: flex-start;
+      max-width: 100%;
+      scrollbar-width: none;
+    }
+    .discover-submenu::-webkit-scrollbar {
+      display: none;
+    }
+    .discover-submenu.hidden {
+      display: none;
+    }
+    .detail-submenu button.discover-seg .lists-seg-icon {
+      fill: var(--muted);
+    }
+    .detail-submenu button.discover-seg.active .lists-seg-icon {
+      fill: var(--accent, var(--text));
+    }
+    .discover-missing-key {
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+      padding: 34px 20px;
+      text-align: center;
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
+    }
+    .discover-missing-key.hidden {
+      display: none;
+    }
+    .discover-missing-key-icon {
+      width: 44px;
+      height: 44px;
+      fill: var(--muted);
+    }
+    .discover-missing-key h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .discover-missing-key p {
+      margin: 0;
+      max-width: 46ch;
+      font-size: .86rem;
+      color: var(--muted);
+    }
+    .discover-missing-key-detail.hidden {
+      display: none;
+    }
+    .discover-missing-key #discoverMissingKeyButton.hidden {
+      display: none;
+    }
+    @media (max-width: 760px) {
+      /* Discover pills mirror the iOS/Android chips: icon + label, horizontally scrollable. */
+      .detail-submenu.discover-submenu button.discover-seg .lists-seg-label {
+        display: inline;
+      }
+      .detail-submenu.discover-submenu button.discover-seg .lists-seg-icon {
+        width: 17px;
+        height: 17px;
+      }
+    }
     .discover-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
@@ -13943,9 +14005,22 @@ def ui_preview_html(
           <div class="discover-head">
             <div>
               <h2 data-next-i18n="discover.title">Discover</h2>
-              <p class="import-source-meta" data-next-i18n="discover.subtitle">Popular movies from TMDb</p>
+              <p class="import-source-meta" id="discoverSubtitle" data-next-i18n="discover.subtitlePopular">The most popular movies on TMDb right now.</p>
             </div>
             <p class="discover-inline-message hidden" id="discoverInlineMessage"></p>
+          </div>
+          <div class="detail-submenu discover-submenu" id="discoverCategories" role="tablist" aria-label="Discover categories" data-next-i18n-aria="discover.categories">
+            <button type="button" class="active lists-seg discover-seg" data-discover-mode="popular" aria-label="Popular" data-next-i18n-aria="discover.categoryPopular"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2M14.5 17.5C14.22 17.74 13.76 18 13.4 18.1C12.28 18.5 11.16 17.94 10.5 17.28C11.69 17 12.4 16.12 12.61 15.23C12.78 14.43 12.46 13.77 12.33 13C12.21 12.26 12.23 11.63 12.5 10.94C12.69 11.32 12.89 11.7 13.13 12C13.9 13 15.11 13.44 15.37 14.8C15.41 14.94 15.43 15.08 15.43 15.23C15.46 16.05 15.1 16.95 14.5 17.5H14.5Z"/></svg><span class="lists-seg-label" data-next-i18n="discover.categoryPopular">Popular</span></button>
+            <button type="button" class="lists-seg discover-seg" data-discover-mode="now_playing" aria-label="Now in cinemas" data-next-i18n-aria="discover.categoryNowPlaying"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7,22H4.75C4.75,22 4,22 3.81,20.65L2.04,3.81L2,3.5C2,2.67 2.9,2 4,2C5.1,2 6,2.67 6,3.5C6,2.67 6.9,2 8,2C9.1,2 10,2.67 10,3.5C10,2.67 10.9,2 12,2C13.09,2 14,2.66 14,3.5V3.5C14,2.67 14.9,2 16,2C17.1,2 18,2.67 18,3.5C18,2.67 18.9,2 20,2C21.1,2 22,2.67 22,3.5L21.96,3.81L20.19,20.65C20,22 19.25,22 19.25,22H17L16.5,22H13.75L10.25,22H7.5L7,22M17.85,4.93C17.55,4.39 16.84,4 16,4C15.19,4 14.36,4.36 14,4.87L13.78,20H16.66L17.85,4.93M10,4.87C9.64,4.36 8.81,4 8,4C7.16,4 6.45,4.39 6.15,4.93L7.34,20H10.22L10,4.87Z"/></svg><span class="lists-seg-label" data-next-i18n="discover.categoryNowPlaying">Now in cinemas</span></button>
+            <button type="button" class="lists-seg discover-seg" data-discover-mode="upcoming" aria-label="Upcoming" data-next-i18n-aria="discover.categoryUpcoming"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15,13H16.5V15.82L18.94,17.23L18.19,18.53L15,16.69V13M19,8H5V19H9.67C9.24,18.09 9,17.07 9,16A7,7 0 0,1 16,9C17.07,9 18.09,9.24 19,9.67V8M5,21C3.89,21 3,20.1 3,19V5C3,3.89 3.89,3 5,3H6V1H8V3H16V1H18V3H19A2,2 0 0,1 21,5V11.1C22.24,12.36 23,14.09 23,16A7,7 0 0,1 16,23C14.09,23 12.36,22.24 11.1,21H5M16,11.15A4.85,4.85 0 0,0 11.15,16C11.15,18.68 13.32,20.85 16,20.85A4.85,4.85 0 0,0 20.85,16C20.85,13.32 18.68,11.15 16,11.15Z"/></svg><span class="lists-seg-label" data-next-i18n="discover.categoryUpcoming">Upcoming</span></button>
+            <button type="button" class="lists-seg discover-seg" data-discover-mode="top_rated" aria-label="Top rated" data-next-i18n-aria="discover.categoryTopRated"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z"/></svg><span class="lists-seg-label" data-next-i18n="discover.categoryTopRated">Top rated</span></button>
+          </div>
+          <div class="discover-missing-key hidden" id="discoverMissingKey">
+            <svg class="discover-missing-key-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22,18V22H18V19H15V16H12L9.74,13.74C9.19,13.91 8.61,14 8,14A6,6 0 0,1 2,8A6,6 0 0,1 8,2A6,6 0 0,1 14,8C14,8.61 13.91,9.19 13.74,9.74L22,18M7,5A2,2 0 0,0 5,7A2,2 0 0,0 7,9A2,2 0 0,0 9,7A2,2 0 0,0 7,5Z"/></svg>
+            <h3 data-next-i18n="discover.missingKeyTitle">Discover needs a free TMDb API key</h3>
+            <p data-next-i18n="discover.missingKeyBody">Adding your free TMDb API key is recommended: it unlocks the Discover feed with popular, cinema, upcoming and top rated titles.</p>
+            <p class="discover-missing-key-detail hidden" id="discoverMissingKeyDetail"></p>
+            <button type="button" class="primary-button hidden" id="discoverMissingKeyButton" data-next-i18n="discover.missingKeyAction">Add API key</button>
           </div>
           <div class="discover-grid" id="discoverGrid"></div>
           <div class="discover-empty hidden" id="discoverEmpty" data-next-i18n="discover.empty">No items found.</div>
@@ -16561,8 +16636,9 @@ def ui_preview_html(
       totalPages: 1,
       hasMore: true,
       configured: true,
+      missingKeyMessage: "",
       kind: "movie",
-      mode: "popular",
+      mode: localStorage.getItem("dv_next_discover_mode") || "popular",
       observer: null
     };
     let activeDiscoverItem = null;
@@ -34929,11 +35005,85 @@ def ui_preview_html(
         </button>
       `;
     }
+    const DISCOVER_MODES = ["popular", "now_playing", "upcoming", "top_rated"];
+    const DISCOVER_MODE_I18N = {
+      popular: {label: ["discover.categoryPopular", "Popular"], subtitle: ["discover.subtitlePopular", "The most popular movies on TMDb right now."]},
+      now_playing: {label: ["discover.categoryNowPlaying", "Now in cinemas"], subtitle: ["discover.subtitleNowPlaying", "Movies currently playing in cinemas."]},
+      upcoming: {label: ["discover.categoryUpcoming", "Upcoming"], subtitle: ["discover.subtitleUpcoming", "Movies arriving in cinemas soon."]},
+      top_rated: {label: ["discover.categoryTopRated", "Top rated"], subtitle: ["discover.subtitleTopRated", "The highest rated movies on TMDb."]}
+    };
+    function normalizeDiscoverMode(value) {
+      const text = String(value || "").trim().toLowerCase().replace(/[\\s-]+/g, "_");
+      if (text === "nowplaying") return "now_playing";
+      if (text === "toprated") return "top_rated";
+      return DISCOVER_MODES.includes(text) ? text : "popular";
+    }
+    function renderDiscoverCategories() {
+      const mode = normalizeDiscoverMode(discoverState.mode);
+      document.querySelectorAll("[data-discover-mode]").forEach((button) => {
+        const isActive = normalizeDiscoverMode(button.dataset.discoverMode) === mode;
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
+      const subtitle = document.getElementById("discoverSubtitle");
+      if (subtitle) {
+        const [key, fallback] = (DISCOVER_MODE_I18N[mode] || DISCOVER_MODE_I18N.popular).subtitle;
+        subtitle.dataset.nextI18n = key;
+        subtitle.textContent = tNext(key, fallback);
+      }
+      const categories = document.getElementById("discoverCategories");
+      if (categories) categories.classList.toggle("hidden", !discoverState.configured);
+    }
+    function renderDiscoverMissingKey() {
+      const panel = document.getElementById("discoverMissingKey");
+      if (!panel) return;
+      const missing = !discoverState.configured;
+      panel.classList.toggle("hidden", !missing);
+      const detail = document.getElementById("discoverMissingKeyDetail");
+      if (detail) {
+        detail.textContent = missing ? (discoverState.missingKeyMessage || "") : "";
+        detail.classList.toggle("hidden", !missing || !discoverState.missingKeyMessage);
+      }
+      const button = document.getElementById("discoverMissingKeyButton");
+      if (button) {
+        const canOpenPlugins = typeof canUseAdminTab === "function" ? canUseAdminTab("plugins") : false;
+        button.classList.toggle("hidden", !missing || !canOpenPlugins);
+      }
+    }
+    function setDiscoverMode(mode) {
+      const next = normalizeDiscoverMode(mode);
+      if (next === normalizeDiscoverMode(discoverState.mode)) return;
+      discoverState.mode = next;
+      try {
+        localStorage.setItem("dv_next_discover_mode", next);
+      } catch (error) {
+        /* storage can be unavailable in private mode */
+      }
+      renderDiscoverCategories();
+      loadDiscoverPage(true);
+    }
+    function bindDiscoverCategories() {
+      document.querySelectorAll("[data-discover-mode]").forEach((button) => {
+        if (button.dataset.discoverBound === "1") return;
+        button.dataset.discoverBound = "1";
+        button.addEventListener("click", () => setDiscoverMode(button.dataset.discoverMode));
+      });
+      const missingKeyButton = document.getElementById("discoverMissingKeyButton");
+      if (missingKeyButton && missingKeyButton.dataset.discoverBound !== "1") {
+        missingKeyButton.dataset.discoverBound = "1";
+        missingKeyButton.addEventListener("click", () => {
+          showAdminPage();
+          setAppAdminTab("plugins");
+        });
+      }
+    }
     function renderDiscoverView() {
       const grid = document.getElementById("discoverGrid");
       const empty = document.getElementById("discoverEmpty");
       const loading = document.getElementById("discoverLoading");
       if (!grid || !empty || !loading) return;
+      renderDiscoverCategories();
+      renderDiscoverMissingKey();
       grid.innerHTML = (discoverState.items || []).map((item) => discoverCardHtml(item)).join("");
       empty.classList.toggle("hidden", !!(discoverState.items || []).length || discoverState.loading || !discoverState.configured);
       loading.classList.toggle("hidden", !discoverState.loading);
@@ -35040,6 +35190,7 @@ def ui_preview_html(
       discoverState.loading = true;
       renderDiscoverView();
       const nextPage = discoverState.page + 1;
+      discoverState.mode = normalizeDiscoverMode(discoverState.mode);
       try {
         const payload = await authApiJson(`/api/next/discover?page=${nextPage}&kind=${encodeURIComponent(discoverState.kind)}&mode=${encodeURIComponent(discoverState.mode)}&locale=${encodeURIComponent(localeState.locale)}`);
         discoverState.configured = payload.configured !== false;
@@ -35048,12 +35199,11 @@ def ui_preview_html(
           discoverState.page = 1;
           discoverState.totalPages = 1;
           discoverState.hasMore = false;
-          setDiscoverMessage(
-            payload.message || tNext("discover.tmdbMissing", "TMDb API key is missing. Open Plugins and add your free TMDb key."),
-            "error"
-          );
+          discoverState.missingKeyMessage = payload.message || tNext("discover.tmdbMissing", "TMDb API key is missing. Open Plugins and add your free TMDb key.");
+          setDiscoverMessage("");
         } else {
           setDiscoverMessage("");
+          discoverState.missingKeyMessage = "";
           discoverState.page = Number(payload.page || nextPage);
           discoverState.totalPages = Number(payload.totalPages || 1);
           discoverState.hasMore = !!payload.hasMore;
@@ -35252,6 +35402,7 @@ def ui_preview_html(
       document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("discoverView")?.classList.remove("hidden");
       setActiveAppRoute("discover");
+      bindDiscoverCategories();
       ensureDiscoverObserver();
       if (!discoverState.loaded) {
         loadDiscoverPage(true);

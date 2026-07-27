@@ -19,7 +19,30 @@ TMDB_PLUGIN_ID = "tmdb"
 DEFAULT_LOCALE = "en-US"
 DISCOVER_PAGE_MAX = 1000
 SUPPORTED_MEDIA_TYPES = {"movie", "tv"}
-SUPPORTED_MODES = {"popular", "trending"}
+DEFAULT_MODE = "popular"
+# Mirrors the four category pills on iOS/Android (Popular, Now playing, Upcoming, Top rated)
+# plus the pre-existing "trending" mode used by the API.
+SUPPORTED_MODES = ("popular", "now_playing", "upcoming", "top_rated", "trending")
+DISCOVER_PILL_MODES = ("popular", "now_playing", "upcoming", "top_rated")
+_MODE_ALIASES = {
+    "nowplaying": "now_playing",
+    "in_theatres": "now_playing",
+    "theatres": "now_playing",
+    "theaters": "now_playing",
+    "cinema": "now_playing",
+    "toprated": "top_rated",
+    "top": "top_rated",
+    "soon": "upcoming",
+}
+
+
+def normalize_discover_mode(value: Any) -> str:
+    """Accept camelCase/kebab-case/snake_case mode names from any client."""
+    text = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if not text:
+        return DEFAULT_MODE
+    resolved = _MODE_ALIASES.get(text, text)
+    return resolved if resolved in SUPPORTED_MODES else DEFAULT_MODE
 
 
 def _next_app():
@@ -124,31 +147,47 @@ def _normalize_discover_item(item: dict[str, Any], media_type: str) -> dict[str,
     }
 
 
+def _discover_request_spec(*, media_type: str, mode: str, language: str, page: int) -> tuple[str, dict[str, Any]]:
+    """Map a Discover pill to the TMDb endpoint iOS/Android use for the same category."""
+    base: dict[str, Any] = {"page": page, "language": language}
+    if mode == "trending":
+        return f"/trending/{media_type}/week", base
+    if mode == "now_playing":
+        # TV has no "now playing"; "on the air" is the equivalent currently-running list.
+        return ("/tv/on_the_air" if media_type == "tv" else "/movie/now_playing"), base
+    if mode == "upcoming":
+        if media_type == "tv":
+            # TMDb offers no /tv/upcoming, so approximate it with future first air dates.
+            return "/discover/tv", {
+                **base,
+                "sort_by": "first_air_date.asc",
+                "include_adult": "false",
+                "first_air_date.gte": date.today().isoformat(),
+            }
+        return "/movie/upcoming", base
+    if mode == "top_rated":
+        return f"/{media_type}/top_rated", base
+    return f"/discover/{media_type}", {
+        **base,
+        "sort_by": "popularity.desc",
+        "include_adult": "false",
+        "include_video": "false",
+    }
+
+
 def discover_feed(context: dict[str, Any], *, media_type: str, mode: str, page: int) -> dict[str, Any]:
     clean_media_type = str(media_type or "movie").strip().lower()
     if clean_media_type not in SUPPORTED_MEDIA_TYPES:
         raise NextApiError("Unsupported discover media type", 400)
-    clean_mode = str(mode or "popular").strip().lower()
-    if clean_mode not in SUPPORTED_MODES:
-        raise NextApiError("Unsupported discover mode", 400)
+    clean_mode = normalize_discover_mode(mode)
     page_number = max(min(int(page or 1), DISCOVER_PAGE_MAX), 1)
-    if clean_mode == "trending":
-        payload = tmdb_plugin._request(  # noqa: SLF001 - reusing shared plugin transport
-            context,
-            f"/trending/{clean_media_type}/week",
-            page=page_number,
-            language=normalize_locale((context.get("settings") or {}).get("language")),
-        )
-    else:
-        payload = tmdb_plugin._request(  # noqa: SLF001 - reusing shared plugin transport
-            context,
-            f"/discover/{clean_media_type}",
-            page=page_number,
-            sort_by="popularity.desc",
-            include_adult="false",
-            include_video="false",
-            language=normalize_locale((context.get("settings") or {}).get("language")),
-        )
+    path, params = _discover_request_spec(
+        media_type=clean_media_type,
+        mode=clean_mode,
+        language=normalize_locale((context.get("settings") or {}).get("language")),
+        page=page_number,
+    )
+    payload = tmdb_plugin._request(context, path, **params)  # noqa: SLF001 - reusing shared plugin transport
     normalized: list[dict[str, Any]] = []
     for row in payload.get("results") or []:
         item = _normalize_discover_item(row or {}, clean_media_type)
@@ -158,6 +197,7 @@ def discover_feed(context: dict[str, Any], *, media_type: str, mode: str, page: 
     bounded_total_pages = max(min(total_pages, DISCOVER_PAGE_MAX), 1)
     return {
         "items": normalized,
+        "mode": clean_mode,
         "page": page_number,
         "totalPages": bounded_total_pages,
         "hasMore": page_number < bounded_total_pages,
