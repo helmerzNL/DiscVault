@@ -3161,6 +3161,10 @@ def ui_preview_html(
       gap: 10px;
       cursor: pointer;
     }
+    .lists-actionsheet-btn:disabled {
+      cursor: default;
+      opacity: .6;
+    }
     .lists-actionsheet-btn-label {
       min-width: 0;
       flex: 1 1 auto;
@@ -12843,6 +12847,26 @@ def ui_preview_html(
       font-size: .76rem;
       text-align: center;
       padding: 8px;
+      position: relative;
+    }
+    .discover-wish-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(2px);
+      pointer-events: none;
+    }
+    .discover-wish-badge svg {
+      width: 13px;
+      height: 13px;
+      display: block;
+      fill: #ef4444;
     }
     .discover-poster img {
       width: 100%;
@@ -16639,6 +16663,8 @@ def ui_preview_html(
       missingKeyMessage: "",
       kind: "movie",
       mode: localStorage.getItem("dv_next_discover_mode") || "popular",
+      wishlistLoading: false,
+      wishlistLoadedAt: 0,
       observer: null
     };
     let activeDiscoverItem = null;
@@ -34976,13 +35002,68 @@ def ui_preview_html(
         mediaType: normalizeDiscoverMediaType(entry?.tmdbMediaType ?? snapshot.tmdb_media_type ?? snapshot.tmdbMediaType)
       };
     }
-    function isDiscoverItemOnWishlist(item) {
+    function normalizeDiscoverTitleKey(value) {
+      return String(value || "")
+        .normalize("NFKD")
+        .replace(/[\\u0300-\\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+    }
+    function normalizeDiscoverYear(value) {
+      const year = Number.parseInt(String(value ?? "").slice(0, 4), 10);
+      return Number.isFinite(year) && year > 1800 ? year : null;
+    }
+    function discoverMatchesWishlistTitleYear(item, entry) {
+      const itemYear = normalizeDiscoverYear(item?.year ?? item?.releaseDate);
+      const entryYear = normalizeDiscoverYear(entry?.year);
+      if (!itemYear || !entryYear || itemYear !== entryYear) return false;
+      const itemTitle = normalizeDiscoverTitleKey(item?.title);
+      return !!itemTitle && itemTitle === normalizeDiscoverTitleKey(entry?.title);
+    }
+    function findDiscoverWishlistEntry(item) {
+      if (!item) return null;
+      const entries = listsState.wishlist || [];
+      if (!entries.length) return null;
       const {tmdbId, mediaType} = discoverIdentity(item);
-      if (!tmdbId) return false;
-      return (listsState.wishlist || []).some((entry) => {
-        const entryIdentity = wishlistEntryIdentity(entry);
-        return entryIdentity.tmdbId && entryIdentity.tmdbId === tmdbId && entryIdentity.mediaType === mediaType;
-      });
+      if (tmdbId) {
+        const byId = entries.find((entry) => {
+          const entryIdentity = wishlistEntryIdentity(entry);
+          return entryIdentity.tmdbId === tmdbId && entryIdentity.mediaType === mediaType;
+        });
+        if (byId) return byId;
+      }
+      // Entries added elsewhere (manual, import) carry no TMDb id, so fall back to title + year.
+      return entries.find((entry) => !wishlistEntryIdentity(entry).tmdbId && discoverMatchesWishlistTitleYear(item, entry)) || null;
+    }
+    function isDiscoverItemOnWishlist(item) {
+      return !!findDiscoverWishlistEntry(item);
+    }
+    function mergeWishlistEntryIntoState(entry) {
+      if (!entry || !entry.id) return;
+      const rows = listsState.wishlist || [];
+      if (rows.some((row) => String(row?.id) === String(entry.id))) return;
+      listsState.wishlist = [...rows, entry];
+    }
+    async function ensureDiscoverWishlistLoaded() {
+      if (!hasPermission("watchlist.manage")) return;
+      if (listsState.loaded || discoverState.wishlistLoading) return;
+      // Lists owns the wishlist once it has loaded; until then Discover keeps its own
+      // short-lived copy so the heart badge and the duplicate guard stay reliable.
+      const lastLoad = discoverState.wishlistLoadedAt || 0;
+      if (lastLoad && Date.now() - lastLoad < 60000) return;
+      discoverState.wishlistLoading = true;
+      try {
+        const payload = await authApiJson("/api/next/lists/wishlist");
+        listsState.wishlist = payload.items || [];
+        discoverState.wishlistLoadedAt = Date.now();
+        renderDiscoverView();
+        updateDiscoverWishlistButtonState(activeDiscoverItem);
+      } catch (error) {
+        /* the badge is an enhancement; a failed preload must not break Discover */
+      } finally {
+        discoverState.wishlistLoading = false;
+      }
     }
     function updateDiscoverWishlistButtonState(item = activeDiscoverItem) {
       const button = document.getElementById("discoverDetailWishlistButton");
@@ -34998,9 +35079,14 @@ def ui_preview_html(
     function discoverCardHtml(item) {
       const poster = usableImage(item.posterUrl || "");
       const title = item.title || tNext("common.untitled", "Untitled");
+      const onWishlist = isDiscoverItemOnWishlist(item);
+      const wishlistLabel = tNext("lists.wishlistSectionPending", "On wishlist");
+      const badge = onWishlist
+        ? `<span class="discover-wish-badge" title="${escapeHtml(wishlistLabel)}" aria-label="${escapeHtml(wishlistLabel)}" role="img"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z"/></svg></span>`
+        : "";
       return `
-        <button type="button" class="discover-card" data-discover-id="${escapeHtml(item.id || "")}">
-          <span class="discover-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : escapeHtml(tNext("collection.noPoster", "No poster"))}</span>
+        <button type="button" class="discover-card${onWishlist ? " on-wishlist" : ""}" data-discover-id="${escapeHtml(item.id || "")}">
+          <span class="discover-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : escapeHtml(tNext("collection.noPoster", "No poster"))}${badge}</span>
           <span class="discover-title">${escapeHtml(title)}</span>
         </button>
       `;
@@ -35106,8 +35192,9 @@ def ui_preview_html(
           label: alreadyOnWishlist
             ? tNext("lists.wishlistSectionPending", "On wishlist")
             : tNext("discover.addWishlist", "Add to wishlist"),
-          icon: "\u2665",
+          icon: alreadyOnWishlist ? "\\u2713" : "\\u2665",
           iconClass: "wishlist",
+          disabled: alreadyOnWishlist,
           run: () => {
             if (!alreadyOnWishlist) addDiscoverItemToWishlist(item);
           }
@@ -35115,7 +35202,7 @@ def ui_preview_html(
       }
       const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
       const buttonsHtml = actions.map((action, index) =>
-        `<button type="button" class="lists-actionsheet-btn" data-action-index="${index}"><span class="lists-actionsheet-btn-icon ${escapeHtml(action.iconClass || "")}" aria-hidden="true">${escapeHtml(action.icon || "")}</span><span class="lists-actionsheet-btn-label">${escapeHtml(action.label)}</span></button>`
+        `<button type="button" class="lists-actionsheet-btn" data-action-index="${index}"${action.disabled ? " disabled" : ""}><span class="lists-actionsheet-btn-icon ${escapeHtml(action.iconClass || "")}" aria-hidden="true">${escapeHtml(action.icon || "")}</span><span class="lists-actionsheet-btn-label">${escapeHtml(action.label)}</span></button>`
       ).join("");
       panel.innerHTML = `
         <header class="lists-modal-head"><h3>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</h3></header>
@@ -35139,6 +35226,7 @@ def ui_preview_html(
       if (isDiscoverItemOnWishlist(item)) {
         if (inDetail) setDiscoverDetailMessage(tNext("lists.wishlistSectionPending", "On wishlist"), "good");
         else setDiscoverMessage(tNext("lists.wishlistSectionPending", "On wishlist"));
+        renderDiscoverView();
         updateDiscoverWishlistButtonState(item);
         return;
       }
@@ -35156,6 +35244,7 @@ def ui_preview_html(
             source: "discover"
           })
         });
+        mergeWishlistEntryIntoState(payload && payload.entry);
         await loadListsView(true);
         const alreadyExists = !!(payload && (payload.alreadyExists || payload.state === "already_exists"));
         if (inDetail) {
@@ -35172,6 +35261,7 @@ def ui_preview_html(
               : tNext("lists.wishlistAdded", "Added to wishlist.")
           );
         }
+        renderDiscoverView();
         updateDiscoverWishlistButtonState(item);
       } catch (error) {
         if (inDetail) setDiscoverDetailMessage(error.message || String(error), "bad");
@@ -35404,6 +35494,7 @@ def ui_preview_html(
       setActiveAppRoute("discover");
       bindDiscoverCategories();
       ensureDiscoverObserver();
+      ensureDiscoverWishlistLoaded();
       if (!discoverState.loaded) {
         loadDiscoverPage(true);
       } else {
