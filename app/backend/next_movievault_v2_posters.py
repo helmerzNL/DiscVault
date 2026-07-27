@@ -20,6 +20,10 @@ Non-negotiables enforced here:
   retained; the cache row is only ever moved to ``degraded``/``error``,
   never silently marked ``ready`` on failure, and interrupted/invalid
   downloads never activate partial bytes (write-to-temp + atomic replace).
+- A ``429`` response is honoured through a bounded ``Retry-After`` wait
+  (clamped, few attempts) and then deferred to a later job - poster
+  caching is a background job, so a rate limit never fails the lookup
+  that discovered the poster.
 - Cleanup only removes cache rows/bytes that are no longer referenced by
   any current release/box-set poster and have been stale past the
   repository's existing artwork retention convention (7 days) - never tied
@@ -31,9 +35,12 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import time
 import uuid
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from PIL import Image, UnidentifiedImageError
 
@@ -89,6 +96,44 @@ VARIANT_MEDIA_ASSET_MAP: dict[str, str] = {"thumbnail": "thumb", "display": "dis
 
 # Matches the existing "artwork_trash_retention" default of 7 days.
 POSTER_CACHE_RETENTION_SECONDS = 7 * 24 * 60 * 60
+
+# Bounded handling of MovieVault's documented 429 rate limit. The fetch runs
+# inside a transaction holding a FOR UPDATE lock on the cache row, so the wait
+# is clamped hard; anything longer is left to the next scheduled job rather
+# than held open here.
+POSTER_RATE_LIMIT_STATUS = 429
+POSTER_RATE_LIMIT_MAX_RETRIES = 2
+POSTER_RATE_LIMIT_MIN_WAIT_SECONDS = 1
+POSTER_RATE_LIMIT_MAX_WAIT_SECONDS = 5
+
+
+def _retry_after_seconds(value: str | None) -> int:
+    """Parse a `Retry-After` header (delta-seconds or HTTP-date, per RFC 9110)
+    and clamp it into the bounded wait window. An absent or unparseable value
+    falls back to the minimum wait so a rate limit is always respected."""
+    if value is None:
+        return POSTER_RATE_LIMIT_MIN_WAIT_SECONDS
+    raw = value.strip()
+    seconds: float | None = None
+    try:
+        seconds = float(int(raw))
+    except ValueError:
+        try:
+            parsed = parsedate_to_datetime(raw)
+        except (TypeError, ValueError):
+            parsed = None
+        if parsed is not None:
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            seconds = (parsed - datetime.now(timezone.utc)).total_seconds()
+    if seconds is None:
+        return POSTER_RATE_LIMIT_MIN_WAIT_SECONDS
+    return int(
+        max(
+            POSTER_RATE_LIMIT_MIN_WAIT_SECONDS,
+            min(POSTER_RATE_LIMIT_MAX_WAIT_SECONDS, seconds),
+        )
+    )
 
 
 def _poster_data_dir() -> Path:
@@ -177,7 +222,12 @@ def _activate_media_asset(
     return str(media_asset_id)
 
 
-def run_poster_cache_job(conn: Any, payload: dict[str, Any]) -> dict[str, Any]:
+def run_poster_cache_job(
+    conn: Any,
+    payload: dict[str, Any],
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
     """Fetch, validate, store, and atomically activate one cached poster
     variant. Never raises on a validated remote/content failure - those are
     recorded on the cache row (degraded/error) so the prior valid poster
@@ -211,6 +261,7 @@ def run_poster_cache_job(conn: Any, payload: dict[str, Any]) -> dict[str, Any]:
                 checksum=str(checksum),
                 variant=str(variant),
                 asset_id=str(asset_id),
+                sleep=sleep,
             )
 
             if outcome["status"] == "ready":
@@ -257,17 +308,28 @@ def _fetch_and_activate(
     checksum: str,
     variant: str,
     asset_id: str,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     accept = ", ".join(POSTER_CONTENT_TYPES)
-    try:
-        status, content, headers = _request(
-            f"{origin}{path}",
-            accept=accept,
-            timeout_seconds=POSTER_FETCH_TIMEOUT_SECONDS,
-            maximum_bytes=POSTER_MAX_BYTES,
-        )
-    except MovieVaultV2Error as exc:
-        return {"status": "failed", "error": str(exc)}
+    for attempt in range(POSTER_RATE_LIMIT_MAX_RETRIES + 1):
+        try:
+            status, content, headers = _request(
+                f"{origin}{path}",
+                accept=accept,
+                timeout_seconds=POSTER_FETCH_TIMEOUT_SECONDS,
+                maximum_bytes=POSTER_MAX_BYTES,
+                passthrough_statuses=frozenset({POSTER_RATE_LIMIT_STATUS}),
+            )
+        except MovieVaultV2Error as exc:
+            return {"status": "failed", "error": str(exc)}
+        if status != POSTER_RATE_LIMIT_STATUS:
+            break
+        if attempt == POSTER_RATE_LIMIT_MAX_RETRIES:
+            # Rate limited beyond the bounded window: the cache row is marked
+            # degraded/error by the caller and retried by a later job. This is
+            # a background job, so it never affects a live lookup.
+            return {"status": "failed", "error": "rate_limited"}
+        sleep(_retry_after_seconds(headers.get("retry-after")))
     if status != 200:
         return {"status": "failed", "error": f"http_status_{status}"}
     content_type = _content_type_key(headers.get("content-type"))

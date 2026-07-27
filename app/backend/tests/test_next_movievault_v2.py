@@ -137,6 +137,118 @@ def release_details_hit(*, external: bool = False) -> dict:
     return payload
 
 
+def release_details_poster(*, asset_id: str = "40000000-0000-0000-0000-000000000001") -> dict:
+    """The approved poster reference reuses the `distribution-4` poster type
+    verbatim, so this mirrors the shape already pinned in
+    tests/fixtures/distribution-v4-full.ndjson."""
+    return {
+        "assetId": asset_id,
+        "assetType": "front_cover",
+        "attestation": "licensed",
+        "license": "cc-by-4.0",
+        "thumbnail": {
+            "checksum": "a" * 64,
+            "path": f"/v2/assets/{asset_id}/thumbnail",
+        },
+        "display": {
+            "checksum": "b" * 64,
+            "path": f"/v2/assets/{asset_id}/display",
+        },
+    }
+
+
+def release_details_box_set() -> dict:
+    return {
+        "state": "explicit",
+        "title": "Example Collection",
+        "alternateTitles": [],
+        "format": "4K UHD",
+        "barcodes": [
+            {
+                "type": "ean13",
+                "value": "9780201379624",
+                "scope": "box_set",
+            }
+        ],
+        "members": [
+            {
+                "position": 1,
+                "title": "Example Film",
+                "year": 2024,
+                "barcodes": [
+                    {
+                        "type": "upca",
+                        "value": "036000291452",
+                        "scope": "member",
+                    }
+                ],
+                "discNumber": 1,
+                "discFormat": "4K UHD",
+                "identifiers": {
+                    "tmdbMovieId": "123",
+                    "imdbId": "tt1234567",
+                },
+            },
+            {
+                "position": 2,
+                "title": "Example Film Two",
+                "barcodes": [
+                    {
+                        "type": "upca",
+                        "value": "012345678905",
+                        "scope": "disc",
+                    }
+                ],
+                "discNumber": 2,
+                "discFormat": "Blu-ray",
+                "identifiers": {
+                    "tmdbMovieId": "456",
+                    "imdbId": "tt7654321",
+                },
+            },
+        ],
+    }
+
+
+class FakePosterConn:
+    """Minimal psycopg-shaped connection covering the two statements the
+    release-details poster path issues: the idempotent poster-cache insert
+    (``_enqueue_poster_cache``) and the cache-status lookup
+    (``_poster_status_fields``)."""
+
+    def __init__(self, cache: dict[tuple[str, str], dict]):
+        self._cache = cache
+        self.enqueued: list[tuple[str, str]] = []
+        self._result: dict | None = None
+
+    def transaction(self):
+        return self
+
+    def cursor(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, sql: str, params: tuple = ()):
+        statement = " ".join(sql.split())
+        if statement.startswith("INSERT INTO movievault_v2_poster_cache"):
+            asset_id, variant, _checksum = params
+            self.enqueued.append((asset_id, variant))
+            self._result = None  # ON CONFLICT DO NOTHING -> nothing to enqueue
+        elif statement.startswith("SELECT status, media_asset_id"):
+            self._result = self._cache.get((params[0], params[1]))
+        else:
+            self._result = None
+        return self
+
+    def fetchone(self):
+        return self._result
+
+
 class MovieVaultV2ContractTests(unittest.TestCase):
     def fixture(self) -> bytes:
         with open(FIXTURE_PATH, "rb") as handle:
@@ -479,6 +591,212 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             [member["position"] for member in result["boxSet"]["members"]],
             [1, 2],
         )
+
+    def test_release_details_accepts_optional_poster_on_both_hit_statuses(self):
+        for external in (False, True):
+            with self.subTest(external=external):
+                payload = release_details_hit(external=external)
+                payload["poster"] = release_details_poster()
+
+                result = next_movievault_v2.validate_release_details_response(payload)
+
+                # An external_hit may carry an approved poster: the poster is
+                # resolved from the canonical entity, so verificationStatus
+                # must not filter it out.
+                self.assertEqual(
+                    result["poster"]["assetId"],
+                    "40000000-0000-0000-0000-000000000001",
+                )
+                self.assertEqual(result["poster"]["assetType"], "front_cover")
+                self.assertEqual(
+                    result["poster"]["display"]["path"],
+                    "/v2/assets/40000000-0000-0000-0000-000000000001/display",
+                )
+
+    def test_release_details_accepts_box_set_poster_alongside_box_set(self):
+        payload = release_details_hit()
+        payload["boxSet"] = release_details_box_set()
+        payload["poster"] = release_details_poster()
+        payload["boxSetPoster"] = release_details_poster(
+            asset_id="40000000-0000-0000-0000-000000000002"
+        )
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(
+            result["poster"]["assetId"],
+            "40000000-0000-0000-0000-000000000001",
+        )
+        self.assertEqual(
+            result["boxSetPoster"]["assetId"],
+            "40000000-0000-0000-0000-000000000002",
+        )
+
+    def test_release_details_rejects_box_set_poster_without_box_set(self):
+        payload = release_details_hit()
+        payload["boxSetPoster"] = release_details_poster()
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_rejects_malformed_poster(self):
+        cases = {
+            "unknown_field": {"unexpected": "value"},
+            "wrong_asset_type": {"assetType": "back_cover"},
+            "unapproved_license": {"license": "all-rights-reserved"},
+            "unapproved_attestation": {"attestation": "unverified"},
+            "off_contract_asset_path": {
+                "display": {
+                    "checksum": "b" * 64,
+                    "path": "https://evil.example/v2/assets/x/display",
+                }
+            },
+            "short_checksum": {
+                "display": {
+                    "checksum": "b" * 10,
+                    "path": "/v2/assets/40000000-0000-0000-0000-000000000001/display",
+                }
+            },
+        }
+        for name, override in cases.items():
+            with self.subTest(case=name):
+                payload = release_details_hit()
+                payload["poster"] = {**release_details_poster(), **override}
+
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error,
+                    "^release_details_response_invalid$",
+                ):
+                    next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_without_poster_is_unchanged(self):
+        payload = release_details_hit()
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertNotIn("poster", result)
+        self.assertNotIn("boxSetPoster", result)
+
+    def test_localize_release_details_posters_exposes_only_local_fields(self):
+        conn = FakePosterConn(
+            {
+                ("40000000-0000-0000-0000-000000000001", "b" * 64): {
+                    "status": "ready",
+                    "media_asset_id": "media-release",
+                },
+                ("40000000-0000-0000-0000-000000000002", "b" * 64): {
+                    "status": "ready",
+                    "media_asset_id": "media-box-set",
+                },
+            }
+        )
+        result = next_movievault_v2.validate_release_details_response(
+            {
+                **release_details_hit(),
+                "boxSet": release_details_box_set(),
+                "poster": release_details_poster(),
+                "boxSetPoster": release_details_poster(
+                    asset_id="40000000-0000-0000-0000-000000000002"
+                ),
+            }
+        )
+
+        localized = next_movievault_v2.localize_release_details_posters(
+            conn, "https://movievault.example", result
+        )
+
+        # The remote MovieVault poster reference never reaches a caller.
+        self.assertNotIn("poster", localized)
+        self.assertNotIn("boxSetPoster", localized)
+        self.assertEqual(
+            localized["release"]["posterUrl"],
+            "/api/next/movievault-v2/posters/media-release",
+        )
+        self.assertEqual(localized["release"]["posterStatus"], "ready")
+        self.assertEqual(localized["release"]["posterChecksum"], "b" * 64)
+        # The box-set poster belongs to the box set, never to the member release.
+        self.assertEqual(
+            localized["boxSet"]["posterUrl"],
+            "/api/next/movievault-v2/posters/media-box-set",
+        )
+        # Both variants are queued through the existing anonymous cache path.
+        self.assertEqual(len(conn.enqueued), 4)
+        self.assertEqual(
+            {(asset_id, variant) for asset_id, variant in conn.enqueued},
+            {
+                ("40000000-0000-0000-0000-000000000001", "thumbnail"),
+                ("40000000-0000-0000-0000-000000000001", "display"),
+                ("40000000-0000-0000-0000-000000000002", "thumbnail"),
+                ("40000000-0000-0000-0000-000000000002", "display"),
+            },
+        )
+
+    def test_localize_release_details_posters_drops_a_withdrawn_poster(self):
+        conn = FakePosterConn({})
+        result = next_movievault_v2.validate_release_details_response(
+            release_details_hit()
+        )
+
+        localized = next_movievault_v2.localize_release_details_posters(
+            conn, "https://movievault.example", result
+        )
+
+        # The association comes only from the current response, so a response
+        # without a poster reports it as unavailable instead of reusing an
+        # earlier one.
+        self.assertIsNone(localized["release"]["posterUrl"])
+        self.assertEqual(localized["release"]["posterStatus"], "unavailable")
+        self.assertIsNone(localized["release"]["posterChecksum"])
+        self.assertEqual(conn.enqueued, [])
+
+    def test_localize_release_details_posters_reports_pending_before_cached(self):
+        conn = FakePosterConn({})
+        result = next_movievault_v2.validate_release_details_response(
+            {**release_details_hit(), "poster": release_details_poster()}
+        )
+
+        localized = next_movievault_v2.localize_release_details_posters(
+            conn, "https://movievault.example", result
+        )
+
+        self.assertIsNone(localized["release"]["posterUrl"])
+        self.assertEqual(localized["release"]["posterStatus"], "pending")
+        self.assertEqual(localized["release"]["posterChecksum"], "b" * 64)
+
+    def test_release_details_callback_survives_poster_cache_failure(self):
+        hit = release_details_hit()
+        hit["poster"] = release_details_poster()
+        resolved = next_movievault_v2.validate_release_details_response(hit)
+
+        class BrokenConn:
+            def transaction(self):
+                raise RuntimeError("poster cache unavailable")
+
+            def cursor(self):
+                raise RuntimeError("poster cache unavailable")
+
+        context = next_movievault_v2.movievault_v2_plugin_context(
+            BrokenConn(),
+            next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,
+            {"settings": {}},
+        )
+        with patch.object(
+            next_movievault_v2,
+            "resolve_release_details",
+            return_value=resolved,
+        ):
+            result = context["movievaultV2ReleaseDetails"]({"barcode": "4006381333931"})
+
+        # The barcode lookup still returns its technical data; only the poster
+        # degrades to unavailable.
+        self.assertEqual(result["status"], "canonical_hit")
+        self.assertEqual(result["film"]["title"], "Example Film")
+        self.assertNotIn("poster", result)
+        self.assertEqual(result["release"]["posterStatus"], "unavailable")
+        self.assertIsNone(result["release"]["posterUrl"])
 
     def test_release_details_http_status_maps_to_stable_value_free_error(self):
         with patch.object(
