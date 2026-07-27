@@ -33774,6 +33774,7 @@ def ui_preview_html(
             }
             const fetchedPrice = payload && typeof payload.fetchedPrice === "number" ? payload.fetchedPrice : null;
             const fetchedCurrency = String((payload && payload.fetchedCurrency) || currency || "EUR").toUpperCase();
+            const fetchedError = payload && payload.fetchedError ? String(payload.fetchedError) : "";
             shopEditor = null;
             if (fetchedPrice != null) {
               const messageTemplate = tNext(
@@ -33786,13 +33787,7 @@ def ui_preview_html(
                 .replace(/\s+\./g, ".");
               setMessage(priceMessage, "good");
             } else {
-              setMessage(
-                tNext(
-                  "lists.wishlistShopSavedNoPrice",
-                  "Shop saved, but no current price could be extracted."
-                ),
-                "bad"
-              );
+              setMessage(describeShopPriceFailure(fetchedError), "bad");
             }
             render();
           } catch (error) {
@@ -34223,6 +34218,47 @@ def ui_preview_html(
       const toRate = Number(rates[to]);
       if (!Number.isFinite(fromRate) || fromRate <= 0 || !Number.isFinite(toRate) || toRate <= 0) return null;
       return (numeric / fromRate) * toRate;
+    }
+    function describeShopPriceFailure(code) {
+      const raw = String(code || "").trim();
+      const key = raw.toLowerCase();
+      const generic = tNext(
+        "lists.wishlistShopSavedNoPrice",
+        "Shop saved, but no current price could be extracted."
+      );
+      if (!key || key === "no_price_found") return generic;
+      let message;
+      if (["dns_failed", "network_error", "timeout"].includes(key)) {
+        message = tNext(
+          "lists.wishlistShopSavedUnreachable",
+          "Shop saved, but the shop website could not be reached. Please try again later."
+        );
+      } else if (key === "blocked_amazon" || key === "url_blocked" || /block|captcha|challenge|robot/.test(key)) {
+        message = tNext(
+          "lists.wishlistShopSavedBlocked",
+          "Shop saved, but the shop blocked the automated price check."
+        );
+      } else if (
+        [
+          "content_decode_failed",
+          "content_encoding_unsupported",
+          "http_error",
+          "redirect_invalid",
+          "redirect_limit",
+          "redirect_loop",
+          "request_too_large",
+          "response_too_large",
+          "url_invalid",
+        ].includes(key)
+      ) {
+        message = tNext(
+          "lists.wishlistShopSavedPageError",
+          "Shop saved, but the price page could not be loaded. Please check the URL."
+        );
+      } else {
+        message = generic;
+      }
+      return `${message} (${raw})`;
     }
     function formatWishlistPrice(value, currency = "EUR") {
       const original = formatStatsPrice(value, currency);
