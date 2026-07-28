@@ -54,6 +54,7 @@ try:
         FLOW_TTL_SECONDS,
         LEGACY_AUTH_SETTING,
         PASSWORD_HASH_VERSION,
+        RECOVERY_ACK_FLOW_TTL_SECONDS,
         PasswordPolicyError,
         attempt_is_throttled,
         constant_time_text_equal,
@@ -95,6 +96,7 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         FLOW_TTL_SECONDS,
         LEGACY_AUTH_SETTING,
         PASSWORD_HASH_VERSION,
+        RECOVERY_ACK_FLOW_TTL_SECONDS,
         PasswordPolicyError,
         attempt_is_throttled,
         constant_time_text_equal,
@@ -1545,6 +1547,68 @@ def register_next_auth_routes(
             }
         )
 
+    def resume_legacy_bootstrap(
+        conn,
+        *,
+        credential: dict[str, Any],
+        context: dict[str, Any],
+    ):
+        """Hand an abandoned first-owner bootstrap back its recovery-code step.
+
+        The account exists with a working password but never reached
+        ``status='active'`` because the recovery codes were never acknowledged.
+        Callers must have verified the password first, so resuming here reveals
+        nothing that completing the login would not.
+
+        Only the hashes of the original recovery codes are stored, so a fresh
+        set is issued. That is also the correct outcome: codes the owner never
+        acknowledged must not stay valid.
+        """
+
+        user_id = credential["id"]
+        mfa_required = bool(credential.get("mfa_required"))
+        recovery_codes = next_generate_recovery_codes()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE legacy_password_credentials
+                SET failed_attempt_count=0, first_failed_at=NULL, locked_until=NULL,
+                    updated_at=now()
+                WHERE user_id=%s
+                """,
+                (user_id,),
+            )
+            next_replace_recovery_codes(cur, user_id, recovery_codes)
+        ack_token = issue_legacy_flow(
+            conn,
+            "bootstrap_recovery_ack",
+            user_id=user_id,
+            payload={**context, "mfaRequired": mfa_required},
+            seconds=RECOVERY_ACK_FLOW_TTL_SECONDS,
+        )
+        audit_event(
+            conn,
+            event_type="auth.legacy_bootstrap_resumed",
+            category="security",
+            actor={
+                "id": user_id,
+                "username": credential["username"],
+                "role": primary_role(conn, user_id),
+            },
+            target_type="user",
+            target_id=user_id,
+            summary=f"Resumed password onboarding for {credential['username']}",
+            metadata={"mfaRequired": mfa_required, "recoveryCodesReissued": True},
+        )
+        return response(
+            {
+                "status": "ok",
+                "stage": "recovery_codes",
+                "flow_token": ack_token,
+                "recovery_codes": recovery_codes,
+            }
+        )
+
     def legacy_next_stage(
         conn,
         *,
@@ -2793,6 +2857,7 @@ def register_next_auth_routes(
             "bootstrap_recovery_ack",
             user_id=user_id,
             payload={"mfaRequired": mfa_required},
+            seconds=RECOVERY_ACK_FLOW_TTL_SECONDS,
         )
         return {
             "status": "ok",
@@ -3066,6 +3131,21 @@ def register_next_auth_routes(
                 )
                 locked = bool(credential.get("locked_until") and credential["locked_until"] > now)
                 verification = verify_password(credential["password_hash"], password)
+                credentials_ok = verification.valid and not expired and not locked
+                if (
+                    credentials_ok
+                    and credential.get("status") == LEGACY_BOOTSTRAP_PENDING_STATUS
+                ):
+                    # Onboarding created this account but never acknowledged the
+                    # recovery codes, so it is stuck outside 'active'. The password
+                    # already verified above, so resume the flow instead of
+                    # reporting a valid credential as invalid.
+                    record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=True)
+                    return resume_legacy_bootstrap(
+                        conn,
+                        credential=credential,
+                        context=context,
+                    )
                 if (
                     credential.get("status") != "active"
                     or expired
@@ -3410,6 +3490,7 @@ def register_next_auth_routes(
                         "clientKind": flow["payload"].get("clientKind"),
                         "profileEnrollment": flow["payload"].get("profileEnrollment") is True,
                     },
+                    seconds=RECOVERY_ACK_FLOW_TTL_SECONDS,
                 )
                 audit_event(
                     conn,
