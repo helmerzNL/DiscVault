@@ -129,7 +129,89 @@ class PosterCacheJobTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "ready")
         request.assert_called_once()
         _, kwargs = request.call_args
-        self.assertEqual(set(kwargs), {"accept", "timeout_seconds", "maximum_bytes"})
+        # Bounded transport controls only - no auth, cookie, identity or
+        # telemetry kwargs are ever passed to the anonymous fetch.
+        self.assertEqual(
+            set(kwargs),
+            {"accept", "timeout_seconds", "maximum_bytes", "passthrough_statuses"},
+        )
+        self.assertEqual(kwargs["passthrough_statuses"], frozenset({429}))
+
+    def test_rate_limited_fetch_waits_for_retry_after_then_succeeds(self):
+        content = _png_bytes()
+        checksum = hashlib.sha256(content).hexdigest()
+        cursor = _FakeCursor(
+            [
+                {"id": "cache-1", "media_asset_id": None},  # SELECT ... FOR UPDATE
+                {"id": "media-1"},  # INSERT media_assets RETURNING id
+                None,  # UPDATE cache row
+            ]
+        )
+        conn = _FakeConn(cursor)
+        waits: list[float] = []
+        with patch.object(
+            posters,
+            "_request",
+            side_effect=[
+                (429, b"", {"retry-after": "3"}),
+                (200, content, {"content-type": "image/png"}),
+            ],
+        ) as request:
+            result = posters.run_poster_cache_job(
+                conn,
+                self._payload(checksum=checksum),
+                sleep=waits.append,
+            )
+
+        self.assertEqual(result["outcome"], "ready")
+        self.assertEqual(waits, [3])
+        self.assertEqual(request.call_count, 2)
+
+    def test_rate_limit_wait_is_clamped_and_never_unbounded(self):
+        cases = {
+            "over_maximum": ("3600", posters.POSTER_RATE_LIMIT_MAX_WAIT_SECONDS),
+            "zero": ("0", posters.POSTER_RATE_LIMIT_MIN_WAIT_SECONDS),
+            "negative": ("-10", posters.POSTER_RATE_LIMIT_MIN_WAIT_SECONDS),
+            "missing": (None, posters.POSTER_RATE_LIMIT_MIN_WAIT_SECONDS),
+            "unparseable": ("soon", posters.POSTER_RATE_LIMIT_MIN_WAIT_SECONDS),
+            "http_date_in_past": (
+                "Wed, 21 Oct 2015 07:28:00 GMT",
+                posters.POSTER_RATE_LIMIT_MIN_WAIT_SECONDS,
+            ),
+        }
+        for name, (header, expected) in cases.items():
+            with self.subTest(case=name):
+                self.assertEqual(posters._retry_after_seconds(header), expected)
+
+    def test_rate_limited_beyond_retries_degrades_without_raising(self):
+        cursor = _FakeCursor(
+            [
+                {"id": "cache-1", "media_asset_id": "media-prior"},  # SELECT FOR UPDATE
+                None,  # UPDATE cache row
+            ]
+        )
+        conn = _FakeConn(cursor)
+        waits: list[float] = []
+        with patch.object(
+            posters,
+            "_request",
+            return_value=(429, b"", {"retry-after": "1"}),
+        ) as request:
+            result = posters.run_poster_cache_job(
+                conn,
+                self._payload(checksum="a" * 64),
+                sleep=waits.append,
+            )
+
+        self.assertEqual(result["outcome"], "failed")
+        self.assertEqual(request.call_count, posters.POSTER_RATE_LIMIT_MAX_RETRIES + 1)
+        self.assertEqual(len(waits), posters.POSTER_RATE_LIMIT_MAX_RETRIES)
+        # The prior valid poster keeps serving: media_asset_id is untouched and
+        # the row is only degraded.
+        update = [call for call in cursor.calls if "UPDATE movievault_v2_poster_cache" in call[0]]
+        self.assertEqual(update[-1][1][0], "degraded")
+        self.assertEqual(update[-1][1][1], "rate_limited")
+        self.assertNotIn("media_asset_id", update[-1][0])
 
     def test_success_activates_media_asset_and_marks_cache_ready(self):
         content = _png_bytes()

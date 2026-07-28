@@ -2483,6 +2483,7 @@ def activity_summary(payload, context=None):
     payload = payload if isinstance(payload, dict) else {}
     contribution = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
     execution = payload.get("execution") if isinstance(payload.get("execution"), dict) else {}
+    runtime = payload.get("runtime") if isinstance(payload.get("runtime"), dict) else {}
     entity_type, contribution_payload = _contribution_payload(contribution, {})
     response_payload = execution.get("response") if isinstance(execution.get("response"), dict) else {}
     remote_id = _text(
@@ -2492,8 +2493,14 @@ def activity_summary(payload, context=None):
         or response_payload.get("operationId")
         or response_payload.get("operation_id")
     )
-    state = _text(execution.get("status") or payload.get("status") or "unknown")
-    reason = _text(execution.get("reason") or payload.get("reason"))
+    state = _text(
+        execution.get("status")
+        or runtime.get("state")
+        or runtime.get("status")
+        or payload.get("status")
+        or "unknown"
+    )
+    reason = _text(execution.get("reason") or runtime.get("error") or payload.get("reason"))
     fields = sorted(contribution_payload.keys())
     result = {
         "status": "ok",
@@ -2668,7 +2675,8 @@ def _contribution_field_diagnostics(payload, template, contribution_payload):
 
 
 def _validation_error(response_payload):
-    return _text(response_payload.get("code") or response_payload.get("error")) == "validation_error"
+    code, _message = _response_error(response_payload if isinstance(response_payload, dict) else {})
+    return code == "validation_error"
 
 
 def receive_metadata(payload, context=None):

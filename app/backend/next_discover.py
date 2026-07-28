@@ -8,10 +8,24 @@ from flask import Flask, request
 
 try:  # pragma: no cover - exercised in both package layouts
     from .next_common import parse_int_arg, response
-    from .next_tmdb_discover import discover_detail, discover_feed, normalize_locale, tmdb_discover_context
+    from .next_tmdb_discover import (
+        SUPPORTED_MODES,
+        discover_detail,
+        discover_feed,
+        normalize_discover_mode,
+        normalize_locale,
+        tmdb_discover_context,
+    )
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import parse_int_arg, response
-    from next_tmdb_discover import discover_detail, discover_feed, normalize_locale, tmdb_discover_context
+    from next_tmdb_discover import (
+        SUPPORTED_MODES,
+        discover_detail,
+        discover_feed,
+        normalize_discover_mode,
+        normalize_locale,
+        tmdb_discover_context,
+    )
 
 
 def _next_app():
@@ -39,7 +53,7 @@ def _missing_config_payload(message: str) -> dict[str, Any]:
         "totalPages": 1,
         "hasMore": False,
         "supportedKinds": ["movie", "tv"],
-        "supportedModes": ["popular", "trending"],
+        "supportedModes": list(SUPPORTED_MODES),
     }
 
 
@@ -129,7 +143,7 @@ def register_next_discover_routes(flask_app: Flask, *, connect) -> None:  # prag
     @flask_app.get("/api/next/discover")
     def next_discover_feed():
         kind = str(request.args.get("kind") or "movie").strip().lower()
-        mode = str(request.args.get("mode") or "popular").strip().lower()
+        mode = normalize_discover_mode(request.args.get("mode"))
         page = parse_int_arg(request.args.get("page"), default=1, minimum=1)
         locale = normalize_locale(request.args.get("locale"))
         with connect() as conn:
@@ -143,7 +157,7 @@ def register_next_discover_routes(flask_app: Flask, *, connect) -> None:  # prag
                 "status": "ok",
                 "configured": True,
                 "supportedKinds": ["movie", "tv"],
-                "supportedModes": ["popular", "trending"],
+                "supportedModes": list(SUPPORTED_MODES),
                 **payload,
             }
         )

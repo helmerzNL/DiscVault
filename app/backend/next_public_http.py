@@ -20,6 +20,16 @@ import dns.resolver
 
 DEFAULT_TIMEOUT_SECONDS = 10.0
 DEFAULT_MAX_REDIRECTS = 5
+# Single source of truth for the outbound browser User-Agent.
+#
+# Shops reject stale Chrome versions: Amazon started serving its "automated
+# access to Amazon data" wall to Chrome/124 while accepting 126+, which silently
+# broke price extraction. Keep this reasonably current and bump it here only —
+# every price provider imports this value rather than pinning its own.
+DEFAULT_BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 DEFAULT_MAX_REQUEST_BYTES = 1024 * 1024
 DEFAULT_MAX_WIRE_BYTES = 8 * 1024 * 1024
 DEFAULT_MAX_DECODED_BYTES = 16 * 1024 * 1024

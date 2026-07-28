@@ -7,17 +7,24 @@ import re
 from typing import Any
 
 try:
-    from ...next_public_http import PublicHttpError, fetch_public_text, public_url_hostname
+    from ...next_public_http import (
+        DEFAULT_BROWSER_USER_AGENT,
+        PublicHttpError,
+        fetch_public_text,
+        public_url_hostname,
+    )
 except ImportError:  # pragma: no cover - dynamically loaded plugin
-    from next_public_http import PublicHttpError, fetch_public_text, public_url_hostname
+    from next_public_http import (
+        DEFAULT_BROWSER_USER_AGENT,
+        PublicHttpError,
+        fetch_public_text,
+        public_url_hostname,
+    )
 
 
 DEFAULT_TIMEOUT = 20
 DEFAULT_CURRENCY = "EUR"
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-)
+USER_AGENT = DEFAULT_BROWSER_USER_AGENT
 BLOCK_SIGNATURES = (
     "access denied",
     "bot verification",
@@ -25,6 +32,17 @@ BLOCK_SIGNATURES = (
     "cloudflare",
     "automated requests",
 )
+# A challenge/interstitial page is a small standalone document. A real product
+# page is far larger and may merely mention one of the words above in an inline
+# script or analytics blob, which must not be read as a block.
+BLOCK_MAX_BYTES = 120_000
+
+
+def _looks_blocked(html: str) -> bool:
+    if len(html) > BLOCK_MAX_BYTES:
+        return False
+    lower_html = html.lower()
+    return any(signature in lower_html for signature in BLOCK_SIGNATURES)
 
 
 def _settings(context: dict[str, Any] | None) -> dict[str, Any]:
@@ -181,16 +199,17 @@ def price_check(payload=None, context=None):
         )
     except PublicHttpError as exc:
         return {"status": "error", "error": exc.code}
-    lower_html = html.lower()
-    if any(signature in lower_html for signature in BLOCK_SIGNATURES):
-        return {"status": "no_match", "error": "bol.com blocked the request (bot/challenge page)."}
 
+    # Extract first: a page that yields a price was obviously not a challenge
+    # page, so block detection can never discard a good result.
     price, currency = _extract_from_schema_org(html)
     if price is None:
         price, currency = _extract_from_open_graph(html)
     if price is None:
         price, currency = _extract_via_regex(html)
     if price is None:
+        if _looks_blocked(html):
+            return {"status": "no_match", "error": "bol.com blocked the request (bot/challenge page)."}
         return {"status": "no_match", "error": "No usable bol.com price found in the product page."}
 
     return {

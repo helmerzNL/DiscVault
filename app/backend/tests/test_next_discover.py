@@ -13,16 +13,26 @@ try:
 
     from app.backend.next_common import NextApiError
     from app.backend.next_discover import register_next_discover_routes
-    from app.backend.next_tmdb_discover import discover_detail, discover_feed, normalize_locale
+    from app.backend.next_tmdb_discover import (
+        DISCOVER_PILL_MODES,
+        discover_detail,
+        discover_feed,
+        normalize_discover_mode,
+        normalize_locale,
+    )
+    from app.backend.next_views_ui import ui_preview_html
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
     if exc.name not in {"flask", "psycopg"}:
         raise
     Flask = None
     NextApiError = None
     register_next_discover_routes = None
+    DISCOVER_PILL_MODES = None
     discover_detail = None
     discover_feed = None
+    normalize_discover_mode = None
     normalize_locale = None
+    ui_preview_html = None
 
 
 class _FakeConn:
@@ -105,6 +115,80 @@ class NextDiscoverLogicTests(unittest.TestCase):
         self.assertEqual(normalize_locale(""), "en-US")
         self.assertEqual(normalize_locale("nl_nl"), "nl-NL")
         self.assertEqual(normalize_locale("fr"), "fr")
+
+    def test_discover_mode_normalization_accepts_aliases_and_falls_back(self):
+        self.assertEqual(normalize_discover_mode(None), "popular")
+        self.assertEqual(normalize_discover_mode("bogus"), "popular")
+        self.assertEqual(normalize_discover_mode("Now Playing"), "now_playing")
+        self.assertEqual(normalize_discover_mode("nowplaying"), "now_playing")
+        self.assertEqual(normalize_discover_mode("top-rated"), "top_rated")
+        self.assertEqual(normalize_discover_mode("soon"), "upcoming")
+
+    def test_pill_modes_hit_their_dedicated_tmdb_endpoints(self):
+        expected = {
+            "popular": "/discover/movie",
+            "now_playing": "/movie/now_playing",
+            "upcoming": "/movie/upcoming",
+            "top_rated": "/movie/top_rated",
+        }
+        self.assertEqual(set(DISCOVER_PILL_MODES), set(expected))
+        for mode, path in expected.items():
+            with self.subTest(mode=mode):
+                with mock.patch(
+                    "app.backend.next_tmdb_discover.tmdb_plugin._request",
+                    return_value={"results": [], "total_pages": 1},
+                ) as request_mock:
+                    payload = discover_feed(
+                        {"settings": {"language": "en-US"}},
+                        media_type="movie",
+                        mode=mode,
+                        page=1,
+                    )
+                self.assertEqual(payload["mode"], mode)
+                self.assertEqual(request_mock.call_args.args[1], path)
+
+
+@unittest.skipIf(ui_preview_html is None, "backend UI module unavailable")
+class DiscoverWishlistBadgeUiTests(unittest.TestCase):
+    """Guard the Discover wishlist affordances that mirror the iOS/Android apps."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.html = ui_preview_html(None, app_mode=True)
+
+    def test_wish_badge_is_styled_as_a_red_top_right_overlay(self):
+        self.assertIn(".discover-wish-badge {", self.html)
+        badge_css = self.html.split(".discover-wish-badge {", 1)[1].split("}", 1)[0]
+        self.assertIn("position: absolute", badge_css)
+        self.assertIn("top: 6px", badge_css)
+        self.assertIn("right: 6px", badge_css)
+        self.assertIn("pointer-events: none", badge_css)
+        self.assertIn(".discover-wish-badge svg {", self.html)
+        svg_css = self.html.split(".discover-wish-badge svg {", 1)[1].split("}", 1)[0]
+        self.assertIn("#ef4444", svg_css)
+
+    def test_discover_cards_render_the_badge_only_for_wishlisted_items(self):
+        self.assertIn('class="discover-wish-badge"', self.html)
+        self.assertIn('const onWishlist = isDiscoverItemOnWishlist(item);', self.html)
+        self.assertIn('${onWishlist ? " on-wishlist" : ""}', self.html)
+
+    def test_wishlist_matching_falls_back_to_title_and_year(self):
+        for symbol in (
+            "function normalizeDiscoverTitleKey(",
+            "function normalizeDiscoverYear(",
+            "function discoverMatchesWishlistTitleYear(",
+            "function findDiscoverWishlistEntry(",
+        ):
+            self.assertIn(symbol, self.html)
+
+    def test_discover_preloads_wishlist_state(self):
+        self.assertIn("async function ensureDiscoverWishlistLoaded()", self.html)
+        self.assertIn("ensureDiscoverWishlistLoaded();", self.html)
+        self.assertIn("function mergeWishlistEntryIntoState(", self.html)
+
+    def test_duplicate_wishlist_adds_are_blocked_in_the_ui(self):
+        self.assertIn("disabled: alreadyOnWishlist", self.html)
+        self.assertIn(".lists-actionsheet-btn:disabled {", self.html)
 
 
 if __name__ == "__main__":

@@ -362,6 +362,10 @@ def _raw_json_body(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
 
 
+def _legacy_public_key_id(public_key: str) -> str:
+    return f"dvpk_{_b64url(hashlib.sha256(public_key.encode('ascii')).digest()[:16])}"
+
+
 def _timestamp() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -416,7 +420,7 @@ def _instance_key_pair(conn) -> tuple[str, str, str]:
         format=serialization.PublicFormat.Raw,
     )
     public_key = _b64url(public_raw)
-    public_key_id = f"dvpk_{_b64url(hashlib.sha256(public_key.encode('ascii')).digest()[:16])}"
+    public_key_id = _legacy_public_key_id(public_key)
     _set_setting(conn, INSTANCE_PRIVATE_KEY_KEY, _encrypt_secret_value(private_key_pem), is_secret=True)
     _set_setting(conn, INSTANCE_PUBLIC_KEY_KEY, public_key, is_secret=False)
     _set_setting(conn, INSTANCE_PUBLIC_KEY_ID_KEY, public_key_id, is_secret=False)
@@ -507,6 +511,64 @@ def _response_error(response: _HttpJsonResponse) -> tuple[str, str]:
 def _response_error_code(response: _HttpJsonResponse) -> str:
     code, _message = _response_error(response)
     return code
+
+
+_SENSITIVE_ERROR_VALUE_RE = re.compile(
+    r"(?i)(?:bearer\s+|key-v1=)[A-Za-z0-9._~+/=-]+"
+    r"|\b(?:mv|iosk|dvpk)_[A-Za-z0-9_-]{4,}\b"
+    r"|-----BEGIN [^-]+-----.*?-----END [^-]+-----"
+    r"|\b[A-Za-z0-9_-]{48,}\b",
+    re.DOTALL,
+)
+_SENSITIVE_ERROR_FIELDS = {
+    "authorization",
+    "key",
+    "keyid",
+    "privatekey",
+    "publickey",
+    "signature",
+    "token",
+}
+
+
+def _safe_error_text(value: Any) -> str:
+    return _SENSITIVE_ERROR_VALUE_RE.sub("[redacted]", _text(value))[:500]
+
+
+def _safe_response_error_detail(response: _HttpJsonResponse) -> str:
+    _code, message = _response_error(response)
+    parts = [_safe_error_text(message)] if message else []
+    try:
+        data = response.json()
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    error = data.get("error")
+    details = error.get("details") if isinstance(error, dict) else data.get("details")
+    if not isinstance(details, list):
+        details = [details] if details not in (None, "", {}, []) else []
+    for detail in details[:5]:
+        if isinstance(detail, dict):
+            field = _text(detail.get("field") or detail.get("path"))
+            field_key = re.sub(r"[^a-z]", "", field.lower())
+            if any(field_key == sensitive or field_key.endswith(sensitive) for sensitive in _SENSITIVE_ERROR_FIELDS):
+                rendered = f"{field}: [redacted]" if field else "[redacted]"
+            else:
+                detail_message = detail.get("message") or detail.get("reason") or detail.get("code")
+                safe_message = _safe_error_text(detail_message)
+                rendered = f"{field}: {safe_message}" if field and safe_message else safe_message
+        else:
+            rendered = _safe_error_text(detail)
+        if rendered and rendered not in parts:
+            parts.append(rendered)
+    return "; ".join(parts)
+
+
+def _connection_failure_reason(response: _HttpJsonResponse) -> str:
+    code = _response_error_code(response) or str(response.status_code)
+    detail = _safe_response_error_detail(response)
+    return f"{code}: {detail}" if detail else code
 
 
 def _client_version_error_fields(response: _HttpJsonResponse) -> tuple[str, str]:
@@ -682,7 +744,7 @@ def _bootstrap(
         return _recover(conn, plugin_id=plugin_id, actor_id=actor_id, allow_bootstrap_fallback=False)
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
-        raise MovieVaultConnectionError(f"MovieVault bootstrap failed: {code or response.status_code}")
+        raise MovieVaultConnectionError(f"MovieVault bootstrap failed: {_connection_failure_reason(response)}")
     return _store_token_response(conn, response.json(), plugin_id=plugin_id, actor_id=actor_id, source="bootstrap")
 
 
@@ -697,27 +759,25 @@ def _recover(
 
     private_key_pem, _public_key, public_key_id = _instance_key_pair(conn)
     payload = _connection_payload(conn)
-    raw_body = _raw_json_body(payload)
+    path, request_body, headers = _plugin_connection_request(plugin_id, "recovery", payload)
+    raw_body = _raw_json_body(request_body)
     timestamp = _timestamp()
     nonce = secrets.token_urlsafe(32)
     signature_input = f"{timestamp}.{nonce}.{raw_body}".encode("utf-8")
     private_key = serialization.load_pem_private_key(private_key_pem.encode("ascii"), password=None)
     signature = _b64url(private_key.sign(signature_input))
-    path, request_body, headers = _plugin_connection_request(
-        plugin_id,
-        "recovery",
-        payload,
+    headers.update(
         {
-            "timestamp": timestamp,
-            "nonce": nonce,
-            "publicKeyId": public_key_id,
-            "signature": f"key-v1={signature}",
-        },
+            "X-DiscVault-Timestamp": timestamp,
+            "X-DiscVault-Nonce": nonce,
+            "X-DiscVault-Key-Id": public_key_id,
+            "X-DiscVault-Signature": f"key-v1={signature}",
+        }
     )
     try:
         response = _post_json(
             f"{_ingest_url(conn)}{path}",
-            _raw_json_body(request_body),
+            raw_body,
             headers,
         )
     except MovieVaultConnectionError as exc:
@@ -736,7 +796,9 @@ def _recover(
         return _bootstrap(conn, plugin_id=plugin_id, actor_id=actor_id, allow_recovery_fallback=False)
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
-        raise MovieVaultConnectionError(f"MovieVault signed recovery failed: {code or response.status_code}")
+        raise MovieVaultConnectionError(
+            f"MovieVault signed recovery failed: {_connection_failure_reason(response)}"
+        )
     return _store_token_response(conn, response.json(), plugin_id=plugin_id, actor_id=actor_id, source="handshake")
 
 
@@ -817,7 +879,23 @@ def refresh_movievault_connection(
         _set_setting(conn, AUTH_METHOD_KEY, "hmac_handshake")
         return _hmac_handshake(conn, plugin_id=plugin_id, actor_id=actor_id)
     _set_setting(conn, AUTH_METHOD_KEY, "bootstrap_signed")
-    if _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_ID_KEY, "")):
+    legacy_key_id = _text(_setting_value(conn, INSTANCE_PUBLIC_KEY_ID_KEY, ""))
+    v3_key_id = _text(_setting_value(conn, V3_KEY_ID_KEY, ""))
+    if legacy_key_id and (
+        legacy_key_id.startswith("iosk_")
+        or (v3_key_id and hmac.compare_digest(legacy_key_id, v3_key_id))
+    ):
+        _private_key, public_key, _poisoned_key_id = _instance_key_pair(conn)
+        _set_setting(
+            conn,
+            INSTANCE_PUBLIC_KEY_ID_KEY,
+            _legacy_public_key_id(public_key),
+            is_secret=False,
+            actor_id=actor_id,
+        )
+        _delete_token(conn)
+        return _bootstrap(conn, plugin_id=plugin_id, actor_id=actor_id)
+    if legacy_key_id:
         return _recover(conn, plugin_id=plugin_id, actor_id=actor_id)
     return _bootstrap(conn, plugin_id=plugin_id, actor_id=actor_id)
 
@@ -1035,7 +1113,9 @@ def bootstrap_v3(conn, *, actor_id: Any = None, _allow_relink_retry: bool = True
             return bootstrap_v3(conn, actor_id=actor_id, _allow_relink_retry=False)
     if response.status_code >= 400:
         _set_setting(conn, LINK_STATUS_KEY, "error")
-        raise MovieVaultConnectionError(f"MovieVault v3 bootstrap failed: {code or response.status_code}")
+        raise MovieVaultConnectionError(
+            f"MovieVault v3 bootstrap failed: {_connection_failure_reason(response)}"
+        )
     data = response.json()
     token = _text(data.get("apiToken"))
     key_id = _text(data.get("keyId"))
@@ -1050,7 +1130,6 @@ def bootstrap_v3(conn, *, actor_id: Any = None, _allow_relink_retry: bool = True
     _set_setting(conn, V3_TOKEN_PREFIX_KEY, _text(data.get("tokenPrefix") or token[:12]), is_secret=False)
     _set_setting(conn, V3_SCOPES_KEY, scopes)
     _set_setting(conn, V3_LAST_BOOTSTRAP_AT_KEY, _timestamp())
-    _set_setting(conn, INSTANCE_PUBLIC_KEY_ID_KEY, key_id, is_secret=False)
     _set_setting(conn, LINK_STATUS_KEY, "active")
     return {"apiToken": token, "keyId": key_id, "instanceId": resolved_instance, "scopes": scopes}
 

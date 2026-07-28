@@ -3161,6 +3161,10 @@ def ui_preview_html(
       gap: 10px;
       cursor: pointer;
     }
+    .lists-actionsheet-btn:disabled {
+      cursor: default;
+      opacity: .6;
+    }
     .lists-actionsheet-btn-label {
       min-width: 0;
       flex: 1 1 auto;
@@ -4966,73 +4970,12 @@ def ui_preview_html(
       gap: 16px;
       align-items: start;
     }
-    .import-mode-tabs {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      padding: 4px;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
-    }
-    .import-mode-tabs::-webkit-scrollbar {
-      display: none;
-    }
-    .import-mode-tabs button {
-      flex: 0 0 auto;
-      min-height: 38px;
-      border: 0;
-      border-radius: 14px;
-      padding: 0 14px;
-      background: transparent;
-      color: var(--muted);
-      font: inherit;
-      font-weight: 760;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .import-mode-tabs button.active {
-      background: var(--bg-elevated);
-      color: var(--text);
-      box-shadow: 0 10px 24px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.16);
-    }
     .import-tab-panel.hidden {
       display: none;
     }
     .import-tab-panel {
       display: grid;
       gap: 16px;
-    }
-    .import-method-tabs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 14px;
-      padding: 4px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: color-mix(in srgb, var(--bg-solid) 66%, transparent);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
-    }
-    .import-method-tabs button {
-      flex: 1 1 auto;
-      min-height: 36px;
-      border: 0;
-      border-radius: 12px;
-      padding: 0 12px;
-      background: transparent;
-      color: var(--muted);
-      font: inherit;
-      font-weight: 720;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .import-method-tabs button.active {
-      background: var(--bg-elevated);
-      color: var(--text);
-      box-shadow: 0 8px 20px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.16);
     }
     .import-method-panel {
       display: grid;
@@ -5043,21 +4986,44 @@ def ui_preview_html(
     .import-method-panel.hidden {
       display: none;
     }
-    .import-method-panel .import-batch-card.standalone {
-      padding-top: 0;
-      border-top: 0;
+    .import-dashboard {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
     }
-    .import-method-panel .import-file-upload-card.secondary {
+    .import-dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-items: start;
+      min-width: 0;
+    }
+    .import-dashboard-grid > .full {
+      grid-column: 1 / -1;
+    }
+    .import-dashboard .import-method-tabs,
+    .import-dashboard .import-method-panel {
       margin-top: 0;
     }
-    .import-scanner-card {
-      overflow: hidden;
+    .import-mode-tabs.profile-dashboard-tabs {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .import-method-tabs.profile-dashboard-tabs {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .import-dashboard-card-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
       min-width: 0;
-      max-width: 100%;
-      border-color: color-mix(in srgb, var(--accent) 22%, var(--line));
-      background:
-        linear-gradient(155deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 44%),
-        color-mix(in srgb, var(--bg-solid) 82%, transparent);
+    }
+    .import-dashboard-card .barcode-scanner-viewport {
+      margin-top: 0;
+    }
+    .import-dashboard-card .import-batch-paste {
+      min-width: 0;
     }
     .import-scanner-spotlight {
       display: grid;
@@ -5067,27 +5033,6 @@ def ui_preview_html(
       margin-top: 14px;
       min-width: 0;
       max-width: 100%;
-    }
-    .import-file-upload-card {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: center;
-      margin-top: 14px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
-    }
-    .import-file-upload-card.secondary {
-      margin-top: 16px;
-      background: color-mix(in srgb, var(--bg-solid) 58%, transparent);
-      box-shadow: none;
-    }
-    .import-file-upload-card .login-message,
-    .import-file-summary {
-      grid-column: 1 / -1;
     }
     .import-file-summary {
       display: grid;
@@ -5672,15 +5617,6 @@ def ui_preview_html(
       letter-spacing: 0;
       overflow-wrap: anywhere;
     }
-    .import-mapping-card {
-      display: grid;
-      gap: 12px;
-      margin-top: 14px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--bg-solid) 72%, transparent);
-    }
     .import-preview-summary {
       display: grid;
       gap: 12px;
@@ -5996,20 +5932,6 @@ def ui_preview_html(
     .button-row.compact {
       flex-wrap: nowrap;
     }
-    .barcode-scanner-shell {
-      display: grid;
-      gap: 10px;
-      min-width: 0;
-      max-width: 100%;
-      box-sizing: border-box;
-      padding: 16px;
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      background:
-        linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent), transparent 52%),
-        color-mix(in srgb, var(--bg-solid) 76%, transparent);
-      box-shadow: 0 24px 70px color-mix(in srgb, var(--shadow) 28%, transparent), inset 0 1px 0 rgba(255,255,255,.12);
-    }
     .barcode-scanner-viewport {
       position: relative;
       overflow: hidden;
@@ -6026,22 +5948,7 @@ def ui_preview_html(
         linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 46%),
         color-mix(in srgb, var(--bg-solid) 88%, #000);
     }
-    .import-manual-card {
-      display: grid;
-      gap: 12px;
-      min-width: 0;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: color-mix(in srgb, var(--bg-solid) 74%, transparent);
-      padding: 14px;
-    }
-    .import-batch-card {
-      display: grid;
-      gap: 10px;
-      padding-top: 12px;
-      border-top: 1px solid var(--line);
-    }
-    .import-batch-card textarea {
+    .import-dashboard-card textarea {
       width: 100%;
       min-height: 92px;
       resize: vertical;
@@ -8471,9 +8378,12 @@ def ui_preview_html(
       height: 20px;
       flex: 0 0 auto;
     }
-    .app-admin-section-tabs button {
+    .app-admin-section-tabs button,
+    .import-section-tabs button {
       transition: color .18s ease, background .18s ease, box-shadow .18s ease;
     }
+    .import-section-tabs button.active,
+    .import-section-tabs button[aria-selected="true"],
     .app-admin-section-tabs button.active,
     .app-admin-section-tabs button[aria-selected="true"] {
       color: var(--accent-bright);
@@ -12023,8 +11933,7 @@ def ui_preview_html(
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
       }
-      .container-detail-submenu::-webkit-scrollbar,
-      .import-mode-tabs::-webkit-scrollbar {
+      .container-detail-submenu::-webkit-scrollbar {
         display: none;
       }
       .container-detail-submenu button {
@@ -12117,19 +12026,10 @@ def ui_preview_html(
         width: 100%;
         max-width: 100%;
       }
-      .import-file-upload-card {
-        grid-template-columns: 1fr;
-      }
-      .import-file-upload-card .button-row {
+      .import-dashboard-card .button-row {
         justify-content: stretch;
       }
-      .import-file-upload-card button {
-        width: 100%;
-      }
-      .import-batch-card .button-row {
-        justify-content: stretch;
-      }
-      .import-batch-card button {
+      .import-dashboard-card .button-row button {
         width: 100%;
       }
       .import-batch-row {
@@ -12139,12 +12039,6 @@ def ui_preview_html(
         aspect-ratio: 4 / 3;
         min-height: 0;
         max-height: min(360px, 56vh);
-      }
-      .import-mode-tabs button {
-        flex: 1 0 auto;
-        max-width: min(74vw, 260px);
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
       .import-metadata-suggestion {
         grid-template-columns: 34px minmax(0, 1fr);
@@ -12496,6 +12390,24 @@ def ui_preview_html(
       .app-admin-metadata-tabs {
         grid-template-columns: repeat(3, minmax(52px, 1fr));
       }
+      .import-mode-tabs.profile-dashboard-tabs,
+      .import-method-tabs.profile-dashboard-tabs {
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(64px, 1fr);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .import-mode-tabs.profile-dashboard-tabs::-webkit-scrollbar,
+      .import-method-tabs.profile-dashboard-tabs::-webkit-scrollbar {
+        display: none;
+      }
+      .import-dashboard-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .import-dashboard-card-actions {
+        justify-content: flex-start;
+      }
       .app-admin-operations-tabs {
         grid-template-columns: none;
         grid-auto-flow: column;
@@ -12664,13 +12576,6 @@ def ui_preview_html(
         padding: 11px;
         gap: 10px;
       }
-      .import-scanner-card {
-        padding: 12px;
-      }
-      .barcode-scanner-shell {
-        padding: 12px;
-        border-radius: 18px;
-      }
       .barcode-scanner-viewport {
         border-radius: 16px;
       }
@@ -12684,14 +12589,12 @@ def ui_preview_html(
     }
     @media (max-width: 420px) {
       .detail-submenu,
-      .container-detail-submenu,
-      .import-mode-tabs {
+      .container-detail-submenu {
         gap: 3px;
         padding: 3px;
       }
       .detail-submenu button,
-      .container-detail-submenu button,
-      .import-mode-tabs button {
+      .container-detail-submenu button {
         min-height: 34px;
         padding: 0 10px;
         font-size: .76rem;
@@ -12733,6 +12636,68 @@ def ui_preview_html(
       align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
+    }
+    .discover-submenu {
+      display: flex;
+      align-self: flex-start;
+      max-width: 100%;
+      scrollbar-width: none;
+    }
+    .discover-submenu::-webkit-scrollbar {
+      display: none;
+    }
+    .discover-submenu.hidden {
+      display: none;
+    }
+    .detail-submenu button.discover-seg .lists-seg-icon {
+      fill: var(--muted);
+    }
+    .detail-submenu button.discover-seg.active .lists-seg-icon {
+      fill: var(--accent, var(--text));
+    }
+    .discover-missing-key {
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+      padding: 34px 20px;
+      text-align: center;
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
+    }
+    .discover-missing-key.hidden {
+      display: none;
+    }
+    .discover-missing-key-icon {
+      width: 44px;
+      height: 44px;
+      fill: var(--muted);
+    }
+    .discover-missing-key h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .discover-missing-key p {
+      margin: 0;
+      max-width: 46ch;
+      font-size: .86rem;
+      color: var(--muted);
+    }
+    .discover-missing-key-detail.hidden {
+      display: none;
+    }
+    .discover-missing-key #discoverMissingKeyButton.hidden {
+      display: none;
+    }
+    @media (max-width: 760px) {
+      /* Discover pills mirror the iOS/Android chips: icon + label, horizontally scrollable. */
+      .detail-submenu.discover-submenu button.discover-seg .lists-seg-label {
+        display: inline;
+      }
+      .detail-submenu.discover-submenu button.discover-seg .lists-seg-icon {
+        width: 17px;
+        height: 17px;
+      }
     }
     .discover-grid {
       display: grid;
@@ -12781,6 +12746,26 @@ def ui_preview_html(
       font-size: .76rem;
       text-align: center;
       padding: 8px;
+      position: relative;
+    }
+    .discover-wish-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(2px);
+      pointer-events: none;
+    }
+    .discover-wish-badge svg {
+      width: 13px;
+      height: 13px;
+      display: block;
+      fill: #ef4444;
     }
     .discover-poster img {
       width: 100%;
@@ -13663,37 +13648,41 @@ def ui_preview_html(
             <button type="button" class="secondary-button" id="importCenterRefreshButton" data-next-i18n="common.refresh">Refresh</button>
           </div>
         </section>
-        <nav class="import-mode-tabs" aria-label="Import sections" data-next-i18n-aria="importCenter.sections">
-          <button type="button" class="active" data-import-tab="add" data-next-i18n="importCenter.addTab">Scan & add</button>
-          <button type="button" data-import-tab="sources" data-next-i18n="importCenter.sources">Import sources</button>
-          <button type="button" data-import-tab="plan" data-next-i18n="importCenter.plan">Plan</button>
-          <button type="button" data-import-tab="review" data-next-i18n="importCenter.review">Review</button>
-          <button type="button" data-import-tab="jobs" data-next-i18n="importCenter.jobs">Jobs</button>
+        <nav class="detail-submenu profile-dashboard-tabs import-section-tabs import-mode-tabs" role="tablist" aria-label="Import sections" data-next-i18n-aria="importCenter.sections">
+          <button type="button" class="active" id="importTabAdd" role="tab" aria-selected="true" aria-controls="importPanelAdd" tabindex="0" data-import-tab="add">""" + nav_icon("import") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.addTab">Scan & add</span></button>
+          <button type="button" id="importTabSources" role="tab" aria-selected="false" aria-controls="importPanelSources" tabindex="-1" data-import-tab="sources">""" + nav_icon("structure") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.sources">Import sources</span></button>
+          <button type="button" id="importTabPlan" role="tab" aria-selected="false" aria-controls="importPanelPlan" tabindex="-1" data-import-tab="plan">""" + nav_icon("preferences") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.plan">Plan</span></button>
+          <button type="button" id="importTabReview" role="tab" aria-selected="false" aria-controls="importPanelReview" tabindex="-1" data-import-tab="review">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.review">Review</span></button>
+          <button type="button" id="importTabJobs" role="tab" aria-selected="false" aria-controls="importPanelJobs" tabindex="-1" data-import-tab="jobs">""" + nav_icon("statistics") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.jobs">Jobs</span></button>
         </nav>
-        <section class="import-tab-panel" data-import-panel="add">
-          <div class="detail-card profile-card full import-scanner-card">
-            <div class="import-card-head">
-              <div>
+        <section class="import-tab-panel" id="importPanelAdd" role="tabpanel" aria-labelledby="importTabAdd" aria-hidden="false" data-import-panel="add">
+          <div class="profile-dashboard import-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("import") + """</span>
+              <div class="profile-dashboard-copy">
                 <span class="eyebrow" data-next-i18n="importCenter.addEyebrow">Quick add</span>
-                <h3 data-next-i18n="importCenter.lookupTitle">Add movie</h3>
+                <h4 data-next-i18n="importCenter.lookupTitle">Add movie</h4>
                 <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding a movie.</p>
               </div>
-            </div>
-            <nav class="import-method-tabs" aria-label="Import method" data-next-i18n-aria="importCenter.methods">
-              <button type="button" class="active" data-import-method="camera" data-next-i18n="importCenter.methodCamera">Camera</button>
-              <button type="button" data-import-method="single" data-next-i18n="importCenter.methodSingle">Single search</button>
-              <button type="button" data-import-method="batch" data-next-i18n="importCenter.methodBatch">Batch</button>
-              <button type="button" data-import-method="boxset" data-next-i18n="importCenter.methodBoxSet">Box-set builder</button>
-              <button type="button" data-import-method="csv" data-next-i18n="importCenter.methodCsv">CSV import</button>
+            </header>
+            <nav class="detail-submenu profile-dashboard-tabs import-section-tabs import-method-tabs" role="tablist" aria-label="Import method" data-next-i18n-aria="importCenter.methods">
+              <button type="button" class="active" id="importMethodTabCamera" role="tab" aria-selected="true" aria-controls="importMethodPanelCamera" tabindex="0" data-import-method="camera">""" + nav_icon("devices") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.methodCamera">Camera</span></button>
+              <button type="button" id="importMethodTabSingle" role="tab" aria-selected="false" aria-controls="importMethodPanelSingle" tabindex="-1" data-import-method="single">""" + nav_icon("discover") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.methodSingle">Single search</span></button>
+              <button type="button" id="importMethodTabBatch" role="tab" aria-selected="false" aria-controls="importMethodPanelBatch" tabindex="-1" data-import-method="batch">""" + nav_icon("lists") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.methodBatch">Batch</span></button>
+              <button type="button" id="importMethodTabBoxset" role="tab" aria-selected="false" aria-controls="importMethodPanelBoxset" tabindex="-1" data-import-method="boxset">""" + nav_icon("groups") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.methodBoxSet">Box-set builder</span></button>
+              <button type="button" id="importMethodTabCsv" role="tab" aria-selected="false" aria-controls="importMethodPanelCsv" tabindex="-1" data-import-method="csv">""" + nav_icon("import") + """<span class="profile-dashboard-tab-label" data-next-i18n="importCenter.methodCsv">CSV import</span></button>
             </nav>
-            <div class="import-method-panel" data-import-method-panel="camera">
-              <div class="barcode-scanner-shell">
-                <div class="import-card-head">
-                  <div>
-                    <strong data-next-i18n="importCenter.scanTitle">Camera scanner</strong>
-                    <p class="import-source-meta" data-next-i18n="importCenter.scanHelp">Works in the PWA over HTTPS after camera permission.</p>
+            <div class="import-method-panel" id="importMethodPanelCamera" role="tabpanel" aria-labelledby="importMethodTabCamera" aria-hidden="false" data-import-method-panel="camera">
+              <section class="profile-dashboard-card primary import-dashboard-card">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("devices") + """</span>
+                    <div>
+                      <h4 data-next-i18n="importCenter.scanTitle">Camera scanner</h4>
+                      <p data-next-i18n="importCenter.scanHelp">Works in the PWA over HTTPS after camera permission.</p>
+                    </div>
                   </div>
-                  <div class="button-row compact">
+                  <div class="import-dashboard-card-actions">
                     <button type="button" class="primary-button" id="importScannerStartButton" data-next-i18n="importCenter.scanStart">Scan</button>
                     <button type="button" class="secondary-button hidden" id="importScannerStopButton" data-next-i18n="importCenter.scanStop">Stop</button>
                   </div>
@@ -13702,13 +13691,18 @@ def ui_preview_html(
                   <div class="barcode-scanner-placeholder" id="importScannerPlaceholder" data-next-i18n="importCenter.scanPlaceholder">Point the camera at an EAN or UPC barcode.</div>
                 </div>
                 <div class="login-message" id="importScannerMessage"></div>
-              </div>
+              </section>
             </div>
-            <div class="import-method-panel hidden" data-import-method-panel="single">
-              <div class="import-manual-card">
-                <div>
-                  <strong data-next-i18n="importCenter.manualTitleCard">Manual search</strong>
-                  <p class="import-source-meta" data-next-i18n="importCenter.manualHelp">Use this when the barcode is unreadable or you want to add a film by title.</p>
+            <div class="import-method-panel hidden" id="importMethodPanelSingle" role="tabpanel" aria-labelledby="importMethodTabSingle" aria-hidden="true" data-import-method-panel="single">
+              <section class="profile-dashboard-card primary import-dashboard-card">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("discover") + """</span>
+                    <div>
+                      <h4 data-next-i18n="importCenter.manualTitleCard">Manual search</h4>
+                      <p data-next-i18n="importCenter.manualHelp">Use this when the barcode is unreadable or you want to add a film by title.</p>
+                    </div>
+                  </div>
                 </div>
                 <form class="import-barcode-form" id="importBarcodeForm">
                   <label>
@@ -13737,43 +13731,58 @@ def ui_preview_html(
                   </label>
                   <button type="submit" class="secondary-button" id="importBarcodePreviewButton" data-next-i18n="importCenter.previewBarcode">Search</button>
                 </form>
-              </div>
+              </section>
             </div>
-            <div class="import-method-panel hidden" data-import-method-panel="batch">
-              <div class="import-batch-card standalone">
-                  <div>
-                    <strong data-next-i18n="importCenter.batchTitle">Batch barcodes</strong>
-                    <p class="import-source-meta" data-next-i18n="importCenter.batchHelp">Scan or paste all EAN/UPC barcodes first, then run Check batch. Work down the list: Search a line, add the film, and it gets checked off so you can continue with the next one.</p>
+            <div class="import-method-panel hidden" id="importMethodPanelBatch" role="tabpanel" aria-labelledby="importMethodTabBatch" aria-hidden="true" data-import-method-panel="batch">
+              <section class="profile-dashboard-card primary import-dashboard-card">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("lists") + """</span>
+                    <div>
+                      <h4 data-next-i18n="importCenter.batchTitle">Batch barcodes</h4>
+                      <p data-next-i18n="importCenter.batchHelp">Scan or paste all EAN/UPC barcodes first, then run Check batch. Work down the list: Search a line, add the film, and it gets checked off so you can continue with the next one.</p>
+                    </div>
                   </div>
-                  <textarea id="importBatchBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.batchPlaceholder" placeholder="8712626064312&#10;5051890315526"></textarea>
-                  <div class="button-row compact">
-                    <button type="button" class="secondary-button" id="importBatchClearButton" data-next-i18n="common.clear">Clear</button>
-                    <button type="button" class="primary-button" id="importBatchLookupButton" data-next-i18n="importCenter.batchLookup">Check batch</button>
-                  </div>
-                  <div class="login-message" id="importBatchMessage"></div>
-                  <div class="import-batch-list" id="importBatchList"></div>
                 </div>
-              </div>
-            <div class="import-method-panel hidden" data-import-method-panel="csv">
-              <div class="import-file-upload-card secondary" id="importFileUploadCard">
-              <div>
-                <strong data-next-i18n="importCenter.fileTitle">Import file</strong>
-                <p class="import-source-meta" data-next-i18n="importCenter.fileHelp">Upload a CSV, TSV, JSON, XML or ZIP file. DiscVault asks the enabled import plugins which one recognizes it.</p>
+                <textarea id="importBatchBarcodeInput" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.batchPlaceholder" placeholder="8712626064312&#10;5051890315526"></textarea>
+                <div class="button-row compact">
+                  <button type="button" class="secondary-button" id="importBatchClearButton" data-next-i18n="common.clear">Clear</button>
+                  <button type="button" class="primary-button" id="importBatchLookupButton" data-next-i18n="importCenter.batchLookup">Check batch</button>
+                </div>
+                <div class="login-message" id="importBatchMessage"></div>
+                <div class="import-batch-list" id="importBatchList"></div>
+              </section>
+            </div>
+            <div class="import-method-panel hidden" id="importMethodPanelCsv" role="tabpanel" aria-labelledby="importMethodTabCsv" aria-hidden="true" data-import-method-panel="csv">
+              <section class="profile-dashboard-card primary import-dashboard-card" id="importFileUploadCard">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("import") + """</span>
+                    <div>
+                      <h4 data-next-i18n="importCenter.fileTitle">Import file</h4>
+                      <p data-next-i18n="importCenter.fileHelp">Upload a CSV, TSV, JSON, XML or ZIP file. DiscVault asks the enabled import plugins which one recognizes it.</p>
+                    </div>
+                  </div>
+                  <div class="import-dashboard-card-actions">
+                    <input class="hidden" id="importFileInput" type="file" accept=".csv,.tsv,.json,.xml,.zip,application/json,text/csv,text/tab-separated-values,application/xml,text/xml,application/zip">
+                    <button type="button" class="primary-button" id="importFileBrowseButton" data-next-i18n="importCenter.fileBrowse">Import / browse</button>
+                  </div>
+                </div>
                 <div class="import-source-meta" id="importFileName" data-next-i18n="importCenter.fileSupported">Supported: CSV, TSV, JSON, XML and ZIP.</div>
-              </div>
-              <div class="button-row compact">
-                <input class="hidden" id="importFileInput" type="file" accept=".csv,.tsv,.json,.xml,.zip,application/json,text/csv,text/tab-separated-values,application/xml,text/xml,application/zip">
-                <button type="button" class="primary-button" id="importFileBrowseButton" data-next-i18n="importCenter.fileBrowse">Import / browse</button>
-              </div>
-              <div class="login-message" id="importFileMessage"></div>
-              <div class="import-file-summary" id="importFileSummary"></div>
+                <div class="login-message" id="importFileMessage"></div>
+                <div class="import-file-summary" id="importFileSummary"></div>
+              </section>
             </div>
-            </div>
-            <div class="import-method-panel hidden" data-import-method-panel="boxset">
-              <div class="import-manual-card" id="boxSetBuilderIdentifyCard">
-                <div>
-                  <strong data-next-i18n="importCenter.boxSetBuilderTitle">Box-set builder</strong>
-                  <p class="import-source-meta" data-next-i18n="importCenter.boxSetBuilderHelp">Scan or type the box-set's own barcode to open it. If nothing is recognized, give it a title to create an empty box-set, then scan each film to add it as a member.</p>
+            <div class="import-method-panel hidden" id="importMethodPanelBoxset" role="tabpanel" aria-labelledby="importMethodTabBoxset" aria-hidden="true" data-import-method-panel="boxset">
+              <section class="profile-dashboard-card primary import-dashboard-card" id="boxSetBuilderIdentifyCard">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("groups") + """</span>
+                    <div>
+                      <h4 data-next-i18n="importCenter.boxSetBuilderTitle">Box-set builder</h4>
+                      <p data-next-i18n="importCenter.boxSetBuilderHelp">Scan or type the box-set's own barcode to open it. If nothing is recognized, give it a title to create an empty box-set, then scan each film to add it as a member.</p>
+                    </div>
+                  </div>
                 </div>
                 <form class="import-barcode-form" id="boxSetBuilderIdentifyForm">
                   <label>
@@ -13791,15 +13800,18 @@ def ui_preview_html(
                   <button type="submit" class="primary-button" id="boxSetBuilderIdentifyButton" data-next-i18n="importCenter.boxSetBuilderIdentify">Identify / create</button>
                 </form>
                 <div class="login-message" id="boxSetBuilderIdentifyMessage"></div>
-              </div>
-              <div class="import-batch-card standalone hidden" id="boxSetBuilderActiveCard">
-                <div class="import-card-head">
-                  <div>
-                    <span class="eyebrow" data-next-i18n="importCenter.boxSetTargetActive">Active box-set</span>
-                    <strong id="boxSetBuilderActiveTitle"></strong>
-                    <p class="import-source-meta"><span id="boxSetBuilderMemberCount">0</span> <span data-next-i18n="importCenter.members">members</span></p>
+              </section>
+              <section class="profile-dashboard-card import-dashboard-card hidden" id="boxSetBuilderActiveCard">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("structure") + """</span>
+                    <div>
+                      <span class="eyebrow" data-next-i18n="importCenter.boxSetTargetActive">Active box-set</span>
+                      <h4 id="boxSetBuilderActiveTitle"></h4>
+                      <p><span id="boxSetBuilderMemberCount">0</span> <span data-next-i18n="importCenter.members">members</span></p>
+                    </div>
                   </div>
-                  <div class="button-row compact">
+                  <div class="import-dashboard-card-actions">
                     <button type="button" class="secondary-button" id="boxSetBuilderCameraButton" data-next-i18n="importCenter.boxSetBuilderScanCamera">Scan with camera</button>
                     <button type="button" class="secondary-button" id="boxSetBuilderOpenButton" data-next-i18n="importCenter.boxSetBuilderOpen">Open box-set</button>
                     <button type="button" class="primary-button" id="boxSetBuilderDoneButton" data-next-i18n="importCenter.boxSetBuilderDone">Done</button>
@@ -13837,65 +13849,120 @@ def ui_preview_html(
                   <div class="import-batch-list" id="boxSetBuilderBatchList"></div>
                 </details>
                 <div class="import-batch-list" id="boxSetBuilderMemberList"></div>
-              </div>
+              </section>
             </div>
             <div class="import-result-list" id="importBarcodeResults"></div>
           </div>
         </section>
-        <section class="import-tab-panel hidden" data-import-panel="sources">
-          <div class="detail-card full">
-            <div class="import-card-head">
-              <div>
-                <h3 data-next-i18n="importCenter.sources">Import sources</h3>
-                <p class="import-source-meta" data-next-i18n="importCenter.sourcesHelp">Choose the plugin that should inspect and plan the import.</p>
+        <section class="import-tab-panel hidden" id="importPanelSources" role="tabpanel" aria-labelledby="importTabSources" aria-hidden="true" data-import-panel="sources">
+          <div class="profile-dashboard import-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("structure") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="importCenter.sources">Import sources</h4>
+                <p data-next-i18n="importCenter.sourcesHelp">Choose the plugin that should inspect and plan the import.</p>
               </div>
-              <span class="tag" id="importCenterSourceCount">-</span>
-            </div>
-            <div class="import-source-list" id="importCenterSources"></div>
-          </div>
-        </section>
-        <section class="import-tab-panel hidden" data-import-panel="plan">
-          <div class="detail-card full">
-            <div class="import-card-head">
-              <div>
-                <h3 data-next-i18n="importCenter.plan">Plan</h3>
-                <p class="import-source-meta" data-next-i18n="importCenter.planHelp">Readiness, required actions and data counts for the selected source.</p>
-              </div>
-              <div class="button-row compact">
-                <span class="tag" id="importCenterState">-</span>
-                <button type="button" class="primary-button" id="importCenterStartButton" data-next-i18n="importCenter.start">Start import</button>
-              </div>
-            </div>
-            <div class="import-source-config">
-              <label>
-                <span data-next-i18n="importCenter.sourcePath">Source path</span>
-                <input id="importSourcePathInput" autocomplete="off" data-next-i18n-placeholder="importCenter.sourcePathPlaceholder" placeholder="/data/import/source">
-              </label>
-              <button type="button" class="secondary-button" id="importSourceInspectButton" data-next-i18n="importCenter.inspect">Inspect source</button>
-            </div>
-            <p class="import-source-meta" data-next-i18n="importCenter.sourcePathHelp">Override the configured plugin path for one preview/import run.</p>
-            <div class="profile-meta" id="importCenterPlan"></div>
-            <div class="import-mapping-card" id="importCenterMappingCard">
-              <div class="import-card-head">
-                <div>
-                  <h3 data-next-i18n="importCenter.mappingTitle">Column mapping</h3>
-                  <p class="import-source-meta" data-next-i18n="importCenter.mappingHelp">Adjust how DiscVault reads columns before previewing or importing.</p>
+            </header>
+            <section class="profile-dashboard-card primary import-dashboard-card">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("api") + """</span>
+                  <div>
+                    <h4 data-next-i18n="importCenter.sources">Import sources</h4>
+                    <p data-next-i18n="importCenter.sourcesHelp">Choose the plugin that should inspect and plan the import.</p>
+                  </div>
                 </div>
-                <button type="button" class="secondary-button" id="importMappingResetButton" data-next-i18n="importCenter.mappingReset">Use detected mapping</button>
+                <div class="import-dashboard-card-actions">
+                  <span class="tag" id="importCenterSourceCount">-</span>
+                </div>
               </div>
-              <div class="import-mapping-grid" id="importCenterMapping"></div>
-            </div>
-            <div class="import-preview-grid" id="importCenterPreview"></div>
-            <div class="import-counts" id="importCenterSourceCounts"></div>
-            <div class="login-message" id="importCenterMessage"></div>
+              <div class="import-source-list" id="importCenterSources"></div>
+            </section>
           </div>
         </section>
-        <section class="import-tab-panel hidden" data-import-panel="review">
-          <div class="detail-card full">
-            <div class="import-card-head">
-              <div>
-                <h3 data-next-i18n="importCenter.reviewTitle">Review import</h3>
-                <p class="import-source-meta" data-next-i18n="importCenter.reviewHelp">Confirm creates, updates, skips and proposed container links before starting the job.</p>
+        <section class="import-tab-panel hidden" id="importPanelPlan" role="tabpanel" aria-labelledby="importTabPlan" aria-hidden="true" data-import-panel="plan">
+          <div class="profile-dashboard import-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("preferences") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="importCenter.plan">Plan</h4>
+                <p data-next-i18n="importCenter.planHelp">Readiness, required actions and data counts for the selected source.</p>
+              </div>
+            </header>
+            <div class="import-dashboard-grid">
+              <section class="profile-dashboard-card primary import-dashboard-card full">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("structure") + """</span>
+                    <div>
+                      <h4 data-next-i18n="importCenter.sourcePath">Source path</h4>
+                      <p data-next-i18n="importCenter.sourcePathHelp">Override the configured plugin path for one preview/import run.</p>
+                    </div>
+                  </div>
+                  <div class="import-dashboard-card-actions">
+                    <span class="tag" id="importCenterState">-</span>
+                    <button type="button" class="primary-button" id="importCenterStartButton" data-next-i18n="importCenter.start">Start import</button>
+                  </div>
+                </div>
+                <div class="import-source-config">
+                  <label>
+                    <span data-next-i18n="importCenter.sourcePath">Source path</span>
+                    <input id="importSourcePathInput" autocomplete="off" data-next-i18n-placeholder="importCenter.sourcePathPlaceholder" placeholder="/data/import/source">
+                  </label>
+                  <button type="button" class="secondary-button" id="importSourceInspectButton" data-next-i18n="importCenter.inspect">Inspect source</button>
+                </div>
+                <div class="profile-meta" id="importCenterPlan"></div>
+                <div class="login-message" id="importCenterMessage"></div>
+              </section>
+              <section class="profile-dashboard-card import-dashboard-card full hidden" id="importCenterMappingCard">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("library_preferences") + """</span>
+                    <div>
+                      <h4 data-next-i18n="importCenter.mappingTitle">Column mapping</h4>
+                      <p data-next-i18n="importCenter.mappingHelp">Adjust how DiscVault reads columns before previewing or importing.</p>
+                    </div>
+                  </div>
+                  <div class="import-dashboard-card-actions">
+                    <button type="button" class="secondary-button" id="importMappingResetButton" data-next-i18n="importCenter.mappingReset">Use detected mapping</button>
+                  </div>
+                </div>
+                <div class="import-mapping-grid" id="importCenterMapping"></div>
+              </section>
+              <section class="profile-dashboard-card import-dashboard-card full">
+                <div class="profile-dashboard-card-head">
+                  <div class="profile-dashboard-card-title">
+                    <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                    <div>
+                      <h4 data-next-i18n="importCenter.previewSummaryTitle">Import preview</h4>
+                      <p data-next-i18n="importCenter.previewSummaryHelp">Check source recognition, mapping and match confidence before writing to the library.</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="import-preview-grid" id="importCenterPreview"></div>
+                <div class="import-counts" id="importCenterSourceCounts"></div>
+              </section>
+            </div>
+          </div>
+        </section>
+        <section class="import-tab-panel hidden" id="importPanelReview" role="tabpanel" aria-labelledby="importTabReview" aria-hidden="true" data-import-panel="review">
+          <div class="profile-dashboard import-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("lists") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="importCenter.reviewTitle">Review import</h4>
+                <p data-next-i18n="importCenter.reviewHelp">Confirm creates, updates, skips and proposed container links before starting the job.</p>
+              </div>
+            </header>
+            <section class="profile-dashboard-card primary import-dashboard-card">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("preferences") + """</span>
+                  <div>
+                    <h4 data-next-i18n="importCenter.reviewTitle">Review import</h4>
+                    <p data-next-i18n="importCenter.reviewHelp">Confirm creates, updates, skips and proposed container links before starting the job.</p>
+                  </div>
+                </div>
               </div>
               <div class="button-row compact">
                 <button type="button" class="secondary-button" id="importReviewUseRecommendedButton" data-next-i18n="importCenter.reviewUseRecommended">Use recommended matches</button>
@@ -13906,35 +13973,58 @@ def ui_preview_html(
                 <button type="button" class="secondary-button" id="importReviewSkipUpdatesButton" data-next-i18n="importCenter.reviewSkipUpdates">Skip updates</button>
                 <button type="button" class="primary-button" id="importReviewStartButton" data-next-i18n="importCenter.start">Start import</button>
               </div>
-            </div>
-            <div class="plugin-operation-panel" id="importReviewWorkbench"></div>
-            <div class="import-review-summary" id="importCenterReviewSummary"></div>
-            <div class="import-review-list" id="importCenterReview"></div>
+            </section>
+            <section class="profile-dashboard-card import-dashboard-card">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("lists") + """</span>
+                  <div>
+                    <h4 data-next-i18n="importCenter.reviewQueue">Import review queue</h4>
+                    <p data-next-i18n="importCenter.reviewQueueHelp">Choose create, update or skip for each detected import item.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="plugin-operation-panel" id="importReviewWorkbench"></div>
+              <div class="import-review-summary" id="importCenterReviewSummary"></div>
+              <div class="import-review-list" id="importCenterReview"></div>
+            </section>
           </div>
         </section>
-        <section class="import-tab-panel hidden" data-import-panel="jobs">
-          <div class="detail-card profile-card full">
-            <div class="import-card-head">
-              <div>
-                <h3 data-next-i18n="importCenter.historyTitle">Import history</h3>
-                <p class="import-source-meta" data-next-i18n="importCenter.historyHelp">Review completed imports, created items, warnings and linked containers.</p>
+        <section class="import-tab-panel hidden" id="importPanelJobs" role="tabpanel" aria-labelledby="importTabJobs" aria-hidden="true" data-import-panel="jobs">
+          <div class="profile-dashboard import-dashboard">
+            <header class="profile-dashboard-intro">
+              <span class="profile-dashboard-symbol">""" + nav_icon("statistics") + """</span>
+              <div class="profile-dashboard-copy">
+                <h4 data-next-i18n="importCenter.historyTitle">Import history</h4>
+                <p data-next-i18n="importCenter.historyHelp">Review completed imports, created items, warnings and linked containers.</p>
               </div>
-              <div class="button-row compact">
-                <select id="importHistoryStatusFilter" aria-label="Import status filter" data-next-i18n-aria="importCenter.historyStatusFilter">
-                  <option value="all" data-next-i18n="importCenter.historyAllStatuses">All statuses</option>
-                  <option value="completed" data-next-i18n="importCenter.historyCompleted">Completed</option>
-                  <option value="failed" data-next-i18n="importCenter.historyFailed">Failed</option>
-                  <option value="pending" data-next-i18n="importCenter.historyPending">Pending</option>
-                  <option value="running" data-next-i18n="importCenter.historyRunning">Running</option>
-                </select>
-                <select id="importHistoryPluginFilter" aria-label="Import plugin filter" data-next-i18n-aria="importCenter.historyPluginFilter">
-                  <option value="all" data-next-i18n="importCenter.historyAllSources">All sources</option>
-                </select>
-                <span class="tag" id="importCenterJobCount">-</span>
+            </header>
+            <section class="profile-dashboard-card primary import-dashboard-card">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("statistics") + """</span>
+                  <div>
+                    <h4 data-next-i18n="importCenter.jobs">Jobs</h4>
+                    <p data-next-i18n="importCenter.historyHelp">Review completed imports, created items, warnings and linked containers.</p>
+                  </div>
+                </div>
+                <div class="import-dashboard-card-actions">
+                  <select id="importHistoryStatusFilter" aria-label="Import status filter" data-next-i18n-aria="importCenter.historyStatusFilter">
+                    <option value="all" data-next-i18n="importCenter.historyAllStatuses">All statuses</option>
+                    <option value="completed" data-next-i18n="importCenter.historyCompleted">Completed</option>
+                    <option value="failed" data-next-i18n="importCenter.historyFailed">Failed</option>
+                    <option value="pending" data-next-i18n="importCenter.historyPending">Pending</option>
+                    <option value="running" data-next-i18n="importCenter.historyRunning">Running</option>
+                  </select>
+                  <select id="importHistoryPluginFilter" aria-label="Import plugin filter" data-next-i18n-aria="importCenter.historyPluginFilter">
+                    <option value="all" data-next-i18n="importCenter.historyAllSources">All sources</option>
+                  </select>
+                  <span class="tag" id="importCenterJobCount">-</span>
+                </div>
               </div>
-            </div>
-            <div class="import-post-review" id="importCenterLatestJob"></div>
-            <div class="import-job-list" id="importCenterJobs"></div>
+              <div class="import-post-review" id="importCenterLatestJob"></div>
+              <div class="import-job-list" id="importCenterJobs"></div>
+            </section>
           </div>
         </section>
       </section>
@@ -13943,9 +14033,22 @@ def ui_preview_html(
           <div class="discover-head">
             <div>
               <h2 data-next-i18n="discover.title">Discover</h2>
-              <p class="import-source-meta" data-next-i18n="discover.subtitle">Popular movies from TMDb</p>
+              <p class="import-source-meta" id="discoverSubtitle" data-next-i18n="discover.subtitlePopular">The most popular movies on TMDb right now.</p>
             </div>
             <p class="discover-inline-message hidden" id="discoverInlineMessage"></p>
+          </div>
+          <div class="detail-submenu discover-submenu" id="discoverCategories" role="tablist" aria-label="Discover categories" data-next-i18n-aria="discover.categories">
+            <button type="button" class="active lists-seg discover-seg" data-discover-mode="popular" aria-label="Popular" data-next-i18n-aria="discover.categoryPopular"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2M14.5 17.5C14.22 17.74 13.76 18 13.4 18.1C12.28 18.5 11.16 17.94 10.5 17.28C11.69 17 12.4 16.12 12.61 15.23C12.78 14.43 12.46 13.77 12.33 13C12.21 12.26 12.23 11.63 12.5 10.94C12.69 11.32 12.89 11.7 13.13 12C13.9 13 15.11 13.44 15.37 14.8C15.41 14.94 15.43 15.08 15.43 15.23C15.46 16.05 15.1 16.95 14.5 17.5H14.5Z"/></svg><span class="lists-seg-label" data-next-i18n="discover.categoryPopular">Popular</span></button>
+            <button type="button" class="lists-seg discover-seg" data-discover-mode="now_playing" aria-label="Now in cinemas" data-next-i18n-aria="discover.categoryNowPlaying"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7,22H4.75C4.75,22 4,22 3.81,20.65L2.04,3.81L2,3.5C2,2.67 2.9,2 4,2C5.1,2 6,2.67 6,3.5C6,2.67 6.9,2 8,2C9.1,2 10,2.67 10,3.5C10,2.67 10.9,2 12,2C13.09,2 14,2.66 14,3.5V3.5C14,2.67 14.9,2 16,2C17.1,2 18,2.67 18,3.5C18,2.67 18.9,2 20,2C21.1,2 22,2.67 22,3.5L21.96,3.81L20.19,20.65C20,22 19.25,22 19.25,22H17L16.5,22H13.75L10.25,22H7.5L7,22M17.85,4.93C17.55,4.39 16.84,4 16,4C15.19,4 14.36,4.36 14,4.87L13.78,20H16.66L17.85,4.93M10,4.87C9.64,4.36 8.81,4 8,4C7.16,4 6.45,4.39 6.15,4.93L7.34,20H10.22L10,4.87Z"/></svg><span class="lists-seg-label" data-next-i18n="discover.categoryNowPlaying">Now in cinemas</span></button>
+            <button type="button" class="lists-seg discover-seg" data-discover-mode="upcoming" aria-label="Upcoming" data-next-i18n-aria="discover.categoryUpcoming"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15,13H16.5V15.82L18.94,17.23L18.19,18.53L15,16.69V13M19,8H5V19H9.67C9.24,18.09 9,17.07 9,16A7,7 0 0,1 16,9C17.07,9 18.09,9.24 19,9.67V8M5,21C3.89,21 3,20.1 3,19V5C3,3.89 3.89,3 5,3H6V1H8V3H16V1H18V3H19A2,2 0 0,1 21,5V11.1C22.24,12.36 23,14.09 23,16A7,7 0 0,1 16,23C14.09,23 12.36,22.24 11.1,21H5M16,11.15A4.85,4.85 0 0,0 11.15,16C11.15,18.68 13.32,20.85 16,20.85A4.85,4.85 0 0,0 20.85,16C20.85,13.32 18.68,11.15 16,11.15Z"/></svg><span class="lists-seg-label" data-next-i18n="discover.categoryUpcoming">Upcoming</span></button>
+            <button type="button" class="lists-seg discover-seg" data-discover-mode="top_rated" aria-label="Top rated" data-next-i18n-aria="discover.categoryTopRated"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z"/></svg><span class="lists-seg-label" data-next-i18n="discover.categoryTopRated">Top rated</span></button>
+          </div>
+          <div class="discover-missing-key hidden" id="discoverMissingKey">
+            <svg class="discover-missing-key-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M22,18V22H18V19H15V16H12L9.74,13.74C9.19,13.91 8.61,14 8,14A6,6 0 0,1 2,8A6,6 0 0,1 8,2A6,6 0 0,1 14,8C14,8.61 13.91,9.19 13.74,9.74L22,18M7,5A2,2 0 0,0 5,7A2,2 0 0,0 7,9A2,2 0 0,0 9,7A2,2 0 0,0 7,5Z"/></svg>
+            <h3 data-next-i18n="discover.missingKeyTitle">Discover needs a free TMDb API key</h3>
+            <p data-next-i18n="discover.missingKeyBody">Adding your free TMDb API key is recommended: it unlocks the Discover feed with popular, cinema, upcoming and top rated titles.</p>
+            <p class="discover-missing-key-detail hidden" id="discoverMissingKeyDetail"></p>
+            <button type="button" class="primary-button hidden" id="discoverMissingKeyButton" data-next-i18n="discover.missingKeyAction">Add API key</button>
           </div>
           <div class="discover-grid" id="discoverGrid"></div>
           <div class="discover-empty hidden" id="discoverEmpty" data-next-i18n="discover.empty">No items found.</div>
@@ -16561,8 +16664,11 @@ def ui_preview_html(
       totalPages: 1,
       hasMore: true,
       configured: true,
+      missingKeyMessage: "",
       kind: "movie",
-      mode: "popular",
+      mode: localStorage.getItem("dv_next_discover_mode") || "popular",
+      wishlistLoading: false,
+      wishlistLoadedAt: 0,
       observer: null
     };
     let activeDiscoverItem = null;
@@ -28133,10 +28239,15 @@ def ui_preview_html(
     function renderImportTabs() {
       const active = importCenter.activeTab || "add";
       document.querySelectorAll("[data-import-tab]").forEach((button) => {
-        button.classList.toggle("active", button.dataset.importTab === active);
+        const selected = button.dataset.importTab === active;
+        button.classList.toggle("active", selected);
+        button.setAttribute("aria-selected", selected ? "true" : "false");
+        button.tabIndex = selected ? 0 : -1;
       });
       document.querySelectorAll("[data-import-panel]").forEach((panel) => {
-        panel.classList.toggle("hidden", panel.dataset.importPanel !== active);
+        const selected = panel.dataset.importPanel === active;
+        panel.classList.toggle("hidden", !selected);
+        panel.setAttribute("aria-hidden", selected ? "false" : "true");
       });
     }
     function setImportMethodTab(method) {
@@ -28150,10 +28261,15 @@ def ui_preview_html(
     function renderImportMethodTabs() {
       const active = importCenter.activeMethod || "camera";
       document.querySelectorAll("[data-import-method]").forEach((button) => {
-        button.classList.toggle("active", button.dataset.importMethod === active);
+        const selected = button.dataset.importMethod === active;
+        button.classList.toggle("active", selected);
+        button.setAttribute("aria-selected", selected ? "true" : "false");
+        button.tabIndex = selected ? 0 : -1;
       });
       document.querySelectorAll("[data-import-method-panel]").forEach((panel) => {
-        panel.classList.toggle("hidden", panel.dataset.importMethodPanel !== active);
+        const selected = panel.dataset.importMethodPanel === active;
+        panel.classList.toggle("hidden", !selected);
+        panel.setAttribute("aria-hidden", selected ? "false" : "true");
       });
     }
     function boxSetBuilderState() {
@@ -33672,6 +33788,7 @@ def ui_preview_html(
             }
             const fetchedPrice = payload && typeof payload.fetchedPrice === "number" ? payload.fetchedPrice : null;
             const fetchedCurrency = String((payload && payload.fetchedCurrency) || currency || "EUR").toUpperCase();
+            const fetchedError = payload && payload.fetchedError ? String(payload.fetchedError) : "";
             shopEditor = null;
             if (fetchedPrice != null) {
               const messageTemplate = tNext(
@@ -33684,13 +33801,7 @@ def ui_preview_html(
                 .replace(/\s+\./g, ".");
               setMessage(priceMessage, "good");
             } else {
-              setMessage(
-                tNext(
-                  "lists.wishlistShopSavedNoPrice",
-                  "Shop saved, but no current price could be extracted."
-                ),
-                "bad"
-              );
+              setMessage(describeShopPriceFailure(fetchedError), "bad");
             }
             render();
           } catch (error) {
@@ -34121,6 +34232,47 @@ def ui_preview_html(
       const toRate = Number(rates[to]);
       if (!Number.isFinite(fromRate) || fromRate <= 0 || !Number.isFinite(toRate) || toRate <= 0) return null;
       return (numeric / fromRate) * toRate;
+    }
+    function describeShopPriceFailure(code) {
+      const raw = String(code || "").trim();
+      const key = raw.toLowerCase();
+      const generic = tNext(
+        "lists.wishlistShopSavedNoPrice",
+        "Shop saved, but no current price could be extracted."
+      );
+      if (!key || key === "no_price_found") return generic;
+      let message;
+      if (["dns_failed", "network_error", "timeout"].includes(key)) {
+        message = tNext(
+          "lists.wishlistShopSavedUnreachable",
+          "Shop saved, but the shop website could not be reached. Please try again later."
+        );
+      } else if (key === "blocked_amazon" || key === "url_blocked" || /block|captcha|challenge|robot/.test(key)) {
+        message = tNext(
+          "lists.wishlistShopSavedBlocked",
+          "Shop saved, but the shop blocked the automated price check."
+        );
+      } else if (
+        [
+          "content_decode_failed",
+          "content_encoding_unsupported",
+          "http_error",
+          "redirect_invalid",
+          "redirect_limit",
+          "redirect_loop",
+          "request_too_large",
+          "response_too_large",
+          "url_invalid",
+        ].includes(key)
+      ) {
+        message = tNext(
+          "lists.wishlistShopSavedPageError",
+          "Shop saved, but the price page could not be loaded. Please check the URL."
+        );
+      } else {
+        message = generic;
+      }
+      return `${message} (${raw})`;
     }
     function formatWishlistPrice(value, currency = "EUR") {
       const original = formatStatsPrice(value, currency);
@@ -34900,13 +35052,68 @@ def ui_preview_html(
         mediaType: normalizeDiscoverMediaType(entry?.tmdbMediaType ?? snapshot.tmdb_media_type ?? snapshot.tmdbMediaType)
       };
     }
-    function isDiscoverItemOnWishlist(item) {
+    function normalizeDiscoverTitleKey(value) {
+      return String(value || "")
+        .normalize("NFKD")
+        .replace(/[\\u0300-\\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+    }
+    function normalizeDiscoverYear(value) {
+      const year = Number.parseInt(String(value ?? "").slice(0, 4), 10);
+      return Number.isFinite(year) && year > 1800 ? year : null;
+    }
+    function discoverMatchesWishlistTitleYear(item, entry) {
+      const itemYear = normalizeDiscoverYear(item?.year ?? item?.releaseDate);
+      const entryYear = normalizeDiscoverYear(entry?.year);
+      if (!itemYear || !entryYear || itemYear !== entryYear) return false;
+      const itemTitle = normalizeDiscoverTitleKey(item?.title);
+      return !!itemTitle && itemTitle === normalizeDiscoverTitleKey(entry?.title);
+    }
+    function findDiscoverWishlistEntry(item) {
+      if (!item) return null;
+      const entries = listsState.wishlist || [];
+      if (!entries.length) return null;
       const {tmdbId, mediaType} = discoverIdentity(item);
-      if (!tmdbId) return false;
-      return (listsState.wishlist || []).some((entry) => {
-        const entryIdentity = wishlistEntryIdentity(entry);
-        return entryIdentity.tmdbId && entryIdentity.tmdbId === tmdbId && entryIdentity.mediaType === mediaType;
-      });
+      if (tmdbId) {
+        const byId = entries.find((entry) => {
+          const entryIdentity = wishlistEntryIdentity(entry);
+          return entryIdentity.tmdbId === tmdbId && entryIdentity.mediaType === mediaType;
+        });
+        if (byId) return byId;
+      }
+      // Entries added elsewhere (manual, import) carry no TMDb id, so fall back to title + year.
+      return entries.find((entry) => !wishlistEntryIdentity(entry).tmdbId && discoverMatchesWishlistTitleYear(item, entry)) || null;
+    }
+    function isDiscoverItemOnWishlist(item) {
+      return !!findDiscoverWishlistEntry(item);
+    }
+    function mergeWishlistEntryIntoState(entry) {
+      if (!entry || !entry.id) return;
+      const rows = listsState.wishlist || [];
+      if (rows.some((row) => String(row?.id) === String(entry.id))) return;
+      listsState.wishlist = [...rows, entry];
+    }
+    async function ensureDiscoverWishlistLoaded() {
+      if (!hasPermission("watchlist.manage")) return;
+      if (listsState.loaded || discoverState.wishlistLoading) return;
+      // Lists owns the wishlist once it has loaded; until then Discover keeps its own
+      // short-lived copy so the heart badge and the duplicate guard stay reliable.
+      const lastLoad = discoverState.wishlistLoadedAt || 0;
+      if (lastLoad && Date.now() - lastLoad < 60000) return;
+      discoverState.wishlistLoading = true;
+      try {
+        const payload = await authApiJson("/api/next/lists/wishlist");
+        listsState.wishlist = payload.items || [];
+        discoverState.wishlistLoadedAt = Date.now();
+        renderDiscoverView();
+        updateDiscoverWishlistButtonState(activeDiscoverItem);
+      } catch (error) {
+        /* the badge is an enhancement; a failed preload must not break Discover */
+      } finally {
+        discoverState.wishlistLoading = false;
+      }
     }
     function updateDiscoverWishlistButtonState(item = activeDiscoverItem) {
       const button = document.getElementById("discoverDetailWishlistButton");
@@ -34922,18 +35129,97 @@ def ui_preview_html(
     function discoverCardHtml(item) {
       const poster = usableImage(item.posterUrl || "");
       const title = item.title || tNext("common.untitled", "Untitled");
+      const onWishlist = isDiscoverItemOnWishlist(item);
+      const wishlistLabel = tNext("lists.wishlistSectionPending", "On wishlist");
+      const badge = onWishlist
+        ? `<span class="discover-wish-badge" title="${escapeHtml(wishlistLabel)}" aria-label="${escapeHtml(wishlistLabel)}" role="img"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z"/></svg></span>`
+        : "";
       return `
-        <button type="button" class="discover-card" data-discover-id="${escapeHtml(item.id || "")}">
-          <span class="discover-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : escapeHtml(tNext("collection.noPoster", "No poster"))}</span>
+        <button type="button" class="discover-card${onWishlist ? " on-wishlist" : ""}" data-discover-id="${escapeHtml(item.id || "")}">
+          <span class="discover-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : escapeHtml(tNext("collection.noPoster", "No poster"))}${badge}</span>
           <span class="discover-title">${escapeHtml(title)}</span>
         </button>
       `;
+    }
+    const DISCOVER_MODES = ["popular", "now_playing", "upcoming", "top_rated"];
+    const DISCOVER_MODE_I18N = {
+      popular: {label: ["discover.categoryPopular", "Popular"], subtitle: ["discover.subtitlePopular", "The most popular movies on TMDb right now."]},
+      now_playing: {label: ["discover.categoryNowPlaying", "Now in cinemas"], subtitle: ["discover.subtitleNowPlaying", "Movies currently playing in cinemas."]},
+      upcoming: {label: ["discover.categoryUpcoming", "Upcoming"], subtitle: ["discover.subtitleUpcoming", "Movies arriving in cinemas soon."]},
+      top_rated: {label: ["discover.categoryTopRated", "Top rated"], subtitle: ["discover.subtitleTopRated", "The highest rated movies on TMDb."]}
+    };
+    function normalizeDiscoverMode(value) {
+      const text = String(value || "").trim().toLowerCase().replace(/[\\s-]+/g, "_");
+      if (text === "nowplaying") return "now_playing";
+      if (text === "toprated") return "top_rated";
+      return DISCOVER_MODES.includes(text) ? text : "popular";
+    }
+    function renderDiscoverCategories() {
+      const mode = normalizeDiscoverMode(discoverState.mode);
+      document.querySelectorAll("[data-discover-mode]").forEach((button) => {
+        const isActive = normalizeDiscoverMode(button.dataset.discoverMode) === mode;
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-selected", isActive ? "true" : "false");
+      });
+      const subtitle = document.getElementById("discoverSubtitle");
+      if (subtitle) {
+        const [key, fallback] = (DISCOVER_MODE_I18N[mode] || DISCOVER_MODE_I18N.popular).subtitle;
+        subtitle.dataset.nextI18n = key;
+        subtitle.textContent = tNext(key, fallback);
+      }
+      const categories = document.getElementById("discoverCategories");
+      if (categories) categories.classList.toggle("hidden", !discoverState.configured);
+    }
+    function renderDiscoverMissingKey() {
+      const panel = document.getElementById("discoverMissingKey");
+      if (!panel) return;
+      const missing = !discoverState.configured;
+      panel.classList.toggle("hidden", !missing);
+      const detail = document.getElementById("discoverMissingKeyDetail");
+      if (detail) {
+        detail.textContent = missing ? (discoverState.missingKeyMessage || "") : "";
+        detail.classList.toggle("hidden", !missing || !discoverState.missingKeyMessage);
+      }
+      const button = document.getElementById("discoverMissingKeyButton");
+      if (button) {
+        const canOpenPlugins = typeof canUseAdminTab === "function" ? canUseAdminTab("plugins") : false;
+        button.classList.toggle("hidden", !missing || !canOpenPlugins);
+      }
+    }
+    function setDiscoverMode(mode) {
+      const next = normalizeDiscoverMode(mode);
+      if (next === normalizeDiscoverMode(discoverState.mode)) return;
+      discoverState.mode = next;
+      try {
+        localStorage.setItem("dv_next_discover_mode", next);
+      } catch (error) {
+        /* storage can be unavailable in private mode */
+      }
+      renderDiscoverCategories();
+      loadDiscoverPage(true);
+    }
+    function bindDiscoverCategories() {
+      document.querySelectorAll("[data-discover-mode]").forEach((button) => {
+        if (button.dataset.discoverBound === "1") return;
+        button.dataset.discoverBound = "1";
+        button.addEventListener("click", () => setDiscoverMode(button.dataset.discoverMode));
+      });
+      const missingKeyButton = document.getElementById("discoverMissingKeyButton");
+      if (missingKeyButton && missingKeyButton.dataset.discoverBound !== "1") {
+        missingKeyButton.dataset.discoverBound = "1";
+        missingKeyButton.addEventListener("click", () => {
+          showAdminPage();
+          setAppAdminTab("plugins");
+        });
+      }
     }
     function renderDiscoverView() {
       const grid = document.getElementById("discoverGrid");
       const empty = document.getElementById("discoverEmpty");
       const loading = document.getElementById("discoverLoading");
       if (!grid || !empty || !loading) return;
+      renderDiscoverCategories();
+      renderDiscoverMissingKey();
       grid.innerHTML = (discoverState.items || []).map((item) => discoverCardHtml(item)).join("");
       empty.classList.toggle("hidden", !!(discoverState.items || []).length || discoverState.loading || !discoverState.configured);
       loading.classList.toggle("hidden", !discoverState.loading);
@@ -34956,8 +35242,9 @@ def ui_preview_html(
           label: alreadyOnWishlist
             ? tNext("lists.wishlistSectionPending", "On wishlist")
             : tNext("discover.addWishlist", "Add to wishlist"),
-          icon: "\u2665",
+          icon: alreadyOnWishlist ? "\\u2713" : "\\u2665",
           iconClass: "wishlist",
+          disabled: alreadyOnWishlist,
           run: () => {
             if (!alreadyOnWishlist) addDiscoverItemToWishlist(item);
           }
@@ -34965,7 +35252,7 @@ def ui_preview_html(
       }
       const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
       const buttonsHtml = actions.map((action, index) =>
-        `<button type="button" class="lists-actionsheet-btn" data-action-index="${index}"><span class="lists-actionsheet-btn-icon ${escapeHtml(action.iconClass || "")}" aria-hidden="true">${escapeHtml(action.icon || "")}</span><span class="lists-actionsheet-btn-label">${escapeHtml(action.label)}</span></button>`
+        `<button type="button" class="lists-actionsheet-btn" data-action-index="${index}"${action.disabled ? " disabled" : ""}><span class="lists-actionsheet-btn-icon ${escapeHtml(action.iconClass || "")}" aria-hidden="true">${escapeHtml(action.icon || "")}</span><span class="lists-actionsheet-btn-label">${escapeHtml(action.label)}</span></button>`
       ).join("");
       panel.innerHTML = `
         <header class="lists-modal-head"><h3>${escapeHtml(item.title || tNext("common.untitled", "Untitled"))}</h3></header>
@@ -34989,6 +35276,7 @@ def ui_preview_html(
       if (isDiscoverItemOnWishlist(item)) {
         if (inDetail) setDiscoverDetailMessage(tNext("lists.wishlistSectionPending", "On wishlist"), "good");
         else setDiscoverMessage(tNext("lists.wishlistSectionPending", "On wishlist"));
+        renderDiscoverView();
         updateDiscoverWishlistButtonState(item);
         return;
       }
@@ -35006,6 +35294,7 @@ def ui_preview_html(
             source: "discover"
           })
         });
+        mergeWishlistEntryIntoState(payload && payload.entry);
         await loadListsView(true);
         const alreadyExists = !!(payload && (payload.alreadyExists || payload.state === "already_exists"));
         if (inDetail) {
@@ -35022,6 +35311,7 @@ def ui_preview_html(
               : tNext("lists.wishlistAdded", "Added to wishlist.")
           );
         }
+        renderDiscoverView();
         updateDiscoverWishlistButtonState(item);
       } catch (error) {
         if (inDetail) setDiscoverDetailMessage(error.message || String(error), "bad");
@@ -35040,6 +35330,7 @@ def ui_preview_html(
       discoverState.loading = true;
       renderDiscoverView();
       const nextPage = discoverState.page + 1;
+      discoverState.mode = normalizeDiscoverMode(discoverState.mode);
       try {
         const payload = await authApiJson(`/api/next/discover?page=${nextPage}&kind=${encodeURIComponent(discoverState.kind)}&mode=${encodeURIComponent(discoverState.mode)}&locale=${encodeURIComponent(localeState.locale)}`);
         discoverState.configured = payload.configured !== false;
@@ -35048,12 +35339,11 @@ def ui_preview_html(
           discoverState.page = 1;
           discoverState.totalPages = 1;
           discoverState.hasMore = false;
-          setDiscoverMessage(
-            payload.message || tNext("discover.tmdbMissing", "TMDb API key is missing. Open Plugins and add your free TMDb key."),
-            "error"
-          );
+          discoverState.missingKeyMessage = payload.message || tNext("discover.tmdbMissing", "TMDb API key is missing. Open Plugins and add your free TMDb key.");
+          setDiscoverMessage("");
         } else {
           setDiscoverMessage("");
+          discoverState.missingKeyMessage = "";
           discoverState.page = Number(payload.page || nextPage);
           discoverState.totalPages = Number(payload.totalPages || 1);
           discoverState.hasMore = !!payload.hasMore;
@@ -35252,7 +35542,9 @@ def ui_preview_html(
       document.getElementById("discoverDetailPage")?.classList.add("hidden");
       document.getElementById("discoverView")?.classList.remove("hidden");
       setActiveAppRoute("discover");
+      bindDiscoverCategories();
       ensureDiscoverObserver();
+      ensureDiscoverWishlistLoaded();
       if (!discoverState.loaded) {
         loadDiscoverPage(true);
       } else {

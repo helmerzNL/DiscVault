@@ -46,6 +46,7 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_price_provider_detection import extract_amazon_asin as _extract_amazon_asin
     from .next_public_http import PUBLIC_HTTP_FAILURE_CODES
+    from .next_public_http import DEFAULT_BROWSER_USER_AGENT
     from .next_public_http import PublicHttpError
     from .next_public_http import fetch_public_text
     from .next_public_http import public_url_hostname
@@ -56,6 +57,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import run_plugin_entrypoint
     from next_price_provider_detection import extract_amazon_asin as _extract_amazon_asin
     from next_public_http import PUBLIC_HTTP_FAILURE_CODES
+    from next_public_http import DEFAULT_BROWSER_USER_AGENT
     from next_public_http import PublicHttpError
     from next_public_http import fetch_public_text
     from next_public_http import public_url_hostname
@@ -103,11 +105,7 @@ _AMAZON_PRICE_PATTERNS: tuple[str, ...] = (
     r'class=["\'][^"\']*a-price-fraction[^"\']*["\'][^>]*>\s*(\d+)',
 )
 
-_BROWSER_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
+_BROWSER_USER_AGENT = DEFAULT_BROWSER_USER_AGENT
 
 logger = logging.getLogger(__name__)
 
@@ -119,28 +117,21 @@ logger = logging.getLogger(__name__)
 def _fetch_html(url: str, *, session: Any = None, browser_like: bool = False) -> str:
     """Return the raw HTML of *url* through the public-network transport.
 
-    When *browser_like* is True (used for sites with bot-detection), the
-    request mimics a real Chrome browser as closely as possible over plain
-    HTTP.
+    When *browser_like* is True (used for sites with bot-detection) a small
+    set of realistic headers is sent.  Deliberately minimal: an
+    over-specified header set (``Sec-Fetch-*``, ``Upgrade-Insecure-Requests``,
+    ``DNT``, ``Cache-Control``) combined with the transport's fixed
+    ``Connection: close`` is not a combination any real browser produces, and
+    Amazon serves its "automated access to Amazon data" wall in response.  The
+    header set below matches the price-provider plugins, which fetch the same
+    pages reliably.
     """
     _ = session
     if browser_like:
         headers = {
             "User-Agent": _BROWSER_USER_AGENT,
-            "Accept": (
-                "text/html,application/xhtml+xml,application/xml;"
-                "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
-            ),
-            "Accept-Language": "nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Accept-Language": "nl-NL,nl;q=0.9,en-GB;q=0.8,en;q=0.7",
             "Accept-Encoding": "gzip, deflate",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-            "Cache-Control": "max-age=0",
-            "DNT": "1",
         }
     else:
         headers = {
@@ -150,10 +141,52 @@ def _fetch_html(url: str, *, session: Any = None, browser_like: bool = False) ->
     return fetch_public_text(url, headers=headers, timeout_seconds=_FETCH_TIMEOUT)
 
 
+# A genuine Amazon challenge/robot page is a small, standalone document.  A
+# full product page is an order of magnitude larger and merely *mentions* the
+# API-contact sentence in its footer, so size guards against false positives.
+_AMAZON_BLOCK_MAX_BYTES = 120_000
+
+
 def _is_amazon_bot_blocked(html: str) -> bool:
     """Return True when Amazon returned a bot/CAPTCHA challenge page."""
+    if len(html) > _AMAZON_BLOCK_MAX_BYTES:
+        # Real product pages carry the same boilerplate sentence in the
+        # footer; only a compact document is an actual challenge page.
+        return False
     lower = html.lower()
-    return any(sig in lower for sig in _AMAZON_BOT_SIGNATURES)
+    return any(sig.lower() in lower for sig in _AMAZON_BOT_SIGNATURES)
+
+
+def _schema_org_price_from_node(node: Any) -> tuple[float | None, str | None]:
+    """Depth-first search for a usable ``price``/``priceCurrency`` pair.
+
+    Shops nest their offer arbitrarily deep: bol.com puts it under a
+    ``Movie``'s ``workExample``, others use ``@graph`` or a list of offers.
+    Only inspecting the top-level ``offers`` key silently misses all of those,
+    so the whole document is walked instead.
+    """
+    stack: list[Any] = [node]
+    seen = 0
+    while stack and seen < 10_000:
+        current = stack.pop()
+        seen += 1
+        if isinstance(current, dict):
+            price = _coerce_price(current.get("price") or current.get("Price"))
+            if price is not None:
+                currency = str(
+                    current.get("priceCurrency") or current.get("PriceCurrency") or ""
+                ).strip().upper() or None
+                return price, currency
+            # Offers first so the nearest offer wins over unrelated numbers.
+            offers = current.get("offers") or current.get("Offers")
+            if isinstance(offers, (dict, list)):
+                stack.append(offers)
+            for value in current.values():
+                if isinstance(value, (dict, list)):
+                    stack.append(value)
+        elif isinstance(current, list):
+            stack.extend(item for item in current if isinstance(item, (dict, list)))
+    return None, None
 
 
 def _extract_from_schema_org(html: str) -> tuple[float | None, str | None]:
@@ -164,26 +197,13 @@ def _extract_from_schema_org(html: str) -> tuple[float | None, str | None]:
         re.DOTALL | re.IGNORECASE,
     ):
         try:
-            data = json.loads(match.group(1))
-        except json.JSONDecodeError:
+            data = json.loads(match.group(1).strip())
+        except (json.JSONDecodeError, TypeError, ValueError):
             continue
 
-        candidates = data if isinstance(data, list) else [data]
-        for item in candidates:
-            if not isinstance(item, dict):
-                continue
-            offers = item.get("offers") or item.get("Offers")
-            if not offers:
-                continue
-            offer_list = offers if isinstance(offers, list) else [offers]
-            for offer in offer_list:
-                if not isinstance(offer, dict):
-                    continue
-                price_raw = offer.get("price") or offer.get("Price")
-                currency = str(offer.get("priceCurrency") or offer.get("PriceCurrency") or "").strip().upper() or None
-                price = _coerce_price(price_raw)
-                if price is not None:
-                    return price, currency
+        price, currency = _schema_org_price_from_node(data)
+        if price is not None:
+            return price, currency
     return None, None
 
 
@@ -388,10 +408,16 @@ def _extract_price_from_domain_preset(url: str, html: str) -> tuple[float | None
     if any(keyword in host for keyword in _PRESET_DOMAIN_KEYWORDS["bol_com"]):
         text = _extract_text_by_regex_capture(
             html,
-            r'(?:data-test=["\']price["\'][^>]*>\s*([^<]+)\s*<|class=["\'][^"\']*promo-price[^"\']*["\'][^>]*>\s*([^<]+)\s*<)',
+            # Current bol.com markup exposes the price via data-test hooks and
+            # a split whole/fraction rendering; the legacy promo-price class is
+            # kept as a fallback for cached/older pages.
+            r'(?:data-test=["\'](?:price|price-current|sales-price)["\'][^>]*>\s*([^<]+?)\s*<'
+            r'|class=["\'][^"\']*promo-price[^"\']*["\'][^>]*>\s*([^<]+?)\s*<)',
         )
         if text:
-            return _coerce_price(text), _currency_from_text(text, "EUR"), "preset"
+            price = _coerce_price(text)
+            if price is not None:
+                return price, _currency_from_text(text, "EUR"), "preset"
 
     return None, None, None
 
@@ -416,11 +442,11 @@ def extract_price_from_url_with_source(
     4. Open Graph ``product:price:amount`` / ``product:price:currency`` meta
     5. Regex heuristic near ``price``-labelled HTML elements
 
-    For Amazon URLs the fetch uses realistic browser headers (Chrome UA +
-    full Accept/Sec-Fetch headers) to avoid bot-detection.  If Amazon
-    returns a CAPTCHA/robot-check page the extraction source is set to
-    ``"blocked_amazon"`` and ``(None, None, "blocked_amazon")`` is returned
-    so callers can surface a clear diagnostic message.
+    For Amazon URLs the fetch uses realistic browser headers to avoid
+    bot-detection.  If Amazon returns a CAPTCHA/robot-check page the remaining
+    extraction strategies are still attempted; only when none of them yields a
+    price is the extraction source reported as ``"blocked_amazon"`` so callers
+    can surface a clear diagnostic message.
     """
     host = (urlparse(url).netloc or "").casefold()
     is_amazon = any(keyword in host for keyword in _PRESET_DOMAIN_KEYWORDS["amazon"])
@@ -435,10 +461,8 @@ def extract_price_from_url_with_source(
     fallback_currency = str((selector_options or {}).get("currency") or "EUR").strip().upper() or "EUR"
 
     price, currency, source = _extract_price_from_domain_preset(url, html)
-    if source == "blocked_amazon":
-        # Propagate the block signal without a price so callers know why.
-        return None, None, "blocked_amazon"
-    if price is not None:
+    blocked = source == "blocked_amazon"
+    if price is not None and not blocked:
         return price, (currency or fallback_currency), (source or "preset")
 
     price, currency = _extract_price_from_profile(
@@ -452,16 +476,19 @@ def extract_price_from_url_with_source(
 
     price, currency = _extract_from_schema_org(html)
     if price is not None:
-        return price, currency, "schema_org"
+        return price, currency or fallback_currency, "schema_org"
 
     price, currency = _extract_from_og_meta(html)
     if price is not None:
-        return price, currency, "og"
+        return price, currency or fallback_currency, "og"
 
     price, currency = _extract_via_regex(html)
     if price is not None:
-        return price, currency, "regex"
-    return None, None, None
+        return price, currency or fallback_currency, "regex"
+
+    # Nothing worked. Report the block as the reason when we saw one, so the
+    # user gets "Amazon blocked us" instead of a generic "no price found".
+    return None, None, "blocked_amazon" if blocked else None
 
 
 def extract_price_from_url(url: str, *, session: Any = None) -> tuple[float | None, str | None]:
