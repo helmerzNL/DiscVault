@@ -36770,7 +36770,7 @@ def ui_preview_html(
         });
         return result;
       },
-      authHeaders: () => authHeaders(),
+      authHeaders: (extra) => authHeaders(extra),
       getExportColumnLabels: () => ({
         title: tNext("collection.titleColumn", "Title"),
         year: tNext("collection.yearColumn", "Year"),
@@ -36788,14 +36788,21 @@ def ui_preview_html(
         const items = sortLibraryListItems(libraryDisplayItems(), sortState);
         const seen = new Set();
         const rows = [];
+        const failed = [];
         items.forEach((item) => {
           itemMovieRows(item).forEach((movie) => {
             const id = String(movie?.id || "");
             if (!id || seen.has(id)) return;
             seen.add(id);
-            rows.push(libraryExportRow(movie));
+            try {
+              rows.push(libraryExportRow(movie));
+            } catch (error) {
+              failed.push(id);
+              console.error("DiscVault export: skipped movie", id, error);
+            }
           });
         });
+        if (failed.length) console.warn("DiscVault export: " + failed.length + " movie(s) could not be exported.");
         return rows;
       },
       onRender: null,
