@@ -25,8 +25,10 @@ from app.backend.next_auth import (
     _rp_origins,
 )
 from app.backend.next_legacy_auth import (
+    FLOW_TTL_SECONDS,
     PASSWORD_MIN_LENGTH,
     PasswordPolicyError,
+    RECOVERY_ACK_FLOW_TTL_SECONDS,
     attempt_is_throttled,
     constant_time_text_equal,
     decrypt_totp_secret,
@@ -455,6 +457,48 @@ class LegacyAuthContractTests(unittest.TestCase):
         complete_login = ack_body.index("return legacy_complete_login(")
         self.assertLess(profile_ack, complete_login)
         self.assertIn('return response({"status": "ok", "stage": "complete"})', ack_body)
+
+    def test_recovery_code_acknowledgement_gets_a_user_paced_flow_ttl(self):
+        self.assertGreater(RECOVERY_ACK_FLOW_TTL_SECONDS, FLOW_TTL_SECONDS)
+        self.assertEqual(RECOVERY_ACK_FLOW_TTL_SECONDS, 30 * 60)
+        # Bootstrap owner, profile MFA enrollment and the resumed bootstrap all
+        # wait on a human writing codes down, so all three widen the window.
+        self.assertGreaterEqual(
+            self.auth_source.count("seconds=RECOVERY_ACK_FLOW_TTL_SECONDS,"), 3
+        )
+
+    def test_pending_bootstrap_login_resumes_instead_of_reporting_bad_password(self):
+        self.assertIn("def resume_legacy_bootstrap(", self.auth_source)
+        resume_start = self.auth_source.index("def resume_legacy_bootstrap(")
+        resume_body = self.auth_source[resume_start : resume_start + 2500]
+        self.assertIn("next_replace_recovery_codes(cur, user_id, recovery_codes)", resume_body)
+        self.assertIn('"bootstrap_recovery_ack"', resume_body)
+        self.assertIn('event_type="auth.legacy_bootstrap_resumed"', resume_body)
+        self.assertIn('"stage": "recovery_codes"', resume_body)
+
+        login_start = self.auth_source.index("def legacy_login():")
+        login_body = self.auth_source[login_start : login_start + 8000]
+        verification = login_body.index(
+            'verification = verify_password(credential["password_hash"], password)'
+        )
+        resume_branch = login_body.index("return resume_legacy_bootstrap(")
+        self.assertIn(
+            'credential.get("status") == LEGACY_BOOTSTRAP_PENDING_STATUS', login_body
+        )
+        self.assertIn(
+            "credentials_ok = verification.valid and not expired and not locked",
+            login_body,
+        )
+        # The resume path must never become an account-status oracle: it only
+        # runs once the password verified, and still precedes the generic 401.
+        self.assertLess(verification, resume_branch)
+        self.assertLess(
+            resume_branch, login_body.index("Invalid username or password", resume_branch)
+        )
+        self.assertIn(
+            "record_legacy_attempt(conn, identity_hash, ip_hash, succeeded=True)",
+            login_body[verification:resume_branch],
+        )
 
     def test_disabling_legacy_requires_an_active_owner_passkey(self):
         settings_start = self.auth_source.index("def legacy_settings():")

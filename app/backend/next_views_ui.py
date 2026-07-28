@@ -34998,6 +34998,27 @@ def ui_preview_html(
         setPushProfileMessage(error.message || String(error), "bad");
       }
     }
+    const APP_VIEW_SURFACE_IDS = [
+      "libraryView",
+      "listsView",
+      "peopleView",
+      "statisticsView",
+      "notificationsView",
+      "importView",
+      "discoverView",
+      "profileView",
+      "adminView",
+      "movieDetailPage",
+      "containerDetailPage",
+      "personDetailPage",
+      "locationDetailPage",
+      "discoverDetailPage",
+    ];
+    function showAppSurface(activeId) {
+      APP_VIEW_SURFACE_IDS.forEach((id) => {
+        document.getElementById(id)?.classList.toggle("hidden", id !== activeId);
+      });
+    }
     function setActiveAppRoute(route) {
       if (route !== "import" && importScanner.running) {
         stopImportBarcodeScanner();
@@ -35422,19 +35443,7 @@ def ui_preview_html(
       return "";
     }
     function showDiscoverDetailPage() {
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.remove("hidden");
+      showAppSurface("discoverDetailPage");
       setActiveAppRoute("discover");
       scrollPreviewTop();
     }
@@ -35526,21 +35535,7 @@ def ui_preview_html(
       }
     }
     function showDiscoverPage(pushUrl = true) {
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.remove("hidden");
+      showAppSurface("discoverView");
       setActiveAppRoute("discover");
       bindDiscoverCategories();
       ensureDiscoverObserver();
@@ -35556,53 +35551,17 @@ def ui_preview_html(
       scrollPreviewTop();
     }
     function showMovieDetailPage() {
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.remove("hidden");
+      showAppSurface("movieDetailPage");
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
     function showContainerDetailPage() {
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.remove("hidden");
+      showAppSurface("containerDetailPage");
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
     function showPersonDetailPage() {
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.remove("hidden");
+      showAppSurface("personDetailPage");
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
@@ -35612,37 +35571,13 @@ def ui_preview_html(
       activeLocationRouteMissing = false;
     }
     function showLocationDetailPage() {
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.remove("hidden");
+      showAppSurface("locationDetailPage");
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
     function showLibraryPage(pushUrl = false, activeRoute = "library") {
       clearLocationRouteContext();
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("libraryView")?.classList.remove("hidden");
+      showAppSurface("libraryView");
       setActiveAppRoute(activeRoute);
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
@@ -35651,16 +35586,7 @@ def ui_preview_html(
     function showPeoplePage(pushUrl = true) {
       showLibraryPage(pushUrl);
       return;
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.remove("hidden");
+      showAppSurface("peopleView");
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
@@ -35680,19 +35606,7 @@ def ui_preview_html(
         showLibraryPage(pushUrl);
         return;
       }
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.remove("hidden");
+      showAppSurface("listsView");
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
@@ -35712,20 +35626,7 @@ def ui_preview_html(
         showLibraryPage(pushUrl);
         return;
       }
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("statisticsView")?.classList.remove("hidden");
+      showAppSurface("statisticsView");
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
@@ -35740,19 +35641,7 @@ def ui_preview_html(
       scrollPreviewTop();
     }
     function showNotificationsPage(pushUrl = true) {
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.remove("hidden");
+      showAppSurface("notificationsView");
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
@@ -35768,19 +35657,7 @@ def ui_preview_html(
       scrollPreviewTop();
     }
     function showProfilePage(pushUrl = true) {
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.remove("hidden");
+      showAppSurface("profileView");
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
@@ -35801,19 +35678,7 @@ def ui_preview_html(
         showLibraryPage(pushUrl);
         return;
       }
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("discoverView")?.classList.add("hidden");
-      document.getElementById("discoverDetailPage")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.remove("hidden");
+      showAppSurface("adminView");
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
@@ -35833,17 +35698,7 @@ def ui_preview_html(
         showLibraryPage(pushUrl);
         return;
       }
-      document.getElementById("libraryView")?.classList.add("hidden");
-      document.getElementById("listsView")?.classList.add("hidden");
-      document.getElementById("peopleView")?.classList.add("hidden");
-      document.getElementById("notificationsView")?.classList.add("hidden");
-      document.getElementById("movieDetailPage")?.classList.add("hidden");
-      document.getElementById("containerDetailPage")?.classList.add("hidden");
-      document.getElementById("personDetailPage")?.classList.add("hidden");
-      document.getElementById("locationDetailPage")?.classList.add("hidden");
-      document.getElementById("profileView")?.classList.add("hidden");
-      document.getElementById("adminView")?.classList.add("hidden");
-      document.getElementById("importView")?.classList.remove("hidden");
+      showAppSurface("importView");
       activeDetailMovieId = "";
       activeDetailPayload = null;
       activeContainerId = "";
