@@ -74,7 +74,14 @@
     if (api && typeof api.authHeaders === "function") {
       try {
         var merged = api.authHeaders(headers);
-        if (merged) return merged;
+        if (merged) {
+          // A bridge that ignores the argument would drop Content-Type, which makes Flask
+          // read an empty payload. Re-apply our own headers so that can never happen.
+          for (key in headers) {
+            if (Object.prototype.hasOwnProperty.call(headers, key)) merged[key] = headers[key];
+          }
+          return merged;
+        }
       } catch (error) {
         /* fall back to the default headers */
       }
@@ -129,11 +136,16 @@
   function exportRows() {
     var api = bridge();
     if (!api || typeof api.getExportRows !== "function") return [];
+    var rows = api.getExportRows();
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  function exportRowCount() {
     try {
-      var rows = api.getExportRows();
-      return Array.isArray(rows) ? rows : [];
+      return exportRows().length;
     } catch (error) {
-      return [];
+      console.error("DiscVault export: collecting the rows failed", error);
+      return 0;
     }
   }
 
@@ -204,7 +216,14 @@
   }
 
   function runExport(options) {
-    var rows = exportRows();
+    var rows;
+    try {
+      rows = exportRows();
+    } catch (error) {
+      console.error("DiscVault export: collecting the rows failed", error);
+      options.onError(translate("collection.exportFailed", "The export could not be created."));
+      return;
+    }
     if (!rows.length) {
       options.onError(translate("collection.exportEmpty", "There is nothing to export."));
       return;
@@ -276,7 +295,7 @@
     heading.textContent = translate("collection.exportTitle", "Export library");
     dialog.appendChild(heading);
 
-    var rowCount = exportRows().length;
+    var rowCount = exportRowCount();
     var summary = document.createElement("p");
     summary.className = "library-export-summary";
     summary.textContent = formatCount(

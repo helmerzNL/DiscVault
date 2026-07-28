@@ -255,7 +255,7 @@ def register_next_export_routes(flask_app: Flask, *, connect) -> None:  # pragma
             user = app.next_auth_current_user(conn) if auth_enabled else None
             if auth_enabled and not user:
                 raise NextApiError("Authentication required", 401)
-        body, filename, mimetype = build_export(request.get_json(silent=True) or {})
+        body, filename, mimetype = build_export(request.get_json(silent=True, force=True) or {})
         result = flask_app.response_class(body, mimetype=mimetype)
         result.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         result.headers["Content-Length"] = str(len(body))

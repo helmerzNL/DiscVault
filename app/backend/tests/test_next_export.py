@@ -342,5 +342,77 @@ class ExportWiringTests(unittest.TestCase):
                 self.assertIn("{count}", messages[key], f"{name}:{key} lost its placeholder")
 
 
+class ExportRequestParsingTests(unittest.TestCase):
+    """The POST body must be read even when the browser omits the JSON content type."""
+
+    def setUp(self):
+        from contextlib import contextmanager
+        from types import SimpleNamespace
+
+        from flask import Flask
+
+        @contextmanager
+        def connect():
+            yield object()
+
+        self._original_next_app = next_export._next_app
+        next_export._next_app = lambda: SimpleNamespace(
+            next_auth_effective_enabled=lambda conn, table_exists: False,
+            next_auth_current_user=lambda conn: None,
+        )
+        flask_app = Flask(__name__)
+        next_export.register_next_export_routes(flask_app, connect=connect)
+        self.client = flask_app.test_client()
+        self.payload = {
+            "format": "csv",
+            "columns": ["title", "barcode"],
+            "rows": [{"title": "Alien", "barcode": "5051888123456"}],
+        }
+
+    def tearDown(self):
+        next_export._next_app = self._original_next_app
+
+    def test_export_succeeds_without_a_json_content_type(self):
+        response = self.client.post(
+            "/api/next/collection/export",
+            data=json.dumps(self.payload),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Alien", response.get_data(as_text=True))
+
+    def test_export_succeeds_with_a_json_content_type(self):
+        response = self.client.post(
+            "/api/next/collection/export",
+            data=json.dumps(self.payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("5051888123456", response.get_data(as_text=True))
+
+
+class ExportHeaderForwardingTests(unittest.TestCase):
+    """Regression guard for the bridge dropping the caller's request headers."""
+
+    @classmethod
+    def setUpClass(cls):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            cls.app_source = handle.read()
+        with open(LIBRARY_EXPORT_JS_PATH, encoding="utf-8") as handle:
+            cls.export_js = handle.read()
+
+    def test_bridge_forwards_extra_headers_to_auth_headers(self):
+        self.assertIn("authHeaders: (extra) => authHeaders(extra),", self.app_source)
+        self.assertNotIn("authHeaders: () => authHeaders(),", self.app_source)
+
+    def test_frontend_reapplies_its_own_headers_after_the_bridge_call(self):
+        start = self.export_js.index("function requestHeaders(")
+        end = self.export_js.index("\n  function ", start + 1)
+        body = self.export_js[start:end]
+        self.assertIn("merged[key] = headers[key]", body)
+
+    def test_frontend_sends_the_json_content_type(self):
+        self.assertIn('"Content-Type": "application/json"', self.export_js)
+
+
 if __name__ == "__main__":
     unittest.main()
