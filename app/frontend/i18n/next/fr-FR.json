@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} tâches de plugin en échec",
   "appAdmin.pluginAttentionUpdates": "{count} mises à jour de plugin disponibles",
   "collection.loadingMoreRows": "Chargement…",
-  "collection.hydrationFailed": "Impossible de charger le reste de la bibliothèque."
+  "collection.hydrationFailed": "Impossible de charger le reste de la bibliothèque.",
+  "collection.exportLibrary": "Exporter",
+  "collection.exportTitle": "Exporter la bibliothèque",
+  "collection.exportSummary": "{count} films seront exportés.",
+  "collection.exportFormat": "Format de fichier",
+  "collection.exportColumns": "Colonnes",
+  "collection.exportDownload": "Exporter",
+  "collection.exportNoColumns": "Sélectionnez au moins une colonne.",
+  "collection.exportEmpty": "Il n'y a rien à exporter.",
+  "collection.exportFailed": "L'export n'a pas pu être créé.",
+  "collection.exportRowCount": "{count} films",
+  "collection.exportDocumentTitle": "Bibliothèque DiscVault"
 }

@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} mislukte plugintaken",
   "appAdmin.pluginAttentionUpdates": "{count} plugin-updates beschikbaar",
   "collection.loadingMoreRows": "Meer laden…",
-  "collection.hydrationFailed": "De rest van de bibliotheek kon niet worden geladen."
+  "collection.hydrationFailed": "De rest van de bibliotheek kon niet worden geladen.",
+  "collection.exportLibrary": "Exporteren",
+  "collection.exportTitle": "Bibliotheek exporteren",
+  "collection.exportSummary": "{count} films worden geëxporteerd.",
+  "collection.exportFormat": "Bestandsformaat",
+  "collection.exportColumns": "Kolommen",
+  "collection.exportDownload": "Exporteren",
+  "collection.exportNoColumns": "Selecteer minstens één kolom.",
+  "collection.exportEmpty": "Er is niets om te exporteren.",
+  "collection.exportFailed": "De export kon niet worden gemaakt.",
+  "collection.exportRowCount": "{count} films",
+  "collection.exportDocumentTitle": "DiscVault-bibliotheek"
 }

@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} başarısız eklenti işi",
   "appAdmin.pluginAttentionUpdates": "{count} eklenti güncellemesi mevcut",
   "collection.loadingMoreRows": "Daha fazlası yükleniyor…",
-  "collection.hydrationFailed": "Kitaplığın geri kalanı yüklenemedi."
+  "collection.hydrationFailed": "Kitaplığın geri kalanı yüklenemedi.",
+  "collection.exportLibrary": "Dışa aktar",
+  "collection.exportTitle": "Kitaplığı dışa aktar",
+  "collection.exportSummary": "{count} film dışa aktarılacak.",
+  "collection.exportFormat": "Dosya biçimi",
+  "collection.exportColumns": "Sütunlar",
+  "collection.exportDownload": "Dışa aktar",
+  "collection.exportNoColumns": "En az bir sütun seçin.",
+  "collection.exportEmpty": "Dışa aktarılacak bir şey yok.",
+  "collection.exportFailed": "Dışa aktarma oluşturulamadı.",
+  "collection.exportRowCount": "{count} film",
+  "collection.exportDocumentTitle": "DiscVault kitaplığı"
 }

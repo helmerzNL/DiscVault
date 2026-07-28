@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count}개의 실패한 플러그인 작업",
   "appAdmin.pluginAttentionUpdates": "{count}개의 플러그인 업데이트 사용 가능",
   "collection.loadingMoreRows": "더 불러오는 중…",
-  "collection.hydrationFailed": "라이브러리의 나머지를 불러오지 못했습니다."
+  "collection.hydrationFailed": "라이브러리의 나머지를 불러오지 못했습니다.",
+  "collection.exportLibrary": "내보내기",
+  "collection.exportTitle": "라이브러리 내보내기",
+  "collection.exportSummary": "영화 {count}편을 내보냅니다.",
+  "collection.exportFormat": "파일 형식",
+  "collection.exportColumns": "열",
+  "collection.exportDownload": "내보내기",
+  "collection.exportNoColumns": "열을 하나 이상 선택하세요.",
+  "collection.exportEmpty": "내보낼 항목이 없습니다.",
+  "collection.exportFailed": "내보내기를 만들지 못했습니다.",
+  "collection.exportRowCount": "영화 {count}편",
+  "collection.exportDocumentTitle": "DiscVault 라이브러리"
 }

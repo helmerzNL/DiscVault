@@ -212,6 +212,36 @@ Standalone SPA modules under `app/frontend/js/` are served by `app/backend/next_
 `GET /api/next/app/js/<name>.js`. Only files listed in `NEXT_SCRIPT_ASSETS` are addressable; the
 prefix is public because the scripts contain no secrets.
 
+## Library export (CSV / XLSX / PDF)
+
+The library toolbar has an **Export** button that turns the current list view into a file. The
+export is WYSIWYG: it honours the active search, filters and sort order, and writes **one row per
+film** (containers and box sets are expanded).
+
+Columns are defined once in `app/backend/next_export_columns.py`: `title`, `year`, `barcode`,
+`format`, `director`, `actors`, `studio`, `contentRating`, `tags` and `watchActivity` — the columns
+of the list view plus the barcode. The frontend fetches that catalogue to build its column picker,
+so the picker and the renderers can never drift apart.
+
+Endpoints (`app/backend/next_export.py`):
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/next/collection/export/columns` | Column catalogue for the picker |
+| `POST /api/next/collection/export` | Renders the posted rows and returns the file as an attachment |
+
+**Why the rows are posted by the client.** The list view already computes exactly what it shows:
+de-duplicated director/actor credits, the preferred content rating, format badge labels, aggregated
+tags and the viewing-activity summary. Re-deriving all of that server-side would duplicate a dozen
+helpers and guarantee drift, so `app/frontend/js/library-export.js` sends the rendered cell values
+(plus the translated headers) and the backend only lays them out. The POST body is capped at
+`MAX_EXPORT_ROWS` (100 000 rows).
+
+Renderers: CSV (stdlib, `;` delimiter with a UTF-8 BOM so Excel opens it cleanly), XLSX
+(`openpyxl`, bold frozen header row and autofilter) and PDF (`reportlab`, **A4 landscape**, repeating
+header row and proportional column widths). Both libraries are pure Python, so the
+`python:3.12-slim` image needs no extra system packages.
+
 ## Data and backups
 
 Persistent files are stored in `/data` in the container.

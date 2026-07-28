@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} неуспешни задачи на плъгини",
   "appAdmin.pluginAttentionUpdates": "{count} налични актуализации на плъгини",
   "collection.loadingMoreRows": "Зареждане на още…",
-  "collection.hydrationFailed": "Останалата част от библиотеката не можа да се зареди."
+  "collection.hydrationFailed": "Останалата част от библиотеката не можа да се зареди.",
+  "collection.exportLibrary": "Експортиране",
+  "collection.exportTitle": "Експортиране на библиотеката",
+  "collection.exportSummary": "Ще бъдат експортирани {count} филма.",
+  "collection.exportFormat": "Файлов формат",
+  "collection.exportColumns": "Колони",
+  "collection.exportDownload": "Експортиране",
+  "collection.exportNoColumns": "Изберете поне една колона.",
+  "collection.exportEmpty": "Няма нищо за експортиране.",
+  "collection.exportFailed": "Експортът не може да бъде създаден.",
+  "collection.exportRowCount": "{count} филма",
+  "collection.exportDocumentTitle": "Библиотека DiscVault"
 }

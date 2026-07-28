@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} epäonnistunutta lisäosatyötä",
   "appAdmin.pluginAttentionUpdates": "{count} lisäosapäivitystä saatavilla",
   "collection.loadingMoreRows": "Ladataan lisää…",
-  "collection.hydrationFailed": "Kirjaston loppuosaa ei voitu ladata."
+  "collection.hydrationFailed": "Kirjaston loppuosaa ei voitu ladata.",
+  "collection.exportLibrary": "Vie",
+  "collection.exportTitle": "Vie kirjasto",
+  "collection.exportSummary": "{count} elokuvaa viedään.",
+  "collection.exportFormat": "Tiedostomuoto",
+  "collection.exportColumns": "Sarakkeet",
+  "collection.exportDownload": "Vie",
+  "collection.exportNoColumns": "Valitse vähintään yksi sarake.",
+  "collection.exportEmpty": "Ei mitään vietävää.",
+  "collection.exportFailed": "Vientiä ei voitu luoda.",
+  "collection.exportRowCount": "{count} elokuvaa",
+  "collection.exportDocumentTitle": "DiscVault-kirjasto"
 }
