@@ -33360,8 +33360,8 @@ def ui_preview_html(
       let shopEditor = null;
       let shopProvidersState = {loaded: false, loading: false, options: []};
       const AMAZON_ASIN_PATTERNS = [
-        /\/dp\/([A-Z0-9]{10})(?:[/?]|$)/i,
-        /\/gp\/product\/([A-Z0-9]{10})(?:[/?]|$)/i,
+        /\\/dp\\/([A-Z0-9]{10})(?:[/?]|$)/i,
+        /\\/gp\\/product\\/([A-Z0-9]{10})(?:[/?]|$)/i,
         /[?&]asin=([A-Z0-9]{10})(?:[&#]|$)/i,
       ];
       const extractAmazonAsinFromUrl = (value) => {
@@ -33469,7 +33469,7 @@ def ui_preview_html(
         try {
           const parsed = new URL(value);
           if (!["http:", "https:"].includes(parsed.protocol)) return "";
-          const label = parsed.hostname.replace(/^www\./i, "") || value;
+          const label = parsed.hostname.replace(/^www\\./i, "") || value;
           return `<a href="${escapeHtml(parsed.href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
         } catch (_) {
           return "";
@@ -33798,7 +33798,7 @@ def ui_preview_html(
               const priceMessage = messageTemplate
                 .replace("{price}", formatWishlistPrice(fetchedPrice, fetchedCurrency))
                 .replace("{currency}", "")
-                .replace(/\s+\./g, ".");
+                .replace(/\\s+\\./g, ".");
               setMessage(priceMessage, "good");
             } else {
               setMessage(describeShopPriceFailure(fetchedError), "bad");
