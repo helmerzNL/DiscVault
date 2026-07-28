@@ -2613,6 +2613,100 @@ def ui_preview_html(
       color: var(--muted);
       font-size: 12px;
     }
+    .library-export-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3200;
+      padding: 16px;
+    }
+    .library-export-dialog {
+      background: var(--bg-solid);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      width: min(560px, 100%);
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 18px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .4);
+      display: grid;
+      gap: 14px;
+    }
+    .library-export-dialog h3 {
+      margin: 0;
+    }
+    .library-export-summary {
+      color: var(--muted);
+      font-size: 13px;
+      margin: 0;
+    }
+    .library-export-fieldset {
+      border: 0;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .library-export-legend {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--muted);
+      padding: 0;
+    }
+    .library-export-formats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .library-export-format {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 7px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .library-export-format[data-selected="true"] {
+      border-color: var(--accent, var(--line-strong));
+      background: color-mix(in srgb, var(--accent, var(--line-strong)) 14%, transparent);
+    }
+    .library-export-columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 6px 14px;
+    }
+    .library-export-column {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      min-width: 0;
+    }
+    .library-export-column span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .library-export-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .library-export-error {
+      color: var(--danger, #d92d20);
+      font-size: 13px;
+      margin: 0;
+    }
     .import-tmdb-guidance {
       display: grid;
       gap: 10px;
@@ -13167,6 +13261,10 @@ def ui_preview_html(
               <span class="visually-hidden" id="selectModeButtonLabel" data-next-i18n="bulk.select">Select</span>
             </button>
             <span class="collection-controls-spacer" aria-hidden="true"></span>
+            <button type="button" class="icon-button hidden" id="libraryExportButton" aria-haspopup="dialog" aria-label="Export" data-next-i18n-aria="collection.exportLibrary" title="Export" data-next-i18n-title="collection.exportLibrary">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+              <span class="visually-hidden" data-next-i18n="collection.exportLibrary">Export</span>
+            </button>
             <div class="view-mode-control" id="libraryViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
               <button type="button" class="icon-button view-mode-button" data-library-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg>
@@ -24310,6 +24408,29 @@ def ui_preview_html(
           ${activity.watchedAt ? `<span class="library-list-watched-date">${escapeHtml(formatAppDate(activity.watchedAt))}</span>` : ""}
         </span>
       `;
+    }
+    function libraryExportWatchActivityText(item) {
+      const activity = itemWatchActivity(item);
+      const parts = [];
+      if (activity.watched) parts.push(tNext("lists.watched", "Watched"));
+      if (activity.onWatchlist) parts.push(tNext("lists.watchlist", "Watchlist"));
+      if (activity.watchedAt) parts.push(formatAppDate(activity.watchedAt));
+      return parts.join(" | ");
+    }
+    function libraryExportRow(movie) {
+      const item = {kind: "movie", movie};
+      return {
+        title: itemTitleValue(item),
+        year: String(itemYearLabel(item) || ""),
+        barcode: String(movie?.barcode || ""),
+        format: itemFormatValues(item).map((format) => format.label).join(", "),
+        director: creditText(itemDirectorCredits(item)),
+        actors: creditText(itemActorCredits(item)),
+        studio: itemStudioValues(item).join(", "),
+        contentRating: itemRatingValues(item).join(", "),
+        tags: itemTagValues(item).map((tag) => tag.name).join(", "),
+        watchActivity: libraryExportWatchActivityText(item),
+      };
     }
     function libraryListSortValue(item, key) {
       if (key === "format") return itemFormatValues(item).map((format) => format.label).join(" ").toLowerCase();
@@ -36650,6 +36771,33 @@ def ui_preview_html(
         return result;
       },
       authHeaders: () => authHeaders(),
+      getExportColumnLabels: () => ({
+        title: tNext("collection.titleColumn", "Title"),
+        year: tNext("collection.yearColumn", "Year"),
+        barcode: tNext("movieDetail.barcode", "Barcode"),
+        format: tNext("movieDetail.format", "Format"),
+        director: tNext("movieDetail.director", "Director"),
+        actors: tNext("movieDetail.actors", "Actors"),
+        studio: tNext("collection.studioColumn", "Studio"),
+        contentRating: tNext("movieDetail.contentRating", "Content rating"),
+        tags: tNext("lists.tags", "Tags"),
+        watchActivity: tNext("collection.behaviorColumn", "Viewing activity"),
+      }),
+      getExportRows: () => {
+        const sortState = normalizeLibraryDetailSort(libraryDetailSort);
+        const items = sortLibraryListItems(libraryDisplayItems(), sortState);
+        const seen = new Set();
+        const rows = [];
+        items.forEach((item) => {
+          itemMovieRows(item).forEach((movie) => {
+            const id = String(movie?.id || "");
+            if (!id || seen.has(id)) return;
+            seen.add(id);
+            rows.push(libraryExportRow(movie));
+          });
+        });
+        return rows;
+      },
       onRender: null,
     };
     function renderLibrary() {
@@ -41151,6 +41299,7 @@ def ui_preview_html(
     });
   </script>
   <script src="/api/next/app/js/library-paging.js" defer></script>
+  <script src="/api/next/app/js/library-export.js" defer></script>
 </body>
 </html>
 """

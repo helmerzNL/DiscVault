@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} mislykkede plugin-jobs",
   "appAdmin.pluginAttentionUpdates": "{count} plugin-opdateringer tilgængelige",
   "collection.loadingMoreRows": "Indlæser flere…",
-  "collection.hydrationFailed": "Resten af biblioteket kunne ikke indlæses."
+  "collection.hydrationFailed": "Resten af biblioteket kunne ikke indlæses.",
+  "collection.exportLibrary": "Eksportér",
+  "collection.exportTitle": "Eksportér bibliotek",
+  "collection.exportSummary": "{count} film eksporteres.",
+  "collection.exportFormat": "Filformat",
+  "collection.exportColumns": "Kolonner",
+  "collection.exportDownload": "Eksportér",
+  "collection.exportNoColumns": "Vælg mindst én kolonne.",
+  "collection.exportEmpty": "Der er intet at eksportere.",
+  "collection.exportFailed": "Eksporten kunne ikke oprettes.",
+  "collection.exportRowCount": "{count} film",
+  "collection.exportDocumentTitle": "DiscVault-bibliotek"
 }

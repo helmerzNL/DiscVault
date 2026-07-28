@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} 個外掛程式工作失敗",
   "appAdmin.pluginAttentionUpdates": "{count} 個外掛程式更新可用",
   "collection.loadingMoreRows": "正在載入更多…",
-  "collection.hydrationFailed": "無法載入媒體庫的其餘部分。"
+  "collection.hydrationFailed": "無法載入媒體庫的其餘部分。",
+  "collection.exportLibrary": "匯出",
+  "collection.exportTitle": "匯出媒體庫",
+  "collection.exportSummary": "將匯出 {count} 部電影。",
+  "collection.exportFormat": "檔案格式",
+  "collection.exportColumns": "欄位",
+  "collection.exportDownload": "匯出",
+  "collection.exportNoColumns": "請至少選擇一個欄位。",
+  "collection.exportEmpty": "沒有可匯出的內容。",
+  "collection.exportFailed": "無法建立匯出檔案。",
+  "collection.exportRowCount": "{count} 部電影",
+  "collection.exportDocumentTitle": "DiscVault 媒體庫"
 }

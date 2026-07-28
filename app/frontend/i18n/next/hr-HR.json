@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} neuspjelih zadataka dodataka",
   "appAdmin.pluginAttentionUpdates": "{count} dostupnih ažuriranja dodataka",
   "collection.loadingMoreRows": "Učitavanje još…",
-  "collection.hydrationFailed": "Ostatak biblioteke nije bilo moguće učitati."
+  "collection.hydrationFailed": "Ostatak biblioteke nije bilo moguće učitati.",
+  "collection.exportLibrary": "Izvezi",
+  "collection.exportTitle": "Izvezi biblioteku",
+  "collection.exportSummary": "Bit će izvezeno {count} filmova.",
+  "collection.exportFormat": "Format datoteke",
+  "collection.exportColumns": "Stupci",
+  "collection.exportDownload": "Izvezi",
+  "collection.exportNoColumns": "Odaberite barem jedan stupac.",
+  "collection.exportEmpty": "Nema ničega za izvoz.",
+  "collection.exportFailed": "Izvoz nije bilo moguće stvoriti.",
+  "collection.exportRowCount": "{count} filmova",
+  "collection.exportDocumentTitle": "DiscVault biblioteka"
 }

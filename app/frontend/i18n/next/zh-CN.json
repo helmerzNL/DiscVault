@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} 个插件任务失败",
   "appAdmin.pluginAttentionUpdates": "{count} 个插件更新可用",
   "collection.loadingMoreRows": "正在加载更多…",
-  "collection.hydrationFailed": "无法加载媒体库的其余部分。"
+  "collection.hydrationFailed": "无法加载媒体库的其余部分。",
+  "collection.exportLibrary": "导出",
+  "collection.exportTitle": "导出媒体库",
+  "collection.exportSummary": "将导出 {count} 部电影。",
+  "collection.exportFormat": "文件格式",
+  "collection.exportColumns": "列",
+  "collection.exportDownload": "导出",
+  "collection.exportNoColumns": "请至少选择一列。",
+  "collection.exportEmpty": "没有可导出的内容。",
+  "collection.exportFailed": "无法创建导出文件。",
+  "collection.exportRowCount": "{count} 部电影",
+  "collection.exportDocumentTitle": "DiscVault 媒体库"
 }

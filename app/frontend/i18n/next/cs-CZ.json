@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} neúspěšných úloh pluginů",
   "appAdmin.pluginAttentionUpdates": "{count} dostupných aktualizací pluginů",
   "collection.loadingMoreRows": "Načítání dalších…",
-  "collection.hydrationFailed": "Zbytek knihovny se nepodařilo načíst."
+  "collection.hydrationFailed": "Zbytek knihovny se nepodařilo načíst.",
+  "collection.exportLibrary": "Exportovat",
+  "collection.exportTitle": "Exportovat knihovnu",
+  "collection.exportSummary": "Bude exportováno {count} filmů.",
+  "collection.exportFormat": "Formát souboru",
+  "collection.exportColumns": "Sloupce",
+  "collection.exportDownload": "Exportovat",
+  "collection.exportNoColumns": "Vyberte alespoň jeden sloupec.",
+  "collection.exportEmpty": "Není co exportovat.",
+  "collection.exportFailed": "Export se nepodařilo vytvořit.",
+  "collection.exportRowCount": "{count} filmů",
+  "collection.exportDocumentTitle": "Knihovna DiscVault"
 }

@@ -2543,5 +2543,16 @@
   "appAdmin.pluginAttentionFailedJobs": "{count} neuspešnih opravil vtičnikov",
   "appAdmin.pluginAttentionUpdates": "{count} razpoložljivih posodobitev vtičnikov",
   "collection.loadingMoreRows": "Nalaganje več…",
-  "collection.hydrationFailed": "Preostanka knjižnice ni bilo mogoče naložiti."
+  "collection.hydrationFailed": "Preostanka knjižnice ni bilo mogoče naložiti.",
+  "collection.exportLibrary": "Izvozi",
+  "collection.exportTitle": "Izvozi knjižnico",
+  "collection.exportSummary": "Izvoženih bo {count} filmov.",
+  "collection.exportFormat": "Oblika datoteke",
+  "collection.exportColumns": "Stolpci",
+  "collection.exportDownload": "Izvozi",
+  "collection.exportNoColumns": "Izberite vsaj en stolpec.",
+  "collection.exportEmpty": "Ni ničesar za izvoz.",
+  "collection.exportFailed": "Izvoza ni bilo mogoče ustvariti.",
+  "collection.exportRowCount": "{count} filmov",
+  "collection.exportDocumentTitle": "Knjižnica DiscVault"
 }

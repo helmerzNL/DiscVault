@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
 
 NEXT_SCRIPT_ASSETS = {
     "library-paging.js",
+    "library-export.js",
 }
 
 NEXT_SCRIPT_URL_PREFIX = "/api/next/app/js"

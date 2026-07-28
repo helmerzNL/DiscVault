@@ -256,6 +256,7 @@ try:
     from .next_push import send_native_push_to_user
     from .next_push import send_push_to_user
     from .next_library_data import register_next_library_data_routes
+    from .next_export import register_next_export_routes
     from .next_static import NEXT_SCRIPT_URL_PREFIX
     from .next_static import register_next_static_routes
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
@@ -471,6 +472,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_push import send_native_push_to_user
     from next_push import send_push_to_user
     from next_library_data import register_next_library_data_routes
+    from next_export import register_next_export_routes
     from next_static import NEXT_SCRIPT_URL_PREFIX
     from next_static import register_next_static_routes
 
@@ -18278,6 +18280,7 @@ def register_routes(flask_app: Flask) -> None:
     register_next_push_routes(flask_app, connect=connect)
     register_next_static_routes(flask_app, connect=connect)
     register_next_library_data_routes(flask_app, connect=connect)
+    register_next_export_routes(flask_app, connect=connect)
 
     @flask_app.errorhandler(NextApiError)
     def handle_next_error(error: NextApiError):

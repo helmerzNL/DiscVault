@@ -13,3 +13,5 @@ pywebpush==2.0.0
 httpx[http2]==0.28.1
 psycopg[binary,pool]>=3.2,<4
 segno==1.6.1
+openpyxl==3.1.5
+reportlab==4.4.10
