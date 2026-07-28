@@ -354,6 +354,90 @@ The default importer migrates functional collection data and media references.
 Users/passkeys/watch history are intentionally not included in this default
 deployment command.
 
+## Troubleshooting
+
+### Repeated `password authentication failed` in the PostgreSQL log
+
+Symptoms:
+
+- `postgres` logs `FATAL: password authentication failed for user "<POSTGRES_USER>"`
+  every few seconds, matching the `host all all all scram-sha-256` line of
+  `pg_hba.conf`.
+- `next-api` never becomes healthy, because its startup migration cannot connect.
+- The credentials are nevertheless correct. Both of these succeed:
+
+```bash
+PW="$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | head -1)"
+docker compose exec -T -e PGPASSWORD="$PW" postgres \
+  psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'select 1'
+docker compose exec -T postgres sh -c \
+  'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select 1"'
+```
+
+When the cluster accepts its own credentials but keeps rejecting connections,
+another client is knocking. On a host running more than one DiscVault stack the
+usual cause is a shared Docker network. `DISCVAULT_NEXT_NETWORK_NAME` becomes
+the literal network name and Compose adds no project prefix, so two stacks that
+keep the same value join the same network. Every stack has a service named
+`postgres`, so that alias resolves to several containers and Docker balances
+connections across them. Roughly half of each stack's connections then reach the
+other stack's database and are rejected, because each stack has its own
+password.
+
+Confirm it. The first command must return exactly one address, and the second
+must list containers from one stack only:
+
+```bash
+docker exec <stack>-next-api-1 getent hosts postgres
+docker network inspect <network-name> -f '{{range .Containers}}{{println .Name}}{{end}}'
+```
+
+The default log format omits the client address. Add it temporarily to identify
+the caller:
+
+```bash
+docker exec <stack>-postgres-1 psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "ALTER SYSTEM SET log_line_prefix = '%m [%p] %q%u@%d from %h '" \
+  -c "SELECT pg_reload_conf()"
+docker logs --tail 20 -f <stack>-postgres-1
+```
+
+Map the logged address back to a container, then restore the log format:
+
+```bash
+docker ps -q | xargs -r docker inspect \
+  -f '{{.Name}}{{range .NetworkSettings.Networks}} {{.IPAddress}}{{end}}'
+docker exec <stack>-postgres-1 psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+  -c "ALTER SYSTEM RESET log_line_prefix" -c "SELECT pg_reload_conf()"
+```
+
+The fix is to give every stack its own network. Set a unique
+`DISCVAULT_NEXT_NETWORK_NAME` in each `.env`, then recreate the affected stacks
+with `docker compose up -d --force-recreate`. Note that the superuser is
+`POSTGRES_USER`, not `postgres`; connections over the container's Unix socket
+are trusted, so no password is needed for these admin commands.
+
+Two other causes are worth ruling out when the stacks are already isolated:
+
+- `POSTGRES_PASSWORD` was changed after the data directory was initialized. The
+  image only applies that variable during the initial `initdb`, so the cluster
+  keeps the old password while `DATABASE_URL` already carries the new one. Fix
+  it in place with
+  `ALTER USER "<POSTGRES_USER>" WITH PASSWORD '<new password>';`.
+- The password contains a character that is unsafe in a URI. `DATABASE_URL` is
+  assembled by plain string interpolation, so an unencoded `/` truncates the
+  authority and `%xx` is percent-decoded by libpq. Verify what the container
+  actually parses:
+
+```bash
+docker compose run --rm --no-deps --entrypoint python next-api -c \
+  "import os;from urllib.parse import urlsplit;u=urlsplit(os.environ['DATABASE_URL']);print(u.username,u.hostname,u.port,u.path,len(u.password or ''))"
+```
+
+A password length that differs from the value in `.env`, or an unexpected host,
+means the URI is being mangled. Use an alphanumeric password or percent-encode
+it.
+
 ## Notes
 
 - `next-api` exposes the Next API on `${DISCVAULT_NEXT_API_PORT:-6180}`.
@@ -363,7 +447,9 @@ deployment command.
 - The Docker network name is `${DISCVAULT_NEXT_NETWORK_NAME:-discvault-next}`. Change
   `DISCVAULT_NEXT_NETWORK_NAME` in `.env` to run multiple stacks side by side without
   network name collisions. This is the actual Docker network name; no Compose project
-  prefix is added.
+  prefix is added. Two stacks that keep the same value also share the `postgres`
+  service alias, which makes each stack reach the other stack's database; see
+  Troubleshooting.
 - `next-worker` processes pending `background_jobs`.
 - PostgreSQL data is stored on a host bind mount at `DISCVAULT_NEXT_POSTGRES_DATA`
   (default `./postgres-data`, relative to this compose file). Point it at an
