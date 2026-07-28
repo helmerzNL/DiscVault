@@ -40,6 +40,9 @@ TOTP_DIGITS = 6
 TOTP_PERIOD_SECONDS = 30
 TOTP_WINDOW = 1
 FLOW_TTL_SECONDS = 5 * 60
+# Recovery-code acknowledgement is the only step that waits on a human writing
+# codes down, so it gets a longer window than the machine-paced flows.
+RECOVERY_ACK_FLOW_TTL_SECONDS = 30 * 60
 LOCK_ATTEMPTS = 5
 LOCK_WINDOW_SECONDS = 15 * 60
 LOCK_DURATION_SECONDS = 15 * 60
