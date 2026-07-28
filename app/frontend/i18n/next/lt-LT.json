@@ -2541,5 +2541,18 @@
   "appAdmin.pluginAttentionEmpty": "Šiuo metu dėmesio nereikia.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} papildiniams reikia konfigūracijos",
   "appAdmin.pluginAttentionFailedJobs": "{count} nepavykusios papildinių užduotys",
-  "appAdmin.pluginAttentionUpdates": "{count} galimi papildinių atnaujinimai"
+  "appAdmin.pluginAttentionUpdates": "{count} galimi papildinių atnaujinimai",
+  "collection.loadingMoreRows": "Įkeliama daugiau…",
+  "collection.hydrationFailed": "Nepavyko įkelti likusios bibliotekos dalies.",
+  "collection.exportLibrary": "Eksportuoti",
+  "collection.exportTitle": "Eksportuoti biblioteką",
+  "collection.exportSummary": "Bus eksportuota {count} filmų.",
+  "collection.exportFormat": "Failo formatas",
+  "collection.exportColumns": "Stulpeliai",
+  "collection.exportDownload": "Eksportuoti",
+  "collection.exportNoColumns": "Pasirinkite bent vieną stulpelį.",
+  "collection.exportEmpty": "Nėra ko eksportuoti.",
+  "collection.exportFailed": "Nepavyko sukurti eksporto.",
+  "collection.exportRowCount": "{count} filmų",
+  "collection.exportDocumentTitle": "DiscVault biblioteka"
 }

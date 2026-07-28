@@ -2541,5 +2541,18 @@
   "appAdmin.pluginAttentionEmpty": "Зараз немає нічого, що потребує уваги.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} плагінів потребують налаштування",
   "appAdmin.pluginAttentionFailedJobs": "{count} невдалих завдань плагінів",
-  "appAdmin.pluginAttentionUpdates": "{count} доступних оновлень плагінів"
+  "appAdmin.pluginAttentionUpdates": "{count} доступних оновлень плагінів",
+  "collection.loadingMoreRows": "Завантаження ще…",
+  "collection.hydrationFailed": "Не вдалося завантажити решту бібліотеки.",
+  "collection.exportLibrary": "Експортувати",
+  "collection.exportTitle": "Експортувати бібліотеку",
+  "collection.exportSummary": "Буде експортовано {count} фільмів.",
+  "collection.exportFormat": "Формат файлу",
+  "collection.exportColumns": "Стовпці",
+  "collection.exportDownload": "Експортувати",
+  "collection.exportNoColumns": "Виберіть щонайменше один стовпець.",
+  "collection.exportEmpty": "Немає чого експортувати.",
+  "collection.exportFailed": "Не вдалося створити експорт.",
+  "collection.exportRowCount": "{count} фільмів",
+  "collection.exportDocumentTitle": "Бібліотека DiscVault"
 }

@@ -2541,5 +2541,18 @@
   "appAdmin.pluginAttentionEmpty": "Praegu ei vaja midagi tähelepanu.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} pluginat vajavad seadistamist",
   "appAdmin.pluginAttentionFailedJobs": "{count} ebaõnnestunud plugina tööd",
-  "appAdmin.pluginAttentionUpdates": "{count} plugina värskendust saadaval"
+  "appAdmin.pluginAttentionUpdates": "{count} plugina värskendust saadaval",
+  "collection.loadingMoreRows": "Laaditakse veel…",
+  "collection.hydrationFailed": "Ülejäänud kogu laadimine ebaõnnestus.",
+  "collection.exportLibrary": "Ekspordi",
+  "collection.exportTitle": "Ekspordi kogu",
+  "collection.exportSummary": "Eksporditakse {count} filmi.",
+  "collection.exportFormat": "Failivorming",
+  "collection.exportColumns": "Veerud",
+  "collection.exportDownload": "Ekspordi",
+  "collection.exportNoColumns": "Vali vähemalt üks veerg.",
+  "collection.exportEmpty": "Pole midagi eksportida.",
+  "collection.exportFailed": "Eksporti ei õnnestunud luua.",
+  "collection.exportRowCount": "{count} filmi",
+  "collection.exportDocumentTitle": "DiscVaulti kogu"
 }

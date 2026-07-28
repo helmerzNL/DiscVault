@@ -60,6 +60,71 @@ curl http://localhost:6180/api/next/health
 curl http://localhost:6180/api/next/stats
 ```
 
+### Preflight check before starting
+
+Two classes of mistake account for nearly every failed start: a required variable
+that is not actually in `.env`, and a value that collides with another DiscVault
+stack on the same host. Both are cheap to rule out beforehand.
+
+**1. Every required variable is present in `.env`.**
+
+`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` are mandatory. Compose
+reads a variable from the shell environment *before* it reads `.env`, so a
+deployment tool that injects one of them will mask its absence from the file.
+The stack starts fine until it is deployed some other way — a manual
+`docker compose up` over SSH, for example — and then fails on a variable that
+looked present all along. Pin them in `.env`:
+
+```bash
+for v in POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD JWT_SECRET; do
+  grep -q "^${v}=" .env || echo "MISSING in .env: ${v}"
+done
+```
+
+Across several stacks at once, list the files that lack a given variable:
+
+```bash
+grep -L '^POSTGRES_DB=' */.env
+```
+
+`POSTGRES_DB` must match the database that already exists in the volume,
+otherwise `DATABASE_URL` points at a database that was never created. On an
+existing stack, confirm the name first:
+
+```bash
+docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -l'
+```
+
+**2. Nothing collides with another stack on this host.**
+
+`DISCVAULT_NEXT_NETWORK_NAME`, `DISCVAULT_NEXT_API_PORT`, and
+`DISCVAULT_NEXT_MCP_PORT` must each be unique per stack. From the directory
+holding the stacks:
+
+```bash
+grep -H -E '^(DISCVAULT_NEXT_NETWORK_NAME|DISCVAULT_NEXT_API_PORT|DISCVAULT_NEXT_MCP_PORT)=' \
+  */.env | sort -t: -k2
+```
+
+Every value must appear exactly once. A duplicated port fails loudly with
+`port is already allocated`; a duplicated network name fails *quietly* and is
+far more damaging — see
+[Repeated `password authentication failed`](#repeated-password-authentication-failed-in-the-postgresql-log).
+
+**3. Compose resolves to what you expect.**
+
+```bash
+docker compose config | grep -E 'DATABASE_URL|POSTGRES_(USER|DB)'
+```
+
+Note that this shows what a *new* container would receive. A container that is
+already running keeps the environment it was created with, so after editing
+`.env` compare against the live container:
+
+```bash
+docker compose exec next-api sh -c 'echo "$DATABASE_URL"'
+```
+
 ### First start takes longer
 
 On a clean installation PostgreSQL runs `initdb` and `next-api` applies every
@@ -74,9 +139,11 @@ socket, because `initdb` briefly runs a temporary socket-only server. Probing
 TCP keeps the check correctly negative until the real server accepts
 connections, so dependent services never start against the temporary server.
 
-`POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` are required. Leaving
-one out fails the `up` immediately with a message naming the missing variable
-instead of producing a container that never becomes healthy.
+A missing `POSTGRES_DB`, `POSTGRES_USER`, or `POSTGRES_PASSWORD` fails the `up`
+immediately with a message naming the variable, rather than producing a
+container that never becomes healthy. See the
+[preflight check](#preflight-check-before-starting) for verifying they are
+really in `.env` and not merely inherited from the shell environment.
 
 When this service is published directly behind a reverse proxy, the Next
 collection UI is available at `/`, `/app`, and `/api/next/app`.
@@ -356,6 +423,10 @@ deployment command.
 
 ## Troubleshooting
 
+Before working through the cases below, run the
+[preflight check](#preflight-check-before-starting) — most failed starts are a
+missing `.env` variable or a value that collides with another stack.
+
 ### Repeated `password authentication failed` in the PostgreSQL log
 
 Symptoms:
@@ -369,10 +440,15 @@ Symptoms:
 ```bash
 PW="$(sed -n 's/^POSTGRES_PASSWORD=//p' .env | head -1)"
 docker compose exec -T -e PGPASSWORD="$PW" postgres \
-  psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c 'select 1'
+  sh -c 'psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select 1"'
 docker compose exec -T postgres sh -c \
   'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select 1"'
 ```
+
+The first command proves the password in `.env` is accepted by the cluster; the
+second proves the container's own credentials work. `POSTGRES_USER` and
+`POSTGRES_DB` are expanded *inside* the container in both cases — they are not
+set in the host shell.
 
 When the cluster accepts its own credentials but keeps rejecting connections,
 another client is knocking. On a host running more than one DiscVault stack the

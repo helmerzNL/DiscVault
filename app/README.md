@@ -10,6 +10,7 @@ For product overview and screenshots, use the repository root README.
 app/
 ├── backend/            DiscVault Next API (next_app.py, Flask + Gunicorn, PostgreSQL)
 ├── frontend/           Shared static assets (i18n/next, flags, icons, PWA, service worker)
+│   └── js/             Standalone SPA modules served via /api/next/app/js/<name>.js
 ├── mcp-server/         MCP HTTP server
 ├── deploy/
 │   ├── v26/            Supervisor config for the v26 (Next) single-container image
@@ -183,7 +184,63 @@ PUT    /api/movies/:id
 DELETE /api/movies/:id
 GET    /api/lookup/:barcode
 GET    /api/search_title?q=
+GET    /api/next/collection/movies?limit=&offset=
+GET    /api/next/app/js/:name.js
 ```
+
+## Library paging and hydration
+
+The library used to be hard-capped: the dashboard snapshot returned at most 200 movies and the
+SPA rendered only the first 80 rows. Both caps are gone.
+
+How it works now:
+
+1. **First paint** — `collection_dashboard_snapshot()` still embeds only the first page
+   (`COLLECTION_MOVIE_PAGE_SIZE`, 200 movies) so the inline `initialState` stays small. The
+   snapshot also reports `moviesTotal`, `moviesPageSize` and `moviesHasMore`, so counters show the
+   real collection size immediately.
+2. **Background hydration** — `app/frontend/js/library-paging.js` loads the remaining movies in
+   chunks of 500 via `GET /api/next/collection/movies?limit=&offset=` (see
+   `app/backend/next_library_data.py`) and appends them through the `window.DiscVaultLibrary`
+   bridge. Progress and failures are surfaced with the `collection.loadingMoreRows` and
+   `collection.hydrationFailed` strings.
+3. **Incremental rendering** — the list, poster grid and location rail render a growing window
+   (`LIBRARY_RENDER_STEP`, 120 rows). An `IntersectionObserver` watches a sentinel at the bottom of
+   the list and grows the window as you scroll, so a 5000-movie library stays responsive.
+
+Standalone SPA modules under `app/frontend/js/` are served by `app/backend/next_static.py` through
+`GET /api/next/app/js/<name>.js`. Only files listed in `NEXT_SCRIPT_ASSETS` are addressable; the
+prefix is public because the scripts contain no secrets.
+
+## Library export (CSV / XLSX / PDF)
+
+The library toolbar has an **Export** button that turns the current list view into a file. The
+export is WYSIWYG: it honours the active search, filters and sort order, and writes **one row per
+film** (containers and box sets are expanded).
+
+Columns are defined once in `app/backend/next_export_columns.py`: `title`, `year`, `barcode`,
+`format`, `director`, `actors`, `studio`, `contentRating`, `tags` and `watchActivity` — the columns
+of the list view plus the barcode. The frontend fetches that catalogue to build its column picker,
+so the picker and the renderers can never drift apart.
+
+Endpoints (`app/backend/next_export.py`):
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/next/collection/export/columns` | Column catalogue for the picker |
+| `POST /api/next/collection/export` | Renders the posted rows and returns the file as an attachment |
+
+**Why the rows are posted by the client.** The list view already computes exactly what it shows:
+de-duplicated director/actor credits, the preferred content rating, format badge labels, aggregated
+tags and the viewing-activity summary. Re-deriving all of that server-side would duplicate a dozen
+helpers and guarantee drift, so `app/frontend/js/library-export.js` sends the rendered cell values
+(plus the translated headers) and the backend only lays them out. The POST body is capped at
+`MAX_EXPORT_ROWS` (100 000 rows).
+
+Renderers: CSV (stdlib, `;` delimiter with a UTF-8 BOM so Excel opens it cleanly), XLSX
+(`openpyxl`, bold frozen header row and autofilter) and PDF (`reportlab`, **A4 landscape**, repeating
+header row and proportional column widths). Both libraries are pure Python, so the
+`python:3.12-slim` image needs no extra system packages.
 
 ## Data and backups
 

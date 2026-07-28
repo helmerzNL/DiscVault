@@ -2541,5 +2541,18 @@
   "appAdmin.pluginAttentionEmpty": "În acest moment nu este nevoie de atenție.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} pluginuri necesită configurare",
   "appAdmin.pluginAttentionFailedJobs": "{count} sarcini de plugin nereușite",
-  "appAdmin.pluginAttentionUpdates": "{count} actualizări de plugin disponibile"
+  "appAdmin.pluginAttentionUpdates": "{count} actualizări de plugin disponibile",
+  "collection.loadingMoreRows": "Se încarcă mai multe…",
+  "collection.hydrationFailed": "Restul bibliotecii nu a putut fi încărcat.",
+  "collection.exportLibrary": "Exportă",
+  "collection.exportTitle": "Exportă biblioteca",
+  "collection.exportSummary": "Vor fi exportate {count} filme.",
+  "collection.exportFormat": "Format fișier",
+  "collection.exportColumns": "Coloane",
+  "collection.exportDownload": "Exportă",
+  "collection.exportNoColumns": "Selectează cel puțin o coloană.",
+  "collection.exportEmpty": "Nu există nimic de exportat.",
+  "collection.exportFailed": "Exportul nu a putut fi creat.",
+  "collection.exportRowCount": "{count} filme",
+  "collection.exportDocumentTitle": "Biblioteca DiscVault"
 }

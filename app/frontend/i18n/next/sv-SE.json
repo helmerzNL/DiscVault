@@ -2541,5 +2541,18 @@
   "appAdmin.pluginAttentionEmpty": "Inget behöver uppmärksamhet just nu.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} plugins behöver konfiguration",
   "appAdmin.pluginAttentionFailedJobs": "{count} misslyckade pluginjobb",
-  "appAdmin.pluginAttentionUpdates": "{count} plugin-uppdateringar tillgängliga"
+  "appAdmin.pluginAttentionUpdates": "{count} plugin-uppdateringar tillgängliga",
+  "collection.loadingMoreRows": "Laddar fler…",
+  "collection.hydrationFailed": "Resten av biblioteket kunde inte laddas.",
+  "collection.exportLibrary": "Exportera",
+  "collection.exportTitle": "Exportera bibliotek",
+  "collection.exportSummary": "{count} filmer exporteras.",
+  "collection.exportFormat": "Filformat",
+  "collection.exportColumns": "Kolumner",
+  "collection.exportDownload": "Exportera",
+  "collection.exportNoColumns": "Välj minst en kolumn.",
+  "collection.exportEmpty": "Det finns inget att exportera.",
+  "collection.exportFailed": "Exporten kunde inte skapas.",
+  "collection.exportRowCount": "{count} filmer",
+  "collection.exportDocumentTitle": "DiscVault-bibliotek"
 }

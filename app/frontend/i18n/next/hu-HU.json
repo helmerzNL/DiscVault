@@ -2541,5 +2541,18 @@
   "appAdmin.pluginAttentionEmpty": "Jelenleg semmi nem igényel figyelmet.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} bővítmény konfigurációt igényel",
   "appAdmin.pluginAttentionFailedJobs": "{count} sikertelen bővítményfeladat",
-  "appAdmin.pluginAttentionUpdates": "{count} elérhető bővítményfrissítés"
+  "appAdmin.pluginAttentionUpdates": "{count} elérhető bővítményfrissítés",
+  "collection.loadingMoreRows": "További elemek betöltése…",
+  "collection.hydrationFailed": "A könyvtár többi része nem tölthető be.",
+  "collection.exportLibrary": "Exportálás",
+  "collection.exportTitle": "Könyvtár exportálása",
+  "collection.exportSummary": "{count} film kerül exportálásra.",
+  "collection.exportFormat": "Fájlformátum",
+  "collection.exportColumns": "Oszlopok",
+  "collection.exportDownload": "Exportálás",
+  "collection.exportNoColumns": "Válassz ki legalább egy oszlopot.",
+  "collection.exportEmpty": "Nincs mit exportálni.",
+  "collection.exportFailed": "Az exportot nem sikerült létrehozni.",
+  "collection.exportRowCount": "{count} film",
+  "collection.exportDocumentTitle": "DiscVault-könyvtár"
 }

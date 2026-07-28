@@ -2541,5 +2541,18 @@
   "appAdmin.pluginAttentionEmpty": "Αυτήν τη στιγμή δεν υπάρχει κάτι που απαιτεί προσοχή.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} πρόσθετα χρειάζονται διαμόρφωση",
   "appAdmin.pluginAttentionFailedJobs": "{count} αποτυχημένες εργασίες προσθέτων",
-  "appAdmin.pluginAttentionUpdates": "{count} διαθέσιμες ενημερώσεις προσθέτων"
+  "appAdmin.pluginAttentionUpdates": "{count} διαθέσιμες ενημερώσεις προσθέτων",
+  "collection.loadingMoreRows": "Φόρτωση περισσότερων…",
+  "collection.hydrationFailed": "Δεν ήταν δυνατή η φόρτωση του υπόλοιπου της βιβλιοθήκης.",
+  "collection.exportLibrary": "Εξαγωγή",
+  "collection.exportTitle": "Εξαγωγή βιβλιοθήκης",
+  "collection.exportSummary": "Θα εξαχθούν {count} ταινίες.",
+  "collection.exportFormat": "Μορφή αρχείου",
+  "collection.exportColumns": "Στήλες",
+  "collection.exportDownload": "Εξαγωγή",
+  "collection.exportNoColumns": "Επιλέξτε τουλάχιστον μία στήλη.",
+  "collection.exportEmpty": "Δεν υπάρχει τίποτα για εξαγωγή.",
+  "collection.exportFailed": "Δεν ήταν δυνατή η δημιουργία της εξαγωγής.",
+  "collection.exportRowCount": "{count} ταινίες",
+  "collection.exportDocumentTitle": "Βιβλιοθήκη DiscVault"
 }

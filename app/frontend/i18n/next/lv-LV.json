@@ -2541,5 +2541,18 @@
   "appAdmin.pluginAttentionEmpty": "Šobrīd nav nekā, kam vajadzīga uzmanība.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} spraudņiem nepieciešama konfigurācija",
   "appAdmin.pluginAttentionFailedJobs": "{count} neizdevušies spraudņu darbi",
-  "appAdmin.pluginAttentionUpdates": "{count} pieejami spraudņu atjauninājumi"
+  "appAdmin.pluginAttentionUpdates": "{count} pieejami spraudņu atjauninājumi",
+  "collection.loadingMoreRows": "Ielādē vairāk…",
+  "collection.hydrationFailed": "Neizdevās ielādēt atlikušo bibliotēkas daļu.",
+  "collection.exportLibrary": "Eksportēt",
+  "collection.exportTitle": "Eksportēt bibliotēku",
+  "collection.exportSummary": "Tiks eksportētas {count} filmas.",
+  "collection.exportFormat": "Faila formāts",
+  "collection.exportColumns": "Kolonnas",
+  "collection.exportDownload": "Eksportēt",
+  "collection.exportNoColumns": "Atlasiet vismaz vienu kolonnu.",
+  "collection.exportEmpty": "Nav nekā, ko eksportēt.",
+  "collection.exportFailed": "Eksportu neizdevās izveidot.",
+  "collection.exportRowCount": "{count} filmas",
+  "collection.exportDocumentTitle": "DiscVault bibliotēka"
 }

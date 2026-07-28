@@ -2541,5 +2541,18 @@
   "appAdmin.pluginAttentionEmpty": "Nothing needs attention right now.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} plugins need configuration",
   "appAdmin.pluginAttentionFailedJobs": "{count} failed plugin jobs",
-  "appAdmin.pluginAttentionUpdates": "{count} plugin updates available"
+  "appAdmin.pluginAttentionUpdates": "{count} plugin updates available",
+  "collection.loadingMoreRows": "Loading more…",
+  "collection.hydrationFailed": "Could not load the rest of the library.",
+  "collection.exportLibrary": "Export",
+  "collection.exportTitle": "Export library",
+  "collection.exportSummary": "{count} movies will be exported.",
+  "collection.exportFormat": "File format",
+  "collection.exportColumns": "Columns",
+  "collection.exportDownload": "Export",
+  "collection.exportNoColumns": "Select at least one column.",
+  "collection.exportEmpty": "There is nothing to export.",
+  "collection.exportFailed": "The export could not be created.",
+  "collection.exportRowCount": "{count} movies",
+  "collection.exportDocumentTitle": "DiscVault library"
 }
