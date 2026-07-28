@@ -1,6 +1,7 @@
 """Tests for next_price_alerts.py – price extraction and alert evaluation logic."""
 
 import os
+import re
 import sys
 import unittest
 from decimal import Decimal
@@ -29,7 +30,12 @@ try:
         extract_price_from_url_with_source,
         run_price_alert_sweep,
     )
-    from app.backend.next_public_http import PublicHttpError
+    from app.backend.next_price_alerts import (
+        _BROWSER_USER_AGENT,
+        _extract_price_from_domain_preset,
+        _schema_org_price_from_node,
+    )
+    from app.backend.next_public_http import DEFAULT_BROWSER_USER_AGENT, PublicHttpError
     _MODULE_AVAILABLE = True
 except ModuleNotFoundError:
     _MODULE_AVAILABLE = False
@@ -528,6 +534,162 @@ class TestPriceAlertSweepSafety(unittest.TestCase):
                 for call in cursor.execute.call_args_list
             )
         )
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestNestedSchemaOrgOffers(unittest.TestCase):
+    """Regression: shops nest ``offers`` far below the document root.
+
+    bol.com serves a top-level ``Movie`` whose ``offers`` key is ``null`` and
+    puts the real offer under ``workExample``.  Reading only the top-level
+    ``offers`` returned no price at all, which is what broke price extraction
+    for every bol.com shop.
+    """
+
+    def test_bol_com_shaped_nested_offer_is_found(self):
+        html = (
+            '<script type="application/ld+json">'
+            '{"@type":"Movie","name":"Supergirl","offers":null,'
+            '"workExample":{"@type":"CreativeWork",'
+            '"offers":{"@type":"Offer","price":"29.99","priceCurrency":"EUR"}}}'
+            "</script>"
+        )
+        price, currency = _extract_from_schema_org(html)
+        self.assertAlmostEqual(price, 29.99)
+        self.assertEqual(currency, "EUR")
+
+    def test_graph_wrapped_offer_is_found(self):
+        html = (
+            '<script type="application/ld+json">'
+            '{"@graph":[{"@type":"WebPage"},'
+            '{"@type":"Product","offers":{"price":"12.34","priceCurrency":"GBP"}}]}'
+            "</script>"
+        )
+        price, currency = _extract_from_schema_org(html)
+        self.assertAlmostEqual(price, 12.34)
+        self.assertEqual(currency, "GBP")
+
+    def test_offer_list_is_found(self):
+        html = (
+            '<script type="application/ld+json">'
+            '{"@type":"Product","offers":[{"price":"5.00","priceCurrency":"EUR"}]}'
+            "</script>"
+        )
+        price, currency = _extract_from_schema_org(html)
+        self.assertAlmostEqual(price, 5.00)
+
+    def test_walk_is_bounded_and_returns_none_without_price(self):
+        node = {"a": {"b": {"c": [{"name": "no price here"}]}}}
+        self.assertEqual(_schema_org_price_from_node(node), (None, None))
+
+    def test_deeply_nested_structure_does_not_hang(self):
+        node: dict = {}
+        cursor = node
+        for _ in range(500):
+            cursor["child"] = {}
+            cursor = cursor["child"]
+        cursor["offers"] = {"price": "1.50", "priceCurrency": "EUR"}
+        price, currency = _schema_org_price_from_node(node)
+        self.assertAlmostEqual(price, 1.50)
+        self.assertEqual(currency, "EUR")
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestAmazonBlockDetection(unittest.TestCase):
+    """Regression: the block signature also appears in normal page footers."""
+
+    def test_compact_challenge_page_is_detected(self):
+        html = (
+            "<html><body>Enter the characters you see below. "
+            "To discuss automated access to Amazon data please contact us."
+            "</body></html>"
+        )
+        self.assertTrue(_is_amazon_bot_blocked(html))
+
+    def test_large_product_page_with_footer_boilerplate_is_not_blocked(self):
+        html = (
+            "<html><body>"
+            + ("<div>product detail</div>" * 6000)
+            + "<footer>To discuss automated access to Amazon data please contact us.</footer>"
+            "</body></html>"
+        )
+        self.assertGreater(len(html), 120_000)
+        self.assertFalse(_is_amazon_bot_blocked(html))
+
+    def test_block_signature_match_is_case_insensitive(self):
+        html = "<p>TO DISCUSS AUTOMATED ACCESS TO AMAZON DATA PLEASE CONTACT US</p>"
+        self.assertTrue(_is_amazon_bot_blocked(html))
+
+    def test_blocked_flag_does_not_short_circuit_other_extractors(self):
+        # Amazon served a challenge page that still carries usable JSON-LD.
+        html = (
+            "<html><body>To discuss automated access to Amazon data contact us."
+            '<script type="application/ld+json">'
+            '{"@type":"Product","offers":{"price":"21.00","priceCurrency":"EUR"}}'
+            "</script></body></html>"
+        )
+        with patch("app.backend.next_price_alerts._fetch_html", return_value=html):
+            price, currency, source = extract_price_from_url_with_source(
+                "https://www.amazon.nl/dp/B000000000"
+            )
+        self.assertAlmostEqual(price, 21.00)
+        self.assertEqual(currency, "EUR")
+        self.assertEqual(source, "schema_org")
+
+    def test_blocked_is_reported_only_when_nothing_could_be_extracted(self):
+        html = "<html><body>To discuss automated access to Amazon data contact us.</body></html>"
+        with patch("app.backend.next_price_alerts._fetch_html", return_value=html):
+            price, currency, source = extract_price_from_url_with_source(
+                "https://www.amazon.nl/dp/B000000000"
+            )
+        self.assertIsNone(price)
+        self.assertIsNone(currency)
+        self.assertEqual(source, "blocked_amazon")
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestBolComPreset(unittest.TestCase):
+    def test_modern_data_test_price_markup(self):
+        html = '<span data-test="price">29,99</span>'
+        price, currency, source = _extract_price_from_domain_preset(
+            "https://www.bol.com/nl/nl/p/x/123/", html
+        )
+        self.assertAlmostEqual(price, 29.99)
+        self.assertEqual(currency, "EUR")
+        self.assertEqual(source, "preset")
+
+    def test_legacy_promo_price_markup_still_supported(self):
+        html = '<span class="promo-price">19,95</span>'
+        price, _currency, source = _extract_price_from_domain_preset(
+            "https://www.bol.com/nl/nl/p/x/123/", html
+        )
+        self.assertAlmostEqual(price, 19.95)
+        self.assertEqual(source, "preset")
+
+    def test_unparseable_preset_match_does_not_return_a_price(self):
+        html = '<span data-test="price">op voorraad</span>'
+        self.assertEqual(
+            _extract_price_from_domain_preset("https://www.bol.com/nl/nl/p/x/123/", html),
+            (None, None, None),
+        )
+
+
+@unittest.skipUnless(_MODULE_AVAILABLE, "next_price_alerts not importable in this environment")
+class TestBrowserUserAgentIsCentralised(unittest.TestCase):
+    """Regression: a locally pinned Chrome version silently rots.
+
+    Amazon began serving its bot wall to Chrome/124 while accepting newer
+    builds, which broke extraction without any code change.  Every caller must
+    therefore share one User-Agent constant so bumping it fixes all of them.
+    """
+
+    def test_price_alerts_uses_the_shared_user_agent(self):
+        self.assertEqual(_BROWSER_USER_AGENT, DEFAULT_BROWSER_USER_AGENT)
+
+    def test_shared_user_agent_is_not_a_stale_chrome_build(self):
+        match = re.search(r"Chrome/(\d+)", DEFAULT_BROWSER_USER_AGENT)
+        self.assertIsNotNone(match, "shared User-Agent must advertise a Chrome version")
+        self.assertGreaterEqual(int(match.group(1)), 126)
 
 
 if __name__ == "__main__":

@@ -23479,10 +23479,12 @@ def register_routes(flask_app: Flask) -> None:
                     selector_value=selector_value,
                     selector_options=selector_options,
                 )
-            if current_price is None and extraction_source in PUBLIC_HTTP_FAILURE_CODES:
-                provider_status = provider_status or "error"
-                provider_error = provider_error or extraction_source
             if current_price is None:
+                # Preserve the real reason so the UI can explain the failure
+                # instead of showing a single generic "no price" message.
+                if extraction_source in PUBLIC_HTTP_FAILURE_CODES:
+                    provider_status = provider_status or "error"
+                provider_error = provider_error or extraction_source or "no_price_found"
                 current_app.logger.warning(
                     "wishlist_shop_price_missing item=%s provider=%s host=%s provider_status=%s provider_error=%s extraction_source=%s",
                     item_uuid,
@@ -23667,10 +23669,12 @@ def register_routes(flask_app: Flask) -> None:
                     selector_value=selector_value,
                     selector_options=selector_options,
                 )
-            if current_price is None and extraction_source in PUBLIC_HTTP_FAILURE_CODES:
-                provider_status = provider_status or "error"
-                provider_error = provider_error or extraction_source
             if current_price is None:
+                # Preserve the real reason so the UI can explain the failure
+                # instead of showing a single generic "no price" message.
+                if extraction_source in PUBLIC_HTTP_FAILURE_CODES:
+                    provider_status = provider_status or "error"
+                provider_error = provider_error or extraction_source or "no_price_found"
                 current_app.logger.warning(
                     "wishlist_shop_price_missing item=%s shop=%s provider=%s host=%s provider_status=%s provider_error=%s extraction_source=%s",
                     item_uuid,

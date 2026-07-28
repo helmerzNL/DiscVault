@@ -7,18 +7,25 @@ import re
 from typing import Any
 
 try:
-    from ...next_public_http import PublicHttpError, fetch_public_text, public_url_hostname
+    from ...next_public_http import (
+        DEFAULT_BROWSER_USER_AGENT,
+        PublicHttpError,
+        fetch_public_text,
+        public_url_hostname,
+    )
 except ImportError:  # pragma: no cover - dynamically loaded plugin
-    from next_public_http import PublicHttpError, fetch_public_text, public_url_hostname
+    from next_public_http import (
+        DEFAULT_BROWSER_USER_AGENT,
+        PublicHttpError,
+        fetch_public_text,
+        public_url_hostname,
+    )
 
 
 DEFAULT_TIMEOUT = 20
 DEFAULT_CURRENCY = "EUR"
 DEFAULT_DOMAIN = "www.amazon.nl"
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-)
+USER_AGENT = DEFAULT_BROWSER_USER_AGENT
 BLOCK_SIGNATURES = (
     "robot check",
     "captchacharacters",
@@ -26,6 +33,16 @@ BLOCK_SIGNATURES = (
     "sorry, we just need to make sure you",
     "/errors/validatecaptcha",
 )
+# A challenge page is a small standalone document; a real product page is an
+# order of magnitude larger and repeats the API-contact sentence in its footer.
+BLOCK_MAX_BYTES = 120_000
+
+
+def _looks_blocked(html: str) -> bool:
+    if len(html) > BLOCK_MAX_BYTES:
+        return False
+    lower_html = html.lower()
+    return any(signature in lower_html for signature in BLOCK_SIGNATURES)
 PRICE_PATTERNS = (
     r'class=["\'][^"\']*a-offscreen[^"\']*["\'][^>]*>\s*([^<]{2,30})\s*<',
     r'id=["\']priceblock_ourprice["\'][^>]*>\s*([^<]{2,20})\s*<',
@@ -204,12 +221,13 @@ def price_check(payload=None, context=None):
         )
     except PublicHttpError as exc:
         return {"status": "error", "error": exc.code}
-    lower_html = html.lower()
-    if any(signature in lower_html for signature in BLOCK_SIGNATURES):
-        return {"status": "no_match", "error": "Amazon blocked the request (bot/challenge page)."}
 
+    # Extract first: a page that yields a price was obviously not a challenge
+    # page, so block detection can never discard a good result.
     price, currency = _extract_amazon_price(html, _fallback_currency(context))
     if price is None:
+        if _looks_blocked(html):
+            return {"status": "no_match", "error": "Amazon blocked the request (bot/challenge page)."}
         return {"status": "no_match", "error": "No usable Amazon price found in the product page."}
 
     return {

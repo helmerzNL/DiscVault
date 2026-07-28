@@ -17,7 +17,7 @@ from app.backend.next_plugins.bol import plugin as bol_plugin
 from app.backend.next_plugins.keepa import plugin as keepa_plugin
 from app.backend.next_plugins.priceapi import plugin as priceapi_plugin
 from app.backend.next_plugins.zavvi import plugin as zavvi_plugin
-from app.backend.next_public_http import PublicHttpError
+from app.backend.next_public_http import DEFAULT_BROWSER_USER_AGENT, PublicHttpError
 
 
 class _Response:
@@ -289,6 +289,77 @@ class TestPriceApiProviderPlugin(unittest.TestCase):
             )
         self.assertEqual(result.get("status"), "ok")
         request.assert_not_called()
+
+
+class TestPriceProviderPluginHardening(unittest.TestCase):
+    """Regressions for the price-monitor outage on bol.com and Amazon.
+
+    Two independent defects took the monitor offline. Every scraping plugin
+    pinned its own Chrome User-Agent, and Amazon began serving its bot wall to
+    Chrome/124 while accepting newer builds. Separately, a plain substring
+    block check fired on legitimate product pages, whose footers repeat the
+    very boilerplate the check looks for.
+    """
+
+    _SCRAPING_PLUGINS = {
+        "amazon": amazon_plugin,
+        "arrow": arrow_plugin,
+        "bol": bol_plugin,
+        "zavvi": zavvi_plugin,
+    }
+
+    def test_all_scraping_plugins_share_one_user_agent(self):
+        for name, module in self._SCRAPING_PLUGINS.items():
+            with self.subTest(plugin=name):
+                self.assertEqual(module.USER_AGENT, DEFAULT_BROWSER_USER_AGENT)
+
+    def test_block_detection_ignores_full_size_product_pages(self):
+        for name, module in self._SCRAPING_PLUGINS.items():
+            with self.subTest(plugin=name):
+                signature = module.BLOCK_SIGNATURES[0]
+                html = "<html>" + ("<div>content</div>" * 8000) + signature + "</html>"
+                self.assertGreater(len(html), module.BLOCK_MAX_BYTES)
+                self.assertFalse(module._looks_blocked(html))
+
+    def test_block_detection_still_flags_compact_challenge_pages(self):
+        for name, module in self._SCRAPING_PLUGINS.items():
+            with self.subTest(plugin=name):
+                html = "<html><body>" + module.BLOCK_SIGNATURES[0] + "</body></html>"
+                self.assertTrue(module._looks_blocked(html))
+
+    def test_extractable_price_wins_over_block_signature(self):
+        schema = (
+            '<script type="application/ld+json">'
+            '{"@type":"Product","offers":{"@type":"Offer","price":"19.99","priceCurrency":"EUR"}}'
+            "</script>"
+        )
+        cases = {
+            "bol": (bol_plugin, "https://www.bol.com/nl/nl/p/example/9300000000000/"),
+            "zavvi": (zavvi_plugin, "https://www.zavvi.com/blu-ray/example/12345678.html"),
+            "arrow": (arrow_plugin, "https://www.arrowfilms.com/product/example"),
+        }
+        for name, (module, url) in cases.items():
+            with self.subTest(plugin=name):
+                html = "<html><body>" + module.BLOCK_SIGNATURES[0] + schema + "</body></html>"
+                target = f"app.backend.next_plugins.{name}.plugin.fetch_public_text"
+                with patch(target, return_value=html):
+                    result = module.price_check({"url": url}, {})
+                self.assertEqual(result.get("status"), "ok", result)
+                self.assertAlmostEqual(result.get("price"), 19.99)
+
+    def test_block_is_reported_when_nothing_could_be_extracted(self):
+        cases = {
+            "bol": (bol_plugin, "https://www.bol.com/nl/nl/p/example/9300000000000/"),
+            "zavvi": (zavvi_plugin, "https://www.zavvi.com/blu-ray/example/12345678.html"),
+        }
+        for name, (module, url) in cases.items():
+            with self.subTest(plugin=name):
+                html = "<html><body>" + module.BLOCK_SIGNATURES[0] + "</body></html>"
+                target = f"app.backend.next_plugins.{name}.plugin.fetch_public_text"
+                with patch(target, return_value=html):
+                    result = module.price_check({"url": url}, {})
+                self.assertEqual(result.get("status"), "no_match")
+                self.assertIn("blocked", result.get("error", "").lower())
 
 
 if __name__ == "__main__":
