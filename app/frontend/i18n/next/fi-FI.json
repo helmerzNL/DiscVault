@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Mikään ei vaadi huomiota juuri nyt.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} lisäosaa tarvitsee määrityksen",
   "appAdmin.pluginAttentionFailedJobs": "{count} epäonnistunutta lisäosatyötä",
-  "appAdmin.pluginAttentionUpdates": "{count} lisäosapäivitystä saatavilla"
+  "appAdmin.pluginAttentionUpdates": "{count} lisäosapäivitystä saatavilla",
+  "collection.loadingMoreRows": "Ladataan lisää…",
+  "collection.hydrationFailed": "Kirjaston loppuosaa ei voitu ladata."
 }

@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Зараз немає нічого, що потребує уваги.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} плагінів потребують налаштування",
   "appAdmin.pluginAttentionFailedJobs": "{count} невдалих завдань плагінів",
-  "appAdmin.pluginAttentionUpdates": "{count} доступних оновлень плагінів"
+  "appAdmin.pluginAttentionUpdates": "{count} доступних оновлень плагінів",
+  "collection.loadingMoreRows": "Завантаження ще…",
+  "collection.hydrationFailed": "Не вдалося завантажити решту бібліотеки."
 }

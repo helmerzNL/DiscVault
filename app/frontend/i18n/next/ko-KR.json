@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "현재 주의가 필요한 항목이 없습니다.",
   "appAdmin.pluginAttentionConfigNeeded": "{count}개의 플러그인에 설정이 필요합니다",
   "appAdmin.pluginAttentionFailedJobs": "{count}개의 실패한 플러그인 작업",
-  "appAdmin.pluginAttentionUpdates": "{count}개의 플러그인 업데이트 사용 가능"
+  "appAdmin.pluginAttentionUpdates": "{count}개의 플러그인 업데이트 사용 가능",
+  "collection.loadingMoreRows": "더 불러오는 중…",
+  "collection.hydrationFailed": "라이브러리의 나머지를 불러오지 못했습니다."
 }

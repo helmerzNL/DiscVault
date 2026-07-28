@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Αυτήν τη στιγμή δεν υπάρχει κάτι που απαιτεί προσοχή.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} πρόσθετα χρειάζονται διαμόρφωση",
   "appAdmin.pluginAttentionFailedJobs": "{count} αποτυχημένες εργασίες προσθέτων",
-  "appAdmin.pluginAttentionUpdates": "{count} διαθέσιμες ενημερώσεις προσθέτων"
+  "appAdmin.pluginAttentionUpdates": "{count} διαθέσιμες ενημερώσεις προσθέτων",
+  "collection.loadingMoreRows": "Φόρτωση περισσότερων…",
+  "collection.hydrationFailed": "Δεν ήταν δυνατή η φόρτωση του υπόλοιπου της βιβλιοθήκης."
 }

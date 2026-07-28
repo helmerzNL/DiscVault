@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "În acest moment nu este nevoie de atenție.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} pluginuri necesită configurare",
   "appAdmin.pluginAttentionFailedJobs": "{count} sarcini de plugin nereușite",
-  "appAdmin.pluginAttentionUpdates": "{count} actualizări de plugin disponibile"
+  "appAdmin.pluginAttentionUpdates": "{count} actualizări de plugin disponibile",
+  "collection.loadingMoreRows": "Se încarcă mai multe…",
+  "collection.hydrationFailed": "Restul bibliotecii nu a putut fi încărcat."
 }

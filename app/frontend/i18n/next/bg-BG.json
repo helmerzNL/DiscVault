@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "В момента нищо не изисква внимание.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} плъгини се нуждаят от конфигуриране",
   "appAdmin.pluginAttentionFailedJobs": "{count} неуспешни задачи на плъгини",
-  "appAdmin.pluginAttentionUpdates": "{count} налични актуализации на плъгини"
+  "appAdmin.pluginAttentionUpdates": "{count} налични актуализации на плъгини",
+  "collection.loadingMoreRows": "Зареждане на още…",
+  "collection.hydrationFailed": "Останалата част от библиотеката не можа да се зареди."
 }

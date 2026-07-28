@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Trenutačno ništa ne zahtijeva pažnju.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} dodataka treba konfiguraciju",
   "appAdmin.pluginAttentionFailedJobs": "{count} neuspjelih zadataka dodataka",
-  "appAdmin.pluginAttentionUpdates": "{count} dostupnih ažuriranja dodataka"
+  "appAdmin.pluginAttentionUpdates": "{count} dostupnih ažuriranja dodataka",
+  "collection.loadingMoreRows": "Učitavanje još…",
+  "collection.hydrationFailed": "Ostatak biblioteke nije bilo moguće učitati."
 }

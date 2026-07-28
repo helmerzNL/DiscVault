@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Intet kræver handling lige nu.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} plugins kræver konfiguration",
   "appAdmin.pluginAttentionFailedJobs": "{count} mislykkede plugin-jobs",
-  "appAdmin.pluginAttentionUpdates": "{count} plugin-opdateringer tilgængelige"
+  "appAdmin.pluginAttentionUpdates": "{count} plugin-opdateringer tilgængelige",
+  "collection.loadingMoreRows": "Indlæser flere…",
+  "collection.hydrationFailed": "Resten af biblioteket kunne ikke indlæses."
 }

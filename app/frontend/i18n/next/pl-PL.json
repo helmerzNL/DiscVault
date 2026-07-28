@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Obecnie nic nie wymaga uwagi.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} wtyczek wymaga konfiguracji",
   "appAdmin.pluginAttentionFailedJobs": "{count} nieudanych zadań wtyczek",
-  "appAdmin.pluginAttentionUpdates": "{count} dostępnych aktualizacji wtyczek"
+  "appAdmin.pluginAttentionUpdates": "{count} dostępnych aktualizacji wtyczek",
+  "collection.loadingMoreRows": "Wczytywanie kolejnych…",
+  "collection.hydrationFailed": "Nie udało się wczytać reszty biblioteki."
 }

@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Trenutno nič ne potrebuje pozornosti.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} vtičnikov potrebuje konfiguracijo",
   "appAdmin.pluginAttentionFailedJobs": "{count} neuspešnih opravil vtičnikov",
-  "appAdmin.pluginAttentionUpdates": "{count} razpoložljivih posodobitev vtičnikov"
+  "appAdmin.pluginAttentionUpdates": "{count} razpoložljivih posodobitev vtičnikov",
+  "collection.loadingMoreRows": "Nalaganje več…",
+  "collection.hydrationFailed": "Preostanka knjižnice ni bilo mogoče naložiti."
 }

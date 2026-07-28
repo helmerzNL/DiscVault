@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Nada precisa de atenção neste momento.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} plugins precisam de configuração",
   "appAdmin.pluginAttentionFailedJobs": "{count} tarefas de plugin falhadas",
-  "appAdmin.pluginAttentionUpdates": "{count} atualizações de plugin disponíveis"
+  "appAdmin.pluginAttentionUpdates": "{count} atualizações de plugin disponíveis",
+  "collection.loadingMoreRows": "A carregar mais…",
+  "collection.hydrationFailed": "Não foi possível carregar o resto da biblioteca."
 }
