@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Momentálně nic nevyžaduje pozornost.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} pluginů vyžaduje konfiguraci",
   "appAdmin.pluginAttentionFailedJobs": "{count} neúspěšných úloh pluginů",
-  "appAdmin.pluginAttentionUpdates": "{count} dostupných aktualizací pluginů"
+  "appAdmin.pluginAttentionUpdates": "{count} dostupných aktualizací pluginů",
+  "collection.loadingMoreRows": "Načítání dalších…",
+  "collection.hydrationFailed": "Zbytek knihovny se nepodařilo načíst."
 }

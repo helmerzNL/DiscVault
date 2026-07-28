@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Jelenleg semmi nem igényel figyelmet.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} bővítmény konfigurációt igényel",
   "appAdmin.pluginAttentionFailedJobs": "{count} sikertelen bővítményfeladat",
-  "appAdmin.pluginAttentionUpdates": "{count} elérhető bővítményfrissítés"
+  "appAdmin.pluginAttentionUpdates": "{count} elérhető bővítményfrissítés",
+  "collection.loadingMoreRows": "További elemek betöltése…",
+  "collection.hydrationFailed": "A könyvtár többi része nem tölthető be."
 }

@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Praegu ei vaja midagi tähelepanu.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} pluginat vajavad seadistamist",
   "appAdmin.pluginAttentionFailedJobs": "{count} ebaõnnestunud plugina tööd",
-  "appAdmin.pluginAttentionUpdates": "{count} plugina värskendust saadaval"
+  "appAdmin.pluginAttentionUpdates": "{count} plugina värskendust saadaval",
+  "collection.loadingMoreRows": "Laaditakse veel…",
+  "collection.hydrationFailed": "Ülejäänud kogu laadimine ebaõnnestus."
 }

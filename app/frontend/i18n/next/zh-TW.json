@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "目前沒有需要注意的項目。",
   "appAdmin.pluginAttentionConfigNeeded": "{count} 個外掛程式需要設定",
   "appAdmin.pluginAttentionFailedJobs": "{count} 個外掛程式工作失敗",
-  "appAdmin.pluginAttentionUpdates": "{count} 個外掛程式更新可用"
+  "appAdmin.pluginAttentionUpdates": "{count} 個外掛程式更新可用",
+  "collection.loadingMoreRows": "正在載入更多…",
+  "collection.hydrationFailed": "無法載入媒體庫的其餘部分。"
 }

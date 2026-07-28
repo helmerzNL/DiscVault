@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Nothing needs attention right now.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} plugins need configuration",
   "appAdmin.pluginAttentionFailedJobs": "{count} failed plugin jobs",
-  "appAdmin.pluginAttentionUpdates": "{count} plugin updates available"
+  "appAdmin.pluginAttentionUpdates": "{count} plugin updates available",
+  "collection.loadingMoreRows": "Loading more…",
+  "collection.hydrationFailed": "Could not load the rest of the library."
 }

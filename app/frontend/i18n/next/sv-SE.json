@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Inget behöver uppmärksamhet just nu.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} plugins behöver konfiguration",
   "appAdmin.pluginAttentionFailedJobs": "{count} misslyckade pluginjobb",
-  "appAdmin.pluginAttentionUpdates": "{count} plugin-uppdateringar tillgängliga"
+  "appAdmin.pluginAttentionUpdates": "{count} plugin-uppdateringar tillgängliga",
+  "collection.loadingMoreRows": "Laddar fler…",
+  "collection.hydrationFailed": "Resten av biblioteket kunde inte laddas."
 }

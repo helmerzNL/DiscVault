@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Šiuo metu dėmesio nereikia.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} papildiniams reikia konfigūracijos",
   "appAdmin.pluginAttentionFailedJobs": "{count} nepavykusios papildinių užduotys",
-  "appAdmin.pluginAttentionUpdates": "{count} galimi papildinių atnaujinimai"
+  "appAdmin.pluginAttentionUpdates": "{count} galimi papildinių atnaujinimai",
+  "collection.loadingMoreRows": "Įkeliama daugiau…",
+  "collection.hydrationFailed": "Nepavyko įkelti likusios bibliotekos dalies."
 }

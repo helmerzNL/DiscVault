@@ -10,6 +10,7 @@ For product overview and screenshots, use the repository root README.
 app/
 ├── backend/            DiscVault Next API (next_app.py, Flask + Gunicorn, PostgreSQL)
 ├── frontend/           Shared static assets (i18n/next, flags, icons, PWA, service worker)
+│   └── js/             Standalone SPA modules served via /api/next/app/js/<name>.js
 ├── mcp-server/         MCP HTTP server
 ├── deploy/
 │   ├── v26/            Supervisor config for the v26 (Next) single-container image
@@ -183,7 +184,33 @@ PUT    /api/movies/:id
 DELETE /api/movies/:id
 GET    /api/lookup/:barcode
 GET    /api/search_title?q=
+GET    /api/next/collection/movies?limit=&offset=
+GET    /api/next/app/js/:name.js
 ```
+
+## Library paging and hydration
+
+The library used to be hard-capped: the dashboard snapshot returned at most 200 movies and the
+SPA rendered only the first 80 rows. Both caps are gone.
+
+How it works now:
+
+1. **First paint** — `collection_dashboard_snapshot()` still embeds only the first page
+   (`COLLECTION_MOVIE_PAGE_SIZE`, 200 movies) so the inline `initialState` stays small. The
+   snapshot also reports `moviesTotal`, `moviesPageSize` and `moviesHasMore`, so counters show the
+   real collection size immediately.
+2. **Background hydration** — `app/frontend/js/library-paging.js` loads the remaining movies in
+   chunks of 500 via `GET /api/next/collection/movies?limit=&offset=` (see
+   `app/backend/next_library_data.py`) and appends them through the `window.DiscVaultLibrary`
+   bridge. Progress and failures are surfaced with the `collection.loadingMoreRows` and
+   `collection.hydrationFailed` strings.
+3. **Incremental rendering** — the list, poster grid and location rail render a growing window
+   (`LIBRARY_RENDER_STEP`, 120 rows). An `IntersectionObserver` watches a sentinel at the bottom of
+   the list and grows the window as you scroll, so a 5000-movie library stays responsive.
+
+Standalone SPA modules under `app/frontend/js/` are served by `app/backend/next_static.py` through
+`GET /api/next/app/js/<name>.js`. Only files listed in `NEXT_SCRIPT_ASSETS` are addressable; the
+prefix is public because the scripts contain no secrets.
 
 ## Data and backups
 

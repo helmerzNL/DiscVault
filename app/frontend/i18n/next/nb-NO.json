@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Ingenting krever oppfølging nå.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} plugins krever konfigurasjon",
   "appAdmin.pluginAttentionFailedJobs": "{count} mislykkede plugin-jobber",
-  "appAdmin.pluginAttentionUpdates": "{count} plugin-oppdateringer tilgjengelige"
+  "appAdmin.pluginAttentionUpdates": "{count} plugin-oppdateringer tilgjengelige",
+  "collection.loadingMoreRows": "Laster inn flere…",
+  "collection.hydrationFailed": "Kunne ikke laste resten av biblioteket."
 }

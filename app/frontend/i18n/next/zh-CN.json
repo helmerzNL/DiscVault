@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "目前没有需要关注的内容。",
   "appAdmin.pluginAttentionConfigNeeded": "{count} 个插件需要配置",
   "appAdmin.pluginAttentionFailedJobs": "{count} 个插件任务失败",
-  "appAdmin.pluginAttentionUpdates": "{count} 个插件更新可用"
+  "appAdmin.pluginAttentionUpdates": "{count} 个插件更新可用",
+  "collection.loadingMoreRows": "正在加载更多…",
+  "collection.hydrationFailed": "无法加载媒体库的其余部分。"
 }

@@ -2541,5 +2541,7 @@
   "appAdmin.pluginAttentionEmpty": "Şu anda dikkat gerektiren bir şey yok.",
   "appAdmin.pluginAttentionConfigNeeded": "{count} eklenti yapılandırma gerektiriyor",
   "appAdmin.pluginAttentionFailedJobs": "{count} başarısız eklenti işi",
-  "appAdmin.pluginAttentionUpdates": "{count} eklenti güncellemesi mevcut"
+  "appAdmin.pluginAttentionUpdates": "{count} eklenti güncellemesi mevcut",
+  "collection.loadingMoreRows": "Daha fazlası yükleniyor…",
+  "collection.hydrationFailed": "Kitaplığın geri kalanı yüklenemedi."
 }

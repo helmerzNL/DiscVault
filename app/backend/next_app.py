@@ -255,6 +255,9 @@ try:
     from .next_push import register_next_push_routes
     from .next_push import send_native_push_to_user
     from .next_push import send_push_to_user
+    from .next_library_data import register_next_library_data_routes
+    from .next_static import NEXT_SCRIPT_URL_PREFIX
+    from .next_static import register_next_static_routes
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
     from next_import import CLIENT_SYNC_SETTING_KEYS
@@ -467,6 +470,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_push import register_next_push_routes
     from next_push import send_native_push_to_user
     from next_push import send_push_to_user
+    from next_library_data import register_next_library_data_routes
+    from next_static import NEXT_SCRIPT_URL_PREFIX
+    from next_static import register_next_static_routes
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
@@ -4177,9 +4183,43 @@ def startup_status_payload(conn) -> dict[str, Any]:
 
 
 
-def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+COLLECTION_MOVIE_PAGE_SIZE = 200
+COLLECTION_MOVIE_MAX_PAGE_SIZE = 500
+
+
+def collection_movie_total_count(conn, *, actor: dict[str, Any] | None = None) -> int:
+    """Total number of movies visible to ``actor`` (ignores paging)."""
+    if not table_exists(conn, "movies"):
+        return 0
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM movies m
+            WHERE {visibility_where}
+              AND m.deleted_at IS NULL
+            """,
+            tuple(visibility_params),
+        )
+        row = cur.fetchone()
+    if not row:
+        return 0
+    if isinstance(row, dict):
+        return int(row.get("total") or 0)
+    return int(row[0] or 0)
+
+
+def collection_movie_preview_entities(
+    conn,
+    *,
+    limit: int = 200,
+    offset: int = 0,
+    actor: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     if not table_exists(conn, "movies"):
         return []
+    offset = max(0, int(offset or 0))
     visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
     if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
         with conn.cursor() as cur:
@@ -4252,9 +4292,9 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
                 WHERE {visibility_where}
                   AND m.deleted_at IS NULL
                 ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
-                LIMIT %s
+                LIMIT %s OFFSET %s
                 """,
-                (*visibility_params, limit),
+                (*visibility_params, limit, offset),
             )
             return attach_movie_genres(
                 conn,
@@ -4303,9 +4343,9 @@ def collection_movie_preview_entities(conn, *, limit: int = 200, actor: dict[str
             WHERE {visibility_where}
               AND m.deleted_at IS NULL
             ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
-            LIMIT %s
+            LIMIT %s OFFSET %s
             """,
-            (*visibility_params, limit),
+            (*visibility_params, limit, offset),
         )
         return attach_movie_genres(
             conn,
@@ -4644,11 +4684,15 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
     }
     counts["personalLists"] = personal_list_counts(conn, user_id)
     counts["notifications"] = notification_counts(conn, user_id)
-    movies = collection_movie_preview_entities(conn, actor=user)
+    movies = collection_movie_preview_entities(conn, limit=COLLECTION_MOVIE_PAGE_SIZE, actor=user)
     movies = attach_personal_list_state(conn, movies, user_id)
+    movies_total = collection_movie_total_count(conn, actor=user)
     return {
         "counts": counts,
         "movies": movies,
+        "moviesTotal": movies_total,
+        "moviesPageSize": COLLECTION_MOVIE_PAGE_SIZE,
+        "moviesHasMore": len(movies) < movies_total,
         "containers": collection_container_preview_entities(conn, actor=user),
         "containerMembership": collection_container_membership_entities(conn, actor=user),
         "locations": location_list_entities(conn),
@@ -4680,6 +4724,9 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
     return {
         "counts": {},
         "movies": [],
+        "moviesTotal": 0,
+        "moviesPageSize": COLLECTION_MOVIE_PAGE_SIZE,
+        "moviesHasMore": False,
         "containers": [],
         "containerMembership": [],
         "locations": [],
@@ -18199,6 +18246,7 @@ PUBLIC_NEXT_PREFIXES = (
     "/api/auth/",
     "/api/next/auth/",
     "/api/next/assets/",
+    f"{NEXT_SCRIPT_URL_PREFIX}/",
     "/api/next/i18n/",
     "/app/movies/",
     "/app/discover/",
@@ -18228,6 +18276,8 @@ def register_routes(flask_app: Flask) -> None:
     register_next_notifications_routes(flask_app, connect=connect)
     register_next_discover_routes(flask_app, connect=connect)
     register_next_push_routes(flask_app, connect=connect)
+    register_next_static_routes(flask_app, connect=connect)
+    register_next_library_data_routes(flask_app, connect=connect)
 
     @flask_app.errorhandler(NextApiError)
     def handle_next_error(error: NextApiError):

@@ -2581,6 +2581,38 @@ def ui_preview_html(
       color: var(--text);
       background: color-mix(in srgb, var(--warn) 8%, transparent);
     }
+    .library-render-sentinel {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .library-render-sentinel::before {
+      content: "";
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--line-strong);
+      border-top-color: var(--muted);
+      animation: library-render-sentinel-spin 900ms linear infinite;
+    }
+    @keyframes library-render-sentinel-spin {
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .library-render-sentinel::before { animation: none; }
+    }
+    .library-hydration-progress {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
     .import-tmdb-guidance {
       display: grid;
       gap: 10px;
@@ -16608,6 +16640,9 @@ def ui_preview_html(
     const initialMovieId = JSON.parse(document.getElementById("initialMovieId").textContent || '""');
     let state = JSON.parse(document.getElementById("initialState").textContent || "{}");
     let movies = state.movies || [];
+    let libraryMovieTotal = Number(state.moviesTotal ?? (state.movies || []).length) || 0;
+    let libraryMoviePageSize = Number(state.moviesPageSize) || 200;
+    let libraryMoviesHasMore = state.moviesHasMore === true;
     let containers = state.containers || [];
     let locations = state.locations || [];
     let containerMembership = state.containerMembership || [];
@@ -24326,13 +24361,36 @@ def ui_preview_html(
         </th>
       `;
     }
+    const LIBRARY_RENDER_STEP = 120;
+    let libraryRenderLimit = LIBRARY_RENDER_STEP;
+    function libraryVisibleSlice(items) {
+      if (!Array.isArray(items)) return [];
+      return items.length > libraryRenderLimit ? items.slice(0, libraryRenderLimit) : items;
+    }
+    function libraryRenderSentinelHtml(total) {
+      const count = Number(total) || 0;
+      if (count <= libraryRenderLimit) return "";
+      const remaining = count - libraryRenderLimit;
+      const label = tNext("collection.loadingMoreRows", "Loading more…");
+      return `<div class="library-render-sentinel" data-library-render-sentinel data-remaining="${remaining}"><span class="library-render-sentinel-label">${escapeHtml(label)}</span></div>`;
+    }
+    function libraryAfterRender() {
+      const hook = window.DiscVaultLibrary && window.DiscVaultLibrary.onRender;
+      if (typeof hook === "function") {
+        try {
+          hook();
+        } catch (error) {
+          console.warn("library render hook failed", error);
+        }
+      }
+    }
     function libraryListTableHtml(items) {
       const normalizedSort = normalizeLibraryDetailSort(libraryDetailSort);
       if (normalizedSort.key !== libraryDetailSort?.key || normalizedSort.direction !== libraryDetailSort?.direction) {
         libraryDetailSort = normalizedSort;
         localStorage.setItem("dv_next_library_detail_sort", JSON.stringify(normalizedSort));
       }
-      const sorted = sortLibraryListItems(items, normalizedSort).slice(0, 80);
+      const sorted = libraryVisibleSlice(sortLibraryListItems(items, normalizedSort));
       return `
         <div class="library-list-scroll">
           <table class="library-list-table" aria-label="${escapeHtml(tNext("collection.viewList", "List"))}">
@@ -36507,7 +36565,7 @@ def ui_preview_html(
         rail.classList.remove("mode-detail-grid");
         rail.classList.toggle("poster-rail", libraryViewMode === "poster");
         rail.innerHTML = displayItems.length
-          ? displayItems.slice(0, 80).map((item, index) => (
+          ? libraryVisibleSlice(displayItems).map((item, index) => (
               libraryViewMode === "list"
                 ? libraryListItemHtml(item)
                 : (
@@ -36515,7 +36573,7 @@ def ui_preview_html(
                       ? containerPosterCardHtml(item.container, index)
                       : posterCardHtml(item.movie, index)
                   )
-            )).join("")
+            )).join("") + libraryRenderSentinelHtml(displayItems.length)
           : `<div class="preview-empty">${escapeHtml(
               activeLocationRouteMissing
                 ? tNext("locations.routeNotFound", "Location not found.")
@@ -36525,6 +36583,7 @@ def ui_preview_html(
       bindCollectionCardInteractions(document.getElementById("locationDetailPage") || document);
       bindViewModeInteractions(document.getElementById("locationDetailPage") || document);
       updateBulkBar();
+      libraryAfterRender();
     }
     function renderCollectionSurface() {
       if (locationDetailPageVisible() && activeLocationRoutePublicId) {
@@ -36533,6 +36592,66 @@ def ui_preview_html(
       }
       renderLibrary();
     }
+    window.DiscVaultLibrary = {
+      version: 1,
+      t: (key, fallback) => tNext(key, fallback),
+      getMovies: () => movies,
+      getMovieTotal: () => libraryMovieTotal,
+      getPageSize: () => libraryMoviePageSize,
+      hasMoreMovies: () => libraryMoviesHasMore === true && movies.length < libraryMovieTotal,
+      getLoadedCount: () => movies.length,
+      setMovieTotal: (total) => {
+        const parsed = Number(total);
+        if (Number.isFinite(parsed) && parsed >= 0) libraryMovieTotal = parsed;
+      },
+      appendMovies: (rows) => {
+        if (!Array.isArray(rows) || !rows.length) return 0;
+        const seen = new Set(movies.map((movie) => String(movie?.id || "")));
+        const added = [];
+        rows.forEach((row) => {
+          const id = String(row?.id || "");
+          if (!id || seen.has(id)) return;
+          seen.add(id);
+          added.push(row);
+        });
+        if (added.length) movies = movies.concat(added);
+        libraryMoviesHasMore = movies.length < libraryMovieTotal;
+        return added.length;
+      },
+      setHydrationComplete: () => {
+        libraryMoviesHasMore = false;
+        if (movies.length > libraryMovieTotal) libraryMovieTotal = movies.length;
+      },
+      getRenderLimit: () => libraryRenderLimit,
+      getRenderStep: () => LIBRARY_RENDER_STEP,
+      growRenderLimit: (step) => {
+        const increment = Number(step) || LIBRARY_RENDER_STEP;
+        libraryRenderLimit += increment;
+        return libraryRenderLimit;
+      },
+      resetRenderLimit: () => {
+        libraryRenderLimit = LIBRARY_RENDER_STEP;
+      },
+      render: () => renderCollectionSurface(),
+      getDisplayItems: () => libraryDisplayItems(),
+      getFilteredMovies: () => {
+        const sortState = normalizeLibraryDetailSort(libraryDetailSort);
+        const items = sortLibraryListItems(libraryDisplayItems(), sortState);
+        const seen = new Set();
+        const result = [];
+        items.forEach((item) => {
+          itemMovieRows(item).forEach((movie) => {
+            const id = String(movie?.id || "");
+            if (!id || seen.has(id)) return;
+            seen.add(id);
+            result.push(movie);
+          });
+        });
+        return result;
+      },
+      authHeaders: () => authHeaders(),
+      onRender: null,
+    };
     function renderLibrary() {
       if (!collectorsModeEnabled()) selectedContainerIds.clear();
       renderGroupFilter();
@@ -36563,13 +36682,15 @@ def ui_preview_html(
         rail.classList.toggle("poster-rail", libraryViewMode === "poster");
         rail.innerHTML = displayItems.length
           ? (
-              libraryViewMode === "list"
-                ? libraryListTableHtml(displayItems)
-                : displayItems.slice(0, 80).map((item, index) => (
-                    item.kind === "container"
-                      ? containerPosterCardHtml(item.container, index)
-                      : posterCardHtml(item.movie, index)
-                  )).join("")
+              (
+                libraryViewMode === "list"
+                  ? libraryListTableHtml(displayItems)
+                  : libraryVisibleSlice(displayItems).map((item, index) => (
+                      item.kind === "container"
+                        ? containerPosterCardHtml(item.container, index)
+                        : posterCardHtml(item.movie, index)
+                    )).join("")
+              ) + libraryRenderSentinelHtml(displayItems.length)
             )
           : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
       }
@@ -36580,14 +36701,14 @@ def ui_preview_html(
         const movieLabel = tNext("collection.movies", "Movies").toLowerCase();
         const tileLabel = tNext("collection.tiles", "tiles");
         const summaryText = mergeEditionsAsTitleEnabled()
-          ? `${visibleMovieCount} / ${movies.length} ${movieLabel} · ${displayItems.length} ${tileLabel}`
-          : `${visibleMovieCount} / ${movies.length} ${movieLabel}`;
+          ? `${visibleMovieCount} / ${libraryMovieTotal} ${movieLabel} · ${displayItems.length} ${tileLabel}`
+          : `${visibleMovieCount} / ${libraryMovieTotal} ${movieLabel}`;
         summary.textContent = summaryText;
       }
       const navMovieCount = document.getElementById("navMovieCount");
       const navListCount = document.getElementById("navListCount");
       const containerPanelCount = document.getElementById("containerPanelCount");
-      if (navMovieCount) navMovieCount.textContent = String(movies.length);
+      if (navMovieCount) navMovieCount.textContent = String(libraryMovieTotal);
       if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
       const firstItem = libraryViewMode === "list" ? sortLibraryListItems(displayItems)[0] : displayItems[0];
@@ -36595,6 +36716,7 @@ def ui_preview_html(
       if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
       updateBulkBar();
       renderLibraryMetadataJobs();
+      libraryAfterRender();
     }
     function toggleSelectMode(force) {
       selectionMode = typeof force === "boolean" ? force : !selectionMode;
@@ -38409,6 +38531,10 @@ def ui_preview_html(
       state = payload.snapshot || {};
       priceDisplay = state.priceDisplay || {};
       movies = state.movies || [];
+      libraryMovieTotal = Number(state.moviesTotal ?? movies.length) || 0;
+      libraryMoviePageSize = Number(state.moviesPageSize) || libraryMoviePageSize;
+      libraryMoviesHasMore = state.moviesHasMore === true;
+      libraryRenderLimit = LIBRARY_RENDER_STEP;
       containers = state.containers || [];
       locations = state.locations || locations || [];
       containerMembership = state.containerMembership || [];
@@ -41024,6 +41150,7 @@ def ui_preview_html(
       });
     });
   </script>
+  <script src="/api/next/app/js/library-paging.js" defer></script>
 </body>
 </html>
 """
