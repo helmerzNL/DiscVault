@@ -967,6 +967,140 @@ class NextReconcileLadderTests(unittest.TestCase):
 
 
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextMovieUpsertBarcodeConflictTests(unittest.TestCase):
+    class _RecordingCursor:
+        def __init__(self, calls):
+            self._calls = calls
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql, params=()):
+            self._calls.append((" ".join(str(sql).split()), tuple(params or ())))
+
+        def fetchone(self):
+            return None
+
+    class _RecordingConn:
+        def __init__(self):
+            self.calls = []
+
+        def cursor(self):
+            return NextMovieUpsertBarcodeConflictTests._RecordingCursor(self.calls)
+
+    def _fields(self, barcode):
+        return {
+            "metadata": {},
+            "barcode": barcode,
+            "title": "The Matrix",
+            "sort_title": "the matrix",
+            "original_title": None,
+            "release_title": None,
+            "year": "1999",
+            "release_date": None,
+            "format": "4K UHD",
+            "edition": "",
+            "edition_type": None,
+            "country": None,
+            "language": None,
+            "runtime_minutes": None,
+            "overview": None,
+            "notes": None,
+            "rating": None,
+            "purchase_date": None,
+            "purchase_price": None,
+            "location": None,
+        }
+
+    def _mutation(self, *, barcode, duplicate_copy=False):
+        return {
+            "clientMutationId": "mutation-1",
+            "clientEntityId": "tmp-1",
+            "payload": {
+                "barcode": barcode,
+                "title": "The Matrix",
+                "format": "4K UHD",
+                "metadata": {},
+                "updated_at": "2026-07-30T12:00:00Z",
+                "duplicate_copy": duplicate_copy,
+            },
+        }
+
+    def _insert_barcodes(self, conn):
+        insert_calls = [params for sql, params in conn.calls if "INSERT INTO movies" in sql]
+        self.assertEqual(len(insert_calls), 1)
+        return insert_calls[0][2]
+
+    def test_create_conflicting_barcode_adopts_live_owner(self):
+        conn = self._RecordingConn()
+        ladder_id = uuid.uuid4()
+        barcode_owner = uuid.uuid4()
+        owner_entity = {"id": barcode_owner, "title": "The Matrix", "deleted_at": None}
+
+        with (
+            patch.object(next_app, "movie_payload_fields", return_value=self._fields("3701432061177")),
+            patch.object(next_app, "client_entity_mapping", return_value=None),
+            patch.object(next_app, "match_existing_movie", return_value=(ladder_id, "clientId")),
+            patch.object(next_app, "find_movie_by_barcode_match", return_value=barcode_owner),
+            patch.object(next_app, "movie_entity", side_effect=[owner_entity, owner_entity]),
+            patch.object(next_app, "store_client_entity_mapping"),
+            patch.object(next_app, "sync_change"),
+            patch.object(next_app, "next_revision", return_value=99),
+            patch.object(next_app, "table_exists", return_value=False),
+        ):
+            result = next_app.apply_movie_upsert(
+                conn,
+                client_id="device-a",
+                idem_key="idem-1",
+                mutation=self._mutation(barcode="3701432061177"),
+                batch_ctx=next_app.SyncBatchContext(),
+            )
+
+        self.assertEqual(result["status"], "applied")
+        self.assertEqual(result["entityId"], barcode_owner)
+        self.assertEqual(result["matchedBy"], "barcode")
+        self.assertFalse(result["created"])
+        self.assertEqual(self._insert_barcodes(conn), "3701432061177")
+
+    def test_duplicate_copy_keeps_target_and_drops_conflicting_barcode(self):
+        conn = self._RecordingConn()
+        ladder_id = uuid.uuid4()
+        barcode_owner = uuid.uuid4()
+        ladder_entity = {"id": ladder_id, "title": "The Matrix", "deleted_at": None}
+
+        with (
+            patch.object(next_app, "movie_payload_fields", return_value=self._fields("5051889647010")),
+            patch.object(next_app, "client_entity_mapping", return_value=None),
+            patch.object(next_app, "match_existing_movie", return_value=(ladder_id, "tmdbEdition")),
+            patch.object(next_app, "find_movie_by_barcode_match", return_value=barcode_owner),
+            patch.object(next_app, "movie_entity", side_effect=[ladder_entity, ladder_entity]),
+            patch.object(next_app, "store_client_entity_mapping"),
+            patch.object(next_app, "sync_change"),
+            patch.object(next_app, "next_revision", return_value=100),
+            patch.object(next_app, "table_exists", return_value=False),
+        ):
+            result = next_app.apply_movie_upsert(
+                conn,
+                client_id="device-a",
+                idem_key="idem-2",
+                mutation=self._mutation(
+                    barcode="5051889647010",
+                    duplicate_copy=True,
+                ),
+                batch_ctx=next_app.SyncBatchContext(),
+            )
+
+        self.assertEqual(result["status"], "applied")
+        self.assertEqual(result["entityId"], ladder_id)
+        self.assertEqual(result["matchedBy"], "tmdbEdition")
+        self.assertFalse(result["created"])
+        self.assertIsNone(self._insert_barcodes(conn))
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class NextTombstoneResponseContractTests(unittest.TestCase):
     def _fields(self):
         return {
