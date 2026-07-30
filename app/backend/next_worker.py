@@ -48,6 +48,7 @@ try:
     from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
     from .next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
+    from .next_movievault_v2_posters import link_box_set_poster_to_containers
     from .next_movievault_v2_posters import run_poster_cache_job
     from .next_movievault_v2_posters import run_poster_cleanup
 except ImportError:  # pragma: no cover - supports python next_worker.py
@@ -73,6 +74,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
     from next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
+    from next_movievault_v2_posters import link_box_set_poster_to_containers
     from next_movievault_v2_posters import run_poster_cache_job
     from next_movievault_v2_posters import run_poster_cleanup
 
@@ -545,6 +547,15 @@ def process_price_alert_sweep(payload: dict[str, Any], worker_id: str) -> dict[s
 def process_movievault_v2_poster_cache(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
     with connect() as conn:
         summary = run_poster_cache_job(conn, payload)
+        # Auto-link ready display posters to matching DiscVault containers.
+        if summary.get("outcome") == "ready" and str(payload.get("variant", "")) == "display":
+            asset_id = str(summary.get("assetId") or payload.get("assetId") or "")
+            media_asset_id = str(summary.get("mediaAssetId") or "")
+            if asset_id and media_asset_id:
+                linked = link_box_set_poster_to_containers(
+                    conn, asset_id=asset_id, media_asset_id=media_asset_id
+                )
+                summary["containersLinked"] = linked
     return {
         "workerId": worker_id,
         "jobType": POSTER_CACHE_JOB_TYPE,

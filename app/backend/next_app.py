@@ -14865,6 +14865,156 @@ def link_container_media_option(
     }
 
 
+def link_local_media_asset_to_container(
+    conn,
+    *,
+    container_id: UUID,
+    kind: str,
+    media_asset_id: UUID,
+    provider_id: str,
+    sort_order: int,
+    primary: bool = False,
+) -> dict[str, Any] | None:
+    """Attach a locally-cached media asset (e.g. from the v4 poster cache) to a
+    container's entity_media without going through ensure_remote_media_asset(),
+    which only handles http/https source URLs.
+
+    Mirrors the primary/ordering/conflict logic of link_container_media_option()
+    but uses a known local media_asset_id directly.
+    """
+    if kind not in {"poster", "backdrop"}:
+        return None
+    if not table_exists(conn, "entity_media"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT is_primary, deleted_at
+            FROM entity_media
+            WHERE entity_type='container'
+              AND entity_id=%s
+              AND media_id=%s
+              AND role=%s
+            """,
+            (container_id, media_asset_id, kind),
+        )
+        row = cur.fetchone()
+        if row and (row["deleted_at"] if isinstance(row, dict) else row[1]):
+            return None
+        if row and bool(row["is_primary"] if isinstance(row, dict) else row[0]):
+            return None
+        make_primary = False
+        if primary:
+            cur.execute(
+                """
+                SELECT 1
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='container'
+                  AND em.entity_id=%s
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                  AND em.is_primary=true
+                  AND ma.kind=%s
+                """,
+                (container_id, kind),
+            )
+            make_primary = cur.fetchone() is None
+        cur.execute(
+            """
+            INSERT INTO entity_media (
+                entity_type,
+                entity_id,
+                media_id,
+                role,
+                is_primary,
+                sort_order
+            )
+            VALUES ('container', %s, %s, %s, %s, %s)
+            ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                sort_order=LEAST(entity_media.sort_order, EXCLUDED.sort_order),
+                deleted_at=NULL
+            """,
+            (container_id, media_asset_id, kind, make_primary, sort_order),
+        )
+    return {
+        "kind": kind,
+        "mediaId": str(media_asset_id),
+        "providerId": provider_id,
+        "primary": make_primary,
+    }
+
+
+def _find_v4_cached_poster_for_container(
+    conn,
+    *,
+    barcode: str | None,
+    movievault_id: str | None,
+) -> dict[str, Any] | None:
+    """Look up a ready v4 display poster for a box-set container.
+
+    Searches movievault_v2_box_sets + movievault_v2_poster_cache using the
+    container's barcode (SHA-256 hash join) or movievault_id identifier.
+    Returns a dict with ``media_asset_id`` and ``asset_id`` when a ready
+    cached display poster is found, else None.
+    """
+    if not barcode and not movievault_id:
+        return None
+    if not table_exists(conn, "movievault_v2_poster_cache") or not table_exists(conn, "movievault_v2_box_sets"):
+        return None
+    with conn.cursor() as cur:
+        if barcode:
+            cur.execute(
+                """
+                SELECT pc.media_asset_id, bs.poster->>'assetId' AS asset_id
+                FROM movievault_v2_box_sets bs
+                JOIN movievault_v2_lookup_hashes h
+                    ON h.generation = bs.generation
+                   AND h.entity_id = bs.box_set_id
+                   AND h.entity_type = 'box_set'
+                   AND h.source_type = 'box_set_ean'
+                   AND h.lookup_hash = encode(digest(%s::text, 'sha256'), 'hex')
+                JOIN movievault_v2_poster_cache pc
+                    ON pc.asset_id = bs.poster->>'assetId'
+                   AND pc.variant = 'display'
+                   AND pc.checksum = bs.poster->'display'->>'checksum'
+                   AND pc.status = 'ready'
+                   AND pc.media_asset_id IS NOT NULL
+                LIMIT 1
+                """,
+                (barcode,),
+            )
+            row = cur.fetchone()
+            if row:
+                media_asset_id = row["media_asset_id"] if isinstance(row, dict) else row[0]
+                asset_id = row["asset_id"] if isinstance(row, dict) else row[1]
+                if media_asset_id:
+                    return {"media_asset_id": str(media_asset_id), "asset_id": str(asset_id) if asset_id else ""}
+        if movievault_id:
+            cur.execute(
+                """
+                SELECT pc.media_asset_id, bs.poster->>'assetId' AS asset_id
+                FROM movievault_v2_box_sets bs
+                JOIN movievault_v2_poster_cache pc
+                    ON pc.asset_id = bs.poster->>'assetId'
+                   AND pc.variant = 'display'
+                   AND pc.checksum = bs.poster->'display'->>'checksum'
+                   AND pc.status = 'ready'
+                   AND pc.media_asset_id IS NOT NULL
+                WHERE bs.box_set_id = %s
+                LIMIT 1
+                """,
+                (movievault_id,),
+            )
+            row = cur.fetchone()
+            if row:
+                media_asset_id = row["media_asset_id"] if isinstance(row, dict) else row[0]
+                asset_id = row["asset_id"] if isinstance(row, dict) else row[1]
+                if media_asset_id:
+                    return {"media_asset_id": str(media_asset_id), "asset_id": str(asset_id) if asset_id else ""}
+    return None
+
+
 def fetch_box_set_artwork_from_sources(
     conn,
     container: dict[str, Any],
@@ -14880,17 +15030,8 @@ def fetch_box_set_artwork_from_sources(
     set's artwork. Returns an empty dict when nothing matches.
     """
 
-    plugins = box_set_metadata_source_plugins(conn)
-    if not plugins:
-        return {}
-
     metadata = container.get("metadata") if isinstance(container.get("metadata"), dict) else {}
-    title = clean_text(container.get("title")) or clean_text(metadata.get("title"))
-    if not title:
-        return {}
     barcode = clean_text(container.get("barcode")) or clean_text(metadata.get("barcode"))
-    year = clean_text(container.get("year")) or clean_text(metadata.get("year"))
-    fmt = clean_text(container.get("format")) or clean_text(metadata.get("format"))
     movievault_id = clean_text(
         metadata.get("movievault_id")
         or metadata.get("movieVaultId")
@@ -14900,6 +15041,40 @@ def fetch_box_set_artwork_from_sources(
         provider = str(identifier.get("provider_id") or "").lower()
         if "movievault" in provider and clean_text(identifier.get("identifier")):
             movievault_id = movievault_id or clean_text(identifier.get("identifier"))
+
+    # Check the v4 local poster cache first — if a ready display poster is
+    # already cached for this box-set's barcode or MovieVault id, link it
+    # directly and skip the external plugin call entirely.
+    container_id_raw = container.get("id")
+    if container_id_raw and (barcode or movievault_id):
+        v4_poster = _find_v4_cached_poster_for_container(
+            conn, barcode=barcode, movievault_id=movievault_id
+        )
+        if v4_poster:
+            try:
+                container_uuid = UUID(str(container_id_raw))
+                media_asset_uuid = UUID(v4_poster["media_asset_id"])
+                link_local_media_asset_to_container(
+                    conn,
+                    container_id=container_uuid,
+                    kind="poster",
+                    media_asset_id=media_asset_uuid,
+                    provider_id="movievault_v2",
+                    sort_order=0,
+                    primary=True,
+                )
+            except (ValueError, TypeError):
+                pass  # bad UUID — fall through to external plugin
+
+    plugins = box_set_metadata_source_plugins(conn)
+    if not plugins:
+        return {}
+
+    title = clean_text(container.get("title")) or clean_text(metadata.get("title"))
+    if not title:
+        return {}
+    year = clean_text(container.get("year")) or clean_text(metadata.get("year"))
+    fmt = clean_text(container.get("format")) or clean_text(metadata.get("format"))
 
     payload = {
         "title": title,
