@@ -16345,8 +16345,34 @@ def apply_movie_upsert(
                 ),
                 barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
             )
-    if provided_entity_id is None and healed_barcode:
-        barcode_owner = find_movie_by_barcode_match(conn, healed_barcode)
+    if provided_entity_id is None:
+        # Belt-and-braces barcode adoption for the create path.
+        #
+        # Batch/sync path: the dedup ladder already ran (digits-only match) and
+        # left healed_barcode intact when it did not adopt, so re-checking
+        # healed_barcode with the same normalized matcher is correct here.
+        #
+        # Single, non-batch path (Import Center movie/box-set-member imports):
+        # the ladder never runs, so resolve_new_movie_identity() detects an
+        # *exact* barcode collision and null-heals healed_barcode to None. That
+        # would hide the conflict from the check below and mint a NULL-barcode
+        # duplicate. Re-run the exact lookup against the original barcode so the
+        # row adopts the live owner instead. Exact (not digits-only) matching is
+        # required here because synthetic box-set member barcodes
+        # (IMPORT-<title>-BOX-01) collapse to the same digits ("01") across
+        # unrelated sets, and a digits-only match would wrongly merge them.
+        if batch_ctx is None:
+            barcode_owner = (
+                movie_id_for_barcode(conn, fields["barcode"])
+                if fields["barcode"]
+                else None
+            )
+        else:
+            barcode_owner = (
+                find_movie_by_barcode_match(conn, healed_barcode)
+                if healed_barcode
+                else None
+            )
         if barcode_owner is not None and barcode_owner != entity_id:
             if duplicate_copy:
                 # Explicit duplicate-copy intent keeps a distinct row: drop the

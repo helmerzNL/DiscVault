@@ -1099,6 +1099,77 @@ class NextMovieUpsertBarcodeConflictTests(unittest.TestCase):
         self.assertFalse(result["created"])
         self.assertIsNone(self._insert_barcodes(conn))
 
+    def test_non_batch_conflicting_barcode_adopts_live_owner(self):
+        # Import Center path: apply_movie_upsert() is called with batch_ctx=None,
+        # so the dedup ladder never runs. resolve_new_movie_identity() detects
+        # the exact barcode collision and null-heals the barcode; without the
+        # belt-and-braces adoption this minted a NULL-barcode duplicate disc.
+        conn = self._RecordingConn()
+        barcode_owner = uuid.uuid4()
+        owner_entity = {"id": barcode_owner, "title": "The Matrix", "deleted_at": None}
+
+        def _fail_ladder(*args, **kwargs):  # ladder must not run without a batch
+            raise AssertionError("match_existing_movie must not run for non-batch upserts")
+
+        def _fail_normalized(*args, **kwargs):  # digits-only match must not be used here
+            raise AssertionError("non-batch adoption must use exact barcode matching")
+
+        with (
+            patch.object(next_app, "movie_payload_fields", return_value=self._fields("3701432061177")),
+            patch.object(next_app, "client_entity_mapping", return_value=None),
+            patch.object(next_app, "match_existing_movie", side_effect=_fail_ladder),
+            patch.object(next_app, "movie_id_for_barcode", return_value=barcode_owner),
+            patch.object(next_app, "find_movie_by_barcode_match", side_effect=_fail_normalized),
+            patch.object(next_app, "movie_entity", side_effect=[owner_entity, owner_entity]),
+            patch.object(next_app, "store_client_entity_mapping"),
+            patch.object(next_app, "sync_change"),
+            patch.object(next_app, "next_revision", return_value=101),
+            patch.object(next_app, "table_exists", return_value=False),
+        ):
+            result = next_app.apply_movie_upsert(
+                conn,
+                client_id="next-import-center",
+                idem_key="idem-import-1",
+                mutation=self._mutation(barcode="3701432061177"),
+                batch_ctx=None,
+            )
+
+        self.assertEqual(result["status"], "applied")
+        self.assertEqual(result["entityId"], barcode_owner)
+        self.assertEqual(result["matchedBy"], "barcode")
+        self.assertFalse(result["created"])
+        self.assertEqual(self._insert_barcodes(conn), "3701432061177")
+
+    def test_non_batch_duplicate_copy_keeps_distinct_row(self):
+        # An explicit duplicate copy imported outside a batch still gets its own
+        # row, with the colliding barcode dropped so the UNIQUE index holds.
+        conn = self._RecordingConn()
+        barcode_owner = uuid.uuid4()
+
+        with (
+            patch.object(next_app, "movie_payload_fields", return_value=self._fields("5051889647010")),
+            patch.object(next_app, "client_entity_mapping", return_value=None),
+            patch.object(next_app, "movie_id_for_barcode", return_value=barcode_owner),
+            patch.object(next_app, "movie_entity", side_effect=[None, None]),
+            patch.object(next_app, "store_client_entity_mapping"),
+            patch.object(next_app, "sync_change"),
+            patch.object(next_app, "next_revision", return_value=102),
+            patch.object(next_app, "table_exists", return_value=False),
+        ):
+            result = next_app.apply_movie_upsert(
+                conn,
+                client_id="next-import-center",
+                idem_key="idem-import-2",
+                mutation=self._mutation(barcode="5051889647010", duplicate_copy=True),
+                batch_ctx=None,
+            )
+
+        self.assertEqual(result["status"], "applied")
+        self.assertNotEqual(result["entityId"], barcode_owner)
+        self.assertTrue(result["created"])
+        self.assertIsNone(result["matchedBy"])
+        self.assertIsNone(self._insert_barcodes(conn))
+
 
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class NextTombstoneResponseContractTests(unittest.TestCase):
