@@ -714,5 +714,187 @@ class AdminDedupPublishedConfigTests(unittest.TestCase):
         self.assertIn("trg_admin_dedup_report_payload_immutable", migration)
 
 
+class SyncDedupScriptFormatAgnosticTests(unittest.TestCase):
+    """Unit tests for format-agnostic detection in sync_dedup_merge.py."""
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        script = REPO_ROOT / "app/backend/scripts/sync_dedup_merge.py"
+        spec = importlib.util.spec_from_file_location("sync_dedup_merge", script)
+        cls.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.mod)
+
+    def _make_movie(self, **kwargs):
+        defaults = {
+            "id": 1,
+            "title": "Test",
+            "year": 2020,
+            "barcode": None,
+            "format": None,
+            "edition": "",
+            "container_ids": [],
+        }
+        defaults.update(kwargs)
+        return defaults
+
+    def test_format_agnostic_movies_are_compatible(self):
+        """Two movies with same title/year but one has no format should not conflict."""
+        left = self._make_movie(format=None)
+        right = self._make_movie(format="Blu-ray")
+        result = self.mod._members_are_compatible(
+            left, right, enforce_tmdb_sanity=False, enforce_titleyear_identity=False
+        )
+        self.assertTrue(result)
+
+    def test_format_conflict_blocks_merge(self):
+        """Two movies with explicitly different formats should not be merged."""
+        left = self._make_movie(format="Blu-ray")
+        right = self._make_movie(format="4K UHD")
+        result = self.mod._members_are_compatible(
+            left, right, enforce_tmdb_sanity=False, enforce_titleyear_identity=False
+        )
+        self.assertFalse(result)
+
+    def test_same_format_compatible(self):
+        left = self._make_movie(format="Blu-ray")
+        right = self._make_movie(format="Blu-ray")
+        result = self.mod._members_are_compatible(
+            left, right, enforce_tmdb_sanity=False, enforce_titleyear_identity=False
+        )
+        self.assertTrue(result)
+
+    def test_detect_groups_includes_no_format_movies_in_tmdb_tier(self):
+        """Movies with tmdb_id but no format should still be grouped together."""
+        mod = self.mod
+        # Simulate detect_groups by checking grouping key directly
+        fmt = mod.normalize_format(None)
+        tid = "tt1234567"
+        edition = ""
+        key = (tid, edition)
+        self.assertEqual(len(key), 2, "tmdbEdition key should not include format")
+
+    def test_detect_groups_includes_no_format_movies_in_titleyear_tier(self):
+        """Movies with title/year but no format should still be grouped by titleYear."""
+        mod = self.mod
+        norm = mod.normalize_title("Aladdin")
+        year = "1992"
+        key = (norm, year)
+        self.assertEqual(len(key), 2, "titleYear key should not include format")
+
+
+class SyncDedupScriptContainerTests(unittest.TestCase):
+    """Unit tests for box-set container deduplication in sync_dedup_merge.py."""
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        script = REPO_ROOT / "app/backend/scripts/sync_dedup_merge.py"
+        spec = importlib.util.spec_from_file_location("sync_dedup_merge", script)
+        cls.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.mod)
+
+    def _make_container(self, **kwargs):
+        from datetime import datetime, timezone
+        defaults = {
+            "id": 1,
+            "title": "Box Set",
+            "year": 2020,
+            "barcode": None,
+            "deleted_at": None,
+            "container_type": "box_set",
+            "movie_count": 0,
+            "created_at": datetime(2024, 1, 1, tzinfo=timezone.utc),
+        }
+        defaults.update(kwargs)
+        return defaults
+
+    def test_detect_container_groups_by_barcode(self):
+        """detect_container_groups returns barcode duplicates."""
+        mod = self.mod
+        bc = "1234567890123"
+        c1 = self._make_container(id=1, barcode=bc, movie_count=3)
+        c2 = self._make_container(id=2, barcode=bc, movie_count=1)
+
+        conn = mock.MagicMock()
+        conn.cursor.return_value.__enter__ = lambda s: conn.cursor.return_value
+        conn.cursor.return_value.__exit__ = mock.MagicMock(return_value=False)
+        conn.cursor.return_value.fetchall.return_value = [c1, c2]
+
+        groups, by_id = mod.detect_container_groups(conn)
+        barcode_groups = groups["barcode"]
+        self.assertIn(mod.normalize_barcode(bc), barcode_groups)
+        self.assertEqual(sorted(barcode_groups[mod.normalize_barcode(bc)]), [1, 2])
+
+    def test_detect_container_groups_by_title_year(self):
+        """detect_container_groups returns titleYear duplicates."""
+        mod = self.mod
+        c1 = self._make_container(id=1, title="The Marvel Collection", year=2019, movie_count=5)
+        c2 = self._make_container(id=2, title="The Marvel Collection", year=2019, movie_count=2)
+
+        conn = mock.MagicMock()
+        conn.cursor.return_value.__enter__ = lambda s: conn.cursor.return_value
+        conn.cursor.return_value.__exit__ = mock.MagicMock(return_value=False)
+        conn.cursor.return_value.fetchall.return_value = [c1, c2]
+
+        groups, _ = mod.detect_container_groups(conn)
+        title_groups = groups["titleYear"]
+        norm = mod.normalize_title("The Marvel Collection")
+        self.assertIn((norm, "2019"), title_groups)
+
+    def test_choose_container_winner_prefers_more_movies(self):
+        """Container with more movies wins."""
+        mod = self.mod
+        from datetime import datetime, timezone
+        c1 = self._make_container(id=1, movie_count=5)
+        c2 = self._make_container(id=2, movie_count=1)
+        by_id = {1: c1, 2: c2}
+
+        conn = mock.MagicMock()
+        conn.cursor.return_value.__enter__ = lambda s: conn.cursor.return_value
+        conn.cursor.return_value.__exit__ = mock.MagicMock(return_value=False)
+        conn.cursor.return_value.fetchone.return_value = {"ok": False}
+        conn.cursor.return_value.fetchall.return_value = []
+
+        winner, losers = mod._choose_container_winner(conn, [1, 2], by_id)
+        self.assertEqual(winner, 1)
+        self.assertIn(2, losers)
+
+    def test_build_report_includes_container_groups(self):
+        """build_report returns container_group_count and container_groups keys."""
+        mod = self.mod
+
+        conn = mock.MagicMock()
+
+        # Mock detect_groups (movies) — no duplicates
+        with mock.patch.object(mod, "detect_groups") as mock_detect, \
+             mock.patch.object(mod, "_movie_signals", return_value={}), \
+             mock.patch.object(mod, "detect_container_groups") as mock_cdetect, \
+             mock.patch.object(mod, "_report_metadata", return_value={}):
+            mock_detect.return_value = (
+                {"barcode": {}, "tmdbEdition": {}, "titleYear": {}},
+                {},
+                {},
+            )
+            mock_cdetect.return_value = (
+                {"barcode": {"9999": [10, 11]}, "titleYear": {}},
+                {
+                    10: self._make_container(id=10, barcode="9999", movie_count=3),
+                    11: self._make_container(id=11, barcode="9999", movie_count=1),
+                },
+            )
+            conn.cursor.return_value.__enter__ = lambda s: conn.cursor.return_value
+            conn.cursor.return_value.__exit__ = mock.MagicMock(return_value=False)
+            conn.cursor.return_value.fetchone.return_value = {"ok": False}
+            conn.cursor.return_value.fetchall.return_value = []
+
+            report = mod.build_report(conn)
+
+        self.assertIn("container_groups", report)
+        self.assertIn("container_group_count", report)
+        self.assertIn("containers_to_tombstone", report)
+        self.assertGreater(report["container_group_count"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

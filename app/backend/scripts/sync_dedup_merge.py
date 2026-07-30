@@ -132,6 +132,18 @@ def _barcode_conflicts(left, right):
     return bool(left_code and right_code and left_code != right_code)
 
 
+def _format_conflicts(left_movie, right_movie):
+    """Two different non-empty formats are incompatible physical items.
+
+    A missing format on either side is treated as a wildcard so that a
+    format-less duplicate (common after barcode-import without enrichment)
+    is still matched and merged into its enriched counterpart.
+    """
+    left_fmt = normalize_format(left_movie.get("format"))
+    right_fmt = normalize_format(right_movie.get("format"))
+    return bool(left_fmt and right_fmt and left_fmt != right_fmt)
+
+
 def _tmdb_sanity_conflicts(left_movie, right_movie):
     left_title = normalize_title(left_movie.get("title"))
     right_title = normalize_title(right_movie.get("title"))
@@ -152,6 +164,8 @@ def _members_are_compatible(
     enforce_titleyear_identity,
 ):
     if _barcode_conflicts(left_movie.get("barcode"), right_movie.get("barcode")):
+        return False
+    if _format_conflicts(left_movie, right_movie):
         return False
     if enforce_tmdb_sanity and _tmdb_sanity_conflicts(left_movie, right_movie):
         return False
@@ -260,6 +274,22 @@ COLLECTION_STATE_TABLES = [
     "media_assets",
 ]
 
+# ---------------------------------------------------------------------------
+# Container (box-set) dedup — parallel ladder for the `containers` table.
+# ---------------------------------------------------------------------------
+
+CONTAINER_RELATIONS = [
+    # table, fk_column, conflict_columns
+    ("container_identifiers", "container_id", ["provider_id", "identifier_type", "identifier"]),
+    ("container_movies", "container_id", ["movie_id"]),
+    ("collection_items", "collection_id", ["item_type", "item_id"]),
+]
+
+CONTAINER_STATE_TABLES = [
+    "containers",
+    *(table for table, _fk, _conflict in CONTAINER_RELATIONS),
+]
+
 
 def _table_exists(conn, table_name):
     with conn.cursor() as cur:
@@ -284,6 +314,102 @@ def _column_exists(conn, table_name, column_name):
         )
         row = cur.fetchone() or {}
     return bool(row.get("ok"))
+
+
+def _fetch_live_containers(conn):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT c.*,
+                   (SELECT count(*)::int FROM container_movies cm
+                    WHERE cm.container_id = c.id) AS movie_count
+            FROM containers c
+            WHERE c.deleted_at IS NULL
+              AND c.container_type = 'box_set'
+            ORDER BY c.id
+            """
+        )
+        return cur.fetchall()
+
+
+def detect_container_groups(conn):
+    """Return duplicate box-set groups keyed by tier."""
+    containers = _fetch_live_containers(conn)
+    by_id = {c["id"]: c for c in containers}
+
+    barcode_groups: dict = {}
+    titleyear_groups: dict = {}
+
+    for c in containers:
+        cid = c["id"]
+        code = normalize_barcode(c.get("barcode"))
+        if code:
+            barcode_groups.setdefault(code, []).append(cid)
+
+        norm = normalize_title(c.get("title"))
+        year = _year_key(c.get("year")) or ""
+        if norm:
+            titleyear_groups.setdefault((norm, year), []).append(cid)
+
+    def _dups(groups):
+        return {k: v for k, v in groups.items() if len(v) > 1}
+
+    return {
+        "barcode": _dups(barcode_groups),
+        "titleYear": _dups(titleyear_groups),
+    }, by_id
+
+
+def _score_container(conn, container_id, by_id):
+    container = by_id.get(container_id, {})
+    score = int(container.get("movie_count") or 0) * 2
+    for col in ("notes", "description", "badge_label"):
+        if container.get(col):
+            score += 1
+    with conn.cursor() as cur:
+        for table, fk, _ in CONTAINER_RELATIONS:
+            if not _table_exists(conn, table):
+                continue
+            cur.execute(f"SELECT count(*) AS n FROM {table} WHERE {fk} = %s", (str(container_id),))
+            score += int((cur.fetchone() or {}).get("n") or 0)
+    return score
+
+
+def _choose_container_winner(conn, members, by_id):
+    scored = []
+    for cid in members:
+        score = _score_container(conn, cid, by_id)
+        created = by_id.get(cid, {}).get("created_at") or datetime.max.replace(tzinfo=timezone.utc)
+        scored.append((score, created, cid))
+    scored.sort(key=lambda t: (-t[0], t[1], str(t[2])))
+    winner = scored[0][2]
+    losers = [t[2] for t in scored[1:]]
+    return winner, losers
+
+
+def _rehang_container_relations(cur, winner, loser):
+    for table, fk, conflict in CONTAINER_RELATIONS:
+        if conflict:
+            cols = " AND ".join(f"w.{c} = l.{c}" for c in conflict)
+            cur.execute(
+                f"""
+                DELETE FROM {table} l
+                WHERE l.{fk} = %s
+                  AND EXISTS (
+                      SELECT 1 FROM {table} w
+                      WHERE w.{fk} = %s AND {cols}
+                  )
+                """,
+                (str(loser), str(winner)),
+            )
+        cur.execute(
+            f"UPDATE {table} SET {fk} = %s WHERE {fk} = %s",
+            (str(winner), str(loser)),
+        )
+    cur.execute(
+        "UPDATE entity_media SET entity_id = %s WHERE entity_type = 'container' AND entity_id = %s",
+        (str(winner), str(loser)),
+    )
 
 
 def lock_collection_snapshot(conn):
@@ -431,14 +557,14 @@ def detect_groups(conn):
 
         fmt = normalize_format(m.get("format"))
         tid = tmdb.get(mid)
-        if tid and fmt:
+        if tid:
             edition = (m.get("edition") or "").strip().lower()
-            tmdb_groups.setdefault((tid, fmt, edition), []).append(mid)
+            tmdb_groups.setdefault((tid, edition), []).append(mid)
 
         norm = normalize_title(m.get("title"))
         year = _year_key(m.get("year")) or ""
-        if norm and fmt:
-            titleyear_groups.setdefault((norm, year, fmt), []).append(mid)
+        if norm:
+            titleyear_groups.setdefault((norm, year), []).append(mid)
 
     def _dups(groups):
         return {k: v for k, v in groups.items() if len(v) > 1}
@@ -656,6 +782,47 @@ def build_report(conn):
                 "members": members,
             }
         )
+
+    # Container (box-set) dedup
+    container_groups, container_by_id = detect_container_groups(conn)
+    container_plans = []
+    container_claimed: set = set()
+    for tier in ("barcode", "titleYear"):
+        for key, members in container_groups[tier].items():
+            fresh = [c for c in members if c not in container_claimed]
+            if len(fresh) < 2:
+                continue
+            container_claimed.update(fresh)
+            container_plans.append({"tier": tier, "key": key, "members": fresh})
+
+    container_report_groups = []
+    total_container_losers = 0
+    for plan in container_plans:
+        winner, losers = _choose_container_winner(conn, plan["members"], container_by_id)
+        total_container_losers += len(losers)
+        members = []
+        for cid in plan["members"]:
+            c = container_by_id.get(cid, {})
+            members.append(
+                {
+                    "id": str(cid),
+                    "title": c.get("title"),
+                    "year": c.get("year"),
+                    "barcode": c.get("barcode"),
+                    "movie_count": int(c.get("movie_count") or 0),
+                    "created_at": c.get("created_at"),
+                }
+            )
+        container_report_groups.append(
+            {
+                "tier": plan["tier"],
+                "key": list(plan["key"]) if isinstance(plan["key"], tuple) else plan["key"],
+                "winner": str(winner),
+                "losers": [str(c) for c in losers],
+                "members": members,
+            }
+        )
+
     return {
         **_report_metadata(),
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -663,6 +830,9 @@ def build_report(conn):
         "merge_group_count": len(report_groups),
         "movies_to_tombstone": total_losers,
         "groups": report_groups,
+        "container_group_count": len(container_report_groups),
+        "containers_to_tombstone": total_container_losers,
+        "container_groups": container_report_groups,
     }
 
 
@@ -699,9 +869,41 @@ def _rehang_relations(cur, winner, loser):
         )
 
 
+def execute_container_merge(conn, report, *, cur):
+    """Tombstone duplicate containers and emit sync_change entries. Uses the caller's cursor."""
+    tombstoned = 0
+    for group in report.get("container_groups", []):
+        winner = group["winner"]
+        for loser in group["losers"]:
+            _rehang_container_relations(cur, winner, loser)
+            cur.execute(
+                """
+                UPDATE containers
+                SET deleted_at = now(), updated_at = now()
+                WHERE id = %s AND deleted_at IS NULL
+                RETURNING id
+                """,
+                (loser,),
+            )
+            if cur.fetchone() is None:
+                continue
+            tombstoned += 1
+            revision = _next_revision(cur)
+            if revision is not None:
+                cur.execute(
+                    """
+                    INSERT INTO sync_changes (revision, entity_type, entity_id, operation, payload)
+                    VALUES (%s, 'container', %s, 'delete', %s)
+                    """,
+                    (revision, str(loser), json.dumps({"mergedInto": str(winner)})),
+                )
+    return tombstoned
+
+
 def execute_merge(conn, report, *, commit=True):
     """Apply the merge plan from ``report`` inside one transaction."""
     tombstoned = 0
+    container_tombstoned = 0
     with conn.cursor() as cur:
         for group in report["groups"]:
             winner = group["winner"]
@@ -728,9 +930,10 @@ def execute_merge(conn, report, *, commit=True):
                         """,
                         (revision, str(loser), json.dumps({"mergedInto": str(winner)})),
                     )
+        container_tombstoned = execute_container_merge(conn, report, cur=cur)
     if commit:
         conn.commit()
-    return tombstoned
+    return tombstoned, container_tombstoned
 
 
 def main(argv=None):
@@ -754,15 +957,21 @@ def main(argv=None):
 
         if not args.execute:
             print(
-                f"\n[dry-run] {report['merge_group_count']} group(s), "
-                f"{report['movies_to_tombstone']} movie(s) would be tombstoned. "
+                f"\n[dry-run] {report['merge_group_count']} movie group(s), "
+                f"{report['movies_to_tombstone']} movie(s) would be tombstoned; "
+                f"{report.get('container_group_count', 0)} container group(s), "
+                f"{report.get('containers_to_tombstone', 0)} container(s) would be tombstoned. "
                 "Re-run with --execute after the report is approved.",
                 file=sys.stderr,
             )
             return 0
 
-        tombstoned = execute_merge(conn, report)
-        print(f"\n[executed] tombstoned {tombstoned} duplicate movie(s).", file=sys.stderr)
+        tombstoned, container_tombstoned = execute_merge(conn, report)
+        print(
+            f"\n[executed] tombstoned {tombstoned} duplicate movie(s), "
+            f"{container_tombstoned} duplicate container(s).",
+            file=sys.stderr,
+        )
         return 0
     finally:
         conn.close()
