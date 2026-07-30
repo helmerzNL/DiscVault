@@ -218,7 +218,7 @@ class MovieVaultDistributionV3Tests(unittest.TestCase):
         self.assertEqual(request.call_args.args[0], "https://movievault.example/v3/bucket/9c10")
 
     def test_feature_package_is_deterministic_and_declares_contract_range(self):
-        archive_path = Path(repo_root) / "dist" / "plugins" / "movievault_v2_1.1.0.zip"
+        archive_path = Path(repo_root) / "dist" / "plugins" / "movievault_v2_1.2.0.zip"
         checksum_path = archive_path.with_suffix(".zip.sha256")
         digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
         self.assertEqual(

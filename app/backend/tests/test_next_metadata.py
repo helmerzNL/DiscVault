@@ -1676,12 +1676,18 @@ class NextMetadataPolicyTests(unittest.TestCase):
             (install_dir / ".initialized").write_text("1", encoding="utf-8")
             plugin_dir = install_dir / "movievault_v2"
             plugin_dir.mkdir()
+            # Pin the install-dir copy to a version far above the bundled
+            # `movievault_v2` default so the bundled-upgrade pass leaves this
+            # externally-installed fixture in place (mirrors the tmdb data
+            # override convention). Without this, the newer bundled plugin would
+            # replace the fixture and the identity-context assertions below would
+            # exercise the real plugin instead.
             (plugin_dir / "manifest.json").write_text(
                 """
                 {
                   "id": "movievault_v2",
                   "name": "MovieVault v2",
-                  "version": "1.0.4",
+                  "version": "99.0.0",
                   "discVaultPluginApi": "next-1",
                   "categories": ["metadata_source"],
                   "capabilities": ["search_barcode", "search_title", "box_set_candidates"],
