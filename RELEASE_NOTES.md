@@ -1,5 +1,18 @@
 # DiscVault Release Notes
 
+## 26.7.8 - MovieVault v2 covers in the PWA
+
+- Barcode scans now show the MovieVault v2 cover in the PWA for both individual
+  films and box-sets, matching the native iOS behavior. The `movievault_v2`
+  plugin previously dropped the poster while building its release and box-set
+  candidates, so the cover never reached the client. The plugin now forwards
+  the localized, DiscVault-served poster URL (bundled as `movievault_v2` 1.2.0,
+  auto-upgraded in place from 1.1.0).
+- The PWA image guard (`usableImage`) now recognizes the
+  `/api/next/movievault-v2/posters/` route in addition to `/api/next/media/`,
+  so locally served MovieVault v2 covers render instead of falling back to a
+  placeholder.
+
 ## 26.6.18 - Exact TMDb enrichment for MovieVault barcode hits
 
 - TMDb preview enrichment now requires an exact normalized title match and,
