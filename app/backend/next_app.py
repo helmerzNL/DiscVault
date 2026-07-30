@@ -16170,6 +16170,18 @@ def apply_movie_upsert(
                 ),
                 barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
             )
+    if provided_entity_id is None and healed_barcode:
+        barcode_owner = find_movie_by_barcode_match(conn, healed_barcode)
+        if barcode_owner is not None and barcode_owner != entity_id:
+            if duplicate_copy:
+                # Explicit duplicate-copy intent keeps a distinct row: drop the
+                # colliding barcode instead of adopting another movie id.
+                healed_barcode = None
+            else:
+                entity_id = barcode_owner
+                matched_by = "barcode"
+                healed_barcode = fields["barcode"]
+
     existing = movie_entity(conn, entity_id)
     created = existing is None
     if created:
