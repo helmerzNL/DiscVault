@@ -231,13 +231,9 @@ class PosterCacheJobTests(unittest.TestCase):
         ):
             result = posters.run_poster_cache_job(conn, self._payload(checksum=checksum))
 
-        self.assertEqual(result, {
-            "handled": True,
-            "cacheId": "cache-1",
-            "assetId": "asset-1",
-            "variant": "thumbnail",
-            "outcome": "ready",
-        })
+        self.assertEqual(result["outcome"], "ready")
+        self.assertEqual(result["mediaAssetId"], "media-42")
+        self.assertFalse(result.get("evicted"))
         insert_sql, insert_params = cursor.calls[1]
         self.assertIn("INSERT INTO media_assets", insert_sql)
         self.assertEqual(insert_params[-1], checksum)
@@ -379,12 +375,106 @@ class PosterCacheJobTests(unittest.TestCase):
             posters.run_poster_cache_job(conn, {"cacheId": "cache-1"})
         self.assertEqual(cursor.calls, [])
 
-    def test_unknown_variant_rejected(self):
-        cursor = _FakeCursor([])
+    def test_http_404_evicts_cache_row_and_soft_deletes_entity_media(self):
+        """A 404 response marks status=evicted, NULLs media_asset_id, and
+        soft-deletes entity_media rows that referenced the old asset."""
+        cursor = _FakeCursor(
+            [
+                {"id": "cache-1", "media_asset_id": "prior-media-7"},  # SELECT FOR UPDATE
+                None,  # UPDATE cache row (eviction)
+                None,  # UPDATE entity_media (soft-delete)
+            ]
+        )
         conn = _FakeConn(cursor)
-        with self.assertRaisesRegex(MovieVaultV2Error, "^poster_job_payload_invalid$"):
-            posters.run_poster_cache_job(conn, self._payload(checksum="d" * 64, variant="backdrop"))
-        self.assertEqual(cursor.calls, [])
+        with patch.object(
+            posters,
+            "_request",
+            return_value=(404, b"", {"content-type": "text/html"}),
+        ):
+            result = posters.run_poster_cache_job(conn, self._payload(checksum="a" * 64))
+
+        self.assertEqual(result["outcome"], "failed")
+        self.assertTrue(result["evicted"])
+        self.assertNotIn("mediaAssetId", result)
+
+        evict_update = [c for c in cursor.calls if "status = 'evicted'" in c[0]]
+        self.assertEqual(len(evict_update), 1)
+        # media_asset_id should be set to NULL in the eviction UPDATE
+        self.assertIn("media_asset_id = NULL", evict_update[0][0])
+
+        em_update = [c for c in cursor.calls if "UPDATE entity_media" in c[0]]
+        self.assertEqual(len(em_update), 1)
+        self.assertIn("deleted_at", em_update[0][0])
+        self.assertEqual(em_update[0][1][0], "prior-media-7")
+
+    def test_http_404_without_prior_media_asset_only_evicts_cache(self):
+        """A 404 with no prior media_asset_id evicts the cache row but skips
+        the entity_media soft-delete (nothing to unlink)."""
+        cursor = _FakeCursor(
+            [
+                {"id": "cache-1", "media_asset_id": None},  # SELECT FOR UPDATE
+                None,  # UPDATE cache row (eviction)
+            ]
+        )
+        conn = _FakeConn(cursor)
+        with patch.object(
+            posters,
+            "_request",
+            return_value=(404, b"", {}),
+        ):
+            result = posters.run_poster_cache_job(conn, self._payload(checksum="b" * 64))
+
+        self.assertTrue(result["evicted"])
+        em_update = [c for c in cursor.calls if "UPDATE entity_media" in c[0]]
+        self.assertEqual(len(em_update), 0)
+
+
+class LinkBoxSetPosterToContainersTests(unittest.TestCase):
+    def _make_cursor_and_conn(self, container_rows):
+        cursor = _FakeCursor([container_rows])
+        conn = _FakeConn(cursor)
+        return cursor, conn
+
+    def test_links_matching_container(self):
+        import types
+        import uuid
+        container_id = str(uuid.uuid4())
+        media_id = str(uuid.uuid4())
+        cursor, conn = self._make_cursor_and_conn([{"id": container_id}])
+        linked_calls: list[dict] = []
+
+        def fake_link(conn, *, container_id, kind, media_asset_id, provider_id, sort_order, primary):
+            linked_calls.append({
+                "container_id": container_id,
+                "media_asset_id": media_asset_id,
+                "primary": primary,
+            })
+            return True
+
+        fake_app = types.SimpleNamespace(link_local_media_asset_to_container=fake_link)
+        with patch.dict("sys.modules", {"app.backend.next_app": fake_app}):
+            result = posters.link_box_set_poster_to_containers(
+                conn, asset_id="asset-99", media_asset_id=media_id
+            )
+
+        self.assertEqual(result, 1)
+        self.assertEqual(len(linked_calls), 1)
+        self.assertTrue(linked_calls[0]["primary"])
+
+    def test_no_matching_containers_returns_zero(self):
+        cursor, conn = self._make_cursor_and_conn([])
+        result = posters.link_box_set_poster_to_containers(
+            conn, asset_id="asset-00", media_asset_id="not-a-uuid"
+        )
+        self.assertEqual(result, 0)
+
+    def test_invalid_media_asset_id_returns_zero(self):
+        """Invalid UUID for media_asset_id short-circuits before linking."""
+        cursor, conn = self._make_cursor_and_conn([{"id": "some-container"}])
+        result = posters.link_box_set_poster_to_containers(
+            conn, asset_id="asset-01", media_asset_id="not-a-uuid"
+        )
+        self.assertEqual(result, 0)
 
 
 class PosterCleanupTests(unittest.TestCase):

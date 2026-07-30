@@ -69,6 +69,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
 __all__ = [
     "POSTER_CACHE_JOB_TYPE",
     "POSTER_CLEANUP_JOB_TYPE",
+    "link_box_set_poster_to_containers",
     "run_poster_cache_job",
     "run_poster_cleanup",
 ]
@@ -222,6 +223,76 @@ def _activate_media_asset(
     return str(media_asset_id)
 
 
+def link_box_set_poster_to_containers(
+    conn: Any,
+    *,
+    asset_id: str,
+    media_asset_id: str,
+) -> int:
+    """Link a freshly-cached v4 box-set display poster to every matching
+    DiscVault container.
+
+    Finds containers whose barcode SHA-256 hash maps to the box-set that owns
+    this poster asset, then inserts or refreshes an entity_media row for each
+    one.  Uses a lazy import of ``link_local_media_asset_to_container`` from
+    ``next_app`` to avoid a circular module-load dependency.
+
+    Returns the number of containers linked.
+    """
+    try:
+        from .next_app import link_local_media_asset_to_container
+    except ImportError:  # pragma: no cover - supports python next_movievault_v2_posters.py
+        from next_app import link_local_media_asset_to_container  # type: ignore[assignment]
+
+    from uuid import UUID
+
+    linked = 0
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT c.id
+            FROM movievault_v2_box_sets bs
+            JOIN movievault_v2_lookup_hashes h
+                ON h.generation = bs.generation
+               AND h.entity_id = bs.box_set_id
+               AND h.entity_type = 'box_set'
+               AND h.source_type = 'box_set_ean'
+            JOIN containers c
+                ON encode(digest(c.barcode, 'sha256'), 'hex') = h.lookup_hash
+               AND c.container_type = 'box_set'
+               AND c.barcode IS NOT NULL
+               AND c.deleted_at IS NULL
+            WHERE bs.poster->>'assetId' = %s
+            """,
+            (asset_id,),
+        )
+        container_rows = cur.fetchall()
+
+    try:
+        media_uuid = UUID(str(media_asset_id))
+    except (ValueError, TypeError):
+        return 0
+
+    for row in container_rows:
+        container_id_raw = row["id"] if isinstance(row, dict) else row[0]
+        try:
+            container_uuid = UUID(str(container_id_raw))
+        except (ValueError, TypeError):
+            continue
+        result = link_local_media_asset_to_container(
+            conn,
+            container_id=container_uuid,
+            kind="poster",
+            media_asset_id=media_uuid,
+            provider_id="movievault_v2",
+            sort_order=0,
+            primary=True,
+        )
+        if result is not None:
+            linked += 1
+    return linked
+
+
 def run_poster_cache_job(
     conn: Any,
     payload: dict[str, Any],
@@ -277,6 +348,34 @@ def run_poster_cache_job(
                     """,
                     (outcome["mediaAssetId"], cache_id),
                 )
+            elif outcome.get("error") == "http_status_404":
+                # The remote asset has been permanently removed from MovieVault.
+                # Mark the cache row as evicted (not an error — do not retry),
+                # NULL out the media_asset reference so the poster stops serving,
+                # and soft-delete any entity_media rows for containers that were
+                # linked to the now-gone asset.
+                cur.execute(
+                    """
+                    UPDATE movievault_v2_poster_cache
+                    SET status = 'evicted',
+                        media_asset_id = NULL,
+                        last_error = 'http_status_404',
+                        checked_at = now()
+                    WHERE id = %s
+                    """,
+                    (cache_id,),
+                )
+                if prior_media_asset_id:
+                    cur.execute(
+                        """
+                        UPDATE entity_media
+                        SET deleted_at = now()
+                        WHERE entity_type = 'container'
+                          AND media_id = %s
+                          AND deleted_at IS NULL
+                        """,
+                        (prior_media_asset_id,),
+                    )
             else:
                 # Preserve the prior valid poster: media_asset_id is left untouched.
                 fallback_status = "degraded" if prior_media_asset_id else "error"
@@ -297,6 +396,8 @@ def run_poster_cache_job(
         "assetId": str(asset_id),
         "variant": str(variant),
         "outcome": outcome["status"],
+        "evicted": outcome.get("error") == "http_status_404",
+        **({"mediaAssetId": str(outcome["mediaAssetId"])} if outcome.get("mediaAssetId") else {}),
     }
 
 
