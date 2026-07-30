@@ -16345,8 +16345,34 @@ def apply_movie_upsert(
                 ),
                 barcode_owner_lookup=lambda code: movie_id_for_barcode(conn, code),
             )
-    if provided_entity_id is None and healed_barcode:
-        barcode_owner = find_movie_by_barcode_match(conn, healed_barcode)
+    if provided_entity_id is None:
+        # Belt-and-braces barcode adoption for the create path.
+        #
+        # Batch/sync path: the dedup ladder already ran (digits-only match) and
+        # left healed_barcode intact when it did not adopt, so re-checking
+        # healed_barcode with the same normalized matcher is correct here.
+        #
+        # Single, non-batch path (Import Center movie/box-set-member imports):
+        # the ladder never runs, so resolve_new_movie_identity() detects an
+        # *exact* barcode collision and null-heals healed_barcode to None. That
+        # would hide the conflict from the check below and mint a NULL-barcode
+        # duplicate. Re-run the exact lookup against the original barcode so the
+        # row adopts the live owner instead. Exact (not digits-only) matching is
+        # required here because synthetic box-set member barcodes
+        # (IMPORT-<title>-BOX-01) collapse to the same digits ("01") across
+        # unrelated sets, and a digits-only match would wrongly merge them.
+        if batch_ctx is None:
+            barcode_owner = (
+                movie_id_for_barcode(conn, fields["barcode"])
+                if fields["barcode"]
+                else None
+            )
+        else:
+            barcode_owner = (
+                find_movie_by_barcode_match(conn, healed_barcode)
+                if healed_barcode
+                else None
+            )
         if barcode_owner is not None and barcode_owner != entity_id:
             if duplicate_copy:
                 # Explicit duplicate-copy intent keeps a distinct row: drop the
@@ -16615,6 +16641,48 @@ def resolve_sync_entity_id(
     )
 
 
+def find_container_by_barcode(
+    conn,
+    barcode: str | None,
+    *,
+    container_type: str | None = None,
+) -> UUID | None:
+    """Return the id of a live container whose barcode matches (or None).
+
+    Digits-only comparison (mirrors find_movie_by_barcode_match) so formatting
+    variants of the same EAN collapse; tombstoned rows are excluded. Optionally
+    scoped to ``container_type`` so a box set never adopts a vault or collection
+    that happens to share a barcode. Oldest row wins for a stable canonical id.
+    """
+    normalized = normalize_barcode(barcode)
+    if not normalized:
+        return None
+    if not table_exists(conn, "containers"):
+        return None
+    clauses = [
+        "deleted_at IS NULL",
+        "barcode IS NOT NULL",
+        "regexp_replace(barcode, '\\D', '', 'g') = %s",
+    ]
+    params: list[Any] = [normalized]
+    if container_type:
+        clauses.append("container_type = %s")
+        params.append(container_type)
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id
+            FROM containers
+            WHERE {' AND '.join(clauses)}
+            ORDER BY created_at
+            LIMIT 1
+            """,
+            tuple(params),
+        )
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
 def apply_container_upsert(
     conn,
     *,
@@ -16630,13 +16698,36 @@ def apply_container_upsert(
         raise NextApiError("Container table is not available", 503)
 
     client_entity_id = str(mutation.get("clientEntityId") or "").strip() or None
-    entity_id = parse_uuid(mutation.get("entityId"), "entityId")
-    entity_id = entity_id or client_entity_mapping(
-        conn,
-        client_id=client_id,
-        entity_type="container",
-        client_entity_id=client_entity_id,
-    )
+    provided_entity_id = parse_uuid(mutation.get("entityId"), "entityId")
+    mapped_entity_id = None
+    if provided_entity_id is None:
+        mapped_entity_id = client_entity_mapping(
+            conn,
+            client_id=client_id,
+            entity_type="container",
+            client_entity_id=client_entity_id,
+        )
+    entity_id = provided_entity_id or mapped_entity_id
+
+    # Create-path barcode dedup. Unlike movies, containers carry no
+    # UNIQUE(barcode) constraint, so a brand-new box set whose EAN already
+    # belongs to a live container would silently mint a duplicate (there is no
+    # duplicate-copy concept for containers -- the same EAN is the same box
+    # set). When this push is not tied to a known container by an explicit
+    # entityId or a clientEntityId mapping, adopt the existing barcode owner
+    # instead of creating a second row.
+    if entity_id is None:
+        incoming_barcode = clean_text(payload.get("barcode"))
+        if incoming_barcode:
+            incoming_type = None
+            if "containerType" in payload or "container_type" in payload:
+                incoming_type = normalize_container_type(
+                    payload.get("containerType", payload.get("container_type"))
+                )
+            entity_id = find_container_by_barcode(
+                conn, incoming_barcode, container_type=incoming_type
+            )
+
     entity_id = entity_id or uuid.uuid4()
     existing = container_entity(conn, entity_id)
 

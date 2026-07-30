@@ -1099,6 +1099,204 @@ class NextMovieUpsertBarcodeConflictTests(unittest.TestCase):
         self.assertFalse(result["created"])
         self.assertIsNone(self._insert_barcodes(conn))
 
+    def test_non_batch_conflicting_barcode_adopts_live_owner(self):
+        # Import Center path: apply_movie_upsert() is called with batch_ctx=None,
+        # so the dedup ladder never runs. resolve_new_movie_identity() detects
+        # the exact barcode collision and null-heals the barcode; without the
+        # belt-and-braces adoption this minted a NULL-barcode duplicate disc.
+        conn = self._RecordingConn()
+        barcode_owner = uuid.uuid4()
+        owner_entity = {"id": barcode_owner, "title": "The Matrix", "deleted_at": None}
+
+        def _fail_ladder(*args, **kwargs):  # ladder must not run without a batch
+            raise AssertionError("match_existing_movie must not run for non-batch upserts")
+
+        def _fail_normalized(*args, **kwargs):  # digits-only match must not be used here
+            raise AssertionError("non-batch adoption must use exact barcode matching")
+
+        with (
+            patch.object(next_app, "movie_payload_fields", return_value=self._fields("3701432061177")),
+            patch.object(next_app, "client_entity_mapping", return_value=None),
+            patch.object(next_app, "match_existing_movie", side_effect=_fail_ladder),
+            patch.object(next_app, "movie_id_for_barcode", return_value=barcode_owner),
+            patch.object(next_app, "find_movie_by_barcode_match", side_effect=_fail_normalized),
+            patch.object(next_app, "movie_entity", side_effect=[owner_entity, owner_entity]),
+            patch.object(next_app, "store_client_entity_mapping"),
+            patch.object(next_app, "sync_change"),
+            patch.object(next_app, "next_revision", return_value=101),
+            patch.object(next_app, "table_exists", return_value=False),
+        ):
+            result = next_app.apply_movie_upsert(
+                conn,
+                client_id="next-import-center",
+                idem_key="idem-import-1",
+                mutation=self._mutation(barcode="3701432061177"),
+                batch_ctx=None,
+            )
+
+        self.assertEqual(result["status"], "applied")
+        self.assertEqual(result["entityId"], barcode_owner)
+        self.assertEqual(result["matchedBy"], "barcode")
+        self.assertFalse(result["created"])
+        self.assertEqual(self._insert_barcodes(conn), "3701432061177")
+
+    def test_non_batch_duplicate_copy_keeps_distinct_row(self):
+        # An explicit duplicate copy imported outside a batch still gets its own
+        # row, with the colliding barcode dropped so the UNIQUE index holds.
+        conn = self._RecordingConn()
+        barcode_owner = uuid.uuid4()
+
+        with (
+            patch.object(next_app, "movie_payload_fields", return_value=self._fields("5051889647010")),
+            patch.object(next_app, "client_entity_mapping", return_value=None),
+            patch.object(next_app, "movie_id_for_barcode", return_value=barcode_owner),
+            patch.object(next_app, "movie_entity", side_effect=[None, None]),
+            patch.object(next_app, "store_client_entity_mapping"),
+            patch.object(next_app, "sync_change"),
+            patch.object(next_app, "next_revision", return_value=102),
+            patch.object(next_app, "table_exists", return_value=False),
+        ):
+            result = next_app.apply_movie_upsert(
+                conn,
+                client_id="next-import-center",
+                idem_key="idem-import-2",
+                mutation=self._mutation(barcode="5051889647010", duplicate_copy=True),
+                batch_ctx=None,
+            )
+
+        self.assertEqual(result["status"], "applied")
+        self.assertNotEqual(result["entityId"], barcode_owner)
+        self.assertTrue(result["created"])
+        self.assertIsNone(result["matchedBy"])
+        self.assertIsNone(self._insert_barcodes(conn))
+
+
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextContainerUpsertBarcodeDedupTests(unittest.TestCase):
+    class _RecordingCursor:
+        def __init__(self, calls):
+            self._calls = calls
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql, params=()):
+            self._calls.append((" ".join(str(sql).split()), tuple(params or ())))
+
+        def fetchone(self):
+            return None
+
+    class _RecordingConn:
+        def __init__(self):
+            self.calls = []
+
+        def cursor(self):
+            return NextContainerUpsertBarcodeDedupTests._RecordingCursor(self.calls)
+
+    def _mutation(self, *, barcode, entity_id=None, client_entity_id="tmp-container-1"):
+        mutation: dict = {
+            "clientMutationId": "container-mutation-1",
+            "clientEntityId": client_entity_id,
+            "payload": {
+                "title": "Alien Anthology",
+                "containerType": "box_set",
+                "barcode": barcode,
+                "metadata": {},
+            },
+        }
+        if entity_id is not None:
+            mutation["entityId"] = str(entity_id)
+        return mutation
+
+    def _insert_container_id(self, conn):
+        insert_calls = [params for sql, params in conn.calls if "INSERT INTO containers" in sql]
+        self.assertEqual(len(insert_calls), 1)
+        return insert_calls[0][0]  # id is the first bound parameter
+
+    def _run(self, mutation, **patches):
+        conn = self._RecordingConn()
+        owner_id = uuid.uuid4()
+        defaults = dict(
+            table_exists=True,
+            client_entity_mapping=None,
+            container_entity=None,
+            single_container_sync_entity={},
+            next_revision=200,
+            actor_or_instance_owner_id=owner_id,
+        )
+        defaults.update(patches)
+        with (
+            patch.object(next_app, "table_exists", return_value=defaults["table_exists"]),
+            patch.object(next_app, "client_entity_mapping", return_value=defaults["client_entity_mapping"]),
+            patch.object(next_app, "container_entity", return_value=defaults["container_entity"]),
+            patch.object(next_app, "single_container_sync_entity", return_value=defaults["single_container_sync_entity"]),
+            patch.object(next_app, "store_client_entity_mapping"),
+            patch.object(next_app, "sync_change"),
+            patch.object(next_app, "next_revision", return_value=defaults["next_revision"]),
+            patch.object(next_app, "actor_or_instance_owner_id", return_value=defaults["actor_or_instance_owner_id"]),
+            patch.object(next_app, "find_container_by_barcode", **defaults["find_container_by_barcode_kw"]),
+        ):
+            result = next_app.apply_container_upsert(
+                conn,
+                client_id="next-import-center",
+                idem_key="idem-container-1",
+                mutation=mutation,
+            )
+        return conn, result
+
+    def test_new_barcode_container_adopts_existing_owner(self):
+        # No entityId, no clientEntityId mapping: a fresh box-set push whose EAN
+        # already belongs to a live container must adopt it, not duplicate.
+        existing_container = uuid.uuid4()
+        conn, result = self._run(
+            self._mutation(barcode="5051892023047"),
+            find_container_by_barcode_kw={"return_value": existing_container},
+        )
+        self.assertEqual(result["status"], "applied")
+        self.assertEqual(result["entityId"], existing_container)
+        self.assertEqual(self._insert_container_id(conn), existing_container)
+
+    def test_new_barcode_container_without_match_creates_fresh(self):
+        conn, result = self._run(
+            self._mutation(barcode="5051892023047"),
+            find_container_by_barcode_kw={"return_value": None},
+        )
+        self.assertEqual(result["status"], "applied")
+        # A brand-new uuid was minted and used for the insert.
+        self.assertEqual(self._insert_container_id(conn), result["entityId"])
+
+    def test_provided_entity_id_skips_barcode_dedup(self):
+        # An explicit entityId is an update; barcode adoption must not run and
+        # cannot silently retarget the row to a different container.
+        provided = uuid.uuid4()
+
+        def _fail(*args, **kwargs):
+            raise AssertionError("barcode dedup must not run when entityId is provided")
+
+        conn, result = self._run(
+            self._mutation(barcode="5051892023047", entity_id=provided),
+            find_container_by_barcode_kw={"side_effect": _fail},
+        )
+        self.assertEqual(result["entityId"], provided)
+        self.assertEqual(self._insert_container_id(conn), provided)
+
+    def test_mapped_client_entity_skips_barcode_dedup(self):
+        mapped = uuid.uuid4()
+
+        def _fail(*args, **kwargs):
+            raise AssertionError("barcode dedup must not run when a clientEntity mapping exists")
+
+        conn, result = self._run(
+            self._mutation(barcode="5051892023047"),
+            client_entity_mapping=mapped,
+            find_container_by_barcode_kw={"side_effect": _fail},
+        )
+        self.assertEqual(result["entityId"], mapped)
+        self.assertEqual(self._insert_container_id(conn), mapped)
+
 
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class NextTombstoneResponseContractTests(unittest.TestCase):
