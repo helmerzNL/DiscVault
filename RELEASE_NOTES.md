@@ -1,5 +1,26 @@
 # DiscVault Release Notes
 
+## 26.7.10 - MovieVault covers reach the PWA
+
+- A scanned disc now shows the MovieVault cover in the PWA, for box-sets and
+  individual films alike. The cover a scan produces arrives on MovieVault's
+  release-details resolver, which DiscVault registered but never called, so the
+  object carrying the artwork was never requested. The `movievault_v2` plugin
+  now resolves the scanned barcode and uses that poster whenever the synced
+  catalog record does not carry one yet (bundled `movievault_v2` 1.3.0). A
+  box-set uses the set's own cover in preference to a single release inside it,
+  and set members carry no artwork of their own.
+- The resolver's poster is now accepted. Its reference publishes only a `path`
+  (no checksum, which only the bulk catalog provides) and types `attestation`
+  and `license` as nested objects, all of which the strict bulk-sync parser
+  rejected outright. Absent or unreadable claims are recorded as absent so a
+  supplementary artwork field never costs a whole record, while a readable but
+  unapproved attestation or licence is still refused.
+- A poster without a checksum is served from MovieVault's stable anonymous
+  asset URL instead of being copied into the local artwork cache: bytes that
+  cannot be verified must never be stored, so nothing unverifiable is written
+  to disk. Checksummed catalog posters keep using the verified local cache.
+
 ## 26.7.9 - MovieVault owns the physical release's artwork
 
 - Scanning a barcode now shows the MovieVault cover in the PWA, for individual
