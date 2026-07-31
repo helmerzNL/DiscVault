@@ -188,6 +188,17 @@ class MigrationLockTests(unittest.TestCase):
 
         self.assertEqual(conn.rollbacks, 1)
 
+    def test_a_broken_rollback_does_not_mask_the_original_failure(self):
+        # If the connection is already dead, rollback() can raise too. That
+        # must not replace the real error the caller is already propagating.
+        conn = _FakeConn(fail_after=1, rollback_raises=True)
+
+        with self.assertRaises(next_database.MigrationError) as caught:
+            with next_database.migration_lock(conn):
+                raise next_database.MigrationError("migration 041 failed")
+
+        self.assertIn("migration 041 failed", str(caught.exception))
+
 
 class _FakeCursor:
     def __init__(self, conn):
@@ -206,11 +217,12 @@ class _FakeCursor:
 
 
 class _FakeConn:
-    def __init__(self, fail_after=None):
+    def __init__(self, fail_after=None, rollback_raises=False):
         self.calls = []
         self.commits = 0
         self.rollbacks = 0
         self.fail_after = fail_after
+        self.rollback_raises = rollback_raises
 
     def cursor(self):
         return _FakeCursor(self)
@@ -220,6 +232,8 @@ class _FakeConn:
 
     def rollback(self):
         self.rollbacks += 1
+        if self.rollback_raises:
+            raise RuntimeError("connection already closed")
 
 
 if __name__ == "__main__":

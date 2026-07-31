@@ -177,8 +177,13 @@ def migration_lock(conn):
         except Exception:
             # A failed migration leaves the transaction aborted, so the unlock
             # cannot run. PostgreSQL drops session locks when the connection
-            # closes, which is imminent either way.
-            conn.rollback()
+            # closes, which is imminent either way. Guard the rollback itself
+            # so a broken connection here can't replace whatever exception is
+            # already propagating out of this `finally`.
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
 
 def ensure_migration_table(conn) -> None:
