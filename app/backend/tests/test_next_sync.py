@@ -497,6 +497,34 @@ class NextIdentityLadderTests(unittest.TestCase):
         self.assertIsNone(entity_id)
         self.assertIsNone(matched_by)
 
+    def test_duplicate_copy_skips_tmdb_edition_tier(self):
+        # The case the flag exists for: two copies of ONE edition share their tmdb
+        # id, format and edition by definition. Suppressing only tier 2 left tier 3
+        # to match them straight back together, so the client's deliberate "add
+        # anyway" undid itself on the next sync.
+        entity_id, matched_by = self._match(
+            barcode_normalized="5051890000000",
+            tmdb_id="157336",
+            fmt="4K UHD",
+            duplicate_copy=True,
+            find_by_barcode=lambda: uuid.uuid4(),
+            find_by_tmdb_edition=lambda: uuid.uuid4(),
+        )
+        self.assertIsNone(entity_id)
+        self.assertIsNone(matched_by)
+
+    def test_duplicate_copy_skips_client_id_tier(self):
+        # Tier 1 cannot legitimately fire for a second copy either: tokens are never
+        # copied (contract §6), so one always arrives with a fresh token. Pinned so
+        # the short-circuit can't be narrowed back to "all tiers except the first".
+        entity_id, matched_by = self._match(
+            persistent_client_id="rec-uuid",
+            duplicate_copy=True,
+            find_by_client_id=lambda: uuid.uuid4(),
+        )
+        self.assertIsNone(entity_id)
+        self.assertIsNone(matched_by)
+
     def test_batch_claimed_barcode_skips_barcode_tier(self):
         # Box-set members sharing the container EAN must stay distinct rows.
         entity_id, _ = self._match(
