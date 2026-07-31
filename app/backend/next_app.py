@@ -16719,6 +16719,181 @@ def find_container_by_barcode(
     return row["id"] if row else None
 
 
+def find_container_by_client_id(conn, client_id: str | None) -> UUID | None:
+    """Trede 1 (§2b): a live container already carrying this persistent clientId."""
+    if not client_id:
+        return None
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM containers WHERE client_id=%s AND deleted_at IS NULL",
+            (client_id,),
+        )
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def find_container_by_identifier(
+    conn,
+    *,
+    identifier_type: str | None,
+    identifier: str | None,
+    container_type: str | None,
+    incoming_title: str | None = None,
+    incoming_barcode: Any = None,
+) -> UUID | None:
+    """Trede 3 (§2b): same external identifier + container_type.
+
+    Mirrors find_movie_by_tmdb_edition's over-merge sanity checks: a shared
+    identifier never merges two containers whose titles materially diverge or
+    whose barcodes conflict. Structurally defined per the contract even
+    though there is, as of this writing, no confirmed producer of container
+    identifiers yet.
+    """
+    identifier_value = clean_text(identifier)
+    identifier_type_value = clean_text(identifier_type)
+    if not identifier_value or not identifier_type_value or not container_type:
+        return None
+    if not table_exists(conn, "container_identifiers") or not table_exists(conn, "containers"):
+        return None
+    incoming_title_key = normalize_title(incoming_title)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT c.id, c.title, c.barcode
+            FROM containers c
+            JOIN container_identifiers ci ON ci.container_id = c.id
+            WHERE c.deleted_at IS NULL
+              AND c.container_type = %s
+              AND lower(ci.identifier_type) = lower(%s)
+              AND ci.identifier = %s
+            ORDER BY c.created_at
+            """,
+            (container_type, identifier_type_value, identifier_value),
+        )
+        rows = cur.fetchall()
+    for row in rows:
+        if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
+        candidate_title_key = normalize_title(row.get("title"))
+        if incoming_title_key and candidate_title_key and incoming_title_key != candidate_title_key:
+            continue
+        return row["id"]
+    return None
+
+
+def find_container_by_title_type(
+    conn,
+    *,
+    title: str | None,
+    container_type: str | None,
+    incoming_barcode: Any = None,
+) -> UUID | None:
+    """Trede 4 (§2b, adoption-only): normalized title + exact container_type.
+
+    Containers have no year concept, so unlike find_movie_by_title_year this
+    tier has no remake-safety clause -- title + container_type is sufficient,
+    plus the same barcode-conflict guard as trede 3.
+    """
+    normalized = normalize_title(title)
+    if not normalized or not container_type:
+        return None
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, barcode
+            FROM containers
+            WHERE deleted_at IS NULL
+              AND container_type = %s
+            ORDER BY created_at
+            """,
+            (container_type,),
+        )
+        rows = cur.fetchall()
+    for row in rows:
+        if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
+        if normalize_title(row.get("title")) == normalized:
+            return row["id"]
+    return None
+
+
+def match_existing_container(
+    *,
+    persistent_client_id: str | None,
+    barcode_normalized: str | None,
+    identifier_type: str | None,
+    identifier: str | None,
+    container_type: str | None,
+    find_by_client_id,
+    find_by_barcode,
+    find_by_identifier,
+) -> tuple[UUID | None, str | None]:
+    """Create-path container identity ladder (contract §2b/§4b.2).
+
+    Strict order, mirroring match_existing_movie: clientId -> barcode ->
+    external identifier. Trede 4 (title+container_type) is deliberately
+    absent here; it is only active on the first-connect reconcile path
+    (match_reconcile_container). There is no duplicate_copy equivalent for
+    containers (§4b.1) -- a second physical copy of the same box-set
+    packaging is not a modeled scenario.
+    """
+    if persistent_client_id:
+        found = find_by_client_id()
+        if found is not None:
+            return found, "clientId"
+    if barcode_normalized:
+        found = find_by_barcode()
+        if found is not None:
+            return found, "barcode"
+    if identifier and identifier_type and container_type:
+        found = find_by_identifier()
+        if found is not None:
+            return found, "containerIdentifier"
+    return None, None
+
+
+def match_reconcile_container(
+    *,
+    persistent_client_id: str | None,
+    barcode_normalized: str | None,
+    identifier_type: str | None,
+    identifier: str | None,
+    container_type: str | None,
+    title: str | None,
+    find_by_client_id,
+    find_by_barcode,
+    find_by_identifier,
+    find_by_title_type,
+) -> tuple[UUID | None, str | None]:
+    """First-connect adoption ladder for containers (contract §5b).
+
+    Read-only: never creates. The title+container_type tier is active here
+    and only here, mirroring match_reconcile_item's restriction of the
+    fuzziest tier to the adoption path.
+    """
+    if persistent_client_id:
+        found = find_by_client_id()
+        if found is not None:
+            return found, "clientId"
+    if barcode_normalized:
+        found = find_by_barcode()
+        if found is not None:
+            return found, "barcode"
+    if identifier and identifier_type and container_type:
+        found = find_by_identifier()
+        if found is not None:
+            return found, "containerIdentifier"
+    if title and container_type:
+        found = find_by_title_type()
+        if found is not None:
+            return found, "titleType"
+    return None, None
+
+
 def container_list_row(row: dict[str, Any]) -> dict[str, Any]:
     """Fold a container list row's joined poster columns into a `poster_url`.
 
@@ -16830,27 +17005,60 @@ def apply_container_upsert(
         )
     entity_id = provided_entity_id or mapped_entity_id
 
-    # Create-path barcode dedup. Unlike movies, containers carry no
-    # UNIQUE(barcode) constraint, so a brand-new box set whose EAN already
-    # belongs to a live container would silently mint a duplicate (there is no
-    # duplicate-copy concept for containers -- the same EAN is the same box
-    # set). When this push is not tied to a known container by an explicit
-    # entityId or a clientEntityId mapping, adopt the existing barcode owner
-    # instead of creating a second row.
+    # Persistent per-record identity (contract §4b.1), mirroring the movie
+    # upsert's persistent_client_id handling. Trede 3's identifier fields are
+    # read here too, structurally, even though no client currently sends
+    # them -- contract §2b tier 3 is "structurally defined, may have zero
+    # live producers initially".
+    persistent_client_id = clean_text(payload.get("client_id"))
+    metadata_payload = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    incoming_identifier_type = clean_text(metadata_payload.get("identifier_type"))
+    incoming_identifier = clean_text(metadata_payload.get("identifier"))
+    incoming_title_for_match = clean_text(payload.get("title"))
+    incoming_type_for_match: str | None = None
+    if "containerType" in payload or "container_type" in payload:
+        incoming_type_for_match = normalize_container_type(
+            payload.get("containerType", payload.get("container_type"))
+        )
+
+    # Create-path identity ladder (contract §2b/§4b.2): clientId -> barcode ->
+    # external identifier. Unlike movies, containers carry no UNIQUE(barcode)
+    # constraint, so a brand-new box set/vault whose EAN already belongs to a
+    # live container would otherwise silently mint a duplicate (there is no
+    # duplicate-copy concept for containers -- the same EAN is the same
+    # physical box). Only runs when this push is not already tied to a known
+    # container by an explicit entityId or a clientEntityId mapping.
+    matched_by: str | None = None
+    incoming_barcode = clean_text(payload.get("barcode"))
+    barcode_norm = normalize_barcode(incoming_barcode)
     if entity_id is None:
-        incoming_barcode = clean_text(payload.get("barcode"))
-        if incoming_barcode:
-            incoming_type = None
-            if "containerType" in payload or "container_type" in payload:
-                incoming_type = normalize_container_type(
-                    payload.get("containerType", payload.get("container_type"))
-                )
-            entity_id = find_container_by_barcode(
-                conn, incoming_barcode, container_type=incoming_type
-            )
+        entity_id, matched_by = match_existing_container(
+            persistent_client_id=persistent_client_id,
+            barcode_normalized=barcode_norm,
+            identifier_type=incoming_identifier_type,
+            identifier=incoming_identifier,
+            container_type=incoming_type_for_match,
+            find_by_client_id=lambda: find_container_by_client_id(conn, persistent_client_id),
+            find_by_barcode=lambda: find_container_by_barcode(
+                conn, incoming_barcode, container_type=incoming_type_for_match
+            ),
+            find_by_identifier=lambda: find_container_by_identifier(
+                conn,
+                identifier_type=incoming_identifier_type,
+                identifier=incoming_identifier,
+                container_type=incoming_type_for_match,
+                incoming_title=incoming_title_for_match,
+                incoming_barcode=incoming_barcode,
+            ),
+        )
 
     entity_id = entity_id or uuid.uuid4()
     existing = container_entity(conn, entity_id)
+    created = existing is None
+    if created:
+        # A brand-new record was not "matched"; matchedBy only describes how
+        # an existing record was found by the dedup ladder.
+        matched_by = None
 
     if "containerType" in payload or "container_type" in payload:
         container_type = normalize_container_type(payload.get("containerType", payload.get("container_type")))
@@ -16869,15 +17077,16 @@ def apply_container_upsert(
         cur.execute(
             """
             INSERT INTO containers (
-                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, metadata, created_at, updated_at
+                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, client_id, metadata, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=COALESCE(EXCLUDED.title, containers.title),
                 barcode=EXCLUDED.barcode,
                 badge_label=EXCLUDED.badge_label,
                 year=EXCLUDED.year,
                 description=EXCLUDED.description,
+                client_id=COALESCE(containers.client_id, EXCLUDED.client_id),
                 metadata=containers.metadata || EXCLUDED.metadata,
                 updated_at=now()
             """,
@@ -16891,9 +17100,16 @@ def apply_container_upsert(
                 fields["year"],
                 fields["description"],
                 actor_or_instance_owner_id(conn, actor),
+                persistent_client_id,
                 Jsonb(json_ready(fields["metadata"])),
             ),
         )
+
+    # No write path into container_identifiers yet: contract §2b tier 3 is
+    # "structurally defined, may have zero live producers initially" -- there
+    # is no confirmed provider/identifier scheme for containers to persist,
+    # unlike movies' tmdb_id. find_container_by_identifier reads whatever a
+    # future producer eventually writes there; nothing writes it today.
 
     attach_container_sync_artwork(
         conn,
@@ -16935,6 +17151,9 @@ def apply_container_upsert(
         "clientEntityId": client_entity_id,
         "revision": revision,
         "entity": entity,
+        "created": created,
+        "matchedBy": matched_by,
+        "recordClientId": persistent_client_id,
     }
 
 
@@ -27258,9 +27477,21 @@ def register_routes(flask_app: Flask) -> None:
 
             if wants_box_set_import and barcode and not has_provided_box_set:
                 with conn.cursor() as cur:
+                    # Digits-only comparison (contract §2b tier 2), matching
+                    # find_container_by_barcode -- an exact-string compare here
+                    # would miss a barcode that differs only in formatting
+                    # (leading zero, hyphenation) from how it was originally
+                    # stored, letting a re-scan slip past this pre-check.
                     cur.execute(
-                        "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set'",
-                        (barcode,),
+                        """
+                        SELECT id
+                        FROM containers
+                        WHERE container_type='box_set'
+                          AND barcode IS NOT NULL
+                          AND regexp_replace(barcode, '\\D', '', 'g') = %s
+                        LIMIT 1
+                        """,
+                        (normalize_barcode(barcode),),
                     )
                     existing_box_set = cur.fetchone()
                 if existing_box_set:
@@ -27286,7 +27517,19 @@ def register_routes(flask_app: Flask) -> None:
 
             if barcode and not has_provided_box_set:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
+                    # Digits-only comparison (contract §2 tier 2), matching
+                    # find_movie_by_barcode_match -- see the box-set pre-check
+                    # above for why an exact-string compare is wrong here.
+                    cur.execute(
+                        """
+                        SELECT id
+                        FROM movies
+                        WHERE barcode IS NOT NULL
+                          AND regexp_replace(barcode, '\\D', '', 'g') = %s
+                        LIMIT 1
+                        """,
+                        (normalize_barcode(barcode),),
+                    )
                     existing = cur.fetchone()
                 if existing:
                     link_result = None
@@ -29488,8 +29731,16 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("items must be a list", 400)
         if len(items) > 1000:
             raise NextApiError("At most 1000 items can be reconciled at once", 400)
+        container_items = body.get("containerItems")
+        if container_items is None:
+            container_items = []
+        if not isinstance(container_items, list):
+            raise NextApiError("containerItems must be a list", 400)
+        if len(container_items) > 1000:
+            raise NextApiError("At most 1000 containerItems can be reconciled at once", 400)
 
         results: list[dict[str, Any]] = []
+        container_results: list[dict[str, Any]] = []
         with connect() as conn:
             require_next_authenticated_user(conn)
             revision = current_revision(conn)
@@ -29577,11 +29828,86 @@ def register_routes(flask_app: Flask) -> None:
                             "matched": False,
                         }
                     )
+
+            # Container branch (contract §5b): same read-only adoption shape
+            # as the movie loop above, offered as a separate containerItems
+            # array/containerResults response so a client can reconcile its
+            # local box-sets/vaults/collections on first connect too, not
+            # just its movies.
+            for item in container_items:
+                if not isinstance(item, dict):
+                    container_results.append({"status": "invalid", "matched": False})
+                    continue
+                persistent_client_id = clean_text(item.get("client_id"))
+                barcode = item.get("barcode")
+                barcode_normalized = normalize_barcode(barcode)
+                identifier_type = clean_text(item.get("identifier_type"))
+                identifier = clean_text(item.get("identifier"))
+                title = item.get("title")
+                raw_container_type = item.get("container_type")
+                if raw_container_type is None:
+                    container_type = None
+                else:
+                    try:
+                        container_type = normalize_container_type(raw_container_type)
+                    except NextApiError:
+                        container_results.append(
+                            {
+                                "client_id": persistent_client_id,
+                                "status": "invalid",
+                                "matched": False,
+                            }
+                        )
+                        continue
+                matched_id, matched_by = match_reconcile_container(
+                    persistent_client_id=persistent_client_id,
+                    barcode_normalized=barcode_normalized,
+                    identifier_type=identifier_type,
+                    identifier=identifier,
+                    container_type=container_type,
+                    title=title,
+                    find_by_client_id=lambda: find_container_by_client_id(
+                        conn, persistent_client_id
+                    ),
+                    find_by_barcode=lambda: find_container_by_barcode(
+                        conn, barcode, container_type=container_type
+                    ),
+                    find_by_identifier=lambda: find_container_by_identifier(
+                        conn,
+                        identifier_type=identifier_type,
+                        identifier=identifier,
+                        container_type=container_type,
+                        incoming_title=title,
+                        incoming_barcode=barcode,
+                    ),
+                    find_by_title_type=lambda: find_container_by_title_type(
+                        conn, title=title, container_type=container_type, incoming_barcode=barcode
+                    ),
+                )
+                if matched_id is not None:
+                    container_results.append(
+                        {
+                            "client_id": persistent_client_id,
+                            "status": "matched",
+                            "matched": True,
+                            "entityId": str(matched_id),
+                            "matchedBy": matched_by,
+                        }
+                    )
+                else:
+                    container_results.append(
+                        {
+                            "client_id": persistent_client_id,
+                            "status": "unknown",
+                            "matched": False,
+                        }
+                    )
         return response(
             {
                 "status": "ok",
                 "currentRevision": revision,
                 "results": results,
+                "containerResults": container_results,
             }
         )
 

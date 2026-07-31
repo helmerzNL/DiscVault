@@ -1100,6 +1100,68 @@ class NextReconcileLadderTests(unittest.TestCase):
         self.assertIsNone(matched_by)
 
 
+class NextContainerReconcileLadderTests(unittest.TestCase):
+    """First-connect adoption ladder for containers (sync-contract.md §5b)."""
+
+    def _match(self, **overrides):
+        kwargs = dict(
+            persistent_client_id=None,
+            barcode_normalized=None,
+            identifier_type=None,
+            identifier=None,
+            container_type=None,
+            title=None,
+            find_by_client_id=lambda: None,
+            find_by_barcode=lambda: None,
+            find_by_identifier=lambda: None,
+            find_by_title_type=lambda: None,
+        )
+        kwargs.update(overrides)
+        return next_app.match_reconcile_container(**kwargs)
+
+    def test_title_type_tier_is_active_in_reconcile(self):
+        existing = uuid.uuid4()
+        entity_id, matched_by = self._match(
+            title="Kids",
+            container_type="vault",
+            find_by_title_type=lambda: existing,
+        )
+        self.assertEqual(entity_id, existing)
+        self.assertEqual(matched_by, "titleType")
+
+    def test_client_id_takes_precedence_over_title_type(self):
+        by_client = uuid.uuid4()
+        entity_id, matched_by = self._match(
+            persistent_client_id="rec-uuid",
+            title="Kids",
+            container_type="vault",
+            find_by_client_id=lambda: by_client,
+            find_by_title_type=lambda: uuid.uuid4(),
+        )
+        self.assertEqual(entity_id, by_client)
+        self.assertEqual(matched_by, "clientId")
+
+    def test_barcode_takes_precedence_over_identifier_and_title_type(self):
+        by_barcode = uuid.uuid4()
+        entity_id, matched_by = self._match(
+            barcode_normalized="5051888240816",
+            identifier_type="external_id",
+            identifier="tmdb-collection-1",
+            title="Kids",
+            container_type="vault",
+            find_by_barcode=lambda: by_barcode,
+            find_by_identifier=lambda: uuid.uuid4(),
+            find_by_title_type=lambda: uuid.uuid4(),
+        )
+        self.assertEqual(entity_id, by_barcode)
+        self.assertEqual(matched_by, "barcode")
+
+    def test_unknown_item_returns_no_match(self):
+        entity_id, matched_by = self._match(title="Ghost Vault", container_type="vault")
+        self.assertIsNone(entity_id)
+        self.assertIsNone(matched_by)
+
+
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class NextMovieUpsertBarcodeConflictTests(unittest.TestCase):
     class _RecordingCursor:

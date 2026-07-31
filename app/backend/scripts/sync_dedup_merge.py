@@ -316,29 +316,44 @@ def _column_exists(conn, table_name, column_name):
     return bool(row.get("ok"))
 
 
-def _fetch_live_containers(conn):
+def _fetch_live_containers(conn, *, container_types=None):
+    """Live containers, optionally scoped to a set of container_type values.
+
+    Previously hard-scoped to ``container_type = 'box_set'``, which made
+    vault/collection duplicates invisible to this whole script -- the
+    downstream scoring/rehang/winner functions were always type-agnostic, so
+    that one WHERE clause was the only thing hiding them. ``container_types``
+    lets an operator narrow a dry-run/execute pass (see --container-type);
+    omitted or empty means all three types.
+    """
+    clauses = ["c.deleted_at IS NULL"]
+    params: list = []
+    if container_types:
+        placeholders = ", ".join(["%s"] * len(container_types))
+        clauses.append(f"c.container_type IN ({placeholders})")
+        params.extend(container_types)
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT c.*,
                    (SELECT count(*)::int FROM container_movies cm
                     WHERE cm.container_id = c.id) AS movie_count
             FROM containers c
-            WHERE c.deleted_at IS NULL
-              AND c.container_type = 'box_set'
+            WHERE {' AND '.join(clauses)}
             ORDER BY c.id
-            """
+            """,
+            tuple(params),
         )
         return cur.fetchall()
 
 
-def detect_container_groups(conn):
-    """Return duplicate box-set groups keyed by tier."""
-    containers = _fetch_live_containers(conn)
+def detect_container_groups(conn, *, container_types=None):
+    """Return duplicate container groups (box_set/vault/collection) keyed by tier."""
+    containers = _fetch_live_containers(conn, container_types=container_types)
     by_id = {c["id"]: c for c in containers}
 
     barcode_groups: dict = {}
-    titleyear_groups: dict = {}
+    titletype_groups: dict = {}
 
     for c in containers:
         cid = c["id"]
@@ -346,17 +361,22 @@ def detect_container_groups(conn):
         if code:
             barcode_groups.setdefault(code, []).append(cid)
 
+        # Containers have no year concept the way movies do, and a vault
+        # named "Kids" must never group with a collection named "Kids" --
+        # so this keys on container_type where the movie ladder keys on
+        # year. The dict key below stays "titleYear" for compatibility with
+        # the rest of this script's report shape and CLI plumbing.
         norm = normalize_title(c.get("title"))
-        year = _year_key(c.get("year")) or ""
+        container_type = c.get("container_type") or ""
         if norm:
-            titleyear_groups.setdefault((norm, year), []).append(cid)
+            titletype_groups.setdefault((norm, container_type), []).append(cid)
 
     def _dups(groups):
         return {k: v for k, v in groups.items() if len(v) > 1}
 
     return {
         "barcode": _dups(barcode_groups),
-        "titleYear": _dups(titleyear_groups),
+        "titleYear": _dups(titletype_groups),
     }, by_id
 
 
@@ -732,7 +752,7 @@ def _dedup_group_members(groups):
     return plans
 
 
-def build_report(conn):
+def build_report(conn, *, container_types=None):
     groups, by_id, tmdb = detect_groups(conn)
     signals = _movie_signals(conn, by_id)
     for mid, movie in by_id.items():
@@ -784,7 +804,7 @@ def build_report(conn):
         )
 
     # Container (box-set) dedup
-    container_groups, container_by_id = detect_container_groups(conn)
+    container_groups, container_by_id = detect_container_groups(conn, container_types=container_types)
     container_plans = []
     container_claimed: set = set()
     for tier in ("barcode", "titleYear"):
@@ -944,11 +964,23 @@ def main(argv=None):
         help="Apply the merge. WITHOUT this flag the script only reports (dry-run).",
     )
     parser.add_argument("--report", help="Write the JSON report to this file as well as stdout.")
+    parser.add_argument(
+        "--container-type",
+        action="append",
+        choices=["box_set", "vault", "collection"],
+        dest="container_types",
+        help=(
+            "Scope container dedup to this container_type. Repeatable "
+            "(e.g. --container-type vault --container-type collection). "
+            "Omit to cover all three types (the default since vault/"
+            "collection support was added)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     conn = _connect()
     try:
-        report = build_report(conn)
+        report = build_report(conn, container_types=args.container_types)
         text = json.dumps(report, indent=2, default=str)
         print(text)
         if args.report:
