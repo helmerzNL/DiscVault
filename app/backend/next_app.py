@@ -15985,20 +15985,30 @@ def match_existing_movie(
        in this batch (``batch_claimed_client_id``) or already on a live movie.
     2. barcode/EAN — exact digits-only match against a live movie, *unless* the
        barcode was already claimed by an earlier create in this batch (a box-set
-       member sharing the container EAN, which must stay a distinct row) or the
-       client explicitly asked for a ``duplicateCopy``.
+       member sharing the container EAN, which must stay a distinct row).
     3. TMDB id + format + edition — all three must match (over-merge protection).
 
     Trede 4 (title+year) is deliberately absent here; it is only active in the
     first-connect ``/sync/reconcile`` adoption path.
+
+    ``duplicate_copy`` short-circuits the whole ladder. It used to suppress only
+    tier 2, which made the flag a no-op in the case it exists for: two copies of
+    one edition share their tmdb id, format and edition by definition, so tier 3
+    matched them right back together and the client's deliberate "add anyway"
+    silently undid itself on the next sync. An explicit second physical copy is a
+    new record on every tier — including tier 1, which cannot legitimately fire
+    here either: tokens are never copied (contract §6), so a second copy always
+    arrives carrying a fresh one.
     """
+    if duplicate_copy:
+        return None, None
     if persistent_client_id and batch_claimed_client_id is not None:
         return batch_claimed_client_id, "clientId"
     if persistent_client_id:
         found = find_by_client_id()
         if found is not None:
             return found, "clientId"
-    if barcode_normalized and not duplicate_copy and not barcode_claimed_in_batch:
+    if barcode_normalized and not barcode_claimed_in_batch:
         found = find_by_barcode()
         if found is not None:
             return found, "barcode"
