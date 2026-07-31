@@ -1821,6 +1821,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       if (!url) return "";
       if (String(url).startsWith("http://") || String(url).startsWith("https://")) return url;
       if (String(url).startsWith("/api/next/media/")) return url;
+      if (String(url).startsWith("/api/next/movievault-v2/posters/")) return url;
       return "";
     }
     function mediaAssetImage(assets, kind) {

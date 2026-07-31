@@ -1,5 +1,75 @@
 # DiscVault Release Notes
 
+## 26.7.11 - Synced box-set covers survive and show in the library
+
+- A box set pushed from another client keeps its cover. The container sync
+  upsert stored only title, barcode, year and metadata, so the artwork the
+  sending client had resolved (MovieVault's own box-set cover) was dropped on
+  arrival. The container then had no artwork of its own and fell back to the
+  first member film's poster — a different film's cover. Pushed poster and
+  backdrop URLs are now registered as container artwork.
+- The pushed cover becomes the container's default without ever overriding a
+  chosen one: it is attached as a selectable option and only promoted to
+  primary when the container has no primary artwork of that kind yet, so a
+  cover picked or uploaded in DiscVault always wins. Registering artwork runs
+  in its own savepoint, so a container still syncs if its cover cannot be
+  stored.
+- The library list now shows a container's own primary artwork. It previously
+  selected no artwork at all and relied on a metadata URL, so a cover living in
+  `entity_media` — synced, scanned, or uploaded — appeared on the detail page
+  but left the library card blank.
+
+## 26.7.10 - MovieVault covers reach the PWA
+
+- A scanned disc now shows the MovieVault cover in the PWA, for box-sets and
+  individual films alike. The cover a scan produces arrives on MovieVault's
+  release-details resolver, which DiscVault registered but never called, so the
+  object carrying the artwork was never requested. The `movievault_v2` plugin
+  now resolves the scanned barcode and uses that poster whenever the synced
+  catalog record does not carry one yet (bundled `movievault_v2` 1.3.0). A
+  box-set uses the set's own cover in preference to a single release inside it,
+  and set members carry no artwork of their own.
+- The resolver's poster is now accepted. Its reference publishes only a `path`
+  (no checksum, which only the bulk catalog provides) and types `attestation`
+  and `license` as nested objects, all of which the strict bulk-sync parser
+  rejected outright. Absent or unreadable claims are recorded as absent so a
+  supplementary artwork field never costs a whole record, while a readable but
+  unapproved attestation or licence is still refused.
+- A poster without a checksum is served from MovieVault's stable anonymous
+  asset URL instead of being copied into the local artwork cache: bytes that
+  cannot be verified must never be stored, so nothing unverifiable is written
+  to disk. Checksummed catalog posters keep using the verified local cache.
+
+## 26.7.9 - MovieVault owns the physical release's artwork
+
+- Scanning a barcode now shows the MovieVault cover in the PWA, for individual
+  films and box-sets alike. The metadata policy treated artwork as
+  enrichment-only, so a MovieVault result had its poster stripped on three
+  paths at once: `poster_url` was filtered out of the movie and metadata
+  updates, `mediaUpdates` (which persists artwork) was cleared, and the
+  candidate the user picks from was sanitized down to identification fields
+  without any poster. The scan card therefore fell back to a letter
+  placeholder even though MovieVault had supplied a cover.
+- MovieVault identity sources may now own artwork — a physical release has its
+  own front cover, which the identity source is the authority on. Poster and
+  backdrop fields survive on the movie, in `mediaUpdates`, and on the
+  candidate. Every other enrichment answer (plot, cast and crew, runtime,
+  ratings, trailers) still belongs to the enrichment provider, and plugins that
+  are not identity sources remain blocked from supplying artwork.
+
+## 26.7.8 - MovieVault v2 covers in the PWA
+
+- Barcode scans now show the MovieVault v2 cover in the PWA for both individual
+  films and box-sets, matching the native iOS behavior. The `movievault_v2`
+  plugin previously dropped the poster while building its release and box-set
+  candidates, so the cover never reached the client. The plugin now forwards
+  the localized, DiscVault-served poster URL (bundled as `movievault_v2` 1.2.0,
+  auto-upgraded in place from 1.1.0).
+- The PWA image guard (`usableImage`) now recognizes the
+  `/api/next/movievault-v2/posters/` route in addition to `/api/next/media/`,
+  so locally served MovieVault v2 covers render instead of falling back to a
+  placeholder.
+
 ## 26.6.18 - Exact TMDb enrichment for MovieVault barcode hits
 
 - TMDb preview enrichment now requires an exact normalized title match and,

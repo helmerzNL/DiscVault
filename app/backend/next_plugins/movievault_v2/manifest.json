@@ -1,0 +1,30 @@
+{
+  "id": "movievault_v2",
+  "name": "MovieVault v2",
+  "version": "1.3.0",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "minimumDiscVaultVersion": "26.4.53",
+  "distributionContractRange": {
+    "minimum": "distribution-2",
+    "maximum": "distribution-3"
+  },
+  "categories": ["metadata_source"],
+  "capabilities": ["health_check", "sync_index", "search_barcode", "search_title", "movie_details", "box_set_candidates"],
+  "requiresSecrets": false,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {"name": "origin", "label": "MovieVault origin", "type": "text", "required": true, "placeholder": "https://movievault.example"},
+      {"name": "syncIntervalHours", "label": "Sync interval (hours)", "type": "number", "default": 6, "minimum": 1, "maximum": 168},
+      {"name": "staleThresholdHours", "label": "Stale threshold (hours)", "type": "number", "default": 48, "minimum": 1, "maximum": 720},
+      {"name": "maximumResults", "label": "Maximum lookup results", "type": "number", "default": 12, "minimum": 1, "maximum": 50},
+      {"name": "bucketFallback", "label": "Allow anonymous bucket fallback", "type": "boolean", "default": false}
+    ],
+    "secrets": []
+  },
+  "defaultEnabled": false,
+  "orderIndex": 52,
+  "premiumFeatureKey": "metadata.source.movievault.use",
+  "entitlements": {"source_use": "metadata.source.movievault.use", "source_bulk": "metadata.source.movievault.bulk"}
+}
