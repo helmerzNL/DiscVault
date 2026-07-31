@@ -56,7 +56,10 @@ services:
       - "${DISCVAULT_NEXT_API_PORT}:5000"
     depends_on:
       postgres:
-        condition: service_healthy
+        # Ordering only. Gating on service_healthy makes a slow or recovering
+        # database abort the whole `up`; next_database.wait_for_database()
+        # blocks here instead, so the stack converges on its own.
+        condition: service_started
     healthcheck:
       test:
         [
@@ -91,7 +94,9 @@ services:
       - ${DISCVAULT_DATA_DIR}:/data
     depends_on:
       next-api:
-        condition: service_healthy
+        # The worker waits for PostgreSQL itself and only reads jobs, so it does
+        # not need a migrated schema to be up before it starts.
+        condition: service_started
     healthcheck:
       disable: true
     networks:
@@ -119,7 +124,9 @@ services:
       - "${DISCVAULT_NEXT_MCP_PORT:-6090}:6090"
     depends_on:
       next-api:
-        condition: service_healthy
+        # next-mcp calls the API per request, not at boot, and retries via its
+        # own restart policy.
+        condition: service_started
     healthcheck:
       test:
         [

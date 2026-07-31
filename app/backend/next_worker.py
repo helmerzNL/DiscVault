@@ -45,6 +45,7 @@ try:
     from .next_backup import restore_functional_backup
     from .next_price_alerts import PRICE_ALERT_JOB_TYPE
     from .next_price_alerts import run_price_alert_sweep
+    from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
     from .next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
@@ -71,6 +72,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_backup import restore_functional_backup
     from next_price_alerts import PRICE_ALERT_JOB_TYPE
     from next_price_alerts import run_price_alert_sweep
+    from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
     from next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
@@ -2566,6 +2568,9 @@ def main(argv: list[str] | None = None) -> int:
     validate_runtime_secrets()
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
+    # The worker only waits for postgres to have started, so it may well be the
+    # first thing knocking while the database is still coming up.
+    wait_for_database(connect_fn=connect).close()
     if args.command == "run-once":
         return run_once(args.worker_id)
     return work_loop(args.worker_id, args.poll_interval)

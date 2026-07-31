@@ -150,6 +150,41 @@ already populated does not run `initdb`, so PostgreSQL should become healthy
 within seconds; if it does not, see
 [PostgreSQL is reported unhealthy on an existing stack](#postgresql-is-reported-unhealthy-on-an-existing-stack).
 
+### A slow database cannot abort the deployment
+
+The long-running services depend on `service_started`, not `service_healthy`.
+Compose therefore starts them in order but does not wait for a health check, so
+`docker compose up -d` returns as soon as the containers exist and no health
+check can make it fail.
+
+Waiting happens inside the containers instead. `next-api` and `next-worker` call
+`wait_for_database()` before touching the schema, retrying with backoff while
+PostgreSQL refuses connections — which it does while it is still binding, and
+while it replays WAL after an unclean shutdown. Nothing runs against a
+half-started database: during `initdb` the temporary server listens on the Unix
+socket only, so a TCP connection cannot succeed early.
+
+The wait gives up after 300s and exits non-zero; `restart: unless-stopped` then
+retries the whole container. Override it with `DISCVAULT_NEXT_DB_WAIT_TIMEOUT`
+(seconds) if your storage needs longer.
+
+The health checks are still defined, and are still the right thing to read when
+you want to know whether the stack is actually up:
+
+```bash
+docker compose ps
+```
+
+The one-off `tools`-profile services (`import-sqlite`, and `migrate` in the
+development compose file) do still wait for `service_healthy`. They are run by
+hand against a stack that is supposed to be up already, so failing fast is the
+useful behaviour there.
+
+Because `next-api` applies migrations on every start and the `migrate` service
+can be run alongside it, migrations take a PostgreSQL advisory lock. A second
+runner blocks until the first finishes instead of applying the same migration
+twice.
+
 When this service is published directly behind a reverse proxy, the Next
 collection UI is available at `/`, `/app`, and `/api/next/app`.
 
@@ -472,7 +507,7 @@ The script is read-only — it inspects containers, reads logs, and runs
 | The probe itself takes longer than 5s | `timeout: 5s` is too tight for this storage | Raise `timeout`, and check whether the data directory sits on a network share |
 | `next-api` is the unhealthy container; `/api/next/health` is slow or returns 503 | Migrations are not `ready`, or the endpoint's per-probe artwork-trash purge exceeds the timeout | Wait out the migration; if the purge is the cause, the endpoint should not be doing write work on a 10s liveness probe |
 | `getent hosts postgres` returns more than one address | Two stacks share a Docker network | Give each stack a unique `DISCVAULT_NEXT_NETWORK_NAME`; see [below](#repeated-password-authentication-failed-in-the-postgresql-log) |
-| Everything is healthy, only slow | The deploy is gated on health checks | Nothing is broken: `docker compose up -d --wait=false` returns immediately and the stack converges on its own |
+| Everything is healthy, only slow | The deployed compose file predates the switch to `service_started` | Redeploy from the current compose file; see [A slow database cannot abort the deployment](#a-slow-database-cannot-abort-the-deployment) |
 
 ### Repeated `password authentication failed` in the PostgreSQL log
 

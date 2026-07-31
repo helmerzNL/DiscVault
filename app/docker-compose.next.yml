@@ -29,7 +29,9 @@ services:
     restart: unless-stopped
     depends_on:
       postgres:
-        condition: service_healthy
+        # Ordering only; next_database.wait_for_database() does the waiting.
+        # Mirrors app/deploy/next/docker-compose.yml.
+        condition: service_started
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
       TZ: ${TZ:-Europe/Amsterdam}
@@ -66,7 +68,8 @@ services:
     restart: unless-stopped
     depends_on:
       next-api:
-        condition: service_healthy
+        # The worker waits for PostgreSQL itself; it does not need the API up.
+        condition: service_started
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
       TZ: ${TZ:-Europe/Amsterdam}
