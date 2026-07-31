@@ -122,7 +122,7 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
             "content_ratings",
             "updated_at",
         ),
-        frozenset({"audio_tracks", "subtitles", "regions", "content_ratings"}),
+        frozenset({"audio_tracks", "subtitles", "regions", "content_ratings", "packaging"}),
     ),
     TableSpec(
         "people",

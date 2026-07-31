@@ -16,6 +16,7 @@ _AUDIO_TRACKS = [
     {"languageCode": "nl", "codec": "dolby_digital", "channels": "5.1", "immersiveFormat": None},
 ]
 _SUBTITLE_LANGUAGES = ["en", "nl"]
+_PACKAGING = ["steelbook", "slipcover"]
 
 
 def _synced_release(**overrides):
@@ -33,6 +34,7 @@ def _synced_release(**overrides):
         "runtimeMinutes": 122,
         "audioTracks": _AUDIO_TRACKS,
         "subtitleLanguages": _SUBTITLE_LANGUAGES,
+        "packaging": _PACKAGING,
     }
     record.update(overrides)
     return record
@@ -43,6 +45,7 @@ class ReleaseMappingTests(unittest.TestCase):
         item = movievault_v2._release(_synced_release())
         self.assertEqual(item["movie"]["audioTracks"], _AUDIO_TRACKS)
         self.assertEqual(item["movie"]["subtitleLanguages"], _SUBTITLE_LANGUAGES)
+        self.assertEqual(item["movie"]["packaging"], _PACKAGING)
         # Already-wired fields stay wired.
         self.assertEqual(item["movie"]["edition"], "Theatrical")
         self.assertEqual(item["movie"]["releaseTitle"], "Example Film")
@@ -51,6 +54,10 @@ class ReleaseMappingTests(unittest.TestCase):
         item = movievault_v2._release(_synced_release(audioTracks=[], subtitleLanguages=[]))
         self.assertNotIn("audioTracks", item["movie"])
         self.assertNotIn("subtitleLanguages", item["movie"])
+
+    def test_release_omits_empty_packaging_array(self):
+        item = movievault_v2._release(_synced_release(packaging=[]))
+        self.assertNotIn("packaging", item["movie"])
 
 
 class SearchBarcodeResolverFallbackTests(unittest.TestCase):
@@ -68,30 +75,43 @@ class SearchBarcodeResolverFallbackTests(unittest.TestCase):
 
     def test_fills_missing_technical_specs_from_the_live_resolver(self):
         context, calls = self._context(
-            lookup_results=[_synced_release(audioTracks=[], subtitleLanguages=[])],
+            lookup_results=[_synced_release(audioTracks=[], subtitleLanguages=[], packaging=[])],
             resolver_result={
                 "status": "canonical_hit",
-                "release": {"audioTracks": _AUDIO_TRACKS, "subtitleLanguages": _SUBTITLE_LANGUAGES},
+                "release": {
+                    "audioTracks": _AUDIO_TRACKS,
+                    "subtitleLanguages": _SUBTITLE_LANGUAGES,
+                    "packaging": _PACKAGING,
+                },
             },
         )
         result = movievault_v2.search_barcode({"barcode": "9781234567897"}, context)
         self.assertEqual(result["movie"]["audioTracks"], _AUDIO_TRACKS)
         self.assertEqual(result["movie"]["subtitleLanguages"], _SUBTITLE_LANGUAGES)
+        self.assertEqual(result["movie"]["packaging"], _PACKAGING)
         self.assertEqual(calls["resolver"], 1)
 
     def test_does_not_overwrite_technical_specs_already_present_from_sync(self):
         context, calls = self._context(
             lookup_results=[_synced_release()],
-            resolver_result={"status": "canonical_hit", "release": {"audioTracks": [], "subtitleLanguages": []}},
+            resolver_result={
+                "status": "canonical_hit",
+                "release": {"audioTracks": [], "subtitleLanguages": [], "packaging": []},
+            },
         )
         result = movievault_v2.search_barcode({"barcode": "9781234567897"}, context)
         self.assertEqual(result["movie"]["audioTracks"], _AUDIO_TRACKS)
         self.assertEqual(result["movie"]["subtitleLanguages"], _SUBTITLE_LANGUAGES)
+        self.assertEqual(result["movie"]["packaging"], _PACKAGING)
 
     def test_box_set_resolver_technical_fields_are_never_pulled_from_the_box_set_section(self):
         details = {
             "status": "canonical_hit",
-            "boxSet": {"audioTracks": _AUDIO_TRACKS, "subtitleLanguages": _SUBTITLE_LANGUAGES},
+            "boxSet": {
+                "audioTracks": _AUDIO_TRACKS,
+                "subtitleLanguages": _SUBTITLE_LANGUAGES,
+                "packaging": _PACKAGING,
+            },
         }
         self.assertEqual(movievault_v2._resolved_technical(details), {})
 
@@ -116,6 +136,7 @@ class MetadataPipelineIntegrationTests(unittest.TestCase):
             ],
         )
         self.assertEqual(canonical["technicalUpdates"]["subtitles"], _SUBTITLE_LANGUAGES)
+        self.assertEqual(canonical["technicalUpdates"]["packaging"], _PACKAGING)
         self.assertEqual(canonical["movieUpdates"]["edition"], "Theatrical")
         self.assertEqual(canonical["movieUpdates"]["release_title"], "Example Film")
 

@@ -424,6 +424,41 @@ class NextMovieDetailUiTests(unittest.TestCase):
         self.assertIn('data-artwork-hidden="${asset.hidden ? "true" : "false"}"', self.source)
         self.assertIn(".movie-art-option.is-hidden .art-option-preview", self.source)
 
+    def test_packaging_edit_uses_a_checkbox_group_of_all_nine_enum_values(self):
+        self.assertIn('<fieldset id="movieEditPackaging"', self.source)
+        # The old single free-text input must be gone, not just superseded.
+        self.assertNotIn(
+            '<input id="movieEditPackaging" name="packaging" maxlength="160" autocomplete="off">',
+            self.source,
+        )
+        for value in (
+            "keep_case",
+            "amaray",
+            "steelbook",
+            "slipcover",
+            "slipcase",
+            "digibook",
+            "mediabook",
+            "digipak",
+            "box",
+        ):
+            with self.subTest(value=value):
+                self.assertIn(f'<input type="checkbox" value="{value}">', self.source)
+
+    def test_packaging_checkbox_fill_and_submit_read_checked_values(self):
+        self.assertIn(
+            'document.querySelectorAll("#movieEditPackaging input[type=checkbox]").forEach((box) => {',
+            self.source,
+        )
+        self.assertIn(
+            'packaging: Array.from(document.querySelectorAll("#movieEditPackaging input[type=checkbox]:checked")).map((box) => box.value),',
+            self.source,
+        )
+
+    def test_movie_edit_locks_handle_the_packaging_fieldset(self):
+        self.assertIn('input.tagName === "FIELDSET" ? input : input.closest("label")', self.source)
+        self.assertIn('container.querySelector("span, legend")', self.source)
+
 
 if __name__ == "__main__":
     unittest.main()

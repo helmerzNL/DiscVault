@@ -69,6 +69,21 @@ def _v3_signed_from_request(fake_request):
     return _hook
 
 
+class PackagingListHelperTests(unittest.TestCase):
+    def test_passes_through_a_list_trimming_blank_entries(self):
+        self.assertEqual(
+            movievault_26._packaging_list(["Steelbook", " ", "Slipcover", ""]),
+            ["Steelbook", "Slipcover"],
+        )
+
+    def test_wraps_a_bare_string_as_a_one_element_list(self):
+        self.assertEqual(movievault_26._packaging_list("Steelbook"), ["Steelbook"])
+
+    def test_empty_or_none_input_returns_an_empty_list(self):
+        self.assertEqual(movievault_26._packaging_list(None), [])
+        self.assertEqual(movievault_26._packaging_list(""), [])
+
+
 class MovieVault26PluginContractTests(unittest.TestCase):
     def test_movievault_26_manifest_declares_plugin_replacement(self):
         manifest = {
@@ -814,6 +829,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                                 "technicalSpecs": {
                                     "hdr": "HDR10, Dolby Vision",
                                     "audioTracks": ["English Dolby Atmos"],
+                                    "packaging": ["Steelbook", "Slipcover"],
                                 },
                             },
                             "releases": [
@@ -853,6 +869,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["technicalSpecs"]["format"], "4K UHD")
         self.assertEqual(result["technicalSpecs"]["hdr"], "HDR10, Dolby Vision")
         self.assertEqual(result["technicalSpecs"]["audioTracks"], ["English Dolby Atmos"])
+        self.assertEqual(result["technicalSpecs"]["packaging"], ["Steelbook", "Slipcover"])
         self.assertEqual(
             result["identifiers"],
             [

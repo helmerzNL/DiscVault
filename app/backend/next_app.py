@@ -8926,7 +8926,7 @@ def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
     if "hdr" in body:
         edits["hdr"] = clean_text(body.get("hdr"))
     if "packaging" in body:
-        edits["packaging"] = clean_text(body.get("packaging"))
+        edits["packaging"] = _movie_edit_csv_list(body.get("packaging"))
     ratio_keys = ("screenRatio", "screen_ratios", "screenRatios")
     if any(key in body for key in ratio_keys):
         raw = next(body[key] for key in ratio_keys if key in body)
@@ -8960,11 +8960,11 @@ def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -
     )
     assignments: list[str] = []
     values: list[Any] = []
-    for col in ("hdr", "packaging", "screen_ratios"):
+    for col in ("hdr", "screen_ratios"):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(edits[col])
-    for col in ("audio_tracks", "subtitles"):
+    for col in ("audio_tracks", "subtitles", "packaging"):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(Jsonb(json_ready(edits[col] or [])))

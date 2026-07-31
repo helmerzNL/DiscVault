@@ -96,9 +96,10 @@ def _resolved_poster(details, *, box_set=False):
 
 
 def _resolved_technical(details):
-    """Audio tracks and subtitle languages the anonymous resolver carries for
-    a scanned barcode. Only ever pulled from `release` - a box set's members
-    are resolved individually and never inherit the set's technical data."""
+    """Audio tracks, subtitle languages and packaging the anonymous resolver
+    carries for a scanned barcode. Only ever pulled from `release` - a box
+    set's members are resolved individually and never inherit the set's
+    technical data."""
     section = (details or {}).get("release")
     fields = {}
     if isinstance(section, dict):
@@ -106,6 +107,8 @@ def _resolved_technical(details):
             fields["audioTracks"] = section["audioTracks"]
         if section.get("subtitleLanguages"):
             fields["subtitleLanguages"] = section["subtitleLanguages"]
+        if section.get("packaging"):
+            fields["packaging"] = section["packaging"]
     return fields
 
 
@@ -117,6 +120,7 @@ def _release(record):
         "studio": record.get("studio"), "distributor": record.get("distributor"),
         "runtimeMinutes": record.get("runtimeMinutes"),
         "audioTracks": record.get("audioTracks"), "subtitleLanguages": record.get("subtitleLanguages"),
+        "packaging": record.get("packaging"),
         **_poster_fields(record)}.items() if value not in (None, "", [], {})}
     return {key: value for key, value in {
         "provider": PROVIDER_ID, "id": record.get("releaseId"), "releaseId": record.get("releaseId"),

@@ -839,6 +839,30 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(merged["technicalUpdates"]["audio_tracks"], ["English Dolby Digital 5.1"])
         self.assertEqual(merged["technicalUpdates"]["subtitles"], ["Dutch"])
 
+    def test_packaging_comma_text_normalizes_into_a_list(self):
+        current = {"title": "Example", "format": "4K UHD", "metadata": {}}
+        technical = {}
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "technical_specs",
+            {
+                "status": "hit",
+                "sourceLabel": "Blu-ray.com",
+                "technicalSpecs": {
+                    "format": "4K UHD",
+                    "packaging": "Steelbook, Slipcover",
+                },
+            },
+        )
+        merged = merge_metadata_results(
+            current=current,
+            technical_current=technical,
+            results=[result],
+            overwrite_enabled=True,
+            target_format="4K UHD",
+        )
+        self.assertEqual(merged["technicalUpdates"]["packaging"], ["Steelbook", "Slipcover"])
+
     def test_release_source_cannot_replace_canonical_display_title(self):
         current = {"title": "A Minecraft Movie", "format": "4K UHD", "metadata": {}}
         result = canonicalize_plugin_result(
@@ -1401,7 +1425,7 @@ class NextMetadataPolicyTests(unittest.TestCase):
                     {
                         "pluginId": plugin_id,
                         "movieUpdates": {"title": "Alien", "year": "1979", "overview": "MovieVault plot"},
-                        "metadataUpdates": {"director": "Ridley Scott", "packaging": "SteelBook"},
+                        "metadataUpdates": {"director": "Ridley Scott", "packaging": ["steelbook"]},
                         "technicalUpdates": {"hdr": "HDR10"},
                         "mediaUpdates": {"poster": {"sourceUrl": "https://movievault.example/poster.jpg"}},
                         "identifiers": {"tmdb": "348"},
@@ -1426,7 +1450,7 @@ class NextMetadataPolicyTests(unittest.TestCase):
                 # (overview, director, credits, localizations) stays with the
                 # enrichment provider.
                 self.assertEqual(constrained["movieUpdates"], {"title": "Alien", "year": "1979"})
-                self.assertEqual(constrained["metadataUpdates"], {"packaging": "SteelBook"})
+                self.assertEqual(constrained["metadataUpdates"], {"packaging": ["steelbook"]})
                 self.assertEqual(constrained["technicalUpdates"], {"hdr": "HDR10"})
                 self.assertEqual(
                     constrained["mediaUpdates"],
