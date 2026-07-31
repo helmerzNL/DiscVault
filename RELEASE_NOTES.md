@@ -1,5 +1,24 @@
 # DiscVault Release Notes
 
+## 26.7.11 - Synced box-set covers survive and show in the library
+
+- A box set pushed from another client keeps its cover. The container sync
+  upsert stored only title, barcode, year and metadata, so the artwork the
+  sending client had resolved (MovieVault's own box-set cover) was dropped on
+  arrival. The container then had no artwork of its own and fell back to the
+  first member film's poster — a different film's cover. Pushed poster and
+  backdrop URLs are now registered as container artwork.
+- The pushed cover becomes the container's default without ever overriding a
+  chosen one: it is attached as a selectable option and only promoted to
+  primary when the container has no primary artwork of that kind yet, so a
+  cover picked or uploaded in DiscVault always wins. Registering artwork runs
+  in its own savepoint, so a container still syncs if its cover cannot be
+  stored.
+- The library list now shows a container's own primary artwork. It previously
+  selected no artwork at all and relied on a metadata URL, so a cover living in
+  `entity_media` — synced, scanned, or uploaded — appeared on the detail page
+  but left the library card blank.
+
 ## 26.7.10 - MovieVault covers reach the PWA
 
 - A scanned disc now shows the MovieVault cover in the PWA, for box-sets and
