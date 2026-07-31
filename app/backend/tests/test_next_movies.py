@@ -21,6 +21,7 @@ try:
     from app.backend.next_app import NextApiError
     from app.backend.next_app import movie_edit_receiver_proposal
     from app.backend.next_app import movie_payload_fields
+    from app.backend.next_app import movie_technical_edits
     from app.backend.next_app import movie_update_payload
     from app.backend.next_app import merge_selected_import_movie_candidate
     from app.backend.next_app import box_set_proposal_audit_summary
@@ -47,6 +48,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     NextApiError = None
     movie_edit_receiver_proposal = None
     movie_payload_fields = None
+    movie_technical_edits = None
     movie_update_payload = None
     merge_selected_import_movie_candidate = None
     box_set_proposal_audit_summary = None
@@ -141,6 +143,7 @@ class NextMovieEditPolicyTests(unittest.TestCase):
                     "hdr": "Dolby Vision",
                     "audio_tracks": ["English: Dolby Atmos"],
                     "subtitles": [],
+                    "packaging": ["steelbook", "slipcover"],
                 },
             },
         )
@@ -157,6 +160,17 @@ class NextMovieEditPolicyTests(unittest.TestCase):
             proposal["technicalUpdates"]["audioTracks"], ["English: Dolby Atmos"]
         )
         self.assertNotIn("subtitles", proposal["technicalUpdates"])
+        self.assertEqual(
+            proposal["technicalUpdates"]["packaging"], ["steelbook", "slipcover"]
+        )
+
+    def test_movie_technical_edits_parses_packaging_as_a_list(self):
+        edits = movie_technical_edits({"packaging": ["steelbook", "slipcover"]})
+        self.assertEqual(edits["packaging"], ["steelbook", "slipcover"])
+
+    def test_movie_technical_edits_parses_comma_separated_packaging_text(self):
+        edits = movie_technical_edits({"packaging": "Steelbook, Slipcover"})
+        self.assertEqual(edits["packaging"], ["Steelbook", "Slipcover"])
 
     def test_movie_edit_receiver_proposal_skips_locked_supplements(self):
         proposal = movie_edit_receiver_proposal(

@@ -1021,5 +1021,218 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertIn("sync_index", next_plugin_runtime.PLUGIN_ENTRYPOINTS)
 
 
+V4_FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "distribution-v4-full.ndjson")
+
+
+class AudioSubtitleTrackContractTests(unittest.TestCase):
+    """distribution-4 audioTracks / subtitleLanguages parsing (PR #159 on
+    MovieVault-v2). See test_next_movievault_v2_postgres.py for the
+    persistence-level coverage of the same feature."""
+
+    def _v4_release(self, **overrides) -> dict:
+        with open(V4_FIXTURE_PATH, "rb") as handle:
+            lines = handle.read().splitlines()
+        record = None
+        for line in lines:
+            candidate = json.loads(line)
+            if candidate.get("recordType") == "release" and candidate.get("releaseId") == (
+                "10000000-0000-0000-0000-000000000001"
+            ):
+                record = candidate
+                break
+        assert record is not None
+        record.update(overrides)
+        return record
+
+    def test_accepts_known_audio_track_and_subtitle_fields(self):
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(), contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        self.assertEqual(
+            parsed["audioTracks"],
+            [
+                {
+                    "languageCode": "en",
+                    "codec": "dolby_truehd",
+                    "channels": "7.1",
+                    "immersiveFormat": "dolby_atmos",
+                },
+                {
+                    "languageCode": "nl",
+                    "codec": "dolby_digital",
+                    "channels": "5.1",
+                    "immersiveFormat": None,
+                },
+            ],
+        )
+        self.assertEqual(parsed["subtitleLanguages"], ["en", "nl"])
+
+    def test_v4_release_requires_audio_tracks_and_subtitle_languages_keys(self):
+        record = self._v4_release()
+        del record["audioTracks"]
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+    def test_v3_release_does_not_require_or_accept_the_new_fields(self):
+        record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
+        del record["audioTracks"]
+        del record["subtitleLanguages"]
+        del record["packaging"]
+        del record["poster"]
+        parsed = next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V3_CONTRACT
+        )
+        self.assertEqual(parsed["audioTracks"], [])
+        self.assertEqual(parsed["subtitleLanguages"], [])
+        self.assertEqual(parsed["packaging"], [])
+
+        record_with_extra = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
+        del record_with_extra["poster"]
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record_with_extra, contract_version=next_movievault_v2.MOVIEVAULT_V3_CONTRACT
+            )
+
+    def test_rejects_more_than_fifty_audio_tracks(self):
+        track = {
+            "languageCode": "en",
+            "codec": "aac",
+            "channels": "2.0",
+            "immersiveFormat": None,
+        }
+        record = self._v4_release(audioTracks=[track] * 51)
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+    def test_rejects_more_than_fifty_subtitle_languages(self):
+        record = self._v4_release(subtitleLanguages=["en"] * 51)
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+    def test_rejects_malformed_language_code_on_audio_track(self):
+        for bad_code in ("EN", "e", "en_US", "x" * 36, ""):
+            with self.subTest(language_code=bad_code):
+                track = {
+                    "languageCode": bad_code,
+                    "codec": "aac",
+                    "channels": None,
+                    "immersiveFormat": None,
+                }
+                record = self._v4_release(audioTracks=[track])
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error, "^record_invalid$"
+                ):
+                    next_movievault_v2.validate_record(
+                        record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+                    )
+
+    def test_rejects_malformed_subtitle_language_code(self):
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                self._v4_release(subtitleLanguages=["EN"]),
+                contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+            )
+
+    def test_rejects_wrong_type_for_codec(self):
+        track = {"languageCode": "en", "codec": 123, "channels": None, "immersiveFormat": None}
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                self._v4_release(audioTracks=[track]),
+                contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+            )
+
+    def test_unrecognized_codec_is_stored_raw_and_logs_a_warning_instead_of_raising(self):
+        track = {
+            "languageCode": "en",
+            "codec": "dts_x_experimental_future_codec",
+            "channels": "5.1",
+            "immersiveFormat": None,
+        }
+        with self.assertLogs("app.backend.next_movievault_v2", level="WARNING") as logs:
+            parsed = next_movievault_v2.validate_record(
+                self._v4_release(audioTracks=[track]),
+                contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+            )
+        self.assertEqual(parsed["audioTracks"][0]["codec"], "dts_x_experimental_future_codec")
+        self.assertTrue(any("codec" in message for message in logs.output))
+
+    def test_unrecognized_channels_and_immersive_format_are_stored_raw_and_logged(self):
+        track = {
+            "languageCode": "en",
+            "codec": "aac",
+            "channels": "9.1",
+            "immersiveFormat": "some_future_format",
+        }
+        with self.assertLogs("app.backend.next_movievault_v2", level="WARNING") as logs:
+            parsed = next_movievault_v2.validate_record(
+                self._v4_release(audioTracks=[track]),
+                contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+            )
+        self.assertEqual(parsed["audioTracks"][0]["channels"], "9.1")
+        self.assertEqual(parsed["audioTracks"][0]["immersiveFormat"], "some_future_format")
+        self.assertEqual(len(logs.output), 2)
+
+    def test_accepts_known_packaging_values(self):
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(packaging=["steelbook", "slipcover"]),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual(parsed["packaging"], ["steelbook", "slipcover"])
+
+    def test_rejects_more_than_nine_packaging_entries(self):
+        record = self._v4_release(packaging=["keep_case"] * 10)
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+    def test_rejects_wrong_type_for_packaging_entry(self):
+        record = self._v4_release(packaging=[123])
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+    def test_unrecognized_packaging_value_is_stored_raw_and_logs_a_warning(self):
+        with self.assertLogs("app.backend.next_movievault_v2", level="WARNING") as logs:
+            parsed = next_movievault_v2.validate_record(
+                self._v4_release(packaging=["a_future_packaging_type"]),
+                contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+            )
+        self.assertEqual(parsed["packaging"], ["a_future_packaging_type"])
+        self.assertTrue(any("packaging" in message for message in logs.output))
+
+    def test_box_set_record_never_carries_audio_or_subtitle_fields(self):
+        with open(V4_FIXTURE_PATH, "rb") as handle:
+            lines = handle.read().splitlines()
+        box_set = next(
+            json.loads(line) for line in lines if json.loads(line).get("recordType") == "box_set"
+        )
+        parsed = next_movievault_v2.validate_record(
+            box_set, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        self.assertNotIn("audioTracks", parsed)
+        self.assertNotIn("subtitleLanguages", parsed)
+        self.assertNotIn("packaging", parsed)
+
+        box_set_with_tracks = dict(box_set, audioTracks=[])
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                box_set_with_tracks, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+        box_set_with_packaging = dict(box_set, packaging=[])
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                box_set_with_packaging, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

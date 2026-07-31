@@ -75,6 +75,7 @@ METADATA_LOCAL_ONLY_FIELDS = {
     "owner_id",
     "purchase_date",
     "purchase_price",
+    "estimated_value",
     "location",
     "notes",
 }
@@ -212,6 +213,7 @@ METADATA_LIST_FIELDS = {
     "regions",
     "backdrop_urls",
     "videos",
+    "packaging",
 }
 
 METADATA_RELEASE_FIELDS = {
@@ -377,6 +379,7 @@ MOVIE_FIELD_ALIASES = {
     "content_ratings": "content_ratings",
     "audioTracks": "audio_tracks",
     "audio_tracks": "audio_tracks",
+    "subtitleLanguages": "subtitles",
     "screenRatios": "screen_ratios",
     "screen_ratios": "screen_ratios",
 }
@@ -1169,7 +1172,7 @@ def normalize_list_field(field: str, value: Any) -> list[Any]:
     raw_items = normalized if isinstance(normalized, list) else [normalized]
     items: list[Any] = []
     separators = {";", "|", "\n", "\r"}
-    if field in {"subtitles", "regions", "backdrop_urls"}:
+    if field in {"subtitles", "regions", "backdrop_urls", "packaging"}:
         separators.add(",")
 
     for item in raw_items:
@@ -2327,7 +2330,7 @@ def field_format_safe(
     if field not in METADATA_RELEASE_FIELDS:
         return True, "format-neutral field"
     if not target or not source:
-        if source_context == "box_set_parent" and field in {"audio_tracks", "subtitles", "regions", "content_ratings"}:
+        if source_context == "box_set_parent" and field in {"audio_tracks", "subtitles", "regions", "content_ratings", "packaging"}:
             return True, "box-set parent technical fallback without explicit format"
         return (field not in METADATA_TECHNICAL_FIELDS), "technical field needs same-format source"
     if target == source:
@@ -4506,8 +4509,11 @@ def apply_metadata_proposal(
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
                 ON CONFLICT (movie_id) DO UPDATE SET
                     hdr=COALESCE(EXCLUDED.hdr, movie_technical_specs.hdr),
-                    packaging=COALESCE(EXCLUDED.packaging, movie_technical_specs.packaging),
                     screen_ratios=COALESCE(EXCLUDED.screen_ratios, movie_technical_specs.screen_ratios),
+                    packaging=CASE
+                        WHEN EXCLUDED.packaging <> '[]'::jsonb THEN EXCLUDED.packaging
+                        ELSE movie_technical_specs.packaging
+                    END,
                     audio_tracks=CASE
                         WHEN EXCLUDED.audio_tracks <> '[]'::jsonb THEN EXCLUDED.audio_tracks
                         ELSE movie_technical_specs.audio_tracks
@@ -4529,7 +4535,7 @@ def apply_metadata_proposal(
                 (
                     movie_uuid,
                     technical_updates.get("hdr"),
-                    technical_updates.get("packaging"),
+                    Jsonb(json_ready(technical_updates.get("packaging") or [])),
                     technical_updates.get("screen_ratios"),
                     Jsonb(json_ready(technical_updates.get("audio_tracks") or [])),
                     Jsonb(json_ready(technical_updates.get("subtitles") or [])),

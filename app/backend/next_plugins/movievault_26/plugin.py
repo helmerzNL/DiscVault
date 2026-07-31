@@ -536,7 +536,7 @@ def _v3_barcode_match(envelope):
         if isinstance(specs, dict) and isinstance(match.get("release"), dict):
             release = dict(match["release"])
             release.setdefault("technicalSpecs", specs)
-            for key in ("format", "hdr", "audioTracks", "subtitles", "regions"):
+            for key in ("format", "hdr", "audioTracks", "subtitles", "regions", "packaging"):
                 if specs.get(key) not in (None, "", [], {}) and release.get(key) in (None, "", [], {}):
                     release[key] = specs[key]
             match["release"] = release
@@ -580,6 +580,7 @@ def _v3_movie_item(envelope):
             "audioTracks",
             "subtitles",
             "regions",
+            "packaging",
             "screenRatios",
             "technicalSpecs",
             "country",
@@ -627,6 +628,13 @@ def _text(value, default=""):
     if isinstance(value, list):
         return ", ".join(str(item).strip() for item in value if str(item).strip())
     return str(value or "").strip()
+
+
+def _packaging_list(value):
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value or "").strip()
+    return [text] if text else []
 
 
 def _first_value(item, *keys):
@@ -1558,7 +1566,7 @@ def _technical_payload(item):
             or item.get("hdr_format")
             or specs.get("hdr")
         ),
-        "packaging": _text(item.get("packaging") or specs.get("packaging")),
+        "packaging": _packaging_list(item.get("packaging") or specs.get("packaging")),
         "screenRatios": _text(
             item.get("screenRatios")
             or item.get("screen_ratios")

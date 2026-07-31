@@ -253,6 +253,16 @@ def json_array(value: Any) -> list[Any]:
     return [text]
 
 
+def json_array_from_scalar_text(value: Any) -> list[str]:
+    """Wrap a legacy free-text field as a one-element list, without the
+    comma-splitting json_array() does for fields that are already
+    semantically lists. Legacy `packaging` is a single descriptive phrase
+    (e.g. "Digibook, Limited Edition"), not an enum list, so splitting it on
+    commas would fragment it into garbage items."""
+    text = clean_text(value)
+    return [text] if text else []
+
+
 def json_object(value: Any) -> dict[str, Any]:
     parsed = parse_json(value)
     return parsed if isinstance(parsed, dict) else {}
@@ -1021,7 +1031,7 @@ class NextImporter:
                     (
                         movie_id,
                         clean_text(row["hdr"]),
-                        clean_text(row["packaging"]),
+                        self.Jsonb(json_array_from_scalar_text(row["packaging"])),
                         clean_text(row["screen_ratios"]),
                         self.Jsonb(json_array(row["audio_tracks"])),
                         self.Jsonb(json_array(row["subtitles"])),

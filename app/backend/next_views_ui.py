@@ -14353,10 +14353,18 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.edition">Edition</span>
                       <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
                     </label>
-                    <label for="movieEditPackaging">
-                      <span data-next-i18n="movieDetail.packaging">Packaging</span>
-                      <input id="movieEditPackaging" name="packaging" maxlength="160" autocomplete="off">
-                    </label>
+                    <fieldset id="movieEditPackaging" class="movie-edit-checkbox-group">
+                      <legend data-next-i18n="movieDetail.packaging">Packaging</legend>
+                      <label><input type="checkbox" value="keep_case"> <span data-next-i18n="moviePackaging.keepCase">Keep case</span></label>
+                      <label><input type="checkbox" value="amaray"> <span data-next-i18n="moviePackaging.amaray">Amaray</span></label>
+                      <label><input type="checkbox" value="steelbook"> <span data-next-i18n="moviePackaging.steelbook">Steelbook</span></label>
+                      <label><input type="checkbox" value="slipcover"> <span data-next-i18n="moviePackaging.slipcover">Slipcover</span></label>
+                      <label><input type="checkbox" value="slipcase"> <span data-next-i18n="moviePackaging.slipcase">Slipcase</span></label>
+                      <label><input type="checkbox" value="digibook"> <span data-next-i18n="moviePackaging.digibook">Digibook</span></label>
+                      <label><input type="checkbox" value="mediabook"> <span data-next-i18n="moviePackaging.mediabook">Mediabook</span></label>
+                      <label><input type="checkbox" value="digipak"> <span data-next-i18n="moviePackaging.digipak">Digipak</span></label>
+                      <label><input type="checkbox" value="box"> <span data-next-i18n="moviePackaging.box">Box</span></label>
+                    </fieldset>
                     <label for="movieEditDistributor">
                       <span data-next-i18n="movieDetail.distributor">Distributor</span>
                       <input id="movieEditDistributor" name="distributor" maxlength="200" autocomplete="off">
@@ -26393,18 +26401,18 @@ def ui_preview_html(
       Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
         const input = document.getElementById(inputId);
         if (!input) return;
-        const label = input.closest("label");
-        if (!label) return;
-        let btn = label.querySelector(".movie-edit-lock");
+        const container = input.tagName === "FIELDSET" ? input : input.closest("label");
+        if (!container) return;
+        let btn = container.querySelector(".movie-edit-lock");
         if (!btn) {
           btn = document.createElement("button");
           btn.type = "button";
           btn.className = "movie-edit-lock";
           btn.dataset.lockField = field;
           btn.addEventListener("click", () => toggleMovieEditLock(field, btn));
-          const head = label.querySelector("span");
+          const head = container.querySelector("span, legend");
           if (head) head.appendChild(btn);
-          else label.insertBefore(btn, input);
+          else container.insertBefore(btn, container.firstChild);
         }
         reflectMovieEditLock(btn, field);
       });
@@ -26435,7 +26443,6 @@ def ui_preview_html(
         movieEditScreenRatio: valueText(specs.screen_ratios || metadata.screen_ratios),
         movieEditAudioTracks: valueText(specs.audio_tracks || metadata.audio_tracks),
         movieEditSubtitles: valueText(specs.subtitles || metadata.subtitles),
-        movieEditPackaging: valueText(specs.packaging || metadata.packaging || movie.edition_type),
         movieEditDistributor: valueText(metadata.distributor),
         movieEditOverview: movie.overview || "",
         movieEditNotes: movie.notes || ""
@@ -26443,6 +26450,14 @@ def ui_preview_html(
       Object.entries(fields).forEach(([id, value]) => {
         const input = document.getElementById(id);
         if (input && document.activeElement !== input) input.value = value;
+      });
+      const packagingValues = new Set(
+        Array.isArray(specs.packaging) && specs.packaging.length
+          ? specs.packaging
+          : (Array.isArray(metadata.packaging) ? metadata.packaging : [])
+      );
+      document.querySelectorAll("#movieEditPackaging input[type=checkbox]").forEach((box) => {
+        box.checked = packagingValues.has(box.value);
       });
       const locationSelect = document.getElementById("movieEditLocationSelect");
       if (locationSelect && document.activeElement !== locationSelect) {
@@ -36040,7 +36055,7 @@ def ui_preview_html(
         screenRatio: formTextValue("movieEditScreenRatio"),
         audioTracks: formTextValue("movieEditAudioTracks"),
         subtitles: formTextValue("movieEditSubtitles"),
-        packaging: formTextValue("movieEditPackaging"),
+        packaging: Array.from(document.querySelectorAll("#movieEditPackaging input[type=checkbox]:checked")).map((box) => box.value),
         distributor: formTextValue("movieEditDistributor"),
         overview: formTextValue("movieEditOverview"),
         notes: formTextValue("movieEditNotes"),
@@ -36051,7 +36066,9 @@ def ui_preview_html(
         if (movieEditLockedFields.has(field)) return;
         const input = document.getElementById(inputId);
         if (!input) return;
-        const newValue = (input.value || "").trim();
+        const newValue = input.tagName === "FIELDSET"
+          ? Array.from(input.querySelectorAll("input[type=checkbox]:checked")).map((box) => box.value).join(",")
+          : (input.value || "").trim();
         if (newValue) return;
         const previous = previousMovieEditFieldValue(field, prevMovie, prevMetadata, prevSpecs);
         if (previous) clearedUnlockedField = true;

@@ -95,6 +95,23 @@ def _resolved_poster(details, *, box_set=False):
     return {}
 
 
+def _resolved_technical(details):
+    """Audio tracks, subtitle languages and packaging the anonymous resolver
+    carries for a scanned barcode. Only ever pulled from `release` - a box
+    set's members are resolved individually and never inherit the set's
+    technical data."""
+    section = (details or {}).get("release")
+    fields = {}
+    if isinstance(section, dict):
+        if section.get("audioTracks"):
+            fields["audioTracks"] = section["audioTracks"]
+        if section.get("subtitleLanguages"):
+            fields["subtitleLanguages"] = section["subtitleLanguages"]
+        if section.get("packaging"):
+            fields["packaging"] = section["packaging"]
+    return fields
+
+
 def _release(record):
     movie = {key: value for key, value in {
         "title": record.get("canonicalTitle") or record.get("releaseTitle") or "",
@@ -102,7 +119,9 @@ def _release(record):
         "format": record.get("format"), "edition": record.get("edition"),
         "studio": record.get("studio"), "distributor": record.get("distributor"),
         "runtimeMinutes": record.get("runtimeMinutes"),
-        **_poster_fields(record)}.items() if value not in (None, "")}
+        "audioTracks": record.get("audioTracks"), "subtitleLanguages": record.get("subtitleLanguages"),
+        "packaging": record.get("packaging"),
+        **_poster_fields(record)}.items() if value not in (None, "", [], {})}
     return {key: value for key, value in {
         "provider": PROVIDER_ID, "id": record.get("releaseId"), "releaseId": record.get("releaseId"),
         "filmId": record.get("filmId"), "title": movie["title"], "movie": movie,
@@ -145,9 +164,12 @@ def search_barcode(payload, context=None):
     release = next((item for item in records if item.get("recordType") == "release"), None)
     if release is None:
         return {"status": "miss", "provider": PROVIDER_ID, "items": []}
-    # Fall back to the resolver's poster when the synced record has none yet.
-    if not (release or {}).get("posterUrl"):
-        resolved = _resolved_poster(_resolved_details(payload, context))
+    # Fall back to the resolver's poster and/or technical specs when the
+    # synced record doesn't carry them yet (not synced, or a v4-sync-disabled
+    # instance still relying purely on the anonymous resolver).
+    if not (release or {}).get("posterUrl") or not (release or {}).get("audioTracks"):
+        details = _resolved_details(payload, context)
+        resolved = {**_resolved_poster(details), **_resolved_technical(details)}
         if resolved:
             release = {**release, **resolved}
     item = _release(release)

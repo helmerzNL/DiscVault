@@ -1208,6 +1208,7 @@ class NextMovieUpsertBarcodeConflictTests(unittest.TestCase):
             "rating": None,
             "purchase_date": None,
             "purchase_price": None,
+            "estimated_value": None,
             "location": None,
         }
 

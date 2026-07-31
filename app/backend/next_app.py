@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html as html_lib
 import base64
+from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
 import hashlib
 import ipaddress
@@ -8815,6 +8816,7 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "rating": payload.get("rating"),
         "purchase_date": purchase_date,
         "purchase_price": payload.get("purchasePrice") or payload.get("purchase_price"),
+        "estimated_value": payload.get("estimatedValue") or payload.get("estimated_value"),
         "location": payload.get("location"),
         "metadata": metadata,
     }
@@ -8889,6 +8891,22 @@ def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int |
         return None
 
 
+def movie_estimated_value(body: dict[str, Any], existing: dict[str, Any]) -> Decimal | None:
+    keys = ("estimatedValue", "estimated_value")
+    if not any(key in body for key in keys):
+        return existing.get("estimated_value")
+    raw = next(body[key] for key in keys if key in body)
+    text = clean_text(raw)
+    if not text:
+        return None
+    normalized = text.replace(",", ".")
+    try:
+        value = Decimal(normalized)
+    except InvalidOperation:
+        raise NextApiError("estimatedValue must be a number", 400)
+    return value.quantize(Decimal("0.01"))
+
+
 def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
     aliases = {
         "director": ("director",),
@@ -8908,7 +8926,7 @@ def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
     if "hdr" in body:
         edits["hdr"] = clean_text(body.get("hdr"))
     if "packaging" in body:
-        edits["packaging"] = clean_text(body.get("packaging"))
+        edits["packaging"] = _movie_edit_csv_list(body.get("packaging"))
     ratio_keys = ("screenRatio", "screen_ratios", "screenRatios")
     if any(key in body for key in ratio_keys):
         raw = next(body[key] for key in ratio_keys if key in body)
@@ -8942,11 +8960,11 @@ def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -
     )
     assignments: list[str] = []
     values: list[Any] = []
-    for col in ("hdr", "packaging", "screen_ratios"):
+    for col in ("hdr", "screen_ratios"):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(edits[col])
-    for col in ("audio_tracks", "subtitles"):
+    for col in ("audio_tracks", "subtitles", "packaging"):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(Jsonb(json_ready(edits[col] or [])))
@@ -8988,6 +9006,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             location=%s,
             location_id=%s,
             runtime_minutes=%s,
+            estimated_value=%s,
             metadata = COALESCE(metadata, '{}'::jsonb) || %s,
             updated_at=now()
         WHERE id=%s
@@ -9009,6 +9028,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             payload["location"],
             payload.get("location_id"),
             payload.get("runtime_minutes"),
+            payload.get("estimated_value"),
             Jsonb(json_ready(metadata_patch)),
             movie_uuid,
         ),
@@ -9081,6 +9101,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "location": pick_text("location"),
         "location_id": location_id,
         "runtime_minutes": movie_runtime_value(body, existing),
+        "estimated_value": movie_estimated_value(body, existing),
         "metadata_edits": movie_metadata_edits(body),
         "technical_edits": movie_technical_edits(body),
         "field_locks": movie_effective_field_locks(body, existing),
@@ -9232,6 +9253,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 rating,
                 purchase_date,
                 purchase_price,
+                estimated_value,
                 location,
                 location_id,
                 owner_id,
@@ -15499,6 +15521,7 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
                 m.rating,
                 m.purchase_date,
                 m.purchase_price,
+                m.estimated_value,
                 m.location,
                 m.metadata,
                 m.created_at,
@@ -16430,6 +16453,7 @@ def apply_movie_upsert(
                 rating,
                 purchase_date,
                 purchase_price,
+                estimated_value,
                 location,
                 client_id,
                 metadata,
@@ -16438,7 +16462,7 @@ def apply_movie_upsert(
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -16460,6 +16484,7 @@ def apply_movie_upsert(
                 rating=COALESCE(EXCLUDED.rating, movies.rating),
                 purchase_date=COALESCE(EXCLUDED.purchase_date, movies.purchase_date),
                 purchase_price=COALESCE(EXCLUDED.purchase_price, movies.purchase_price),
+                estimated_value=COALESCE(EXCLUDED.estimated_value, movies.estimated_value),
                 location=COALESCE(EXCLUDED.location, movies.location),
                 client_id=COALESCE(movies.client_id, EXCLUDED.client_id),
                 metadata=movies.metadata || EXCLUDED.metadata,
@@ -16486,6 +16511,7 @@ def apply_movie_upsert(
                 fields["rating"],
                 fields["purchase_date"],
                 fields["purchase_price"],
+                fields["estimated_value"],
                 fields["location"],
                 persistent_client_id,
                 Jsonb(fields["metadata"]),
@@ -21432,12 +21458,13 @@ def register_routes(flask_app: Flask) -> None:
                             overview,
                             notes,
                             location,
+                            estimated_value,
                             owner_id,
                             metadata,
                             created_at,
                             updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             movie_id,
@@ -21456,6 +21483,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["overview"],
                             payload["notes"],
                             payload["location"],
+                            payload.get("estimated_value"),
                             actor.get("id"),
                             Jsonb(body.get("metadata") if isinstance(body.get("metadata"), dict) else {}),
                         ),
