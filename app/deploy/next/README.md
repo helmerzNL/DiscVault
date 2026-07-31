@@ -145,6 +145,46 @@ container that never becomes healthy. See the
 [preflight check](#preflight-check-before-starting) for verifying they are
 really in `.env` and not merely inherited from the shell environment.
 
+All of this applies to a *clean* installation. A stack whose data directory is
+already populated does not run `initdb`, so PostgreSQL should become healthy
+within seconds; if it does not, see
+[PostgreSQL is reported unhealthy on an existing stack](#postgresql-is-reported-unhealthy-on-an-existing-stack).
+
+### A slow database cannot abort the deployment
+
+The long-running services depend on `service_started`, not `service_healthy`.
+Compose therefore starts them in order but does not wait for a health check, so
+`docker compose up -d` returns as soon as the containers exist and no health
+check can make it fail.
+
+Waiting happens inside the containers instead. `next-api` and `next-worker` call
+`wait_for_database()` before touching the schema, retrying with backoff while
+PostgreSQL refuses connections — which it does while it is still binding, and
+while it replays WAL after an unclean shutdown. Nothing runs against a
+half-started database: during `initdb` the temporary server listens on the Unix
+socket only, so a TCP connection cannot succeed early.
+
+The wait gives up after 300s and exits non-zero; `restart: unless-stopped` then
+retries the whole container. Override it with `DISCVAULT_NEXT_DB_WAIT_TIMEOUT`
+(seconds) if your storage needs longer.
+
+The health checks are still defined, and are still the right thing to read when
+you want to know whether the stack is actually up:
+
+```bash
+docker compose ps
+```
+
+The one-off `tools`-profile services (`import-sqlite`, and `migrate` in the
+development compose file) do still wait for `service_healthy`. They are run by
+hand against a stack that is supposed to be up already, so failing fast is the
+useful behaviour there.
+
+Because `next-api` applies migrations on every start and the `migrate` service
+can be run alongside it, migrations take a PostgreSQL advisory lock. A second
+runner blocks until the first finishes instead of applying the same migration
+twice.
+
 When this service is published directly behind a reverse proxy, the Next
 collection UI is available at `/`, `/app`, and `/api/next/app`.
 
@@ -426,6 +466,48 @@ deployment command.
 Before working through the cases below, run the
 [preflight check](#preflight-check-before-starting) — most failed starts are a
 missing `.env` variable or a value that collides with another stack.
+
+### PostgreSQL is reported unhealthy on an existing stack
+
+Symptoms:
+
+- `docker compose up` (or a management UI that runs it) takes minutes and then
+  aborts with
+  `dependency failed to start: container <stack>-postgres-1 is unhealthy`.
+- The stack already has a populated data directory, so `initdb` does not run.
+
+This case is **not** the one covered by
+[First start takes longer](#first-start-takes-longer). The 120s `start_period`
+on `postgres` exists for clean installs, where `initdb` is genuinely slow on NAS
+storage. On an existing data directory PostgreSQL should accept TCP connections
+within seconds, so an unhealthy container means something else is wrong — and
+the long `start_period` merely delays the failure by up to 220s
+(`start_period` 120s + `retries` 10 × `interval` 10s) before Compose gives up.
+
+Note also that the health check probes TCP rather than the Unix socket. The
+socket probe it replaced reported success during startup phases in which the
+server was not yet accepting real connections, so a slow start used to be
+invisible. A start that now looks slow may always have been slow.
+
+Collect the evidence in one pass:
+
+```bash
+app/scripts/next_stack_doctor.sh <compose-project-name>
+```
+
+The script is read-only — it inspects containers, reads logs, and runs
+`pg_isready`; it changes nothing. The project name defaults to
+`discvault_next_deploy`. Then match the findings:
+
+| Observation | Cause | Fix |
+| --- | --- | --- |
+| Probe exits `3`, or the health command shows an empty `-U ""` | A management UI re-interpolated the compose file and destroyed the `$$` escape, leaving an invalid `pg_isready` invocation that can never succeed | Drop the credentials from the probe — `pg_isready -h 127.0.0.1 -p 5432` is still a correct readiness check and has nothing left to mis-interpolate |
+| Probe exits `1`; log shows `automatic recovery in progress` | PostgreSQL is replaying WAL after an unclean shutdown | Give the server time to stop cleanly next time: set `stop_grace_period: 60s` on the `postgres` service, so Compose does not `SIGKILL` it after the default 10s |
+| Probe exits `2` and `RestartCount` climbs | PostgreSQL is not staying up at all | Read the reason in the log: bind-mount permissions (the container runs as uid 70), or a data directory created by a different major version — `postgres:17-alpine` is a tag, not a digest |
+| The probe itself takes longer than 5s | `timeout: 5s` is too tight for this storage | Raise `timeout`, and check whether the data directory sits on a network share |
+| `next-api` is the unhealthy container; `/api/next/health` is slow or returns 503 | Migrations are not `ready`, or the endpoint's per-probe artwork-trash purge exceeds the timeout | Wait out the migration; if the purge is the cause, the endpoint should not be doing write work on a 10s liveness probe |
+| `getent hosts postgres` returns more than one address | Two stacks share a Docker network | Give each stack a unique `DISCVAULT_NEXT_NETWORK_NAME`; see [below](#repeated-password-authentication-failed-in-the-postgresql-log) |
+| Everything is healthy, only slow | The deployed compose file predates the switch to `service_started` | Redeploy from the current compose file; see [A slow database cannot abort the deployment](#a-slow-database-cannot-abort-the-deployment) |
 
 ### Repeated `password authentication failed` in the PostgreSQL log
 

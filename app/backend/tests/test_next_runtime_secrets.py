@@ -9,7 +9,8 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 repo_root = Path(__file__).resolve().parents[3]
 if str(repo_root) not in sys.path:
@@ -136,16 +137,64 @@ class RuntimeSecretTests(unittest.TestCase):
                 next_worker.main(["run-once"])
 
     def test_worker_startup_accepts_configured_secret(self):
-        mock_conn = MagicMock()
         with (
             patch.dict(os.environ, {"JWT_SECRET": "worker-startup-test-secret"}, clear=True),
-            patch.object(next_worker, "wait_for_database", return_value=mock_conn),
             patch.object(next_worker, "run_once", return_value=0) as run_once,
             patch.object(next_worker.signal, "signal"),
         ):
             self.assertEqual(next_worker.main(["run-once", "--worker-id", "test-worker"]), 0)
 
         run_once.assert_called_once_with("test-worker")
+
+    def test_run_once_does_not_wait_for_the_database(self):
+        # `run-once` is invoked by hand against a stack that is already up, so it
+        # must reach run_once() without opening a connection first.
+        with (
+            patch.dict(os.environ, {"JWT_SECRET": "worker-startup-test-secret"}, clear=True),
+            patch.object(next_worker, "run_once", return_value=0),
+            patch.object(next_worker, "wait_for_database") as wait_for_database,
+            patch.object(
+                next_worker, "wait_for_background_jobs_table"
+            ) as wait_for_background_jobs_table,
+            patch.object(next_worker.signal, "signal"),
+        ):
+            self.assertEqual(next_worker.main(["run-once"]), 0)
+
+        wait_for_database.assert_not_called()
+        wait_for_background_jobs_table.assert_not_called()
+
+    def test_work_waits_for_the_database_before_looping(self):
+        # `work` is the container entry point and starts alongside postgres, so it
+        # must wait for both the database and the migrated schema, in that
+        # order, before the loop touches any table.
+        calls = []
+
+        with (
+            patch.dict(os.environ, {"JWT_SECRET": "worker-startup-test-secret"}, clear=True),
+            patch.object(
+                next_worker,
+                "wait_for_database",
+                side_effect=lambda **kwargs: calls.append("wait_db") or MagicMock(),
+            ) as wait_for_database,
+            patch.object(
+                next_worker,
+                "wait_for_background_jobs_table",
+                side_effect=lambda *a, **k: calls.append("wait_table"),
+            ) as wait_for_background_jobs_table,
+            patch.object(
+                next_worker,
+                "work_loop",
+                side_effect=lambda *a: calls.append("loop") or 0,
+            ),
+            patch.object(next_worker.signal, "signal"),
+        ):
+            self.assertEqual(next_worker.main(["work"]), 0)
+
+        self.assertEqual(calls, ["wait_db", "wait_table", "loop"])
+        self.assertIs(
+            wait_for_database.call_args.kwargs["connect_fn"], next_worker.connect
+        )
+        self.assertIs(wait_for_background_jobs_table.call_args.args[0], next_worker.connect)
 
 
 if __name__ == "__main__":
