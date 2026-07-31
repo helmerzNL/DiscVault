@@ -269,6 +269,21 @@ METADATA_ENRICHMENT_FIELDS = {
     "videos",
 }
 
+# Artwork an identity source (MovieVault) is allowed to own. A physical release
+# has its own front cover, which the identity source is the authority on -- the
+# enrichment provider only knows the film's generic artwork. These fields stay
+# in METADATA_ENRICHMENT_FIELDS so every other plugin is still blocked; only
+# MovieVault identity sources may supply them. Trailers/videos remain
+# enrichment-owned.
+METADATA_IDENTITY_ARTWORK_FIELDS = {
+    "poster",
+    "poster_url",
+    "posters",
+    "backdrop",
+    "backdrop_url",
+    "backdrop_urls",
+}
+
 METADATA_IDENTIFICATION_CANDIDATE_FIELDS = {
     "id",
     "provider",
@@ -311,6 +326,17 @@ METADATA_IDENTIFICATION_CANDIDATE_FIELDS = {
     "tmdb_id",
     "imdbId",
     "imdb_id",
+    # Artwork shown on the candidate card while the user picks a match. The
+    # poster stays display-only: `poster_url` remains in
+    # METADATA_ENRICHMENT_FIELDS, so an identity source still cannot write
+    # artwork onto the movie (TMDB keeps enrichment ownership). Without these
+    # keys _identification_candidate() drops the cover a scan already resolved
+    # and the PWA falls back to a letter placeholder.
+    "posterUrl",
+    "poster_url",
+    "poster",
+    "coverUrl",
+    "cover_url",
 }
 
 METADATA_IDENTIFIER_TYPES = {
@@ -1049,17 +1075,36 @@ def metadata_source_policy_result(result: dict[str, Any]) -> dict[str, Any]:
         constrained["raw"] = {}
         return constrained
 
+    # MovieVault owns the physical release's own artwork; every other
+    # enrichment answer (plot, cast, runtime, ratings, trailers) stays with the
+    # enrichment provider. Other plugins remain fully blocked from artwork.
+    artwork_owner = is_movievault_identity_source(plugin_id)
+
+    def _keep(field: str) -> bool:
+        if field in LEGACY_GENRE_FIELDS:
+            return False
+        if field not in METADATA_ENRICHMENT_FIELDS:
+            return True
+        return artwork_owner and field in METADATA_IDENTITY_ARTWORK_FIELDS
+
     constrained["movieUpdates"] = {
-        field: value
-        for field, value in movie_updates.items()
-        if field not in METADATA_ENRICHMENT_FIELDS and field not in LEGACY_GENRE_FIELDS
+        field: value for field, value in movie_updates.items() if _keep(field)
     }
     constrained["metadataUpdates"] = {
-        field: value
-        for field, value in metadata_updates.items()
-        if field not in METADATA_ENRICHMENT_FIELDS and field not in LEGACY_GENRE_FIELDS
+        field: value for field, value in metadata_updates.items() if _keep(field)
     }
-    constrained["mediaUpdates"] = {}
+    # The poster/backdrop media updates are what actually persist artwork, so an
+    # artwork owner keeps them; anything else it might carry is still dropped.
+    media_updates = result.get("mediaUpdates")
+    constrained["mediaUpdates"] = (
+        {
+            kind: value
+            for kind, value in media_updates.items()
+            if kind in {"poster", "backdrop"}
+        }
+        if artwork_owner and isinstance(media_updates, dict)
+        else {}
+    )
     constrained["credits"] = []
     constrained["localizations"] = []
     # Genres are TMDB-only; any other plugin's genre answer is dropped here

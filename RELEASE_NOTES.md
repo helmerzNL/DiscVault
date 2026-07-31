@@ -1,5 +1,22 @@
 # DiscVault Release Notes
 
+## 26.7.9 - MovieVault owns the physical release's artwork
+
+- Scanning a barcode now shows the MovieVault cover in the PWA, for individual
+  films and box-sets alike. The metadata policy treated artwork as
+  enrichment-only, so a MovieVault result had its poster stripped on three
+  paths at once: `poster_url` was filtered out of the movie and metadata
+  updates, `mediaUpdates` (which persists artwork) was cleared, and the
+  candidate the user picks from was sanitized down to identification fields
+  without any poster. The scan card therefore fell back to a letter
+  placeholder even though MovieVault had supplied a cover.
+- MovieVault identity sources may now own artwork — a physical release has its
+  own front cover, which the identity source is the authority on. Poster and
+  backdrop fields survive on the movie, in `mediaUpdates`, and on the
+  candidate. Every other enrichment answer (plot, cast and crew, runtime,
+  ratings, trailers) still belongs to the enrichment provider, and plugins that
+  are not identity sources remain blocked from supplying artwork.
+
 ## 26.7.8 - MovieVault v2 covers in the PWA
 
 - Barcode scans now show the MovieVault v2 cover in the PWA for both individual
