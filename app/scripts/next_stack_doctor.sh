@@ -11,7 +11,6 @@
 set -eu
 
 PROJECT="${1:-discvault_next_deploy}"
-API_PORT="${DISCVAULT_NEXT_API_PORT:-6180}"
 
 section() {
   printf '\n========================================================================\n'
@@ -98,6 +97,10 @@ docker inspect \
   "$PG" 2>/dev/null || true
 
 section "5. Did the healthcheck reach the container intact?"
+note "Expect \"pg_isready -h 127.0.0.1 -p 5432 ...\" and a StartPeriod of"
+note "120000000000 (120s). A command without -h, or a MISSING StartPeriod,"
+note "means the running container was created from an OUTDATED compose file —"
+note "the stack needs redeploying from the current one."
 note "Expect a LITERAL \${POSTGRES_USER:-postgres} in the command: Compose turns"
 note "\$\$ into one \$ and the container shell expands the rest. If you see an"
 note "empty -U \"\" or -U \"\$\", the compose file was re-interpolated by a"
@@ -122,10 +125,22 @@ note "an artwork-trash purge in a write transaction on every probe. A slow or"
 note "503 response here makes next-api the unhealthy service."
 if [ -n "$API" ]; then
   docker inspect --format '{{json .State.Health}}' "$API" 2>/dev/null | pretty_json || true
-  if command -v curl >/dev/null 2>&1; then
+  # Read the published port off the container rather than assuming the default,
+  # which is wrong for any stack that moved it to avoid a collision.
+  API_PORT="$(docker port "$API" 5000/tcp 2>/dev/null | head -1 | sed 's/.*://')"
+  if [ -n "$API_PORT" ] && command -v curl >/dev/null 2>&1; then
     note "curl http://localhost:${API_PORT}/api/next/health"
     curl -s -o /dev/null -w '  http_code=%{http_code} time_total=%{time_total}s\n' \
       "http://localhost:${API_PORT}/api/next/health" 2>&1 || true
+  else
+    note "no published port for next-api (or curl missing); probing from inside instead"
+    docker exec "$API" python -c \
+      "import time,urllib.request,urllib.error;s=time.time()
+try:
+    r=urllib.request.urlopen('http://localhost:5000/api/next/health');c=r.status
+except urllib.error.HTTPError as e:
+    c=e.code
+print('  http_code=%s time_total=%.6fs' % (c, time.time()-s))" 2>&1 || true
   fi
 else
   note "next-api container not found; skipped."
