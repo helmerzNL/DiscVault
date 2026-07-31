@@ -75,6 +75,7 @@ METADATA_LOCAL_ONLY_FIELDS = {
     "owner_id",
     "purchase_date",
     "purchase_price",
+    "estimated_value",
     "location",
     "notes",
 }
