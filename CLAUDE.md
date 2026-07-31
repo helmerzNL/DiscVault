@@ -81,6 +81,23 @@ git push origin --delete <feature-branch>
 - Do **not** delete a branch an open session is still using: session branches are reused across
   multiple PRs. Delete only after the session is finished. If unsure, ask first.
 
+### Follow-up work after a PR merges
+
+**Before every push or PR, check whether the branch's previous PR is already merged.** Fetch the
+base and confirm whether your last pushed commit is already an ancestor of it
+(`git fetch origin release/v26-beta && git merge-base --is-ancestor <last-commit> origin/release/v26-beta`).
+A merged PR is finished — it cannot track new work and **must not be reused**; never stack new
+commits on top of already-merged history.
+
+If it was merged, treat the follow-up as a fresh change:
+
+1. Restart the branch from the latest base, keeping the **same** name:
+   `git fetch origin release/v26-beta && git checkout -B <branch> origin/release/v26-beta`.
+2. Re-apply only the still-unmerged commits on top (cherry-pick / rebase) — drop the ones already
+   promoted into the base.
+3. Push (force-with-lease is fine when the branch carried only merged history) and open a **new**
+   PR into `release/v26-beta`. Any PR opened for it is a new PR, not the merged one.
+
 ---
 
 ## Version guard: always bump `app/VERSION`
