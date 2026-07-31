@@ -206,10 +206,10 @@ Next. Its attributed contribution connection is not used for MovieVault v2
 anonymous reads.
 
 DiscVault `26.4.57` adds negotiated `distribution-3` support. The matching
-deterministic `movievault_v2` 1.1.0 feature package is also available under
-`dist/plugins/` for staged installation. Older plugins continue to use
-`distribution-2`; v3 is selected only when both the plugin manifest and core
-declare support.
+deterministic `movievault_v2` feature package (currently 1.2.0) ships as a
+bundled default plugin and is also available under `dist/plugins/` for staged
+installation. Older plugins continue to use `distribution-2`; v3 is selected
+only when both the plugin manifest and core declare support.
 
 DiscVault no longer bundles or distributes a local `bluray_com` metadata
 provider. Blu-ray.com release-detail fallback is owned by MovieVault v2 and is

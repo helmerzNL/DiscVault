@@ -107,6 +107,23 @@ git push origin --delete <feature-branch>   # or use the PR "Delete branch" butt
   (e.g. one session may open #144, #148, #149 from the same branch). Delete such a
   branch only after the session is finished.
 
+### Follow-up work after a PR merges
+
+**Before every push or PR, check whether the branch's previous PR is already merged.** Fetch the
+base and confirm whether your last pushed commit is already an ancestor of it
+(`git fetch origin release/v26-beta && git merge-base --is-ancestor <last-commit> origin/release/v26-beta`).
+A merged PR is finished — it cannot track new work and **must not be reused**; never stack new
+commits on top of already-merged history.
+
+If it was merged, treat the follow-up as a fresh change:
+
+1. Restart the branch from the latest base, keeping the **same** name:
+   `git fetch origin release/v26-beta && git checkout -B <branch> origin/release/v26-beta`.
+2. Re-apply only the still-unmerged commits on top (cherry-pick / rebase) — drop the ones already
+   promoted into the base.
+3. Push (force-with-lease is fine when the branch carried only merged history) and open a **new**
+   PR into `release/v26-beta`. Any PR opened for it is a new PR, not the merged one.
+
 ### Branch protection
 
 `main` is protected: PRs require review, the version-guard check, and Copilot review before
@@ -160,6 +177,27 @@ inferred). Carry the chosen type through the whole flow:
 - Do not open or merge a PR while translations are incomplete.
 - Before PR creation, run an i18n completeness pass (no missing keys, and no newly introduced
   hardcoded UI text without i18n keys).
+
+**Record decisions in the App-Guidance documentation repo**
+
+Documentation lives in [`Flux76HQ/App-Guidance`](https://github.com/Flux76HQ/App-Guidance), not in
+this repository. Whenever a session settles something that outlives its own PR, write it up there —
+do not wait to be asked.
+
+- **What to record:** a route or contract between DiscVault and another system (MovieVault, the iOS
+  app, a plugin API), an ownership or precedence rule (which source may supply a field, which value
+  wins), a deliberate policy and why it exists, and the symptom-to-cause mapping that made a bug
+  findable. A plain bug fix with no rule behind it does not need an entry; the release notes cover
+  that.
+- **How to record it:** describe the rule and the reasoning, not the diff — the document has to stay
+  true after the code moves. Reference DiscVault symbols and paths so a reader can find the
+  implementation, and keep an appendix mapping each rule to its source location. Carry open questions
+  across as open questions instead of quietly resolving them. Write it in English.
+- **Attaching the repo:** App-Guidance sits under a different owner (`Flux76HQ`) than this repository
+  (`helmerzNL`), and a session cannot attach a repo from another owner. A session working in
+  DiscVault therefore cannot push there: prepare the document, hand it over, and say plainly that it
+  still needs to land in App-Guidance. To commit it directly, start a session with App-Guidance as
+  its initial source.
 
 **When the user starts a new feature (or bug/other work)**
 

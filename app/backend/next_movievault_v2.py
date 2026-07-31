@@ -1071,21 +1071,81 @@ def _release_details_box_set(value: Any) -> dict[str, Any]:
     return result
 
 
-def _release_details_poster(value: Any) -> dict[str, Any]:
-    """Validate an approved catalog poster carried by a release-details
-    response.
+def _release_details_asset_variant(value: Any) -> dict[str, Any]:
+    """Parse a `distribution-4` asset variant carried by a release-details
+    response, where `checksum` is optional.
 
-    MovieVault reuses the `distribution-4` poster reference verbatim here, so
-    the bulk-sync parser is reused unchanged rather than declaring a second
-    model; only the stable, value-free error code is remapped onto the
-    release-details namespace so callers keep a single failure vocabulary."""
+    Only the v4 catalog publishes a checksum; the v2 resolver's poster
+    reference specifies just `path`. Requiring one here (as the bulk-sync
+    parser does) rejected every resolver poster outright."""
+    if not isinstance(value, dict):
+        raise MovieVaultV2Error("release_details_response_invalid")
     try:
-        poster = _poster(value, MOVIEVAULT_V4_CONTRACT)
+        _exact_keys(value, required={"path"}, optional={"checksum"})
+        path = _text(value["path"], minimum=1, maximum=500)
+        if not ASSET_PATH_PATTERNS[MOVIEVAULT_V4_CONTRACT].fullmatch(path):
+            raise MovieVaultV2Error("release_details_response_invalid")
+        variant = {"path": path}
+        if value.get("checksum") is not None:
+            variant["checksum"] = _hash(value["checksum"])
     except MovieVaultV2Error as exc:
         raise MovieVaultV2Error("release_details_response_invalid") from exc
-    if poster is None:
+    return variant
+
+
+def _asset_claim(value: Any) -> str | None:
+    """Read an `attestation`/`license` claim that the two sources type
+    differently: the v4 catalog sends a plain string while the v2 resolver
+    renders it as a nested object. An unexpected shape degrades to absent
+    rather than failing the record -- a poster is supplementary, and losing a
+    release over an artwork sub-field is never the right trade."""
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, dict):
+        for key in ("value", "name", "id", "type", "license", "attestation"):
+            inner = value.get(key)
+            if isinstance(inner, str) and inner.strip():
+                return inner.strip()
+    return None
+
+
+def _release_details_poster(value: Any) -> dict[str, Any]:
+    """Parse a poster carried by a release-details response.
+
+    The bulk-sync parser cannot be reused: it requires `attestation`,
+    `license` and a per-variant `checksum`, all of which are optional on this
+    path. A *readable* claim is still held to the approved attestation/licence
+    sets, so artwork DiscVault is not cleared to show is still refused. Only a
+    claim that is absent -- or whose shape cannot be read at all -- is recorded
+    as absent, which is what keeps a supplementary artwork sub-field from
+    costing the whole record."""
+    if not isinstance(value, dict):
         raise MovieVaultV2Error("release_details_response_invalid")
-    return poster
+    try:
+        _exact_keys(
+            value,
+            required={"assetId", "assetType", "thumbnail", "display"},
+            optional={"attestation", "license"},
+        )
+        if value["assetType"] != POSTER_ASSET_TYPE:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        asset_id = _uuid(value["assetId"])
+    except MovieVaultV2Error as exc:
+        raise MovieVaultV2Error("release_details_response_invalid") from exc
+    attestation = _asset_claim(value.get("attestation"))
+    license_name = _asset_claim(value.get("license"))
+    if attestation is not None and attestation not in POSTER_ATTESTATIONS:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    if license_name is not None and license_name not in POSTER_LICENSES:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return {
+        "assetId": asset_id,
+        "assetType": POSTER_ASSET_TYPE,
+        "attestation": attestation,
+        "license": license_name,
+        "thumbnail": _release_details_asset_variant(value["thumbnail"]),
+        "display": _release_details_asset_variant(value["display"]),
+    }
 
 
 def validate_release_details_response(value: Any) -> dict[str, Any]:
@@ -2184,17 +2244,48 @@ def _poster_status_fields(conn: Any, poster: dict[str, Any] | None) -> dict[str,
     }
 
 
+def _remote_asset_url(origin: str, path: Any) -> str | None:
+    """Resolve a root-relative `distribution-4` asset path against the
+    MovieVault origin.
+
+    ``/v2/assets/{assetId}/{variant}`` is a stable anonymous endpoint (no auth,
+    no cookies, no instance identity), so the absolute URL is safe to hand to a
+    client that loads it like any other remote poster."""
+    text = str(path or "").strip()
+    if not text.startswith("/"):
+        return None
+    return f"{origin.rstrip('/')}{text}"
+
+
 def _release_details_poster_fields(
     conn: Any,
     origin: str,
     poster: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Reuse the bulk-sync poster cache for a poster carried by a
-    release-details response: enqueue the same bounded, anonymous caching job
-    (idempotent on ``assetId``/variant/checksum, so an already-cached poster
-    never re-downloads) and return only DiscVault-local poster fields."""
+    """Expose a poster carried by a release-details response.
+
+    With a checksum the bulk-sync cache is reused: enqueue the same bounded,
+    anonymous caching job (idempotent on ``assetId``/variant/checksum, so an
+    already-cached poster never re-downloads) and return a DiscVault-local URL.
+
+    The v2 resolver publishes no checksum, and bytes that cannot be verified
+    must never be stored -- caching them would break the guarantee that
+    everything on disk was checked. Such a poster is therefore surfaced as the
+    stable anonymous asset URL instead, so the cover still reaches the client
+    without an unverifiable copy being written."""
     if poster is None:
         return dict(POSTER_FIELDS_UNAVAILABLE)
+    display = poster.get("display") if isinstance(poster.get("display"), dict) else {}
+    if not display.get("checksum"):
+        remote_url = _remote_asset_url(origin, display.get("path"))
+        if not remote_url:
+            return dict(POSTER_FIELDS_UNAVAILABLE)
+        return {
+            "posterUrl": remote_url,
+            "posterStatus": "remote",
+            "posterChecksum": None,
+            "posterRevision": None,
+        }
     with conn.transaction():
         with conn.cursor() as cur:
             _enqueue_poster_cache(cur, origin, poster)

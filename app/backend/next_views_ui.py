@@ -16915,7 +16915,7 @@ def ui_preview_html(
     };
     function usableImage(value) {
       const text = String(value || "");
-      return text.startsWith("http://") || text.startsWith("https://") || text.startsWith("/api/next/media/") ? text : "";
+      return text.startsWith("http://") || text.startsWith("https://") || text.startsWith("/api/next/media/") || text.startsWith("/api/next/movievault-v2/posters/") ? text : "";
     }
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
