@@ -680,6 +680,106 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertNotIn("poster", result)
         self.assertNotIn("boxSetPoster", result)
 
+    def test_release_details_accepts_resolver_poster_without_checksum_or_claims(self):
+        """Only the v4 catalog publishes a checksum, and the resolver types
+        attestation/license as nested objects. Requiring either rejected every
+        resolver poster, so a scanned disc never showed its cover."""
+        asset_id = "40000000-0000-0000-0000-000000000001"
+        cases = {
+            "no_checksum_no_claims": {
+                "assetId": asset_id,
+                "assetType": "front_cover",
+                "thumbnail": {"path": f"/v2/assets/{asset_id}/thumbnail"},
+                "display": {"path": f"/v2/assets/{asset_id}/display"},
+            },
+            "nested_claims": {
+                "assetId": asset_id,
+                "assetType": "front_cover",
+                "attestation": {"value": "licensed"},
+                "license": {"value": "cc-by-4.0"},
+                "thumbnail": {"path": f"/v2/assets/{asset_id}/thumbnail"},
+                "display": {"path": f"/v2/assets/{asset_id}/display"},
+            },
+            "unreadable_claims_degrade_to_absent": {
+                "assetId": asset_id,
+                "assetType": "front_cover",
+                "attestation": {"unexpected": ["shape"]},
+                "license": 12,
+                "thumbnail": {"path": f"/v2/assets/{asset_id}/thumbnail"},
+                "display": {"path": f"/v2/assets/{asset_id}/display"},
+            },
+        }
+        for name, poster in cases.items():
+            with self.subTest(case=name):
+                payload = release_details_hit()
+                payload["poster"] = poster
+
+                result = next_movievault_v2.validate_release_details_response(payload)
+
+                self.assertEqual(result["poster"]["assetId"], asset_id)
+                self.assertEqual(
+                    result["poster"]["display"]["path"],
+                    f"/v2/assets/{asset_id}/display",
+                )
+
+    def test_release_details_still_rejects_a_readable_unapproved_claim(self):
+        """Leniency covers shape and absence only -- artwork DiscVault is not
+        cleared to show must still be refused."""
+        asset_id = "40000000-0000-0000-0000-000000000001"
+        base = {
+            "assetId": asset_id,
+            "assetType": "front_cover",
+            "thumbnail": {"path": f"/v2/assets/{asset_id}/thumbnail"},
+            "display": {"path": f"/v2/assets/{asset_id}/display"},
+        }
+        for name, override in {
+            "plain_license": {"license": "all-rights-reserved"},
+            "nested_license": {"license": {"value": "all-rights-reserved"}},
+            "plain_attestation": {"attestation": "scraped"},
+        }.items():
+            with self.subTest(case=name):
+                payload = release_details_hit()
+                payload["poster"] = {**base, **override}
+
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error,
+                    "^release_details_response_invalid$",
+                ):
+                    next_movievault_v2.validate_release_details_response(payload)
+
+    def test_poster_without_checksum_is_served_remotely_and_never_cached(self):
+        """Unverifiable bytes must not be written to the artwork cache, so the
+        cover is surfaced as MovieVault's stable anonymous asset URL instead."""
+        asset_id = "40000000-0000-0000-0000-000000000001"
+        poster = {
+            "assetId": asset_id,
+            "assetType": "front_cover",
+            "attestation": None,
+            "license": None,
+            "thumbnail": {"path": f"/v2/assets/{asset_id}/thumbnail"},
+            "display": {"path": f"/v2/assets/{asset_id}/display"},
+        }
+
+        class RefusesDatabaseAccess:
+            def transaction(self):
+                raise AssertionError("an unverifiable poster must not be cached")
+
+            def cursor(self):
+                raise AssertionError("an unverifiable poster must not be cached")
+
+        fields = next_movievault_v2._release_details_poster_fields(
+            RefusesDatabaseAccess(),
+            "https://movies2.vaultstack.eu",
+            poster,
+        )
+
+        self.assertEqual(
+            fields["posterUrl"],
+            f"https://movies2.vaultstack.eu/v2/assets/{asset_id}/display",
+        )
+        self.assertEqual(fields["posterStatus"], "remote")
+        self.assertIsNone(fields["posterChecksum"])
+
     def test_localize_release_details_posters_exposes_only_local_fields(self):
         conn = FakePosterConn(
             {
