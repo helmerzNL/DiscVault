@@ -178,6 +178,27 @@ inferred). Carry the chosen type through the whole flow:
 - Before PR creation, run an i18n completeness pass (no missing keys, and no newly introduced
   hardcoded UI text without i18n keys).
 
+**Record decisions in the App-Guidance documentation repo**
+
+Documentation lives in [`Flux76HQ/App-Guidance`](https://github.com/Flux76HQ/App-Guidance), not in
+this repository. Whenever a session settles something that outlives its own PR, write it up there —
+do not wait to be asked.
+
+- **What to record:** a route or contract between DiscVault and another system (MovieVault, the iOS
+  app, a plugin API), an ownership or precedence rule (which source may supply a field, which value
+  wins), a deliberate policy and why it exists, and the symptom-to-cause mapping that made a bug
+  findable. A plain bug fix with no rule behind it does not need an entry; the release notes cover
+  that.
+- **How to record it:** describe the rule and the reasoning, not the diff — the document has to stay
+  true after the code moves. Reference DiscVault symbols and paths so a reader can find the
+  implementation, and keep an appendix mapping each rule to its source location. Carry open questions
+  across as open questions instead of quietly resolving them. Write it in English.
+- **Attaching the repo:** App-Guidance sits under a different owner (`Flux76HQ`) than this repository
+  (`helmerzNL`), and a session cannot attach a repo from another owner. A session working in
+  DiscVault therefore cannot push there: prepare the document, hand it over, and say plainly that it
+  still needs to land in App-Guidance. To commit it directly, start a session with App-Guidance as
+  its initial source.
+
 **When the user starts a new feature (or bug/other work)**
 
 1. Base the work on `release/v26-beta`, **never** on `main` or `legacy`. In a worktree session
