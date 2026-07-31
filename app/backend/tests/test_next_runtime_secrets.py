@@ -9,7 +9,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 repo_root = Path(__file__).resolve().parents[3]
 if str(repo_root) not in sys.path:
@@ -136,8 +136,10 @@ class RuntimeSecretTests(unittest.TestCase):
                 next_worker.main(["run-once"])
 
     def test_worker_startup_accepts_configured_secret(self):
+        mock_conn = MagicMock()
         with (
             patch.dict(os.environ, {"JWT_SECRET": "worker-startup-test-secret"}, clear=True),
+            patch.object(next_worker, "wait_for_database", return_value=mock_conn),
             patch.object(next_worker, "run_once", return_value=0) as run_once,
             patch.object(next_worker.signal, "signal"),
         ):
