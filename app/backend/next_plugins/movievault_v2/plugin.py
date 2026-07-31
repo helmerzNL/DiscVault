@@ -1,6 +1,7 @@
 """Callback-only MovieVault distribution adapter for DiscVault 26."""
 
 import hashlib
+import uuid
 
 PROVIDER_ID = "movievault_v2"
 
@@ -39,6 +40,26 @@ def _lookup(payload, context):
         return []
     result = callback(request)
     return (result or {}).get("results") or []
+
+
+def _release_uuid(payload):
+    """The v4 catalog keys releases by UUID, so only a well-formed UUID is a usable lookup id.
+
+    The metadata refresh planner hands this entrypoint the movie's stored `movieVaultId`, not a
+    `releaseId` - so that key has to be accepted here or a refresh never reaches the catalog.
+    But it is deliberately filtered: a `movievault_26`-era id (e.g. "mv_matrix") lives in a
+    different namespace and is *not* a v4 release, so treating it as one would look up a
+    different disc. Anything that isn't a UUID is simply no match for this provider.
+    """
+    for key in ("releaseId", "id", "movieVaultId", "movievaultId"):
+        value = str((payload or {}).get(key) or "").strip()
+        if not value:
+            continue
+        try:
+            return str(uuid.UUID(value))
+        except (ValueError, AttributeError, TypeError):
+            continue
+    return ""
 
 
 def _poster_fields(record):
@@ -188,8 +209,16 @@ def movie_details(payload, context=None):
     callback = _callback(context, "movievaultV2Lookup")
     if callback is None:
         return _error()
-    release_id = str((payload or {}).get("releaseId") or (payload or {}).get("id") or "")
-    records = (callback({"kind": "release", "releaseId": release_id, "limit": 1}) or {}).get("results") or []
+    release_id = _release_uuid(payload)
+    if not release_id:
+        return {"status": "miss", "provider": PROVIDER_ID}
+    try:
+        records = (callback({"kind": "release", "releaseId": release_id, "limit": 1}) or {}).get("results") or []
+    except Exception:
+        # A catalog that is unconfigured/mid-resync must degrade to a miss. Letting this raise
+        # failed the *whole* plugin execution, so a refresh returned nothing from MovieVault at
+        # all - no audio, subtitles or packaging - rather than just skipping this one lookup.
+        return {"status": "miss", "provider": PROVIDER_ID}
     return {"status": "miss", "provider": PROVIDER_ID} if not records else {"status": "hit", **_release(records[0])}
 
 
