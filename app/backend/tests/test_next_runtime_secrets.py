@@ -153,15 +153,20 @@ class RuntimeSecretTests(unittest.TestCase):
             patch.dict(os.environ, {"JWT_SECRET": "worker-startup-test-secret"}, clear=True),
             patch.object(next_worker, "run_once", return_value=0),
             patch.object(next_worker, "wait_for_database") as wait_for_database,
+            patch.object(
+                next_worker, "wait_for_background_jobs_table"
+            ) as wait_for_background_jobs_table,
             patch.object(next_worker.signal, "signal"),
         ):
             self.assertEqual(next_worker.main(["run-once"]), 0)
 
         wait_for_database.assert_not_called()
+        wait_for_background_jobs_table.assert_not_called()
 
     def test_work_waits_for_the_database_before_looping(self):
         # `work` is the container entry point and starts alongside postgres, so it
-        # must wait, and must do so before the loop touches any table.
+        # must wait for both the database and the migrated schema, in that
+        # order, before the loop touches any table.
         calls = []
 
         with (
@@ -169,8 +174,13 @@ class RuntimeSecretTests(unittest.TestCase):
             patch.object(
                 next_worker,
                 "wait_for_database",
-                side_effect=lambda **kwargs: calls.append("wait") or MagicMock(),
+                side_effect=lambda **kwargs: calls.append("wait_db") or MagicMock(),
             ) as wait_for_database,
+            patch.object(
+                next_worker,
+                "wait_for_background_jobs_table",
+                side_effect=lambda *a, **k: calls.append("wait_table"),
+            ) as wait_for_background_jobs_table,
             patch.object(
                 next_worker,
                 "work_loop",
@@ -180,10 +190,11 @@ class RuntimeSecretTests(unittest.TestCase):
         ):
             self.assertEqual(next_worker.main(["work"]), 0)
 
-        self.assertEqual(calls, ["wait", "loop"])
+        self.assertEqual(calls, ["wait_db", "wait_table", "loop"])
         self.assertIs(
             wait_for_database.call_args.kwargs["connect_fn"], next_worker.connect
         )
+        self.assertIs(wait_for_background_jobs_table.call_args.args[0], next_worker.connect)
 
 
 if __name__ == "__main__":
