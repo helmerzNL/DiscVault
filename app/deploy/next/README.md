@@ -145,6 +145,11 @@ container that never becomes healthy. See the
 [preflight check](#preflight-check-before-starting) for verifying they are
 really in `.env` and not merely inherited from the shell environment.
 
+All of this applies to a *clean* installation. A stack whose data directory is
+already populated does not run `initdb`, so PostgreSQL should become healthy
+within seconds; if it does not, see
+[PostgreSQL is reported unhealthy on an existing stack](#postgresql-is-reported-unhealthy-on-an-existing-stack).
+
 When this service is published directly behind a reverse proxy, the Next
 collection UI is available at `/`, `/app`, and `/api/next/app`.
 
@@ -426,6 +431,48 @@ deployment command.
 Before working through the cases below, run the
 [preflight check](#preflight-check-before-starting) — most failed starts are a
 missing `.env` variable or a value that collides with another stack.
+
+### PostgreSQL is reported unhealthy on an existing stack
+
+Symptoms:
+
+- `docker compose up` (or a management UI that runs it) takes minutes and then
+  aborts with
+  `dependency failed to start: container <stack>-postgres-1 is unhealthy`.
+- The stack already has a populated data directory, so `initdb` does not run.
+
+This case is **not** the one covered by
+[First start takes longer](#first-start-takes-longer). The 120s `start_period`
+on `postgres` exists for clean installs, where `initdb` is genuinely slow on NAS
+storage. On an existing data directory PostgreSQL should accept TCP connections
+within seconds, so an unhealthy container means something else is wrong — and
+the long `start_period` merely delays the failure by up to 220s
+(`start_period` 120s + `retries` 10 × `interval` 10s) before Compose gives up.
+
+Note also that the health check probes TCP rather than the Unix socket. The
+socket probe it replaced reported success during startup phases in which the
+server was not yet accepting real connections, so a slow start used to be
+invisible. A start that now looks slow may always have been slow.
+
+Collect the evidence in one pass:
+
+```bash
+app/scripts/next_stack_doctor.sh <compose-project-name>
+```
+
+The script is read-only — it inspects containers, reads logs, and runs
+`pg_isready`; it changes nothing. The project name defaults to
+`discvault_next_deploy`. Then match the findings:
+
+| Observation | Cause | Fix |
+| --- | --- | --- |
+| Probe exits `3`, or the health command shows an empty `-U ""` | A management UI re-interpolated the compose file and destroyed the `$$` escape, leaving an invalid `pg_isready` invocation that can never succeed | Drop the credentials from the probe — `pg_isready -h 127.0.0.1 -p 5432` is still a correct readiness check and has nothing left to mis-interpolate |
+| Probe exits `1`; log shows `automatic recovery in progress` | PostgreSQL is replaying WAL after an unclean shutdown | Give the server time to stop cleanly next time: set `stop_grace_period: 60s` on the `postgres` service, so Compose does not `SIGKILL` it after the default 10s |
+| Probe exits `2` and `RestartCount` climbs | PostgreSQL is not staying up at all | Read the reason in the log: bind-mount permissions (the container runs as uid 70), or a data directory created by a different major version — `postgres:17-alpine` is a tag, not a digest |
+| The probe itself takes longer than 5s | `timeout: 5s` is too tight for this storage | Raise `timeout`, and check whether the data directory sits on a network share |
+| `next-api` is the unhealthy container; `/api/next/health` is slow or returns 503 | Migrations are not `ready`, or the endpoint's per-probe artwork-trash purge exceeds the timeout | Wait out the migration; if the purge is the cause, the endpoint should not be doing write work on a 10s liveness probe |
+| `getent hosts postgres` returns more than one address | Two stacks share a Docker network | Give each stack a unique `DISCVAULT_NEXT_NETWORK_NAME`; see [below](#repeated-password-authentication-failed-in-the-postgresql-log) |
+| Everything is healthy, only slow | The deploy is gated on health checks | Nothing is broken: `docker compose up -d --wait=false` returns immediately and the stack converges on its own |
 
 ### Repeated `password authentication failed` in the PostgreSQL log
 
