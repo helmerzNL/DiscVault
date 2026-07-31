@@ -11,11 +11,27 @@ import argparse
 import hashlib
 import os
 import sys
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations_next"
+
+# Startup ordering is not guaranteed by Compose: services depend on postgres
+# having *started*, not on it reporting healthy, so that a slow or recovering
+# database cannot abort a whole deployment. Callers wait here instead.
+DB_WAIT_TIMEOUT_ENV = "DISCVAULT_NEXT_DB_WAIT_TIMEOUT"
+DEFAULT_DB_WAIT_TIMEOUT = 300.0
+DB_WAIT_MAX_DELAY = 5.0
+
+# Session-scoped lock taken while migrations are applied. next-api migrates on
+# every start and the `tools` profile exposes a standalone `migrate` service, so
+# two runners can genuinely overlap.
+MIGRATION_LOCK_KEY = int.from_bytes(
+    hashlib.sha256(b"discvault_next_migrations").digest()[:8], "big", signed=True
+)
 SCHEMA_MIGRATIONS_SQL = """
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    text PRIMARY KEY,
@@ -28,6 +44,10 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 class MigrationError(RuntimeError):
     """Raised when DiscVault Next migrations cannot be applied safely."""
+
+
+class DatabaseUnavailableError(MigrationError):
+    """Raised when PostgreSQL does not accept connections within the timeout."""
 
 
 @dataclass(frozen=True)
@@ -82,6 +102,85 @@ def connect():
     return psycopg.connect(database_url(), autocommit=False)
 
 
+def db_wait_timeout() -> float:
+    raw = os.environ.get(DB_WAIT_TIMEOUT_ENV, "").strip()
+    if not raw:
+        return DEFAULT_DB_WAIT_TIMEOUT
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_DB_WAIT_TIMEOUT
+    return value if value > 0 else DEFAULT_DB_WAIT_TIMEOUT
+
+
+def wait_for_database(
+    timeout: float | None = None,
+    connect_fn=None,
+    *,
+    initial_delay: float = 0.5,
+    max_delay: float = DB_WAIT_MAX_DELAY,
+    sleep=time.sleep,
+    monotonic=time.monotonic,
+    log=None,
+):
+    """Open a connection, retrying while PostgreSQL refuses one.
+
+    PostgreSQL rejects connections while it replays WAL after an unclean
+    shutdown, and is not listening at all for the first moments of a container
+    start. Both are transient, so retry rather than exit and rely on Docker to
+    restart the container. Returns the open connection; the caller owns it.
+    """
+    psycopg = _load_psycopg()
+    connect_fn = connect_fn or connect
+    log = log or (lambda message: print(message, file=sys.stderr, flush=True))
+    if timeout is None:
+        timeout = db_wait_timeout()
+
+    deadline = monotonic() + timeout
+    delay = initial_delay
+    attempt = 0
+    last_error: Exception | None = None
+
+    while True:
+        attempt += 1
+        try:
+            return connect_fn()
+        except psycopg.OperationalError as exc:
+            last_error = exc
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                break
+            if attempt == 1:
+                log(f"Waiting for PostgreSQL to accept connections: {exc}")
+            sleep(min(delay, max_delay, remaining))
+            delay = min(delay * 2, max_delay)
+
+    raise DatabaseUnavailableError(
+        f"PostgreSQL did not accept a connection within {timeout:g}s "
+        f"({attempt} attempts). Last error: {last_error}"
+    )
+
+
+@contextmanager
+def migration_lock(conn):
+    """Hold the advisory lock that serializes concurrent migration runners."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_lock(%s)", (MIGRATION_LOCK_KEY,))
+    conn.commit()
+    try:
+        yield
+    finally:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_unlock(%s)", (MIGRATION_LOCK_KEY,))
+            conn.commit()
+        except Exception:
+            # A failed migration leaves the transaction aborted, so the unlock
+            # cannot run. PostgreSQL drops session locks when the connection
+            # closes, which is imminent either way.
+            conn.rollback()
+
+
 def ensure_migration_table(conn) -> None:
     with conn.cursor() as cur:
         cur.execute(SCHEMA_MIGRATIONS_SQL)
@@ -126,6 +225,11 @@ def migration_status(conn, migrations: list[Migration]) -> list[dict]:
 
 
 def apply_migrations(conn, migrations: list[Migration]) -> list[dict]:
+    with migration_lock(conn):
+        return _apply_migrations_locked(conn, migrations)
+
+
+def _apply_migrations_locked(conn, migrations: list[Migration]) -> list[dict]:
     ensure_migration_table(conn)
     applied = applied_migrations(conn)
     results = []
@@ -190,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     migrations = discover_migrations(Path(args.migrations_dir).resolve())
     try:
-        with connect() as conn:
+        with wait_for_database() as conn:
             if args.command == "status":
                 print_table(migration_status(conn, migrations))
                 return 0
