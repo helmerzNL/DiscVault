@@ -7,6 +7,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import socket
@@ -61,6 +62,30 @@ ASSET_PATH_PATTERNS = {
 POSTER_ASSET_TYPE = "front_cover"
 POSTER_ATTESTATIONS = {"original", "licensed"}
 POSTER_LICENSES = {"cc0-1.0", "cc-by-4.0", "cc-by-sa-4.0"}
+
+# distribution-4 audio track / subtitle language enums (PR #159 on
+# MovieVault-v2). Kept as plain sets rather than a DB-level CHECK enum:
+# unrecognized codec/channels/immersiveFormat values are stored as-is with a
+# logged warning rather than rejecting the whole record - see
+# _audio_track() below.
+AUDIO_TRACK_CODECS = {
+    "pcm",
+    "dolby_digital",
+    "dolby_digital_plus",
+    "dolby_truehd",
+    "dts",
+    "dts_hd_hr",
+    "dts_hd_ma",
+    "mpeg_audio",
+    "aac",
+}
+AUDIO_TRACK_CHANNELS = {"1.0", "2.0", "5.1", "6.1", "7.1"}
+AUDIO_TRACK_IMMERSIVE_FORMATS = {"dolby_atmos", "dts_x", "auro_3d"}
+MAX_AUDIO_TRACKS = 50
+MAX_SUBTITLE_LANGUAGES = 50
+LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,8}(-[a-z0-9]{1,8})*$")
+
+logger = logging.getLogger(__name__)
 
 ConnectionFactory = Callable[[], ContextManager[Any]]
 
@@ -268,6 +293,73 @@ def _poster(value: Any, contract_version: str) -> dict[str, Any] | None:
     }
 
 
+def _language_code(value: Any) -> str:
+    if not isinstance(value, str) or len(value) > 35 or not LANGUAGE_CODE_PATTERN.fullmatch(value):
+        raise MovieVaultV2Error("record_invalid")
+    return value
+
+
+def _audio_track(value: Any, *, release_id: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise MovieVaultV2Error("record_invalid")
+    _exact_keys(
+        value,
+        required={"languageCode", "codec", "channels", "immersiveFormat"},
+        optional=set(),
+    )
+    codec = value["codec"]
+    if not isinstance(codec, str) or not codec or len(codec) > 64:
+        raise MovieVaultV2Error("record_invalid")
+    if codec not in AUDIO_TRACK_CODECS:
+        # Forward-compatible on purpose: MovieVault may ship a new codec
+        # value before this allow-list is updated. Store it as-is rather
+        # than rejecting the whole release record - see the note on
+        # AUDIO_TRACK_CODECS above.
+        logger.warning(
+            "movievault_v2: unrecognized audio codec %r on release %s - storing raw value",
+            codec,
+            release_id,
+        )
+    channels = value["channels"]
+    if channels is not None:
+        if not isinstance(channels, str) or not channels or len(channels) > 16:
+            raise MovieVaultV2Error("record_invalid")
+        if channels not in AUDIO_TRACK_CHANNELS:
+            logger.warning(
+                "movievault_v2: unrecognized audio channels %r on release %s - storing raw value",
+                channels,
+                release_id,
+            )
+    immersive_format = value["immersiveFormat"]
+    if immersive_format is not None:
+        if not isinstance(immersive_format, str) or not immersive_format or len(immersive_format) > 64:
+            raise MovieVaultV2Error("record_invalid")
+        if immersive_format not in AUDIO_TRACK_IMMERSIVE_FORMATS:
+            logger.warning(
+                "movievault_v2: unrecognized audio immersiveFormat %r on release %s - storing raw value",
+                immersive_format,
+                release_id,
+            )
+    return {
+        "languageCode": _language_code(value["languageCode"]),
+        "codec": codec,
+        "channels": channels,
+        "immersiveFormat": immersive_format,
+    }
+
+
+def _audio_tracks(value: Any, *, release_id: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or len(value) > MAX_AUDIO_TRACKS:
+        raise MovieVaultV2Error("record_invalid")
+    return [_audio_track(item, release_id=release_id) for item in value]
+
+
+def _subtitle_languages(value: Any) -> list[str]:
+    if not isinstance(value, list) or len(value) > MAX_SUBTITLE_LANGUAGES:
+        raise MovieVaultV2Error("record_invalid")
+    return [_language_code(item) for item in value]
+
+
 def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, Any]:
     required = {
         "contractVersion",
@@ -296,6 +388,7 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         optional.update({"studio", "distributor", "runtimeMinutes"})
     if contract_version == MOVIEVAULT_V4_CONTRACT:
         required.add("poster")
+        required.update({"audioTracks", "subtitleLanguages"})
     _exact_keys(value, required=required, optional=optional)
     provider_ids = value["providerIds"]
     if not isinstance(provider_ids, dict):
@@ -349,6 +442,16 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
             _poster(value["poster"], contract_version)
             if contract_version == MOVIEVAULT_V4_CONTRACT
             else None
+        ),
+        "audioTracks": (
+            _audio_tracks(value["audioTracks"], release_id=str(value.get("releaseId")))
+            if contract_version == MOVIEVAULT_V4_CONTRACT
+            else []
+        ),
+        "subtitleLanguages": (
+            _subtitle_languages(value["subtitleLanguages"])
+            if contract_version == MOVIEVAULT_V4_CONTRACT
+            else []
         ),
     }
 
@@ -1590,6 +1693,62 @@ def _insert_lookup(
     )
 
 
+def _replace_audio_tracks(
+    cur: Any, generation: str, release_id: str, tracks: list[dict[str, Any]]
+) -> None:
+    """Full replacement, not a diff: always delete first, even when `tracks`
+    is empty, since an empty array is meaningful (all tracks removed
+    upstream)."""
+    cur.execute(
+        """
+        DELETE FROM movievault_v2_release_audio_tracks
+        WHERE generation = %s AND release_id = %s
+        """,
+        (generation, release_id),
+    )
+    for position, track in enumerate(tracks, start=1):
+        cur.execute(
+            """
+            INSERT INTO movievault_v2_release_audio_tracks (
+                generation, release_id, position, language_code, codec,
+                channels, immersive_format
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                generation,
+                release_id,
+                position,
+                track["languageCode"],
+                track["codec"],
+                track["channels"],
+                track["immersiveFormat"],
+            ),
+        )
+
+
+def _replace_subtitle_languages(
+    cur: Any, generation: str, release_id: str, languages: list[str]
+) -> None:
+    cur.execute(
+        """
+        DELETE FROM movievault_v2_release_subtitle_languages
+        WHERE generation = %s AND release_id = %s
+        """,
+        (generation, release_id),
+    )
+    for position, language_code in enumerate(languages, start=1):
+        cur.execute(
+            """
+            INSERT INTO movievault_v2_release_subtitle_languages (
+                generation, release_id, position, language_code
+            )
+            VALUES (%s, %s, %s, %s)
+            """,
+            (generation, release_id, position, language_code),
+        )
+
+
 def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: str) -> None:
     release_id = record["releaseId"]
     cur.execute(
@@ -1657,6 +1816,8 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
     )
     for lookup_hash in record["eanHashes"]:
         _insert_lookup(cur, generation, lookup_hash, "release", release_id, "release_ean")
+    _replace_audio_tracks(cur, generation, release_id, record.get("audioTracks") or [])
+    _replace_subtitle_languages(cur, generation, release_id, record.get("subtitleLanguages") or [])
     _enqueue_poster_cache(cur, origin, record.get("poster"))
 
 
@@ -2372,7 +2533,47 @@ def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         "revision": int(row["revision"]),
     }
     payload.update(_poster_status_fields(conn, row.get("poster")))
+    payload["audioTracks"], payload["subtitleLanguages"] = _release_track_fields(
+        conn, row["generation"], row["release_id"]
+    )
     return payload
+
+
+def _release_track_fields(
+    conn: Any, generation: Any, release_id: Any
+) -> tuple[list[dict[str, Any]], list[str]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT language_code, codec, channels, immersive_format
+            FROM movievault_v2_release_audio_tracks
+            WHERE generation = %s AND release_id = %s
+            ORDER BY position
+            """,
+            (generation, release_id),
+        )
+        audio_rows = cur.fetchall()
+        cur.execute(
+            """
+            SELECT language_code
+            FROM movievault_v2_release_subtitle_languages
+            WHERE generation = %s AND release_id = %s
+            ORDER BY position
+            """,
+            (generation, release_id),
+        )
+        subtitle_rows = cur.fetchall()
+    audio_tracks = [
+        {
+            "languageCode": row["language_code"],
+            "codec": row["codec"],
+            "channels": row.get("channels"),
+            "immersiveFormat": row.get("immersive_format"),
+        }
+        for row in audio_rows
+    ]
+    subtitle_languages = [row["language_code"] for row in subtitle_rows]
+    return audio_tracks, subtitle_languages
 
 
 def _box_set_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
