@@ -1,5 +1,6 @@
 import os
 import sys
+import types
 import unittest
 import uuid
 from datetime import datetime, timezone
@@ -417,6 +418,111 @@ class NextBatchCreateHealTests(unittest.TestCase):
 
 
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextContainerSyncArtworkTests(unittest.TestCase):
+    """A box set pushed from another client carries the cover its source
+    resolved. Dropping it leaves the container falling back to a member film's
+    poster, which is a different film's cover."""
+
+    def test_reads_the_pushed_cover_from_the_payload_or_metadata(self):
+        cover = "https://movies2.vaultstack.eu/v2/assets/abc/display"
+        for label, payload, metadata in (
+            ("camelCase root", {"posterUrl": cover}, None),
+            ("snake_case root", {"poster_url": cover}, None),
+            ("bare key", {"poster": cover}, None),
+            ("metadata fallback", {}, {"poster_url": cover}),
+        ):
+            with self.subTest(case=label):
+                self.assertEqual(
+                    next_app.container_sync_artwork_urls(payload, metadata),
+                    {"poster": cover},
+                )
+
+    def test_payload_root_wins_over_metadata(self):
+        cover = "https://movies2.vaultstack.eu/v2/assets/current/display"
+        urls = next_app.container_sync_artwork_urls(
+            {"posterUrl": cover},
+            {"poster_url": "https://movies2.vaultstack.eu/v2/assets/stale/display"},
+        )
+
+        self.assertEqual(urls["poster"], cover)
+
+    def test_backdrop_is_read_alongside_the_poster(self):
+        urls = next_app.container_sync_artwork_urls(
+            {
+                "posterUrl": "https://movies2.vaultstack.eu/v2/assets/a/display",
+                "backdropUrl": "https://movies2.vaultstack.eu/v2/assets/b/display",
+            }
+        )
+
+        self.assertEqual(sorted(urls), ["backdrop", "poster"])
+
+    def test_ignores_values_that_are_not_fetchable_urls(self):
+        for label, payload in (
+            ("relative path", {"posterUrl": "/v2/assets/abc/display"}),
+            ("non-string", {"posterUrl": 42}),
+            ("blank", {"posterUrl": "   "}),
+            ("nothing", {}),
+        ):
+            with self.subTest(case=label):
+                self.assertEqual(next_app.container_sync_artwork_urls(payload), {})
+
+    def test_attach_requests_primary_without_overwriting_a_chosen_cover(self):
+        """`link_container_media_option` only honours `primary` when no primary
+        artwork of that kind exists, so a cover the user chose is preserved."""
+        cover = "https://movies2.vaultstack.eu/v2/assets/abc/display"
+        container_id = uuid.uuid4()
+        calls = []
+
+        class _Savepoint:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_exc):
+                return False
+
+        conn = types.SimpleNamespace(transaction=lambda: _Savepoint())
+        with patch.object(
+            next_app,
+            "link_container_media_option",
+            side_effect=lambda _conn, **kwargs: calls.append(kwargs),
+        ):
+            next_app.attach_container_sync_artwork(
+                conn,
+                container_id=container_id,
+                payload={"posterUrl": cover},
+            )
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["container_id"], container_id)
+        self.assertEqual(calls[0]["kind"], "poster")
+        self.assertEqual(calls[0]["source_url"], cover)
+        self.assertTrue(calls[0]["primary"])
+
+    def test_attach_failure_never_fails_the_sync_mutation(self):
+        """Artwork is supplementary: a container must still sync when its cover
+        cannot be registered."""
+
+        class _Savepoint:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_exc):
+                return False
+
+        conn = types.SimpleNamespace(transaction=lambda: _Savepoint())
+        with patch.object(
+            next_app,
+            "link_container_media_option",
+            side_effect=RuntimeError("media backend unavailable"),
+        ):
+            next_app.attach_container_sync_artwork(
+                conn,
+                container_id=uuid.uuid4(),
+                payload={"posterUrl": "https://movies2.vaultstack.eu/v2/assets/a/display"},
+            )
+
+
 class NextSyncDedupMigrationContractTests(unittest.TestCase):
     """Migration 045 must declare the dedup/tombstone schema (Deel 1 + 2)."""
 

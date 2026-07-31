@@ -16683,6 +16683,91 @@ def find_container_by_barcode(
     return row["id"] if row else None
 
 
+def container_list_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Fold a container list row's joined poster columns into a `poster_url`.
+
+    The list view reads `poster_url` first and falls back to a metadata URL, so
+    exposing the container's own primary artwork here is what makes a cover that
+    lives in entity_media (a synced, scanned or uploaded one) show in the library
+    and not just on the detail page."""
+    item = dict(row)
+    asset = {
+        "id": item.pop("poster_asset_id", None),
+        "storage_backend": item.pop("poster_storage_backend", None),
+        "storage_key": item.pop("poster_storage_key", None),
+        "source_url": item.pop("poster_source_url", None),
+    }
+    if asset["id"]:
+        poster_url = media_asset_public_url(asset)
+        if poster_url:
+            item["poster_url"] = poster_url
+    return item
+
+
+CONTAINER_SYNC_ARTWORK_KEYS = {
+    "poster": ("posterUrl", "poster_url", "poster"),
+    "backdrop": ("backdropUrl", "backdrop_url", "backdrop"),
+}
+
+
+def container_sync_artwork_urls(
+    payload: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    """Read the artwork a client pushes alongside a container.
+
+    A box set scanned on another client carries the cover its source resolved
+    (e.g. MovieVault's), and that link is the set's own artwork -- without it the
+    container falls back to a member film's poster, which is a different film's
+    cover. The payload root wins over ``metadata`` because a client that sends
+    both means the root as the current value."""
+    urls: dict[str, str] = {}
+    for kind, keys in CONTAINER_SYNC_ARTWORK_KEYS.items():
+        for source in (payload, metadata):
+            if not isinstance(source, dict):
+                continue
+            for key in keys:
+                value = clean_text(source.get(key))
+                if value and value.startswith(("http://", "https://")):
+                    urls[kind] = value
+                    break
+            if kind in urls:
+                break
+    return urls
+
+
+def attach_container_sync_artwork(
+    conn,
+    *,
+    container_id: UUID,
+    payload: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Register pushed container artwork as a selectable option, preferred as
+    the primary one.
+
+    ``link_container_media_option`` only honours ``primary`` when the container
+    has no primary artwork of that kind yet, so a cover the user has since
+    chosen is never overwritten -- the pushed artwork simply becomes the
+    default for a container that has none. Artwork is supplementary, so each
+    attach runs in its own savepoint and a failure never fails the sync
+    mutation carrying it."""
+    for kind, source_url in container_sync_artwork_urls(payload, metadata).items():
+        try:
+            with conn.transaction():
+                link_container_media_option(
+                    conn,
+                    container_id=container_id,
+                    kind=kind,
+                    source_url=source_url,
+                    provider_id="sync",
+                    sort_order=0,
+                    primary=True,
+                )
+        except Exception:
+            app.logger.warning("Could not attach pushed container %s artwork", kind)
+
+
 def apply_container_upsert(
     conn,
     *,
@@ -16773,6 +16858,13 @@ def apply_container_upsert(
                 Jsonb(json_ready(fields["metadata"])),
             ),
         )
+
+    attach_container_sync_artwork(
+        conn,
+        container_id=entity_id,
+        payload=payload,
+        metadata=fields.get("metadata"),
+    )
 
     store_client_entity_mapping(
         conn,
@@ -27933,15 +28025,38 @@ def register_routes(flask_app: Flask) -> None:
                         c.description,
                         c.metadata,
                         c.created_at,
-                        c.updated_at
+                        c.updated_at,
+                        poster.id AS poster_asset_id,
+                        poster.storage_backend AS poster_storage_backend,
+                        poster.storage_key AS poster_storage_key,
+                        poster.source_url AS poster_source_url
                     FROM containers c
+                    -- The container's own cover, so the library shows the artwork
+                    -- the detail view already resolves from entity_media instead of
+                    -- only the subset that happens to carry a metadata URL.
+                    LEFT JOIN LATERAL (
+                        SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                        FROM entity_media em
+                        JOIN media_assets ma ON ma.id = em.media_id
+                        WHERE em.entity_type = 'container'
+                          AND em.entity_id = c.id
+                          AND em.role = 'poster'
+                          AND em.deleted_at IS NULL
+                          AND em.hidden_at IS NULL
+                          AND ma.kind = 'poster'
+                        ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                        LIMIT 1
+                    ) poster ON true
                     {where}
                     ORDER BY c.container_type, lower(c.title)
                     LIMIT 200
                     """,
                     params,
                 )
-                items = [with_preview_media_urls(row) for row in cur.fetchall()]
+                items = [
+                    with_preview_media_urls(container_list_row(row))
+                    for row in cur.fetchall()
+                ]
         return response({"status": "ok", "items": items})
 
     @flask_app.get("/api/next/containers/<container_id>")
