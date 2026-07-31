@@ -1079,12 +1079,14 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
         record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
         del record["audioTracks"]
         del record["subtitleLanguages"]
+        del record["packaging"]
         del record["poster"]
         parsed = next_movievault_v2.validate_record(
             record, contract_version=next_movievault_v2.MOVIEVAULT_V3_CONTRACT
         )
         self.assertEqual(parsed["audioTracks"], [])
         self.assertEqual(parsed["subtitleLanguages"], [])
+        self.assertEqual(parsed["packaging"], [])
 
         record_with_extra = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
         del record_with_extra["poster"]
@@ -1176,6 +1178,36 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
         self.assertEqual(parsed["audioTracks"][0]["immersiveFormat"], "some_future_format")
         self.assertEqual(len(logs.output), 2)
 
+    def test_accepts_known_packaging_values(self):
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(packaging=["steelbook", "slipcover"]),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual(parsed["packaging"], ["steelbook", "slipcover"])
+
+    def test_rejects_more_than_nine_packaging_entries(self):
+        record = self._v4_release(packaging=["keep_case"] * 10)
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+    def test_rejects_wrong_type_for_packaging_entry(self):
+        record = self._v4_release(packaging=[123])
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+    def test_unrecognized_packaging_value_is_stored_raw_and_logs_a_warning(self):
+        with self.assertLogs("app.backend.next_movievault_v2", level="WARNING") as logs:
+            parsed = next_movievault_v2.validate_record(
+                self._v4_release(packaging=["a_future_packaging_type"]),
+                contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+            )
+        self.assertEqual(parsed["packaging"], ["a_future_packaging_type"])
+        self.assertTrue(any("packaging" in message for message in logs.output))
+
     def test_box_set_record_never_carries_audio_or_subtitle_fields(self):
         with open(V4_FIXTURE_PATH, "rb") as handle:
             lines = handle.read().splitlines()
@@ -1187,11 +1219,18 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
         )
         self.assertNotIn("audioTracks", parsed)
         self.assertNotIn("subtitleLanguages", parsed)
+        self.assertNotIn("packaging", parsed)
 
         box_set_with_tracks = dict(box_set, audioTracks=[])
         with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
             next_movievault_v2.validate_record(
                 box_set_with_tracks, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
+
+        box_set_with_packaging = dict(box_set, packaging=[])
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                box_set_with_packaging, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
             )
 
 

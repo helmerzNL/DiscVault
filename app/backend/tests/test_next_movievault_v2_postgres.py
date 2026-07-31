@@ -960,6 +960,36 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         )
         self.assertEqual(release["subtitleLanguages"], ["en", "nl"])
 
+    def test_v4_full_sync_persists_packaging_matching_fixture(self):
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            release_with = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+            release_without = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000002", "limit": 1},
+            )["results"][0]
+        self.assertEqual(release_with["packaging"], ["steelbook", "slipcover"])
+        self.assertEqual(release_without["packaging"], [])
+
+    def test_v4_delta_with_different_packaging_replaces_the_value(self):
+        self._sync_full(V4_FULL_PATH)
+        base = json.loads(V4_DELTA_PATH.read_bytes().splitlines()[0])
+        self.assertEqual(base["releaseId"], "10000000-0000-0000-0000-000000000001")
+        base["revision"] = 44
+        base["packaging"] = ["digipak"]
+
+        self._apply_delta_ndjson([base], revision=44, cursor="fixture-distribution-4-r44")
+
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(release["packaging"], ["digipak"])
+
     def test_v4_full_sync_persists_empty_tracks_for_a_release_without_them(self):
         self._sync_full(V4_FULL_PATH)
         with self.connect() as conn:

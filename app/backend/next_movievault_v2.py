@@ -85,6 +85,22 @@ MAX_AUDIO_TRACKS = 50
 MAX_SUBTITLE_LANGUAGES = 50
 LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,8}(-[a-z0-9]{1,8})*$")
 
+# distribution-4 packaging enum. Same forward-compat leniency as the audio
+# track enums above - an unrecognized value is stored as-is with a logged
+# warning rather than rejecting the whole release record.
+PACKAGING_VALUES = {
+    "keep_case",
+    "amaray",
+    "steelbook",
+    "slipcover",
+    "slipcase",
+    "digibook",
+    "mediabook",
+    "digipak",
+    "box",
+}
+MAX_PACKAGING = 9
+
 logger = logging.getLogger(__name__)
 
 ConnectionFactory = Callable[[], ContextManager[Any]]
@@ -360,6 +376,23 @@ def _subtitle_languages(value: Any) -> list[str]:
     return [_language_code(item) for item in value]
 
 
+def _packaging(value: Any, *, release_id: str) -> list[str]:
+    if not isinstance(value, list) or len(value) > MAX_PACKAGING:
+        raise MovieVaultV2Error("record_invalid")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item or len(item) > 24:
+            raise MovieVaultV2Error("record_invalid")
+        if item not in PACKAGING_VALUES:
+            logger.warning(
+                "movievault_v2: unrecognized packaging value %r on release %s - storing raw value",
+                item,
+                release_id,
+            )
+        result.append(item)
+    return result
+
+
 def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, Any]:
     required = {
         "contractVersion",
@@ -388,7 +421,7 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         optional.update({"studio", "distributor", "runtimeMinutes"})
     if contract_version == MOVIEVAULT_V4_CONTRACT:
         required.add("poster")
-        required.update({"audioTracks", "subtitleLanguages"})
+        required.update({"audioTracks", "subtitleLanguages", "packaging"})
     _exact_keys(value, required=required, optional=optional)
     provider_ids = value["providerIds"]
     if not isinstance(provider_ids, dict):
@@ -450,6 +483,11 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         ),
         "subtitleLanguages": (
             _subtitle_languages(value["subtitleLanguages"])
+            if contract_version == MOVIEVAULT_V4_CONTRACT
+            else []
+        ),
+        "packaging": (
+            _packaging(value["packaging"], release_id=str(value.get("releaseId")))
             if contract_version == MOVIEVAULT_V4_CONTRACT
             else []
         ),
@@ -1764,12 +1802,12 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             generation, release_id, film_id, canonical_title, release_year,
             provider_ids, release_title, edition, format, region, country_code,
             language_code, release_date, disc_count, studio, distributor,
-            runtime_minutes, assets, revision, poster
+            runtime_minutes, assets, revision, poster, packaging
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s
+            %s, %s, %s, %s, %s
         )
         ON CONFLICT (generation, release_id) DO UPDATE
         SET film_id = EXCLUDED.film_id,
@@ -1789,7 +1827,8 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             runtime_minutes = EXCLUDED.runtime_minutes,
             assets = EXCLUDED.assets,
             revision = EXCLUDED.revision,
-            poster = EXCLUDED.poster
+            poster = EXCLUDED.poster,
+            packaging = EXCLUDED.packaging
         """,
         (
             generation,
@@ -1812,6 +1851,7 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             Jsonb(record["assets"]),
             record["revision"],
             Jsonb(record["poster"]) if record.get("poster") is not None else None,
+            Jsonb(record.get("packaging") or []),
         ),
     )
     for lookup_hash in record["eanHashes"]:
@@ -2531,6 +2571,7 @@ def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         "runtimeMinutes": row.get("runtime_minutes"),
         "assets": _json_value(row.get("assets") or []),
         "revision": int(row["revision"]),
+        "packaging": _json_value(row.get("packaging") or []),
     }
     payload.update(_poster_status_fields(conn, row.get("poster")))
     payload["audioTracks"], payload["subtitleLanguages"] = _release_track_fields(
