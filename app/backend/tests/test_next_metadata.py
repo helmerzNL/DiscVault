@@ -1420,14 +1420,54 @@ class NextMetadataPolicyTests(unittest.TestCase):
                     }
                 )
 
+                # MovieVault owns the physical release's artwork, so the poster
+                # survives in mediaUpdates (which persists it) and on the
+                # candidate the user picks from. Every other enrichment answer
+                # (overview, director, credits, localizations) stays with the
+                # enrichment provider.
                 self.assertEqual(constrained["movieUpdates"], {"title": "Alien", "year": "1979"})
                 self.assertEqual(constrained["metadataUpdates"], {"packaging": "SteelBook"})
                 self.assertEqual(constrained["technicalUpdates"], {"hdr": "HDR10"})
-                self.assertEqual(constrained["mediaUpdates"], {})
+                self.assertEqual(
+                    constrained["mediaUpdates"],
+                    {"poster": {"sourceUrl": "https://movievault.example/poster.jpg"}},
+                )
                 self.assertEqual(constrained["credits"], [])
                 self.assertEqual(constrained["localizations"], [])
-                self.assertEqual(constrained["candidates"], [{"title": "Alien", "year": "1979", "tmdbId": "348"}])
+                self.assertEqual(
+                    constrained["candidates"],
+                    [
+                        {
+                            "title": "Alien",
+                            "year": "1979",
+                            "tmdbId": "348",
+                            "posterUrl": "https://movievault.example/poster.jpg",
+                        }
+                    ],
+                )
                 self.assertEqual(constrained["raw"], {})
+
+    def test_movievault_artwork_ownership_is_limited_to_artwork(self):
+        """MovieVault may own artwork, but not the rest of enrichment -- and no
+        other plugin may supply artwork at all."""
+        payload = {
+            "movieUpdates": {"title": "Alien", "poster_url": "https://mv.example/p.jpg", "overview": "plot"},
+            "metadataUpdates": {"backdrop_url": "https://mv.example/b.jpg", "director": "Ridley Scott"},
+            "mediaUpdates": {"poster": {"sourceUrl": "https://mv.example/p.jpg"}},
+        }
+
+        movievault = metadata_source_policy_result({"pluginId": "movievault_v2", **payload})
+        self.assertEqual(
+            movievault["movieUpdates"],
+            {"title": "Alien", "poster_url": "https://mv.example/p.jpg"},
+        )
+        self.assertEqual(movievault["metadataUpdates"], {"backdrop_url": "https://mv.example/b.jpg"})
+        self.assertIn("poster", movievault["mediaUpdates"])
+
+        other = metadata_source_policy_result({"pluginId": "upcitemdb", **payload})
+        self.assertEqual(other["movieUpdates"], {"title": "Alien"})
+        self.assertEqual(other["metadataUpdates"], {})
+        self.assertEqual(other["mediaUpdates"], {})
 
     def test_non_tmdb_result_drops_legacy_free_text_genres(self):
         constrained = metadata_source_policy_result(

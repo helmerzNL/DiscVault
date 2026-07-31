@@ -42,18 +42,57 @@ def _lookup(payload, context):
 
 
 def _poster_fields(record):
-    # The core lookup already localizes the poster into an authenticated,
-    # DiscVault-served URL (/api/next/movievault-v2/posters/...) when the cache
-    # is ready; forward it verbatim so the cover reaches the PWA and iOS clients
-    # alike. A pending/unavailable poster has no URL, so nothing is forwarded.
+    # Core already resolved the poster into a URL a client can load: a
+    # DiscVault-served one for a verified cached asset, or MovieVault's stable
+    # anonymous asset URL when no checksum was published. Forward it verbatim so
+    # the cover reaches the PWA and iOS alike. A pending/unavailable poster has
+    # no URL, so nothing is forwarded.
     fields = {}
-    poster_url = record.get("posterUrl")
+    poster_url = (record or {}).get("posterUrl")
     if poster_url:
         fields["posterUrl"] = poster_url
-        poster_status = record.get("posterStatus")
+        poster_status = (record or {}).get("posterStatus")
         if poster_status:
             fields["posterStatus"] = poster_status
     return fields
+
+
+def _resolved_details(payload, context):
+    """Resolve the scanned barcode through the v2 resolver.
+
+    The synced catalog carries a poster only once a v4 index sync has published
+    one; the resolver answers per barcode and is the source the poster arrives
+    on for a freshly scanned disc. Artwork is supplementary, so any resolver
+    failure degrades to "no poster" and never fails the surrounding lookup."""
+    callback = _callback(context, "movievaultV2ReleaseDetails")
+    barcode = str((payload or {}).get("barcode") or "").strip()
+    if callback is None or not _barcode_hash(barcode):
+        return {}
+    request = {"barcode": barcode}
+    title = str((payload or {}).get("title") or "").strip()
+    if title:
+        request["title"] = title
+    try:
+        result = callback(request)
+    except Exception:
+        return {}
+    if not isinstance(result, dict) or result.get("status") not in ("canonical_hit", "external_hit"):
+        return {}
+    return result
+
+
+def _resolved_poster(details, *, box_set=False):
+    """Pick the poster a resolver hit carries.
+
+    On a box-set result the set's own cover is the more specific answer, so
+    `boxSet` wins over `release` there; `release` describes a single disc inside
+    the set. Individual members never carry their own artwork."""
+    sections = (("boxSet", "release") if box_set else ("release",))
+    for key in sections:
+        section = (details or {}).get(key)
+        if isinstance(section, dict) and section.get("posterUrl"):
+            return _poster_fields(section)
+    return {}
 
 
 def _release(record):
@@ -104,7 +143,15 @@ def search_barcode(payload, context=None):
     if records is None:
         return _error()
     release = next((item for item in records if item.get("recordType") == "release"), None)
-    return {"status": "miss", "provider": PROVIDER_ID, "items": []} if release is None else {"status": "hit", **_release(release), "items": [_release(release)]}
+    if release is None:
+        return {"status": "miss", "provider": PROVIDER_ID, "items": []}
+    # Fall back to the resolver's poster when the synced record has none yet.
+    if not (release or {}).get("posterUrl"):
+        resolved = _resolved_poster(_resolved_details(payload, context))
+        if resolved:
+            release = {**release, **resolved}
+    item = _release(release)
+    return {"status": "hit", **item, "items": [item]}
 
 
 def search_title(payload, context=None):
@@ -128,5 +175,13 @@ def box_set_candidates(payload, context=None):
     records = _lookup(payload, context)
     if records is None:
         return _error()
-    proposals = [_proposal(item) for item in records if item.get("recordType") == "box_set"]
+    box_sets = [item for item in records if item.get("recordType") == "box_set"]
+    # A scanned box-set's cover arrives on the resolver's `boxSet`, so fill it in
+    # when the synced record has none. Only the first proposal matches the
+    # scanned barcode, so the resolver's cover is applied to that one alone.
+    if box_sets and not box_sets[0].get("posterUrl"):
+        resolved = _resolved_poster(_resolved_details(payload, context), box_set=True)
+        if resolved:
+            box_sets = [{**box_sets[0], **resolved}, *box_sets[1:]]
+    proposals = [_proposal(item) for item in box_sets]
     return {"status": "hit" if proposals else "miss", "provider": PROVIDER_ID, "boxSetProposal": proposals[0] if proposals else {}, "boxSetProposals": proposals, "items": proposals}
