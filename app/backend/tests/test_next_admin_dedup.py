@@ -827,10 +827,15 @@ class SyncDedupScriptContainerTests(unittest.TestCase):
         self.assertEqual(sorted(barcode_groups[mod.normalize_barcode(bc)]), [1, 2])
 
     def test_detect_container_groups_by_title_year(self):
-        """detect_container_groups returns titleYear duplicates."""
+        """detect_container_groups groups same-title containers by container_type,
+        not by year -- containers have no year concept the way movies do."""
         mod = self.mod
-        c1 = self._make_container(id=1, title="The Marvel Collection", year=2019, movie_count=5)
-        c2 = self._make_container(id=2, title="The Marvel Collection", year=2019, movie_count=2)
+        c1 = self._make_container(
+            id=1, title="The Marvel Collection", container_type="box_set", movie_count=5
+        )
+        c2 = self._make_container(
+            id=2, title="The Marvel Collection", container_type="box_set", movie_count=2
+        )
 
         conn = mock.MagicMock()
         conn.cursor.return_value.__enter__ = lambda s: conn.cursor.return_value
@@ -840,7 +845,51 @@ class SyncDedupScriptContainerTests(unittest.TestCase):
         groups, _ = mod.detect_container_groups(conn)
         title_groups = groups["titleYear"]
         norm = mod.normalize_title("The Marvel Collection")
-        self.assertIn((norm, "2019"), title_groups)
+        self.assertIn((norm, "box_set"), title_groups)
+
+    def test_detect_container_groups_by_title_does_not_cross_container_type(self):
+        """A vault and a collection sharing a title must never group together --
+        only container_type disambiguates them, since neither carries a year."""
+        mod = self.mod
+        c1 = self._make_container(id=1, title="Kids", container_type="vault", movie_count=5)
+        c2 = self._make_container(id=2, title="Kids", container_type="collection", movie_count=2)
+
+        conn = mock.MagicMock()
+        conn.cursor.return_value.__enter__ = lambda s: conn.cursor.return_value
+        conn.cursor.return_value.__exit__ = mock.MagicMock(return_value=False)
+        conn.cursor.return_value.fetchall.return_value = [c1, c2]
+
+        groups, _ = mod.detect_container_groups(conn)
+        title_groups = groups["titleYear"]
+        norm = mod.normalize_title("Kids")
+        self.assertNotIn((norm, "vault"), title_groups)
+        self.assertNotIn((norm, "collection"), title_groups)
+
+    def test_fetch_live_containers_covers_vault_and_collection(self):
+        """_fetch_live_containers must not filter to container_type = 'box_set'
+        only -- that was the one thing hiding vault/collection duplicates from
+        this whole script."""
+        mod = self.mod
+        conn = mock.MagicMock()
+        captured_sql = {}
+
+        def _execute(sql, params=()):
+            captured_sql["sql"] = " ".join(sql.split())
+            captured_sql["params"] = params
+
+        conn.cursor.return_value.__enter__ = lambda s: conn.cursor.return_value
+        conn.cursor.return_value.__exit__ = mock.MagicMock(return_value=False)
+        conn.cursor.return_value.execute.side_effect = _execute
+        conn.cursor.return_value.fetchall.return_value = []
+
+        mod._fetch_live_containers(conn)
+        self.assertNotIn("container_type = 'box_set'", captured_sql["sql"])
+        self.assertNotIn("container_type", captured_sql["sql"])
+
+        conn.cursor.return_value.execute.side_effect = _execute
+        mod._fetch_live_containers(conn, container_types=["vault", "collection"])
+        self.assertIn("container_type IN (%s, %s)", captured_sql["sql"])
+        self.assertEqual(list(captured_sql["params"]), ["vault", "collection"])
 
     def test_choose_container_winner_prefers_more_movies(self):
         """Container with more movies wins."""

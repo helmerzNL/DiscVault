@@ -3,10 +3,10 @@
 from types import MappingProxyType
 
 
-IDENTITY_FIXTURE_SOURCE_COMMIT = "fb78a04cdc1908757becf88e3a551da9ff7c7ffe"
-IDENTITY_FIXTURE_SOURCE_PR = "https://github.com/Flux76HQ/App-Guidance/pull/17"
+IDENTITY_FIXTURE_SOURCE_COMMIT = "f9b22b88ddb3fadd043b4eada33ed8b0c64edd43"
+IDENTITY_FIXTURE_SOURCE_PR = "https://github.com/Flux76HQ/App-Guidance/pull/22"
 IDENTITY_FIXTURE_SHA256_CRLF = (
-    "afa4f3c00877cce61fb4237e4ccf0a93f99c3149adab8b6b2466365182b550d6"
+    "6adc13a87272bfec621c6d98c1e96d2acb34d51384c058d20cabbbf64a236d4c"
 )
 
 IDENTITY_FIXTURE_RUNNERS = MappingProxyType(
@@ -14,6 +14,8 @@ IDENTITY_FIXTURE_RUNNERS = MappingProxyType(
         "cases": "_run_ladder_cases",
         "identifier_cases": "_run_identifier_cases",
         "merge_winner_cases": "_run_merge_winner_cases",
+        "container_cases": "_run_container_cases",
+        "container_merge_winner_cases": "_run_container_merge_winner_cases",
     }
 )
 

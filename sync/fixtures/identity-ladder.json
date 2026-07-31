@@ -1,6 +1,6 @@
 {
-  "$schema_note": "Taalonafhankelijke fixtures voor de DiscVault-identiteitsladder (sync-contract.md §2). Server, iOS en Android draaien alle top-level testcategorieën en falen gesloten op onbekende categorieën. 'expected' is het verwachte laddereindresultaat voor het paar (a, b). match_tier geeft de trede die het besluit neemt; null bij no-match. context 'create' = gewone create-pad (trede 4 inactief); 'reconcile' = first-connect-adoptiepad (trede 4 actief). 'identifier_cases' pinnen hoe de TMDB- en MovieVault-id uit identifier-records worden gehaald. Divergentie tussen implementaties hoort hier een falende test te zijn, niet een duplicaat in een collectie.",
-  "version": "1.1",
+  "$schema_note": "Taalonafhankelijke fixtures voor de DiscVault-identiteitsladder (sync-contract.md §2 voor films, §2b voor containers). Server, iOS en Android draaien alle top-level testcategorieën en falen gesloten op onbekende categorieën. 'expected' is het verwachte laddereindresultaat voor het paar (a, b). match_tier geeft de trede die het besluit neemt; null bij no-match — voor films: clientId/barcode/tmdbEdition/titleYear; voor containers: clientId/barcode/containerIdentifier/titleType. context 'create' = gewone create-pad (trede 4 inactief); 'reconcile' = first-connect-adoptiepad (trede 4 actief). 'identifier_cases' pinnen hoe de TMDB- en MovieVault-id uit identifier-records worden gehaald (films). 'container_cases' en 'container_merge_winner_cases' zijn de containeranaloga van 'cases' en 'merge_winner_cases' (sync-contract.md §2b/§8b) — 'container_type' ('box_set'/'vault'/'collection') is nooit een uitzondering: het scoped alléén trede 2 (barcode) en telt mee op trede 4 (titel). Divergentie tussen implementaties hoort hier een falende test te zijn, niet een duplicaat in een collectie.",
+  "version": "1.2",
   "generated_from": "productie dry-run 2026-07-22 + contract-randgevallen",
   "cases": [
     {
@@ -223,6 +223,127 @@
       ],
       "expected_tmdb_id": null,
       "expected_movievault_id": null
+    }
+  ],
+  "container_cases": [
+    {
+      "id": "container-tier1-same-token",
+      "description": "Zelfde per-record token is altijd dezelfde container.",
+      "context": "create",
+      "a": { "client_id": "ctok-1", "title": "Ocean's Trilogy", "container_type": "box_set" },
+      "b": { "client_id": "ctok-1", "title": "Ocean's Trilogy", "container_type": "box_set" },
+      "expected": "match",
+      "match_tier": "clientId"
+    },
+    {
+      "id": "container-tier2-same-barcode",
+      "description": "Gelijke barcode, gelijk container_type: match.",
+      "context": "create",
+      "a": { "barcode": "5051888240816", "title": "The Lord of the Rings Trilogy", "container_type": "box_set" },
+      "b": { "barcode": "5051888240816", "title": "The Lord of the Rings Trilogy", "container_type": "box_set" },
+      "expected": "match",
+      "match_tier": "barcode"
+    },
+    {
+      "id": "container-tier2-diff-barcode-blocks",
+      "description": "Twee verschillende barcodes op dezelfde titel = twee verschillende verpakkingen (bv. een US- en een EU-uitgave van dezelfde box-set). Definitief geen match.",
+      "context": "reconcile",
+      "a": { "barcode": "5051888240816", "title": "The Lord of the Rings Trilogy", "container_type": "box_set" },
+      "b": { "barcode": "7321900123456", "title": "The Lord of the Rings Trilogy", "container_type": "box_set" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "container-tier2-type-scoped",
+      "description": "Gedeelde barcode tussen een box set en een vault mag nooit over container_type heen adopteren — container_type scoped trede 2.",
+      "context": "create",
+      "a": { "barcode": "5051888240816", "title": "Kids", "container_type": "box_set" },
+      "b": { "barcode": "5051888240816", "title": "Kids", "container_type": "vault" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "container-tier3-identifier-match",
+      "description": "Zelfde externe identifier + container_type, consistente titel: match.",
+      "context": "create",
+      "a": { "container_identifier": "tmdb-collection-2344", "title": "The Lord of the Rings Collection", "container_type": "collection" },
+      "b": { "container_identifier": "tmdb-collection-2344", "title": "The Lord of the Rings Collection", "container_type": "collection" },
+      "expected": "match",
+      "match_tier": "containerIdentifier"
+    },
+    {
+      "id": "container-tier3-sanity-check",
+      "description": "Zelfde (foute) externe identifier op twee duidelijk verschillende titels: sanity-check blokkeert de merge, net als filmtrede 3.",
+      "context": "create",
+      "a": { "container_identifier": "tmdb-collection-9999", "title": "Kids Vault", "container_type": "vault" },
+      "b": { "container_identifier": "tmdb-collection-9999", "title": "Horror Vault", "container_type": "vault" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "container-tier4-title-type-reconcile",
+      "description": "Geen token/barcode/identifier, maar zelfde genormaliseerde titel + container_type, in reconcile-context: match op trede 4.",
+      "context": "reconcile",
+      "a": { "title": "Kids", "container_type": "vault" },
+      "b": { "title": "Kids", "container_type": "vault" },
+      "expected": "match",
+      "match_tier": "titleType"
+    },
+    {
+      "id": "container-tier4-inactive-on-create",
+      "description": "Zelfde titel+container_type maar op het create-pad: trede 4 is daar inactief, dus geen match (wordt een nieuw record).",
+      "context": "create",
+      "a": { "title": "Kids", "container_type": "vault" },
+      "b": { "title": "Kids", "container_type": "vault" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "container-tier4-diff-type-not-match",
+      "description": "Zelfde titel, ander container_type (box set vs collection): geen match, zelfs in reconcile — container_type telt mee op trede 4.",
+      "context": "reconcile",
+      "a": { "title": "Marvel Cinematic Universe", "container_type": "box_set" },
+      "b": { "title": "Marvel Cinematic Universe", "container_type": "collection" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "container-norm-english-the-stripped",
+      "description": "Titelnormalisatie werkt identiek voor containers als voor films: alleen 'the' wordt gestript. Geen apart normalisatiepad.",
+      "context": "reconcile",
+      "a": { "title": "The Cornetto Trilogy", "container_type": "box_set" },
+      "b": { "title": "Cornetto Trilogy", "container_type": "box_set" },
+      "expected": "match",
+      "match_tier": "titleType"
+    }
+  ],
+  "container_merge_winner_cases": [
+    {
+      "id": "container-winner-most-relations",
+      "description": "Bij een terechte merge wint de container met de meeste relaties (leden + identifiers). Containeranalogon van winner-most-userdata.",
+      "records": [
+        { "id": "populated", "member_count": 3, "identifier_count": 1, "has_badge_label": true, "has_description": true, "created_at": "2026-07-12T04:17:18Z" },
+        { "id": "empty-duplicate", "member_count": 0, "identifier_count": 0, "has_badge_label": false, "has_description": false, "created_at": "2026-07-13T12:43:59Z" }
+      ],
+      "expected_winner": "populated"
+    },
+    {
+      "id": "container-winner-members-beat-oldest",
+      "description": "Ledenaantal weegt zwaar: een container met leden verliest niet van een oudere, lege container. Containeranalogon van winner-watch-history-beats-oldest.",
+      "records": [
+        { "id": "older-empty", "member_count": 0, "identifier_count": 0, "has_badge_label": false, "has_description": false, "created_at": "2026-07-12T14:08:54Z" },
+        { "id": "newer-with-members", "member_count": 2, "identifier_count": 0, "has_badge_label": false, "has_description": false, "created_at": "2026-07-12T19:29:48Z" }
+      ],
+      "expected_winner": "newer-with-members"
+    },
+    {
+      "id": "container-winner-tiebreak-oldest",
+      "description": "Gelijke user-data-score: oudste created_at wint als tiebreaker.",
+      "records": [
+        { "id": "first", "member_count": 0, "identifier_count": 0, "has_badge_label": false, "has_description": false, "created_at": "2026-07-13T12:43:58.805Z" },
+        { "id": "second", "member_count": 0, "identifier_count": 0, "has_badge_label": false, "has_description": false, "created_at": "2026-07-13T12:43:58.888Z" }
+      ],
+      "expected_winner": "first"
     }
   ],
   "merge_winner_cases": [

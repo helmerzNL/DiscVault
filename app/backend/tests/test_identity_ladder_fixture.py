@@ -290,6 +290,107 @@ class IdentityLadderFixtureRunner:
             executed.append(case["id"])
         return executed
 
+    @classmethod
+    def _classify_container_case(cls, case):
+        """Mirror _classify_ladder_case for the container ladder (contract §2b).
+
+        Same stub-callback approach: the fixture only needs to prove the
+        *orchestration* (match_existing_container/match_reconcile_container)
+        picks the right tier in the right order, so the callbacks are simple
+        equality checks rather than real DB lookups.
+        """
+        left = case["a"]
+        right = case["b"]
+        marker = "fixture-match"
+
+        left_token = str(left.get("client_id") or "").strip()
+        right_token = str(right.get("client_id") or "").strip()
+        same_token = bool(left_token and left_token == right_token)
+
+        left_barcode = merge.normalize_barcode(left.get("barcode"))
+        right_barcode = merge.normalize_barcode(right.get("barcode"))
+        left_type = left.get("container_type")
+        right_type = right.get("container_type")
+        barcode_conflict = bool(left_barcode and right_barcode and left_barcode != right_barcode)
+        same_barcode = bool(left_barcode and left_barcode == right_barcode and left_type == right_type)
+
+        left_identifier = left.get("container_identifier")
+        right_identifier = right.get("container_identifier")
+        left_title_norm = merge.normalize_title(left.get("title"))
+        right_title_norm = merge.normalize_title(right.get("title"))
+        identifier_title_conflict = bool(
+            left_title_norm and right_title_norm and left_title_norm != right_title_norm
+        )
+        same_identifier = bool(
+            left_identifier
+            and left_identifier == right_identifier
+            and left_type == right_type
+            and not barcode_conflict
+            and not identifier_title_conflict
+        )
+        identifier_type_value = "external_id" if left_identifier else None
+
+        title_type_matches = bool(
+            left_title_norm
+            and left_title_norm == right_title_norm
+            and left_type
+            and left_type == right_type
+            and not barcode_conflict
+        )
+
+        callbacks = {
+            "find_by_client_id": lambda: marker if same_token else None,
+            "find_by_barcode": lambda: marker if same_barcode else None,
+            "find_by_identifier": lambda: marker if same_identifier else None,
+        }
+        if case["context"] == "create":
+            return next_app.match_existing_container(
+                persistent_client_id=left_token or None,
+                barcode_normalized=left_barcode,
+                identifier_type=identifier_type_value,
+                identifier=left_identifier,
+                container_type=left_type,
+                **callbacks,
+            )
+        if case["context"] == "reconcile":
+            return next_app.match_reconcile_container(
+                persistent_client_id=left_token or None,
+                barcode_normalized=left_barcode,
+                identifier_type=identifier_type_value,
+                identifier=left_identifier,
+                container_type=left_type,
+                title=left.get("title"),
+                find_by_title_type=lambda: marker if title_type_matches else None,
+                **callbacks,
+            )
+        raise AssertionError(
+            f"[{case['id']}] unknown identity fixture context {case['context']!r}."
+        )
+
+    @classmethod
+    def _run_container_cases(cls, cases):
+        executed = []
+        for case in cases:
+            container_id, matched_by = cls._classify_container_case(case)
+            expected = case["expected"]
+            if expected == "match":
+                if container_id is None or matched_by != case["match_tier"]:
+                    raise AssertionError(
+                        f"[{case['id']}] expected {case['match_tier']} match, "
+                        f"got container_id={container_id!r}, matchedBy={matched_by!r}."
+                    )
+            elif expected == "no_match":
+                if container_id is not None:
+                    raise AssertionError(
+                        f"[{case['id']}] expected no firm match, got {matched_by!r}."
+                    )
+            else:
+                raise AssertionError(
+                    f"[{case['id']}] unknown expected value {expected!r}."
+                )
+            executed.append(case["id"])
+        return executed
+
     @staticmethod
     def _run_merge_winner_cases(cases):
         executed = []
@@ -308,6 +409,40 @@ class IdentityLadderFixtureRunner:
                     },
                 }
             winner, _losers, _scores, _reasons, _decision = merge._choose_winner(
+                _ScoreConnection(), list(by_id), by_id
+            )
+            if winner != case["expected_winner"]:
+                raise AssertionError(
+                    f"[{case['id']}] expected winner {case['expected_winner']!r}, "
+                    f"got {winner!r}."
+                )
+            executed.append(case["id"])
+        return executed
+
+    @staticmethod
+    def _run_container_merge_winner_cases(cases):
+        """Mirror _run_merge_winner_cases for containers (contract §8b).
+
+        _score_container's relation-table counts (container_identifiers,
+        container_movies, collection_items) go through _ScoreCursor, which
+        always reports zero rows -- same limitation the movie winner test
+        already accepts. member_count/badge/description are enough to
+        exercise every case here without a real connection.
+        """
+        executed = []
+        for case in cases:
+            by_id = {}
+            for record in case["records"]:
+                by_id[record["id"]] = {
+                    "movie_count": record["member_count"],
+                    "notes": None,
+                    "description": "x" if record["has_description"] else None,
+                    "badge_label": "x" if record["has_badge_label"] else None,
+                    "created_at": datetime.fromisoformat(
+                        record["created_at"].replace("Z", "+00:00")
+                    ),
+                }
+            winner, _losers = merge._choose_container_winner(
                 _ScoreConnection(), list(by_id), by_id
             )
             if winner != case["expected_winner"]:
@@ -344,7 +479,13 @@ class FixtureCategoryCoverageTests(unittest.TestCase):
         executed = self.runner.run_all()
         self.assertEqual(
             {category: len(case_ids) for category, case_ids in executed.items()},
-            {"cases": 19, "merge_winner_cases": 3, "identifier_cases": 5},
+            {
+                "cases": 19,
+                "container_cases": 10,
+                "merge_winner_cases": 3,
+                "container_merge_winner_cases": 3,
+                "identifier_cases": 5,
+            },
         )
         self.assertEqual(
             executed["identifier_cases"],
