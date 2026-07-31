@@ -116,6 +116,56 @@ class SearchBarcodeResolverFallbackTests(unittest.TestCase):
         self.assertEqual(movievault_v2._resolved_technical(details), {})
 
 
+class MovieDetailsRefreshTests(unittest.TestCase):
+    """A metadata refresh reaches this entrypoint, and `movievault_identification_plan` hands it
+    the movie's stored `movieVaultId` — never a `releaseId`. Reading only `releaseId`/`id` meant
+    the lookup ran with an empty string, the catalog raised `record_invalid`, and the whole
+    plugin execution failed — so a refresh returned no audio/subtitles/packaging at all."""
+
+    RELEASE_ID = "10000000-0000-0000-0000-000000000001"
+
+    def _context(self, *, raises=False, seen=None):
+        def lookup(request):
+            if seen is not None:
+                seen.append(request)
+            if raises:
+                raise RuntimeError("catalog unavailable")
+            return {"results": [_synced_release()]}
+
+        return {"movievaultV2Lookup": lookup}
+
+    def test_a_refresh_payload_carrying_movie_vault_id_reaches_the_catalog(self):
+        seen = []
+        result = movievault_v2.movie_details(
+            {"movieVaultId": self.RELEASE_ID, "title": "Example Film"},
+            self._context(seen=seen),
+        )
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(seen[0]["releaseId"], self.RELEASE_ID)
+        self.assertEqual(result["movie"]["audioTracks"], _AUDIO_TRACKS)
+        self.assertEqual(result["movie"]["packaging"], _PACKAGING)
+
+    def test_a_non_uuid_legacy_id_is_not_looked_up_as_a_v4_release(self):
+        # A movievault_26-era id lives in another namespace; treating it as a v4 release UUID
+        # would silently return a different disc's technical data.
+        seen = []
+        result = movievault_v2.movie_details({"movieVaultId": "mv_matrix"}, self._context(seen=seen))
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(seen, [])
+
+    def test_a_missing_id_is_a_clean_miss(self):
+        seen = []
+        result = movievault_v2.movie_details({"title": "Example Film"}, self._context(seen=seen))
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(seen, [])
+
+    def test_a_raising_catalog_degrades_to_a_miss_instead_of_failing_the_execution(self):
+        result = movievault_v2.movie_details(
+            {"releaseId": self.RELEASE_ID}, self._context(raises=True)
+        )
+        self.assertEqual(result["status"], "miss")
+
+
 class MetadataPipelineIntegrationTests(unittest.TestCase):
     """Confirms the plugin's output actually reaches next_metadata's
     technical_updates/movie_updates buckets end to end - not just that the
