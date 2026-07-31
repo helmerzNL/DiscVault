@@ -377,6 +377,7 @@ MOVIE_FIELD_ALIASES = {
     "content_ratings": "content_ratings",
     "audioTracks": "audio_tracks",
     "audio_tracks": "audio_tracks",
+    "subtitleLanguages": "subtitles",
     "screenRatios": "screen_ratios",
     "screen_ratios": "screen_ratios",
 }
