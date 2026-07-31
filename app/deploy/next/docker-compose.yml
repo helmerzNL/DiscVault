@@ -94,8 +94,9 @@ services:
       - ${DISCVAULT_DATA_DIR}:/data
     depends_on:
       next-api:
-        # The worker waits for PostgreSQL itself and only reads jobs, so it does
-        # not need a migrated schema to be up before it starts.
+        # Ordering only. The worker waits for PostgreSQL and for the
+        # background_jobs table itself, so it does not need next-api to be
+        # *healthy* (migrated) before it starts.
         condition: service_started
     healthcheck:
       disable: true

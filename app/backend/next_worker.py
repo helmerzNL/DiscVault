@@ -45,6 +45,7 @@ try:
     from .next_backup import restore_functional_backup
     from .next_price_alerts import PRICE_ALERT_JOB_TYPE
     from .next_price_alerts import run_price_alert_sweep
+    from .next_database import db_wait_timeout
     from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
@@ -72,6 +73,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_backup import restore_functional_backup
     from next_price_alerts import PRICE_ALERT_JOB_TYPE
     from next_price_alerts import run_price_alert_sweep
+    from next_database import db_wait_timeout
     from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
@@ -112,6 +114,52 @@ def background_jobs_ready(conn) -> bool:
         cur.execute("SELECT to_regclass('public.background_jobs') AS table_name")
         row = cur.fetchone()
     return bool(row and row.get("table_name"))
+
+
+def wait_for_background_jobs_table(
+    connect_fn,
+    timeout: float | None = None,
+    *,
+    initial_delay: float = 0.5,
+    max_delay: float = 5.0,
+    sleep=time.sleep,
+    monotonic=time.monotonic,
+    log=None,
+) -> None:
+    """Poll until `background_jobs` exists, or the timeout expires.
+
+    `next-api` creates the table as part of its migration run, which can still
+    be in progress when the worker starts (it only waits for postgres to have
+    *started*). Without this, `work_loop()` would call `run_once()` every
+    `poll_interval` while it returns its "waiting" status, which is needless
+    DB polling and log spam until the migration catches up. This is
+    best-effort: on timeout the loop starts anyway and `run_once()` keeps
+    reporting "waiting" as it already did before this wait existed.
+    """
+    log = log or (lambda message: print(message, file=sys.stderr, flush=True))
+    if timeout is None:
+        timeout = db_wait_timeout()
+
+    deadline = monotonic() + timeout
+    delay = initial_delay
+    attempt = 0
+
+    while True:
+        attempt += 1
+        with connect_fn() as conn:
+            if background_jobs_ready(conn):
+                return
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            log(
+                "Gave up waiting for the background_jobs table after "
+                f"{timeout:g}s ({attempt} attempts); starting the poll loop anyway."
+            )
+            return
+        if attempt == 1:
+            log("Waiting for migrations to create background_jobs...")
+        sleep(min(delay, max_delay, remaining))
+        delay = min(delay * 2, max_delay)
 
 
 def table_exists(conn, table_name: str) -> bool:
@@ -2576,6 +2624,10 @@ def main(argv: list[str] | None = None) -> int:
     # already up, so it fails fast instead — the same split the `tools`-profile
     # compose services use.
     wait_for_database(connect_fn=connect).close()
+    # next-api creates background_jobs as part of its migration run, which may
+    # still be in progress here. Without this, work_loop() would spam
+    # run_once()'s "waiting" status every poll interval until it catches up.
+    wait_for_background_jobs_table(connect)
     return work_loop(args.worker_id, args.poll_interval)
 
 

@@ -68,7 +68,9 @@ services:
     restart: unless-stopped
     depends_on:
       next-api:
-        # The worker waits for PostgreSQL itself; it does not need the API up.
+        # Ordering only. The worker waits for PostgreSQL and for the
+        # background_jobs table itself, so it does not need next-api to be
+        # *healthy* (migrated) before it starts.
         condition: service_started
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-discvault_next}:${POSTGRES_PASSWORD:-discvault_next_dev}@postgres:5432/${POSTGRES_DB:-discvault_next}
