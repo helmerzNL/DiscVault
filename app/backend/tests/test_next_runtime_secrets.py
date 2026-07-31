@@ -9,6 +9,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 repo_root = Path(__file__).resolve().parents[3]
@@ -144,6 +145,45 @@ class RuntimeSecretTests(unittest.TestCase):
             self.assertEqual(next_worker.main(["run-once", "--worker-id", "test-worker"]), 0)
 
         run_once.assert_called_once_with("test-worker")
+
+    def test_run_once_does_not_wait_for_the_database(self):
+        # `run-once` is invoked by hand against a stack that is already up, so it
+        # must reach run_once() without opening a connection first.
+        with (
+            patch.dict(os.environ, {"JWT_SECRET": "worker-startup-test-secret"}, clear=True),
+            patch.object(next_worker, "run_once", return_value=0),
+            patch.object(next_worker, "wait_for_database") as wait_for_database,
+            patch.object(next_worker.signal, "signal"),
+        ):
+            self.assertEqual(next_worker.main(["run-once"]), 0)
+
+        wait_for_database.assert_not_called()
+
+    def test_work_waits_for_the_database_before_looping(self):
+        # `work` is the container entry point and starts alongside postgres, so it
+        # must wait, and must do so before the loop touches any table.
+        calls = []
+
+        with (
+            patch.dict(os.environ, {"JWT_SECRET": "worker-startup-test-secret"}, clear=True),
+            patch.object(
+                next_worker,
+                "wait_for_database",
+                side_effect=lambda **kwargs: calls.append("wait") or MagicMock(),
+            ) as wait_for_database,
+            patch.object(
+                next_worker,
+                "work_loop",
+                side_effect=lambda *a: calls.append("loop") or 0,
+            ),
+            patch.object(next_worker.signal, "signal"),
+        ):
+            self.assertEqual(next_worker.main(["work"]), 0)
+
+        self.assertEqual(calls, ["wait", "loop"])
+        self.assertIs(
+            wait_for_database.call_args.kwargs["connect_fn"], next_worker.connect
+        )
 
 
 if __name__ == "__main__":

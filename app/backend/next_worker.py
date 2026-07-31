@@ -2568,11 +2568,14 @@ def main(argv: list[str] | None = None) -> int:
     validate_runtime_secrets()
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
-    # The worker only waits for postgres to have started, so it may well be the
-    # first thing knocking while the database is still coming up.
-    wait_for_database(connect_fn=connect).close()
     if args.command == "run-once":
         return run_once(args.worker_id)
+    # `work` is the container entry point and only depends on postgres having
+    # *started*, so it may be the first thing knocking while the database is
+    # still coming up. `run-once` is invoked by hand against a stack that is
+    # already up, so it fails fast instead — the same split the `tools`-profile
+    # compose services use.
+    wait_for_database(connect_fn=connect).close()
     return work_loop(args.worker_id, args.poll_interval)
 
 
