@@ -26702,6 +26702,7 @@ def ui_preview_html(
     const MOVIE_EDIT_LOCK_FIELDS = {
       movieEditTitle: "title",
       movieEditOriginalTitle: "original_title",
+      movieEditReleaseTitle: "release_title",
       movieEditSortTitle: "sort_title",
       movieEditYear: "year",
       movieEditBarcode: "barcode",

@@ -9426,41 +9426,65 @@ def movie_edit_receiver_proposal(
     }
 
 
+# The `movies` columns every sync payload carries, shared by the two builders
+# below so they cannot drift apart again.
+#
+# They did drift. `all_movie_entities` (bootstrap) and `movie_entity` (delta)
+# were two hand-maintained SELECT lists, and `release_title` had been added to
+# the delta alone — so the field synced on an edit and vanished on a fresh
+# install. Nothing failed, because the delta is the path anyone testing by hand
+# exercises. See `tests/test_next_movie_sync_payload_parity.py`.
+_MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
+    "id",
+    "public_id",
+    "barcode",
+    "title",
+    "sort_title",
+    "original_title",
+    "release_title",
+    "year",
+    "release_date",
+    "format",
+    "edition",
+    "edition_type",
+    "country",
+    "language",
+    "runtime_minutes",
+    "overview",
+    "notes",
+    "rating",
+    "purchase_date",
+    "purchase_price",
+    "estimated_value",
+    "estimated_value_currency",
+    "location",
+    "metadata",
+    "created_at",
+    "updated_at",
+)
+
+# What the delta legitimately carries on top: routing and tombstone state a
+# bootstrap has no use for. Declared rather than implied, so the parity test can
+# assert the difference is exactly this and no wider.
+_MOVIE_ENTITY_ONLY_COLUMNS: tuple[str, ...] = (
+    "location_id",
+    "owner_id",
+    "client_id",
+    "deleted_at",
+)
+
+
+def _movie_select_columns(columns: tuple[str, ...], *, prefix: str = "") -> str:
+    qualified = f"{prefix}." if prefix else ""
+    return ",\n                ".join(f"{qualified}{column}" for column in columns)
+
+
 def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                id,
-                public_id,
-                barcode,
-                title,
-                sort_title,
-                original_title,
-                release_title,
-                year,
-                release_date,
-                format,
-                edition,
-                edition_type,
-                country,
-                language,
-                runtime_minutes,
-                overview,
-                notes,
-                rating,
-                purchase_date,
-                purchase_price,
-                estimated_value,
-                estimated_value_currency,
-                location,
-                location_id,
-                owner_id,
-                client_id,
-                deleted_at,
-                metadata,
-                created_at,
-                updated_at
+                {_movie_select_columns(_MOVIE_SYNC_COLUMNS + _MOVIE_ENTITY_ONLY_COLUMNS)}
             FROM movies
             WHERE id=%s
             """,
@@ -9553,34 +9577,49 @@ def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         return cur.fetchone()
 
 
-# The technical-profile keys as they appear on the sync wire, mapped from the
-# column that holds them. snake_case of the distribution-4 vocabulary, so a
-# reader sees the same names the feed uses rather than DiscVault-only spellings
-# — which is also why two of them are renamed: the column `hdr` is a list of HDR
-# formats, and `regions` is the disc region-code set.
-MOVIE_TECHNICAL_SYNC_KEYS: dict[str, str] = {
-    "hdr": "hdr_formats",
-    "screen_ratios": "screen_ratios",
-    "disc_regions": "disc_regions",
-    "packaging": "packaging",
-    "audio_tracks": "audio_tracks",
-    "subtitles": "subtitles",
-    "video_resolution": "video_resolution",
-    "video_codecs": "video_codecs",
+# The technical-profile columns, mapped to the key they take on the sync wire
+# and the value that stands for "this movie has nothing recorded here".
+#
+# snake_case of the distribution-4 vocabulary, so a reader sees the names the
+# feed uses rather than DiscVault-only spellings — which is why two are renamed:
+# the column `hdr` is a list of HDR formats, and `regions` is the disc
+# region-code set.
+#
+# Load-bearing. `_TECHNICAL_SYNC_COLUMNS` and `attach_movie_technical_specs`
+# below are both derived from this, so a field cannot be added to one and
+# forgotten in the other. It was documentation-only until now, referenced
+# nowhere — and it had already drifted: it named `disc_regions` as a *column*,
+# which is the wire name. Nothing caught that because nothing read it.
+MOVIE_TECHNICAL_SYNC_KEYS: dict[str, tuple[str, Any]] = {
+    "hdr": ("hdr_formats", []),
+    "screen_ratios": ("screen_ratios", []),
+    "regions": ("disc_regions", []),
+    "packaging": ("packaging", []),
+    "audio_tracks": ("audio_tracks", []),
+    "subtitles": ("subtitles", []),
+    "video_resolution": ("video_resolution", None),
+    "video_codecs": ("video_codecs", []),
+    # A map {countryCode: rating}, so its empty is `{}` rather than `[]`. Push
+    # has accepted this for as long as the technical edits have existed, but it
+    # was never published, so a client could set it and never read it back
+    # (sync-contract §4.8).
+    "content_ratings": ("content_ratings", {}),
 }
 
-# `regions` is the column; `disc_regions` is the wire name. Kept apart from the
-# map above so the SELECT below can stay a plain column list.
-_TECHNICAL_SYNC_COLUMNS = (
-    "hdr",
-    "screen_ratios",
-    "regions",
-    "packaging",
-    "audio_tracks",
-    "subtitles",
-    "video_resolution",
-    "video_codecs",
-)
+_TECHNICAL_SYNC_COLUMNS: tuple[str, ...] = tuple(MOVIE_TECHNICAL_SYNC_KEYS)
+
+
+def _empty_technical_profile() -> dict[str, Any]:
+    """A fresh set of empties, built per movie.
+
+    The lists and maps must not be shared between rows: one `dict` reused
+    across a 1000-movie bootstrap hands every movie the *same* list object, and
+    a later mutation of one would show up on all of them.
+    """
+    return {
+        wire: empty.copy() if isinstance(empty, (list, dict)) else empty
+        for wire, empty in MOVIE_TECHNICAL_SYNC_KEYS.values()
+    }
 
 
 def attach_movie_technical_specs(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -9596,20 +9635,13 @@ def attach_movie_technical_specs(conn, movies: list[dict[str, Any]]) -> list[dic
     that never mentions the field, but the wrong one here: this payload *is*
     the server's opinion, and "this movie has no technical data" has to be
     expressible.
+
+    Every key is derived from `MOVIE_TECHNICAL_SYNC_KEYS`, including the empty
+    it falls back to, so adding a column there is the whole change.
     """
-    empty: dict[str, Any] = {
-        "hdr_formats": [],
-        "screen_ratios": [],
-        "disc_regions": [],
-        "packaging": [],
-        "audio_tracks": [],
-        "subtitles": [],
-        "video_resolution": None,
-        "video_codecs": [],
-    }
     if not movies or not table_exists(conn, "movie_technical_specs"):
         for movie in movies:
-            movie.update(empty)
+            movie.update(_empty_technical_profile())
         return movies
     movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
     specs_by_movie: dict[str, dict[str, Any]] = {}
@@ -9625,16 +9657,13 @@ def attach_movie_technical_specs(conn, movies: list[dict[str, Any]]) -> list[dic
     for movie in movies:
         row = specs_by_movie.get(str(movie.get("id")))
         if row is None:
-            movie.update(empty)
+            movie.update(_empty_technical_profile())
             continue
-        movie["hdr_formats"] = row.get("hdr") or []
-        movie["screen_ratios"] = row.get("screen_ratios") or []
-        movie["disc_regions"] = row.get("regions") or []
-        movie["packaging"] = row.get("packaging") or []
-        movie["audio_tracks"] = row.get("audio_tracks") or []
-        movie["subtitles"] = row.get("subtitles") or []
-        movie["video_resolution"] = row.get("video_resolution")
-        movie["video_codecs"] = row.get("video_codecs") or []
+        for column, (wire, empty) in MOVIE_TECHNICAL_SYNC_KEYS.items():
+            value = row.get(column)
+            if value is None:
+                value = empty.copy() if isinstance(empty, (list, dict)) else empty
+            movie[wire] = value
     return movies
 
 
@@ -15787,35 +15816,12 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
     if not table_exists(conn, "movies"):
         return []
     visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
+    select_columns = _movie_select_columns(_MOVIE_SYNC_COLUMNS, prefix="m")
     with conn.cursor() as cur:
         cur.execute(
             f"""
             SELECT
-                m.id,
-                m.public_id,
-                m.barcode,
-                m.title,
-                m.sort_title,
-                m.original_title,
-                m.year,
-                m.release_date,
-                m.format,
-                m.edition,
-                m.edition_type,
-                m.country,
-                m.language,
-                m.runtime_minutes,
-                m.overview,
-                m.notes,
-                m.rating,
-                m.purchase_date,
-                m.purchase_price,
-                m.estimated_value,
-                m.estimated_value_currency,
-                m.location,
-                m.metadata,
-                m.created_at,
-                m.updated_at
+                {select_columns}
             FROM movies m
             WHERE {visibility_where} AND m.deleted_at IS NULL
             ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
