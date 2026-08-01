@@ -1,0 +1,74 @@
+name: DiscVault Prune Landed Branches
+
+# Reports stale branches whose work already reached release/v26-beta, and deletes them
+# when asked to. The scheduled run only ever reports: deleting is a manual decision, made
+# after reading the report, because a branch an active session still uses must survive.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC — a report waiting at the start of the week, never a surprise delete.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Delete the branches instead of only reporting them"
+        type: boolean
+        default: false
+      min_age_days:
+        description: "Never touch a branch pushed more recently than this many days"
+        type: string
+        default: "14"
+      keep:
+        description: "Extra branches to protect, comma-separated"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: prune-landed-branches
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch every branch
+        # The classification compares each branch against the base, so all of them have to
+        # be present locally — a shallow or single-branch checkout would report nonsense.
+        run: git fetch --prune --quiet origin "+refs/heads/*:refs/remotes/origin/*"
+
+      - name: Prune landed branches
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          APPLY: ${{ inputs.apply }}
+          MIN_AGE_DAYS: ${{ inputs.min_age_days || '14' }}
+          KEEP: ${{ inputs.keep }}
+        run: |
+          set -euo pipefail
+          args=(--base release/v26-beta --min-age-days "${MIN_AGE_DAYS}")
+          if [ "${APPLY}" = "true" ]; then
+            args+=(--apply)
+          fi
+          IFS=',' read -ra extra <<< "${KEEP}"
+          for branch in "${extra[@]}"; do
+            trimmed="$(echo "${branch}" | xargs)"
+            if [ -n "${trimmed}" ]; then
+              args+=(--keep "${trimmed}")
+            fi
+          done
+          {
+            echo "## Landed-branch report"
+            echo
+            echo '```'
+            python app/scripts/prune_landed_branches.py "${args[@]}" 2>&1 | tee /dev/stderr
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"

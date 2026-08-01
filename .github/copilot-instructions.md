@@ -107,6 +107,30 @@ git push origin --delete <feature-branch>   # or use the PR "Delete branch" butt
   (e.g. one session may open #144, #148, #149 from the same branch). Delete such a
   branch only after the session is finished.
 
+#### Finding what is safe to prune
+
+"Commits ahead of beta" does **not** answer this. A branch usually lands through a
+*different* commit than the one it carries — a squash, a cherry-pick, or a
+re-implementation on top of newer beta — so that count stays above zero long after the
+work shipped. Deciding from it deletes live work.
+
+Use the report instead:
+
+```sh
+python app/scripts/prune_landed_branches.py --min-age-days 14
+```
+
+It calls a branch landed only when it is certain — merged, patch-equivalent
+(`git cherry`), carrying nothing but an `app/VERSION` bump, or content-identical to the
+base — and reports everything else as `keep`. A branch whose work was *re-implemented*
+differently on beta also reads as `keep`: the tool cannot tell that apart from unmerged
+work, and it errs toward keeping. Confirm those by hand before deleting.
+
+The `DiscVault Prune Landed Branches` workflow runs the same report every Monday and
+never deletes on a schedule. To delete, dispatch it with `apply: true`; it still refuses
+to touch a permanent branch, a branch with an open PR, or one pushed within
+`min_age_days`. Protect an active session branch explicitly with the `keep` input.
+
 ### Follow-up work after a PR merges
 
 **Before every push or PR, check whether the branch's previous PR is already merged.** Fetch the
