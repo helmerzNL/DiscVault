@@ -69,19 +69,19 @@ def _v3_signed_from_request(fake_request):
     return _hook
 
 
-class PackagingListHelperTests(unittest.TestCase):
+class StringListHelperTests(unittest.TestCase):
     def test_passes_through_a_list_trimming_blank_entries(self):
         self.assertEqual(
-            movievault_26._packaging_list(["Steelbook", " ", "Slipcover", ""]),
+            movievault_26._string_list(["Steelbook", " ", "Slipcover", ""]),
             ["Steelbook", "Slipcover"],
         )
 
     def test_wraps_a_bare_string_as_a_one_element_list(self):
-        self.assertEqual(movievault_26._packaging_list("Steelbook"), ["Steelbook"])
+        self.assertEqual(movievault_26._string_list("Steelbook"), ["Steelbook"])
 
     def test_empty_or_none_input_returns_an_empty_list(self):
-        self.assertEqual(movievault_26._packaging_list(None), [])
-        self.assertEqual(movievault_26._packaging_list(""), [])
+        self.assertEqual(movievault_26._string_list(None), [])
+        self.assertEqual(movievault_26._string_list(""), [])
 
 
 class MovieVault26PluginContractTests(unittest.TestCase):
@@ -867,7 +867,9 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["release"]["id"], "rel_matrix_4k")
         self.assertEqual(result["releases"][0]["barcode"], "5051888238400")
         self.assertEqual(result["technicalSpecs"]["format"], "4K UHD")
-        self.assertEqual(result["technicalSpecs"]["hdr"], "HDR10, Dolby Vision")
+        # hdr is a list since migration 055; the v3 API still sends a scalar, so it
+        # arrives as a one-element list rather than being joined into a string.
+        self.assertEqual(result["technicalSpecs"]["hdr"], ["HDR10, Dolby Vision"])
         self.assertEqual(result["technicalSpecs"]["audioTracks"], ["English Dolby Atmos"])
         self.assertEqual(result["technicalSpecs"]["packaging"], ["Steelbook", "Slipcover"])
         self.assertEqual(

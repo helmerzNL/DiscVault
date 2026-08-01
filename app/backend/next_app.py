@@ -91,7 +91,11 @@ try:
     from .next_metadata import metadata_receiver_plugins
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
-    from .next_metadata import normalize_movie_field_locks
+    from .next_metadata import (
+        normalize_audio_tracks,
+        normalize_movie_field_locks,
+        normalize_subtitles,
+    )
     from .next_metadata import movie_locked_fields
     from .next_metadata import movie_genre_keys
     from .next_metadata import MOVIE_LOCKABLE_FIELDS
@@ -308,7 +312,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import metadata_receiver_plugins
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
-    from next_metadata import normalize_movie_field_locks
+    from next_metadata import (
+        normalize_audio_tracks,
+        normalize_movie_field_locks,
+        normalize_subtitles,
+    )
     from next_metadata import movie_locked_fields
     from next_metadata import movie_genre_keys
     from next_metadata import MOVIE_LOCKABLE_FIELDS
@@ -8923,22 +8931,47 @@ def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
     return edits
 
 
+def _movie_edit_tracks(raw: Any, normalizer, *, label: str) -> list[Any]:
+    try:
+        return normalizer(raw)
+    except ValueError as exc:
+        raise NextApiError(422, "invalid_request", f"{label}: {exc}") from exc
+
+
 def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
     edits: dict[str, Any] = {}
-    if "hdr" in body:
-        edits["hdr"] = clean_text(body.get("hdr"))
+    hdr_keys = ("hdr", "hdrFormats", "hdr_formats")
+    if any(key in body for key in hdr_keys):
+        raw = next(body[key] for key in hdr_keys if key in body)
+        edits["hdr"] = _movie_edit_csv_list(raw)
     if "packaging" in body:
         edits["packaging"] = _movie_edit_csv_list(body.get("packaging"))
-    ratio_keys = ("screenRatio", "screen_ratios", "screenRatios")
+    region_keys = ("regions", "discRegions", "disc_regions")
+    if any(key in body for key in region_keys):
+        raw = next(body[key] for key in region_keys if key in body)
+        edits["regions"] = _movie_edit_csv_list(raw)
+    resolution_keys = ("videoResolution", "video_resolution")
+    if any(key in body for key in resolution_keys):
+        raw = next(body[key] for key in resolution_keys if key in body)
+        edits["video_resolution"] = clean_text(raw)
+    codec_keys = ("videoCodecs", "video_codecs")
+    if any(key in body for key in codec_keys):
+        raw = next(body[key] for key in codec_keys if key in body)
+        edits["video_codecs"] = _movie_edit_csv_list(raw)
+    ratio_keys = ("screenRatio", "screen_ratios", "screenRatios", "aspectRatios")
     if any(key in body for key in ratio_keys):
         raw = next(body[key] for key in ratio_keys if key in body)
-        edits["screen_ratios"] = clean_text(raw)
+        edits["screen_ratios"] = _movie_edit_csv_list(raw)
     audio_keys = ("audioTracks", "audio_tracks")
     if any(key in body for key in audio_keys):
         raw = next(body[key] for key in audio_keys if key in body)
-        edits["audio_tracks"] = _movie_edit_csv_list(raw)
-    if "subtitles" in body:
-        edits["subtitles"] = _movie_edit_csv_list(body.get("subtitles"))
+        edits["audio_tracks"] = _movie_edit_tracks(
+            raw, normalize_audio_tracks, label="audioTracks"
+        )
+    subtitle_keys = ("subtitles", "subtitleLanguages")
+    if any(key in body for key in subtitle_keys):
+        raw = next(body[key] for key in subtitle_keys if key in body)
+        edits["subtitles"] = _movie_edit_tracks(raw, normalize_subtitles, label="subtitles")
     if "contentRating" in body or "content_rating" in body:
         rating = clean_text(body.get("contentRating", body.get("content_rating")))
         country = (clean_text(body.get("ratingCountry") or body.get("rating_country")) or "NL").upper()
@@ -8962,11 +8995,19 @@ def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -
     )
     assignments: list[str] = []
     values: list[Any] = []
-    for col in ("hdr", "screen_ratios"):
+    for col in ("video_resolution",):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(edits[col])
-    for col in ("audio_tracks", "subtitles", "packaging"):
+    for col in (
+        "audio_tracks",
+        "subtitles",
+        "packaging",
+        "hdr",
+        "screen_ratios",
+        "regions",
+        "video_codecs",
+    ):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(Jsonb(json_ready(edits[col] or [])))
@@ -9113,11 +9154,16 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
 # Maps a canonical technical-spec column to the receiver payload key the
 # MovieVault contribution template expects (camelCase contract).
 MOVIE_TECHNICAL_RECEIVER_KEYS: dict[str, str] = {
-    "hdr": "hdr",
+    # Keyed to distribution-4's names where one exists, so a receiver sees the
+    # same vocabulary the feed uses rather than a DiscVault-only spelling.
+    "hdr": "hdrFormats",
     "packaging": "packaging",
-    "screen_ratios": "screenRatios",
+    "screen_ratios": "aspectRatios",
     "audio_tracks": "audioTracks",
     "subtitles": "subtitles",
+    "regions": "discRegions",
+    "video_resolution": "videoResolution",
+    "video_codecs": "videoCodecs",
     "content_ratings": "contentRatings",
 }
 
@@ -9342,6 +9388,8 @@ def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 subtitles,
                 regions,
                 content_ratings,
+                video_resolution,
+                video_codecs,
                 updated_at
             FROM movie_technical_specs
             WHERE movie_id=%s

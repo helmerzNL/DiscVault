@@ -140,7 +140,7 @@ class NextMovieEditPolicyTests(unittest.TestCase):
                     "studios": "",
                 },
                 "technical_edits": {
-                    "hdr": "Dolby Vision",
+                    "hdr": ["Dolby Vision", "HDR10"],
                     "audio_tracks": ["English: Dolby Atmos"],
                     "subtitles": [],
                     "packaging": ["steelbook", "slipcover"],
@@ -155,7 +155,12 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         self.assertNotIn("studios", proposal["metadataUpdates"])
         self.assertEqual(proposal["metadataUpdates"]["runtimeMinutes"], 142)
         self.assertEqual(proposal["movieUpdates"]["runtime_minutes"], 142)
-        self.assertEqual(proposal["technicalUpdates"]["hdr"], "Dolby Vision")
+        # `hdr` is a list since migration 055 and the receiver key follows
+        # distribution-4, so a receiver sees the feed vocabulary rather than a
+        # DiscVault-only spelling.
+        self.assertEqual(
+            proposal["technicalUpdates"]["hdrFormats"], ["Dolby Vision", "HDR10"]
+        )
         self.assertEqual(
             proposal["technicalUpdates"]["audioTracks"], ["English: Dolby Atmos"]
         )
