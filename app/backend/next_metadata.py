@@ -128,6 +128,11 @@ MOVIE_LOCKABLE_FIELDS = {
     "title",
     "sort_title",
     "original_title",
+    # Lockable since sync-contract 1.6. It was the one user-editable field the
+    # PWA offered with no lock, so a metadata refresh could overwrite a
+    # hand-typed release title and nothing stood in the way - while both mobile
+    # clients already had a `releaseTitle` lock key.
+    "release_title",
     "year",
     "barcode",
     "release_date",
@@ -190,6 +195,7 @@ MOVIE_LOCK_RECEIVER_KEYS: dict[str, tuple[str, ...]] = {
     "title": ("title",),
     "sort_title": ("sortTitle",),
     "original_title": ("originalTitle",),
+    "release_title": ("releaseTitle", "release_title"),
     "year": ("year",),
     "barcode": ("barcode",),
     "release_date": ("releaseDate",),
