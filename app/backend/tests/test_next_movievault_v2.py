@@ -1077,13 +1077,51 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
             ],
         )
 
-    def test_v4_release_requires_audio_tracks_and_subtitle_languages_keys(self):
+    def test_v4_release_without_the_technical_fields_still_parses(self):
+        """The live feed serves release records that carry `poster` but none of
+        the eight technical fields - poster support landed in distribution-4
+        before the audio/subtitle/packaging/video work did, and records published
+        in between were never re-projected. Demanding them rejected 342 of 359
+        records on the production feed, i.e. the whole catalog, for the sake of
+        supplementary metadata."""
         record = self._v4_release()
-        del record["audioTracks"]
+        for key in (
+            "audioTracks", "subtitles", "packaging", "videoResolution",
+            "videoCodecs", "hdrFormats", "aspectRatios", "discRegions",
+        ):
+            del record[key]
+        parsed = next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        # Absent decodes exactly like "nothing known", so downstream sees one shape.
+        self.assertEqual(parsed["audioTracks"], [])
+        self.assertEqual(parsed["subtitles"], [])
+        self.assertEqual(parsed["packaging"], [])
+        self.assertIsNone(parsed["videoResolution"])
+        self.assertEqual(parsed["videoCodecs"], [])
+        self.assertEqual(parsed["hdrFormats"], [])
+        self.assertEqual(parsed["aspectRatios"], [])
+        self.assertEqual(parsed["discRegions"], [])
+        # The identity of the release is untouched.
+        self.assertEqual(parsed["releaseId"], record["releaseId"])
+        self.assertIsNotNone(parsed["poster"])
+
+    def test_v4_release_still_requires_its_poster(self):
+        # Unlike the technical fields, poster is present on every record the feed
+        # serves, so its absence is a genuine contract break rather than history.
+        record = self._v4_release()
+        del record["poster"]
         with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
             next_movievault_v2.validate_record(
                 record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
             )
+
+    def test_v4_technical_fields_are_still_decoded_when_present(self):
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(), contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        self.assertTrue(parsed["audioTracks"])
+        self.assertTrue(parsed["subtitles"])
 
     def test_v3_release_does_not_require_or_accept_the_new_fields(self):
         record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
@@ -1320,23 +1358,33 @@ class VideoProfileContractTests(unittest.TestCase):
         self.assertIsNone(parsed["videoResolution"])
         self.assertEqual(parsed["videoCodecs"], [])
 
-    def test_every_video_key_is_required_on_v4(self):
-        for key in (
-            "videoResolution",
-            "videoCodecs",
-            "hdrFormats",
-            "aspectRatios",
-            "discRegions",
-        ):
+    def test_every_video_key_is_optional_on_v4(self):
+        """Records published before the video work landed omit these entirely.
+        An absent key decodes to the same empty value a record with nothing to
+        report carries, so the release survives either way."""
+        empty = {
+            "videoResolution": None,
+            "videoCodecs": [],
+            "hdrFormats": [],
+            "aspectRatios": [],
+            "discRegions": [],
+        }
+        for key, blank in empty.items():
             with self.subTest(key=key):
                 record = self._v4_release()
                 del record[key]
-                with self.assertRaisesRegex(
-                    next_movievault_v2.MovieVaultV2Error, "^record_invalid$"
-                ):
-                    next_movievault_v2.validate_record(
-                        record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
-                    )
+                parsed = next_movievault_v2.validate_record(
+                    record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+                )
+                self.assertEqual(parsed[key], blank)
+
+    def test_a_malformed_video_key_is_still_rejected(self):
+        # Tolerating absence must not tolerate a wrong type.
+        record = self._v4_release(videoCodecs="hevc")
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
 
     def test_unrecognized_enum_members_are_stored_raw_and_logged(self):
         with self.assertLogs("app.backend.next_movievault_v2", level="WARNING") as logs:

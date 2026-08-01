@@ -566,26 +566,34 @@ def _release_video_fields(value: dict[str, Any], *, release_id: str) -> dict[str
     Kept together so the feed's shape is described once: if MovieVault ever
     nests these under a `video` object the way `release-technical-1` does, this
     is the only function that has to change.
+
+    Each key is optional: the live feed carries release records published before
+    the technical-fields work landed, which omit them entirely. An absent key
+    decodes to the same empty value a record with nothing to report would carry,
+    so "not published" and "nothing known" are stored identically - neither is a
+    reason to reject the release.
     """
     return {
-        "videoResolution": _video_resolution(value["videoResolution"], release_id=release_id),
+        "videoResolution": _video_resolution(
+            value.get("videoResolution"), release_id=release_id
+        ),
         "videoCodecs": _enum_list(
-            value["videoCodecs"],
+            value.get("videoCodecs") or [],
             maximum=MAX_VIDEO_CODECS,
             allowed=VIDEO_CODECS,
             label="videoCodecs",
             release_id=release_id,
         ),
         "hdrFormats": _enum_list(
-            value["hdrFormats"],
+            value.get("hdrFormats") or [],
             maximum=MAX_HDR_FORMATS,
             allowed=HDR_FORMATS,
             label="hdrFormats",
             release_id=release_id,
         ),
-        "aspectRatios": _aspect_ratios(value["aspectRatios"], release_id=release_id),
+        "aspectRatios": _aspect_ratios(value.get("aspectRatios") or [], release_id=release_id),
         "discRegions": _enum_list(
-            value["discRegions"],
+            value.get("discRegions") or [],
             maximum=MAX_DISC_REGIONS,
             allowed=DISC_REGIONS,
             label="discRegions",
@@ -639,7 +647,17 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         optional.update({"studio", "distributor", "runtimeMinutes"})
     if contract_version == MOVIEVAULT_V4_CONTRACT:
         required.add("poster")
-        required.update(
+        # Optional rather than required, even though MovieVault's own v4 schema
+        # marks them required. The live feed serves release records that carry
+        # `poster` but none of the eight technical fields - poster support landed
+        # in distribution-4 before the audio/subtitle/packaging/video work did,
+        # and records published in between were never re-projected. Demanding
+        # them rejected the record, and a rejected record fails the entire sync:
+        # 342 of 359 records on the production feed, which is the whole catalog
+        # for the sake of supplementary metadata. A release is identified by its
+        # ids, title and barcodes; technical specs are enrichment and their
+        # absence is not a reason to lose the film.
+        optional.update(
             {
                 "audioTracks",
                 "subtitles",
@@ -705,19 +723,23 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
             if contract_version == MOVIEVAULT_V4_CONTRACT
             else None
         ),
+        # A pre-v4 contract has no technical fields at all, and a v4 record may
+        # simply omit them (see the note above). Both land on the same empty
+        # defaults, so an absent field is stored as "nothing known" rather than
+        # costing the record.
         "audioTracks": (
             _audio_tracks(value["audioTracks"], release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if contract_version == MOVIEVAULT_V4_CONTRACT and "audioTracks" in value
             else []
         ),
         "subtitles": (
             _subtitles(value["subtitles"], release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if contract_version == MOVIEVAULT_V4_CONTRACT and "subtitles" in value
             else []
         ),
         "packaging": (
             _packaging(value["packaging"], release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if contract_version == MOVIEVAULT_V4_CONTRACT and "packaging" in value
             else []
         ),
         **(
