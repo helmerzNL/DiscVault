@@ -53,7 +53,7 @@ class NextMigrationContractTests(unittest.TestCase):
         migration = (
             Path(__file__).resolve().parents[1]
             / "migrations_next"
-            / "055_movievault_default_source_order.sql"
+            / "058_movievault_default_source_order.sql"
         ).read_text(encoding="utf-8")
 
         # Guarded so it is a no-op where the plugin tables do not exist yet.
