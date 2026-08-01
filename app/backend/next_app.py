@@ -8906,7 +8906,52 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "location": payload.get("location"),
         "metadata": metadata,
+        # Not a `movies` column: this is the technical profile, which lives in
+        # movie_technical_specs and is applied separately by the caller. It is
+        # carried here so every movie-upsert path picks it up in one place.
+        #
+        # `movie_technical_edits` keys on presence (`if key in payload`), so an
+        # absent key yields no entry and leaves the stored value alone, while an
+        # explicit empty list clears it — sync-contract §4.7. That distinction is
+        # load-bearing for the mobile clients: kotlinx omits defaults and Swift
+        # uses encodeIfPresent, so a client that never touched a field sends no
+        # key at all.
+        "technical_edits": movie_technical_sync_edits(payload),
     }
+
+
+def movie_technical_sync_edits(payload: dict[str, Any]) -> dict[str, Any]:
+    """The technical profile as it may arrive over *sync*.
+
+    The same helper the PATCH path uses, with one restriction: the wire carries
+    only structured tracks (sync-contract §4.7). At rest a track may still be
+    legacy free text — the PWA edits that in place, one track at a time — but a
+    sync push may not introduce it.
+
+    That matters during rollout. An Android build from before §4.7 pushes plain
+    language strings under these very keys (`audioTracks: ["en", "nl"]`). Letting
+    those through would replace the structured tracks the PWA just wrote with two
+    bare strings: a downgrade performed by the device that knows least. Such
+    entries are dropped, and a key left empty *because* of that is treated as
+    absent — "no opinion" — rather than as a clear.
+
+    An explicitly empty list still clears, because that is the only way a user
+    removes the last track.
+    """
+    cleaned = dict(payload)
+    for key in ("audioTracks", "audio_tracks", "subtitles", "subtitleLanguages"):
+        if key not in cleaned:
+            continue
+        raw = cleaned[key]
+        if not isinstance(raw, list):
+            cleaned.pop(key)
+            continue
+        objects = [entry for entry in raw if isinstance(entry, dict)]
+        if objects or not raw:
+            cleaned[key] = objects
+        else:
+            cleaned.pop(key)
+    return movie_technical_edits(cleaned)
 
 
 MOVIE_EDIT_FIELD_LIMITS = {
@@ -9424,6 +9469,9 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         row = cur.fetchone()
     if row is not None:
         row["genres"] = movie_genre_keys(conn, movie_id)
+        # Also reaches the delta: a sync change stores this entity verbatim as
+        # its payload, so anything missing here is missing from the delta too.
+        attach_movie_technical_specs(conn, [row])
     return row
 
 
@@ -9503,6 +9551,91 @@ def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
             (movie_id,),
         )
         return cur.fetchone()
+
+
+# The technical-profile keys as they appear on the sync wire, mapped from the
+# column that holds them. snake_case of the distribution-4 vocabulary, so a
+# reader sees the same names the feed uses rather than DiscVault-only spellings
+# — which is also why two of them are renamed: the column `hdr` is a list of HDR
+# formats, and `regions` is the disc region-code set.
+MOVIE_TECHNICAL_SYNC_KEYS: dict[str, str] = {
+    "hdr": "hdr_formats",
+    "screen_ratios": "screen_ratios",
+    "disc_regions": "disc_regions",
+    "packaging": "packaging",
+    "audio_tracks": "audio_tracks",
+    "subtitles": "subtitles",
+    "video_resolution": "video_resolution",
+    "video_codecs": "video_codecs",
+}
+
+# `regions` is the column; `disc_regions` is the wire name. Kept apart from the
+# map above so the SELECT below can stay a plain column list.
+_TECHNICAL_SYNC_COLUMNS = (
+    "hdr",
+    "screen_ratios",
+    "regions",
+    "packaging",
+    "audio_tracks",
+    "subtitles",
+    "video_resolution",
+    "video_codecs",
+)
+
+
+def attach_movie_technical_specs(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach the technical profile to each movie for the sync payload.
+
+    One query for the whole batch, the same shape `attach_movie_genres` uses: a
+    bootstrap carries up to 1000 movies and a per-movie lookup would be 1000
+    round trips.
+
+    A movie with no `movie_technical_specs` row gets empty lists and `None` —
+    not omitted keys. The clients read an absent key as "no opinion, keep what
+    you have" (sync-contract §4.7), which is the right reading for a payload
+    that never mentions the field, but the wrong one here: this payload *is*
+    the server's opinion, and "this movie has no technical data" has to be
+    expressible.
+    """
+    empty: dict[str, Any] = {
+        "hdr_formats": [],
+        "screen_ratios": [],
+        "disc_regions": [],
+        "packaging": [],
+        "audio_tracks": [],
+        "subtitles": [],
+        "video_resolution": None,
+        "video_codecs": [],
+    }
+    if not movies or not table_exists(conn, "movie_technical_specs"):
+        for movie in movies:
+            movie.update(empty)
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    specs_by_movie: dict[str, dict[str, Any]] = {}
+    if movie_ids:
+        columns = ", ".join(_TECHNICAL_SYNC_COLUMNS)
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT movie_id, {columns} FROM movie_technical_specs WHERE movie_id = ANY(%s)",
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                specs_by_movie[str(row.get("movie_id"))] = row
+    for movie in movies:
+        row = specs_by_movie.get(str(movie.get("id")))
+        if row is None:
+            movie.update(empty)
+            continue
+        movie["hdr_formats"] = row.get("hdr") or []
+        movie["screen_ratios"] = row.get("screen_ratios") or []
+        movie["disc_regions"] = row.get("regions") or []
+        movie["packaging"] = row.get("packaging") or []
+        movie["audio_tracks"] = row.get("audio_tracks") or []
+        movie["subtitles"] = row.get("subtitles") or []
+        movie["video_resolution"] = row.get("video_resolution")
+        movie["video_codecs"] = row.get("video_codecs") or []
+    return movies
 
 
 def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
@@ -15690,7 +15823,7 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             """,
             (*visibility_params, limit),
         )
-        return attach_movie_genres(conn, cur.fetchall())
+        return attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
 
 
 def all_movie_credit_entities(
@@ -16680,6 +16813,17 @@ def apply_movie_upsert(
                 Jsonb(fields["metadata"]),
             ),
         )
+
+    # The technical profile, through the same helper the PATCH path uses
+    # (`write_movie_edit_record`). Deliberately not a second write path with its
+    # own behaviour: the normalisers, the union-at-rest handling and the
+    # absent-vs-empty rule then only exist once.
+    #
+    # A client that predates sync-contract §4.7 sends none of these keys, so
+    # `technical_edits` is empty and this is a no-op — which is what makes it
+    # safe to ship the server ahead of the clients.
+    with conn.cursor() as cur:
+        upsert_movie_technical_edits(cur, entity_id, fields.get("technical_edits") or {})
 
     # Persist the TMDB identifier so trede 3 (tmdb+format+edition) can match on a
     # later sync. Idempotent: the composite PK makes re-writes a no-op.

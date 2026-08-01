@@ -287,15 +287,28 @@ class TrackNormalizerTests(unittest.TestCase):
 
     def test_shape_errors_are_still_rejected(self):
         for bad in (
-            {"languageCode": "en"},
             {"languageCode": "en", "codec": "dts", "forced": True},
             {"languageCode": "en_US", "codec": "dts"},
-            {"languageCode": "en", "codec": ""},
+            {"codec": "dts"},
             42,
         ):
             with self.subTest(bad=bad):
                 with self.assertRaises(ValueError):
                     self.metadata.normalize_audio_track_entry(bad)
+
+    def test_a_track_may_name_a_language_and_no_codec(self):
+        """Changed 2026-08-01. A codec used to be mandatory, which held while the
+        only writers were the feed (always has one) and the PWA form (silently
+        dropped a track without one). A title saved before the structured columns
+        existed knows a language and nothing else, and every hand-entered track
+        passes through that state - so a codec-less track now stores rather than
+        422-ing the whole sync mutation."""
+        for entry in ({"languageCode": "en"}, {"languageCode": "en", "codec": ""}):
+            with self.subTest(entry=entry):
+                self.assertEqual(
+                    self.metadata.normalize_audio_track_entry(entry),
+                    {"languageCode": "en", "codec": "", "channels": None, "immersiveFormat": None},
+                )
 
     def test_subtitle_text_that_is_not_a_subtag_stays_legacy_text(self):
         self.assertEqual(
