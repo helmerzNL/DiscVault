@@ -934,7 +934,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         ):
             return next_movievault_v2.run_sync(self.connect, settings, contract_version="distribution-4")
 
-    def test_v4_full_sync_persists_audio_tracks_and_subtitle_languages_matching_fixture(self):
+    def test_v4_full_sync_persists_audio_tracks_and_subtitles_matching_fixture(self):
         self._sync_full(V4_FULL_PATH)
         with self.connect() as conn:
             release = next_movievault_v2.local_lookup(
@@ -958,7 +958,14 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual(release["subtitleLanguages"], ["en", "nl"])
+        self.assertEqual(
+            release["subtitles"],
+            [
+                {"languageCode": "en", "subtitleType": "full"},
+                {"languageCode": "en", "subtitleType": "sdh"},
+                {"languageCode": "nl", "subtitleType": "full"},
+            ],
+        )
 
     def test_v4_full_sync_persists_packaging_matching_fixture(self):
         self._sync_full(V4_FULL_PATH)
@@ -998,7 +1005,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000002", "limit": 1},
             )["results"][0]
         self.assertEqual(release["audioTracks"], [])
-        self.assertEqual(release["subtitleLanguages"], [])
+        self.assertEqual(release["subtitles"], [])
 
     def test_v4_delta_with_unchanged_tracks_still_replaces_rows_cleanly(self):
         # Mirrors MovieVault-v2's own shipped fixture pair: the delta only
@@ -1023,12 +1030,19 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 )
                 audio_row_count = cur.fetchone()["n"]
         self.assertEqual(audio_row_count, 2)
-        self.assertEqual(release["subtitleLanguages"], ["en", "nl"])
+        self.assertEqual(
+            release["subtitles"],
+            [
+                {"languageCode": "en", "subtitleType": "full"},
+                {"languageCode": "en", "subtitleType": "sdh"},
+                {"languageCode": "nl", "subtitleType": "full"},
+            ],
+        )
 
     def test_v4_delta_with_different_tracks_replaces_not_appends(self):
         """The shipped MovieVault-v2 fixture only exercises 'poster changed,
         tracks unchanged' - this synthetic delta exercises an actual change
-        to audioTracks/subtitleLanguages content on top of a prior full sync,
+        to audioTracks/subtitles content on top of a prior full sync,
         asserting replace-not-append semantics end to end."""
         self._sync_full(V4_FULL_PATH)
         base = json.loads(V4_DELTA_PATH.read_bytes().splitlines()[0])
@@ -1042,7 +1056,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 "immersiveFormat": None,
             }
         ]
-        base["subtitleLanguages"] = ["ja"]
+        base["subtitles"] = [{"languageCode": "ja", "subtitleType": "forced"}]
 
         self._apply_delta_ndjson([base], revision=44, cursor="fixture-distribution-4-r44")
 
@@ -1055,7 +1069,10 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             release["audioTracks"],
             [{"languageCode": "ja", "codec": "aac", "channels": "2.0", "immersiveFormat": None}],
         )
-        self.assertEqual(release["subtitleLanguages"], ["ja"])
+        self.assertEqual(
+            release["subtitles"],
+            [{"languageCode": "ja", "subtitleType": "forced"}],
+        )
 
     def test_v4_delta_with_empty_arrays_replaces_existing_tracks_with_nothing(self):
         """An empty array is meaningful (all tracks removed upstream) - the
@@ -1065,7 +1082,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         base = json.loads(V4_DELTA_PATH.read_bytes().splitlines()[0])
         base["revision"] = 44
         base["audioTracks"] = []
-        base["subtitleLanguages"] = []
+        base["subtitles"] = []
 
         self._apply_delta_ndjson([base], revision=44, cursor="fixture-distribution-4-r44")
 
@@ -1081,7 +1098,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 )
                 remaining = cur.fetchone()["n"]
         self.assertEqual(release["audioTracks"], [])
-        self.assertEqual(release["subtitleLanguages"], [])
+        self.assertEqual(release["subtitles"], [])
         self.assertEqual(remaining, 0)
 
     def test_v4_release_tombstone_cascades_to_audio_and_subtitle_tables(self):
@@ -1635,6 +1652,93 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 with self.connect() as conn:
                     with conn.cursor() as cur:
                         cur.execute("DELETE FROM media_assets WHERE id = %s", (public_media_asset_id,))
+
+    def test_v4_full_sync_persists_the_video_profile(self):
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(release["videoResolution"], "2160p")
+        self.assertEqual(release["videoCodecs"], ["hevc"])
+        self.assertEqual(release["hdrFormats"], ["dolby_vision", "hdr10"])
+        self.assertEqual(release["aspectRatios"], ["2.39:1"])
+        self.assertEqual(release["discRegions"], ["B"])
+
+    def test_v4_full_sync_persists_an_absent_video_profile_as_null_and_empty(self):
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000002", "limit": 1},
+            )["results"][0]
+        self.assertIsNone(release["videoResolution"])
+        self.assertEqual(release["videoCodecs"], [])
+        self.assertEqual(release["hdrFormats"], [])
+        self.assertEqual(release["aspectRatios"], [])
+        self.assertEqual(release["discRegions"], [])
+
+    def test_v4_delta_replaces_the_video_profile_rather_than_merging_it(self):
+        self._sync_full(V4_FULL_PATH)
+        base = self._fixture_release("10000000-0000-0000-0000-000000000001")
+        base["revision"] = 43
+        base["videoResolution"] = "1080p"
+        base["videoCodecs"] = ["h264"]
+        base["hdrFormats"] = []
+        base["aspectRatios"] = ["16:9"]
+        base["discRegions"] = ["A", "B"]
+        self._apply_delta_ndjson([base], revision=43, cursor="fixture-distribution-4-r43")
+
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(release["videoResolution"], "1080p")
+        self.assertEqual(release["videoCodecs"], ["h264"])
+        # Emptied, not left at its previous ["dolby_vision", "hdr10"].
+        self.assertEqual(release["hdrFormats"], [])
+        self.assertEqual(release["aspectRatios"], ["16:9"])
+        self.assertEqual(release["discRegions"], ["A", "B"])
+
+    def test_v4_sync_keeps_two_variants_of_the_same_subtitle_language_as_separate_rows(self):
+        """The mirror's primary key is (generation, release_id, position), so repeating
+        a language was always representable - only the variant column was missing."""
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT language_code, subtitle_type"
+                    " FROM movievault_v2_release_subtitle_languages"
+                    " WHERE release_id = '10000000-0000-0000-0000-000000000001'"
+                    " ORDER BY position"
+                )
+                rows = [(row["language_code"], row["subtitle_type"]) for row in cur.fetchall()]
+        self.assertEqual(rows, [("en", "full"), ("en", "sdh"), ("nl", "full")])
+
+    def test_v4_delta_replaces_subtitle_variants_rather_than_appending(self):
+        self._sync_full(V4_FULL_PATH)
+        base = self._fixture_release("10000000-0000-0000-0000-000000000001")
+        base["revision"] = 43
+        base["subtitles"] = [{"languageCode": "de", "subtitleType": "closed_caption"}]
+        self._apply_delta_ndjson([base], revision=43, cursor="fixture-distribution-4-r43")
+
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(
+            release["subtitles"], [{"languageCode": "de", "subtitleType": "closed_caption"}]
+        )
+
+    def _fixture_release(self, release_id: str) -> dict:
+        for line in V4_FULL_PATH.read_bytes().splitlines():
+            record = json.loads(line)
+            if record.get("recordType") == "release" and record.get("releaseId") == release_id:
+                return record
+        raise AssertionError(f"fixture release {release_id} not found")
 
 
 if __name__ == "__main__":

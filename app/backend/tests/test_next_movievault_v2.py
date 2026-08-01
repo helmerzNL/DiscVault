@@ -1065,7 +1065,16 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual(parsed["subtitleLanguages"], ["en", "nl"])
+        self.assertEqual(
+            parsed["subtitles"],
+            [
+                {"languageCode": "en", "subtitleType": "full"},
+                # The same language twice with different variants - the thing the
+                # old bare-language-list shape could not express at all.
+                {"languageCode": "en", "subtitleType": "sdh"},
+                {"languageCode": "nl", "subtitleType": "full"},
+            ],
+        )
 
     def test_v4_release_requires_audio_tracks_and_subtitle_languages_keys(self):
         record = self._v4_release()
@@ -1077,16 +1086,29 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
 
     def test_v3_release_does_not_require_or_accept_the_new_fields(self):
         record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
-        del record["audioTracks"]
-        del record["subtitleLanguages"]
-        del record["packaging"]
-        del record["poster"]
+        for key in (
+            "audioTracks",
+            "subtitles",
+            "packaging",
+            "poster",
+            "videoResolution",
+            "videoCodecs",
+            "hdrFormats",
+            "aspectRatios",
+            "discRegions",
+        ):
+            del record[key]
         parsed = next_movievault_v2.validate_record(
             record, contract_version=next_movievault_v2.MOVIEVAULT_V3_CONTRACT
         )
         self.assertEqual(parsed["audioTracks"], [])
-        self.assertEqual(parsed["subtitleLanguages"], [])
+        self.assertEqual(parsed["subtitles"], [])
         self.assertEqual(parsed["packaging"], [])
+        self.assertIsNone(parsed["videoResolution"])
+        self.assertEqual(parsed["videoCodecs"], [])
+        self.assertEqual(parsed["hdrFormats"], [])
+        self.assertEqual(parsed["aspectRatios"], [])
+        self.assertEqual(parsed["discRegions"], [])
 
         record_with_extra = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
         del record_with_extra["poster"]
@@ -1236,3 +1258,186 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VideoProfileContractTests(unittest.TestCase):
+    """distribution-4's video facts (MovieVault PR #161).
+
+    Note what a rejection costs here: `_exact_keys` makes the v4 key set exhaustive
+    and `record_invalid` discards the *whole* release record, not one field. That is
+    why every enum below logs-and-stores rather than raising.
+    """
+
+    def _v4_release(self, **overrides) -> dict:
+        with open(V4_FIXTURE_PATH, "rb") as handle:
+            for line in handle.read().splitlines():
+                candidate = json.loads(line)
+                if candidate.get("recordType") == "release" and candidate.get(
+                    "releaseId"
+                ) == "10000000-0000-0000-0000-000000000001":
+                    candidate.update(overrides)
+                    return candidate
+        raise AssertionError("fixture release not found")
+
+    def _parse(self, **overrides) -> dict:
+        return next_movievault_v2.validate_record(
+            self._v4_release(**overrides),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+
+    def test_accepts_the_full_video_profile(self):
+        parsed = self._parse()
+        self.assertEqual(parsed["videoResolution"], "2160p")
+        self.assertEqual(parsed["videoCodecs"], ["hevc"])
+        self.assertEqual(parsed["hdrFormats"], ["dolby_vision", "hdr10"])
+        self.assertEqual(parsed["aspectRatios"], ["2.39:1"])
+        self.assertEqual(parsed["discRegions"], ["B"])
+
+    def test_a_null_resolution_and_empty_arrays_are_valid(self):
+        parsed = self._parse(
+            videoResolution=None,
+            videoCodecs=[],
+            hdrFormats=[],
+            aspectRatios=[],
+            discRegions=[],
+        )
+        self.assertIsNone(parsed["videoResolution"])
+        self.assertEqual(parsed["videoCodecs"], [])
+
+    def test_every_video_key_is_required_on_v4(self):
+        for key in (
+            "videoResolution",
+            "videoCodecs",
+            "hdrFormats",
+            "aspectRatios",
+            "discRegions",
+        ):
+            with self.subTest(key=key):
+                record = self._v4_release()
+                del record[key]
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error, "^record_invalid$"
+                ):
+                    next_movievault_v2.validate_record(
+                        record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+                    )
+
+    def test_unrecognized_enum_members_are_stored_raw_and_logged(self):
+        with self.assertLogs("app.backend.next_movievault_v2", level="WARNING") as logs:
+            parsed = self._parse(
+                videoResolution="4320p",
+                videoCodecs=["vvc"],
+                hdrFormats=["hdr_vivid"],
+                discRegions=["Z"],
+            )
+        self.assertEqual(parsed["videoResolution"], "4320p")
+        self.assertEqual(parsed["videoCodecs"], ["vvc"])
+        self.assertEqual(parsed["hdrFormats"], ["hdr_vivid"])
+        self.assertEqual(parsed["discRegions"], ["Z"])
+        self.assertEqual(len(logs.output), 4)
+
+    def test_duplicates_are_dropped_rather_than_rejected(self):
+        parsed = self._parse(videoCodecs=["hevc", "hevc", "av1"])
+        self.assertEqual(parsed["videoCodecs"], ["hevc", "av1"])
+
+    def test_the_documented_maximums_are_enforced(self):
+        for key, value in (
+            ("videoCodecs", ["hevc"] * 6),
+            ("hdrFormats", ["hdr10"] * 6),
+            ("aspectRatios", ["2.39:1"] * 9),
+            ("discRegions", ["B"] * 13),
+        ):
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error, "^record_invalid$"
+                ):
+                    self._parse(**{key: value})
+
+    def test_twelve_disc_regions_are_accepted(self):
+        regions = ["A", "B", "C", "1", "2", "3", "4", "5", "6", "7", "8", "FREE"]
+        self.assertEqual(self._parse(discRegions=regions)["discRegions"], regions)
+
+    def test_common_aspect_ratios_validate(self):
+        """The old release-details regex was `^(?:1|2)\\.[0-9]{2}:1$`, which rejected
+        every one of these - and rejected them by discarding the whole response."""
+        ratios = ["16:9", "4:3", "1.375:1", "2.39:1", "1.85:1", "2.76:1"]
+        with self.assertNoLogs("app.backend.next_movievault_v2", level="WARNING"):
+            self.assertEqual(self._parse(aspectRatios=ratios)["aspectRatios"], ratios)
+
+    def test_a_non_ratio_string_is_kept_but_logged(self):
+        with self.assertLogs("app.backend.next_movievault_v2", level="WARNING"):
+            self.assertEqual(self._parse(aspectRatios=["widescreen"])["aspectRatios"], ["widescreen"])
+
+    def test_wrong_types_still_raise(self):
+        for key, value in (
+            ("videoResolution", 2160),
+            ("videoCodecs", "hevc"),
+            ("hdrFormats", [None]),
+            ("aspectRatios", [239]),
+            ("discRegions", {"region": "B"}),
+        ):
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error, "^record_invalid$"
+                ):
+                    self._parse(**{key: value})
+
+
+class SubtitleVariantContractTests(unittest.TestCase):
+    """distribution-4's structured subtitles (MovieVault PR #162)."""
+
+    def _v4_release(self, **overrides) -> dict:
+        with open(V4_FIXTURE_PATH, "rb") as handle:
+            for line in handle.read().splitlines():
+                candidate = json.loads(line)
+                if candidate.get("recordType") == "release" and candidate.get(
+                    "releaseId"
+                ) == "10000000-0000-0000-0000-000000000001":
+                    candidate.update(overrides)
+                    return candidate
+        raise AssertionError("fixture release not found")
+
+    def _parse(self, **overrides) -> dict:
+        return next_movievault_v2.validate_record(
+            self._v4_release(**overrides),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+
+    def test_the_same_language_survives_twice_with_different_variants(self):
+        parsed = self._parse(
+            subtitles=[
+                {"languageCode": "en", "subtitleType": "full"},
+                {"languageCode": "en", "subtitleType": "sdh"},
+                {"languageCode": "en", "subtitleType": "forced"},
+            ]
+        )
+        self.assertEqual([item["subtitleType"] for item in parsed["subtitles"]], ["full", "sdh", "forced"])
+
+    def test_every_documented_variant_is_accepted(self):
+        for variant in ("full", "sdh", "forced", "commentary", "closed_caption"):
+            with self.subTest(variant=variant):
+                parsed = self._parse(subtitles=[{"languageCode": "en", "subtitleType": variant}])
+                self.assertEqual(parsed["subtitles"][0]["subtitleType"], variant)
+
+    def test_an_unknown_variant_is_stored_raw_and_logged(self):
+        with self.assertLogs("app.backend.next_movievault_v2", level="WARNING"):
+            parsed = self._parse(subtitles=[{"languageCode": "en", "subtitleType": "karaoke"}])
+        self.assertEqual(parsed["subtitles"][0]["subtitleType"], "karaoke")
+
+    def test_a_bare_language_string_is_rejected(self):
+        """The feed sends objects since PR #162. A string here means the producer and
+        this consumer disagree about the contract, which is worth failing loudly."""
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            self._parse(subtitles=["en"])
+
+    def test_a_missing_or_extra_key_on_a_subtitle_is_rejected(self):
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            self._parse(subtitles=[{"languageCode": "en"}])
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            self._parse(
+                subtitles=[{"languageCode": "en", "subtitleType": "full", "forced": True}]
+            )
+
+    def test_a_malformed_language_code_is_rejected(self):
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            self._parse(subtitles=[{"languageCode": "en_US", "subtitleType": "full"}])

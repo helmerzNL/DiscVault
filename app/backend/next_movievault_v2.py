@@ -101,6 +101,29 @@ PACKAGING_VALUES = {
 }
 MAX_PACKAGING = 9
 
+# distribution-4 subtitle variants (MovieVault PR #162). A disc carries several
+# tracks in the same language - a full track, an SDH track that also transcribes
+# sound effects, a forced track for foreign dialogue only - so the feed sends
+# objects, not bare language codes, and the pair (language, type) is what
+# identifies a track. Same forward-compat leniency as the enums above.
+SUBTITLE_TYPES = {"full", "sdh", "forced", "commentary", "closed_caption"}
+DEFAULT_SUBTITLE_TYPE = "full"
+
+# distribution-4 video profile (MovieVault PR #161).
+VIDEO_RESOLUTIONS = {"480p", "576p", "720p", "1080i", "1080p", "2160p"}
+VIDEO_CODECS = {"mpeg2", "vc1", "h264", "hevc", "av1"}
+HDR_FORMATS = {"hdr", "hdr10", "hdr10_plus", "hlg", "dolby_vision"}
+DISC_REGIONS = {"A", "B", "C", "1", "2", "3", "4", "5", "6", "7", "8", "FREE"}
+MAX_VIDEO_CODECS = 5
+MAX_HDR_FORMATS = 5
+MAX_ASPECT_RATIOS = 8
+MAX_DISC_REGIONS = 12
+# Deliberately broader than the old release-details regex `^(?:1|2)\.[0-9]{2}:1$`,
+# which rejected "16:9", "4:3" and "1.375:1" - all of them real, common ratios.
+# MovieVault constrains the whole array to digits, dots and colons; this mirrors
+# that while still refusing anything that is not shaped like a ratio.
+ASPECT_RATIO_PATTERN = re.compile(r"^[0-9]{1,2}(?:\.[0-9]{1,3})?:[0-9]{1,2}(?:\.[0-9]{1,3})?$")
+
 logger = logging.getLogger(__name__)
 
 ConnectionFactory = Callable[[], ContextManager[Any]]
@@ -370,10 +393,130 @@ def _audio_tracks(value: Any, *, release_id: str) -> list[dict[str, Any]]:
     return [_audio_track(item, release_id=release_id) for item in value]
 
 
-def _subtitle_languages(value: Any) -> list[str]:
+def _subtitle(value: Any, *, release_id: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise MovieVaultV2Error("record_invalid")
+    _exact_keys(value, required={"languageCode", "subtitleType"}, optional=set())
+    subtitle_type = value["subtitleType"]
+    if not isinstance(subtitle_type, str) or not subtitle_type or len(subtitle_type) > 24:
+        raise MovieVaultV2Error("record_invalid")
+    if subtitle_type not in SUBTITLE_TYPES:
+        # Same forward-compat rule as the audio enums: MovieVault may add a
+        # variant before this allow-list catches up, and losing one track is
+        # better than rejecting the whole release.
+        logger.warning(
+            "movievault_v2: unrecognized subtitleType %r on release %s - storing raw value",
+            subtitle_type,
+            release_id,
+        )
+    return {
+        "languageCode": _language_code(value["languageCode"]),
+        "subtitleType": subtitle_type,
+    }
+
+
+def _subtitles(value: Any, *, release_id: str) -> list[dict[str, Any]]:
     if not isinstance(value, list) or len(value) > MAX_SUBTITLE_LANGUAGES:
         raise MovieVaultV2Error("record_invalid")
-    return [_language_code(item) for item in value]
+    return [_subtitle(item, release_id=release_id) for item in value]
+
+
+def _enum_list(
+    value: Any,
+    *,
+    maximum: int,
+    allowed: set[str],
+    label: str,
+    release_id: str,
+) -> list[str]:
+    """Parse a distribution-4 enum array with the feed's forward-compat rule.
+
+    Unrecognized members are logged and kept; exact repeats are dropped rather
+    than rejected, because a duplicate is a producer slip with an obvious
+    lossless fix while rejection would cost the whole release record.
+    """
+    if not isinstance(value, list) or len(value) > maximum:
+        raise MovieVaultV2Error("record_invalid")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item or len(item) > 32:
+            raise MovieVaultV2Error("record_invalid")
+        if item not in allowed:
+            logger.warning(
+                "movievault_v2: unrecognized %s value %r on release %s - storing raw value",
+                label,
+                item,
+                release_id,
+            )
+        if item not in result:
+            result.append(item)
+    return result
+
+
+def _aspect_ratios(value: Any, *, release_id: str) -> list[str]:
+    if not isinstance(value, list) or len(value) > MAX_ASPECT_RATIOS:
+        raise MovieVaultV2Error("record_invalid")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item or len(item) > 16:
+            raise MovieVaultV2Error("record_invalid")
+        if not ASPECT_RATIO_PATTERN.fullmatch(item):
+            logger.warning(
+                "movievault_v2: unrecognized aspect ratio %r on release %s - storing raw value",
+                item,
+                release_id,
+            )
+        if item not in result:
+            result.append(item)
+    return result
+
+
+def _video_resolution(value: Any, *, release_id: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value or len(value) > 16:
+        raise MovieVaultV2Error("record_invalid")
+    if value not in VIDEO_RESOLUTIONS:
+        logger.warning(
+            "movievault_v2: unrecognized videoResolution %r on release %s - storing raw value",
+            value,
+            release_id,
+        )
+    return value
+
+
+def _release_video_fields(value: dict[str, Any], *, release_id: str) -> dict[str, Any]:
+    """Decode the five distribution-4 video keys in one place.
+
+    Kept together so the feed's shape is described once: if MovieVault ever
+    nests these under a `video` object the way `release-technical-1` does, this
+    is the only function that has to change.
+    """
+    return {
+        "videoResolution": _video_resolution(value["videoResolution"], release_id=release_id),
+        "videoCodecs": _enum_list(
+            value["videoCodecs"],
+            maximum=MAX_VIDEO_CODECS,
+            allowed=VIDEO_CODECS,
+            label="videoCodecs",
+            release_id=release_id,
+        ),
+        "hdrFormats": _enum_list(
+            value["hdrFormats"],
+            maximum=MAX_HDR_FORMATS,
+            allowed=HDR_FORMATS,
+            label="hdrFormats",
+            release_id=release_id,
+        ),
+        "aspectRatios": _aspect_ratios(value["aspectRatios"], release_id=release_id),
+        "discRegions": _enum_list(
+            value["discRegions"],
+            maximum=MAX_DISC_REGIONS,
+            allowed=DISC_REGIONS,
+            label="discRegions",
+            release_id=release_id,
+        ),
+    }
 
 
 def _packaging(value: Any, *, release_id: str) -> list[str]:
@@ -421,7 +564,18 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         optional.update({"studio", "distributor", "runtimeMinutes"})
     if contract_version == MOVIEVAULT_V4_CONTRACT:
         required.add("poster")
-        required.update({"audioTracks", "subtitleLanguages", "packaging"})
+        required.update(
+            {
+                "audioTracks",
+                "subtitles",
+                "packaging",
+                "videoResolution",
+                "videoCodecs",
+                "hdrFormats",
+                "aspectRatios",
+                "discRegions",
+            }
+        )
     _exact_keys(value, required=required, optional=optional)
     provider_ids = value["providerIds"]
     if not isinstance(provider_ids, dict):
@@ -481,8 +635,8 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
             if contract_version == MOVIEVAULT_V4_CONTRACT
             else []
         ),
-        "subtitleLanguages": (
-            _subtitle_languages(value["subtitleLanguages"])
+        "subtitles": (
+            _subtitles(value["subtitles"], release_id=str(value.get("releaseId")))
             if contract_version == MOVIEVAULT_V4_CONTRACT
             else []
         ),
@@ -490,6 +644,17 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
             _packaging(value["packaging"], release_id=str(value.get("releaseId")))
             if contract_version == MOVIEVAULT_V4_CONTRACT
             else []
+        ),
+        **(
+            _release_video_fields(value, release_id=str(value.get("releaseId")))
+            if contract_version == MOVIEVAULT_V4_CONTRACT
+            else {
+                "videoResolution": None,
+                "videoCodecs": [],
+                "hdrFormats": [],
+                "aspectRatios": [],
+                "discRegions": [],
+            }
         ),
     }
 
@@ -944,15 +1109,35 @@ def _release_details_enum_list(
     *,
     maximum: int,
     allowed: set[str],
+    label: str = "value",
 ) -> list[str]:
-    if (
-        not isinstance(value, list)
-        or len(value) > maximum
-        or any(not isinstance(item, str) or item not in allowed for item in value)
-        or len(set(value)) != len(value)
-    ):
+    """Parse an enum array from the release-details resolver.
+
+    Two policy changes from the original, aligning this path with the sync
+    feed's parsers (see the note on AUDIO_TRACK_CODECS):
+
+    - An unrecognized member is logged and kept, not rejected. Rejecting raised
+      `release_details_response_invalid`, which discards the *entire* resolve
+      response - so MovieVault shipping one new codec value blanked every field
+      of every lookup until this repo caught up.
+    - An exact duplicate is dropped rather than rejected. It is a producer slip
+      with an obvious lossless fix, and it is not worth the whole response.
+    """
+    if not isinstance(value, list) or len(value) > maximum:
         raise MovieVaultV2Error("release_details_response_invalid")
-    return list(value)
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item or len(item) > 32:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        if item not in allowed:
+            logger.warning(
+                "movievault_v2: unrecognized release-details %s value %r - storing raw value",
+                label,
+                item,
+            )
+        if item not in result:
+            result.append(item)
+    return result
 
 
 def _release_details_language_list(value: Any, *, maximum: int) -> list[str]:
@@ -981,35 +1166,27 @@ def _release_details_video(value: Any) -> dict[str, Any]:
     )
     result: dict[str, Any] = {}
     if item.get("resolution") is not None:
-        if item["resolution"] not in {"480p", "576p", "720p", "1080i", "1080p", "2160p"}:
-            raise MovieVaultV2Error("release_details_response_invalid")
-        result["resolution"] = item["resolution"]
+        result["resolution"] = _video_resolution(item["resolution"], release_id="<resolver>")
     if "codecs" in item:
         result["codecs"] = _release_details_enum_list(
             item["codecs"],
-            maximum=5,
-            allowed={"mpeg2", "vc1", "h264", "hevc", "av1"},
+            maximum=MAX_VIDEO_CODECS,
+            allowed=VIDEO_CODECS,
+            label="videoCodecs",
         )
     if "hdrFormats" in item:
         result["hdrFormats"] = _release_details_enum_list(
             item["hdrFormats"],
-            maximum=5,
-            allowed={"hdr", "hdr10", "hdr10_plus", "hlg", "dolby_vision"},
+            maximum=MAX_HDR_FORMATS,
+            allowed=HDR_FORMATS,
+            label="hdrFormats",
         )
     if "aspectRatios" in item:
-        ratios = item["aspectRatios"]
-        if (
-            not isinstance(ratios, list)
-            or len(ratios) > 8
-            or any(
-                not isinstance(ratio, str)
-                or re.fullmatch(r"^(?:1|2)\.[0-9]{2}:1$", ratio) is None
-                for ratio in ratios
-            )
-            or len(set(ratios)) != len(ratios)
-        ):
-            raise MovieVaultV2Error("release_details_response_invalid")
-        result["aspectRatios"] = list(ratios)
+        # The old regex here was `^(?:1|2)\.[0-9]{2}:1$`, which rejected "16:9",
+        # "4:3" and "1.375:1" - all real, common ratios - and did so by discarding
+        # the whole resolve response. ASPECT_RATIO_PATTERN matches what MovieVault
+        # actually permits, and an odd value is now logged and kept.
+        result["aspectRatios"] = _aspect_ratios(item["aspectRatios"], release_id="<resolver>")
     return result
 
 
@@ -1093,13 +1270,14 @@ def _release_details_release(value: Any) -> dict[str, Any]:
     if "regions" in item:
         result["regions"] = _release_details_enum_list(
             item["regions"],
-            maximum=8,
-            allowed={"A", "B", "C", "1", "2", "3", "4", "5", "6", "7", "8", "FREE"},
+            maximum=MAX_DISC_REGIONS,
+            allowed=DISC_REGIONS,
+            label="discRegions",
         )
     if "packaging" in item:
         result["packaging"] = _release_details_enum_list(
             item["packaging"],
-            maximum=8,
+            maximum=MAX_PACKAGING,
             allowed={
                 "keep_case",
                 "amaray",
@@ -1765,9 +1943,14 @@ def _replace_audio_tracks(
         )
 
 
-def _replace_subtitle_languages(
-    cur: Any, generation: str, release_id: str, languages: list[str]
+def _replace_subtitles(
+    cur: Any, generation: str, release_id: str, subtitles: list[dict[str, Any]]
 ) -> None:
+    """Full replacement, not a diff.
+
+    Always deletes first, even when `subtitles` is empty, since an empty array is
+    meaningful: it says the release has no recorded subtitles.
+    """
     cur.execute(
         """
         DELETE FROM movievault_v2_release_subtitle_languages
@@ -1775,15 +1958,21 @@ def _replace_subtitle_languages(
         """,
         (generation, release_id),
     )
-    for position, language_code in enumerate(languages, start=1):
+    for position, subtitle in enumerate(subtitles, start=1):
         cur.execute(
             """
             INSERT INTO movievault_v2_release_subtitle_languages (
-                generation, release_id, position, language_code
+                generation, release_id, position, language_code, subtitle_type
             )
-            VALUES (%s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s)
             """,
-            (generation, release_id, position, language_code),
+            (
+                generation,
+                release_id,
+                position,
+                subtitle["languageCode"],
+                subtitle["subtitleType"],
+            ),
         )
 
 
@@ -1802,12 +1991,15 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             generation, release_id, film_id, canonical_title, release_year,
             provider_ids, release_title, edition, format, region, country_code,
             language_code, release_date, disc_count, studio, distributor,
-            runtime_minutes, assets, revision, poster, packaging
+            runtime_minutes, assets, revision, poster, packaging,
+            video_resolution, video_codecs, hdr_formats, aspect_ratios,
+            disc_regions
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s
         )
         ON CONFLICT (generation, release_id) DO UPDATE
         SET film_id = EXCLUDED.film_id,
@@ -1828,7 +2020,12 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             assets = EXCLUDED.assets,
             revision = EXCLUDED.revision,
             poster = EXCLUDED.poster,
-            packaging = EXCLUDED.packaging
+            packaging = EXCLUDED.packaging,
+            video_resolution = EXCLUDED.video_resolution,
+            video_codecs = EXCLUDED.video_codecs,
+            hdr_formats = EXCLUDED.hdr_formats,
+            aspect_ratios = EXCLUDED.aspect_ratios,
+            disc_regions = EXCLUDED.disc_regions
         """,
         (
             generation,
@@ -1852,12 +2049,17 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             record["revision"],
             Jsonb(record["poster"]) if record.get("poster") is not None else None,
             Jsonb(record.get("packaging") or []),
+            record.get("videoResolution"),
+            Jsonb(record.get("videoCodecs") or []),
+            Jsonb(record.get("hdrFormats") or []),
+            Jsonb(record.get("aspectRatios") or []),
+            Jsonb(record.get("discRegions") or []),
         ),
     )
     for lookup_hash in record["eanHashes"]:
         _insert_lookup(cur, generation, lookup_hash, "release", release_id, "release_ean")
     _replace_audio_tracks(cur, generation, release_id, record.get("audioTracks") or [])
-    _replace_subtitle_languages(cur, generation, release_id, record.get("subtitleLanguages") or [])
+    _replace_subtitles(cur, generation, release_id, record.get("subtitles") or [])
     _enqueue_poster_cache(cur, origin, record.get("poster"))
 
 
@@ -2572,9 +2774,14 @@ def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         "assets": _json_value(row.get("assets") or []),
         "revision": int(row["revision"]),
         "packaging": _json_value(row.get("packaging") or []),
+        "videoResolution": row.get("video_resolution"),
+        "videoCodecs": _json_value(row.get("video_codecs") or []),
+        "hdrFormats": _json_value(row.get("hdr_formats") or []),
+        "aspectRatios": _json_value(row.get("aspect_ratios") or []),
+        "discRegions": _json_value(row.get("disc_regions") or []),
     }
     payload.update(_poster_status_fields(conn, row.get("poster")))
-    payload["audioTracks"], payload["subtitleLanguages"] = _release_track_fields(
+    payload["audioTracks"], payload["subtitles"] = _release_track_fields(
         conn, row["generation"], row["release_id"]
     )
     return payload
@@ -2582,7 +2789,7 @@ def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
 
 def _release_track_fields(
     conn: Any, generation: Any, release_id: Any
-) -> tuple[list[dict[str, Any]], list[str]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -2596,7 +2803,7 @@ def _release_track_fields(
         audio_rows = cur.fetchall()
         cur.execute(
             """
-            SELECT language_code
+            SELECT language_code, subtitle_type
             FROM movievault_v2_release_subtitle_languages
             WHERE generation = %s AND release_id = %s
             ORDER BY position
@@ -2613,8 +2820,14 @@ def _release_track_fields(
         }
         for row in audio_rows
     ]
-    subtitle_languages = [row["language_code"] for row in subtitle_rows]
-    return audio_tracks, subtitle_languages
+    subtitles = [
+        {
+            "languageCode": row["language_code"],
+            "subtitleType": row.get("subtitle_type") or DEFAULT_SUBTITLE_TYPE,
+        }
+        for row in subtitle_rows
+    ]
+    return audio_tracks, subtitles
 
 
 def _box_set_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
