@@ -94,7 +94,11 @@ try:
     from .next_metadata import metadata_receiver_plugins
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
-    from .next_metadata import normalize_movie_field_locks
+    from .next_metadata import (
+        normalize_audio_tracks,
+        normalize_movie_field_locks,
+        normalize_subtitles,
+    )
     from .next_metadata import movie_locked_fields
     from .next_metadata import movie_genre_keys
     from .next_metadata import MOVIE_LOCKABLE_FIELDS
@@ -314,7 +318,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import metadata_receiver_plugins
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
-    from next_metadata import normalize_movie_field_locks
+    from next_metadata import (
+        normalize_audio_tracks,
+        normalize_movie_field_locks,
+        normalize_subtitles,
+    )
     from next_metadata import movie_locked_fields
     from next_metadata import movie_genre_keys
     from next_metadata import MOVIE_LOCKABLE_FIELDS
@@ -8893,6 +8901,9 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "purchase_date": purchase_date,
         "purchase_price": payload.get("purchasePrice") or payload.get("purchase_price"),
         "estimated_value": payload.get("estimatedValue") or payload.get("estimated_value"),
+        "estimated_value_currency": (
+            payload.get("estimatedValueCurrency") or payload.get("estimated_value_currency")
+        ),
         "location": payload.get("location"),
         "metadata": metadata,
     }
@@ -8983,6 +8994,31 @@ def movie_estimated_value(body: dict[str, Any], existing: dict[str, Any]) -> Dec
     return value.quantize(Decimal("0.01"))
 
 
+def movie_estimated_value_currency(body: dict[str, Any], existing: dict[str, Any]) -> str | None:
+    """The ISO 4217 code an estimated value is expressed in.
+
+    Shape-validated rather than checked against an allow-list. The pickers offer
+    the seven currencies the price converter can fetch rates for, but a stored
+    row must never become unsaveable because that list changed, and a user may
+    legitimately hold a disc priced in something else.
+
+    Deliberately no default: a missing currency stays missing. Filling in EUR, or
+    the user's display preference, would attach a unit to money that nobody
+    stated - and the preference can change later, silently reinterpreting every
+    amount it had been applied to.
+    """
+    keys = ("estimatedValueCurrency", "estimated_value_currency")
+    if not any(key in body for key in keys):
+        return existing.get("estimated_value_currency")
+    raw = next(body[key] for key in keys if key in body)
+    text = (clean_text(raw) or "").upper()
+    if not text:
+        return None
+    if not re.fullmatch(r"[A-Z]{3}", text):
+        raise NextApiError("estimatedValueCurrency must be a three-letter ISO 4217 code", 400)
+    return text
+
+
 def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
     aliases = {
         "director": ("director",),
@@ -8997,22 +9033,47 @@ def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
     return edits
 
 
+def _movie_edit_tracks(raw: Any, normalizer, *, label: str) -> list[Any]:
+    try:
+        return normalizer(raw)
+    except ValueError as exc:
+        raise NextApiError(422, "invalid_request", f"{label}: {exc}") from exc
+
+
 def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
     edits: dict[str, Any] = {}
-    if "hdr" in body:
-        edits["hdr"] = clean_text(body.get("hdr"))
+    hdr_keys = ("hdr", "hdrFormats", "hdr_formats")
+    if any(key in body for key in hdr_keys):
+        raw = next(body[key] for key in hdr_keys if key in body)
+        edits["hdr"] = _movie_edit_csv_list(raw)
     if "packaging" in body:
         edits["packaging"] = _movie_edit_csv_list(body.get("packaging"))
-    ratio_keys = ("screenRatio", "screen_ratios", "screenRatios")
+    region_keys = ("regions", "discRegions", "disc_regions")
+    if any(key in body for key in region_keys):
+        raw = next(body[key] for key in region_keys if key in body)
+        edits["regions"] = _movie_edit_csv_list(raw)
+    resolution_keys = ("videoResolution", "video_resolution")
+    if any(key in body for key in resolution_keys):
+        raw = next(body[key] for key in resolution_keys if key in body)
+        edits["video_resolution"] = clean_text(raw)
+    codec_keys = ("videoCodecs", "video_codecs")
+    if any(key in body for key in codec_keys):
+        raw = next(body[key] for key in codec_keys if key in body)
+        edits["video_codecs"] = _movie_edit_csv_list(raw)
+    ratio_keys = ("screenRatio", "screen_ratios", "screenRatios", "aspectRatios")
     if any(key in body for key in ratio_keys):
         raw = next(body[key] for key in ratio_keys if key in body)
-        edits["screen_ratios"] = clean_text(raw)
+        edits["screen_ratios"] = _movie_edit_csv_list(raw)
     audio_keys = ("audioTracks", "audio_tracks")
     if any(key in body for key in audio_keys):
         raw = next(body[key] for key in audio_keys if key in body)
-        edits["audio_tracks"] = _movie_edit_csv_list(raw)
-    if "subtitles" in body:
-        edits["subtitles"] = _movie_edit_csv_list(body.get("subtitles"))
+        edits["audio_tracks"] = _movie_edit_tracks(
+            raw, normalize_audio_tracks, label="audioTracks"
+        )
+    subtitle_keys = ("subtitles", "subtitleLanguages")
+    if any(key in body for key in subtitle_keys):
+        raw = next(body[key] for key in subtitle_keys if key in body)
+        edits["subtitles"] = _movie_edit_tracks(raw, normalize_subtitles, label="subtitles")
     if "contentRating" in body or "content_rating" in body:
         rating = clean_text(body.get("contentRating", body.get("content_rating")))
         country = (clean_text(body.get("ratingCountry") or body.get("rating_country")) or "NL").upper()
@@ -9036,11 +9097,19 @@ def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -
     )
     assignments: list[str] = []
     values: list[Any] = []
-    for col in ("hdr", "screen_ratios"):
+    for col in ("video_resolution",):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(edits[col])
-    for col in ("audio_tracks", "subtitles", "packaging"):
+    for col in (
+        "audio_tracks",
+        "subtitles",
+        "packaging",
+        "hdr",
+        "screen_ratios",
+        "regions",
+        "video_codecs",
+    ):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(Jsonb(json_ready(edits[col] or [])))
@@ -9083,6 +9152,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             location_id=%s,
             runtime_minutes=%s,
             estimated_value=%s,
+            estimated_value_currency=%s,
             metadata = COALESCE(metadata, '{}'::jsonb) || %s,
             updated_at=now()
         WHERE id=%s
@@ -9105,6 +9175,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             payload.get("location_id"),
             payload.get("runtime_minutes"),
             payload.get("estimated_value"),
+            payload.get("estimated_value_currency"),
             Jsonb(json_ready(metadata_patch)),
             movie_uuid,
         ),
@@ -9178,6 +9249,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "location_id": location_id,
         "runtime_minutes": movie_runtime_value(body, existing),
         "estimated_value": movie_estimated_value(body, existing),
+        "estimated_value_currency": movie_estimated_value_currency(body, existing),
         "metadata_edits": movie_metadata_edits(body),
         "technical_edits": movie_technical_edits(body),
         "field_locks": movie_effective_field_locks(body, existing),
@@ -9187,11 +9259,16 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
 # Maps a canonical technical-spec column to the receiver payload key the
 # MovieVault contribution template expects (camelCase contract).
 MOVIE_TECHNICAL_RECEIVER_KEYS: dict[str, str] = {
-    "hdr": "hdr",
+    # Keyed to distribution-4's names where one exists, so a receiver sees the
+    # same vocabulary the feed uses rather than a DiscVault-only spelling.
+    "hdr": "hdrFormats",
     "packaging": "packaging",
-    "screen_ratios": "screenRatios",
+    "screen_ratios": "aspectRatios",
     "audio_tracks": "audioTracks",
     "subtitles": "subtitles",
+    "regions": "discRegions",
+    "video_resolution": "videoResolution",
+    "video_codecs": "videoCodecs",
     "content_ratings": "contentRatings",
 }
 
@@ -9330,6 +9407,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 purchase_date,
                 purchase_price,
                 estimated_value,
+                estimated_value_currency,
                 location,
                 location_id,
                 owner_id,
@@ -9416,6 +9494,8 @@ def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 subtitles,
                 regions,
                 content_ratings,
+                video_resolution,
+                video_codecs,
                 updated_at
             FROM movie_technical_specs
             WHERE movie_id=%s
@@ -15598,6 +15678,7 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
                 m.purchase_date,
                 m.purchase_price,
                 m.estimated_value,
+                m.estimated_value_currency,
                 m.location,
                 m.metadata,
                 m.created_at,
@@ -16530,6 +16611,7 @@ def apply_movie_upsert(
                 purchase_date,
                 purchase_price,
                 estimated_value,
+                estimated_value_currency,
                 location,
                 client_id,
                 metadata,
@@ -16539,6 +16621,7 @@ def apply_movie_upsert(
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -16561,6 +16644,9 @@ def apply_movie_upsert(
                 purchase_date=COALESCE(EXCLUDED.purchase_date, movies.purchase_date),
                 purchase_price=COALESCE(EXCLUDED.purchase_price, movies.purchase_price),
                 estimated_value=COALESCE(EXCLUDED.estimated_value, movies.estimated_value),
+                estimated_value_currency=COALESCE(
+                    EXCLUDED.estimated_value_currency, movies.estimated_value_currency
+                ),
                 location=COALESCE(EXCLUDED.location, movies.location),
                 client_id=COALESCE(movies.client_id, EXCLUDED.client_id),
                 metadata=movies.metadata || EXCLUDED.metadata,
@@ -16588,6 +16674,7 @@ def apply_movie_upsert(
                 fields["purchase_date"],
                 fields["purchase_price"],
                 fields["estimated_value"],
+                fields["estimated_value_currency"],
                 fields["location"],
                 persistent_client_id,
                 Jsonb(fields["metadata"]),
@@ -21535,12 +21622,13 @@ def register_routes(flask_app: Flask) -> None:
                             notes,
                             location,
                             estimated_value,
+                estimated_value_currency,
                             owner_id,
                             metadata,
                             created_at,
                             updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             movie_id,
@@ -21560,6 +21648,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["notes"],
                             payload["location"],
                             payload.get("estimated_value"),
+                            payload.get("estimated_value_currency"),
                             actor.get("id"),
                             Jsonb(body.get("metadata") if isinstance(body.get("metadata"), dict) else {}),
                         ),

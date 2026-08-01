@@ -42,6 +42,15 @@ ghcr.io/helmerznl/discvault:beta     # DiscVault 26 beta
 > `helmerzNL/DiscVault`, but Docker pulls should use
 > `ghcr.io/helmerznl/discvault`.
 
+## Troubleshooting
+
+- [Library shows too few movies, or the app freezes](docs/troubleshooting/library-count-and-app-freeze.md)
+  — step-by-step check for a library counter that stops short (for example `200 / 228`)
+  or an app that becomes unresponsive after a few minutes or a PDF export.
+- [Stack-level troubleshooting](app/deploy/next/README.md) — PostgreSQL health,
+  preflight checks and log commands.
+- FAQ: https://discvault.eu/faq
+
 ## Unraid
 
 - Unraid template repo: https://github.com/helmerzNL/unraid-templates
