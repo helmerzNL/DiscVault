@@ -2506,7 +2506,7 @@ def _maybe_enqueue_movievault_v2_sync(worker_id: str) -> None:
                 """
                 SELECT ps.settings, state.last_success_at, state.last_attempt_at
                 FROM plugins AS plugin
-                JOIN plugin_settings AS ps ON ps.plugin_id = plugin.id
+                LEFT JOIN plugin_settings AS ps ON ps.plugin_id = plugin.id
                 LEFT JOIN movievault_v2_sync_state AS state
                     ON state.plugin_id = plugin.id
                 WHERE plugin.id = %s
@@ -2518,9 +2518,15 @@ def _maybe_enqueue_movievault_v2_sync(worker_id: str) -> None:
             row = cur.fetchone()
             if not row:
                 return
+            # Readiness is decided by the plugin being installed and enabled,
+            # nothing more. The origin is enforced by enforced_origin() and is
+            # stripped from the settings schema, so it is absent from
+            # plugin_settings on every install and says nothing about whether a
+            # sync can run; a plugin that has never had its config saved has no
+            # plugin_settings row at all, which is why the join is a LEFT JOIN.
             settings = row.get("settings")
-            if not isinstance(settings, dict) or not clean_text(settings.get("origin")):
-                return
+            if not isinstance(settings, dict):
+                settings = {}
             interval_hours = _movievault_v2_sync_interval(settings)
             attempts = [
                 value

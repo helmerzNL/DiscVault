@@ -41,6 +41,8 @@ from app.backend.next_plugin_runtime import plugin_install_dir
 from app.backend.next_plugin_runtime import plugin_paths
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
 from app.backend.next_plugin_runtime import seed_default_plugins_if_needed
+from app.backend.next_plugin_runtime import reconcile_plugin_replacements
+from app.backend.next_plugin_runtime import required_secrets_configured
 from app.backend import next_worker
 from app.backend.next_worker import apply_collection_import_review
 from app.backend.next_worker import import_release_date
@@ -655,6 +657,25 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertIn("metadata_source", plugin.manifest["categories"])
         self.assertNotIn("person_details", plugin.manifest["capabilities"])
         self.assertNotIn("person_details", plugin.runtime["entrypoints"])
+
+    def test_movievault_v2_ships_as_the_default_movievault_source(self):
+        """v2 is the MovieVault source a fresh install uses, ranked above 26.
+
+        The order matters as much as the flag: metadata_source_plugins() sorts by
+        (order_index, lower(name)), and "movievault 26" sorts before
+        "movievault v2", so an equal order_index would silently hand the win to
+        26. v2 must also stay below the legacy "movievault" seed order of 50 so an
+        order inherited through reconcile_plugin_replacements() cannot outrank it.
+        """
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+
+        v2 = plugins["movievault_v2"].manifest
+        legacy = plugins["movievault_26"].manifest
+        self.assertIs(v2["defaultEnabled"], True)
+        self.assertIs(legacy["defaultEnabled"], False)
+        self.assertLess(v2["orderIndex"], legacy["orderIndex"])
+        self.assertLess(v2["orderIndex"], 50)
 
     def test_upcitemdb_is_tagged_as_bootstrap_metadata_source(self):
         discovery = discover_plugins()
@@ -1510,6 +1531,118 @@ class PluginAutoUpdateTests(unittest.TestCase):
         self.assertTrue(plugin_auto_update_enabled())
         set_plugin_auto_update_enabled(None)
         self.assertFalse(plugin_auto_update_enabled())
+
+
+class RequiredSecretsConfiguredTests(unittest.TestCase):
+    """Distinct from ``secretsConfigured`` ("at least one secret exists"), which
+    is true as soon as any one field of a multi-secret plugin is filled in."""
+
+    def test_plugin_without_secrets_is_configured(self):
+        self.assertTrue(required_secrets_configured({"secrets": []}, {}))
+        self.assertTrue(required_secrets_configured({}, {}))
+
+    def test_optional_secrets_do_not_block(self):
+        schema = {"secrets": [{"name": "apiKey"}]}
+        self.assertTrue(required_secrets_configured(schema, {}))
+
+    def test_missing_required_secret_blocks(self):
+        schema = {"secrets": [{"name": "apiKey", "required": True}]}
+        self.assertFalse(required_secrets_configured(schema, {}))
+
+    def test_present_required_secret_passes(self):
+        schema = {"secrets": [{"name": "apiKey", "required": True}]}
+        self.assertTrue(
+            required_secrets_configured(schema, {"apiKey": {"configured": True}})
+        )
+
+    def test_one_of_several_required_secrets_is_not_enough(self):
+        schema = {
+            "secrets": [
+                {"name": "apiKey", "required": True},
+                {"name": "apiSecret", "required": True},
+            ]
+        }
+        refs = {"apiKey": {"configured": True}}
+        self.assertFalse(required_secrets_configured(schema, refs))
+        refs["apiSecret"] = {"configured": True}
+        self.assertTrue(required_secrets_configured(schema, refs))
+
+    def test_tmdb_bundled_manifest_needs_its_api_key(self):
+        discovery = discover_plugins()
+        plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
+        schema = plugins["tmdb"].manifest["settingsSchema"]
+        self.assertFalse(required_secrets_configured(schema, {}))
+        self.assertTrue(
+            required_secrets_configured(schema, {"apiKey": {"configured": True}})
+        )
+
+
+class ReplacementOrderFloorTests(unittest.TestCase):
+    """A replacement inherits the legacy plugin's enabled state, not a licence to
+    outrank where DiscVault ships it. A v25 import writes order_index = index*10,
+    so a legacy "movievault" row can sit far above movievault_v2."""
+
+    class _Cursor:
+        def __init__(self, rows, statements):
+            self._rows = rows
+            self._statements = statements
+            self._last = None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, sql, params=None):
+            self._statements.append((" ".join(sql.split()), params))
+            self._last = sql
+
+        def fetchall(self):
+            return list(self._rows)
+
+        def fetchone(self):
+            return None
+
+    class _Conn:
+        def __init__(self, rows):
+            self.rows = rows
+            self.statements = []
+
+        def cursor(self):
+            return ReplacementOrderFloorTests._Cursor(self.rows, self.statements)
+
+    def _run(self, legacy_order, manifest_order):
+        discovery = types.SimpleNamespace(
+            plugin_id="movievault_26",
+            manifest={
+                "id": "movievault_26",
+                "replacesPlugins": ["movievault"],
+                "orderIndex": manifest_order,
+            },
+        )
+        conn = self._Conn(
+            [
+                {"id": "movievault_26", "enabled": False, "order_index": manifest_order},
+                {"id": "movievault", "enabled": True, "order_index": legacy_order},
+            ]
+        )
+        reconcile_plugin_replacements(
+            conn,
+            plugins=[discovery],
+            has_plugins_table=False,
+            has_metadata_plugins_table=True,
+        )
+        for sql, params in conn.statements:
+            if sql.startswith("UPDATE metadata_plugins SET enabled=true"):
+                return params[0]
+        self.fail("replacement was never promoted")
+
+    def test_low_legacy_order_cannot_promote_the_replacement(self):
+        self.assertEqual(self._run(legacy_order=10, manifest_order=55), 55)
+
+    def test_higher_legacy_order_is_still_inherited(self):
+        self.assertEqual(self._run(legacy_order=80, manifest_order=55), 80)
 
 
 if __name__ == "__main__":

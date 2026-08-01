@@ -1,5 +1,53 @@
 # DiscVault Release Notes
 
+## 26.7.25 - MovieVault v2 is the default metadata source
+
+**Two changes here override existing settings. Read the last two bullets.**
+
+- `movievault_v2` now ships enabled and is the highest-priority MovieVault
+  metadata source (order 45); `movievault_26` moves to order 55 and now ships
+  disabled. A fresh install uses the v2 distribution catalog without an admin
+  having to find and enable it first. Order 45 rather than a straight swap:
+  metadata sources are sorted by `(order_index, lower(name))`, and on a tie
+  "MovieVault 26" sorts ahead of "MovieVault v2".
+- The anonymous bucket fallback is now real and always on (bundled
+  `movievault_v2` 1.5.0). It was declared as a setting but nothing ever read it,
+  so a barcode that the locally synced index did not carry simply missed - which
+  is every title MovieVault has not distributed into this instance's index yet.
+  A barcode or box-set lookup that misses locally now asks MovieVault's
+  hash-keyed bucket index before giving up. Title queries cannot use it: buckets
+  are keyed by the hash of the EAN.
+- "Allow anonymous bucket fallback" has disappeared from the plugin-settings UI
+  and any stored value is removed. Like the MovieVault v2 endpoint, it is now
+  enforced by DiscVault rather than switchable; `MOVIEVAULT_V2_BUCKET_FALLBACK=0`
+  overrides it out-of-band. Every bucket failure - unreachable origin, malformed
+  bucket, incompatible contract - degrades to a miss and never fails the lookup
+  that produced it.
+- Saving credentials for TMDb, Plex, Jellyfin or Trakt now enables that plugin
+  automatically. Storing a TMDb key and then having to hunt for a separate
+  toggle was a dead end; configuring one of these integrations is the intent to
+  use it. Deliberately one-directional: clearing a key never disables the plugin,
+  so a key rotation cannot drop a metadata source mid-rotation. Price providers
+  are not included - starting to scrape shops stays a separate, deliberate act.
+- Fixed: the periodic MovieVault v2 sync never ran. The scheduler required a
+  stored `origin` in plugin settings, but the origin has been enforced
+  server-side and stripped from the settings schema since `26.6.x`, so that value
+  is empty on every install - leaving the index permanently unsynced. Readiness
+  is now decided by the plugin being installed and enabled, and a plugin whose
+  config was never saved no longer needs a settings row at all.
+- **Existing installs are flipped once.** The migration sets `movievault_v2` to
+  enabled at order 45 and `movievault_26` to disabled at order 55, overriding a
+  deliberate operator choice if one was made. There is no way to tell a
+  deliberate setting from an untouched default, so re-apply your preference after
+  upgrading if it differed.
+- **Contribution back to MovieVault stops until you re-enable it.**
+  `movievault_26` is DiscVault's only `metadata_receiver` - the channel that
+  sends barcode updates, container updates and activity summaries back to
+  MovieVault. `movievault_v2` is read-only and has none of those capabilities.
+  With 26 disabled, contribution silently no-ops. Enable `movievault_26` again in
+  App Admin → Plugins if you want to keep contributing; it costs nothing, since
+  v2 still outranks it as a metadata source.
+
 ## 26.7.11 - Synced box-set covers survive and show in the library
 
 - A box set pushed from another client keeps its cover. The container sync

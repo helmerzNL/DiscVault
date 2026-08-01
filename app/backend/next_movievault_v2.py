@@ -194,6 +194,35 @@ def enforced_origin() -> str:
     return normalize_origin(DEFAULT_MOVIEVAULT_V2_ORIGIN)
 
 
+# The anonymous bucket fallback is enforced by DiscVault for the same reason as
+# the origin: it is what resolves a disc the locally synced index does not carry
+# yet, so a barcode lookup without it silently misses every title MovieVault has
+# not distributed into this instance's index. It is therefore always on and is
+# stripped from the plugin's settingsSchema (ENFORCED_PLUGIN_SETTINGS); any value
+# left in plugin settings is ignored at runtime.
+DEFAULT_MOVIEVAULT_V2_BUCKET_FALLBACK = True
+MOVIEVAULT_V2_BUCKET_FALLBACK_ENV = "MOVIEVAULT_V2_BUCKET_FALLBACK"
+_BUCKET_FALLBACK_OFF_VALUES = {"0", "false", "no", "off"}
+
+
+def enforced_bucket_fallback() -> bool:
+    """Return whether the anonymous bucket fallback is active.
+
+    Resolution order:
+    1. ``MOVIEVAULT_V2_BUCKET_FALLBACK`` environment variable, when it spells out
+       a recognised "off" value (``0``/``false``/``no``/``off``, any casing).
+    2. ``DEFAULT_MOVIEVAULT_V2_BUCKET_FALLBACK`` otherwise.
+
+    Anything unrecognised - including an empty or malformed override - resolves to
+    the default, so a misconfigured deployment can never silently lose the
+    fallback.
+    """
+    override = os.environ.get(MOVIEVAULT_V2_BUCKET_FALLBACK_ENV)
+    if override and override.strip().lower() in _BUCKET_FALLBACK_OFF_VALUES:
+        return False
+    return DEFAULT_MOVIEVAULT_V2_BUCKET_FALLBACK
+
+
 def _integer(value: Any, *, minimum: int, maximum: int | None = None) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
         raise MovieVaultV2Error("record_invalid")
@@ -3175,11 +3204,21 @@ def movievault_v2_plugin_context(
         )
 
     def bucket_callback(request: dict[str, Any]) -> dict[str, Any]:
-        return bucket_lookup(
-            safe_settings,
-            request,
-            contract_version=contract_version,
-        )
+        """Resolve a barcode hash against MovieVault's anonymous bucket index.
+
+        The fallback is supplementary to the locally synced index, so every
+        failure mode - an unreachable origin, a malformed or undigestable bucket,
+        an incompatible contract - degrades to an empty result set rather than an
+        exception. A raise here would cross into the plugin and fail the whole
+        barcode lookup, losing the local hit the caller already has."""
+        try:
+            return bucket_lookup(
+                safe_settings,
+                request,
+                contract_version=contract_version,
+            )
+        except MovieVaultV2Error as exc:
+            return {"state": "unavailable", "results": [], "errorCode": exc.code}
 
     def release_details_callback(request: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -3208,6 +3247,7 @@ def movievault_v2_plugin_context(
         "movievaultV2Status": status_callback,
         "movievaultV2Sync": sync_callback,
         "movievaultV2BucketLookup": bucket_callback,
+        "movievaultV2BucketFallback": enforced_bucket_fallback(),
         "movievaultV2ReleaseDetails": release_details_callback,
         "movievaultDistributionContract": contract_version,
         "movievaultDistributionContractRange": {

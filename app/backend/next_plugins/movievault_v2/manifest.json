@@ -1,7 +1,7 @@
 {
   "id": "movievault_v2",
   "name": "MovieVault v2",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "minimumDiscVaultVersion": "26.4.53",
@@ -23,8 +23,8 @@
     ],
     "secrets": []
   },
-  "defaultEnabled": false,
-  "orderIndex": 52,
+  "defaultEnabled": true,
+  "orderIndex": 45,
   "premiumFeatureKey": "metadata.source.movievault.use",
   "entitlements": {"source_use": "metadata.source.movievault.use", "source_bulk": "metadata.source.movievault.bulk"}
 }

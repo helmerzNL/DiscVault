@@ -42,6 +42,29 @@ def _lookup(payload, context):
     return (result or {}).get("results") or []
 
 
+def _bucket_lookup(payload, context):
+    """Resolve a barcode against MovieVault's anonymous bucket index.
+
+    The local index only carries what this instance has synced, so a disc
+    MovieVault knows about but has not distributed here yet misses entirely.
+    Buckets are keyed by the SHA-256 of the EAN, which is why this only serves
+    barcode lookups - there is no title index to fall back to.
+
+    Core already degrades every failure to an empty result set; the guard here is
+    belt-and-braces because the plugin runs in-process and a raise would fail the
+    surrounding lookup rather than just the fallback."""
+    if (context or {}).get("movievaultV2BucketFallback") is False:
+        return []
+    digest = _barcode_hash((payload or {}).get("barcode"))
+    callback = _callback(context, "movievaultV2BucketLookup")
+    if not digest or callback is None:
+        return []
+    try:
+        return (callback({"hash": digest}) or {}).get("results") or []
+    except Exception:
+        return []
+
+
 def _release_uuid(payload):
     """The v4 catalog keys releases by UUID, so only a well-formed UUID is a usable lookup id.
 
@@ -215,6 +238,10 @@ def search_barcode(payload, context=None):
         return _error()
     release = next((item for item in records if item.get("recordType") == "release"), None)
     if release is None:
+        # Not in the synced index - ask the anonymous bucket before giving up.
+        records = _bucket_lookup(payload, context)
+        release = next((item for item in records if item.get("recordType") == "release"), None)
+    if release is None:
         return {"status": "miss", "provider": PROVIDER_ID, "items": []}
     # Fall back to the resolver's poster and/or technical specs when the
     # synced record doesn't carry them yet (not synced, or a v4-sync-disabled
@@ -232,6 +259,8 @@ def search_title(payload, context=None):
     records = _lookup(payload, context)
     if records is None:
         return _error()
+    # No bucket fallback here: buckets are keyed by the hash of the EAN, so a
+    # title query has nothing to look up.
     items = [_release(item) for item in records[:_limit(context)] if item.get("recordType") == "release"]
     return {"status": "hit" if items else "miss", "provider": PROVIDER_ID, "items": items}
 
@@ -258,6 +287,10 @@ def box_set_candidates(payload, context=None):
     if records is None:
         return _error()
     box_sets = [item for item in records if item.get("recordType") == "box_set"]
+    if not box_sets:
+        # A box set is reachable by hash too: bucket records match on the set's
+        # own eanHashes as well as on each member's discBarcodeHash.
+        box_sets = [item for item in _bucket_lookup(payload, context) if item.get("recordType") == "box_set"]
     # A scanned box-set's cover arrives on the resolver's `boxSet`, so fill it in
     # when the synced record has none. Only the first proposal matches the
     # scanned barcode, so the resolver's cover is applied to that one alone.

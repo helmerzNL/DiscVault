@@ -1706,7 +1706,10 @@ class NextMetadataPolicyTests(unittest.TestCase):
     @mock.patch(
         "app.backend.next_metadata.plugin_config_from_db",
         return_value={
-            "settings": {"origin": "https://movievault.example", "bucketFallback": False},
+            # Neither field is read from stored settings any more: both the origin
+            # and the bucket fallback are enforced server-side and stripped from
+            # the schema. Kept here only as a realistic stored-settings blob.
+            "settings": {"origin": "https://movievault.example"},
             "settingsConfigured": True,
             "secretNames": [],
             "secretsConfigured": True,
