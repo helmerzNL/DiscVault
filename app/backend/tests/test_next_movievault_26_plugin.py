@@ -272,6 +272,51 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["candidates"][0]["tmdbId"], "424694")
         self.assertNotIn("boxSetProposal", result)
 
+    def test_barcode_release_match_falls_back_to_release_poster(self):
+        original_get = movievault_26._get
+        try:
+            movievault_26._get = lambda *_args, **_kwargs: _v3_barcode_release(
+                {"id": "mv_movie_1", "title": "Bohemian Rhapsody", "year": "2018"},
+                {
+                    "format": "4K UHD",
+                    "barcode": "8712626068546",
+                    "posterUrl": "https://img.example/release.jpg",
+                },
+            )
+            result = movievault_26.search_barcode(
+                {"barcode": "8712626068546"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["movie"]["posterUrl"], "https://img.example/release.jpg")
+        self.assertEqual(result["items"][0]["posterUrl"], "https://img.example/release.jpg")
+
+    def test_barcode_release_match_prefers_movie_poster(self):
+        original_get = movievault_26._get
+        try:
+            movievault_26._get = lambda *_args, **_kwargs: _v3_barcode_release(
+                {
+                    "id": "mv_movie_1",
+                    "title": "Bohemian Rhapsody",
+                    "year": "2018",
+                    "poster_url": "https://img.example/movie.jpg",
+                },
+                {
+                    "format": "4K UHD",
+                    "barcode": "8712626068546",
+                    "posterUrl": "https://img.example/release.jpg",
+                },
+            )
+            result = movievault_26.search_barcode(
+                {"barcode": "8712626068546"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["movie"]["posterUrl"], "https://img.example/movie.jpg")
+        self.assertEqual(result["items"][0]["posterUrl"], "https://img.example/movie.jpg")
+
     def test_barcode_hit_surfaces_persistable_movievault_identifier(self):
         # The movievault_26 catalog id must be surfaced as an identifiers[] entry
         # so the enrichment write path persists the movievault_26 link in
