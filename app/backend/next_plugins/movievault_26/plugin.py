@@ -536,7 +536,17 @@ def _v3_barcode_match(envelope):
         if isinstance(specs, dict) and isinstance(match.get("release"), dict):
             release = dict(match["release"])
             release.setdefault("technicalSpecs", specs)
-            for key in ("format", "hdr", "audioTracks", "subtitles", "regions", "packaging"):
+            for key in (
+                "format",
+                "hdr",
+                "audioTracks",
+                "subtitles",
+                "regions",
+                "packaging",
+                "screenRatios",
+                "videoResolution",
+                "videoCodecs",
+            ):
                 if specs.get(key) not in (None, "", [], {}) and release.get(key) in (None, "", [], {}):
                     release[key] = specs[key]
             match["release"] = release
@@ -582,6 +592,8 @@ def _v3_movie_item(envelope):
             "regions",
             "packaging",
             "screenRatios",
+            "videoResolution",
+            "videoCodecs",
             "technicalSpecs",
             "country",
             "language",
@@ -630,7 +642,13 @@ def _text(value, default=""):
     return str(value or "").strip()
 
 
-def _packaging_list(value):
+def _string_list(value):
+    """Coerce to a list of non-empty strings, keeping a scalar as one element.
+
+    Used for every technical field DiscVault now stores as a jsonb list. The
+    alternative, `_text`, joins a list into "a, b" - which is how hdr and
+    screenRatios used to lose their structure on the way in from the v3 API.
+    """
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     text = str(value or "").strip()
@@ -1560,16 +1578,20 @@ def _technical_payload(item):
             or item.get("media_type")
             or specs.get("format")
         ),
-        "hdr": _text(
-            item.get("hdr")
+        "hdr": _string_list(
+            item.get("hdrFormats")
+            or item.get("hdr")
             or item.get("hdrFormat")
             or item.get("hdr_format")
+            or specs.get("hdrFormats")
             or specs.get("hdr")
         ),
-        "packaging": _packaging_list(item.get("packaging") or specs.get("packaging")),
-        "screenRatios": _text(
-            item.get("screenRatios")
+        "packaging": _string_list(item.get("packaging") or specs.get("packaging")),
+        "screenRatios": _string_list(
+            item.get("aspectRatios")
+            or item.get("screenRatios")
             or item.get("screen_ratios")
+            or specs.get("aspectRatios")
             or specs.get("screenRatios")
             or specs.get("screen_ratios")
         ),
@@ -1581,7 +1603,24 @@ def _technical_payload(item):
             or []
         ),
         "subtitles": item.get("subtitles") or specs.get("subtitles") or [],
-        "regions": item.get("regions") or specs.get("regions") or [],
+        "regions": _string_list(
+            item.get("discRegions")
+            or item.get("regions")
+            or specs.get("discRegions")
+            or specs.get("regions")
+        ),
+        "videoResolution": _text(
+            item.get("videoResolution")
+            or item.get("video_resolution")
+            or specs.get("videoResolution")
+            or specs.get("video_resolution")
+        ),
+        "videoCodecs": _string_list(
+            item.get("videoCodecs")
+            or item.get("video_codecs")
+            or specs.get("videoCodecs")
+            or specs.get("video_codecs")
+        ),
         "contentRatings": (
             item.get("contentRatings")
             or item.get("content_ratings")
@@ -1981,8 +2020,12 @@ def _release_candidate_payload(movie, release, barcode):
             "language",
             "regions",
             "hdr",
+            "screenRatios",
+            "videoResolution",
+            "videoCodecs",
             "audioTracks",
             "subtitles",
+            "packaging",
             "technicalSpecs",
             "distributor",
             "barcode",
