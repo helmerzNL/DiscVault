@@ -413,6 +413,58 @@ class ExportHeaderForwardingTests(unittest.TestCase):
     def test_frontend_sends_the_json_content_type(self):
         self.assertIn('"Content-Type": "application/json"', self.export_js)
 
+    def test_frontend_warns_when_the_library_is_not_fully_loaded(self):
+        # getExportRows() only sees what the SPA has loaded, so exporting during
+        # background hydration silently produces a partial file.
+        self.assertIn("function hydrationIncomplete()", self.export_js)
+        self.assertIn("collection.exportIncomplete", self.export_js)
+        self.assertIn("library-export-warning", self.export_js)
+
+    def test_frontend_collects_the_rows_once_per_export(self):
+        # getExportRows() re-runs the library filters and a full sort of the
+        # collection; the dialog and the submit handler used to each pay for it.
+        self.assertIn("var preparedRows = collectExportRows();", self.export_js)
+        self.assertIn("rows: preparedRows,", self.export_js)
+        self.assertEqual(self.export_js.count("collectExportRows()"), 3)
+
+    def test_frontend_gives_the_download_time_to_read_the_blob(self):
+        start = self.export_js.index("function triggerDownload(")
+        end = self.export_js.index("\n  function ", start + 1)
+        self.assertIn("}, 60000);", self.export_js[start:end])
+
+
+class PdfRowCeilingTests(unittest.TestCase):
+    """ReportLab lays the whole table out in memory, synchronously, in the request.
+
+    With only two gunicorn workers an unbounded PDF render occupies half the app's
+    request capacity for its full duration and can be killed by the worker timeout
+    mid-flight, which takes unrelated requests down with it.
+    """
+
+    def _rows(self, count):
+        return [{"title": f"Movie {index}"} for index in range(count)]
+
+    def test_an_oversized_pdf_is_rejected_before_rendering(self):
+        payload = {
+            "format": "pdf",
+            "columns": ["title"],
+            "rows": self._rows(next_export.MAX_PDF_EXPORT_ROWS + 1),
+        }
+        with self.assertRaises(NextApiError) as ctx:
+            next_export.build_export(payload)
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("CSV", str(ctx.exception))
+
+    def test_the_ceiling_only_applies_to_pdf(self):
+        rows = self._rows(next_export.MAX_PDF_EXPORT_ROWS + 1)
+        body, _, _ = next_export.build_export(
+            {"format": "csv", "columns": ["title"], "rows": rows}
+        )
+        self.assertIn(b"Movie 5000", body)
+
+    def test_the_ceiling_is_below_the_generic_row_limit(self):
+        self.assertLess(next_export.MAX_PDF_EXPORT_ROWS, next_export_columns.MAX_EXPORT_ROWS)
+
 
 if __name__ == "__main__":
     unittest.main()

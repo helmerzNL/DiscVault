@@ -1309,7 +1309,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         <div class="actions">
           <button type="button" onclick="loadCollection()" data-next-i18n="common.refresh">Refresh</button>
           <a class="button" href="/api/next/migration" data-next-i18n="nav.migration">Migration</a>
-          <a class="button" href="/api/next/movies?limit=200" data-next-i18n="nav.moviesJson">Movies JSON</a>
+          <a class="button" href="/api/next/movies?limit=1000" data-next-i18n="nav.moviesJson">Movies JSON</a>
         </div>
       </div>
     </header>
@@ -4124,7 +4124,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("resultCount").textContent = tNext("collection.loading", "Loading...");
       const stats = await json("/api/next/stats");
       setClientStatus(tNext("collection.loadingMovies", "Stats loaded; loading movies..."));
-      const movies = await json("/api/next/movies?limit=200");
+      const movies = await json("/api/next/movies?limit=1000");
       setClientStatus(tNext("collection.loadingPlugins", "Movies loaded; loading containers..."));
       const containers = await json("/api/next/containers");
       setClientStatus(tNext("collection.loadingContainers", "Containers loaded; loading metadata plugins..."));

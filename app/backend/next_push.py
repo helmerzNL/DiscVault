@@ -7,6 +7,7 @@ import hashlib
 import json as json_lib
 import mimetypes
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,35 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         notification_counts,
         notification_preference_map,
     )
+
+try:  # pragma: no cover - import shape depends on runtime layout
+    from .versioning import backend_version, build_sha
+except ImportError:  # pragma: no cover - supports gunicorn next_app:app
+    from versioning import backend_version, build_sha
+
+
+# Substituted into the service worker so its Cache Storage namespace changes on
+# every release. Without it the caches are keyed to a hand-maintained constant
+# and a deploy can leave clients running an app shell precached by an earlier
+# version of the worker — which is how a removed limit can reappear.
+SW_BUILD_PLACEHOLDER = "__DISCVAULT_SW_BUILD__"
+
+_SW_BUILD_SAFE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def service_worker_build_token() -> str:
+    """Cache-busting token identifying the running build."""
+    version = _SW_BUILD_SAFE.sub("-", backend_version()).strip("-") or "unknown"
+    sha = _SW_BUILD_SAFE.sub("-", build_sha()).strip("-")
+    if sha and sha != "unknown":
+        return f"{version}-{sha[:12]}"
+    return version
+
+
+def service_worker_source(path: Path, *, token: str | None = None) -> str:
+    """Read the service worker and stamp it with the current build token."""
+    source = path.read_text(encoding="utf-8")
+    return source.replace(SW_BUILD_PLACEHOLDER, token or service_worker_build_token())
 
 
 PWA_ICON_ASSETS = {
@@ -554,7 +584,10 @@ def register_next_push_routes(flask_app: Flask, *, connect) -> None:  # pragma: 
         path = _next_app().next_frontend_dir() / "service-worker.js"
         if not path.exists() or not path.is_file():
             raise NextApiError("Service worker not found", 404)
-        result = send_file(path, mimetype="application/javascript")
+        result = flask_app.response_class(
+            service_worker_source(path),
+            mimetype="application/javascript",
+        )
         result.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         return result
 

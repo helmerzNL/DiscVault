@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Nu există nimic de exportat.",
   "collection.exportFailed": "Exportul nu a putut fi creat.",
   "collection.exportRowCount": "{count} filme",
-  "collection.exportDocumentTitle": "Biblioteca DiscVault"
+  "collection.exportDocumentTitle": "Biblioteca DiscVault",
+  "collection.hydrationTruncated": "S-a putut încărca doar o parte din bibliotecă.",
+  "collection.exportIncomplete": "Până acum s-au încărcat doar {count} filme din această bibliotecă. Așteaptă finalizarea încărcării pentru un export complet.",
+  "app.updateAvailable": "Este disponibilă o versiune nouă de DiscVault.",
+  "app.updateReload": "Reîncarcă"
 }

@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Es gibt nichts zu exportieren.",
   "collection.exportFailed": "Der Export konnte nicht erstellt werden.",
   "collection.exportRowCount": "{count} Filme",
-  "collection.exportDocumentTitle": "DiscVault-Bibliothek"
+  "collection.exportDocumentTitle": "DiscVault-Bibliothek",
+  "collection.hydrationTruncated": "Es konnte nur ein Teil der Bibliothek geladen werden.",
+  "collection.exportIncomplete": "Bisher wurden nur {count} Filme dieser Bibliothek geladen. Warte, bis die Bibliothek vollständig geladen ist, um alles zu exportieren.",
+  "app.updateAvailable": "Eine neue Version von DiscVault ist verfügbar.",
+  "app.updateReload": "Neu laden"
 }

@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "沒有可匯出的內容。",
   "collection.exportFailed": "無法建立匯出檔案。",
   "collection.exportRowCount": "{count} 部電影",
-  "collection.exportDocumentTitle": "DiscVault 媒體庫"
+  "collection.exportDocumentTitle": "DiscVault 媒體庫",
+  "collection.hydrationTruncated": "只能載入部分媒體櫃。",
+  "collection.exportIncomplete": "目前這個媒體櫃只載入了 {count} 部電影。請等待媒體櫃載入完成後再匯出，以取得完整結果。",
+  "app.updateAvailable": "DiscVault 有新版本可用。",
+  "app.updateReload": "重新載入"
 }

@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Dışa aktarılacak bir şey yok.",
   "collection.exportFailed": "Dışa aktarma oluşturulamadı.",
   "collection.exportRowCount": "{count} film",
-  "collection.exportDocumentTitle": "DiscVault kitaplığı"
+  "collection.exportDocumentTitle": "DiscVault kitaplığı",
+  "collection.hydrationTruncated": "Kitaplığın yalnızca bir kısmı yüklenebildi.",
+  "collection.exportIncomplete": "Bu kitaplıktan şu ana kadar yalnızca {count} film yüklendi. Eksiksiz bir dışa aktarma için kitaplığın yüklenmesinin bitmesini bekleyin.",
+  "app.updateAvailable": "DiscVault'un yeni bir sürümü mevcut.",
+  "app.updateReload": "Yeniden yükle"
 }

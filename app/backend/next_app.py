@@ -4186,8 +4186,10 @@ def startup_status_payload(conn) -> dict[str, Any]:
 
 
 
+# Size of the movie page embedded in the first-paint snapshot. It is a page size,
+# not a cap: library-paging.js hydrates the remainder through
+# /api/next/collection/movies, whose ceiling is next_library_data.MAX_PAGE_SIZE.
 COLLECTION_MOVIE_PAGE_SIZE = 200
-COLLECTION_MOVIE_MAX_PAGE_SIZE = 500
 
 
 def collection_movie_total_count(conn, *, actor: dict[str, Any] | None = None) -> int:
@@ -23103,7 +23105,11 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/movies")
     def movies():
-        limit = min(max(int(request.args.get("limit", 50)), 1), 200)
+        # 1000 matches the sibling list routes (/api/next/api/v1/movies,
+        # /api/next/media-groups, /api/next/digital-items). The old 200 ceiling was a
+        # leftover of the removed library cap and silently truncated any caller that
+        # asked for more.
+        limit = min(max(int(request.args.get("limit", 50)), 1), 1000)
         offset = max(int(request.args.get("offset", 0)), 0)
         query = (request.args.get("q") or "").strip()
         with connect() as conn:

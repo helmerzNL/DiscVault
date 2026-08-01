@@ -2613,6 +2613,30 @@ def ui_preview_html(
       color: var(--muted);
       font-size: 12px;
     }
+    .library-hydration-warning {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--warn);
+      font-size: 12px;
+    }
+    .sw-update-banner {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 3400;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: min(640px, calc(100vw - 32px));
+      padding: 12px 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
+      font-size: 13px;
+    }
     .library-export-overlay {
       position: fixed;
       inset: 0;
@@ -2640,6 +2664,11 @@ def ui_preview_html(
     }
     .library-export-summary {
       color: var(--muted);
+      font-size: 13px;
+      margin: 0;
+    }
+    .library-export-warning {
+      color: var(--warn);
       font-size: 13px;
       margin: 0;
     }
@@ -16749,6 +16778,9 @@ def ui_preview_html(
     let libraryMovieTotal = Number(state.moviesTotal ?? (state.movies || []).length) || 0;
     let libraryMoviePageSize = Number(state.moviesPageSize) || 200;
     let libraryMoviesHasMore = state.moviesHasMore === true;
+    // Set by library-paging.js when background hydration gives up, so the counter
+    // can say why it is short instead of silently showing a truncated library.
+    let libraryHydrationWarning = "";
     let containers = state.containers || [];
     let locations = state.locations || [];
     let containerMembership = state.containerMembership || [];
@@ -16881,10 +16913,39 @@ def ui_preview_html(
     };
     let commandPaletteState = {open: false, query: "", activeIndex: 0};
     let appDebugMode = localStorage.getItem("dv_next_debug_mode") === "true";
+    // The service worker posts {type: "sw-updated"} once it has dropped the caches of a
+    // previous release. Without a listener the tab keeps running the bundle it loaded
+    // before the update, so a fix can look like it never shipped.
+    function showServiceWorkerUpdateBanner() {
+      if (document.getElementById("swUpdateBanner")) return;
+      const banner = document.createElement("div");
+      banner.id = "swUpdateBanner";
+      banner.className = "sw-update-banner";
+      banner.setAttribute("role", "status");
+      const message = document.createElement("span");
+      message.textContent = tNext("app.updateAvailable", "A new version of DiscVault is available.");
+      const reload = document.createElement("button");
+      reload.type = "button";
+      reload.className = "button primary";
+      reload.textContent = tNext("app.updateReload", "Reload");
+      reload.addEventListener("click", () => window.location.reload());
+      const dismiss = document.createElement("button");
+      dismiss.type = "button";
+      dismiss.className = "button";
+      dismiss.textContent = tNext("common.close", "Close");
+      dismiss.addEventListener("click", () => banner.remove());
+      banner.appendChild(message);
+      banner.appendChild(reload);
+      banner.appendChild(dismiss);
+      document.body.appendChild(banner);
+    }
     function registerAppServiceWorker() {
       if (!("serviceWorker" in navigator)) return;
       const canRegister = location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1";
       if (!canRegister) return;
+      navigator.serviceWorker.addEventListener("message", (event) => {
+        if (event && event.data && event.data.type === "sw-updated") showServiceWorkerUpdateBanner();
+      });
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("/service-worker.js", {updateViaCache: "none"})
           .then((registration) => registration.update().catch(() => {}))
@@ -23762,17 +23823,68 @@ def ui_preview_html(
     function containerMembershipRows() {
       return Array.isArray(containerMembership) ? containerMembership : [];
     }
+    // Resolving a container's movies used to scan the full membership table and then
+    // the full movie list, once per container per call — and libraryDisplayItems()
+    // calls it for every container, several times per render. That is quadratic in the
+    // collection size, which only became painful once the 200-movie cap was lifted.
+    // The index below is rebuilt whenever either source array is replaced; both are
+    // reassigned rather than mutated in place (see appendMovies), so identity checks
+    // are a sound cache key.
+    let containerMemberIndexCache = null;
+    function containerMemberIndex() {
+      const movieRows = movies || [];
+      const membershipRows = containerMembershipRows();
+      if (
+        containerMemberIndexCache
+        && containerMemberIndexCache.movies === movieRows
+        && containerMemberIndexCache.membership === membershipRows
+      ) {
+        return containerMemberIndexCache;
+      }
+      const idsByContainer = new Map();
+      const containerIdsByMovie = new Map();
+      membershipRows.forEach((row) => {
+        const containerId = String(row?.container_id || "");
+        const movieId = String(row?.movie_id || "");
+        if (!containerId || !movieId) return;
+        let ids = idsByContainer.get(containerId);
+        if (!ids) {
+          ids = new Set();
+          idsByContainer.set(containerId, ids);
+        }
+        if (ids.has(movieId)) return;
+        ids.add(movieId);
+        const containerIds = containerIdsByMovie.get(movieId);
+        if (containerIds) containerIds.push(containerId);
+        else containerIdsByMovie.set(movieId, [containerId]);
+      });
+      // Walk `movies` in order so each bucket keeps the library's own ordering, which
+      // is what the previous per-container filter over `movies` produced.
+      const byContainer = new Map();
+      movieRows.forEach((movie) => {
+        const movieId = String(movie?.id || "");
+        if (!movieId) return;
+        const containerIds = containerIdsByMovie.get(movieId);
+        if (!containerIds) return;
+        containerIds.forEach((containerId) => {
+          const bucket = byContainer.get(containerId);
+          if (bucket) bucket.push(movie);
+          else byContainer.set(containerId, [movie]);
+        });
+      });
+      containerMemberIndexCache = {
+        movies: movieRows,
+        membership: membershipRows,
+        byContainer,
+        idsByContainer,
+      };
+      return containerMemberIndexCache;
+    }
     function movieIdSetForContainer(containerId) {
-      const id = String(containerId || "");
-      const values = containerMembershipRows()
-        .filter((row) => String(row.container_id || "") === id)
-        .map((row) => String(row.movie_id || ""))
-        .filter(Boolean);
-      return new Set(values);
+      return containerMemberIndex().idsByContainer.get(String(containerId || "")) || new Set();
     }
     function containerMemberMovies(containerId) {
-      const memberIds = movieIdSetForContainer(containerId);
-      return (movies || []).filter((movie) => memberIds.has(String(movie.id || "")));
+      return containerMemberIndex().byContainer.get(String(containerId || "")) || [];
     }
     function containerIsNestedChild(containerId, visibleContainerIds) {
       const id = String(containerId || "");
@@ -24246,7 +24358,7 @@ def ui_preview_html(
         : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
       return `
         <article class="mode-list-card ${isContainer ? "container-row" : ""}" ${targetAttr} tabindex="0">
-          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
+          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
           <span class="mode-list-body">
             <strong>${escapeHtml(title)}</strong>
             <span class="mode-list-meta">${[year, itemFormatLabel(item)].filter(Boolean).map(escapeHtml).join(" / ")}</span>
@@ -24552,7 +24664,7 @@ def ui_preview_html(
                   <tr class="${isContainer ? "container-row " : ""}${selected ? "bulk-selected" : ""}">
                     <td class="library-list-poster-column">
                       <button type="button" class="library-list-poster-target" ${targetAttr} aria-label="${escapeHtml(title)}">
-                        ${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span class="library-list-poster-placeholder" aria-hidden="true">&mdash;</span>`}
+                        ${poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span class="library-list-poster-placeholder" aria-hidden="true">&mdash;</span>`}
                       </button>
                     </td>
                     <td class="library-list-title-column">
@@ -24939,7 +25051,7 @@ def ui_preview_html(
     }
     function posterCardHtml(movie, index) {
       const poster = usableImage(movie.poster_url);
-      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
       const meta = movie.year || "";
       const selected = index === 0 ? " selected" : "";
       return `
@@ -24957,7 +25069,7 @@ def ui_preview_html(
       const showFormatBadge = String(container.container_type || "") !== "collection" && preferences.show_container_format_badges !== false;
       const showMemberBadge = preferences.show_container_member_badges !== false;
       const memberCount = movieIdSetForContainer(container.id).size;
-      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(typeLabel)}</span>`;
+      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span>${escapeHtml(typeLabel)}</span>`;
       const meta = [
         typeLabel,
         showMemberBadge && memberCount ? `${memberCount} ${tNext("collection.movies", "Movies").toLowerCase()}` : "",
@@ -36756,7 +36868,12 @@ def ui_preview_html(
         libraryMoviesHasMore = movies.length < libraryMovieTotal;
         return added.length;
       },
+      setHydrationWarning: (message) => {
+        libraryHydrationWarning = String(message || "");
+        renderCollectionSurface();
+      },
       setHydrationComplete: () => {
+        libraryHydrationWarning = "";
         libraryMoviesHasMore = false;
         if (movies.length > libraryMovieTotal) libraryMovieTotal = movies.length;
       },
@@ -36876,6 +36993,12 @@ def ui_preview_html(
           ? `${visibleMovieCount} / ${libraryMovieTotal} ${movieLabel} · ${displayItems.length} ${tileLabel}`
           : `${visibleMovieCount} / ${libraryMovieTotal} ${movieLabel}`;
         summary.textContent = summaryText;
+        if (libraryHydrationWarning) {
+          const warning = document.createElement("span");
+          warning.className = "library-hydration-warning";
+          warning.textContent = ` · ${libraryHydrationWarning}`;
+          summary.appendChild(warning);
+        }
       }
       const navMovieCount = document.getElementById("navMovieCount");
       const navListCount = document.getElementById("navListCount");
@@ -38706,6 +38829,7 @@ def ui_preview_html(
       libraryMovieTotal = Number(state.moviesTotal ?? movies.length) || 0;
       libraryMoviePageSize = Number(state.moviesPageSize) || libraryMoviePageSize;
       libraryMoviesHasMore = state.moviesHasMore === true;
+      libraryHydrationWarning = "";
       libraryRenderLimit = LIBRARY_RENDER_STEP;
       containers = state.containers || [];
       locations = state.locations || locations || [];

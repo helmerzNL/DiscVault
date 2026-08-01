@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Pole midagi eksportida.",
   "collection.exportFailed": "Eksporti ei õnnestunud luua.",
   "collection.exportRowCount": "{count} filmi",
-  "collection.exportDocumentTitle": "DiscVaulti kogu"
+  "collection.exportDocumentTitle": "DiscVaulti kogu",
+  "collection.hydrationTruncated": "Kogust õnnestus laadida ainult osa.",
+  "collection.exportIncomplete": "Seni on sellest kogust laaditud ainult {count} filmi. Täieliku ekspordi jaoks oota, kuni kogu on täielikult laaditud.",
+  "app.updateAvailable": "Saadaval on DiscVaulti uus versioon.",
+  "app.updateReload": "Laadi uuesti"
 }

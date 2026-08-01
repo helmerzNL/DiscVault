@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 import unittest
 
@@ -146,17 +147,99 @@ class LibraryPagingSourceTests(unittest.TestCase):
         self.assertIn("data-library-render-sentinel", self.js_source)
         self.assertIn("collection.hydrationFailed", self.js_source)
 
+    def test_a_failed_page_is_retried_instead_of_disabling_hydration(self):
+        # A single failed request used to set a terminal `failed` flag, which left the
+        # library stuck on its first page for the rest of the page load.
+        self.assertNotIn("state.failed", self.js_source)
+        self.assertIn("var RETRY_DELAYS_MS =", self.js_source)
+        self.assertIn("function scheduleRetry()", self.js_source)
+        self.assertIn('window.addEventListener("online"', self.js_source)
+
+    def test_truncated_hydration_is_not_reported_as_complete(self):
+        # setHydrationComplete() rewrites the total to the loaded count, so calling it
+        # on a truncated load makes the counter claim a short library is whole.
+        self.assertIn("function stopTruncated(", self.js_source)
+        start = self.js_source.index("function stopTruncated(")
+        end = self.js_source.index("function scheduleRetry(", start)
+        self.assertNotIn("setHydrationComplete", self.js_source[start:end])
+        self.assertIn("collection.hydrationTruncated", self.js_source)
+
+    def test_render_growth_is_deferred_to_an_animation_frame(self):
+        # Growing the window synchronously inside the observer callback re-renders,
+        # emits a new sentinel still inside the root margin and fires again — a
+        # cascade of full re-renders in a single burst.
+        self.assertIn("function scheduleGrowth()", self.js_source)
+        self.assertIn("requestAnimationFrame", self.js_source)
+        start = self.js_source.index("new window.IntersectionObserver(")
+        end = self.js_source.index("function onRender()", start)
+        callback = self.js_source[start:end]
+        self.assertIn("scheduleGrowth()", callback)
+        self.assertNotIn("growRenderLimit", callback)
+
+    def test_client_chunk_size_is_below_the_server_ceiling(self):
+        # When the two are equal the server clamp lands exactly on the client's
+        # request, so raising CHUNK_SIZE alone would silently do nothing.
+        match = re.search(r"var CHUNK_SIZE = (\d+);", self.js_source)
+        assert match is not None
+        self.assertLess(int(match.group(1)), next_library_data.MAX_PAGE_SIZE)
+
+    def test_hydration_warning_is_surfaced_in_the_ui(self):
+        self.assertIn("setHydrationWarning:", self.ui_source)
+        self.assertIn("libraryHydrationWarning", self.ui_source)
+        self.assertIn("library-hydration-warning", self.ui_source)
+
+    def test_container_membership_lookups_are_indexed(self):
+        # Resolving members per container used to scan the whole membership table and
+        # the whole movie list, for every container, several times per render.
+        self.assertIn("function containerMemberIndex()", self.ui_source)
+        start = self.ui_source.index("function containerMemberMovies(")
+        end = self.ui_source.index("function containerIsNestedChild(", start)
+        body = self.ui_source[start:end]
+        self.assertIn("containerMemberIndex()", body)
+        self.assertNotIn(".filter(", body)
+
+    def test_no_movie_listing_surface_still_caps_at_200(self):
+        # Leftovers of the removed library cap: the legacy collection view asked for
+        # 200 movies, and /api/next/movies clamped to 200 so the query string could
+        # not have raised it anyway.
+        self.assertIn(
+            'limit = min(max(int(request.args.get("limit", 50)), 1), 1000)',
+            self.app_source,
+        )
+        legacy = os.path.join(BACKEND_DIR, "next_views_collection.py")
+        with open(legacy, encoding="utf-8") as handle:
+            legacy_source = handle.read()
+        self.assertNotIn("/api/next/movies?limit=200", legacy_source)
+
+    def test_the_dead_page_size_ceiling_constant_is_gone(self):
+        # It was never referenced; the real ceiling is next_library_data.MAX_PAGE_SIZE.
+        self.assertNotIn("COLLECTION_MOVIE_MAX_PAGE_SIZE", self.app_source)
+
+    def test_library_posters_are_lazily_loaded(self):
+        self.assertIn(
+            '<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">',
+            self.ui_source,
+        )
+
     def test_paging_i18n_keys_exist_in_every_locale(self):
         locales = sorted(name for name in os.listdir(I18N_DIR) if name.endswith(".json"))
         self.assertTrue(locales)
+        keys = (
+            "collection.loadingMoreRows",
+            "collection.hydrationFailed",
+            "collection.hydrationTruncated",
+            "collection.exportIncomplete",
+            "app.updateAvailable",
+            "app.updateReload",
+            "common.close",
+        )
         for name in locales:
             with open(os.path.join(I18N_DIR, name), encoding="utf-8") as handle:
                 data = json.load(handle)
-            with self.subTest(locale=name):
-                self.assertIn("collection.loadingMoreRows", data)
-                self.assertIn("collection.hydrationFailed", data)
-                self.assertTrue(data["collection.loadingMoreRows"].strip())
-                self.assertTrue(data["collection.hydrationFailed"].strip())
+            for key in keys:
+                with self.subTest(locale=name, key=key):
+                    self.assertIn(key, data)
+                    self.assertTrue(str(data[key]).strip())
 
 
 if __name__ == "__main__":

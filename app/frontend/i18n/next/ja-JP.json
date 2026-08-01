@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "エクスポートするものがありません。",
   "collection.exportFailed": "エクスポートを作成できませんでした。",
   "collection.exportRowCount": "{count} 件の映画",
-  "collection.exportDocumentTitle": "DiscVault ライブラリ"
+  "collection.exportDocumentTitle": "DiscVault ライブラリ",
+  "collection.hydrationTruncated": "ライブラリの一部しか読み込めませんでした。",
+  "collection.exportIncomplete": "このライブラリの映画はまだ {count} 件しか読み込まれていません。完全にエクスポートするには、読み込みが完了するまでお待ちください。",
+  "app.updateAvailable": "DiscVault の新しいバージョンが利用できます。",
+  "app.updateReload": "再読み込み"
 }

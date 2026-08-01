@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Det finns inget att exportera.",
   "collection.exportFailed": "Exporten kunde inte skapas.",
   "collection.exportRowCount": "{count} filmer",
-  "collection.exportDocumentTitle": "DiscVault-bibliotek"
+  "collection.exportDocumentTitle": "DiscVault-bibliotek",
+  "collection.hydrationTruncated": "Endast en del av biblioteket kunde läsas in.",
+  "collection.exportIncomplete": "Hittills har bara {count} filmer i det här biblioteket lästs in. Vänta tills biblioteket har lästs in helt för en fullständig export.",
+  "app.updateAvailable": "En ny version av DiscVault är tillgänglig.",
+  "app.updateReload": "Läs in igen"
 }

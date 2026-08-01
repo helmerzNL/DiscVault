@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Ni ničesar za izvoz.",
   "collection.exportFailed": "Izvoza ni bilo mogoče ustvariti.",
   "collection.exportRowCount": "{count} filmov",
-  "collection.exportDocumentTitle": "Knjižnica DiscVault"
+  "collection.exportDocumentTitle": "Knjižnica DiscVault",
+  "collection.hydrationTruncated": "Naložiti je bilo mogoče le del knjižnice.",
+  "collection.exportIncomplete": "Doslej je bilo iz te knjižnice naloženih le {count} filmov. Za popoln izvoz počakajte, da se knjižnica naloži do konca.",
+  "app.updateAvailable": "Na voljo je nova različica DiscVaulta.",
+  "app.updateReload": "Znova naloži"
 }
