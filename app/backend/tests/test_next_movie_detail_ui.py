@@ -552,6 +552,46 @@ class NextMovieDetailUiTests(unittest.TestCase):
         self.assertIn('"technical:hdr": ["movieDetail.hdr", "HDR"]', self.source)
         self.assertNotIn("<span>HDR</span>", self.source)
 
+    def test_the_estimated_value_is_editable_at_all(self):
+        """It shipped as an API/sync-only field: the server accepted it, both apps
+        edited it, and the PWA had no input for it anywhere."""
+        self.assertIn('<input id="movieEditEstimatedValue" name="estimated_value"', self.source)
+        self.assertIn('estimatedValue: formTextValue("movieEditEstimatedValue"),', self.source)
+
+    def test_the_currency_sits_next_to_the_value_and_is_submitted(self):
+        self.assertIn('<select id="movieEditEstimatedValueCurrency"', self.source)
+        self.assertIn(
+            'estimatedValueCurrency: formTextValue("movieEditEstimatedValueCurrency"),', self.source
+        )
+        self.assertIn("function fillMovieEditEstimatedValueCurrency(stored)", self.source)
+
+    def test_the_currency_picker_offers_what_the_converter_can_actually_convert(self):
+        """A currency outside the price-display set could never be converted to
+        the preferred one, which is the reason for recording it."""
+        self.assertIn("priceDisplay?.supportedCurrencies", self.source)
+        self.assertIn("DEFAULT_PRICE_DISPLAY_CURRENCIES", self.source)
+
+    def test_a_stored_currency_is_never_dropped_from_the_picker(self):
+        self.assertIn("[...available, ...DEFAULT_PRICE_DISPLAY_CURRENCIES, chosen]", self.source)
+
+    def test_a_value_without_a_currency_renders_as_a_bare_number(self):
+        """Stating a unit nobody entered is worse than stating none."""
+        self.assertIn("function formatEstimatedValue(value, currency)", self.source)
+        self.assertIn(
+            "return Number.isFinite(numeric) ? numeric.toLocaleString(undefined, {maximumFractionDigits: 2}) : \"\";",
+            self.source,
+        )
+
+    def test_a_value_with_a_currency_reuses_the_existing_conversion_helper(self):
+        """formatWishlistPrice already renders "original (converted to preferred)";
+        a second implementation would drift from it."""
+        self.assertIn("return formatWishlistPrice(value, code);", self.source)
+
+    def test_the_estimated_value_is_shown_on_the_detail_page(self):
+        self.assertIn(
+            'formatEstimatedValue(movie.estimated_value, movie.estimated_value_currency)', self.source
+        )
+
     def test_the_checkbox_group_has_a_style_rule(self):
         """The packaging fieldset shipped without one and rendered with the
         browser default fieldset border."""

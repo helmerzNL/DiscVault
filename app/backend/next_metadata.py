@@ -76,6 +76,9 @@ METADATA_LOCAL_ONLY_FIELDS = {
     "purchase_date",
     "purchase_price",
     "estimated_value",
+    # Local-only for the same reason as the amount: no metadata provider has
+    # any business saying what currency the user values their copy in.
+    "estimated_value_currency",
     "location",
     "notes",
 }

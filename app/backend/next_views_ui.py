@@ -14529,6 +14529,14 @@ def ui_preview_html(
                       <span data-next-i18n="locations.assign">Storage location</span>
                       <select id="movieEditLocationSelect" name="locationId"></select>
                     </label>
+                    <label for="movieEditEstimatedValue">
+                      <span data-next-i18n="movieDetail.estimatedValue">Estimated value</span>
+                      <input id="movieEditEstimatedValue" name="estimated_value" inputmode="decimal" maxlength="12" autocomplete="off">
+                    </label>
+                    <label for="movieEditEstimatedValueCurrency">
+                      <span data-next-i18n="movieDetail.estimatedValueCurrency">Currency</span>
+                      <select id="movieEditEstimatedValueCurrency" name="estimated_value_currency"></select>
+                    </label>
                   </div>
                 </div>
                 <div class="detail-subsection">
@@ -26905,6 +26913,51 @@ def ui_preview_html(
     function collectMovieEditCheckboxGroup(containerId) {
       return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)).map((box) => box.value);
     }
+    // ---- Estimated value currency ------------------------------------------
+    // The picker offers exactly the currencies the price-display converter can
+    // fetch rates for. Anything outside that set could never be converted to the
+    // user's preferred currency, which is the whole point of recording it - but
+    // a value already stored is always included so an older or hand-set code
+    // never becomes unselectable and gets rewritten by an unrelated save.
+    function estimatedValueCurrencyOptions(selected) {
+      const chosen = String(selected || "").trim().toUpperCase();
+      const seen = new Set();
+      const codes = [];
+      const available = Array.isArray(priceDisplay?.supportedCurrencies)
+        ? priceDisplay.supportedCurrencies
+        : [];
+      [...available, ...DEFAULT_PRICE_DISPLAY_CURRENCIES, chosen].forEach((value) => {
+        const code = String(value || "").trim().toUpperCase();
+        if (!code || seen.has(code)) return;
+        seen.add(code);
+        codes.push(code);
+      });
+      return [
+        `<option value=""${chosen ? "" : " selected"}>${escapeHtml(tNext("movieDetail.estimatedValueCurrencyNone", "Not set"))}</option>`,
+        ...codes.map((code) => `<option value="${escapeHtml(code)}"${code === chosen ? " selected" : ""}>${escapeHtml(code)}</option>`)
+      ].join("");
+    }
+    function fillMovieEditEstimatedValueCurrency(stored) {
+      const select = document.getElementById("movieEditEstimatedValueCurrency");
+      if (!select || document.activeElement === select) return;
+      // Empty stays empty rather than being pre-filled with the display
+      // preference: that preference can change later, and it must never
+      // retroactively decide what an already-entered amount was denominated in.
+      select.innerHTML = estimatedValueCurrencyOptions(stored);
+      select.value = String(stored || "").trim().toUpperCase();
+    }
+    // "€ 25,00" when a currency is recorded, plus the converted amount in the
+    // user's preferred currency when the two differ. A value with no currency is
+    // a bare number - stating a unit nobody entered would be worse than none.
+    function formatEstimatedValue(value, currency) {
+      if (value === null || value === undefined || value === "") return "";
+      const code = String(currency || "").trim().toUpperCase();
+      if (!code) {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric.toLocaleString(undefined, {maximumFractionDigits: 2}) : "";
+      }
+      return formatWishlistPrice(value, code);
+    }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
       const metadata = movie.metadata || {};
@@ -26929,6 +26982,9 @@ def ui_preview_html(
         movieEditContentRating: contentRatingInfo.unknown ? "" : (contentRatingInfo.rating || ""),
         movieEditScreenRatio: valueText(specs.screen_ratios || metadata.screen_ratios),
         movieEditVideoResolution: valueText(specs.video_resolution || metadata.video_resolution),
+        movieEditEstimatedValue: movie.estimated_value === null || movie.estimated_value === undefined
+          ? ""
+          : String(movie.estimated_value),
         movieEditDistributor: valueText(metadata.distributor),
         movieEditOverview: movie.overview || "",
         movieEditNotes: movie.notes || ""
@@ -26946,6 +27002,7 @@ def ui_preview_html(
       fillMovieEditCheckboxGroup("movieEditHdr", specList("hdr"));
       fillMovieEditCheckboxGroup("movieEditVideoCodecs", specList("video_codecs"));
       fillMovieEditCheckboxGroup("movieEditRegions", specList("regions"));
+      fillMovieEditEstimatedValueCurrency(movie.estimated_value_currency);
       fillMovieEditAudioTracks(specList("audio_tracks"));
       fillMovieEditSubtitles(specList("subtitles"));
       setupMovieEditTrackEditors();
@@ -27549,6 +27606,7 @@ def ui_preview_html(
         [tNext("locations.assign", "Storage location"), storageLocationHtml ? {text: storageLocationLabel, html: storageLocationHtml} : storageLocationLabel],
         [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
         [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
+        [tNext("movieDetail.estimatedValue", "Estimated value"), formatEstimatedValue(movie.estimated_value, movie.estimated_value_currency)],
         ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
       ];
       document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
@@ -36552,6 +36610,8 @@ def ui_preview_html(
         audioTracks: collectMovieEditAudioTracks(),
         subtitles: collectMovieEditSubtitles(),
         packaging: collectMovieEditCheckboxGroup("movieEditPackaging"),
+        estimatedValue: formTextValue("movieEditEstimatedValue"),
+        estimatedValueCurrency: formTextValue("movieEditEstimatedValueCurrency"),
         distributor: formTextValue("movieEditDistributor"),
         overview: formTextValue("movieEditOverview"),
         notes: formTextValue("movieEditNotes"),

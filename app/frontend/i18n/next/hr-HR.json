@@ -2609,5 +2609,8 @@
   "movieVideoCodec.h264": "AVC (H.264)",
   "movieVideoCodec.hevc": "HEVC (H.265)",
   "movieVideoCodec.mpeg2": "MPEG-2",
-  "movieVideoCodec.vc1": "VC-1"
+  "movieVideoCodec.vc1": "VC-1",
+  "movieDetail.estimatedValue": "Procijenjena vrijednost",
+  "movieDetail.estimatedValueCurrency": "Valuta",
+  "movieDetail.estimatedValueCurrencyNone": "Nije postavljeno"
 }
