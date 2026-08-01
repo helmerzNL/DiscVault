@@ -117,19 +117,47 @@ def _resolved_poster(details, *, box_set=False):
 
 
 def _resolved_technical(details):
-    """Audio tracks, subtitle languages and packaging the anonymous resolver
-    carries for a scanned barcode. Only ever pulled from `release` - a box
-    set's members are resolved individually and never inherit the set's
-    technical data."""
+    """The technical profile the anonymous resolver carries for a scanned
+    barcode. Only ever pulled from `release` - a box set's members are resolved
+    individually and never inherit the set's technical data.
+
+    The resolver nests its video facts under `video` and names the disc region
+    array `regions`; the sync feed puts them flat on the release and calls the
+    array `discRegions`. Both are flattened to the feed's names here so the
+    merge pipeline downstream sees one vocabulary.
+
+    The resolver reports subtitles as bare language codes; they are lifted into
+    the feed's structured shape with `subtitleType: "full"`, which is what the
+    resolver contract can express and nothing more."""
     section = (details or {}).get("release")
     fields = {}
     if isinstance(section, dict):
         if section.get("audioTracks"):
             fields["audioTracks"] = section["audioTracks"]
         if section.get("subtitleLanguages"):
-            fields["subtitleLanguages"] = section["subtitleLanguages"]
+            # Converted to the sync feed's structured shape so everything downstream
+            # of this adapter speaks one vocabulary. `full` is not a guess: the
+            # resolver contract has no way to express SDH or any other variant, so
+            # every track it reports is the complete one.
+            fields["subtitles"] = [
+                {"languageCode": language, "subtitleType": "full"}
+                for language in section["subtitleLanguages"]
+                if isinstance(language, str) and language
+            ]
         if section.get("packaging"):
             fields["packaging"] = section["packaging"]
+        if section.get("regions"):
+            fields["discRegions"] = section["regions"]
+        video = section.get("video")
+        if isinstance(video, dict):
+            if video.get("resolution"):
+                fields["videoResolution"] = video["resolution"]
+            if video.get("codecs"):
+                fields["videoCodecs"] = video["codecs"]
+            if video.get("hdrFormats"):
+                fields["hdrFormats"] = video["hdrFormats"]
+            if video.get("aspectRatios"):
+                fields["aspectRatios"] = video["aspectRatios"]
     return fields
 
 
@@ -140,8 +168,11 @@ def _release(record):
         "format": record.get("format"), "edition": record.get("edition"),
         "studio": record.get("studio"), "distributor": record.get("distributor"),
         "runtimeMinutes": record.get("runtimeMinutes"),
-        "audioTracks": record.get("audioTracks"), "subtitleLanguages": record.get("subtitleLanguages"),
+        "audioTracks": record.get("audioTracks"), "subtitles": record.get("subtitles"),
         "packaging": record.get("packaging"),
+        "videoResolution": record.get("videoResolution"),
+        "videoCodecs": record.get("videoCodecs"), "hdrFormats": record.get("hdrFormats"),
+        "aspectRatios": record.get("aspectRatios"), "discRegions": record.get("discRegions"),
         **_poster_fields(record)}.items() if value not in (None, "", [], {})}
     return {key: value for key, value in {
         "provider": PROVIDER_ID, "id": record.get("releaseId"), "releaseId": record.get("releaseId"),
