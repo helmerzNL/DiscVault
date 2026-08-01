@@ -64,6 +64,9 @@ try:
     from .next_plugin_runtime import upgrade_seeded_default_plugins
     from .next_plugin_runtime import plugin_update_state
     from .next_plugin_runtime import unconfigured_integration_plugins
+    from .next_plugin_runtime import AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS
+    from .next_plugin_runtime import _plugin_has_required_settings
+    from .next_plugin_runtime import required_secrets_configured
     from .next_plugin_runtime import validate_manifest_compatibility
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from .next_plugin_runtime import validate_plugin_settings
@@ -281,6 +284,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import upgrade_seeded_default_plugins
     from next_plugin_runtime import plugin_update_state
     from next_plugin_runtime import unconfigured_integration_plugins
+    from next_plugin_runtime import AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS
+    from next_plugin_runtime import _plugin_has_required_settings
+    from next_plugin_runtime import required_secrets_configured
     from next_plugin_runtime import validate_manifest_compatibility
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from next_plugin_runtime import validate_plugin_settings
@@ -8512,6 +8518,10 @@ def plugin_config_payload(settings_schema: Any, settings: Any, secrets_ref: Any)
     }
     payload["secretNames"] = sorted(safe_refs)
     payload["secretsConfigured"] = bool(safe_refs)
+    # Recomputed against the name-filtered refs: a secret whose name does not
+    # match PLUGIN_SECRET_NAME_PATTERN is dropped here, and a required secret that
+    # was dropped must not still count as configured.
+    payload["requiredSecretsConfigured"] = required_secrets_configured(settings_schema, safe_refs)
     payload["secretsRef"] = safe_refs
     return payload
 
@@ -8535,6 +8545,70 @@ def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
         row.get("settings") if row else {},
         row.get("secrets_ref") if row else {},
     )
+
+
+def maybe_auto_enable_configured_plugin(
+    conn,
+    *,
+    plugin_id: str,
+    categories: Any,
+    actor: dict[str, Any] | None,
+) -> bool:
+    """Enable an allow-listed integration once its credentials are complete.
+
+    Saving a TMDb key and then having to find a separate toggle is a dead end
+    users fall into, so configuring one of AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS counts
+    as the intent to use it. Returns whether the plugin was switched on.
+
+    Deliberately one-directional: clearing a secret does NOT disable again. A key
+    rotation goes through this same endpoint, and dropping the plugin mid-rotation
+    would be worse than leaving it enabled-but-unconfigured, which
+    unconfigured_integration_plugins() already surfaces.
+    """
+    if plugin_id not in AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT enabled, installed, manifest FROM plugins WHERE id=%s",
+            (plugin_id,),
+        )
+        row = cur.fetchone()
+    if not row or row.get("enabled") or not row.get("installed"):
+        return False
+
+    config = plugin_config_from_db(conn, plugin_id)
+    manifest = row.get("manifest") or {}
+    if manifest.get("requiresSecrets") and not config.get("requiredSecretsConfigured"):
+        return False
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+    if plugin and _plugin_has_required_settings(plugin) and not config.get("settingsConfigured"):
+        return False
+
+    # Both tables, metadata_plugins first: sync_plugin_registry() mirrors
+    # plugins <- metadata_plugins, so enabling only plugins is reverted at the
+    # next sync.
+    with conn.cursor() as cur:
+        if plugin_is_metadata(categories) and table_exists(conn, "metadata_plugins"):
+            cur.execute(
+                "UPDATE metadata_plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                (plugin_id,),
+            )
+        cur.execute(
+            "UPDATE plugins SET enabled=true, updated_at=now() WHERE id=%s",
+            (plugin_id,),
+        )
+    audit_event(
+        conn,
+        event_type="plugin.auto_enabled",
+        category="plugins",
+        actor=actor,
+        target_type="plugin",
+        target_id=plugin_id,
+        summary=f"Enabled plugin {plugin_id} after configuration",
+        metadata={"pluginId": plugin_id, "reason": "required_credentials_configured"},
+    )
+    return True
 
 
 def plugin_secret_values(conn, config: dict[str, Any]) -> dict[str, Any]:
@@ -22779,6 +22853,14 @@ def register_routes(flask_app: Flask) -> None:
                 secrets_provided=has_secrets,
                 secrets_value=body.get("secrets"),
             )
+            # Runs before the snapshot below so the returned plugin carries the
+            # new enabled state and the admin card re-renders as enabled.
+            auto_enabled = maybe_auto_enable_configured_plugin(
+                conn,
+                plugin_id=plugin_id,
+                categories=plugin_row.get("categories"),
+                actor=actor,
+            )
             audit_event(
                 conn,
                 event_type="plugin.config_updated",
@@ -22791,8 +22873,11 @@ def register_routes(flask_app: Flask) -> None:
                     "settingsProvided": has_settings,
                     "secretsProvided": has_secrets,
                     "categories": plugin_row.get("categories") or [],
+                    "autoEnabled": auto_enabled,
                 },
             )
+            if auto_enabled and table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
 
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
             plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)

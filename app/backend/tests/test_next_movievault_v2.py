@@ -992,6 +992,7 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertIn("movievaultV2Status", decorated)
         self.assertIn("movievaultV2Sync", decorated)
         self.assertIn("movievaultV2BucketLookup", decorated)
+        self.assertIs(decorated["movievaultV2BucketFallback"], True)
         self.assertIn("movievaultV2ReleaseDetails", decorated)
         with self.assertRaisesRegex(
             next_movievault_v2.MovieVaultV2Error,

@@ -49,6 +49,40 @@ class _RecoveryCursor:
 
 
 class NextMigrationContractTests(unittest.TestCase):
+    def test_movievault_default_source_order_migration_flips_both_tables(self):
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "migrations_next"
+            / "055_movievault_default_source_order.sql"
+        ).read_text(encoding="utf-8")
+
+        # Guarded so it is a no-op where the plugin tables do not exist yet.
+        for table in (
+            "public.plugins",
+            "public.metadata_plugins",
+            "public.plugin_settings",
+            "public.metadata_plugin_settings",
+        ):
+            self.assertIn(f"to_regclass('{table}')", migration)
+
+        # Both registry tables must be written: sync_plugin_registry() mirrors
+        # plugins <- metadata_plugins, so writing only one is reverted or stale.
+        for table in ("UPDATE plugins", "UPDATE metadata_plugins"):
+            self.assertIn(table, migration)
+        self.assertEqual(migration.count("order_index = 45"), 2)
+        self.assertEqual(migration.count("order_index = 55"), 2)
+        # v2 twice for the enable/order flip and twice for the schema scrub.
+        self.assertEqual(migration.count("WHERE id = 'movievault_v2'"), 4)
+        self.assertEqual(migration.count("WHERE id = 'movievault_26'"), 2)
+
+        # Idempotent: every flip is conditional on the row not already matching.
+        self.assertIn("enabled IS DISTINCT FROM true", migration)
+        self.assertIn("enabled IS DISTINCT FROM false", migration)
+
+        # The enforced bucket fallback is scrubbed from schema and stored values.
+        self.assertIn("<> 'bucketFallback'", migration)
+        self.assertEqual(migration.count("settings - 'bucketFallback'"), 2)
+
     def test_movievault_person_cleanup_migration_rebuilds_from_tmdb(self):
         migration = (
             Path(__file__).resolve().parents[1]

@@ -192,21 +192,36 @@ verify the SHA-256 checksum, and extract its `movievault_v2/` root folder into
 `DISCVAULT_PLUGIN_INSTALL_DIR` (normally `/data/plugins` in the persistent
 volume).
 
-Restart DiscVault or refresh its plugin registry. The plugin ships with safe
-operational defaults while remaining disabled. The MovieVault v2 endpoint is
-**fixed** and no longer editable in the plugin-settings UI: DiscVault always
-uses the enforced origin `https://movies2.vaultstack.eu`. Self-hosted operators
-who need a different instance can override it out-of-band with the
-`MOVIEVAULT_V2_ORIGIN` environment variable (an invalid or empty value falls
-back to the default). Review the remaining defaults, then enable the plugin;
-DiscVault queues the first synchronization automatically. Normal barcode,
-title, release, and box-set queries then use the derived PostgreSQL index. The
-existing `movievault_26` plugin remains independently available for MovieVault
-Next. Its attributed contribution connection is not used for MovieVault v2
-anonymous reads.
+Restart DiscVault or refresh its plugin registry. As of `26.7.25` the plugin is
+**enabled by default** and is the highest-priority MovieVault metadata source
+(order 45), ranked above `movievault_26` (order 55, now disabled by default).
+DiscVault queues the first synchronization automatically, and normal barcode,
+title, release, and box-set queries then use the derived PostgreSQL index.
+
+Two settings are **enforced by DiscVault and not editable in the plugin-settings
+UI**:
+
+- **Endpoint.** DiscVault always uses the enforced origin
+  `https://movies2.vaultstack.eu`. Self-hosted operators who need a different
+  instance can override it out-of-band with the `MOVIEVAULT_V2_ORIGIN`
+  environment variable (an invalid or empty value falls back to the default).
+- **Anonymous bucket fallback.** Always on. It is what resolves a disc the
+  locally synced index does not carry yet, so a barcode lookup without it
+  silently misses every title MovieVault has not distributed into this
+  instance's index. Override out-of-band with
+  `MOVIEVAULT_V2_BUCKET_FALLBACK=0` only if you have a reason to. The fallback
+  applies to barcode and box-set lookups; title queries cannot use it, because
+  buckets are keyed by the hash of the EAN.
+
+Because `movievault_26` now defaults to disabled and is DiscVault's only
+`metadata_receiver`, **contribution back to MovieVault is off unless you
+re-enable it**. Enable `movievault_26` in App Admin → Plugins if you want to
+keep contributing; it stays independently available for MovieVault Next, and
+its attributed contribution connection is not used for MovieVault v2 anonymous
+reads.
 
 DiscVault `26.4.57` adds negotiated `distribution-3` support. The matching
-deterministic `movievault_v2` feature package (currently 1.2.0) ships as a
+deterministic `movievault_v2` feature package (currently 1.5.0) ships as a
 bundled default plugin and is also available under `dist/plugins/` for staged
 installation. Older plugins continue to use `distribution-2`; v3 is selected
 only when both the plugin manifest and core declare support.

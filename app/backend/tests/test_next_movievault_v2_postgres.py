@@ -589,7 +589,8 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             state = next_movievault_v2._sync_state(conn)
         self.assertEqual(state["cursor"], v3_delta_cursor)
 
-    def test_scheduler_enqueues_one_due_job(self):
+    def _seed_enabled_v2_plugin(self, settings=None):
+        """Install movievault_v2 as enabled, optionally with a settings row."""
         manifest = {
             "id": "movievault_v2",
             "name": "MovieVault v2",
@@ -616,26 +617,16 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                         Jsonb(manifest),
                     ),
                 )
-                cur.execute(
-                    """
-                    INSERT INTO plugin_settings (plugin_id, settings)
-                    VALUES (%s, %s)
-                    """,
-                    (
-                        "movievault_v2",
-                        Jsonb(
-                            {
-                                "origin": "https://movievault.example",
-                                "syncIntervalHours": 6,
-                            }
-                        ),
-                    ),
-                )
+                if settings is not None:
+                    cur.execute(
+                        """
+                        INSERT INTO plugin_settings (plugin_id, settings)
+                        VALUES (%s, %s)
+                        """,
+                        ("movievault_v2", Jsonb(settings)),
+                    )
 
-        with patch.object(next_worker, "connect", side_effect=self.connect):
-            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
-            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
-
+    def _queued_sync_jobs(self):
         with self.connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -647,9 +638,41 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     """,
                     ("movievault_v2",),
                 )
-                row = cur.fetchone()
+                return cur.fetchone()
+
+    def test_scheduler_enqueues_one_due_job(self):
+        self._seed_enabled_v2_plugin(
+            {"origin": "https://movievault.example", "syncIntervalHours": 6}
+        )
+
+        with patch.object(next_worker, "connect", side_effect=self.connect):
+            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
+            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
+
+        row = self._queued_sync_jobs()
         self.assertEqual(row["job_count"], 1)
         self.assertEqual(row["source"], "scheduler")
+
+    def test_scheduler_enqueues_without_a_stored_origin(self):
+        """The origin is enforced by enforced_origin() and stripped from the
+        settings schema, so it is absent on every install and says nothing about
+        whether a sync can run. Gating on it left the index permanently empty."""
+        self._seed_enabled_v2_plugin({"syncIntervalHours": 6})
+
+        with patch.object(next_worker, "connect", side_effect=self.connect):
+            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
+
+        self.assertEqual(self._queued_sync_jobs()["job_count"], 1)
+
+    def test_scheduler_enqueues_without_any_plugin_settings_row(self):
+        """A plugin whose config was never saved has no plugin_settings row at
+        all; readiness is decided by installed + enabled, nothing more."""
+        self._seed_enabled_v2_plugin(settings=None)
+
+        with patch.object(next_worker, "connect", side_effect=self.connect):
+            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
+
+        self.assertEqual(self._queued_sync_jobs()["job_count"], 1)
 
     def test_registry_materializes_defaults_without_overwriting_operator_values(self):
         settings_schema = {
@@ -668,7 +691,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     "maximum": 168,
                 },
                 {
-                    "name": "bucketFallback",
+                    "name": "someToggle",
                     "type": "boolean",
                     "default": False,
                 },
@@ -716,7 +739,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                         Jsonb(
                             {
                                 "origin": "https://custom.example",
-                                "bucketFallback": True,
+                                "someToggle": True,
                             }
                         ),
                         "movievault_v2",
@@ -764,7 +787,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
 
         self.assertEqual(stored["origin"], "https://custom.example")
         self.assertEqual(stored["syncIntervalHours"], 6)
-        self.assertTrue(stored["bucketFallback"])
+        self.assertTrue(stored["someToggle"])
 
     def test_initial_sync_job_is_duplicate_safe_and_skips_current_index(self):
         actor = {"id": None, "username": "owner", "role": "owner"}
