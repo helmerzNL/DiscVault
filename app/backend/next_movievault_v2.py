@@ -283,16 +283,33 @@ def _exact_keys(
     *,
     required: set[str],
     optional: set[str],
+    label: str = "object",
 ) -> None:
+    """Reject an object whose key set does not match the contract exactly.
+
+    Logs which keys are missing or unexpected before raising. The error code is
+    deliberately value-free where it crosses the plugin boundary, so without this
+    an operator sees a whole sync fail with no indication of which field
+    disagreed - the failure mode that makes contract drift between MovieVault and
+    DiscVault expensive to diagnose. Key names only; no values are logged.
+    """
     keys = set(value)
-    if not required.issubset(keys) or keys - required - optional:
+    missing = required - keys
+    unexpected = keys - required - optional
+    if missing or unexpected:
+        logger.warning(
+            "movievault_v2: %s rejected - missing keys %s, unexpected keys %s",
+            label,
+            sorted(missing) or "none",
+            sorted(unexpected) or "none",
+        )
         raise MovieVaultV2Error("record_invalid")
 
 
 def _asset_variant(value: Any, contract_version: str) -> dict[str, str]:
     if not isinstance(value, dict):
         raise MovieVaultV2Error("record_invalid")
-    _exact_keys(value, required={"path", "checksum"}, optional=set())
+    _exact_keys(value, required={"path", "checksum"}, optional=set(), label="asset variant")
     path = _text(value["path"], minimum=1, maximum=500)
     if not ASSET_PATH_PATTERNS[contract_version].fullmatch(path):
         raise MovieVaultV2Error("record_invalid")
@@ -310,6 +327,7 @@ def _assets(value: Any, contract_version: str) -> list[dict[str, Any]]:
             item,
             required={"assetId", "assetType", "attestation", "license", "thumbnail", "display"},
             optional=set(),
+            label="asset",
         )
         asset_type = item["assetType"]
         attestation = item["attestation"]
@@ -342,6 +360,7 @@ def _poster(value: Any, contract_version: str) -> dict[str, Any] | None:
         value,
         required={"assetId", "assetType", "attestation", "license", "thumbnail", "display"},
         optional=set(),
+        label="poster",
     )
     if value["assetType"] != POSTER_ASSET_TYPE:
         raise MovieVaultV2Error("record_invalid")
@@ -361,9 +380,35 @@ def _poster(value: Any, contract_version: str) -> dict[str, Any] | None:
     }
 
 
-def _language_code(value: Any) -> str:
-    if not isinstance(value, str) or len(value) > 35 or not LANGUAGE_CODE_PATTERN.fullmatch(value):
+def _language_code(value: Any, *, release_id: str) -> str:
+    """Parse a track language code with the same leniency as its neighbours.
+
+    Type and length stay strict - those bound what is stored. The *shape* does
+    not: this was the only fatal check among the distribution-4 track fields,
+    while codec, channels, immersiveFormat, subtitleType, packaging, resolution,
+    aspect ratios, HDR formats and disc regions all log-and-keep an unrecognized
+    value. It was also the field most likely to vary, because MovieVault applies
+    no pattern of its own to the published value: the v4 schema constrains
+    languageCode to a string of at most 35 characters, and the publisher
+    re-asserts audioTracks and subtitles as raw rows after the model dump, so its
+    own BCP-47 pattern never runs on what ships. A perfectly ordinary "en-US",
+    "pt-BR" or "zh-Hans" therefore failed here and cost the entire release
+    record, and with it the whole sync. Losing a film over the casing of a
+    language tag is the wrong trade.
+    """
+    if not isinstance(value, str) or not value or len(value) > 35:
+        logger.warning(
+            "movievault_v2: unusable languageCode %r on release %s - rejecting record",
+            value,
+            release_id,
+        )
         raise MovieVaultV2Error("record_invalid")
+    if not LANGUAGE_CODE_PATTERN.fullmatch(value):
+        logger.warning(
+            "movievault_v2: unrecognized languageCode %r on release %s - storing raw value",
+            value,
+            release_id,
+        )
     return value
 
 
@@ -374,6 +419,7 @@ def _audio_track(value: Any, *, release_id: str) -> dict[str, Any]:
         value,
         required={"languageCode", "codec", "channels", "immersiveFormat"},
         optional=set(),
+        label="audio track",
     )
     codec = value["codec"]
     if not isinstance(codec, str) or not codec or len(codec) > 64:
@@ -409,7 +455,7 @@ def _audio_track(value: Any, *, release_id: str) -> dict[str, Any]:
                 release_id,
             )
     return {
-        "languageCode": _language_code(value["languageCode"]),
+        "languageCode": _language_code(value["languageCode"], release_id=release_id),
         "codec": codec,
         "channels": channels,
         "immersiveFormat": immersive_format,
@@ -425,7 +471,7 @@ def _audio_tracks(value: Any, *, release_id: str) -> list[dict[str, Any]]:
 def _subtitle(value: Any, *, release_id: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise MovieVaultV2Error("record_invalid")
-    _exact_keys(value, required={"languageCode", "subtitleType"}, optional=set())
+    _exact_keys(value, required={"languageCode", "subtitleType"}, optional=set(), label="subtitle track")
     subtitle_type = value["subtitleType"]
     if not isinstance(subtitle_type, str) or not subtitle_type or len(subtitle_type) > 24:
         raise MovieVaultV2Error("record_invalid")
@@ -439,7 +485,7 @@ def _subtitle(value: Any, *, release_id: str) -> dict[str, Any]:
             release_id,
         )
     return {
-        "languageCode": _language_code(value["languageCode"]),
+        "languageCode": _language_code(value["languageCode"], release_id=release_id),
         "subtitleType": subtitle_type,
     }
 
@@ -605,7 +651,7 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
                 "discRegions",
             }
         )
-    _exact_keys(value, required=required, optional=optional)
+    _exact_keys(value, required=required, optional=optional, label="release record")
     provider_ids = value["providerIds"]
     if not isinstance(provider_ids, dict):
         raise MovieVaultV2Error("record_invalid")
@@ -710,7 +756,7 @@ def _member(value: Any, contract_version: str) -> dict[str, Any]:
     }
     if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
         optional.update({"studio", "distributor", "runtimeMinutes"})
-    _exact_keys(value, required=required, optional=optional)
+    _exact_keys(value, required=required, optional=optional, label="box-set member")
     if value["relationship"] != "contains":
         raise MovieVaultV2Error("record_invalid")
     barcode_hash = value.get("discBarcodeHash")
@@ -752,7 +798,7 @@ def _box_set_record(value: dict[str, Any], contract_version: str) -> dict[str, A
     optional = {"edition", "yearRange", "format", "countryCode", "languageCode"}
     if contract_version == MOVIEVAULT_V4_CONTRACT:
         required.add("poster")
-    _exact_keys(value, required=required, optional=optional)
+    _exact_keys(value, required=required, optional=optional, label="box-set record")
     members_value = value["members"]
     if not isinstance(members_value, list) or len(members_value) > 1000:
         raise MovieVaultV2Error("record_invalid")
@@ -787,7 +833,44 @@ def _box_set_record(value: dict[str, Any], contract_version: str) -> dict[str, A
     }
 
 
+def _record_identity(value: Any) -> str:
+    """Describe a feed record well enough to find it, using ids only.
+
+    Never includes titles or any other free text: this string is written to the
+    operator log, and the v2 feed is consumed anonymously."""
+    if not isinstance(value, dict):
+        return "<non-object record>"
+    parts = []
+    for key in ("recordType", "operation", "revision", "entityId", "releaseId", "boxSetId"):
+        raw = value.get(key)
+        if isinstance(raw, (str, int)) and not isinstance(raw, bool):
+            parts.append(f"{key}={raw}")
+    return " ".join(parts) or "<record without identifiers>"
+
+
 def validate_record(
+    value: Any,
+    *,
+    contract_version: str = MOVIEVAULT_V2_CONTRACT,
+) -> dict[str, Any]:
+    """Validate one feed record, logging which record failed before re-raising.
+
+    A rejected record fails the whole sync, so the operator needs to know which
+    one. The nested validators log *what* disagreed; this layer adds *where*, and
+    catches the cases that raise without any context of their own."""
+    try:
+        return _validate_record(value, contract_version=contract_version)
+    except MovieVaultV2Error as exc:
+        if exc.code == "record_invalid":
+            logger.warning(
+                "movievault_v2: rejected record (%s) on contract %s",
+                _record_identity(value),
+                contract_version,
+            )
+        raise
+
+
+def _validate_record(
     value: Any,
     *,
     contract_version: str = MOVIEVAULT_V2_CONTRACT,
@@ -805,6 +888,7 @@ def validate_record(
             value,
             required={"contractVersion", "recordType", "operation", "revision", "entityId"},
             optional=set(),
+            label="delete record",
         )
         return {
             "contractVersion": contract_version,
@@ -1429,7 +1513,7 @@ def _release_details_asset_variant(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise MovieVaultV2Error("release_details_response_invalid")
     try:
-        _exact_keys(value, required={"path"}, optional={"checksum"})
+        _exact_keys(value, required={"path"}, optional={"checksum"}, label="release-details poster")
         path = _text(value["path"], minimum=1, maximum=500)
         if not ASSET_PATH_PATTERNS[MOVIEVAULT_V4_CONTRACT].fullmatch(path):
             raise MovieVaultV2Error("release_details_response_invalid")
@@ -1474,6 +1558,7 @@ def _release_details_poster(value: Any) -> dict[str, Any]:
             value,
             required={"assetId", "assetType", "thumbnail", "display"},
             optional={"attestation", "license"},
+            label="release-details asset",
         )
         if value["assetType"] != POSTER_ASSET_TYPE:
             raise MovieVaultV2Error("release_details_response_invalid")
