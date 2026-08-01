@@ -120,9 +120,24 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
             "subtitles",
             "regions",
             "content_ratings",
+            "video_resolution",
+            "video_codecs",
             "updated_at",
         ),
-        frozenset({"audio_tracks", "subtitles", "regions", "content_ratings", "packaging"}),
+        # hdr and screen_ratios joined the jsonb set in migration 055. Missing one
+        # here means every backup taken afterwards restores that column corrupt.
+        frozenset(
+            {
+                "audio_tracks",
+                "subtitles",
+                "regions",
+                "content_ratings",
+                "packaging",
+                "hdr",
+                "screen_ratios",
+                "video_codecs",
+            }
+        ),
     ),
     TableSpec(
         "people",
