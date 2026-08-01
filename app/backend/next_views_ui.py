@@ -6294,8 +6294,86 @@ def ui_preview_html(
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
     }
-    .movie-edit-grid label.wide {
+    .movie-edit-grid label.wide,
+    .movie-edit-grid .wide {
       grid-column: 1 / -1;
+    }
+    /* The packaging fieldset has shipped without a rule since it was added, so it
+       rendered with the browser default fieldset border and no layout. */
+    .movie-edit-checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 14px;
+      margin: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border, rgba(128, 128, 128, 0.35));
+      border-radius: 8px;
+      min-width: 0;
+    }
+    .movie-edit-checkbox-group legend {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 4px;
+      font-size: 0.85rem;
+      opacity: 0.8;
+    }
+    .movie-edit-checkbox-group label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    .movie-edit-track-editor {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    .movie-edit-track-editor > span:first-child {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .movie-edit-track-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .movie-edit-track-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
+      gap: 6px;
+      align-items: center;
+    }
+    .movie-edit-track-row.movie-edit-subtitle-row {
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) auto;
+    }
+    .movie-edit-track-row select {
+      min-width: 0;
+    }
+    /* A track imported as free text keeps its original string until the user
+       actually changes one of its selects; the marker says so rather than letting
+       a guessed row look like recorded data. */
+    .movie-edit-track-row[data-legacy-text]:not([data-legacy-text=""]) {
+      border-left: 3px solid var(--accent, #d09a2c);
+      padding-left: 6px;
+    }
+    .movie-edit-track-remove {
+      background: none;
+      border: 1px solid var(--border, rgba(128, 128, 128, 0.35));
+      border-radius: 6px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 6px 9px;
+    }
+    .movie-edit-track-add {
+      align-self: flex-start;
+    }
+    .movie-edit-track-empty {
+      opacity: 0.65;
+      font-size: 0.9rem;
     }
     .movie-edit-grid label > span:first-child {
       display: flex;
@@ -12199,6 +12277,10 @@ def ui_preview_html(
       .movie-edit-grid {
         grid-template-columns: 1fr;
       }
+      .movie-edit-track-row,
+      .movie-edit-track-row.movie-edit-subtitle-row {
+        grid-template-columns: 1fr;
+      }
       .profile-hero-actions {
         justify-content: stretch;
         gap: 8px;
@@ -14324,26 +14406,52 @@ def ui_preview_html(
                 <div class="detail-subsection">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
                   <div class="movie-edit-grid">
-                    <label for="movieEditHdr">
-                      <span>HDR</span>
-                      <input id="movieEditHdr" name="hdr" maxlength="80" autocomplete="off">
-                    </label>
-                    <label for="movieEditScreenRatio">
-                      <span data-next-i18n="movieDetail.screenRatio">Screen ratio</span>
-                      <input id="movieEditScreenRatio" name="screen_ratios" maxlength="80" autocomplete="off">
+                    <label for="movieEditVideoResolution">
+                      <span data-next-i18n="movieDetail.videoResolution">Resolution</span>
+                      <select id="movieEditVideoResolution" name="video_resolution">
+                        <option value="" data-next-i18n="common.notSet">Not set</option>
+                        <option value="480p">480p</option>
+                        <option value="576p">576p</option>
+                        <option value="720p">720p</option>
+                        <option value="1080i">1080i</option>
+                        <option value="1080p">1080p</option>
+                        <option value="2160p">2160p</option>
+                      </select>
                     </label>
                     <label for="movieEditRuntime">
                       <span data-next-i18n="movieDetail.runtime">Runtime</span>
                       <input id="movieEditRuntime" name="runtime_minutes" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="min">
                     </label>
-                    <label for="movieEditAudioTracks">
-                      <span data-next-i18n="movieDetail.audio">Audio</span>
-                      <textarea id="movieEditAudioTracks" name="audio_tracks" rows="5" maxlength="400" autocomplete="off"></textarea>
+                    <fieldset id="movieEditHdr" class="movie-edit-checkbox-group">
+                      <legend data-next-i18n="movieDetail.hdr" data-lock-anchor>HDR</legend>
+                      <label><input type="checkbox" value="hdr"> <span data-next-i18n="movieHdrFormat.hdr">HDR</span></label>
+                      <label><input type="checkbox" value="hdr10"> <span data-next-i18n="movieHdrFormat.hdr10">HDR10</span></label>
+                      <label><input type="checkbox" value="hdr10_plus"> <span data-next-i18n="movieHdrFormat.hdr10Plus">HDR10+</span></label>
+                      <label><input type="checkbox" value="hlg"> <span data-next-i18n="movieHdrFormat.hlg">HLG</span></label>
+                      <label><input type="checkbox" value="dolby_vision"> <span data-next-i18n="movieHdrFormat.dolbyVision">Dolby Vision</span></label>
+                    </fieldset>
+                    <fieldset id="movieEditVideoCodecs" class="movie-edit-checkbox-group">
+                      <legend data-next-i18n="movieDetail.videoCodecs" data-lock-anchor>Video codec</legend>
+                      <label><input type="checkbox" value="mpeg2"> <span data-next-i18n="movieVideoCodec.mpeg2">MPEG-2</span></label>
+                      <label><input type="checkbox" value="vc1"> <span data-next-i18n="movieVideoCodec.vc1">VC-1</span></label>
+                      <label><input type="checkbox" value="h264"> <span data-next-i18n="movieVideoCodec.h264">AVC (H.264)</span></label>
+                      <label><input type="checkbox" value="hevc"> <span data-next-i18n="movieVideoCodec.hevc">HEVC (H.265)</span></label>
+                      <label><input type="checkbox" value="av1"> <span data-next-i18n="movieVideoCodec.av1">AV1</span></label>
+                    </fieldset>
+                    <label for="movieEditScreenRatio" class="wide">
+                      <span data-next-i18n="movieDetail.screenRatio">Screen ratio</span>
+                      <input id="movieEditScreenRatio" name="screen_ratios" maxlength="160" autocomplete="off" data-next-i18n-placeholder="movieDetail.commaSeparated" placeholder="Comma separated">
                     </label>
-                    <label for="movieEditSubtitles">
-                      <span data-next-i18n="movieDetail.subtitles">Subtitles</span>
-                      <textarea id="movieEditSubtitles" name="subtitles" rows="5" maxlength="400" autocomplete="off"></textarea>
-                    </label>
+                    <div id="movieEditAudioTracks" class="movie-edit-track-editor wide" data-lock-container="self">
+                      <span data-lock-anchor data-next-i18n="movieDetail.audio">Audio</span>
+                      <div class="movie-edit-track-rows" id="movieEditAudioTrackRows"></div>
+                      <button type="button" class="ghost-button movie-edit-track-add" id="movieEditAudioTrackAdd" data-next-i18n="movieDetail.audioTrackAdd">Add audio track</button>
+                    </div>
+                    <div id="movieEditSubtitles" class="movie-edit-track-editor wide" data-lock-container="self">
+                      <span data-lock-anchor data-next-i18n="movieDetail.subtitles">Subtitles</span>
+                      <div class="movie-edit-track-rows" id="movieEditSubtitleRows"></div>
+                      <button type="button" class="ghost-button movie-edit-track-add" id="movieEditSubtitleAdd" data-next-i18n="movieDetail.subtitleAdd">Add subtitle</button>
+                    </div>
                   </div>
                 </div>
                 <div class="detail-subsection">
@@ -14354,7 +14462,7 @@ def ui_preview_html(
                       <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
                     </label>
                     <fieldset id="movieEditPackaging" class="movie-edit-checkbox-group">
-                      <legend data-next-i18n="movieDetail.packaging">Packaging</legend>
+                      <legend data-next-i18n="movieDetail.packaging" data-lock-anchor>Packaging</legend>
                       <label><input type="checkbox" value="keep_case"> <span data-next-i18n="moviePackaging.keepCase">Keep case</span></label>
                       <label><input type="checkbox" value="amaray"> <span data-next-i18n="moviePackaging.amaray">Amaray</span></label>
                       <label><input type="checkbox" value="steelbook"> <span data-next-i18n="moviePackaging.steelbook">Steelbook</span></label>
@@ -14364,6 +14472,21 @@ def ui_preview_html(
                       <label><input type="checkbox" value="mediabook"> <span data-next-i18n="moviePackaging.mediabook">Mediabook</span></label>
                       <label><input type="checkbox" value="digipak"> <span data-next-i18n="moviePackaging.digipak">Digipak</span></label>
                       <label><input type="checkbox" value="box"> <span data-next-i18n="moviePackaging.box">Box</span></label>
+                    </fieldset>
+                    <fieldset id="movieEditRegions" class="movie-edit-checkbox-group">
+                      <legend data-next-i18n="movieDetail.regions" data-lock-anchor>Regions</legend>
+                      <label><input type="checkbox" value="A"> <span>A</span></label>
+                      <label><input type="checkbox" value="B"> <span>B</span></label>
+                      <label><input type="checkbox" value="C"> <span>C</span></label>
+                      <label><input type="checkbox" value="1"> <span>1</span></label>
+                      <label><input type="checkbox" value="2"> <span>2</span></label>
+                      <label><input type="checkbox" value="3"> <span>3</span></label>
+                      <label><input type="checkbox" value="4"> <span>4</span></label>
+                      <label><input type="checkbox" value="5"> <span>5</span></label>
+                      <label><input type="checkbox" value="6"> <span>6</span></label>
+                      <label><input type="checkbox" value="7"> <span>7</span></label>
+                      <label><input type="checkbox" value="8"> <span>8</span></label>
+                      <label><input type="checkbox" value="FREE"> <span data-next-i18n="movieDiscRegion.free">Region free</span></label>
                     </fieldset>
                     <label for="movieEditDistributor">
                       <span data-next-i18n="movieDetail.distributor">Distributor</span>
@@ -16948,6 +17071,98 @@ def ui_preview_html(
     }
     function tNext(key, fallback) {
       return localeState.messages[key] || fallback || key;
+    }
+    // ---- Technical track vocabularies -------------------------------------
+    // These mirror the Python sets in next_metadata.py / next_movievault_v2.py.
+    // test_next_technical_enum_parity.py asserts they stay equal, because a
+    // silent drift here shows up as a value the user cannot select back.
+    const AUDIO_TRACK_CODEC_VALUES = ["pcm", "dolby_digital", "dolby_digital_plus", "dolby_truehd", "dts", "dts_hd_hr", "dts_hd_ma", "mpeg_audio", "aac"];
+    const AUDIO_TRACK_CHANNEL_VALUES = ["1.0", "2.0", "5.1", "6.1", "7.1"];
+    const AUDIO_TRACK_IMMERSIVE_VALUES = ["dolby_atmos", "dts_x", "auro_3d"];
+    const SUBTITLE_TYPE_VALUES = ["full", "sdh", "forced", "commentary", "closed_caption"];
+    const VIDEO_CODEC_VALUES = ["mpeg2", "vc1", "h264", "hevc", "av1"];
+    const HDR_FORMAT_VALUES = ["hdr", "hdr10", "hdr10_plus", "hlg", "dolby_vision"];
+    const VIDEO_RESOLUTION_VALUES = ["480p", "576p", "720p", "1080i", "1080p", "2160p"];
+    const DISC_REGION_VALUES = ["A", "B", "C", "1", "2", "3", "4", "5", "6", "7", "8", "FREE"];
+    // A starter list only. Any code stored on a movie that is not here is
+    // injected into its select on the fly, so nothing becomes unselectable.
+    const TRACK_LANGUAGE_VALUES = ["en", "nl", "de", "fr", "es", "it", "pt", "pl", "cs", "da", "fi", "no", "sv", "hu", "ro", "tr", "el", "uk", "ru", "ja", "ko", "zh", "hi", "ar", "he", "th", "is", "ca"];
+
+    function camelKey(value) {
+      return String(value || "").replace(/_([a-z0-9])/g, (_match, chr) => chr.toUpperCase());
+    }
+    // Language *names* are never translated by hand: 8000 languages across 29
+    // locales is not a translation task, and the browser already knows the
+    // answer for the locale the user picked. The code stays the stored value;
+    // only the label changes.
+    let languageDisplayNames = null;
+    let languageDisplayLocale = null;
+    function languageLabel(code) {
+      const raw = String(code || "").trim();
+      if (!raw) return "";
+      if (languageDisplayLocale !== localeState.locale) {
+        languageDisplayLocale = localeState.locale;
+        try {
+          languageDisplayNames = new Intl.DisplayNames([localeState.locale], {type: "language"});
+        } catch (error) {
+          languageDisplayNames = null;
+        }
+      }
+      if (!languageDisplayNames) return raw;
+      try {
+        const label = languageDisplayNames.of(raw);
+        // Intl echoes the input back when it does not recognise the subtag.
+        return label && label.toLowerCase() !== raw.toLowerCase() ? label : raw;
+      } catch (error) {
+        return raw;
+      }
+    }
+    function languageWithCode(code) {
+      const raw = String(code || "").trim();
+      const label = languageLabel(raw);
+      return label && label !== raw ? `${label} (${raw})` : raw;
+    }
+    function enumLabel(prefix, value, fallback) {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      return tNext(`${prefix}.${camelKey(raw)}`, fallback || raw);
+    }
+    const packagingLabel = (value) => enumLabel("moviePackaging", value);
+    const hdrFormatLabel = (value) => enumLabel("movieHdrFormat", value);
+    const videoCodecLabel = (value) => enumLabel("movieVideoCodec", value);
+    const audioCodecLabel = (value) => enumLabel("movieAudioCodec", value);
+    const immersiveLabel = (value) => enumLabel("movieAudioImmersive", value);
+    const subtitleTypeLabel = (value) => enumLabel("movieSubtitleType", value);
+    const discRegionLabel = (value) => (String(value) === "FREE" ? tNext("movieDiscRegion.free", "Region free") : String(value || ""));
+
+    function audioTrackLabel(track) {
+      if (typeof track === "string") return track;
+      if (!track || typeof track !== "object") return "";
+      const detail = [audioCodecLabel(track.codec), track.channels, immersiveLabel(track.immersiveFormat)]
+        .filter(Boolean).join(" ");
+      const language = languageLabel(track.languageCode) || track.languageCode || "";
+      return detail ? `${language} (${detail})` : language;
+    }
+    function subtitleLabel(subtitle) {
+      if (typeof subtitle === "string") return subtitle;
+      if (!subtitle || typeof subtitle !== "object") return "";
+      const language = languageLabel(subtitle.languageCode) || subtitle.languageCode || "";
+      const variant = subtitle.subtitleType && subtitle.subtitleType !== "full"
+        ? subtitleTypeLabel(subtitle.subtitleType)
+        : "";
+      return variant ? `${language} (${variant})` : language;
+    }
+    function audioTracksText(value) {
+      return (Array.isArray(value) ? value : []).map(audioTrackLabel).filter(Boolean).join(", ");
+    }
+    function subtitlesText(value) {
+      return (Array.isArray(value) ? value : []).map(subtitleLabel).filter(Boolean).join(", ");
+    }
+    // Tolerates a scalar as well as a list: a row migrated by 055 is a list, but
+    // a metadata blob written before that still holds the old string.
+    function enumListText(value, labeller) {
+      const list = Array.isArray(value) ? value : (value ? [value] : []);
+      return list.map(labeller).filter(Boolean).join(", ");
     }
     const DISCOVER_DETAIL_CACHE_KEY = "dv_next_discover_detail_cache_v1";
     const DISCOVER_DETAIL_TTL_MS = 15 * 60 * 1000;
@@ -24990,7 +25205,16 @@ def ui_preview_html(
     }
     function valueText(value) {
       if (value === null || value === undefined || value === "") return "";
-      if (Array.isArray(value)) return value.filter((item) => item !== null && item !== undefined && item !== "").join(", ");
+      // Objects inside an array used to render as "[object Object]": `.join`
+      // calls String() per element, and the typeof check below only ever saw a
+      // whole-value object. A safety net - the audio/subtitle sites use their
+      // own formatters.
+      if (Array.isArray(value)) {
+        return value
+          .filter((item) => item !== null && item !== undefined && item !== "")
+          .map((item) => (typeof item === "object" ? JSON.stringify(item) : String(item)))
+          .join(", ");
+      }
       if (typeof value === "object") return JSON.stringify(value);
       return String(value);
     }
@@ -25828,7 +26052,7 @@ def ui_preview_html(
       "metadata:studios": ["movieDetail.studios", "Studios"],
       "metadata:distributor": ["movieDetail.distributor", "Distributor"],
       "metadata:packaging": ["movieDetail.packaging", "Packaging"],
-      "technical:hdr": ["", "HDR"],
+      "technical:hdr": ["movieDetail.hdr", "HDR"],
       "technical:screen_ratios": ["movieDetail.screenRatio", "Screen ratio"],
       "technical:audio_tracks": ["movieDetail.audio", "Audio"],
       "technical:subtitles": ["movieDetail.subtitles", "Subtitles"],
@@ -25888,7 +26112,7 @@ def ui_preview_html(
         [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title || metadata.release_title || metadata.releaseTitle, metadata.release_title_source || metadata.source || "collection"],
         [tNext("movieDetail.fieldOverview", "Overview"), movie.overview || metadata.overview, metadata.overview_source || metadata.source || "collection"],
         [tNext("movieDetail.rating", "Rating"), movie.rating || metadata.rating, metadata.rating_source || metadata.source || "collection"],
-        [tNext("movieDetail.technical", "Technical"), [technical.hdr, (technical.audio_tracks || []).slice(0, 2).join(", "), (technical.subtitles || []).slice(0, 2).join(", ")].filter(Boolean).join(" / "), technical.provider || metadata.technical_source || "metadata"]
+        [tNext("movieDetail.technical", "Technical"), [enumListText(technical.hdr, hdrFormatLabel), audioTracksText((technical.audio_tracks || []).slice(0, 2)), subtitlesText((technical.subtitles || []).slice(0, 2))].filter(Boolean).join(" / "), technical.provider || metadata.technical_source || "metadata"]
       ].filter(([, value]) => value);
       const idText = identifiers.map((item) => `${item.provider_id || item.providerId}:${item.identifier}`).join(" / ");
       if (idText) rows.push([tNext("movieDetail.identifiers", "Identifiers"), idText, "providers"]);
@@ -26378,6 +26602,9 @@ def ui_preview_html(
       movieEditAudioTracks: "audio_tracks",
       movieEditSubtitles: "subtitles",
       movieEditPackaging: "packaging",
+      movieEditRegions: "regions",
+      movieEditVideoResolution: "video_resolution",
+      movieEditVideoCodecs: "video_codecs",
       movieEditDistributor: "distributor"
     };
     let movieEditLockedFields = new Set();
@@ -26396,12 +26623,25 @@ def ui_preview_html(
       else movieEditLockedFields.add(field);
       reflectMovieEditLock(btn, field);
     }
+    // Three container shapes now carry a lock: a <label>-wrapped input, a
+    // <fieldset> of checkboxes, and a track editor that is neither. The editor
+    // opts in with data-lock-container="self" rather than being matched by tag,
+    // so a fourth shape needs no change here.
+    function movieEditLockContainer(input) {
+      if (input.dataset && input.dataset.lockContainer === "self") return input;
+      return input.tagName === "FIELDSET" ? input : input.closest("label");
+    }
+    function movieEditLockAnchor(container) {
+      return container.querySelector("[data-lock-anchor]")
+        || container.querySelector("legend")
+        || container.querySelector("span");
+    }
     function setupMovieEditLocks(lockedList) {
       movieEditLockedFields = new Set(Array.isArray(lockedList) ? lockedList : []);
       Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
         const input = document.getElementById(inputId);
         if (!input) return;
-        const container = input.tagName === "FIELDSET" ? input : input.closest("label");
+        const container = movieEditLockContainer(input);
         if (!container) return;
         let btn = container.querySelector(".movie-edit-lock");
         if (!btn) {
@@ -26410,12 +26650,148 @@ def ui_preview_html(
           btn.className = "movie-edit-lock";
           btn.dataset.lockField = field;
           btn.addEventListener("click", () => toggleMovieEditLock(field, btn));
-          const head = container.querySelector("span, legend");
+          const head = movieEditLockAnchor(container);
           if (head) head.appendChild(btn);
           else container.insertBefore(btn, container.firstChild);
         }
         reflectMovieEditLock(btn, field);
       });
+    }
+    // ---- Per-track editors ------------------------------------------------
+    function trackSelectHtml(field, values, current, labeller, {allowEmpty = false, emptyLabel = ""} = {}) {
+      const chosen = String(current ?? "");
+      const options = values.slice();
+      // Inject whatever is stored but unknown to us, so a forward-compatible
+      // value the feed deliberately kept raw is still selectable - otherwise an
+      // unrelated save would quietly rewrite it.
+      if (chosen && !options.includes(chosen)) options.push(chosen);
+      const head = allowEmpty
+        ? `<option value=""${chosen ? "" : " selected"}>${escapeHtml(emptyLabel || tNext("common.notSet", "Not set"))}</option>`
+        : "";
+      return `<select data-track-field="${escapeHtml(field)}">${head}${options.map((value) => {
+        const label = labeller ? labeller(value) : value;
+        return `<option value="${escapeHtml(value)}"${value === chosen ? " selected" : ""}>${escapeHtml(label || value)}</option>`;
+      }).join("")}</select>`;
+    }
+    function audioTrackRowHtml(track) {
+      const entry = typeof track === "string" ? (guessAudioTrack(track) || {}) : (track || {});
+      const legacy = typeof track === "string" ? track : "";
+      const signature = audioTrackSignatureOf(entry);
+      return `<div class="movie-edit-track-row" data-legacy-text="${escapeHtml(legacy)}" data-guess="${escapeHtml(legacy ? signature : "")}" title="${escapeHtml(legacy)}">
+        ${trackSelectHtml("languageCode", TRACK_LANGUAGE_VALUES, entry.languageCode, languageWithCode, {allowEmpty: true, emptyLabel: tNext("movieDetail.audioTrackLanguage", "Track language")})}
+        ${trackSelectHtml("codec", AUDIO_TRACK_CODEC_VALUES, entry.codec, audioCodecLabel, {allowEmpty: true, emptyLabel: tNext("movieDetail.audioTrackCodec", "Audio codec")})}
+        ${trackSelectHtml("channels", AUDIO_TRACK_CHANNEL_VALUES, entry.channels, null, {allowEmpty: true})}
+        ${trackSelectHtml("immersiveFormat", AUDIO_TRACK_IMMERSIVE_VALUES, entry.immersiveFormat, immersiveLabel, {allowEmpty: true})}
+        <button type="button" class="movie-edit-track-remove" aria-label="${escapeHtml(tNext("movieDetail.audioTrackRemove", "Remove audio track"))}">&times;</button>
+      </div>`;
+    }
+    function subtitleRowHtml(subtitle) {
+      const entry = typeof subtitle === "string" ? {} : (subtitle || {});
+      const legacy = typeof subtitle === "string" ? subtitle : "";
+      return `<div class="movie-edit-track-row movie-edit-subtitle-row" data-legacy-text="${escapeHtml(legacy)}" data-guess="" title="${escapeHtml(legacy)}">
+        ${trackSelectHtml("languageCode", TRACK_LANGUAGE_VALUES, entry.languageCode, languageWithCode, {allowEmpty: true, emptyLabel: tNext("movieDetail.subtitleLanguage", "Subtitle language")})}
+        ${trackSelectHtml("subtitleType", SUBTITLE_TYPE_VALUES, entry.subtitleType || "full", subtitleTypeLabel)}
+        <button type="button" class="movie-edit-track-remove" aria-label="${escapeHtml(tNext("movieDetail.subtitleRemove", "Remove subtitle"))}">&times;</button>
+      </div>`;
+    }
+    function audioTrackSignatureOf(entry) {
+      return ["languageCode", "codec", "channels", "immersiveFormat"]
+        .map((key) => String((entry || {})[key] ?? "")).join("|");
+    }
+    function audioTrackRowSignature(row) {
+      const entry = {};
+      row.querySelectorAll("select[data-track-field]").forEach((select) => {
+        entry[select.dataset.trackField] = select.value;
+      });
+      return audioTrackSignatureOf(entry);
+    }
+    // Best effort only. A row it cannot read stays opaque legacy text rather
+    // than being half-guessed into structure the user never approved.
+    function guessAudioTrack(text) {
+      const raw = String(text || "");
+      const language = TRACK_LANGUAGE_VALUES.find((code) => {
+        const name = languageLabel(code);
+        return name && name !== code && new RegExp(`\\b${name}\\b`, "i").test(raw);
+      });
+      if (!language) return null;
+      const haystack = raw.toLowerCase().replace(/[^a-z0-9.]+/g, " ");
+      const codecMatches = [
+        ["dts_hd_ma", /dts\\s*hd\\s*(ma|master)/], ["dts_hd_hr", /dts\\s*hd\\s*hr/],
+        ["dolby_truehd", /true\\s*hd/], ["dolby_digital_plus", /(dd\\s*\\+|digital\\s*plus|eac3|e-ac-3)/],
+        ["dolby_digital", /(dolby\\s*digital|ac3|ac-3|dd\\s*5|dd\\s*2)/], ["dts", /dts/],
+        ["pcm", /pcm/], ["aac", /aac/], ["mpeg_audio", /mpeg/]
+      ];
+      const codec = (codecMatches.find(([, pattern]) => pattern.test(haystack)) || [])[0] || "";
+      const channels = (AUDIO_TRACK_CHANNEL_VALUES.find((value) => haystack.includes(value)) || "");
+      const immersive = /atmos/.test(haystack) ? "dolby_atmos" : (/dts\\s*x/.test(haystack) ? "dts_x" : (/auro/.test(haystack) ? "auro_3d" : ""));
+      return {languageCode: language, codec, channels, immersiveFormat: immersive};
+    }
+    function renderMovieEditTrackRows(containerId, entries, rowHtml, emptyKey, emptyFallback) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const list = Array.isArray(entries) ? entries : [];
+      container.innerHTML = list.length
+        ? list.map(rowHtml).join("")
+        : `<p class="movie-edit-track-empty">${escapeHtml(tNext(emptyKey, emptyFallback))}</p>`;
+    }
+    function fillMovieEditAudioTracks(value) {
+      renderMovieEditTrackRows("movieEditAudioTrackRows", value, audioTrackRowHtml, "movieDetail.audioTrackNone", "No audio tracks yet");
+    }
+    function fillMovieEditSubtitles(value) {
+      renderMovieEditTrackRows("movieEditSubtitleRows", value, subtitleRowHtml, "movieDetail.subtitleNone", "No subtitles yet");
+    }
+    function collectMovieEditAudioTracks() {
+      return Array.from(document.querySelectorAll("#movieEditAudioTrackRows .movie-edit-track-row")).map((row) => {
+        const legacy = row.dataset.legacyText || "";
+        // Untouched legacy row: re-emit the original string verbatim. This is
+        // what makes a save lossless for someone who never opens this editor.
+        if (legacy && audioTrackRowSignature(row) === (row.dataset.guess || "")) return legacy;
+        const entry = {};
+        row.querySelectorAll("select[data-track-field]").forEach((select) => {
+          entry[select.dataset.trackField] = select.value || null;
+        });
+        if (!entry.languageCode || !entry.codec) return legacy || null;
+        return entry;
+      }).filter((item) => item !== null && item !== "");
+    }
+    function collectMovieEditSubtitles() {
+      return Array.from(document.querySelectorAll("#movieEditSubtitleRows .movie-edit-track-row")).map((row) => {
+        const entry = {};
+        row.querySelectorAll("select[data-track-field]").forEach((select) => {
+          entry[select.dataset.trackField] = select.value || "";
+        });
+        if (!entry.languageCode) return row.dataset.legacyText || null;
+        return {languageCode: entry.languageCode, subtitleType: entry.subtitleType || "full"};
+      }).filter((item) => item !== null && item !== "");
+    }
+    function setupMovieEditTrackEditors() {
+      const wire = (addId, rowsId, rowHtml) => {
+        const addButton = document.getElementById(addId);
+        const rows = document.getElementById(rowsId);
+        if (!addButton || !rows || addButton.dataset.wired === "1") return;
+        addButton.dataset.wired = "1";
+        addButton.addEventListener("click", () => {
+          const empty = rows.querySelector(".movie-edit-track-empty");
+          if (empty) empty.remove();
+          rows.insertAdjacentHTML("beforeend", rowHtml({}));
+        });
+        rows.addEventListener("click", (event) => {
+          const remove = event.target.closest(".movie-edit-track-remove");
+          if (!remove) return;
+          remove.closest(".movie-edit-track-row").remove();
+        });
+      };
+      wire("movieEditAudioTrackAdd", "movieEditAudioTrackRows", audioTrackRowHtml);
+      wire("movieEditSubtitleAdd", "movieEditSubtitleRows", subtitleRowHtml);
+    }
+    function fillMovieEditCheckboxGroup(containerId, values) {
+      const chosen = new Set((Array.isArray(values) ? values : []).map((item) => String(item)));
+      document.querySelectorAll(`#${containerId} input[type=checkbox]`).forEach((box) => {
+        box.checked = chosen.has(box.value);
+      });
+    }
+    function collectMovieEditCheckboxGroup(containerId) {
+      return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)).map((box) => box.value);
     }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
@@ -26439,10 +26815,8 @@ def ui_preview_html(
         movieEditDirector: valueText(metadata.director),
         movieEditStudios: valueText(metadata.studios),
         movieEditContentRating: contentRatingInfo.unknown ? "" : (contentRatingInfo.rating || ""),
-        movieEditHdr: valueText(specs.hdr || metadata.hdr),
         movieEditScreenRatio: valueText(specs.screen_ratios || metadata.screen_ratios),
-        movieEditAudioTracks: valueText(specs.audio_tracks || metadata.audio_tracks),
-        movieEditSubtitles: valueText(specs.subtitles || metadata.subtitles),
+        movieEditVideoResolution: valueText(specs.video_resolution || metadata.video_resolution),
         movieEditDistributor: valueText(metadata.distributor),
         movieEditOverview: movie.overview || "",
         movieEditNotes: movie.notes || ""
@@ -26451,14 +26825,18 @@ def ui_preview_html(
         const input = document.getElementById(id);
         if (input && document.activeElement !== input) input.value = value;
       });
-      const packagingValues = new Set(
-        Array.isArray(specs.packaging) && specs.packaging.length
-          ? specs.packaging
-          : (Array.isArray(metadata.packaging) ? metadata.packaging : [])
-      );
-      document.querySelectorAll("#movieEditPackaging input[type=checkbox]").forEach((box) => {
-        box.checked = packagingValues.has(box.value);
-      });
+      const specList = (key) => {
+        const value = specs[key];
+        if (Array.isArray(value) && value.length) return value;
+        return Array.isArray(metadata[key]) ? metadata[key] : [];
+      };
+      fillMovieEditCheckboxGroup("movieEditPackaging", specList("packaging"));
+      fillMovieEditCheckboxGroup("movieEditHdr", specList("hdr"));
+      fillMovieEditCheckboxGroup("movieEditVideoCodecs", specList("video_codecs"));
+      fillMovieEditCheckboxGroup("movieEditRegions", specList("regions"));
+      fillMovieEditAudioTracks(specList("audio_tracks"));
+      fillMovieEditSubtitles(specList("subtitles"));
+      setupMovieEditTrackEditors();
       const locationSelect = document.getElementById("movieEditLocationSelect");
       if (locationSelect && document.activeElement !== locationSelect) {
         const currentLocationId = (movie.location && movie.location.id) || movie.location_id || "";
@@ -27037,12 +27415,14 @@ def ui_preview_html(
         ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
       ]);
       const audioVideoFields = [
-        ["HDR", specs.hdr || metadata.hdr],
+        [tNext("movieDetail.hdr", "HDR"), enumListText(specs.hdr || metadata.hdr, hdrFormatLabel)],
+        [tNext("movieDetail.videoResolution", "Resolution"), specs.video_resolution || metadata.video_resolution],
+        [tNext("movieDetail.videoCodecs", "Video codec"), enumListText(specs.video_codecs || metadata.video_codecs, videoCodecLabel)],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
         [tNext("movieDetail.format", "Format"), movie.format || specs.format || metadata.format],
         [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
-        [tNext("movieDetail.audio", "Audio"), specs.audio_tracks || metadata.audio_tracks],
-        [tNext("movieDetail.subtitles", "Subtitles"), specs.subtitles || metadata.subtitles]
+        [tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)],
+        [tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)]
       ];
       const releaseLocationText = typeof movie.location === "string" ? movie.location : "";
       const storageLocationLabel = movie.location && typeof movie.location === "object"
@@ -27051,7 +27431,8 @@ def ui_preview_html(
       const storageLocationHtml = storageLocationLabel ? locationRouteLinkHtml(movie.location, storageLocationLabel) : "";
       const collectorsFields = [
         [tNext("movieDetail.edition", "Edition"), movie.edition],
-        [tNext("movieDetail.packaging", "Packaging"), releasePackaging],
+        [tNext("movieDetail.packaging", "Packaging"), enumListText(releasePackaging, packagingLabel)],
+        [tNext("movieDetail.regions", "Regions"), enumListText(specs.regions || metadata.regions, discRegionLabel)],
         [tNext("movieDetail.location", "Location"), releaseLocationText],
         [tNext("locations.assign", "Storage location"), storageLocationHtml ? {text: storageLocationLabel, html: storageLocationHtml} : storageLocationLabel],
         [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
@@ -36051,11 +36432,14 @@ def ui_preview_html(
         studios: formTextValue("movieEditStudios"),
         contentRating: formTextValue("movieEditContentRating"),
         ratingCountry,
-        hdr: formTextValue("movieEditHdr"),
+        hdr: collectMovieEditCheckboxGroup("movieEditHdr"),
         screenRatio: formTextValue("movieEditScreenRatio"),
-        audioTracks: formTextValue("movieEditAudioTracks"),
-        subtitles: formTextValue("movieEditSubtitles"),
-        packaging: Array.from(document.querySelectorAll("#movieEditPackaging input[type=checkbox]:checked")).map((box) => box.value),
+        videoResolution: formTextValue("movieEditVideoResolution"),
+        videoCodecs: collectMovieEditCheckboxGroup("movieEditVideoCodecs"),
+        discRegions: collectMovieEditCheckboxGroup("movieEditRegions"),
+        audioTracks: collectMovieEditAudioTracks(),
+        subtitles: collectMovieEditSubtitles(),
+        packaging: collectMovieEditCheckboxGroup("movieEditPackaging"),
         distributor: formTextValue("movieEditDistributor"),
         overview: formTextValue("movieEditOverview"),
         notes: formTextValue("movieEditNotes"),
@@ -36066,9 +36450,14 @@ def ui_preview_html(
         if (movieEditLockedFields.has(field)) return;
         const input = document.getElementById(inputId);
         if (!input) return;
-        const newValue = input.tagName === "FIELDSET"
-          ? Array.from(input.querySelectorAll("input[type=checkbox]:checked")).map((box) => box.value).join(",")
-          : (input.value || "").trim();
+        // A track editor is a <div>: `input.value` is undefined there, so without
+        // this branch every save would read as "user cleared the field" and
+        // silently trigger a metadata refresh.
+        const newValue = input.dataset.lockContainer === "self"
+          ? (input.querySelectorAll(".movie-edit-track-row").length ? "x" : "")
+          : input.tagName === "FIELDSET"
+            ? Array.from(input.querySelectorAll("input[type=checkbox]:checked")).map((box) => box.value).join(",")
+            : (input.value || "").trim();
         if (newValue) return;
         const previous = previousMovieEditFieldValue(field, prevMovie, prevMetadata, prevSpecs);
         if (previous) clearedUnlockedField = true;
@@ -36098,9 +36487,12 @@ def ui_preview_html(
         case "distributor": return valueText(metadata.distributor);
         case "hdr": return valueText(specs.hdr || metadata.hdr);
         case "screen_ratios": return valueText(specs.screen_ratios || metadata.screen_ratios);
-        case "audio_tracks": return valueText(specs.audio_tracks || metadata.audio_tracks);
-        case "subtitles": return valueText(specs.subtitles || metadata.subtitles);
+        case "audio_tracks": return audioTracksText(specs.audio_tracks || metadata.audio_tracks);
+        case "subtitles": return subtitlesText(specs.subtitles || metadata.subtitles);
         case "packaging": return valueText(specs.packaging || metadata.packaging || movie.edition_type);
+        case "regions": return valueText(specs.regions || metadata.regions);
+        case "video_resolution": return valueText(specs.video_resolution || metadata.video_resolution);
+        case "video_codecs": return valueText(specs.video_codecs || metadata.video_codecs);
         case "content_ratings": {
           const contentRatingInfo = preferredContentRatingInfo(movie, specs);
           return contentRatingInfo.unknown ? "" : valueText(contentRatingInfo.rating);

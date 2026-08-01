@@ -106,15 +106,74 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
 
-    def test_audio_and_subtitle_edit_fields_are_five_rows_high(self):
+    def test_audio_and_subtitles_are_edited_as_per_track_rows(self):
+        """Replaces the old free-text textareas. A track is a language plus a
+        codec, channel layout and immersive format; a subtitle is a language plus
+        a variant. Typing that as prose cannot express "English SDH"."""
+        for container, rows, add in (
+            ("movieEditAudioTracks", "movieEditAudioTrackRows", "movieEditAudioTrackAdd"),
+            ("movieEditSubtitles", "movieEditSubtitleRows", "movieEditSubtitleAdd"),
+        ):
+            with self.subTest(container=container):
+                self.assertIn(
+                    f'<div id="{container}" class="movie-edit-track-editor wide" '
+                    'data-lock-container="self">',
+                    self.source,
+                )
+                self.assertIn(f'id="{rows}"', self.source)
+                self.assertIn(f'id="{add}"', self.source)
+        self.assertNotIn('<textarea id="movieEditAudioTracks"', self.source)
+        self.assertNotIn('<textarea id="movieEditSubtitles"', self.source)
+
+    def test_a_legacy_audio_string_is_re_emitted_verbatim_when_untouched(self):
+        """The lossless promise: someone who never opens the editor keeps their
+        hand-entered "English (DTS-HD MA 5.1)" exactly as it was."""
         self.assertIn(
-            '<textarea id="movieEditAudioTracks" name="audio_tracks" rows="5" '
-            'maxlength="400" autocomplete="off"></textarea>',
+            'if (legacy && audioTrackRowSignature(row) === (row.dataset.guess || "")) return legacy;',
+            self.source,
+        )
+
+    def test_the_track_editors_are_covered_by_clear_detection(self):
+        """A track editor is a <div>, so `input.value` is undefined. Without this
+        branch every save reads as "user cleared the field" and silently fires a
+        metadata refresh."""
+        self.assertIn('input.dataset.lockContainer === "self"', self.source)
+        self.assertIn(
+            '? (input.querySelectorAll(".movie-edit-track-row").length ? "x" : "")',
+            self.source,
+        )
+
+    def test_language_names_are_resolved_for_the_display_locale(self):
+        """The code is what gets stored; the name is what the user reads. 8000
+        languages across 29 locales is not a hand-translation task."""
+        self.assertIn('new Intl.DisplayNames([localeState.locale], {type: "language"})', self.source)
+        self.assertIn("function languageWithCode(code)", self.source)
+
+    def test_structured_tracks_never_render_as_object_object(self):
+        """`[].join()` calls String() per element, so an object rendered as
+        "[object Object]" on the detail page, in the edit form and in the
+        metadata comparison."""
+        self.assertIn("function audioTracksText(value)", self.source)
+        self.assertIn("function subtitlesText(value)", self.source)
+        self.assertIn(
+            '[tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)],',
             self.source,
         )
         self.assertIn(
-            '<textarea id="movieEditSubtitles" name="subtitles" rows="5" '
-            'maxlength="400" autocomplete="off"></textarea>',
+            '[tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)]',
+            self.source,
+        )
+        self.assertIn(
+            '.map((item) => (typeof item === "object" ? JSON.stringify(item) : String(item)))',
+            self.source,
+        )
+
+    def test_every_subtitle_variant_is_selectable(self):
+        for variant in ("full", "sdh", "forced", "commentary", "closed_caption"):
+            with self.subTest(variant=variant):
+                self.assertIn(f'"{variant}"', self.source)
+        self.assertIn(
+            'const SUBTITLE_TYPE_VALUES = ["full", "sdh", "forced", "commentary", "closed_caption"];',
             self.source,
         )
 
@@ -447,17 +506,57 @@ class NextMovieDetailUiTests(unittest.TestCase):
 
     def test_packaging_checkbox_fill_and_submit_read_checked_values(self):
         self.assertIn(
-            'document.querySelectorAll("#movieEditPackaging input[type=checkbox]").forEach((box) => {',
+            'fillMovieEditCheckboxGroup("movieEditPackaging", specList("packaging"));',
             self.source,
         )
         self.assertIn(
-            'packaging: Array.from(document.querySelectorAll("#movieEditPackaging input[type=checkbox]:checked")).map((box) => box.value),',
+            'packaging: collectMovieEditCheckboxGroup("movieEditPackaging"),',
+            self.source,
+        )
+        self.assertIn(
+            'document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)',
             self.source,
         )
 
-    def test_movie_edit_locks_handle_the_packaging_fieldset(self):
+    def test_movie_edit_locks_handle_all_three_container_shapes(self):
+        """A <label>-wrapped input, a <fieldset> of checkboxes, and a track editor
+        that is neither. The editor opts in by data attribute rather than being
+        matched by tag name, so a fourth shape needs no change here."""
+        self.assertIn("function movieEditLockContainer(input)", self.source)
+        self.assertIn('input.dataset && input.dataset.lockContainer === "self"', self.source)
         self.assertIn('input.tagName === "FIELDSET" ? input : input.closest("label")', self.source)
-        self.assertIn('container.querySelector("span, legend")', self.source)
+        self.assertIn("function movieEditLockAnchor(container)", self.source)
+        self.assertIn('container.querySelector("[data-lock-anchor]")', self.source)
+
+    def test_the_new_technical_fields_are_lockable(self):
+        for element_id, field in (
+            ("movieEditRegions", "regions"),
+            ("movieEditVideoResolution", "video_resolution"),
+            ("movieEditVideoCodecs", "video_codecs"),
+        ):
+            with self.subTest(field=field):
+                self.assertIn(f'{element_id}: "{field}"', self.source)
+
+    def test_hdr_and_video_codecs_are_checkbox_groups_of_all_their_enum_values(self):
+        for value in ("hdr", "hdr10", "hdr10_plus", "hlg", "dolby_vision"):
+            with self.subTest(value=value):
+                self.assertIn(f'<label><input type="checkbox" value="{value}">', self.source)
+        for value in ("mpeg2", "vc1", "h264", "hevc", "av1"):
+            with self.subTest(value=value):
+                self.assertIn(f'<label><input type="checkbox" value="{value}">', self.source)
+
+    def test_hdr_is_no_longer_a_hardcoded_english_literal(self):
+        """It shipped as a bare "HDR" span in the form, a bare label on the detail
+        page, and an empty i18n key in the comparison table."""
+        self.assertIn('data-next-i18n="movieDetail.hdr"', self.source)
+        self.assertIn('"technical:hdr": ["movieDetail.hdr", "HDR"]', self.source)
+        self.assertNotIn("<span>HDR</span>", self.source)
+
+    def test_the_checkbox_group_has_a_style_rule(self):
+        """The packaging fieldset shipped without one and rendered with the
+        browser default fieldset border."""
+        self.assertIn(".movie-edit-checkbox-group {", self.source)
+        self.assertIn(".movie-edit-track-row {", self.source)
 
 
 if __name__ == "__main__":
