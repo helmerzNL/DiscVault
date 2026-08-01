@@ -26870,7 +26870,11 @@ def ui_preview_html(
         row.querySelectorAll("select[data-track-field]").forEach((select) => {
           entry[select.dataset.trackField] = select.value || null;
         });
-        if (!entry.languageCode || !entry.codec) return legacy || null;
+        // A language is enough. Requiring a codec here silently discarded a row
+        // the user had filled in half way, which is how a track could vanish on
+        // save with nothing to explain it. The server accepts a codec-less
+        // track for the same reason.
+        if (!entry.languageCode) return legacy || null;
         return entry;
       }).filter((item) => item !== null && item !== "");
     }

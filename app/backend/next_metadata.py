@@ -1270,12 +1270,22 @@ def normalize_audio_track_entry(value: Any) -> dict[str, Any] | str | None:
     unknown = set(entry) - set(AUDIO_TRACK_KEYS)
     if unknown:
         raise ValueError(f"unknown audio track keys: {sorted(unknown)}")
+    # A codec used to be mandatory. That held while the only writers were the
+    # MovieVault feed (which always has one) and the PWA form (which silently
+    # dropped a track without one). It stopped holding once the clients could
+    # edit tracks: a title saved before the structured columns existed knows a
+    # language and nothing else, and every hand-entered track passes through
+    # that state on its way to being filled in. Rejecting it would 422 the whole
+    # sync mutation over a track the user is halfway through typing.
+    #
+    # A language is still required — a track that names neither a language nor a
+    # codec describes nothing.
     codec = entry.get("codec")
-    if not isinstance(codec, str) or not codec.strip():
-        raise ValueError("audio track needs a codec")
+    if codec is not None and not isinstance(codec, str):
+        raise ValueError("audio track codec must be a string or null")
     return {
         "languageCode": _track_language(entry.get("languageCode")),
-        "codec": codec.strip()[:64],
+        "codec": (codec or "").strip()[:64],
         "channels": _track_optional_text(entry.get("channels"), maximum=16),
         "immersiveFormat": _track_optional_text(entry.get("immersiveFormat"), maximum=64),
     }
