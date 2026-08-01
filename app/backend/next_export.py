@@ -46,6 +46,13 @@ EXPORT_MIME_TYPES = {
 
 DEFAULT_EXPORT_TITLE = "DiscVault library"
 
+# ReportLab builds one Paragraph per cell and lays the whole table out in memory,
+# synchronously, inside the request. The deployment runs two gunicorn workers, so an
+# unbounded PDF render occupies half the app's request capacity for its full duration
+# and can be killed by the worker timeout mid-flight. CSV and XLSX stream far more
+# cheaply and carry no such ceiling.
+MAX_PDF_EXPORT_ROWS = 5_000
+
 _FILENAME_SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -232,6 +239,12 @@ def build_export(payload: dict[str, Any]) -> tuple[bytes, str, str]:
     elif fmt == "xlsx":
         body = render_xlsx(headers, rows, sheet_title=title)
     else:
+        if len(rows) > MAX_PDF_EXPORT_ROWS:
+            raise NextApiError(
+                f"A PDF export is limited to {MAX_PDF_EXPORT_ROWS} rows "
+                f"({len(rows)} selected). Export to CSV or XLSX instead.",
+                400,
+            )
         body = render_pdf(
             headers,
             rows,

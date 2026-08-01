@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Der er intet at eksportere.",
   "collection.exportFailed": "Eksporten kunne ikke oprettes.",
   "collection.exportRowCount": "{count} film",
-  "collection.exportDocumentTitle": "DiscVault-bibliotek"
+  "collection.exportDocumentTitle": "DiscVault-bibliotek",
+  "collection.hydrationTruncated": "Kun en del af biblioteket kunne indlæses.",
+  "collection.exportIncomplete": "Indtil videre er kun {count} film fra dette bibliotek indlæst. Vent, til biblioteket er indlæst helt, for at få en komplet eksport.",
+  "app.updateAvailable": "Der er en ny version af DiscVault tilgængelig.",
+  "app.updateReload": "Indlæs igen"
 }

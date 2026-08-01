@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Nėra ko eksportuoti.",
   "collection.exportFailed": "Nepavyko sukurti eksporto.",
   "collection.exportRowCount": "{count} filmų",
-  "collection.exportDocumentTitle": "DiscVault biblioteka"
+  "collection.exportDocumentTitle": "DiscVault biblioteka",
+  "collection.hydrationTruncated": "Pavyko įkelti tik dalį bibliotekos.",
+  "collection.exportIncomplete": "Kol kas iš šios bibliotekos įkelti tik {count} filmai. Kad eksportas būtų visas, palaukite, kol biblioteka bus įkelta iki galo.",
+  "app.updateAvailable": "Yra nauja „DiscVault“ versija.",
+  "app.updateReload": "Įkelti iš naujo"
 }

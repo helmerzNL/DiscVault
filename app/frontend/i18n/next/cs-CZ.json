@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Není co exportovat.",
   "collection.exportFailed": "Export se nepodařilo vytvořit.",
   "collection.exportRowCount": "{count} filmů",
-  "collection.exportDocumentTitle": "Knihovna DiscVault"
+  "collection.exportDocumentTitle": "Knihovna DiscVault",
+  "collection.hydrationTruncated": "Podařilo se načíst jen část knihovny.",
+  "collection.exportIncomplete": "Zatím se z této knihovny načetlo jen {count} filmů. Pro úplný export počkejte, až se knihovna načte celá.",
+  "app.updateAvailable": "Je k dispozici nová verze DiscVault.",
+  "app.updateReload": "Načíst znovu"
 }

@@ -389,7 +389,11 @@ class ServiceWorkerProtectedMediaTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
     def test_new_cache_version_evicts_pre_hardening_media(self):
-        self.assertIn('const SW_VERSION = "discvault-sw-v153";', self.source)
+        # The cache namespace is derived from the running build rather than a
+        # hand-maintained constant, so *every* release evicts the caches of the
+        # previous one — a superset of the one-off eviction this test used to pin.
+        self.assertIn("const SW_VERSION = `discvault-sw-${SW_BUILD}`;", self.source)
+        self.assertIn('const SW_BUILD = "__DISCVAULT_SW_BUILD__"', self.source)
         self.assertIn("oldKeys.map(key => caches.delete(key))", self.source)
 
     def test_protected_media_is_network_only_and_uses_offline_placeholder(self):

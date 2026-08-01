@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Nav nekā, ko eksportēt.",
   "collection.exportFailed": "Eksportu neizdevās izveidot.",
   "collection.exportRowCount": "{count} filmas",
-  "collection.exportDocumentTitle": "DiscVault bibliotēka"
+  "collection.exportDocumentTitle": "DiscVault bibliotēka",
+  "collection.hydrationTruncated": "Izdevās ielādēt tikai daļu bibliotēkas.",
+  "collection.exportIncomplete": "Līdz šim no šīs bibliotēkas ir ielādētas tikai {count} filmas. Pilnīgam eksportam nogaidiet, līdz bibliotēka ir pilnībā ielādēta.",
+  "app.updateAvailable": "Ir pieejama jauna DiscVault versija.",
+  "app.updateReload": "Ielādēt atkārtoti"
 }

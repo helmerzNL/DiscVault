@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Nincs mit exportálni.",
   "collection.exportFailed": "Az exportot nem sikerült létrehozni.",
   "collection.exportRowCount": "{count} film",
-  "collection.exportDocumentTitle": "DiscVault-könyvtár"
+  "collection.exportDocumentTitle": "DiscVault-könyvtár",
+  "collection.hydrationTruncated": "A könyvtárnak csak egy részét sikerült betölteni.",
+  "collection.exportIncomplete": "Eddig csak {count} film töltődött be ebből a könyvtárból. A teljes exportáláshoz várd meg, amíg a könyvtár betöltése befejeződik.",
+  "app.updateAvailable": "Elérhető a DiscVault új verziója.",
+  "app.updateReload": "Újratöltés"
 }

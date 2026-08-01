@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "Δεν υπάρχει τίποτα για εξαγωγή.",
   "collection.exportFailed": "Δεν ήταν δυνατή η δημιουργία της εξαγωγής.",
   "collection.exportRowCount": "{count} ταινίες",
-  "collection.exportDocumentTitle": "Βιβλιοθήκη DiscVault"
+  "collection.exportDocumentTitle": "Βιβλιοθήκη DiscVault",
+  "collection.hydrationTruncated": "Ήταν δυνατή η φόρτωση μόνο ενός μέρους της βιβλιοθήκης.",
+  "collection.exportIncomplete": "Μέχρι στιγμής έχουν φορτωθεί μόνο {count} ταινίες από αυτήν τη βιβλιοθήκη. Περιμένετε να ολοκληρωθεί η φόρτωση για πλήρη εξαγωγή.",
+  "app.updateAvailable": "Είναι διαθέσιμη μια νέα έκδοση του DiscVault.",
+  "app.updateReload": "Επαναφόρτωση"
 }

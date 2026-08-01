@@ -2563,5 +2563,9 @@
   "collection.exportEmpty": "没有可导出的内容。",
   "collection.exportFailed": "无法创建导出文件。",
   "collection.exportRowCount": "{count} 部电影",
-  "collection.exportDocumentTitle": "DiscVault 媒体库"
+  "collection.exportDocumentTitle": "DiscVault 媒体库",
+  "collection.hydrationTruncated": "只能加载部分媒体库。",
+  "collection.exportIncomplete": "目前该媒体库仅加载了 {count} 部电影。请等待媒体库加载完成后再导出，以获得完整结果。",
+  "app.updateAvailable": "DiscVault 有新版本可用。",
+  "app.updateReload": "重新加载"
 }
