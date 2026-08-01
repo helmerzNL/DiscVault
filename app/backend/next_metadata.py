@@ -464,17 +464,55 @@ def value_present(value: Any) -> bool:
     return value not in (None, "", [], {})
 
 
+# A 4K UHD + Blu-ray combo pack physically ships both discs, so release data for
+# either leg legitimately describes it. The collection filter already treats the
+# combo as matching both members; keeping the merge policy in step means the
+# format shown to the user and the format used to accept release data agree.
+# Deliberately one-directional: a combo accepts single-disc release data, but a
+# Blu-ray-only movie must not inherit a combo's specs, which also cover its 4K disc.
+FORMAT_COMBO_MEMBERS = {"4K UHD + Blu-ray": frozenset({"4K UHD", "Blu-ray"})}
+
+
 def normalize_media_format(value: Any) -> str:
+    """Normalize a media format onto DiscVault's canonical vocabulary.
+
+    Mirrors the seven options the collection UI offers (`MOVIE_FORMAT_OPTIONS`
+    in `next_views_ui`) and the vocabulary `physical_media_format_key` already
+    recognises. Previously only 4K UHD, Blu-ray and DVD were understood and every
+    other value normalized to "", which `field_format_safe` reads as "no format"
+    and which blocks every technical field: an HD DVD, LaserDisc or VCD/SVCD
+    could never receive audio tracks, subtitles or video facts from a release
+    source. A genuinely unrecognised value still returns "" and stays blocked --
+    an unknown format must not be guessed into matching a release it does not
+    describe.
+    """
     text = str(value or "").strip().lower()
     if not text:
         return ""
-    if re.search(r"4k|uhd|ultra\s*hd", text):
+    has_4k = bool(re.search(r"4k|uhd|ultra\s*hd", text))
+    has_bluray = bool(re.search(r"blu[-\s]?ray|(?:^|[^a-z])bd(?:[^a-z]|$)", text))
+    if has_4k and has_bluray and re.search(r"[+/&]", text):
+        return "4K UHD + Blu-ray"
+    if has_4k:
         return "4K UHD"
-    if re.search(r"blu[- ]?ray", text):
+    if has_bluray:
         return "Blu-ray"
+    # HD DVD is matched ahead of DVD: it carries the literal "dvd" token, so the
+    # plain-DVD rule would otherwise claim it and let DVD release data through.
+    if re.search(r"hd[-\s]?dvd", text):
+        return "HD DVD"
+    if re.search(r"laser[-\s]?disc", text):
+        return "LaserDisc"
+    if re.search(r"\bs?vcd\b", text):
+        return "VCD/SVCD"
     if re.search(r"\bdvd\b", text):
         return "DVD"
     return ""
+
+
+def media_formats_compatible(target: str, source: str) -> bool:
+    """True when release data for *source* may be applied to a *target* format."""
+    return target == source or source in FORMAT_COMBO_MEMBERS.get(target, ())
 
 
 def detect_format_from_text(value: Any) -> str:
@@ -1061,15 +1099,26 @@ def movievault_identification_plan(plugin: dict[str, Any], query: dict[str, Any]
             if key not in ("externalBarcode", "barcode")
         }
         add("search_title", identity_payload)
-    elif movievault_id:
-        add("movie_details", base_payload)
-        identity_payload = base_payload
-    elif external_barcode:
-        identity_payload = {**base_payload, "barcode": external_barcode}
-        add("search_barcode", identity_payload)
     else:
         identity_payload = base_payload
-        if title:
+        if movievault_id:
+            # `movieVaultId` is only sometimes a MovieVault release id. A movie
+            # that reached DiscVault through an import carries a locally derived
+            # UUIDv5 here (`next_import`), which no catalog row will ever match.
+            # It is forwarded as `releaseId` so `movie_details` can resolve it
+            # when it genuinely is one -- the entrypoint reads `releaseId`/`id`
+            # and the query supplied neither, so the lookup could only miss.
+            identity_payload = {**base_payload, "releaseId": movievault_id}
+            add("movie_details", identity_payload)
+        if external_barcode:
+            # Planned alongside `movie_details` rather than instead of it. As an
+            # `elif` the mere presence of an identifier removed the barcode
+            # lookup, so every movie holding a non-release `movieVaultId` was cut
+            # off from the catalog permanently: the refresh reported a clean
+            # "no usable match" and no MovieVault edit could ever reach it.
+            identity_payload = {**identity_payload, "barcode": external_barcode}
+            add("search_barcode", identity_payload)
+        if not plan and title:
             add("search_title", identity_payload)
 
     if (query.get("memberOfBoxSet") or query.get("detectBoxSets")) and (title or fallback or external_barcode):
@@ -2539,6 +2588,8 @@ def field_format_safe(
         return (field not in METADATA_TECHNICAL_FIELDS), "technical field needs same-format source"
     if target == source:
         return True, "same-format release data"
+    if media_formats_compatible(target, source):
+        return True, "combo pack accepts release data for either disc"
     return False, f"format mismatch: target={target}, source={source}"
 
 
@@ -2569,7 +2620,10 @@ def should_apply_field(
     if not value_present(current_value):
         return True, "current field is empty"
     if field in METADATA_TECHNICAL_FIELDS and release_priority:
-        if format_reason == "same-format release data":
+        if format_reason in (
+            "same-format release data",
+            "combo pack accepts release data for either disc",
+        ):
             return True, "same-format technical release refresh"
         if field == "content_ratings" and format_reason == "format-neutral certification field":
             return True, "format-neutral certification refresh"
