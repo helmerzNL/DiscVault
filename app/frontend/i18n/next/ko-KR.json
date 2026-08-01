@@ -2609,5 +2609,8 @@
   "movieVideoCodec.h264": "AVC (H.264)",
   "movieVideoCodec.hevc": "HEVC (H.265)",
   "movieVideoCodec.mpeg2": "MPEG-2",
-  "movieVideoCodec.vc1": "VC-1"
+  "movieVideoCodec.vc1": "VC-1",
+  "movieDetail.estimatedValue": "예상 가치",
+  "movieDetail.estimatedValueCurrency": "통화",
+  "movieDetail.estimatedValueCurrencyNone": "설정되지 않음"
 }
