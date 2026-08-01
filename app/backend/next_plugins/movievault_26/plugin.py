@@ -2037,6 +2037,11 @@ def _release_candidate_payload(movie, release, barcode):
         if release_title:
             base.setdefault("releaseTitle", release_title)
             base.setdefault("release_title", release_title)
+    poster = _first_value(movie, "posterUrl", "poster_url", "poster", "coverUrl", "cover_url", "image")
+    if not poster:
+        poster = _first_value(release, "posterUrl", "poster_url", "poster", "coverUrl", "cover_url", "image")
+    if poster:
+        base["posterUrl"] = poster
     if not _text(base.get("barcode")):
         base["barcode"] = barcode
     return base
