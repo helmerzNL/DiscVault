@@ -12,6 +12,10 @@ Behaviour:
   inspect tracked + untracked working-tree changes instead.
 * Only bumps when a protected path changed and ``app/VERSION`` itself was not already
   modified, so an explicit manual bump is never doubled.
+* Checks the target branch (``--base-ref``, default ``release/v26-beta``) and ensures
+  the new version is strictly greater than both the local file and the target branch.
+  This prevents the version-collision scenario where two parallel PRs independently
+  bump to the same value (see PR #473/#474).
 * Never raises on routine problems; it simply exits 0 without touching anything so it
   can never block a commit.
 """
@@ -77,11 +81,64 @@ def bump_patch(version: str) -> str | None:
     return f"{major}.{minor}.{int(patch) + 1}{suffix}"
 
 
+def _parse_semver(version: str) -> tuple[int, int, int] | None:
+    match = SEMVER_RE.match(version.strip())
+    if not match:
+        return None
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+
+
+def _read_base_ref_version(base_ref: str) -> str | None:
+    """Return the VERSION at origin/<base_ref> or <base_ref>, fetching if needed.
+
+    Returns None when the ref cannot be resolved or does not carry app/VERSION.
+    Network/auth errors are silently swallowed so they can never block a commit.
+    """
+    for candidate in (f"origin/{base_ref}", base_ref):
+        try:
+            return subprocess.check_output(
+                ["git", "show", f"{candidate}:{VERSION_FILE}"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        except subprocess.CalledProcessError:
+            pass
+    # Best-effort fetch and retry once.
+    subprocess.run(
+        ["git", "fetch", "--quiet", "--no-tags", "origin", base_ref],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    for candidate in (f"origin/{base_ref}", base_ref):
+        try:
+            return subprocess.check_output(
+                ["git", "show", f"{candidate}:{VERSION_FILE}"],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        except subprocess.CalledProcessError:
+            pass
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--working", action="store_true", help="Inspect working-tree changes instead of the staged set.")
     parser.add_argument("--stage", dest="stage", action="store_true", default=True, help="git add the bumped file (default).")
     parser.add_argument("--no-stage", dest="stage", action="store_false", help="Bump the file without staging it.")
+    parser.add_argument(
+        "--base-ref",
+        default="release/v26-beta",
+        metavar="REF",
+        help=(
+            "Branch whose VERSION the bump must exceed (default: release/v26-beta). "
+            "When two parallel PRs independently bump to the same value and one lands "
+            "first, the local file version alone is stale; this flag ensures the new "
+            "version is always strictly greater than the target branch tip too. "
+            "Pass an empty string to skip the check."
+        ),
+    )
     args = parser.parse_args()
 
     try:
@@ -107,6 +164,25 @@ def main() -> int:
     if not bumped:
         sys.stderr.write(f"bump_version: could not parse '{current}', leaving app/VERSION untouched\n")
         return 0
+
+    # If the target branch has already advanced past our local bump, start from
+    # its version instead so we stay strictly ahead.  This is the fix for the
+    # version-collision scenario where two parallel PRs both bump to the same
+    # value: whichever one runs bump_version.py after the other has landed will
+    # now automatically produce a version that exceeds the branch tip.
+    if args.base_ref:
+        base_ver = _read_base_ref_version(args.base_ref)
+        if base_ver:
+            base_semver = _parse_semver(base_ver)
+            bumped_semver = _parse_semver(bumped)
+            if base_semver and bumped_semver and bumped_semver <= base_semver:
+                alt = bump_patch(base_ver)
+                if alt:
+                    sys.stderr.write(
+                        f"bump_version: {args.base_ref} is already at {base_ver}; "
+                        f"bumping past that: {current} -> {alt}\n"
+                    )
+                    bumped = alt
 
     with open(VERSION_FILE, "wb") as handle:
         handle.write(bumped.encode("utf-8") + newline)
