@@ -56,6 +56,53 @@ def _synced_release(**overrides):
     return record
 
 
+class BarcodeHashTests(unittest.TestCase):
+    """MovieVault assigned the barcode, not DiscVault - only shape (digits-only,
+    a length EAN/UPC/GTIN actually use) gates whether a lookup is attempted.
+    A check digit that disagrees with the textbook mod-10 formula is real, if
+    unusual, in retail packaging and is MovieVault's call to make, not a reason
+    for DiscVault to refuse to even ask. This matches DiscVaultApp's iOS hasher
+    (`V4BarcodeHasher.normalize()`), which never validates the check digit."""
+
+    def test_a_valid_length_barcode_hashes_regardless_of_its_check_digit(self):
+        import hashlib
+
+        # "4006381333931" is a real EAN-13 with a correct check digit; flipping
+        # the last digit makes the mod-10 checksum wrong while keeping the
+        # barcode a well-formed 13-digit EAN.
+        wrong_check_digit = "4006381333930"
+        self.assertEqual(
+            movievault_v2._barcode_hash(wrong_check_digit),
+            hashlib.sha256(wrong_check_digit.encode("ascii")).hexdigest(),
+        )
+
+    def test_hashes_any_digit_string_of_a_valid_length(self):
+        import hashlib
+
+        for digits in ("12345678", "123456789012", "1234567890123", "12345678901234"):
+            with self.subTest(digits=digits):
+                self.assertEqual(
+                    movievault_v2._barcode_hash(digits),
+                    hashlib.sha256(digits.encode("ascii")).hexdigest(),
+                )
+
+    def test_rejects_the_wrong_length(self):
+        for digits in ("1234567", "123456789", "123456789012345"):
+            with self.subTest(digits=digits):
+                self.assertEqual(movievault_v2._barcode_hash(digits), "")
+
+    def test_rejects_non_digit_characters(self):
+        self.assertEqual(movievault_v2._barcode_hash("not-a-barcode"), "")
+
+    def test_strips_separators_before_hashing(self):
+        import hashlib
+
+        self.assertEqual(
+            movievault_v2._barcode_hash("4006-3813-33931"),
+            hashlib.sha256(b"4006381333931").hexdigest(),
+        )
+
+
 class ReleaseMappingTests(unittest.TestCase):
     def test_release_carries_the_whole_technical_profile_into_the_movie_dict(self):
         item = movievault_v2._release(_synced_release())

@@ -1109,9 +1109,11 @@ def _release_details_integer(value: Any, *, minimum: int, maximum: int) -> int:
     return value
 
 
-def _release_details_barcode_value(value: Any, *, error_code: str) -> str:
+def _release_details_barcode_value(value: Any, *, error_code: str, require_check_digit: bool = True) -> str:
     if not isinstance(value, str) or len(value) not in {8, 12, 13, 14} or not value.isdigit():
         raise MovieVaultV2Error(error_code)
+    if not require_check_digit:
+        return value
     expected = (
         10
         - sum(
@@ -1786,6 +1788,11 @@ def _release_details_payload(value: Any) -> dict[str, Any]:
         "barcode": _release_details_barcode_value(
             value["barcode"],
             error_code="release_details_request_invalid",
+            # MovieVault assigned this barcode, not DiscVault - a check digit
+            # that disagrees with the textbook mod-10 formula (real, if unusual,
+            # in retail packaging) is MovieVault's call, not a reason to refuse
+            # asking. Only shape (digits-only, valid length) gates the request.
+            require_check_digit=False,
         )
     }
     for key, maximum in (("title", 500), ("edition", 255), ("format", 80)):
