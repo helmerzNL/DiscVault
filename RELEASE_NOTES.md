@@ -1,6 +1,86 @@
 # DiscVault Release Notes
 
-## 26.7.25 - MovieVault v2 is the default metadata source
+## 26.7.34 - Edits made in the PWA reach the phones
+
+- A field you edit in the browser now travels over the mobile sync. The push
+  direction already accepted every one of these fields, so an edit made *on* a
+  phone arrived and stuck; the same edit made in the PWA stayed invisible to
+  every client, which looked like the edit had been lost.
+- The cause sat on the read side. The sync bootstrap and the delta were two
+  hand-maintained SELECT lists with nothing asserting they matched, and they had
+  drifted — `release_title` had been added to the delta alone. A field could
+  therefore reach a client down one path and never down the other. The two lists
+  are now held equal by a test, so a field added to one cannot silently go
+  missing from the other.
+
+## 26.7.33 - A scanned disc keeps its cover when the film has none
+
+- A barcode scan that matches a release now falls back to the release's own
+  artwork when the film carries none of its own. The scanned candidate is built
+  from the film's canonical fields with the release's spec laid over it, and
+  artwork was in neither set — so a film without a poster landed in the
+  collection with an empty poster slot, even though MovieVault had supplied
+  cover art on the release itself. Film artwork still wins wherever it exists,
+  so nothing that already had a poster changes.
+- Internal only: a report (`app/scripts/prune_landed_branches.py`) and a weekly
+  workflow that say which development branches are safe to delete. No effect on
+  the application.
+
+## 26.7.32 - A metadata refresh reaches films that carry a MovieVault id
+
+- Refreshing metadata on a film with a `movieVaultId` reached the MovieVault v2
+  catalog again. It had been planning a details lookup *instead of* a barcode
+  lookup whenever an identifier was present, and that identifier usually cannot
+  resolve: a film that arrived through an import carries a locally derived UUID
+  that no catalog row will ever match. Both calls are now planned together.
+- This failed silently in the worst way — every surface reported success, with
+  `resultStatus: "miss"` and "provider returned no usable match" and no error.
+  The same edit on a film *without* a `movieVaultId` did arrive, because that
+  film still had the barcode path.
+- All seven physical formats now receive technical data. Only 4K UHD, Blu-ray
+  and DVD were recognised; everything else normalised to an empty format, which
+  is read as "no format" and blocks every technical field. An HD DVD, LaserDisc
+  or VCD/SVCD could never receive audio tracks, subtitles or video facts, even
+  though the collection UI has always offered all seven.
+- Two consequences of that worth naming: `HD DVD` is now matched ahead of `DVD`
+  (it contains the literal "dvd" token, so the plain-DVD rule used to claim it
+  and let DVD release data through onto an HD DVD disc), and `4K UHD + Blu-ray`
+  becomes a value of its own rather than collapsing onto 4K.
+
+## 26.7.31 - Audio and subtitle edits reach the mobile apps
+
+- An audio or subtitle edit made in the PWA now reaches the native clients. The
+  cause was wider than a missing field: the whole mobile sync surface read and
+  wrote the `movies` table in both directions, while this data lives in
+  `movie_technical_specs`. There was neither a producer nor a consumer for it —
+  `audio_languages`, the key Android has been decoding all along, appeared
+  nowhere in the codebase.
+
+## 26.7.30 - The MovieVault catalog syncs again
+
+- 342 of the 359 records on the production feed were being rejected — the entire
+  catalog. Eight distribution-4 technical fields (audio tracks, subtitles,
+  packaging, video resolution and codecs, HDR formats, aspect ratios, disc
+  regions) were treated as required, but the live feed serves records published
+  before that work existed and never re-projected since.
+- They are now optional. A release is identified by its ids, title and barcodes;
+  technical specs are enrichment, and their absence is not a reason to lose the
+  film. An absent field decodes to exactly what a record with nothing to report
+  already carried, so "not published" and "nothing known" are stored identically.
+
+## 26.7.29 - A regional language tag no longer kills the whole sync
+
+- The MovieVault v2 sync failed with `record_invalid` and nothing further.
+  Language codes were the single fatal track field: anything outside a strict
+  pattern raised and took the entire release record with it, and with it the
+  whole sync. `pt-BR`, `en-US` and `zh-Hans` each destroyed the record.
+- Every neighbouring field — codec, channels, immersive format, subtitle type,
+  packaging, resolution, video codecs, HDR formats, aspect ratios, disc regions
+  — logs an unrecognised value and keeps it. Language codes now behave the same.
+- The failure was also undiagnosable, which is why it took a second release to
+  find the next one. Rejections now name the record and the offending keys.
+
+## 26.7.28 - MovieVault v2 is the default metadata source
 
 **Two changes here override existing settings. Read the last two bullets.**
 
@@ -47,6 +127,48 @@
   With 26 disabled, contribution silently no-ops. Enable `movievault_26` again in
   App Admin → Plugins if you want to keep contributing; it costs nothing, since
   v2 still outranks it as a metadata source.
+
+## 26.7.27 - The estimated value has a currency, and the PWA can set it
+
+- The PWA can now set a film's estimated value. It had shipped as an API- and
+  sync-only field: the server accepted it and both native apps edited it, but
+  there was no input for it anywhere in the web UI.
+- The amount now carries a currency. It had been a bare number since it was
+  introduced, which quietly assumes everyone thinks in one currency; a
+  collection bought across borders does not, and the number means nothing
+  without saying what it is.
+- The currency is nullable rather than defaulting to EUR. Rows already exist
+  that carry a value and no currency, and inventing a unit for them would state
+  something nobody entered.
+
+## 26.7.26 - Audio tracks and subtitles are editable, not "[object Object]"
+
+- The per-track audio and subtitle editors, with localised language names, are
+  present. Beta had received the ingestion half of this work without the rest:
+  structured tracks reached storage as objects while the edit screen was still
+  the free-text field, which renders an object as `[object Object]`. The data
+  had arrived; the view could not show it.
+- Not new functionality — two PRs had merged into their stacked base branches
+  rather than into beta, which is how the halves came apart.
+- Also in this version: a tester guide for a short library count or a freezing
+  app, at `docs/troubleshooting/library-count-and-app-freeze.md`.
+
+## 26.7.24 - The library shows every film, and the app stops freezing
+
+- A collection of 228 films showed 200 of them, and after updating the app
+  stopped working altogether — first in Firefox, later in Chrome. Neither
+  symptom came from the movie cap, which had already been lifted.
+- The cause was the PWA service worker. It classified every same-origin `/api/`
+  request as data, and the app document and its frontend modules are served from
+  `/api/` routes too. On any fetch failure they were answered with a JSON stub
+  instead of the page, so the app served itself a fragment of API data where its
+  own code should have been.
+- **This upgrade needs one manual reset.** The listener that shows the reload
+  banner ships *in* this version, so the bundle you are upgrading *from* has
+  nobody listening. The new worker activates and purges the old caches silently,
+  and an open tab keeps running pre-fix code with no signal that anything
+  changed. Reload once by hand after updating; later upgrades announce
+  themselves. The troubleshooting guide added in 26.7.26 walks through it.
 
 ## 26.7.11 - Synced box-set covers survive and show in the library
 
