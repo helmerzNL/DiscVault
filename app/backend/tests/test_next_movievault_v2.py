@@ -444,6 +444,33 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertNotIn("x-instance-id", headers)
         self.assertNotIn("x-contribution-token", headers)
 
+    def test_release_details_request_accepts_a_barcode_with_a_wrong_check_digit(self):
+        # MovieVault assigned the barcode, not DiscVault - a check digit that
+        # disagrees with the textbook mod-10 formula is not a reason to refuse
+        # even asking (DiscVaultApp's iOS client never validates it either).
+        wrong_check_digit = "4006381333930"
+        opener = SequenceOpener(
+            [
+                FakeResponse(
+                    json.dumps(release_details_hit(), separators=(",", ":")).encode("ascii")
+                )
+            ]
+        )
+
+        with patch.object(
+            next_movievault_v2.urllib.request,
+            "build_opener",
+            return_value=opener,
+        ):
+            result = next_movievault_v2.resolve_release_details(
+                {"origin": "https://movievault.example"},
+                {"barcode": wrong_check_digit},
+            )
+
+        self.assertEqual(result["status"], "canonical_hit")
+        request, _timeout = opener.requests[0]
+        self.assertEqual(json.loads(request.data), {"barcode": wrong_check_digit})
+
     def test_release_details_pending_polls_only_opaque_resolution_id(self):
         resolution_id = "71a6c771-cd83-478e-a2db-109cb4fd6279"
         opener = SequenceOpener(

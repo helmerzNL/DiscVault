@@ -138,6 +138,18 @@ class BucketFallbackPluginTests(unittest.TestCase):
         self.assertEqual(result["status"], "miss")
         self.assertNotIn("bucket", self.calls)
 
+    def test_a_wrong_check_digit_is_still_sent_to_the_bucket(self):
+        # MovieVault assigned this barcode, not DiscVault - a check digit that
+        # disagrees with the textbook mod-10 formula is not a reason to refuse
+        # even attempting the lookup (DiscVaultApp's iOS hasher never validates
+        # it either). Only shape (digits-only, a valid EAN/UPC/GTIN length)
+        # gates the bucket call.
+        wrong_check_digit = BARCODE[:-1] + str((int(BARCODE[-1]) + 1) % 10)
+        context = self._context(local=(), bucket=(RELEASE,))
+        result = self.plugin.search_barcode({"barcode": wrong_check_digit}, context)
+        self.assertEqual(result["status"], "hit")
+        self.assertIn("bucket", self.calls)
+
     def test_missing_bucket_callback_degrades_to_a_miss(self):
         context = self._context(local=())
         context.pop("movievaultV2BucketLookup")

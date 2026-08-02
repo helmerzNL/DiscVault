@@ -26,8 +26,7 @@ def _barcode_hash(value):
     digits = "".join(character for character in str(value or "") if character.isdigit())
     if len(digits) not in {8, 12, 13, 14}:
         return ""
-    check = (10 - sum(int(digit) * (3 if index % 2 == 0 else 1) for index, digit in enumerate(reversed(digits[:-1]))) % 10) % 10
-    return hashlib.sha256(digits.encode("ascii")).hexdigest() if check == int(digits[-1]) else ""
+    return hashlib.sha256(digits.encode("ascii")).hexdigest()
 
 
 def _lookup(payload, context):
