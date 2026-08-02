@@ -17044,6 +17044,10 @@ def ui_preview_html(
     };
     let commandPaletteState = {open: false, query: "", activeIndex: 0};
     let appDebugMode = localStorage.getItem("dv_next_debug_mode") === "true";
+    // Rendered server-side on every page load, so a tab has a way to detect a new
+    // release even if it is still running a bundle from before any listener below
+    // existed - see the version poll under registerAppUpdateChecks().
+    window.DISCVAULT_APP_VERSION = """ + html_lib.escape(json_lib.dumps(build_version()), quote=False) + """;
     // The service worker posts {type: "sw-updated"} once it has dropped the caches of a
     // previous release. Without a listener the tab keeps running the bundle it loaded
     // before the update, so a fix can look like it never shipped.
@@ -17084,6 +17088,30 @@ def ui_preview_html(
       });
     }
     registerAppServiceWorker();
+    // Independent of the service worker entirely: a tab that loaded its bundle before
+    // the `sw-updated` listener above existed has no way to receive that message, and
+    // would otherwise stay on the old version until manually reloaded (see
+    // docs/troubleshooting/library-count-and-app-freeze.md). Comparing the server's
+    // current build against the one this tab loaded closes that gap for good, and
+    // keeps working across any future rewrite of the service worker itself.
+    const APP_UPDATE_POLL_INTERVAL_MS = 5 * 60 * 1000;
+    function checkForAppUpdate() {
+      fetch("/api/next/health", {cache: "no-store"})
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload) => {
+          const remoteVersion = payload && payload.version;
+          if (remoteVersion && remoteVersion !== window.DISCVAULT_APP_VERSION) showServiceWorkerUpdateBanner();
+        })
+        .catch(() => {});
+    }
+    function registerAppUpdateChecks() {
+      window.setInterval(checkForAppUpdate, APP_UPDATE_POLL_INTERVAL_MS);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkForAppUpdate();
+      });
+      window.addEventListener("focus", checkForAppUpdate);
+    }
+    registerAppUpdateChecks();
     let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera", boxSetBuilder: {target: null, members: [], captureToCamera: false, busy: false}};
     let bulkLastResult = null;
     let longPressSuppressUntil = 0;

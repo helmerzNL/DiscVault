@@ -182,5 +182,52 @@ class ServiceWorkerVersioningTests(unittest.TestCase):
         self.assertIn("showServiceWorkerUpdateBanner", ui)
 
 
+class AppUpdatePollTests(unittest.TestCase):
+    """Guards the fallback that closes the sw-updated chicken-and-egg gap.
+
+    A tab that loaded its bundle before the `sw-updated` listener existed has no
+    code path to ever receive that message - not just across the 26.7.24 upgrade
+    that introduced it, but across any future one too, since the listener only
+    ships in the bundle that already has it. Update notification must therefore
+    not depend solely on the service worker; see
+    docs/troubleshooting/library-count-and-app-freeze.md for the symptom this
+    produces when it isn't in place.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = (Path(BACKEND_DIR) / "next_views_ui.py").read_text(encoding="utf-8")
+
+    def test_the_running_build_is_exposed_to_every_page_load(self):
+        self.assertIn("window.DISCVAULT_APP_VERSION =", self.source)
+        # Rendered from build_version(), not a static placeholder, so a tab always
+        # sees the version the server was actually running when it rendered.
+        start = self.source.index("window.DISCVAULT_APP_VERSION =")
+        end = self.source.index(";", start)
+        self.assertIn("build_version()", self.source[start:end])
+        self.assertIn("json_lib.dumps", self.source[start:end])
+
+    def test_the_poll_compares_against_health_independently_of_the_sw_listener(self):
+        self.assertIn("function checkForAppUpdate()", self.source)
+        start = self.source.index("function checkForAppUpdate()")
+        end = self.source.index("function registerAppUpdateChecks(", start)
+        body = self.source[start:end]
+        self.assertIn('"/api/next/health"', body)
+        self.assertIn("window.DISCVAULT_APP_VERSION", body)
+        self.assertIn("showServiceWorkerUpdateBanner()", body)
+        # Must not be gated on the service worker's message event - that's the
+        # exact dependency this fallback exists to remove.
+        self.assertNotIn("navigator.serviceWorker", body)
+
+    def test_the_poll_runs_on_an_interval_and_when_the_tab_regains_focus(self):
+        self.assertIn("function registerAppUpdateChecks()", self.source)
+        start = self.source.index("function registerAppUpdateChecks()")
+        end = self.source.index("registerAppUpdateChecks();", start)
+        body = self.source[start:end]
+        self.assertIn("window.setInterval(checkForAppUpdate,", body)
+        self.assertIn('"visibilitychange"', body)
+        self.assertIn('window.addEventListener("focus", checkForAppUpdate)', body)
+
+
 if __name__ == "__main__":
     unittest.main()
