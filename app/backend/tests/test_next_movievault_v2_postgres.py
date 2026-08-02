@@ -437,6 +437,106 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         self.assertNotEqual(first_generation, second_generation)
         self.assertEqual(generation_count, 1)
 
+    def test_delta_more_than_one_publish_behind_walks_the_cursor_chain(self):
+        """The delta feed serves one MovieVault publication segment per request. An
+        instance more than one publish behind gets an intermediate segment back -
+        its next-cursor is the next hop, not the manifest's head. A single run_sync()
+        call must walk the whole chain rather than reject the first hop short of the
+        head as `cursor_invalid` (which used to fail every sync permanently, since
+        the stored cursor never advanced past the first hop)."""
+        settings = {"origin": "https://movievault.example"}
+        full_fixture = self.publisher_ordered_fixture()
+        full_digest = hashlib.sha256(full_fixture).hexdigest()
+        initial_manifest = self.manifest()
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=initial_manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    full_fixture,
+                    {
+                        "x-content-sha256": full_digest,
+                        "x-next-cursor": "cursor-value-long-enough",
+                    },
+                ),
+            ),
+        ):
+            next_movievault_v2.run_sync(self.connect, settings)
+
+        release = json.loads(self.fixture().splitlines()[1])
+        hop_one = copy.deepcopy(release)
+        hop_one["revision"] = 43
+        hop_one["edition"] = "Hop One Cut"
+        hop_one_content = json.dumps(
+            hop_one, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+        ).encode("ascii") + b"\n"
+        hop_one_digest = hashlib.sha256(hop_one_content).hexdigest()
+
+        hop_two = copy.deepcopy(release)
+        hop_two["revision"] = 44
+        hop_two["edition"] = "Hop Two Cut"
+        hop_two_content = json.dumps(
+            hop_two, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+        ).encode("ascii") + b"\n"
+        hop_two_digest = hashlib.sha256(hop_two_content).hexdigest()
+
+        head_manifest = self.manifest(revision=44, cursor="cursor-value-hop-two-long-enough")
+        responses = [
+            (
+                200,
+                hop_one_content,
+                {
+                    "x-content-sha256": hop_one_digest,
+                    # Intermediate hop: not the manifest's head cursor.
+                    "x-next-cursor": "cursor-value-hop-one-long-enough",
+                },
+            ),
+            (
+                200,
+                hop_two_content,
+                {
+                    "x-content-sha256": hop_two_digest,
+                    "x-next-cursor": head_manifest["currentCursor"],
+                },
+            ),
+        ]
+        fetch_mock = patch.object(next_movievault_v2, "_fetch_feed", side_effect=responses)
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=head_manifest),
+            fetch_mock as mocked_fetch_feed,
+        ):
+            result = next_movievault_v2.run_sync(self.connect, settings)
+
+        self.assertEqual(mocked_fetch_feed.call_count, 2)
+        first_call_kwargs = mocked_fetch_feed.call_args_list[0].kwargs
+        second_call_kwargs = mocked_fetch_feed.call_args_list[1].kwargs
+        self.assertEqual(first_call_kwargs["cursor"], "cursor-value-long-enough")
+        self.assertEqual(second_call_kwargs["cursor"], "cursor-value-hop-one-long-enough")
+
+        self.assertEqual(result["mode"], "delta")
+        self.assertEqual(result["state"], "current")
+        self.assertEqual(result["revision"], 44)
+        self.assertEqual(result["recordsApplied"], 2)
+
+        with self.connect() as conn:
+            state = next_movievault_v2.sync_status(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT cursor, revision FROM movievault_v2_sync_state WHERE plugin_id = %s",
+                    (next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,),
+                )
+                stored = cur.fetchone()
+            exact = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": release["releaseId"], "limit": 1},
+            )["results"][0]
+        self.assertEqual(state["state"], "current")
+        self.assertEqual(stored["cursor"], "cursor-value-hop-two-long-enough")
+        self.assertEqual(stored["revision"], 44)
+        self.assertEqual(exact["edition"], "Hop Two Cut")
+
     def test_v3_replaces_v2_cursor_then_applies_delta_atomically(self):
         settings = {"origin": "https://movievault.example"}
         v2_content = self.publisher_ordered_fixture()
