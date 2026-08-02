@@ -21,7 +21,35 @@ env:
   IMAGE_NAME: helmerznl/discvault
 
 jobs:
+  # The image carries app/VERSION as BUILD_VERSION, so publishing an unguarded build ships a
+  # version number that may already belong to a different image. That happened on beta when
+  # two PRs bumped to the same value: the standalone version-guard workflow went red while
+  # this one published anyway, because nothing connected the two. Gate the build on the same
+  # check so a rejected version cannot reach the registry.
+  version-guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # The guard compares HEAD against the commit the push started from, which a shallow
+          # checkout does not contain.
+          fetch-depth: 0
+
+      - name: Check app version bump
+        run: |
+          # A manual dispatch and a tag push have no meaningful "before" commit; the script
+          # detects that via valid_commit() and falls back to inspecting HEAD alone, which
+          # keeps the :dev escape hatch usable.
+          python app/scripts/check_version_bumped.py \
+            --base "${{ github.event.before }}" \
+            --head "${{ github.sha }}" \
+            --aggregate
+
   build-and-push:
+    needs: version-guard
     runs-on: ubuntu-latest
     permissions:
       contents: read
