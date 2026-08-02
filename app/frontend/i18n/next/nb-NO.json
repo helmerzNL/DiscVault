@@ -402,6 +402,7 @@
   "appAdmin.movievaultResetConnection": "Nullstill tilkobling",
   "appAdmin.movievaultResetRequired": "Lokal tilkobling m? nullstilles",
   "appAdmin.movievaultToken": "Token",
+  "appAdmin.movievaultV2BucketFallbackAlwaysOn": "Anonym reserveløsning: alltid på",
   "appAdmin.movingPlugin": "Oppdaterer pluginrekkefolge...",
   "appAdmin.needAttention": "need attention",
   "appAdmin.noApiTokenPresets": "No API token presets available.",

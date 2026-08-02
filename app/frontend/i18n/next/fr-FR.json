@@ -402,6 +402,7 @@
   "appAdmin.movievaultResetConnection": "R?initialiser la connexion",
   "appAdmin.movievaultResetRequired": "R?initialisation locale requise",
   "appAdmin.movievaultToken": "Jeton",
+  "appAdmin.movievaultV2BucketFallbackAlwaysOn": "Repli anonyme : toujours actif",
   "appAdmin.movingPlugin": "Mise a jour de l ordre des plugins...",
   "appAdmin.needAttention": "need attention",
   "appAdmin.noApiTokenPresets": "No API token presets available.",

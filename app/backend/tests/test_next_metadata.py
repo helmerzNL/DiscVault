@@ -1856,6 +1856,70 @@ box_set_candidates = _lookup
         self.assertTrue(all(item["status"] == "ok" for item in barcode_result["executions"]))
         self.assertTrue(all(item["status"] == "ok" for item in title_result["executions"]))
 
+    @mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={})
+    @mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={})
+    @mock.patch("app.backend.next_metadata.metadata_source_plugins")
+    @mock.patch("app.backend.next_metadata.run_plugin_entrypoint")
+    def test_movievault_v2_match_source_and_bucket_diagnostics_reach_the_execution_item(
+        self,
+        run_entrypoint,
+        source_plugins,
+        _plugin_config,
+        _execution_context,
+        _requires_config,
+        _overwrite,
+    ):
+        source_plugins.return_value = [
+            {
+                "id": "movievault_v2",
+                "name": "MovieVault v2",
+                "categories": ["metadata_source"],
+                "capabilities": ["search_barcode"],
+                "manifest": {"capabilities": ["search_barcode"]},
+                "order_index": 52,
+            },
+        ]
+
+        def execute(plugin_id, entrypoint, payload, _context):
+            self.assertEqual(plugin_id, "movievault_v2")
+            self.assertEqual(entrypoint, "search_barcode")
+            return {
+                "status": "ok",
+                "state": "available",
+                "elapsedMs": 5,
+                # A miss whose bucket fallback attempt failed - the exact shape that
+                # used to be indistinguishable from a genuine catalog miss.
+                "result": {
+                    "status": "miss",
+                    "provider": "movievault_v2",
+                    "items": [],
+                    "bucketFallback": {
+                        "attempted": True,
+                        "outcome": "error",
+                        "errorCode": "bucket_unavailable",
+                    },
+                },
+            }
+
+        run_entrypoint.side_effect = execute
+        result = run_metadata_source_pipeline(
+            object(),
+            query=query_from_payload({"barcode": "4006381333931", "previewMode": True}),
+            current={"metadata": {}},
+            technical_current={},
+        )
+
+        execution = next(
+            item for item in result["executions"] if item["pluginId"] == "movievault_v2"
+        )
+        self.assertIsNone(execution.get("matchSource"))
+        self.assertEqual(
+            execution["bucketFallback"],
+            {"attempted": True, "outcome": "error", "errorCode": "bucket_unavailable"},
+        )
+
     def test_preview_title_lookup_can_request_box_set_candidates(self):
         query = query_from_payload({"title": "Back to the Future Trilogy", "detectBoxSets": True, "previewMode": True})
         plan = plugin_execution_plan(

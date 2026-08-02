@@ -3768,6 +3768,21 @@ def run_metadata_source_pipeline(
             execution_item["resultStatus"] = normalized.get("status")
             execution_item["candidateCount"] = len(normalized.get("candidates") or [])
             execution_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
+            # Which route resolved this (or why it didn't) - currently only movievault_v2
+            # emits these, on a local-index hit vs. a live anonymous bucket-fallback
+            # attempt. Read off the plugin's own raw result, not `normalized["raw"]`:
+            # metadata_source_policy_result() deliberately scrubs `raw` to `{}` for
+            # every MovieVault identity source (privacy hygiene for the rest of the
+            # pipeline), which would silently drop these fields at exactly the plugin
+            # that sets them. Forwarded generically rather than gated to one plugin
+            # id, so any other plugin that starts reporting a match source gets the
+            # same audit-trail treatment for free.
+            raw_result = execution.get("result") or {}
+            if isinstance(raw_result, dict):
+                if "matchSource" in raw_result:
+                    execution_item["matchSource"] = raw_result["matchSource"]
+                if "bucketFallback" in raw_result:
+                    execution_item["bucketFallback"] = raw_result["bucketFallback"]
             if normalized.get("status") in {"miss", "not_found", "needs_configuration"}:
                 continue
             normalized_results.append(normalized)

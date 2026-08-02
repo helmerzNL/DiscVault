@@ -152,6 +152,68 @@ class BucketFallbackPluginTests(unittest.TestCase):
         result = self.plugin.search_barcode({"barcode": BARCODE}, context)
         self.assertEqual(result["status"], "miss")
 
+    def test_local_hit_reports_local_index_as_match_source(self):
+        context = self._context(local=(RELEASE,), bucket=())
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["matchSource"], "local_index")
+        self.assertNotIn("bucketFallback", result)
+
+    def test_bucket_hit_reports_match_source_and_diagnostic(self):
+        context = self._context(local=(), bucket=(RELEASE,))
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["matchSource"], "bucket_fallback")
+        self.assertEqual(
+            result["bucketFallback"],
+            {"attempted": True, "outcome": "hit", "errorCode": None},
+        )
+
+    def test_bucket_miss_reports_diagnostic_without_a_match_source(self):
+        context = self._context(local=(), bucket=())
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertNotIn("matchSource", result)
+        self.assertEqual(
+            result["bucketFallback"],
+            {"attempted": True, "outcome": "miss", "errorCode": None},
+        )
+
+    def test_bucket_error_reports_diagnostic_with_the_error_code(self):
+        def bucket_callback(request):
+            return {"state": "unavailable", "results": [], "errorCode": "bucket_unavailable"}
+
+        context = self._context(local=(), movievaultV2BucketLookup=bucket_callback)
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "miss")
+        self.assertNotIn("matchSource", result)
+        self.assertEqual(
+            result["bucketFallback"],
+            {"attempted": True, "outcome": "error", "errorCode": "bucket_unavailable"},
+        )
+
+    def test_disabled_fallback_reports_not_attempted(self):
+        context = self._context(
+            local=(), bucket=(RELEASE,), movievaultV2BucketFallback=False
+        )
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(
+            result["bucketFallback"],
+            {"attempted": False, "outcome": None, "errorCode": None},
+        )
+
+    def test_box_set_bucket_hit_reports_match_source_and_diagnostic(self):
+        context = self._context(local=(), bucket=(BOX_SET,))
+        result = self.plugin.box_set_candidates({"barcode": BARCODE}, context)
+        self.assertEqual(result["matchSource"], "bucket_fallback")
+        self.assertEqual(
+            result["bucketFallback"],
+            {"attempted": True, "outcome": "hit", "errorCode": None},
+        )
+
+    def test_box_set_local_hit_never_reaches_the_bucket_and_reports_local_index(self):
+        context = self._context(local=(BOX_SET,), bucket=())
+        result = self.plugin.box_set_candidates({"barcode": BARCODE}, context)
+        self.assertEqual(result["matchSource"], "local_index")
+        self.assertNotIn("bucketFallback", result)
+
 
 class BucketCallbackDegradationTests(unittest.TestCase):
     """The core-side callback must never let a MovieVaultV2Error cross into the

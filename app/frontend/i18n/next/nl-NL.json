@@ -402,6 +402,7 @@
   "appAdmin.movievaultResetConnection": "Koppeling resetten",
   "appAdmin.movievaultResetRequired": "Lokale koppeling moet worden gereset",
   "appAdmin.movievaultToken": "Token",
+  "appAdmin.movievaultV2BucketFallbackAlwaysOn": "Anonieme fallback: altijd aan",
   "appAdmin.movingPlugin": "Pluginvolgorde bijwerken...",
   "appAdmin.needAttention": "vragen aandacht",
   "appAdmin.noApiTokenPresets": "Geen API-token presets beschikbaar.",

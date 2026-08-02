@@ -402,6 +402,7 @@
   "appAdmin.movievaultResetConnection": "Nollaa yhteys",
   "appAdmin.movievaultResetRequired": "Paikallinen yhteys on nollattava",
   "appAdmin.movievaultToken": "Token",
+  "appAdmin.movievaultV2BucketFallbackAlwaysOn": "Anonyymi varareitti: aina käytössä",
   "appAdmin.movingPlugin": "Paivitetaan lisaosien jarjestysta...",
   "appAdmin.needAttention": "need attention",
   "appAdmin.noApiTokenPresets": "No API token presets available.",

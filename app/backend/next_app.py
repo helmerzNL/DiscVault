@@ -27675,6 +27675,13 @@ def register_routes(flask_app: Flask) -> None:
                     "candidateCount": item.get("candidateCount"),
                     "elapsedMs": item.get("elapsedMs"),
                     "error": item.get("error"),
+                    # Which route resolved this - currently only movievault_v2 reports
+                    # it, on a local-index hit vs. a live anonymous bucket-fallback
+                    # attempt. `bucketFallback` distinguishes a real catalog miss from
+                    # a bucket attempt that failed (attempted=true, outcome=error,
+                    # errorCode set) - both used to look identical in this log.
+                    "matchSource": item.get("matchSource"),
+                    "bucketFallback": item.get("bucketFallback"),
                 }
                 for item in executions
                 if isinstance(item, dict)
