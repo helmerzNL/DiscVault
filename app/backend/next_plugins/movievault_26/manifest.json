@@ -1,7 +1,7 @@
 {
   "id": "movievault_26",
   "name": "MovieVault 26",
-  "version": "1.8.1",
+  "version": "1.8.3",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": ["metadata_source", "metadata_receiver"],
@@ -26,8 +26,8 @@
     "settings": [],
     "secrets": []
   },
-  "defaultEnabled": true,
-  "orderIndex": 51,
+  "defaultEnabled": false,
+  "orderIndex": 55,
   "premiumFeatureKey": "metadata.source.movievault.use",
   "entitlements": {
     "source_use": "metadata.source.movievault.use",

@@ -18,7 +18,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
 
 
 DEFAULT_PAGE_SIZE = 200
-MAX_PAGE_SIZE = 500
+# Above the CHUNK_SIZE that library-paging.js requests (500). When the two are equal
+# the clamp in parse_page_params() sits exactly on the client's request, so raising
+# the client chunk size alone silently has no effect.
+MAX_PAGE_SIZE = 1000
 
 
 def _next_app():

@@ -21,6 +21,7 @@ try:
     from app.backend.next_app import NextApiError
     from app.backend.next_app import movie_edit_receiver_proposal
     from app.backend.next_app import movie_payload_fields
+    from app.backend.next_app import movie_technical_edits
     from app.backend.next_app import movie_update_payload
     from app.backend.next_app import merge_selected_import_movie_candidate
     from app.backend.next_app import box_set_proposal_audit_summary
@@ -47,6 +48,7 @@ except ModuleNotFoundError as exc:  # Local minimal test environments may omit F
     NextApiError = None
     movie_edit_receiver_proposal = None
     movie_payload_fields = None
+    movie_technical_edits = None
     movie_update_payload = None
     merge_selected_import_movie_candidate = None
     box_set_proposal_audit_summary = None
@@ -138,9 +140,10 @@ class NextMovieEditPolicyTests(unittest.TestCase):
                     "studios": "",
                 },
                 "technical_edits": {
-                    "hdr": "Dolby Vision",
+                    "hdr": ["Dolby Vision", "HDR10"],
                     "audio_tracks": ["English: Dolby Atmos"],
                     "subtitles": [],
+                    "packaging": ["steelbook", "slipcover"],
                 },
             },
         )
@@ -152,11 +155,27 @@ class NextMovieEditPolicyTests(unittest.TestCase):
         self.assertNotIn("studios", proposal["metadataUpdates"])
         self.assertEqual(proposal["metadataUpdates"]["runtimeMinutes"], 142)
         self.assertEqual(proposal["movieUpdates"]["runtime_minutes"], 142)
-        self.assertEqual(proposal["technicalUpdates"]["hdr"], "Dolby Vision")
+        # `hdr` is a list since migration 055 and the receiver key follows
+        # distribution-4, so a receiver sees the feed vocabulary rather than a
+        # DiscVault-only spelling.
+        self.assertEqual(
+            proposal["technicalUpdates"]["hdrFormats"], ["Dolby Vision", "HDR10"]
+        )
         self.assertEqual(
             proposal["technicalUpdates"]["audioTracks"], ["English: Dolby Atmos"]
         )
         self.assertNotIn("subtitles", proposal["technicalUpdates"])
+        self.assertEqual(
+            proposal["technicalUpdates"]["packaging"], ["steelbook", "slipcover"]
+        )
+
+    def test_movie_technical_edits_parses_packaging_as_a_list(self):
+        edits = movie_technical_edits({"packaging": ["steelbook", "slipcover"]})
+        self.assertEqual(edits["packaging"], ["steelbook", "slipcover"])
+
+    def test_movie_technical_edits_parses_comma_separated_packaging_text(self):
+        edits = movie_technical_edits({"packaging": "Steelbook, Slipcover"})
+        self.assertEqual(edits["packaging"], ["Steelbook", "Slipcover"])
 
     def test_movie_edit_receiver_proposal_skips_locked_supplements(self):
         proposal = movie_edit_receiver_proposal(

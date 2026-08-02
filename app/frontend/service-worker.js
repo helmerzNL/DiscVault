@@ -1,25 +1,46 @@
-const SW_VERSION = "discvault-sw-v153";
+// The build token is substituted by the backend route that serves this file
+// (see next_service_worker() in next_push.py) so that every release gets its own
+// cache namespace and the `activate` handler below drops the previous one. When
+// the placeholder survives — a raw file read, or a dev server without the route —
+// the literal below is used, which keeps the worker functional but pins the
+// caches to a single namespace.
+const SW_BUILD = "__DISCVAULT_SW_BUILD__".indexOf("DISCVAULT_SW_BUILD") >= 0
+  ? "dev"
+  : "__DISCVAULT_SW_BUILD__";
+const SW_VERSION = `discvault-sw-${SW_BUILD}`;
 const APP_CACHE = `${SW_VERSION}-app`;
 const API_CACHE = `${SW_VERSION}-api`;
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`;
 
+// Cache Storage grows without bound otherwise: opaque cross-origin poster
+// responses are charged to the origin quota with a large padding, and Firefox's
+// per-origin quota is small enough that a few hundred of them exhaust it.
+const RUNTIME_CACHE_MAX_ENTRIES = 300;
+const SNAPSHOT_PREFETCH_MAX_URLS = 60;
+
+// Frontend modules served by register_next_static_routes() in next_static.py.
+// They live under /api/ but are scripts, not data.
+const NEXT_SCRIPT_PREFIX = "/api/next/app/js";
+
+// Paged and offset-keyed responses must never enter Cache Storage: each offset
+// is a distinct key, so the cache grows with the library, and replaying a stale
+// page mid-hydration corrupts the loaded list.
+const NON_CACHEABLE_API_PATHS = [
+  "/api/next/collection/movies",
+  "/api/next/collection/export"
+];
+
+// Only paths the backend actually serves belong here: `cache.add` failures are
+// swallowed during install, so a fictional entry silently leaves the app shell
+// half-precached. The SPA document is one route under many URLs — precache the
+// canonical two and let appShellNetworkFirst() cover the rest at runtime.
 const APP_SHELL = [
   "/",
-  "/index.html",
-  "/styles.css",
-  "/app",
-  "/app/",
-  "/import",
-  "/lists",
-  "/notifications",
-  "/profile",
-  "/admin",
   "/api/next/app",
-  "/api/next/app/",
-  "/api/next/app/import",
+  "/api/next/app/js/library-paging.js",
+  "/api/next/app/js/library-export.js",
   "/api/next/manifest.json",
   "/manifest.json",
-  "/version.json",
   "/apple-touch-icon-152.png",
   "/apple-touch-icon-167.png",
   "/apple-touch-icon.png",
@@ -30,8 +51,6 @@ const APP_SHELL = [
   "/pwa-icon-512.png",
   "/pwa-maskable-192.png",
   "/pwa-maskable-512.png",
-  "/icon.svg",
-  "/logo.svg",
   "/api/next/assets/apple-touch-icon-152.png",
   "/api/next/assets/apple-touch-icon-167.png",
   "/api/next/assets/apple-touch-icon.png",
@@ -44,56 +63,14 @@ const APP_SHELL = [
   "/api/next/assets/pwa-maskable-512.png",
   "/api/next/assets/icon.svg",
   "/api/next/assets/logo.svg",
-  "/js/i18n.js",
-  "/js/scanner.js",
-  "/js/collection.js",
-  "/js/import.js",
-  "/js/auth.js",
-  "/js/social.js",
-  "/js/settings.js",
-  "/js/app.js",
-  "/i18n/translations.json",
+  // Only the catalogue and the two default locales: the app serves 29 of them,
+  // and the active one is cached at runtime anyway.
   "/api/next/i18n",
   "/api/next/i18n/nl-NL",
-  "/api/next/i18n/en-US",
-  "/api/next/i18n/fr-FR",
-  "/api/next/i18n/de-DE",
-  "/api/next/i18n/es-ES",
-  "/api/next/i18n/pt-PT",
-  "/api/next/i18n/it-IT",
-  "/api/next/i18n/sv-SE",
-  "/api/next/i18n/da-DK",
-  "/api/next/i18n/nb-NO",
-  "/api/next/i18n/fi-FI",
-  "/flags/nl.svg",
-  "/flags/de.svg",
-  "/flags/fr.svg",
-  "/flags/es.svg",
-  "/flags/pt.svg",
-  "/flags/it.svg",
-  "/flags/sv.svg",
-  "/flags/da.svg",
-  "/flags/no.svg",
-  "/flags/fi.svg",
-  "/flags/us.svg",
-  "/flags/gb.svg",
-  "/flags/ca.svg",
-  "/api/next/flags/nl.svg",
-  "/api/next/flags/de.svg",
-  "/api/next/flags/fr.svg",
-  "/api/next/flags/es.svg",
-  "/api/next/flags/pt.svg",
-  "/api/next/flags/it.svg",
-  "/api/next/flags/sv.svg",
-  "/api/next/flags/da.svg",
-  "/api/next/flags/no.svg",
-  "/api/next/flags/fi.svg",
-  "/api/next/flags/us.svg",
-  "/api/next/flags/gb.svg",
-  "/api/next/flags/ca.svg"
+  "/api/next/i18n/en-US"
 ];
 
-const APP_SHELL_FALLBACKS = ["/api/next/app", "/", "/index.html"];
+const APP_SHELL_FALLBACKS = ["/api/next/app", "/"];
 
 self.addEventListener("install", event => {
   event.waitUntil(
@@ -142,8 +119,48 @@ function imageFallbackResponse() {
   });
 }
 
+function isAppScriptPath(pathname) {
+  return pathname.startsWith(`${NEXT_SCRIPT_PREFIX}/`);
+}
+
+/**
+ * A `<script src>` or a navigation must never be answered with a stand-in body.
+ * A JSON or text/plain reply to a script request is rejected by strict MIME
+ * checking, so the module silently never runs — which is how the library used to
+ * freeze at its first-paint page and the export button stopped responding. A
+ * plain typed 503 lets the browser report an ordinary load failure instead.
+ */
+function isSubstitutableRequest(request) {
+  const url = new URL(request.url);
+  if (request.destination === "script" || request.destination === "document") return false;
+  if (request.mode === "navigate") return false;
+  return !isAppScriptPath(url.pathname);
+}
+
+function scriptFailureResponse() {
+  return new Response("", {
+    status: 503,
+    headers: { "Content-Type": "application/javascript", "X-DiscVault-Offline": "1" }
+  });
+}
+
+function documentFailureResponse() {
+  return new Response("", {
+    status: 503,
+    headers: { "Content-Type": "text/html; charset=utf-8", "X-DiscVault-Offline": "1" }
+  });
+}
+
+function unsubstitutableFailureResponse(request) {
+  if (request.destination === "document" || request.mode === "navigate") {
+    return documentFailureResponse();
+  }
+  return scriptFailureResponse();
+}
+
 function offlineResponseForRequest(request) {
   const url = new URL(request.url);
+  if (!isSubstitutableRequest(request)) return unsubstitutableFailureResponse(request);
   if (
     request.destination === "image" ||
     /\.(avif|gif|jpe?g|png|svg|webp)$/i.test(url.pathname) ||
@@ -193,11 +210,64 @@ async function cacheMatch(request, cacheName) {
   return cache ? cache.match(key) : caches.match(key);
 }
 
+function isNonCacheableApiRequest(request) {
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return false;
+  return NON_CACHEABLE_API_PATHS.some(path => url.pathname === path || url.pathname.startsWith(`${path}/`));
+}
+
+function isQuotaError(error) {
+  if (!error) return false;
+  return error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED";
+}
+
+/** Drop the oldest entries so a runtime cache cannot grow until the origin quota trips. */
+async function trimCache(cacheName, maxEntries) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length <= maxEntries) return;
+  // cache.keys() is insertion-ordered, so the head of the list is the oldest.
+  await Promise.all(keys.slice(0, keys.length - maxEntries).map(key => cache.delete(key)));
+}
+
+/**
+ * Never let a cache write decide the fate of a live response. Cache Storage is
+ * best-effort: a full origin quota must degrade offline support, not break the
+ * app while it is online. Callers therefore treat this as fire-and-forget.
+ */
 async function cachePut(request, response, cacheName) {
   if (!response || !(response.ok || response.type === "opaque")) return;
   if (isProtectedMediaRequest(request)) return;
-  const cache = await caches.open(cacheName);
-  await cache.put(normalizedCacheRequest(request), response.clone());
+  if (isNonCacheableApiRequest(request)) return;
+  const key = normalizedCacheRequest(request);
+  const body = response.clone();
+  try {
+    const cache = await caches.open(cacheName);
+    await cache.put(key, body);
+  } catch (error) {
+    if (!isQuotaError(error)) throw error;
+    // Reclaim the biggest consumer (opaque poster responses) and try once more.
+    await caches.delete(RUNTIME_CACHE).catch(() => {});
+    try {
+      const cache = await caches.open(cacheName);
+      await cache.put(key, response.clone());
+    } catch (retryError) {
+      console.warn("[SW] Cache write skipped, storage quota reached", retryError);
+      return;
+    }
+  }
+  if (cacheName === RUNTIME_CACHE) {
+    await trimCache(RUNTIME_CACHE, RUNTIME_CACHE_MAX_ENTRIES).catch(() => {});
+  }
+}
+
+/** Fire-and-forget cache write; ties into event.waitUntil() when one is available. */
+function cachePutBackground(request, response, cacheName, event) {
+  const write = cachePut(request, response, cacheName).catch(error => {
+    console.warn("[SW] Cache write failed", error);
+  });
+  if (event && typeof event.waitUntil === "function") event.waitUntil(write);
+  return write;
 }
 
 async function readCachedJson(path) {
@@ -258,7 +328,7 @@ function isCacheableImageUrl(value) {
 function collectSnapshotImageUrls(snapshot) {
   const urls = new Set();
   const visit = value => {
-    if (!value || urls.size >= 240) return;
+    if (!value || urls.size >= SNAPSHOT_PREFETCH_MAX_URLS) return;
     if (typeof value === "string") {
       if (isCacheableImageUrl(value)) urls.add(value);
       return;
@@ -442,6 +512,13 @@ function apiFallback(url) {
   return jsonResponse({ status: "error", offline: true, error: "Offline and no cached data is available.", path }, 503);
 }
 
+function apiFallbackFor(request, url) {
+  // The generic JSON stub is only ever valid for data requests. Anything that
+  // the browser will parse as a script or render as a page gets a typed 503.
+  if (!isSubstitutableRequest(request)) return unsubstitutableFailureResponse(request);
+  return apiFallback(url);
+}
+
 async function handleApi(request, event) {
   const url = new URL(request.url);
   const isGet = request.method === "GET";
@@ -464,6 +541,11 @@ async function handleApi(request, event) {
   }
 
   if (isProtectedMediaPath(url.pathname)) {
+    // Network-only, and deliberately `no-store`: protected media must never be
+    // replayable from any cache once the viewer loses access to it (see
+    // ServiceWorkerProtectedMediaTests). The cost of re-fetching posters is
+    // addressed by rendering fewer times and lazy-loading the images, not by
+    // caching the bytes.
     try {
       return await fetch(new Request(request, { cache: "no-store" }));
     } catch {
@@ -479,55 +561,76 @@ async function handleApi(request, event) {
     }
   }
 
+  let networkResp;
   try {
-    const networkResp = await fetch(request);
-    if (networkResp.ok) {
-      await cachePut(request, networkResp, API_CACHE);
-      if (url.pathname === "/api/next/app/snapshot") {
-        const prefetch = prefetchSnapshotAssets(networkResp).catch(error => console.warn("[SW] Snapshot asset prefetch failed", error));
-        if (event && event.waitUntil) event.waitUntil(prefetch);
-      }
-    }
-    return networkResp;
+    networkResp = await fetch(request);
   } catch {
     const cached = (await cacheMatch(request, API_CACHE)) || (await cacheMatch(request));
     if (cached) return cached;
     const detail = await detailFromSnapshot(url);
     if (detail) return detail;
-    return apiFallback(url);
+    return apiFallbackFor(request, url);
   }
+  // Deliberately outside the try: a Cache Storage write must never be able to
+  // turn a successful network response into an offline fallback.
+  if (networkResp.ok) {
+    cachePutBackground(request, networkResp, API_CACHE, event);
+    if (url.pathname === "/api/next/app/snapshot") {
+      const prefetch = prefetchSnapshotAssets(networkResp).catch(error => console.warn("[SW] Snapshot asset prefetch failed", error));
+      if (event && event.waitUntil) event.waitUntil(prefetch);
+    }
+  }
+  return networkResp;
 }
 
-async function cacheFirst(request, cacheName) {
+async function cacheFirst(request, cacheName, event) {
   const cached = await cacheMatch(request, cacheName);
   if (cached) return cached;
   const resp = await fetch(request);
-  if (resp && (resp.ok || resp.type === "opaque")) await cachePut(request, resp, cacheName);
+  if (resp && (resp.ok || resp.type === "opaque")) cachePutBackground(request, resp, cacheName, event);
   return resp;
 }
 
-async function networkFirst(request, cacheName) {
+async function networkFirst(request, cacheName, event) {
+  let resp;
   try {
-    const networkRequest = new Request(request, { cache: "reload" });
-    const resp = await fetch(networkRequest);
-    if (resp && resp.ok) await cachePut(request, resp, cacheName);
-    return resp;
+    resp = await fetch(new Request(request, { cache: "reload" }));
   } catch {
     const cached = await cacheMatch(request, cacheName);
     return cached || offlineResponseForRequest(request);
   }
+  if (resp && resp.ok) cachePutBackground(request, resp, cacheName, event);
+  return resp;
 }
 
-async function appShellNetworkFirst(request) {
+/**
+ * Frontend modules under /api/next/app/js/. They must be served fresh or from
+ * cache, and on failure they must fail as scripts — never as a JSON stub, which
+ * strict MIME checking blocks and which leaves the SPA running without its
+ * paging and export modules.
+ */
+async function scriptNetworkFirst(request, event) {
+  let resp;
   try {
-    const networkRequest = new Request(request, { cache: "reload" });
-    const resp = await fetch(networkRequest);
-    if (resp && resp.ok) await cachePut(request, resp, APP_CACHE);
-    return resp;
+    resp = await fetch(new Request(request, { cache: "reload" }));
+  } catch {
+    const cached = (await cacheMatch(request, APP_CACHE)) || (await cacheMatch(request, API_CACHE));
+    return cached || scriptFailureResponse();
+  }
+  if (resp && resp.ok) cachePutBackground(request, resp, APP_CACHE, event);
+  return resp;
+}
+
+async function appShellNetworkFirst(request, event) {
+  let resp;
+  try {
+    resp = await fetch(new Request(request, { cache: "reload" }));
   } catch {
     const cached = await cacheMatch(request, APP_CACHE);
     return cached || appShellFallback();
   }
+  if (resp && resp.ok) cachePutBackground(request, resp, APP_CACHE, event);
+  return resp;
 }
 
 async function appShellFallback() {
@@ -537,28 +640,38 @@ async function appShellFallback() {
   }
   return new Response("DiscVault is offline and the app shell is not cached yet.", {
     status: 503,
-    headers: { "Content-Type": "text/plain", "X-DiscVault-Offline": "1" }
+    headers: { "Content-Type": "text/html; charset=utf-8", "X-DiscVault-Offline": "1" }
   });
 }
 
 self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
+  const sameOrigin = url.origin === self.location.origin;
 
-  if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) {
+  // Order matters. The SPA document and its modules are served from /api/ routes,
+  // so both must be classified before the generic /api/ data branch — otherwise
+  // handleApi() answers them with a JSON offline stub and the app loses either
+  // its page or its paging/export modules.
+  if (request.method === "GET" && request.mode === "navigate") {
+    event.respondWith(appShellNetworkFirst(request, event));
+    return;
+  }
+
+  if (request.method === "GET" && sameOrigin && isAppScriptPath(url.pathname)) {
+    event.respondWith(scriptNetworkFirst(request, event));
+    return;
+  }
+
+  if (sameOrigin && url.pathname.startsWith("/api/")) {
     event.respondWith(handleApi(request, event));
     return;
   }
 
   if (request.method !== "GET") return;
 
-  if (request.mode === "navigate") {
-    event.respondWith(appShellNetworkFirst(request));
-    return;
-  }
-
   if (
-    url.origin === self.location.origin &&
+    sameOrigin &&
     (
       url.pathname.startsWith("/api/next/media/") ||
       url.pathname.startsWith("/api/next/assets/") ||
@@ -566,21 +679,21 @@ self.addEventListener("fetch", event => {
       url.pathname.startsWith("/flags/")
     )
   ) {
-    event.respondWith(cacheFirst(request, RUNTIME_CACHE).catch(async () => (await cacheMatch(request, RUNTIME_CACHE)) || offlineResponseForRequest(request)));
+    event.respondWith(cacheFirst(request, RUNTIME_CACHE, event).catch(async () => (await cacheMatch(request, RUNTIME_CACHE)) || offlineResponseForRequest(request)));
     return;
   }
 
-  if (url.origin === self.location.origin && /\.(js|css|json)$/.test(url.pathname)) {
-    event.respondWith(networkFirst(request, APP_CACHE));
+  if (sameOrigin && /\.(js|css|json)$/.test(url.pathname)) {
+    event.respondWith(networkFirst(request, APP_CACHE, event));
     return;
   }
 
-  if (url.origin !== self.location.origin) {
-    event.respondWith(cacheFirst(request, RUNTIME_CACHE).catch(async () => (await cacheMatch(request, RUNTIME_CACHE)) || offlineResponseForRequest(request)));
+  if (!sameOrigin) {
+    event.respondWith(cacheFirst(request, RUNTIME_CACHE, event).catch(async () => (await cacheMatch(request, RUNTIME_CACHE)) || offlineResponseForRequest(request)));
     return;
   }
 
-  event.respondWith(cacheFirst(request, APP_CACHE).catch(() => appShellFallback()));
+  event.respondWith(cacheFirst(request, APP_CACHE, event).catch(() => appShellFallback()));
 });
 
 self.addEventListener("push", event => {

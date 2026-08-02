@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html as html_lib
 import base64
+from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
 import hashlib
 import ipaddress
@@ -63,6 +64,9 @@ try:
     from .next_plugin_runtime import upgrade_seeded_default_plugins
     from .next_plugin_runtime import plugin_update_state
     from .next_plugin_runtime import unconfigured_integration_plugins
+    from .next_plugin_runtime import AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS
+    from .next_plugin_runtime import _plugin_has_required_settings
+    from .next_plugin_runtime import required_secrets_configured
     from .next_plugin_runtime import validate_manifest_compatibility
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from .next_plugin_runtime import validate_plugin_settings
@@ -90,7 +94,11 @@ try:
     from .next_metadata import metadata_receiver_plugins
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
-    from .next_metadata import normalize_movie_field_locks
+    from .next_metadata import (
+        normalize_audio_tracks,
+        normalize_movie_field_locks,
+        normalize_subtitles,
+    )
     from .next_metadata import movie_locked_fields
     from .next_metadata import movie_genre_keys
     from .next_metadata import MOVIE_LOCKABLE_FIELDS
@@ -280,6 +288,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import upgrade_seeded_default_plugins
     from next_plugin_runtime import plugin_update_state
     from next_plugin_runtime import unconfigured_integration_plugins
+    from next_plugin_runtime import AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS
+    from next_plugin_runtime import _plugin_has_required_settings
+    from next_plugin_runtime import required_secrets_configured
     from next_plugin_runtime import validate_manifest_compatibility
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from next_plugin_runtime import validate_plugin_settings
@@ -307,7 +318,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import metadata_receiver_plugins
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
-    from next_metadata import normalize_movie_field_locks
+    from next_metadata import (
+        normalize_audio_tracks,
+        normalize_movie_field_locks,
+        normalize_subtitles,
+    )
     from next_metadata import movie_locked_fields
     from next_metadata import movie_genre_keys
     from next_metadata import MOVIE_LOCKABLE_FIELDS
@@ -4185,8 +4200,10 @@ def startup_status_payload(conn) -> dict[str, Any]:
 
 
 
+# Size of the movie page embedded in the first-paint snapshot. It is a page size,
+# not a cap: library-paging.js hydrates the remainder through
+# /api/next/collection/movies, whose ceiling is next_library_data.MAX_PAGE_SIZE.
 COLLECTION_MOVIE_PAGE_SIZE = 200
-COLLECTION_MOVIE_MAX_PAGE_SIZE = 500
 
 
 def collection_movie_total_count(conn, *, actor: dict[str, Any] | None = None) -> int:
@@ -8509,6 +8526,10 @@ def plugin_config_payload(settings_schema: Any, settings: Any, secrets_ref: Any)
     }
     payload["secretNames"] = sorted(safe_refs)
     payload["secretsConfigured"] = bool(safe_refs)
+    # Recomputed against the name-filtered refs: a secret whose name does not
+    # match PLUGIN_SECRET_NAME_PATTERN is dropped here, and a required secret that
+    # was dropped must not still count as configured.
+    payload["requiredSecretsConfigured"] = required_secrets_configured(settings_schema, safe_refs)
     payload["secretsRef"] = safe_refs
     return payload
 
@@ -8532,6 +8553,70 @@ def plugin_config_from_db(conn, plugin_id: str) -> dict[str, Any]:
         row.get("settings") if row else {},
         row.get("secrets_ref") if row else {},
     )
+
+
+def maybe_auto_enable_configured_plugin(
+    conn,
+    *,
+    plugin_id: str,
+    categories: Any,
+    actor: dict[str, Any] | None,
+) -> bool:
+    """Enable an allow-listed integration once its credentials are complete.
+
+    Saving a TMDb key and then having to find a separate toggle is a dead end
+    users fall into, so configuring one of AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS counts
+    as the intent to use it. Returns whether the plugin was switched on.
+
+    Deliberately one-directional: clearing a secret does NOT disable again. A key
+    rotation goes through this same endpoint, and dropping the plugin mid-rotation
+    would be worse than leaving it enabled-but-unconfigured, which
+    unconfigured_integration_plugins() already surfaces.
+    """
+    if plugin_id not in AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS:
+        return False
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT enabled, installed, manifest FROM plugins WHERE id=%s",
+            (plugin_id,),
+        )
+        row = cur.fetchone()
+    if not row or row.get("enabled") or not row.get("installed"):
+        return False
+
+    config = plugin_config_from_db(conn, plugin_id)
+    manifest = row.get("manifest") or {}
+    if manifest.get("requiresSecrets") and not config.get("requiredSecretsConfigured"):
+        return False
+    registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
+    plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
+    if plugin and _plugin_has_required_settings(plugin) and not config.get("settingsConfigured"):
+        return False
+
+    # Both tables, metadata_plugins first: sync_plugin_registry() mirrors
+    # plugins <- metadata_plugins, so enabling only plugins is reverted at the
+    # next sync.
+    with conn.cursor() as cur:
+        if plugin_is_metadata(categories) and table_exists(conn, "metadata_plugins"):
+            cur.execute(
+                "UPDATE metadata_plugins SET enabled=true, updated_at=now() WHERE id=%s",
+                (plugin_id,),
+            )
+        cur.execute(
+            "UPDATE plugins SET enabled=true, updated_at=now() WHERE id=%s",
+            (plugin_id,),
+        )
+    audit_event(
+        conn,
+        event_type="plugin.auto_enabled",
+        category="plugins",
+        actor=actor,
+        target_type="plugin",
+        target_id=plugin_id,
+        summary=f"Enabled plugin {plugin_id} after configuration",
+        metadata={"pluginId": plugin_id, "reason": "required_credentials_configured"},
+    )
+    return True
 
 
 def plugin_secret_values(conn, config: dict[str, Any]) -> dict[str, Any]:
@@ -8815,9 +8900,58 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "rating": payload.get("rating"),
         "purchase_date": purchase_date,
         "purchase_price": payload.get("purchasePrice") or payload.get("purchase_price"),
+        "estimated_value": payload.get("estimatedValue") or payload.get("estimated_value"),
+        "estimated_value_currency": (
+            payload.get("estimatedValueCurrency") or payload.get("estimated_value_currency")
+        ),
         "location": payload.get("location"),
         "metadata": metadata,
+        # Not a `movies` column: this is the technical profile, which lives in
+        # movie_technical_specs and is applied separately by the caller. It is
+        # carried here so every movie-upsert path picks it up in one place.
+        #
+        # `movie_technical_edits` keys on presence (`if key in payload`), so an
+        # absent key yields no entry and leaves the stored value alone, while an
+        # explicit empty list clears it — sync-contract §4.7. That distinction is
+        # load-bearing for the mobile clients: kotlinx omits defaults and Swift
+        # uses encodeIfPresent, so a client that never touched a field sends no
+        # key at all.
+        "technical_edits": movie_technical_sync_edits(payload),
     }
+
+
+def movie_technical_sync_edits(payload: dict[str, Any]) -> dict[str, Any]:
+    """The technical profile as it may arrive over *sync*.
+
+    The same helper the PATCH path uses, with one restriction: the wire carries
+    only structured tracks (sync-contract §4.7). At rest a track may still be
+    legacy free text — the PWA edits that in place, one track at a time — but a
+    sync push may not introduce it.
+
+    That matters during rollout. An Android build from before §4.7 pushes plain
+    language strings under these very keys (`audioTracks: ["en", "nl"]`). Letting
+    those through would replace the structured tracks the PWA just wrote with two
+    bare strings: a downgrade performed by the device that knows least. Such
+    entries are dropped, and a key left empty *because* of that is treated as
+    absent — "no opinion" — rather than as a clear.
+
+    An explicitly empty list still clears, because that is the only way a user
+    removes the last track.
+    """
+    cleaned = dict(payload)
+    for key in ("audioTracks", "audio_tracks", "subtitles", "subtitleLanguages"):
+        if key not in cleaned:
+            continue
+        raw = cleaned[key]
+        if not isinstance(raw, list):
+            cleaned.pop(key)
+            continue
+        objects = [entry for entry in raw if isinstance(entry, dict)]
+        if objects or not raw:
+            cleaned[key] = objects
+        else:
+            cleaned.pop(key)
+    return movie_technical_edits(cleaned)
 
 
 MOVIE_EDIT_FIELD_LIMITS = {
@@ -8889,6 +9023,47 @@ def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int |
         return None
 
 
+def movie_estimated_value(body: dict[str, Any], existing: dict[str, Any]) -> Decimal | None:
+    keys = ("estimatedValue", "estimated_value")
+    if not any(key in body for key in keys):
+        return existing.get("estimated_value")
+    raw = next(body[key] for key in keys if key in body)
+    text = clean_text(raw)
+    if not text:
+        return None
+    normalized = text.replace(",", ".")
+    try:
+        value = Decimal(normalized)
+    except InvalidOperation:
+        raise NextApiError("estimatedValue must be a number", 400)
+    return value.quantize(Decimal("0.01"))
+
+
+def movie_estimated_value_currency(body: dict[str, Any], existing: dict[str, Any]) -> str | None:
+    """The ISO 4217 code an estimated value is expressed in.
+
+    Shape-validated rather than checked against an allow-list. The pickers offer
+    the seven currencies the price converter can fetch rates for, but a stored
+    row must never become unsaveable because that list changed, and a user may
+    legitimately hold a disc priced in something else.
+
+    Deliberately no default: a missing currency stays missing. Filling in EUR, or
+    the user's display preference, would attach a unit to money that nobody
+    stated - and the preference can change later, silently reinterpreting every
+    amount it had been applied to.
+    """
+    keys = ("estimatedValueCurrency", "estimated_value_currency")
+    if not any(key in body for key in keys):
+        return existing.get("estimated_value_currency")
+    raw = next(body[key] for key in keys if key in body)
+    text = (clean_text(raw) or "").upper()
+    if not text:
+        return None
+    if not re.fullmatch(r"[A-Z]{3}", text):
+        raise NextApiError("estimatedValueCurrency must be a three-letter ISO 4217 code", 400)
+    return text
+
+
 def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
     aliases = {
         "director": ("director",),
@@ -8903,22 +9078,47 @@ def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
     return edits
 
 
+def _movie_edit_tracks(raw: Any, normalizer, *, label: str) -> list[Any]:
+    try:
+        return normalizer(raw)
+    except ValueError as exc:
+        raise NextApiError(422, "invalid_request", f"{label}: {exc}") from exc
+
+
 def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
     edits: dict[str, Any] = {}
-    if "hdr" in body:
-        edits["hdr"] = clean_text(body.get("hdr"))
+    hdr_keys = ("hdr", "hdrFormats", "hdr_formats")
+    if any(key in body for key in hdr_keys):
+        raw = next(body[key] for key in hdr_keys if key in body)
+        edits["hdr"] = _movie_edit_csv_list(raw)
     if "packaging" in body:
-        edits["packaging"] = clean_text(body.get("packaging"))
-    ratio_keys = ("screenRatio", "screen_ratios", "screenRatios")
+        edits["packaging"] = _movie_edit_csv_list(body.get("packaging"))
+    region_keys = ("regions", "discRegions", "disc_regions")
+    if any(key in body for key in region_keys):
+        raw = next(body[key] for key in region_keys if key in body)
+        edits["regions"] = _movie_edit_csv_list(raw)
+    resolution_keys = ("videoResolution", "video_resolution")
+    if any(key in body for key in resolution_keys):
+        raw = next(body[key] for key in resolution_keys if key in body)
+        edits["video_resolution"] = clean_text(raw)
+    codec_keys = ("videoCodecs", "video_codecs")
+    if any(key in body for key in codec_keys):
+        raw = next(body[key] for key in codec_keys if key in body)
+        edits["video_codecs"] = _movie_edit_csv_list(raw)
+    ratio_keys = ("screenRatio", "screen_ratios", "screenRatios", "aspectRatios")
     if any(key in body for key in ratio_keys):
         raw = next(body[key] for key in ratio_keys if key in body)
-        edits["screen_ratios"] = clean_text(raw)
+        edits["screen_ratios"] = _movie_edit_csv_list(raw)
     audio_keys = ("audioTracks", "audio_tracks")
     if any(key in body for key in audio_keys):
         raw = next(body[key] for key in audio_keys if key in body)
-        edits["audio_tracks"] = _movie_edit_csv_list(raw)
-    if "subtitles" in body:
-        edits["subtitles"] = _movie_edit_csv_list(body.get("subtitles"))
+        edits["audio_tracks"] = _movie_edit_tracks(
+            raw, normalize_audio_tracks, label="audioTracks"
+        )
+    subtitle_keys = ("subtitles", "subtitleLanguages")
+    if any(key in body for key in subtitle_keys):
+        raw = next(body[key] for key in subtitle_keys if key in body)
+        edits["subtitles"] = _movie_edit_tracks(raw, normalize_subtitles, label="subtitles")
     if "contentRating" in body or "content_rating" in body:
         rating = clean_text(body.get("contentRating", body.get("content_rating")))
         country = (clean_text(body.get("ratingCountry") or body.get("rating_country")) or "NL").upper()
@@ -8942,11 +9142,19 @@ def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -
     )
     assignments: list[str] = []
     values: list[Any] = []
-    for col in ("hdr", "packaging", "screen_ratios"):
+    for col in ("video_resolution",):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(edits[col])
-    for col in ("audio_tracks", "subtitles"):
+    for col in (
+        "audio_tracks",
+        "subtitles",
+        "packaging",
+        "hdr",
+        "screen_ratios",
+        "regions",
+        "video_codecs",
+    ):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(Jsonb(json_ready(edits[col] or [])))
@@ -8988,6 +9196,8 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             location=%s,
             location_id=%s,
             runtime_minutes=%s,
+            estimated_value=%s,
+            estimated_value_currency=%s,
             metadata = COALESCE(metadata, '{}'::jsonb) || %s,
             updated_at=now()
         WHERE id=%s
@@ -9009,6 +9219,8 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             payload["location"],
             payload.get("location_id"),
             payload.get("runtime_minutes"),
+            payload.get("estimated_value"),
+            payload.get("estimated_value_currency"),
             Jsonb(json_ready(metadata_patch)),
             movie_uuid,
         ),
@@ -9081,6 +9293,8 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "location": pick_text("location"),
         "location_id": location_id,
         "runtime_minutes": movie_runtime_value(body, existing),
+        "estimated_value": movie_estimated_value(body, existing),
+        "estimated_value_currency": movie_estimated_value_currency(body, existing),
         "metadata_edits": movie_metadata_edits(body),
         "technical_edits": movie_technical_edits(body),
         "field_locks": movie_effective_field_locks(body, existing),
@@ -9090,11 +9304,16 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
 # Maps a canonical technical-spec column to the receiver payload key the
 # MovieVault contribution template expects (camelCase contract).
 MOVIE_TECHNICAL_RECEIVER_KEYS: dict[str, str] = {
-    "hdr": "hdr",
+    # Keyed to distribution-4's names where one exists, so a receiver sees the
+    # same vocabulary the feed uses rather than a DiscVault-only spelling.
+    "hdr": "hdrFormats",
     "packaging": "packaging",
-    "screen_ratios": "screenRatios",
+    "screen_ratios": "aspectRatios",
     "audio_tracks": "audioTracks",
     "subtitles": "subtitles",
+    "regions": "discRegions",
+    "video_resolution": "videoResolution",
+    "video_codecs": "videoCodecs",
     "content_ratings": "contentRatings",
 }
 
@@ -9207,39 +9426,65 @@ def movie_edit_receiver_proposal(
     }
 
 
+# The `movies` columns every sync payload carries, shared by the two builders
+# below so they cannot drift apart again.
+#
+# They did drift. `all_movie_entities` (bootstrap) and `movie_entity` (delta)
+# were two hand-maintained SELECT lists, and `release_title` had been added to
+# the delta alone — so the field synced on an edit and vanished on a fresh
+# install. Nothing failed, because the delta is the path anyone testing by hand
+# exercises. See `tests/test_next_movie_sync_payload_parity.py`.
+_MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
+    "id",
+    "public_id",
+    "barcode",
+    "title",
+    "sort_title",
+    "original_title",
+    "release_title",
+    "year",
+    "release_date",
+    "format",
+    "edition",
+    "edition_type",
+    "country",
+    "language",
+    "runtime_minutes",
+    "overview",
+    "notes",
+    "rating",
+    "purchase_date",
+    "purchase_price",
+    "estimated_value",
+    "estimated_value_currency",
+    "location",
+    "metadata",
+    "created_at",
+    "updated_at",
+)
+
+# What the delta legitimately carries on top: routing and tombstone state a
+# bootstrap has no use for. Declared rather than implied, so the parity test can
+# assert the difference is exactly this and no wider.
+_MOVIE_ENTITY_ONLY_COLUMNS: tuple[str, ...] = (
+    "location_id",
+    "owner_id",
+    "client_id",
+    "deleted_at",
+)
+
+
+def _movie_select_columns(columns: tuple[str, ...], *, prefix: str = "") -> str:
+    qualified = f"{prefix}." if prefix else ""
+    return ",\n                ".join(f"{qualified}{column}" for column in columns)
+
+
 def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
-                id,
-                public_id,
-                barcode,
-                title,
-                sort_title,
-                original_title,
-                release_title,
-                year,
-                release_date,
-                format,
-                edition,
-                edition_type,
-                country,
-                language,
-                runtime_minutes,
-                overview,
-                notes,
-                rating,
-                purchase_date,
-                purchase_price,
-                location,
-                location_id,
-                owner_id,
-                client_id,
-                deleted_at,
-                metadata,
-                created_at,
-                updated_at
+                {_movie_select_columns(_MOVIE_SYNC_COLUMNS + _MOVIE_ENTITY_ONLY_COLUMNS)}
             FROM movies
             WHERE id=%s
             """,
@@ -9248,6 +9493,9 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         row = cur.fetchone()
     if row is not None:
         row["genres"] = movie_genre_keys(conn, movie_id)
+        # Also reaches the delta: a sync change stores this entity verbatim as
+        # its payload, so anything missing here is missing from the delta too.
+        attach_movie_technical_specs(conn, [row])
     return row
 
 
@@ -9318,6 +9566,8 @@ def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
                 subtitles,
                 regions,
                 content_ratings,
+                video_resolution,
+                video_codecs,
                 updated_at
             FROM movie_technical_specs
             WHERE movie_id=%s
@@ -9325,6 +9575,96 @@ def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
             (movie_id,),
         )
         return cur.fetchone()
+
+
+# The technical-profile columns, mapped to the key they take on the sync wire
+# and the value that stands for "this movie has nothing recorded here".
+#
+# snake_case of the distribution-4 vocabulary, so a reader sees the names the
+# feed uses rather than DiscVault-only spellings — which is why two are renamed:
+# the column `hdr` is a list of HDR formats, and `regions` is the disc
+# region-code set.
+#
+# Load-bearing. `_TECHNICAL_SYNC_COLUMNS` and `attach_movie_technical_specs`
+# below are both derived from this, so a field cannot be added to one and
+# forgotten in the other. It was documentation-only until now, referenced
+# nowhere — and it had already drifted: it named `disc_regions` as a *column*,
+# which is the wire name. Nothing caught that because nothing read it.
+MOVIE_TECHNICAL_SYNC_KEYS: dict[str, tuple[str, Any]] = {
+    "hdr": ("hdr_formats", []),
+    "screen_ratios": ("screen_ratios", []),
+    "regions": ("disc_regions", []),
+    "packaging": ("packaging", []),
+    "audio_tracks": ("audio_tracks", []),
+    "subtitles": ("subtitles", []),
+    "video_resolution": ("video_resolution", None),
+    "video_codecs": ("video_codecs", []),
+    # A map {countryCode: rating}, so its empty is `{}` rather than `[]`. Push
+    # has accepted this for as long as the technical edits have existed, but it
+    # was never published, so a client could set it and never read it back
+    # (sync-contract §4.8).
+    "content_ratings": ("content_ratings", {}),
+}
+
+_TECHNICAL_SYNC_COLUMNS: tuple[str, ...] = tuple(MOVIE_TECHNICAL_SYNC_KEYS)
+
+
+def _empty_technical_profile() -> dict[str, Any]:
+    """A fresh set of empties, built per movie.
+
+    The lists and maps must not be shared between rows: one `dict` reused
+    across a 1000-movie bootstrap hands every movie the *same* list object, and
+    a later mutation of one would show up on all of them.
+    """
+    return {
+        wire: empty.copy() if isinstance(empty, (list, dict)) else empty
+        for wire, empty in MOVIE_TECHNICAL_SYNC_KEYS.values()
+    }
+
+
+def attach_movie_technical_specs(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach the technical profile to each movie for the sync payload.
+
+    One query for the whole batch, the same shape `attach_movie_genres` uses: a
+    bootstrap carries up to 1000 movies and a per-movie lookup would be 1000
+    round trips.
+
+    A movie with no `movie_technical_specs` row gets empty lists and `None` —
+    not omitted keys. The clients read an absent key as "no opinion, keep what
+    you have" (sync-contract §4.7), which is the right reading for a payload
+    that never mentions the field, but the wrong one here: this payload *is*
+    the server's opinion, and "this movie has no technical data" has to be
+    expressible.
+
+    Every key is derived from `MOVIE_TECHNICAL_SYNC_KEYS`, including the empty
+    it falls back to, so adding a column there is the whole change.
+    """
+    if not movies or not table_exists(conn, "movie_technical_specs"):
+        for movie in movies:
+            movie.update(_empty_technical_profile())
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    specs_by_movie: dict[str, dict[str, Any]] = {}
+    if movie_ids:
+        columns = ", ".join(_TECHNICAL_SYNC_COLUMNS)
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT movie_id, {columns} FROM movie_technical_specs WHERE movie_id = ANY(%s)",
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                specs_by_movie[str(row.get("movie_id"))] = row
+    for movie in movies:
+        row = specs_by_movie.get(str(movie.get("id")))
+        if row is None:
+            movie.update(_empty_technical_profile())
+            continue
+        for column, (wire, empty) in MOVIE_TECHNICAL_SYNC_KEYS.items():
+            value = row.get(column)
+            if value is None:
+                value = empty.copy() if isinstance(empty, (list, dict)) else empty
+            movie[wire] = value
+    return movies
 
 
 def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
@@ -15476,33 +15816,12 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
     if not table_exists(conn, "movies"):
         return []
     visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
+    select_columns = _movie_select_columns(_MOVIE_SYNC_COLUMNS, prefix="m")
     with conn.cursor() as cur:
         cur.execute(
             f"""
             SELECT
-                m.id,
-                m.public_id,
-                m.barcode,
-                m.title,
-                m.sort_title,
-                m.original_title,
-                m.year,
-                m.release_date,
-                m.format,
-                m.edition,
-                m.edition_type,
-                m.country,
-                m.language,
-                m.runtime_minutes,
-                m.overview,
-                m.notes,
-                m.rating,
-                m.purchase_date,
-                m.purchase_price,
-                m.location,
-                m.metadata,
-                m.created_at,
-                m.updated_at
+                {select_columns}
             FROM movies m
             WHERE {visibility_where} AND m.deleted_at IS NULL
             ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
@@ -15510,7 +15829,7 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             """,
             (*visibility_params, limit),
         )
-        return attach_movie_genres(conn, cur.fetchall())
+        return attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
 
 
 def all_movie_credit_entities(
@@ -16430,6 +16749,8 @@ def apply_movie_upsert(
                 rating,
                 purchase_date,
                 purchase_price,
+                estimated_value,
+                estimated_value_currency,
                 location,
                 client_id,
                 metadata,
@@ -16438,7 +16759,8 @@ def apply_movie_upsert(
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -16460,6 +16782,10 @@ def apply_movie_upsert(
                 rating=COALESCE(EXCLUDED.rating, movies.rating),
                 purchase_date=COALESCE(EXCLUDED.purchase_date, movies.purchase_date),
                 purchase_price=COALESCE(EXCLUDED.purchase_price, movies.purchase_price),
+                estimated_value=COALESCE(EXCLUDED.estimated_value, movies.estimated_value),
+                estimated_value_currency=COALESCE(
+                    EXCLUDED.estimated_value_currency, movies.estimated_value_currency
+                ),
                 location=COALESCE(EXCLUDED.location, movies.location),
                 client_id=COALESCE(movies.client_id, EXCLUDED.client_id),
                 metadata=movies.metadata || EXCLUDED.metadata,
@@ -16486,11 +16812,24 @@ def apply_movie_upsert(
                 fields["rating"],
                 fields["purchase_date"],
                 fields["purchase_price"],
+                fields["estimated_value"],
+                fields["estimated_value_currency"],
                 fields["location"],
                 persistent_client_id,
                 Jsonb(fields["metadata"]),
             ),
         )
+
+    # The technical profile, through the same helper the PATCH path uses
+    # (`write_movie_edit_record`). Deliberately not a second write path with its
+    # own behaviour: the normalisers, the union-at-rest handling and the
+    # absent-vs-empty rule then only exist once.
+    #
+    # A client that predates sync-contract §4.7 sends none of these keys, so
+    # `technical_edits` is empty and this is a no-op — which is what makes it
+    # safe to ship the server ahead of the clients.
+    with conn.cursor() as cur:
+        upsert_movie_technical_edits(cur, entity_id, fields.get("technical_edits") or {})
 
     # Persist the TMDB identifier so trede 3 (tmdb+format+edition) can match on a
     # later sync. Idempotent: the composite PK makes re-writes a no-op.
@@ -16693,6 +17032,181 @@ def find_container_by_barcode(
     return row["id"] if row else None
 
 
+def find_container_by_client_id(conn, client_id: str | None) -> UUID | None:
+    """Trede 1 (§2b): a live container already carrying this persistent clientId."""
+    if not client_id:
+        return None
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM containers WHERE client_id=%s AND deleted_at IS NULL",
+            (client_id,),
+        )
+        row = cur.fetchone()
+    return row["id"] if row else None
+
+
+def find_container_by_identifier(
+    conn,
+    *,
+    identifier_type: str | None,
+    identifier: str | None,
+    container_type: str | None,
+    incoming_title: str | None = None,
+    incoming_barcode: Any = None,
+) -> UUID | None:
+    """Trede 3 (§2b): same external identifier + container_type.
+
+    Mirrors find_movie_by_tmdb_edition's over-merge sanity checks: a shared
+    identifier never merges two containers whose titles materially diverge or
+    whose barcodes conflict. Structurally defined per the contract even
+    though there is, as of this writing, no confirmed producer of container
+    identifiers yet.
+    """
+    identifier_value = clean_text(identifier)
+    identifier_type_value = clean_text(identifier_type)
+    if not identifier_value or not identifier_type_value or not container_type:
+        return None
+    if not table_exists(conn, "container_identifiers") or not table_exists(conn, "containers"):
+        return None
+    incoming_title_key = normalize_title(incoming_title)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT c.id, c.title, c.barcode
+            FROM containers c
+            JOIN container_identifiers ci ON ci.container_id = c.id
+            WHERE c.deleted_at IS NULL
+              AND c.container_type = %s
+              AND lower(ci.identifier_type) = lower(%s)
+              AND ci.identifier = %s
+            ORDER BY c.created_at
+            """,
+            (container_type, identifier_type_value, identifier_value),
+        )
+        rows = cur.fetchall()
+    for row in rows:
+        if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
+        candidate_title_key = normalize_title(row.get("title"))
+        if incoming_title_key and candidate_title_key and incoming_title_key != candidate_title_key:
+            continue
+        return row["id"]
+    return None
+
+
+def find_container_by_title_type(
+    conn,
+    *,
+    title: str | None,
+    container_type: str | None,
+    incoming_barcode: Any = None,
+) -> UUID | None:
+    """Trede 4 (§2b, adoption-only): normalized title + exact container_type.
+
+    Containers have no year concept, so unlike find_movie_by_title_year this
+    tier has no remake-safety clause -- title + container_type is sufficient,
+    plus the same barcode-conflict guard as trede 3.
+    """
+    normalized = normalize_title(title)
+    if not normalized or not container_type:
+        return None
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, barcode
+            FROM containers
+            WHERE deleted_at IS NULL
+              AND container_type = %s
+            ORDER BY created_at
+            """,
+            (container_type,),
+        )
+        rows = cur.fetchall()
+    for row in rows:
+        if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
+        if normalize_title(row.get("title")) == normalized:
+            return row["id"]
+    return None
+
+
+def match_existing_container(
+    *,
+    persistent_client_id: str | None,
+    barcode_normalized: str | None,
+    identifier_type: str | None,
+    identifier: str | None,
+    container_type: str | None,
+    find_by_client_id,
+    find_by_barcode,
+    find_by_identifier,
+) -> tuple[UUID | None, str | None]:
+    """Create-path container identity ladder (contract §2b/§4b.2).
+
+    Strict order, mirroring match_existing_movie: clientId -> barcode ->
+    external identifier. Trede 4 (title+container_type) is deliberately
+    absent here; it is only active on the first-connect reconcile path
+    (match_reconcile_container). There is no duplicate_copy equivalent for
+    containers (§4b.1) -- a second physical copy of the same box-set
+    packaging is not a modeled scenario.
+    """
+    if persistent_client_id:
+        found = find_by_client_id()
+        if found is not None:
+            return found, "clientId"
+    if barcode_normalized:
+        found = find_by_barcode()
+        if found is not None:
+            return found, "barcode"
+    if identifier and identifier_type and container_type:
+        found = find_by_identifier()
+        if found is not None:
+            return found, "containerIdentifier"
+    return None, None
+
+
+def match_reconcile_container(
+    *,
+    persistent_client_id: str | None,
+    barcode_normalized: str | None,
+    identifier_type: str | None,
+    identifier: str | None,
+    container_type: str | None,
+    title: str | None,
+    find_by_client_id,
+    find_by_barcode,
+    find_by_identifier,
+    find_by_title_type,
+) -> tuple[UUID | None, str | None]:
+    """First-connect adoption ladder for containers (contract §5b).
+
+    Read-only: never creates. The title+container_type tier is active here
+    and only here, mirroring match_reconcile_item's restriction of the
+    fuzziest tier to the adoption path.
+    """
+    if persistent_client_id:
+        found = find_by_client_id()
+        if found is not None:
+            return found, "clientId"
+    if barcode_normalized:
+        found = find_by_barcode()
+        if found is not None:
+            return found, "barcode"
+    if identifier and identifier_type and container_type:
+        found = find_by_identifier()
+        if found is not None:
+            return found, "containerIdentifier"
+    if title and container_type:
+        found = find_by_title_type()
+        if found is not None:
+            return found, "titleType"
+    return None, None
+
+
 def container_list_row(row: dict[str, Any]) -> dict[str, Any]:
     """Fold a container list row's joined poster columns into a `poster_url`.
 
@@ -16804,27 +17318,60 @@ def apply_container_upsert(
         )
     entity_id = provided_entity_id or mapped_entity_id
 
-    # Create-path barcode dedup. Unlike movies, containers carry no
-    # UNIQUE(barcode) constraint, so a brand-new box set whose EAN already
-    # belongs to a live container would silently mint a duplicate (there is no
-    # duplicate-copy concept for containers -- the same EAN is the same box
-    # set). When this push is not tied to a known container by an explicit
-    # entityId or a clientEntityId mapping, adopt the existing barcode owner
-    # instead of creating a second row.
+    # Persistent per-record identity (contract §4b.1), mirroring the movie
+    # upsert's persistent_client_id handling. Trede 3's identifier fields are
+    # read here too, structurally, even though no client currently sends
+    # them -- contract §2b tier 3 is "structurally defined, may have zero
+    # live producers initially".
+    persistent_client_id = clean_text(payload.get("client_id"))
+    metadata_payload = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    incoming_identifier_type = clean_text(metadata_payload.get("identifier_type"))
+    incoming_identifier = clean_text(metadata_payload.get("identifier"))
+    incoming_title_for_match = clean_text(payload.get("title"))
+    incoming_type_for_match: str | None = None
+    if "containerType" in payload or "container_type" in payload:
+        incoming_type_for_match = normalize_container_type(
+            payload.get("containerType", payload.get("container_type"))
+        )
+
+    # Create-path identity ladder (contract §2b/§4b.2): clientId -> barcode ->
+    # external identifier. Unlike movies, containers carry no UNIQUE(barcode)
+    # constraint, so a brand-new box set/vault whose EAN already belongs to a
+    # live container would otherwise silently mint a duplicate (there is no
+    # duplicate-copy concept for containers -- the same EAN is the same
+    # physical box). Only runs when this push is not already tied to a known
+    # container by an explicit entityId or a clientEntityId mapping.
+    matched_by: str | None = None
+    incoming_barcode = clean_text(payload.get("barcode"))
+    barcode_norm = normalize_barcode(incoming_barcode)
     if entity_id is None:
-        incoming_barcode = clean_text(payload.get("barcode"))
-        if incoming_barcode:
-            incoming_type = None
-            if "containerType" in payload or "container_type" in payload:
-                incoming_type = normalize_container_type(
-                    payload.get("containerType", payload.get("container_type"))
-                )
-            entity_id = find_container_by_barcode(
-                conn, incoming_barcode, container_type=incoming_type
-            )
+        entity_id, matched_by = match_existing_container(
+            persistent_client_id=persistent_client_id,
+            barcode_normalized=barcode_norm,
+            identifier_type=incoming_identifier_type,
+            identifier=incoming_identifier,
+            container_type=incoming_type_for_match,
+            find_by_client_id=lambda: find_container_by_client_id(conn, persistent_client_id),
+            find_by_barcode=lambda: find_container_by_barcode(
+                conn, incoming_barcode, container_type=incoming_type_for_match
+            ),
+            find_by_identifier=lambda: find_container_by_identifier(
+                conn,
+                identifier_type=incoming_identifier_type,
+                identifier=incoming_identifier,
+                container_type=incoming_type_for_match,
+                incoming_title=incoming_title_for_match,
+                incoming_barcode=incoming_barcode,
+            ),
+        )
 
     entity_id = entity_id or uuid.uuid4()
     existing = container_entity(conn, entity_id)
+    created = existing is None
+    if created:
+        # A brand-new record was not "matched"; matchedBy only describes how
+        # an existing record was found by the dedup ladder.
+        matched_by = None
 
     if "containerType" in payload or "container_type" in payload:
         container_type = normalize_container_type(payload.get("containerType", payload.get("container_type")))
@@ -16843,15 +17390,16 @@ def apply_container_upsert(
         cur.execute(
             """
             INSERT INTO containers (
-                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, metadata, created_at, updated_at
+                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, client_id, metadata, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=COALESCE(EXCLUDED.title, containers.title),
                 barcode=EXCLUDED.barcode,
                 badge_label=EXCLUDED.badge_label,
                 year=EXCLUDED.year,
                 description=EXCLUDED.description,
+                client_id=COALESCE(containers.client_id, EXCLUDED.client_id),
                 metadata=containers.metadata || EXCLUDED.metadata,
                 updated_at=now()
             """,
@@ -16865,9 +17413,16 @@ def apply_container_upsert(
                 fields["year"],
                 fields["description"],
                 actor_or_instance_owner_id(conn, actor),
+                persistent_client_id,
                 Jsonb(json_ready(fields["metadata"])),
             ),
         )
+
+    # No write path into container_identifiers yet: contract §2b tier 3 is
+    # "structurally defined, may have zero live producers initially" -- there
+    # is no confirmed provider/identifier scheme for containers to persist,
+    # unlike movies' tmdb_id. find_container_by_identifier reads whatever a
+    # future producer eventually writes there; nothing writes it today.
 
     attach_container_sync_artwork(
         conn,
@@ -16909,6 +17464,9 @@ def apply_container_upsert(
         "clientEntityId": client_entity_id,
         "revision": revision,
         "entity": entity,
+        "created": created,
+        "matchedBy": matched_by,
+        "recordClientId": persistent_client_id,
     }
 
 
@@ -21213,12 +21771,14 @@ def register_routes(flask_app: Flask) -> None:
                             overview,
                             notes,
                             location,
+                            estimated_value,
+                estimated_value_currency,
                             owner_id,
                             metadata,
                             created_at,
                             updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             movie_id,
@@ -21237,6 +21797,8 @@ def register_routes(flask_app: Flask) -> None:
                             payload["overview"],
                             payload["notes"],
                             payload["location"],
+                            payload.get("estimated_value"),
+                            payload.get("estimated_value_currency"),
                             actor.get("id"),
                             Jsonb(body.get("metadata") if isinstance(body.get("metadata"), dict) else {}),
                         ),
@@ -22530,6 +23092,14 @@ def register_routes(flask_app: Flask) -> None:
                 secrets_provided=has_secrets,
                 secrets_value=body.get("secrets"),
             )
+            # Runs before the snapshot below so the returned plugin carries the
+            # new enabled state and the admin card re-renders as enabled.
+            auto_enabled = maybe_auto_enable_configured_plugin(
+                conn,
+                plugin_id=plugin_id,
+                categories=plugin_row.get("categories"),
+                actor=actor,
+            )
             audit_event(
                 conn,
                 event_type="plugin.config_updated",
@@ -22542,8 +23112,11 @@ def register_routes(flask_app: Flask) -> None:
                     "settingsProvided": has_settings,
                     "secretsProvided": has_secrets,
                     "categories": plugin_row.get("categories") or [],
+                    "autoEnabled": auto_enabled,
                 },
             )
+            if auto_enabled and table_exists(conn, "metadata_plugins"):
+                sync_metadata_plugin_registry(conn)
 
             registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
             plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
@@ -22856,7 +23429,11 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/movies")
     def movies():
-        limit = min(max(int(request.args.get("limit", 50)), 1), 200)
+        # 1000 matches the sibling list routes (/api/next/api/v1/movies,
+        # /api/next/media-groups, /api/next/digital-items). The old 200 ceiling was a
+        # leftover of the removed library cap and silently truncated any caller that
+        # asked for more.
+        limit = min(max(int(request.args.get("limit", 50)), 1), 1000)
         offset = max(int(request.args.get("offset", 0)), 0)
         query = (request.args.get("q") or "").strip()
         with connect() as conn:
@@ -27230,9 +27807,21 @@ def register_routes(flask_app: Flask) -> None:
 
             if wants_box_set_import and barcode and not has_provided_box_set:
                 with conn.cursor() as cur:
+                    # Digits-only comparison (contract §2b tier 2), matching
+                    # find_container_by_barcode -- an exact-string compare here
+                    # would miss a barcode that differs only in formatting
+                    # (leading zero, hyphenation) from how it was originally
+                    # stored, letting a re-scan slip past this pre-check.
                     cur.execute(
-                        "SELECT id FROM containers WHERE barcode=%s AND container_type='box_set'",
-                        (barcode,),
+                        """
+                        SELECT id
+                        FROM containers
+                        WHERE container_type='box_set'
+                          AND barcode IS NOT NULL
+                          AND regexp_replace(barcode, '\\D', '', 'g') = %s
+                        LIMIT 1
+                        """,
+                        (normalize_barcode(barcode),),
                     )
                     existing_box_set = cur.fetchone()
                 if existing_box_set:
@@ -27258,7 +27847,19 @@ def register_routes(flask_app: Flask) -> None:
 
             if barcode and not has_provided_box_set:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
+                    # Digits-only comparison (contract §2 tier 2), matching
+                    # find_movie_by_barcode_match -- see the box-set pre-check
+                    # above for why an exact-string compare is wrong here.
+                    cur.execute(
+                        """
+                        SELECT id
+                        FROM movies
+                        WHERE barcode IS NOT NULL
+                          AND regexp_replace(barcode, '\\D', '', 'g') = %s
+                        LIMIT 1
+                        """,
+                        (normalize_barcode(barcode),),
+                    )
                     existing = cur.fetchone()
                 if existing:
                     link_result = None
@@ -29460,8 +30061,16 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("items must be a list", 400)
         if len(items) > 1000:
             raise NextApiError("At most 1000 items can be reconciled at once", 400)
+        container_items = body.get("containerItems")
+        if container_items is None:
+            container_items = []
+        if not isinstance(container_items, list):
+            raise NextApiError("containerItems must be a list", 400)
+        if len(container_items) > 1000:
+            raise NextApiError("At most 1000 containerItems can be reconciled at once", 400)
 
         results: list[dict[str, Any]] = []
+        container_results: list[dict[str, Any]] = []
         with connect() as conn:
             require_next_authenticated_user(conn)
             revision = current_revision(conn)
@@ -29549,11 +30158,86 @@ def register_routes(flask_app: Flask) -> None:
                             "matched": False,
                         }
                     )
+
+            # Container branch (contract §5b): same read-only adoption shape
+            # as the movie loop above, offered as a separate containerItems
+            # array/containerResults response so a client can reconcile its
+            # local box-sets/vaults/collections on first connect too, not
+            # just its movies.
+            for item in container_items:
+                if not isinstance(item, dict):
+                    container_results.append({"status": "invalid", "matched": False})
+                    continue
+                persistent_client_id = clean_text(item.get("client_id"))
+                barcode = item.get("barcode")
+                barcode_normalized = normalize_barcode(barcode)
+                identifier_type = clean_text(item.get("identifier_type"))
+                identifier = clean_text(item.get("identifier"))
+                title = item.get("title")
+                raw_container_type = item.get("container_type")
+                if raw_container_type is None:
+                    container_type = None
+                else:
+                    try:
+                        container_type = normalize_container_type(raw_container_type)
+                    except NextApiError:
+                        container_results.append(
+                            {
+                                "client_id": persistent_client_id,
+                                "status": "invalid",
+                                "matched": False,
+                            }
+                        )
+                        continue
+                matched_id, matched_by = match_reconcile_container(
+                    persistent_client_id=persistent_client_id,
+                    barcode_normalized=barcode_normalized,
+                    identifier_type=identifier_type,
+                    identifier=identifier,
+                    container_type=container_type,
+                    title=title,
+                    find_by_client_id=lambda: find_container_by_client_id(
+                        conn, persistent_client_id
+                    ),
+                    find_by_barcode=lambda: find_container_by_barcode(
+                        conn, barcode, container_type=container_type
+                    ),
+                    find_by_identifier=lambda: find_container_by_identifier(
+                        conn,
+                        identifier_type=identifier_type,
+                        identifier=identifier,
+                        container_type=container_type,
+                        incoming_title=title,
+                        incoming_barcode=barcode,
+                    ),
+                    find_by_title_type=lambda: find_container_by_title_type(
+                        conn, title=title, container_type=container_type, incoming_barcode=barcode
+                    ),
+                )
+                if matched_id is not None:
+                    container_results.append(
+                        {
+                            "client_id": persistent_client_id,
+                            "status": "matched",
+                            "matched": True,
+                            "entityId": str(matched_id),
+                            "matchedBy": matched_by,
+                        }
+                    )
+                else:
+                    container_results.append(
+                        {
+                            "client_id": persistent_client_id,
+                            "status": "unknown",
+                            "matched": False,
+                        }
+                    )
         return response(
             {
                 "status": "ok",
                 "currentRevision": revision,
                 "results": results,
+                "containerResults": container_results,
             }
         )
 

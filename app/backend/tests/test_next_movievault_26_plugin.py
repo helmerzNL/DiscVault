@@ -69,6 +69,21 @@ def _v3_signed_from_request(fake_request):
     return _hook
 
 
+class StringListHelperTests(unittest.TestCase):
+    def test_passes_through_a_list_trimming_blank_entries(self):
+        self.assertEqual(
+            movievault_26._string_list(["Steelbook", " ", "Slipcover", ""]),
+            ["Steelbook", "Slipcover"],
+        )
+
+    def test_wraps_a_bare_string_as_a_one_element_list(self):
+        self.assertEqual(movievault_26._string_list("Steelbook"), ["Steelbook"])
+
+    def test_empty_or_none_input_returns_an_empty_list(self):
+        self.assertEqual(movievault_26._string_list(None), [])
+        self.assertEqual(movievault_26._string_list(""), [])
+
+
 class MovieVault26PluginContractTests(unittest.TestCase):
     def test_movievault_26_manifest_declares_plugin_replacement(self):
         manifest = {
@@ -256,6 +271,51 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["posterUrl"], "https://img.example/bohemian.jpg")
         self.assertEqual(result["candidates"][0]["tmdbId"], "424694")
         self.assertNotIn("boxSetProposal", result)
+
+    def test_barcode_release_match_falls_back_to_release_poster(self):
+        original_get = movievault_26._get
+        try:
+            movievault_26._get = lambda *_args, **_kwargs: _v3_barcode_release(
+                {"id": "mv_movie_1", "title": "Bohemian Rhapsody", "year": "2018"},
+                {
+                    "format": "4K UHD",
+                    "barcode": "8712626068546",
+                    "posterUrl": "https://img.example/release.jpg",
+                },
+            )
+            result = movievault_26.search_barcode(
+                {"barcode": "8712626068546"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["movie"]["posterUrl"], "https://img.example/release.jpg")
+        self.assertEqual(result["items"][0]["posterUrl"], "https://img.example/release.jpg")
+
+    def test_barcode_release_match_prefers_movie_poster(self):
+        original_get = movievault_26._get
+        try:
+            movievault_26._get = lambda *_args, **_kwargs: _v3_barcode_release(
+                {
+                    "id": "mv_movie_1",
+                    "title": "Bohemian Rhapsody",
+                    "year": "2018",
+                    "poster_url": "https://img.example/movie.jpg",
+                },
+                {
+                    "format": "4K UHD",
+                    "barcode": "8712626068546",
+                    "posterUrl": "https://img.example/release.jpg",
+                },
+            )
+            result = movievault_26.search_barcode(
+                {"barcode": "8712626068546"}, {"movievault": {"enabled": True}}
+            )
+        finally:
+            movievault_26._get = original_get
+
+        self.assertEqual(result["movie"]["posterUrl"], "https://img.example/movie.jpg")
+        self.assertEqual(result["items"][0]["posterUrl"], "https://img.example/movie.jpg")
 
     def test_barcode_hit_surfaces_persistable_movievault_identifier(self):
         # The movievault_26 catalog id must be surfaced as an identifiers[] entry
@@ -814,6 +874,7 @@ class MovieVault26PluginContractTests(unittest.TestCase):
                                 "technicalSpecs": {
                                     "hdr": "HDR10, Dolby Vision",
                                     "audioTracks": ["English Dolby Atmos"],
+                                    "packaging": ["Steelbook", "Slipcover"],
                                 },
                             },
                             "releases": [
@@ -851,8 +912,11 @@ class MovieVault26PluginContractTests(unittest.TestCase):
         self.assertEqual(result["release"]["id"], "rel_matrix_4k")
         self.assertEqual(result["releases"][0]["barcode"], "5051888238400")
         self.assertEqual(result["technicalSpecs"]["format"], "4K UHD")
-        self.assertEqual(result["technicalSpecs"]["hdr"], "HDR10, Dolby Vision")
+        # hdr is a list since migration 055; the v3 API still sends a scalar, so it
+        # arrives as a one-element list rather than being joined into a string.
+        self.assertEqual(result["technicalSpecs"]["hdr"], ["HDR10, Dolby Vision"])
         self.assertEqual(result["technicalSpecs"]["audioTracks"], ["English Dolby Atmos"])
+        self.assertEqual(result["technicalSpecs"]["packaging"], ["Steelbook", "Slipcover"])
         self.assertEqual(
             result["identifiers"],
             [

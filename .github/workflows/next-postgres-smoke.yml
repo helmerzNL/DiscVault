@@ -30,9 +30,7 @@ on:
       - "app/backend/tests/test_identity_identifier_extraction.py"
       - "app/backend/tests/test_identity_ladder_fixture.py"
       - "app/backend/tests/test_identity_ladder_validator.py"
-      - "app/backend/tests/test_next_movievault_v2*.py"
-      - "app/backend/tests/test_next_movievault_v3.py"
-      - "app/backend/tests/test_next_runtime_secrets.py"
+      - "app/backend/tests/test_next_*.py"
       - "app/backend/next_worker.py"
       - "app/backend/migrations_next/**"
       - "app/backend/requirements.txt"
@@ -104,6 +102,17 @@ jobs:
 
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres
+
+      # These three had never run in CI: the workflow lists its test modules by
+      # hand and they were simply never added. That is the same class of gap as
+      # the bootstrap/delta drift they exist to catch - a guard nobody invokes
+      # is not a guard.
+      - name: Test movie sync payload parity and the technical profile
+        run: >-
+          python -m unittest
+          tests.test_next_movie_sync_payload_parity
+          tests.test_next_technical_profile_sync
+          tests.test_next_movie_estimated_value
 
       - name: Create minimal legacy SQLite fixture
         run: |

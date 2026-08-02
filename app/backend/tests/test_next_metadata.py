@@ -28,6 +28,8 @@ from app.backend.next_metadata import _clean_scanned_title
 from app.backend.next_metadata import _extract_edition_from_title
 from app.backend.next_metadata import _parse_import_country
 from app.backend.next_metadata import external_metadata_barcode
+from app.backend.next_metadata import field_format_safe
+from app.backend.next_metadata import should_apply_field
 from app.backend.next_metadata import filter_locked_artwork_updates
 from app.backend.next_metadata import filter_hidden_artwork_updates
 from app.backend.next_metadata import metadata_field_decisions_with_write_state
@@ -839,6 +841,30 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(merged["technicalUpdates"]["audio_tracks"], ["English Dolby Digital 5.1"])
         self.assertEqual(merged["technicalUpdates"]["subtitles"], ["Dutch"])
 
+    def test_packaging_comma_text_normalizes_into_a_list(self):
+        current = {"title": "Example", "format": "4K UHD", "metadata": {}}
+        technical = {}
+        result = canonicalize_plugin_result(
+            "bluray_com",
+            "technical_specs",
+            {
+                "status": "hit",
+                "sourceLabel": "Blu-ray.com",
+                "technicalSpecs": {
+                    "format": "4K UHD",
+                    "packaging": "Steelbook, Slipcover",
+                },
+            },
+        )
+        merged = merge_metadata_results(
+            current=current,
+            technical_current=technical,
+            results=[result],
+            overwrite_enabled=True,
+            target_format="4K UHD",
+        )
+        self.assertEqual(merged["technicalUpdates"]["packaging"], ["Steelbook", "Slipcover"])
+
     def test_release_source_cannot_replace_canonical_display_title(self):
         current = {"title": "A Minecraft Movie", "format": "4K UHD", "metadata": {}}
         result = canonicalize_plugin_result(
@@ -1394,6 +1420,37 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual([item["entrypoint"] for item in plan], ["movie_details"])
         self.assertEqual(plan[0]["payload"]["movieVaultId"], "mv_alien")
 
+    def test_movievault_identification_plan_keeps_the_barcode_beside_an_identifier(self):
+        # A movieVaultId is not necessarily a catalog release id -- an imported
+        # movie carries a locally derived UUIDv5. While planning movie_details
+        # *instead of* search_barcode, such a movie could never resolve against
+        # the v2 catalog: movie_details missed on every refresh and the barcode
+        # was never tried, so no MovieVault edit ever reached it.
+        query = query_from_payload(
+            {
+                "title": "The Terminator",
+                "barcode": "5051892249348",
+                "movieVaultId": "7ccce664-6d62-5d3f-83d7-2651adb72bea",
+            }
+        )
+        plan = movievault_identification_plan(
+            {"capabilities": ["search_title", "search_barcode", "movie_details"]},
+            query,
+        )
+
+        self.assertEqual(
+            [item["entrypoint"] for item in plan],
+            ["movie_details", "search_barcode"],
+        )
+        by_entrypoint = {item["entrypoint"]: item["payload"] for item in plan}
+        # movie_details reads releaseId/id and the query carried neither, so the
+        # identifier is forwarded under the key the entrypoint actually reads.
+        self.assertEqual(
+            by_entrypoint["movie_details"]["releaseId"],
+            "7ccce664-6d62-5d3f-83d7-2651adb72bea",
+        )
+        self.assertEqual(by_entrypoint["search_barcode"]["barcode"], "5051892249348")
+
     def test_movievault_result_keeps_identity_and_filters_enrichment(self):
         for plugin_id in ("movievault_26", "movievault_v2"):
             with self.subTest(plugin_id=plugin_id):
@@ -1401,7 +1458,7 @@ class NextMetadataPolicyTests(unittest.TestCase):
                     {
                         "pluginId": plugin_id,
                         "movieUpdates": {"title": "Alien", "year": "1979", "overview": "MovieVault plot"},
-                        "metadataUpdates": {"director": "Ridley Scott", "packaging": "SteelBook"},
+                        "metadataUpdates": {"director": "Ridley Scott", "packaging": ["steelbook"]},
                         "technicalUpdates": {"hdr": "HDR10"},
                         "mediaUpdates": {"poster": {"sourceUrl": "https://movievault.example/poster.jpg"}},
                         "identifiers": {"tmdb": "348"},
@@ -1426,7 +1483,7 @@ class NextMetadataPolicyTests(unittest.TestCase):
                 # (overview, director, credits, localizations) stays with the
                 # enrichment provider.
                 self.assertEqual(constrained["movieUpdates"], {"title": "Alien", "year": "1979"})
-                self.assertEqual(constrained["metadataUpdates"], {"packaging": "SteelBook"})
+                self.assertEqual(constrained["metadataUpdates"], {"packaging": ["steelbook"]})
                 self.assertEqual(constrained["technicalUpdates"], {"hdr": "HDR10"})
                 self.assertEqual(
                     constrained["mediaUpdates"],
@@ -1682,7 +1739,10 @@ class NextMetadataPolicyTests(unittest.TestCase):
     @mock.patch(
         "app.backend.next_metadata.plugin_config_from_db",
         return_value={
-            "settings": {"origin": "https://movievault.example", "bucketFallback": False},
+            # Neither field is read from stored settings any more: both the origin
+            # and the bucket fallback are enforced server-side and stripped from
+            # the schema. Kept here only as a realistic stored-settings blob.
+            "settings": {"origin": "https://movievault.example"},
             "settingsConfigured": True,
             "secretNames": [],
             "secretsConfigured": True,
@@ -1895,6 +1955,54 @@ box_set_candidates = _lookup
         self.assertEqual(normalize_media_format("Ultra HD Blu-ray"), "4K UHD")
         self.assertEqual(normalize_media_format("Blu ray"), "Blu-ray")
         self.assertEqual(normalize_media_format("DVD Video"), "DVD")
+
+    def test_media_format_normalization_covers_the_collector_formats(self):
+        # These are offered by the collection UI, so they are valid DiscVault
+        # formats. Normalizing them to "" made field_format_safe read them as
+        # "no format", which blocks every technical field.
+        self.assertEqual(normalize_media_format("HD DVD"), "HD DVD")
+        self.assertEqual(normalize_media_format("hd-dvd"), "HD DVD")
+        self.assertEqual(normalize_media_format("LaserDisc"), "LaserDisc")
+        self.assertEqual(normalize_media_format("Laser Disc"), "LaserDisc")
+        self.assertEqual(normalize_media_format("VCD/SVCD"), "VCD/SVCD")
+        self.assertEqual(normalize_media_format("SVCD"), "VCD/SVCD")
+
+    def test_hd_dvd_does_not_normalize_onto_plain_dvd(self):
+        # "HD DVD" carries the literal "dvd" token; claiming it for DVD would let
+        # DVD release data through onto an HD DVD disc.
+        self.assertNotEqual(normalize_media_format("HD DVD"), "DVD")
+
+    def test_combo_pack_is_its_own_format_and_accepts_either_disc(self):
+        self.assertEqual(normalize_media_format("4K UHD + Blu-ray"), "4K UHD + Blu-ray")
+        self.assertEqual(normalize_media_format("4K UHD/Blu-ray"), "4K UHD + Blu-ray")
+        # Without a separator this is a single 4K disc, not a combo pack.
+        self.assertEqual(normalize_media_format("Ultra HD Blu-ray"), "4K UHD")
+        for source in ("4K UHD", "Blu-ray"):
+            with self.subTest(source=source):
+                allowed, _reason = field_format_safe("audio_tracks", "4K UHD + Blu-ray", source)
+                self.assertTrue(allowed)
+        # One-directional: a single-disc movie must not inherit a combo's specs.
+        allowed, _reason = field_format_safe("audio_tracks", "Blu-ray", "4K UHD + Blu-ray")
+        self.assertFalse(allowed)
+
+    def test_unrecognised_media_format_stays_blocked(self):
+        self.assertEqual(normalize_media_format("Betamax"), "")
+        allowed, _reason = field_format_safe("audio_tracks", "Betamax", "Blu-ray")
+        self.assertFalse(allowed)
+
+    def test_combo_pack_may_refresh_existing_technical_specs(self):
+        allowed, reason = should_apply_field(
+            field="audio_tracks",
+            current_value=[{"languageCode": "en"}],
+            incoming_value=[{"languageCode": "nl"}],
+            overwrite_enabled=False,
+            target_format="4K UHD + Blu-ray",
+            source_format="Blu-ray",
+            release_priority=True,
+        )
+
+        self.assertTrue(allowed)
+        self.assertEqual(reason, "same-format technical release refresh")
 
     def test_identifier_list_and_source_format_are_normalized(self):
         result = canonicalize_plugin_result(

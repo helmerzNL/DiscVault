@@ -589,7 +589,8 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             state = next_movievault_v2._sync_state(conn)
         self.assertEqual(state["cursor"], v3_delta_cursor)
 
-    def test_scheduler_enqueues_one_due_job(self):
+    def _seed_enabled_v2_plugin(self, settings=None):
+        """Install movievault_v2 as enabled, optionally with a settings row."""
         manifest = {
             "id": "movievault_v2",
             "name": "MovieVault v2",
@@ -616,26 +617,16 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                         Jsonb(manifest),
                     ),
                 )
-                cur.execute(
-                    """
-                    INSERT INTO plugin_settings (plugin_id, settings)
-                    VALUES (%s, %s)
-                    """,
-                    (
-                        "movievault_v2",
-                        Jsonb(
-                            {
-                                "origin": "https://movievault.example",
-                                "syncIntervalHours": 6,
-                            }
-                        ),
-                    ),
-                )
+                if settings is not None:
+                    cur.execute(
+                        """
+                        INSERT INTO plugin_settings (plugin_id, settings)
+                        VALUES (%s, %s)
+                        """,
+                        ("movievault_v2", Jsonb(settings)),
+                    )
 
-        with patch.object(next_worker, "connect", side_effect=self.connect):
-            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
-            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
-
+    def _queued_sync_jobs(self):
         with self.connect() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -647,9 +638,41 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     """,
                     ("movievault_v2",),
                 )
-                row = cur.fetchone()
+                return cur.fetchone()
+
+    def test_scheduler_enqueues_one_due_job(self):
+        self._seed_enabled_v2_plugin(
+            {"origin": "https://movievault.example", "syncIntervalHours": 6}
+        )
+
+        with patch.object(next_worker, "connect", side_effect=self.connect):
+            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
+            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
+
+        row = self._queued_sync_jobs()
         self.assertEqual(row["job_count"], 1)
         self.assertEqual(row["source"], "scheduler")
+
+    def test_scheduler_enqueues_without_a_stored_origin(self):
+        """The origin is enforced by enforced_origin() and stripped from the
+        settings schema, so it is absent on every install and says nothing about
+        whether a sync can run. Gating on it left the index permanently empty."""
+        self._seed_enabled_v2_plugin({"syncIntervalHours": 6})
+
+        with patch.object(next_worker, "connect", side_effect=self.connect):
+            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
+
+        self.assertEqual(self._queued_sync_jobs()["job_count"], 1)
+
+    def test_scheduler_enqueues_without_any_plugin_settings_row(self):
+        """A plugin whose config was never saved has no plugin_settings row at
+        all; readiness is decided by installed + enabled, nothing more."""
+        self._seed_enabled_v2_plugin(settings=None)
+
+        with patch.object(next_worker, "connect", side_effect=self.connect):
+            next_worker._maybe_enqueue_movievault_v2_sync("postgres-test")
+
+        self.assertEqual(self._queued_sync_jobs()["job_count"], 1)
 
     def test_registry_materializes_defaults_without_overwriting_operator_values(self):
         settings_schema = {
@@ -668,7 +691,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     "maximum": 168,
                 },
                 {
-                    "name": "bucketFallback",
+                    "name": "someToggle",
                     "type": "boolean",
                     "default": False,
                 },
@@ -716,7 +739,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                         Jsonb(
                             {
                                 "origin": "https://custom.example",
-                                "bucketFallback": True,
+                                "someToggle": True,
                             }
                         ),
                         "movievault_v2",
@@ -764,7 +787,7 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
 
         self.assertEqual(stored["origin"], "https://custom.example")
         self.assertEqual(stored["syncIntervalHours"], 6)
-        self.assertTrue(stored["bucketFallback"])
+        self.assertTrue(stored["someToggle"])
 
     def test_initial_sync_job_is_duplicate_safe_and_skips_current_index(self):
         actor = {"id": None, "username": "owner", "role": "owner"}
@@ -887,6 +910,253 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         # unavailable, never as an error.
         self.assertEqual(release_without_poster["posterStatus"], "unavailable")
         self.assertIsNone(release_without_poster["posterUrl"])
+
+    def _sync_full(self, path: Path, *, revision=42, cursor="fixture-distribution-4-r42"):
+        settings = {"origin": "https://movievault.example"}
+        content = path.read_bytes()
+        digest = hashlib.sha256(content).digest()
+        manifest = _v4_manifest(revision=revision, cursor=cursor)
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    content,
+                    {
+                        "x-content-sha256": digest.hex(),
+                        "content-digest": f"sha-256=:{base64.b64encode(digest).decode('ascii')}:",
+                        "x-next-cursor": manifest["currentCursor"],
+                    },
+                ),
+            ),
+        ):
+            return next_movievault_v2.run_sync(self.connect, settings, contract_version="distribution-4")
+
+    def _apply_delta_ndjson(self, records: list[dict], *, revision, cursor):
+        settings = {"origin": "https://movievault.example"}
+        content = ("\n".join(json.dumps(record) for record in records) + "\n").encode("utf-8")
+        digest = hashlib.sha256(content).digest()
+        manifest = _v4_manifest(revision=revision, cursor=cursor)
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    content,
+                    {
+                        "x-content-sha256": digest.hex(),
+                        "content-digest": f"sha-256=:{base64.b64encode(digest).decode('ascii')}:",
+                        "x-next-cursor": manifest["currentCursor"],
+                    },
+                ),
+            ),
+        ):
+            return next_movievault_v2.run_sync(self.connect, settings, contract_version="distribution-4")
+
+    def test_v4_full_sync_persists_audio_tracks_and_subtitles_matching_fixture(self):
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(
+            release["audioTracks"],
+            [
+                {
+                    "languageCode": "en",
+                    "codec": "dolby_truehd",
+                    "channels": "7.1",
+                    "immersiveFormat": "dolby_atmos",
+                },
+                {
+                    "languageCode": "nl",
+                    "codec": "dolby_digital",
+                    "channels": "5.1",
+                    "immersiveFormat": None,
+                },
+            ],
+        )
+        self.assertEqual(
+            release["subtitles"],
+            [
+                {"languageCode": "en", "subtitleType": "full"},
+                {"languageCode": "en", "subtitleType": "sdh"},
+                {"languageCode": "nl", "subtitleType": "full"},
+            ],
+        )
+
+    def test_v4_full_sync_persists_packaging_matching_fixture(self):
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            release_with = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+            release_without = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000002", "limit": 1},
+            )["results"][0]
+        self.assertEqual(release_with["packaging"], ["steelbook", "slipcover"])
+        self.assertEqual(release_without["packaging"], [])
+
+    def test_v4_delta_with_different_packaging_replaces_the_value(self):
+        self._sync_full(V4_FULL_PATH)
+        base = json.loads(V4_DELTA_PATH.read_bytes().splitlines()[0])
+        self.assertEqual(base["releaseId"], "10000000-0000-0000-0000-000000000001")
+        base["revision"] = 44
+        base["packaging"] = ["digipak"]
+
+        self._apply_delta_ndjson([base], revision=44, cursor="fixture-distribution-4-r44")
+
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(release["packaging"], ["digipak"])
+
+    def test_v4_full_sync_persists_empty_tracks_for_a_release_without_them(self):
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000002", "limit": 1},
+            )["results"][0]
+        self.assertEqual(release["audioTracks"], [])
+        self.assertEqual(release["subtitles"], [])
+
+    def test_v4_delta_with_unchanged_tracks_still_replaces_rows_cleanly(self):
+        # Mirrors MovieVault-v2's own shipped fixture pair: the delta only
+        # changes the poster, tracks/subtitles are carried forward unchanged.
+        # Asserts the replace-then-reinsert in _upsert_release doesn't
+        # duplicate rows when the incoming values happen to be identical.
+        self._sync_full(V4_FULL_PATH)
+        self._apply_delta_ndjson(
+            [json.loads(line) for line in V4_DELTA_PATH.read_bytes().splitlines() if line.strip()],
+            revision=44,
+            cursor="fixture-distribution-4-r44",
+        )
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT count(*) AS n FROM movievault_v2_release_audio_tracks"
+                    " WHERE release_id = '10000000-0000-0000-0000-000000000001'"
+                )
+                audio_row_count = cur.fetchone()["n"]
+        self.assertEqual(audio_row_count, 2)
+        self.assertEqual(
+            release["subtitles"],
+            [
+                {"languageCode": "en", "subtitleType": "full"},
+                {"languageCode": "en", "subtitleType": "sdh"},
+                {"languageCode": "nl", "subtitleType": "full"},
+            ],
+        )
+
+    def test_v4_delta_with_different_tracks_replaces_not_appends(self):
+        """The shipped MovieVault-v2 fixture only exercises 'poster changed,
+        tracks unchanged' - this synthetic delta exercises an actual change
+        to audioTracks/subtitles content on top of a prior full sync,
+        asserting replace-not-append semantics end to end."""
+        self._sync_full(V4_FULL_PATH)
+        base = json.loads(V4_DELTA_PATH.read_bytes().splitlines()[0])
+        self.assertEqual(base["releaseId"], "10000000-0000-0000-0000-000000000001")
+        base["revision"] = 44
+        base["audioTracks"] = [
+            {
+                "languageCode": "ja",
+                "codec": "aac",
+                "channels": "2.0",
+                "immersiveFormat": None,
+            }
+        ]
+        base["subtitles"] = [{"languageCode": "ja", "subtitleType": "forced"}]
+
+        self._apply_delta_ndjson([base], revision=44, cursor="fixture-distribution-4-r44")
+
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(
+            release["audioTracks"],
+            [{"languageCode": "ja", "codec": "aac", "channels": "2.0", "immersiveFormat": None}],
+        )
+        self.assertEqual(
+            release["subtitles"],
+            [{"languageCode": "ja", "subtitleType": "forced"}],
+        )
+
+    def test_v4_delta_with_empty_arrays_replaces_existing_tracks_with_nothing(self):
+        """An empty array is meaningful (all tracks removed upstream) - the
+        delete-then-reinsert must still run even when there is nothing to
+        reinsert."""
+        self._sync_full(V4_FULL_PATH)
+        base = json.loads(V4_DELTA_PATH.read_bytes().splitlines()[0])
+        base["revision"] = 44
+        base["audioTracks"] = []
+        base["subtitles"] = []
+
+        self._apply_delta_ndjson([base], revision=44, cursor="fixture-distribution-4-r44")
+
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT count(*) AS n FROM movievault_v2_release_audio_tracks"
+                    " WHERE release_id = '10000000-0000-0000-0000-000000000001'"
+                )
+                remaining = cur.fetchone()["n"]
+        self.assertEqual(release["audioTracks"], [])
+        self.assertEqual(release["subtitles"], [])
+        self.assertEqual(remaining, 0)
+
+    def test_v4_release_tombstone_cascades_to_audio_and_subtitle_tables(self):
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT count(*) AS n FROM movievault_v2_release_audio_tracks"
+                    " WHERE release_id = '10000000-0000-0000-0000-000000000001'"
+                )
+                self.assertEqual(cur.fetchone()["n"], 2)
+
+        tombstone = {
+            "contractVersion": "distribution-4",
+            "recordType": "release",
+            "operation": "delete",
+            "revision": 44,
+            "entityId": "10000000-0000-0000-0000-000000000001",
+        }
+        self._apply_delta_ndjson([tombstone], revision=44, cursor="fixture-distribution-4-r44")
+
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT count(*) AS n FROM movievault_v2_release_audio_tracks"
+                    " WHERE release_id = '10000000-0000-0000-0000-000000000001'"
+                )
+                audio_count = cur.fetchone()["n"]
+                cur.execute(
+                    "SELECT count(*) AS n FROM movievault_v2_release_subtitle_languages"
+                    " WHERE release_id = '10000000-0000-0000-0000-000000000001'"
+                )
+                subtitle_count = cur.fetchone()["n"]
+        self.assertEqual(audio_count, 0)
+        self.assertEqual(subtitle_count, 0)
 
     def test_local_lookup_never_triggers_a_remote_poster_fetch(self):
         settings = {"origin": "https://movievault.example"}
@@ -1405,6 +1675,93 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                 with self.connect() as conn:
                     with conn.cursor() as cur:
                         cur.execute("DELETE FROM media_assets WHERE id = %s", (public_media_asset_id,))
+
+    def test_v4_full_sync_persists_the_video_profile(self):
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(release["videoResolution"], "2160p")
+        self.assertEqual(release["videoCodecs"], ["hevc"])
+        self.assertEqual(release["hdrFormats"], ["dolby_vision", "hdr10"])
+        self.assertEqual(release["aspectRatios"], ["2.39:1"])
+        self.assertEqual(release["discRegions"], ["B"])
+
+    def test_v4_full_sync_persists_an_absent_video_profile_as_null_and_empty(self):
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000002", "limit": 1},
+            )["results"][0]
+        self.assertIsNone(release["videoResolution"])
+        self.assertEqual(release["videoCodecs"], [])
+        self.assertEqual(release["hdrFormats"], [])
+        self.assertEqual(release["aspectRatios"], [])
+        self.assertEqual(release["discRegions"], [])
+
+    def test_v4_delta_replaces_the_video_profile_rather_than_merging_it(self):
+        self._sync_full(V4_FULL_PATH)
+        base = self._fixture_release("10000000-0000-0000-0000-000000000001")
+        base["revision"] = 43
+        base["videoResolution"] = "1080p"
+        base["videoCodecs"] = ["h264"]
+        base["hdrFormats"] = []
+        base["aspectRatios"] = ["16:9"]
+        base["discRegions"] = ["A", "B"]
+        self._apply_delta_ndjson([base], revision=43, cursor="fixture-distribution-4-r43")
+
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(release["videoResolution"], "1080p")
+        self.assertEqual(release["videoCodecs"], ["h264"])
+        # Emptied, not left at its previous ["dolby_vision", "hdr10"].
+        self.assertEqual(release["hdrFormats"], [])
+        self.assertEqual(release["aspectRatios"], ["16:9"])
+        self.assertEqual(release["discRegions"], ["A", "B"])
+
+    def test_v4_sync_keeps_two_variants_of_the_same_subtitle_language_as_separate_rows(self):
+        """The mirror's primary key is (generation, release_id, position), so repeating
+        a language was always representable - only the variant column was missing."""
+        self._sync_full(V4_FULL_PATH)
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT language_code, subtitle_type"
+                    " FROM movievault_v2_release_subtitle_languages"
+                    " WHERE release_id = '10000000-0000-0000-0000-000000000001'"
+                    " ORDER BY position"
+                )
+                rows = [(row["language_code"], row["subtitle_type"]) for row in cur.fetchall()]
+        self.assertEqual(rows, [("en", "full"), ("en", "sdh"), ("nl", "full")])
+
+    def test_v4_delta_replaces_subtitle_variants_rather_than_appending(self):
+        self._sync_full(V4_FULL_PATH)
+        base = self._fixture_release("10000000-0000-0000-0000-000000000001")
+        base["revision"] = 43
+        base["subtitles"] = [{"languageCode": "de", "subtitleType": "closed_caption"}]
+        self._apply_delta_ndjson([base], revision=43, cursor="fixture-distribution-4-r43")
+
+        with self.connect() as conn:
+            release = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "release", "releaseId": "10000000-0000-0000-0000-000000000001", "limit": 1},
+            )["results"][0]
+        self.assertEqual(
+            release["subtitles"], [{"languageCode": "de", "subtitleType": "closed_caption"}]
+        )
+
+    def _fixture_release(self, release_id: str) -> dict:
+        for line in V4_FULL_PATH.read_bytes().splitlines():
+            record = json.loads(line)
+            if record.get("recordType") == "release" and record.get("releaseId") == release_id:
+                return record
+        raise AssertionError(f"fixture release {release_id} not found")
 
 
 if __name__ == "__main__":

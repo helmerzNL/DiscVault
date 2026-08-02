@@ -75,6 +75,10 @@ METADATA_LOCAL_ONLY_FIELDS = {
     "owner_id",
     "purchase_date",
     "purchase_price",
+    "estimated_value",
+    # Local-only for the same reason as the amount: no metadata provider has
+    # any business saying what currency the user values their copy in.
+    "estimated_value_currency",
     "location",
     "notes",
 }
@@ -105,7 +109,15 @@ METADATA_TECHNICAL_FIELDS = {
     "subtitles",
     "regions",
     "content_ratings",
+    "video_resolution",
+    "video_codecs",
 }
+
+# Technical fields a box-set member may inherit from its parent when neither
+# side declares a media format. Derived rather than hand-listed: the literal set
+# this replaced had silently drifted, omitting `hdr` and `screen_ratios` while
+# the enum-shaped fields were added around them.
+BOX_SET_INHERITABLE_TECHNICAL_FIELDS = set(METADATA_TECHNICAL_FIELDS)
 
 MOVIE_METADATA_LOCKS_KEY = "field_locks"
 
@@ -116,6 +128,11 @@ MOVIE_LOCKABLE_FIELDS = {
     "title",
     "sort_title",
     "original_title",
+    # Lockable since sync-contract 1.6. It was the one user-editable field the
+    # PWA offered with no lock, so a metadata refresh could overwrite a
+    # hand-typed release title and nothing stood in the way - while both mobile
+    # clients already had a `releaseTitle` lock key.
+    "release_title",
     "year",
     "barcode",
     "release_date",
@@ -136,6 +153,9 @@ MOVIE_LOCKABLE_FIELDS = {
     "audio_tracks",
     "subtitles",
     "content_ratings",
+    "regions",
+    "video_resolution",
+    "video_codecs",
     "poster",
     "backdrop",
 }
@@ -175,6 +195,7 @@ MOVIE_LOCK_RECEIVER_KEYS: dict[str, tuple[str, ...]] = {
     "title": ("title",),
     "sort_title": ("sortTitle",),
     "original_title": ("originalTitle",),
+    "release_title": ("releaseTitle", "release_title"),
     "year": ("year",),
     "barcode": ("barcode",),
     "release_date": ("releaseDate",),
@@ -189,12 +210,15 @@ MOVIE_LOCK_RECEIVER_KEYS: dict[str, tuple[str, ...]] = {
     "director": ("director",),
     "studios": ("studios", "studio"),
     "distributor": ("distributor",),
-    "hdr": ("hdr",),
+    "hdr": ("hdr", "hdrFormats"),
     "packaging": ("packaging",),
-    "screen_ratios": ("screenRatios", "screen_ratios"),
+    "screen_ratios": ("screenRatios", "screen_ratios", "aspectRatios"),
     "audio_tracks": ("audioTracks", "audio_tracks"),
-    "subtitles": ("subtitles",),
+    "subtitles": ("subtitles", "subtitleLanguages"),
     "content_ratings": ("contentRatings", "content_ratings"),
+    "regions": ("regions", "discRegions"),
+    "video_resolution": ("videoResolution", "video_resolution"),
+    "video_codecs": ("videoCodecs", "video_codecs"),
 }
 
 
@@ -212,6 +236,12 @@ METADATA_LIST_FIELDS = {
     "regions",
     "backdrop_urls",
     "videos",
+    "packaging",
+    # Lists since migration 055 - MovieVault publishes both as arrays and a disc
+    # genuinely carries more than one of each.
+    "hdr",
+    "screen_ratios",
+    "video_codecs",
 }
 
 METADATA_RELEASE_FIELDS = {
@@ -377,8 +407,24 @@ MOVIE_FIELD_ALIASES = {
     "content_ratings": "content_ratings",
     "audioTracks": "audio_tracks",
     "audio_tracks": "audio_tracks",
+    "subtitleLanguages": "subtitles",
+    "subtitles": "subtitles",
     "screenRatios": "screen_ratios",
     "screen_ratios": "screen_ratios",
+    # distribution-4 spellings. Without these, canonicalize_plugin_result's
+    # fall-through drops the raw camelCase key into the metadata blob under its
+    # literal name - silent, invisible, and permanent.
+    "hdrFormats": "hdr",
+    "hdr_formats": "hdr",
+    "aspectRatios": "screen_ratios",
+    "aspect_ratios": "screen_ratios",
+    "discRegions": "regions",
+    "disc_regions": "regions",
+    "regions": "regions",
+    "videoResolution": "video_resolution",
+    "video_resolution": "video_resolution",
+    "videoCodecs": "video_codecs",
+    "video_codecs": "video_codecs",
 }
 
 
@@ -424,17 +470,55 @@ def value_present(value: Any) -> bool:
     return value not in (None, "", [], {})
 
 
+# A 4K UHD + Blu-ray combo pack physically ships both discs, so release data for
+# either leg legitimately describes it. The collection filter already treats the
+# combo as matching both members; keeping the merge policy in step means the
+# format shown to the user and the format used to accept release data agree.
+# Deliberately one-directional: a combo accepts single-disc release data, but a
+# Blu-ray-only movie must not inherit a combo's specs, which also cover its 4K disc.
+FORMAT_COMBO_MEMBERS = {"4K UHD + Blu-ray": frozenset({"4K UHD", "Blu-ray"})}
+
+
 def normalize_media_format(value: Any) -> str:
+    """Normalize a media format onto DiscVault's canonical vocabulary.
+
+    Mirrors the seven options the collection UI offers (`MOVIE_FORMAT_OPTIONS`
+    in `next_views_ui`) and the vocabulary `physical_media_format_key` already
+    recognises. Previously only 4K UHD, Blu-ray and DVD were understood and every
+    other value normalized to "", which `field_format_safe` reads as "no format"
+    and which blocks every technical field: an HD DVD, LaserDisc or VCD/SVCD
+    could never receive audio tracks, subtitles or video facts from a release
+    source. A genuinely unrecognised value still returns "" and stays blocked --
+    an unknown format must not be guessed into matching a release it does not
+    describe.
+    """
     text = str(value or "").strip().lower()
     if not text:
         return ""
-    if re.search(r"4k|uhd|ultra\s*hd", text):
+    has_4k = bool(re.search(r"4k|uhd|ultra\s*hd", text))
+    has_bluray = bool(re.search(r"blu[-\s]?ray|(?:^|[^a-z])bd(?:[^a-z]|$)", text))
+    if has_4k and has_bluray and re.search(r"[+/&]", text):
+        return "4K UHD + Blu-ray"
+    if has_4k:
         return "4K UHD"
-    if re.search(r"blu[- ]?ray", text):
+    if has_bluray:
         return "Blu-ray"
+    # HD DVD is matched ahead of DVD: it carries the literal "dvd" token, so the
+    # plain-DVD rule would otherwise claim it and let DVD release data through.
+    if re.search(r"hd[-\s]?dvd", text):
+        return "HD DVD"
+    if re.search(r"laser[-\s]?disc", text):
+        return "LaserDisc"
+    if re.search(r"\bs?vcd\b", text):
+        return "VCD/SVCD"
     if re.search(r"\bdvd\b", text):
         return "DVD"
     return ""
+
+
+def media_formats_compatible(target: str, source: str) -> bool:
+    """True when release data for *source* may be applied to a *target* format."""
+    return target == source or source in FORMAT_COMBO_MEMBERS.get(target, ())
 
 
 def detect_format_from_text(value: Any) -> str:
@@ -1021,15 +1105,26 @@ def movievault_identification_plan(plugin: dict[str, Any], query: dict[str, Any]
             if key not in ("externalBarcode", "barcode")
         }
         add("search_title", identity_payload)
-    elif movievault_id:
-        add("movie_details", base_payload)
-        identity_payload = base_payload
-    elif external_barcode:
-        identity_payload = {**base_payload, "barcode": external_barcode}
-        add("search_barcode", identity_payload)
     else:
         identity_payload = base_payload
-        if title:
+        if movievault_id:
+            # `movieVaultId` is only sometimes a MovieVault release id. A movie
+            # that reached DiscVault through an import carries a locally derived
+            # UUIDv5 here (`next_import`), which no catalog row will ever match.
+            # It is forwarded as `releaseId` so `movie_details` can resolve it
+            # when it genuinely is one -- the entrypoint reads `releaseId`/`id`
+            # and the query supplied neither, so the lookup could only miss.
+            identity_payload = {**base_payload, "releaseId": movievault_id}
+            add("movie_details", identity_payload)
+        if external_barcode:
+            # Planned alongside `movie_details` rather than instead of it. As an
+            # `elif` the mere presence of an identifier removed the barcode
+            # lookup, so every movie holding a non-release `movieVaultId` was cut
+            # off from the catalog permanently: the refresh reported a clean
+            # "no usable match" and no MovieVault edit could ever reach it.
+            identity_payload = {**identity_payload, "barcode": external_barcode}
+            add("search_barcode", identity_payload)
+        if not plan and title:
             add("search_title", identity_payload)
 
     if (query.get("memberOfBoxSet") or query.get("detectBoxSets")) and (title or fallback or external_barcode):
@@ -1164,12 +1259,179 @@ def split_outside_parentheses(text: str, separators: set[str]) -> list[str]:
     return parts
 
 
+AUDIO_TRACK_KEYS = ("languageCode", "codec", "channels", "immersiveFormat")
+AUDIO_TRACK_KEY_ALIASES = {
+    "language_code": "languageCode",
+    "immersive_format": "immersiveFormat",
+}
+SUBTITLE_KEYS = ("languageCode", "subtitleType")
+SUBTITLE_KEY_ALIASES = {
+    "language_code": "languageCode",
+    "subtitle_type": "subtitleType",
+}
+TRACK_LANGUAGE_PATTERN = re.compile(r"^[a-z]{2,8}(-[a-z0-9]{1,8})*$")
+DEFAULT_SUBTITLE_TYPE = "full"
+MAX_TRACK_ENTRIES = 50
+MAX_LEGACY_TRACK_TEXT = 200
+
+
+def _track_language(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError("track language must be a string")
+    clean = value.strip().casefold()
+    if not clean or len(clean) > 35 or not TRACK_LANGUAGE_PATTERN.fullmatch(clean):
+        raise ValueError(f"{value!r} is not a valid BCP-47 subtag")
+    return clean
+
+
+def _track_optional_text(value: Any, *, maximum: int) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("track field must be a string or null")
+    clean = value.strip()
+    if not clean:
+        return None
+    if len(clean) > maximum:
+        raise ValueError("track field is too long")
+    return clean
+
+
+def normalize_audio_track_entry(value: Any) -> dict[str, Any] | str | None:
+    """Normalize one audio track, which may be an object or legacy free text.
+
+    The column has held plain strings since long before MovieVault published
+    structured tracks, e.g. "English (DTS-HD MA 5.1)". Those are kept verbatim
+    rather than parsed: reconstructing a codec enum from prose needs a synonym
+    table that will misfire on "Commentary with the director" or "Audio
+    Description", and a migration has no undo. Conversion happens per track,
+    only when a user edits that track, and is visible before they save.
+
+    Shape is validated strictly; enum membership is not. The edit form is filled
+    *from stored data*, so rejecting a codec outside the allow-list would make
+    any movie carrying a forward-compat value permanently unsaveable through the
+    UI - the opposite of what the lenient feed parser was for.
+    """
+    if isinstance(value, str):
+        clean = " ".join(value.split())
+        if not clean:
+            return None
+        if len(clean) > MAX_LEGACY_TRACK_TEXT:
+            raise ValueError("audio track text is too long")
+        return clean
+    if not isinstance(value, dict):
+        raise ValueError("audio track must be an object or a string")
+    entry = {AUDIO_TRACK_KEY_ALIASES.get(key, key): item for key, item in value.items()}
+    unknown = set(entry) - set(AUDIO_TRACK_KEYS)
+    if unknown:
+        raise ValueError(f"unknown audio track keys: {sorted(unknown)}")
+    # A codec used to be mandatory. That held while the only writers were the
+    # MovieVault feed (which always has one) and the PWA form (which silently
+    # dropped a track without one). It stopped holding once the clients could
+    # edit tracks: a title saved before the structured columns existed knows a
+    # language and nothing else, and every hand-entered track passes through
+    # that state on its way to being filled in. Rejecting it would 422 the whole
+    # sync mutation over a track the user is halfway through typing.
+    #
+    # A language is still required — a track that names neither a language nor a
+    # codec describes nothing.
+    codec = entry.get("codec")
+    if codec is not None and not isinstance(codec, str):
+        raise ValueError("audio track codec must be a string or null")
+    return {
+        "languageCode": _track_language(entry.get("languageCode")),
+        "codec": (codec or "").strip()[:64],
+        "channels": _track_optional_text(entry.get("channels"), maximum=16),
+        "immersiveFormat": _track_optional_text(entry.get("immersiveFormat"), maximum=64),
+    }
+
+
+def normalize_subtitle_entry(value: Any) -> dict[str, Any] | str | None:
+    """Normalize one subtitle, which may be an object, a bare language code or
+    legacy free text.
+
+    A bare language code becomes the `full` variant - that is not a guess, it is
+    what an unqualified subtitle listing on a disc means and the only thing the
+    pre-variant shape could express. Anything that is not a valid subtag is kept
+    as legacy text, the same union the audio column carries.
+    """
+    if isinstance(value, str):
+        clean = " ".join(value.split())
+        if not clean:
+            return None
+        if len(clean) > MAX_LEGACY_TRACK_TEXT:
+            raise ValueError("subtitle text is too long")
+        try:
+            return {
+                "languageCode": _track_language(clean),
+                "subtitleType": DEFAULT_SUBTITLE_TYPE,
+            }
+        except ValueError:
+            return clean
+    if not isinstance(value, dict):
+        raise ValueError("subtitle must be an object or a string")
+    entry = {SUBTITLE_KEY_ALIASES.get(key, key): item for key, item in value.items()}
+    unknown = set(entry) - set(SUBTITLE_KEYS)
+    if unknown:
+        raise ValueError(f"unknown subtitle keys: {sorted(unknown)}")
+    subtitle_type = entry.get("subtitleType") or DEFAULT_SUBTITLE_TYPE
+    if not isinstance(subtitle_type, str) or not subtitle_type.strip():
+        raise ValueError("subtitle variant must be a string")
+    return {
+        "languageCode": _track_language(entry.get("languageCode")),
+        "subtitleType": subtitle_type.strip()[:24],
+    }
+
+
+def _normalize_track_list(field: str, value: Any, normalizer) -> list[Any]:
+    if isinstance(value, str) or not isinstance(value, (list, tuple)):
+        # A plain string is split by the historical splitter first, so API and
+        # mobile clients posting comma-separated text keep working - but each
+        # part then goes through the same per-entry normalizer as a structured
+        # payload, so "en, nl" and ["en", "nl"] cannot disagree about the shape
+        # that ends up in the column.
+        value = normalize_list_field(field, value)
+    if len(value) > MAX_TRACK_ENTRIES:
+        raise ValueError(f"at most {MAX_TRACK_ENTRIES} entries are allowed")
+    result: list[Any] = []
+    seen: set[str] = set()
+    for item in value:
+        entry = normalizer(item)
+        if entry is None:
+            continue
+        key = entry if isinstance(entry, str) else json.dumps(entry, sort_keys=True)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(entry)
+    return result
+
+
+def normalize_audio_tracks(value: Any) -> list[Any]:
+    return _normalize_track_list("audio_tracks", value, normalize_audio_track_entry)
+
+
+def normalize_subtitles(value: Any) -> list[Any]:
+    return _normalize_track_list("subtitles", value, normalize_subtitle_entry)
+
+
 def normalize_list_field(field: str, value: Any) -> list[Any]:
     normalized = normalize_value(value)
     raw_items = normalized if isinstance(normalized, list) else [normalized]
     items: list[Any] = []
     separators = {";", "|", "\n", "\r"}
-    if field in {"subtitles", "regions", "backdrop_urls"}:
+    if field in {
+        "subtitles",
+        "regions",
+        "backdrop_urls",
+        "packaging",
+        "hdr",
+        "screen_ratios",
+        "video_codecs",
+    }:
+        # Comma is a separator for these, which is also what turns a legacy
+        # scalar preserved by migration 055 as ["1.85:1, 2.39:1"] back into two
+        # elements the next time it passes through here.
         separators.add(",")
 
     for item in raw_items:
@@ -2327,11 +2589,13 @@ def field_format_safe(
     if field not in METADATA_RELEASE_FIELDS:
         return True, "format-neutral field"
     if not target or not source:
-        if source_context == "box_set_parent" and field in {"audio_tracks", "subtitles", "regions", "content_ratings"}:
+        if source_context == "box_set_parent" and field in BOX_SET_INHERITABLE_TECHNICAL_FIELDS:
             return True, "box-set parent technical fallback without explicit format"
         return (field not in METADATA_TECHNICAL_FIELDS), "technical field needs same-format source"
     if target == source:
         return True, "same-format release data"
+    if media_formats_compatible(target, source):
+        return True, "combo pack accepts release data for either disc"
     return False, f"format mismatch: target={target}, source={source}"
 
 
@@ -2362,7 +2626,10 @@ def should_apply_field(
     if not value_present(current_value):
         return True, "current field is empty"
     if field in METADATA_TECHNICAL_FIELDS and release_priority:
-        if format_reason == "same-format release data":
+        if format_reason in (
+            "same-format release data",
+            "combo pack accepts release data for either disc",
+        ):
             return True, "same-format technical release refresh"
         if field == "content_ratings" and format_reason == "format-neutral certification field":
             return True, "format-neutral certification refresh"
@@ -4501,13 +4768,30 @@ def apply_metadata_proposal(
             cur.execute(
                 """
                 INSERT INTO movie_technical_specs (
-                    movie_id, hdr, packaging, screen_ratios, audio_tracks, subtitles, regions, content_ratings, updated_at
+                    movie_id, hdr, packaging, screen_ratios, audio_tracks, subtitles, regions,
+                    content_ratings, video_resolution, video_codecs, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                 ON CONFLICT (movie_id) DO UPDATE SET
-                    hdr=COALESCE(EXCLUDED.hdr, movie_technical_specs.hdr),
-                    packaging=COALESCE(EXCLUDED.packaging, movie_technical_specs.packaging),
-                    screen_ratios=COALESCE(EXCLUDED.screen_ratios, movie_technical_specs.screen_ratios),
+                    video_resolution=COALESCE(
+                        EXCLUDED.video_resolution, movie_technical_specs.video_resolution
+                    ),
+                    hdr=CASE
+                        WHEN EXCLUDED.hdr <> '[]'::jsonb THEN EXCLUDED.hdr
+                        ELSE movie_technical_specs.hdr
+                    END,
+                    screen_ratios=CASE
+                        WHEN EXCLUDED.screen_ratios <> '[]'::jsonb THEN EXCLUDED.screen_ratios
+                        ELSE movie_technical_specs.screen_ratios
+                    END,
+                    video_codecs=CASE
+                        WHEN EXCLUDED.video_codecs <> '[]'::jsonb THEN EXCLUDED.video_codecs
+                        ELSE movie_technical_specs.video_codecs
+                    END,
+                    packaging=CASE
+                        WHEN EXCLUDED.packaging <> '[]'::jsonb THEN EXCLUDED.packaging
+                        ELSE movie_technical_specs.packaging
+                    END,
                     audio_tracks=CASE
                         WHEN EXCLUDED.audio_tracks <> '[]'::jsonb THEN EXCLUDED.audio_tracks
                         ELSE movie_technical_specs.audio_tracks
@@ -4528,13 +4812,15 @@ def apply_metadata_proposal(
                 """,
                 (
                     movie_uuid,
-                    technical_updates.get("hdr"),
-                    technical_updates.get("packaging"),
-                    technical_updates.get("screen_ratios"),
+                    Jsonb(json_ready(technical_updates.get("hdr") or [])),
+                    Jsonb(json_ready(technical_updates.get("packaging") or [])),
+                    Jsonb(json_ready(technical_updates.get("screen_ratios") or [])),
                     Jsonb(json_ready(technical_updates.get("audio_tracks") or [])),
                     Jsonb(json_ready(technical_updates.get("subtitles") or [])),
                     Jsonb(json_ready(technical_updates.get("regions") or [])),
                     Jsonb(json_ready(technical_updates.get("content_ratings") or {})),
+                    technical_updates.get("video_resolution"),
+                    Jsonb(json_ready(technical_updates.get("video_codecs") or [])),
                 ),
             )
 

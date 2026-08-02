@@ -1,0 +1,276 @@
+import json
+import os
+import sys
+import unittest
+
+
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+from app.backend.next_plugins.movievault_v2 import plugin as movievault_v2
+from app.backend import next_metadata, next_movievault_v2
+
+
+_AUDIO_TRACKS = [
+    {"languageCode": "en", "codec": "dolby_truehd", "channels": "7.1", "immersiveFormat": "dolby_atmos"},
+    {"languageCode": "nl", "codec": "dolby_digital", "channels": "5.1", "immersiveFormat": None},
+]
+# Structured since MovieVault PR #162: the same language twice with different
+# variants is exactly what the old bare-language list could not express.
+_SUBTITLES = [
+    {"languageCode": "en", "subtitleType": "full"},
+    {"languageCode": "en", "subtitleType": "sdh"},
+    {"languageCode": "nl", "subtitleType": "full"},
+]
+_SUBTITLE_LANGUAGES = ["en", "nl"]  # the resolver path, which has no variant concept
+_PACKAGING = ["steelbook", "slipcover"]
+_VIDEO = {
+    "videoResolution": "2160p",
+    "videoCodecs": ["hevc"],
+    "hdrFormats": ["dolby_vision", "hdr10"],
+    "aspectRatios": ["2.39:1"],
+    "discRegions": ["B"],
+}
+
+
+def _synced_release(**overrides):
+    record = {
+        "recordType": "release",
+        "releaseId": "10000000-0000-0000-0000-000000000001",
+        "filmId": "20000000-0000-0000-0000-000000000001",
+        "canonicalTitle": "Example Film",
+        "releaseTitle": "Example Film",
+        "releaseYear": 2024,
+        "format": "4K UHD",
+        "edition": "Theatrical",
+        "studio": "Example Studio",
+        "distributor": "Example Distribution",
+        "runtimeMinutes": 122,
+        "audioTracks": _AUDIO_TRACKS,
+        "subtitles": _SUBTITLES,
+        "packaging": _PACKAGING,
+        **_VIDEO,
+    }
+    record.update(overrides)
+    return record
+
+
+class ReleaseMappingTests(unittest.TestCase):
+    def test_release_carries_the_whole_technical_profile_into_the_movie_dict(self):
+        item = movievault_v2._release(_synced_release())
+        self.assertEqual(item["movie"]["audioTracks"], _AUDIO_TRACKS)
+        self.assertEqual(item["movie"]["subtitles"], _SUBTITLES)
+        self.assertEqual(item["movie"]["packaging"], _PACKAGING)
+        self.assertEqual(item["movie"]["videoResolution"], "2160p")
+        self.assertEqual(item["movie"]["videoCodecs"], ["hevc"])
+        self.assertEqual(item["movie"]["hdrFormats"], ["dolby_vision", "hdr10"])
+        self.assertEqual(item["movie"]["aspectRatios"], ["2.39:1"])
+        self.assertEqual(item["movie"]["discRegions"], ["B"])
+        # Already-wired fields stay wired.
+        self.assertEqual(item["movie"]["edition"], "Theatrical")
+        self.assertEqual(item["movie"]["releaseTitle"], "Example Film")
+
+    def test_release_omits_empty_audio_and_subtitle_arrays(self):
+        item = movievault_v2._release(_synced_release(audioTracks=[], subtitles=[]))
+        self.assertNotIn("audioTracks", item["movie"])
+        self.assertNotIn("subtitles", item["movie"])
+
+    def test_release_omits_empty_packaging_array(self):
+        item = movievault_v2._release(_synced_release(packaging=[]))
+        self.assertNotIn("packaging", item["movie"])
+
+
+class SearchBarcodeResolverFallbackTests(unittest.TestCase):
+    def _context(self, *, lookup_results, resolver_result=None):
+        calls = {"resolver": 0}
+
+        def lookup(_request):
+            return {"results": lookup_results}
+
+        def resolver(_request):
+            calls["resolver"] += 1
+            return resolver_result or {}
+
+        return {"movievaultV2Lookup": lookup, "movievaultV2ReleaseDetails": resolver}, calls
+
+    def test_fills_missing_technical_specs_from_the_live_resolver(self):
+        context, calls = self._context(
+            lookup_results=[_synced_release(audioTracks=[], subtitles=[], packaging=[])],
+            resolver_result={
+                "status": "canonical_hit",
+                "release": {
+                    "audioTracks": _AUDIO_TRACKS,
+                    "subtitleLanguages": _SUBTITLE_LANGUAGES,
+                    "packaging": _PACKAGING,
+                },
+            },
+        )
+        result = movievault_v2.search_barcode({"barcode": "9781234567897"}, context)
+        self.assertEqual(result["movie"]["audioTracks"], _AUDIO_TRACKS)
+        # The resolver has no variant concept, so its languages are lifted to `full`
+        # rather than left in a second, incompatible shape.
+        self.assertEqual(
+            result["movie"]["subtitles"],
+            [
+                {"languageCode": "en", "subtitleType": "full"},
+                {"languageCode": "nl", "subtitleType": "full"},
+            ],
+        )
+        self.assertEqual(result["movie"]["packaging"], _PACKAGING)
+        self.assertEqual(calls["resolver"], 1)
+
+    def test_does_not_overwrite_technical_specs_already_present_from_sync(self):
+        context, calls = self._context(
+            lookup_results=[_synced_release()],
+            resolver_result={
+                "status": "canonical_hit",
+                "release": {"audioTracks": [], "subtitleLanguages": [], "packaging": []},
+            },
+        )
+        result = movievault_v2.search_barcode({"barcode": "9781234567897"}, context)
+        self.assertEqual(result["movie"]["audioTracks"], _AUDIO_TRACKS)
+        # Crucially the SDH row from sync survives - the resolver cannot see it and
+        # must not be allowed to flatten it away.
+        self.assertEqual(result["movie"]["subtitles"], _SUBTITLES)
+        self.assertEqual(result["movie"]["packaging"], _PACKAGING)
+
+    def test_box_set_resolver_technical_fields_are_never_pulled_from_the_box_set_section(self):
+        details = {
+            "status": "canonical_hit",
+            "boxSet": {
+                "audioTracks": _AUDIO_TRACKS,
+                "subtitleLanguages": _SUBTITLE_LANGUAGES,
+                "packaging": _PACKAGING,
+            },
+        }
+        self.assertEqual(movievault_v2._resolved_technical(details), {})
+
+
+class MovieDetailsRefreshTests(unittest.TestCase):
+    """A metadata refresh reaches this entrypoint, and `movievault_identification_plan` hands it
+    the movie's stored `movieVaultId` — never a `releaseId`. Reading only `releaseId`/`id` meant
+    the lookup ran with an empty string, the catalog raised `record_invalid`, and the whole
+    plugin execution failed — so a refresh returned no audio/subtitles/packaging at all."""
+
+    RELEASE_ID = "10000000-0000-0000-0000-000000000001"
+
+    def _context(self, *, raises=False, seen=None):
+        def lookup(request):
+            if seen is not None:
+                seen.append(request)
+            if raises:
+                raise RuntimeError("catalog unavailable")
+            return {"results": [_synced_release()]}
+
+        return {"movievaultV2Lookup": lookup}
+
+    def test_a_refresh_payload_carrying_movie_vault_id_reaches_the_catalog(self):
+        seen = []
+        result = movievault_v2.movie_details(
+            {"movieVaultId": self.RELEASE_ID, "title": "Example Film"},
+            self._context(seen=seen),
+        )
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(seen[0]["releaseId"], self.RELEASE_ID)
+        self.assertEqual(result["movie"]["audioTracks"], _AUDIO_TRACKS)
+        self.assertEqual(result["movie"]["packaging"], _PACKAGING)
+
+    def test_a_non_uuid_legacy_id_is_not_looked_up_as_a_v4_release(self):
+        # A movievault_26-era id lives in another namespace; treating it as a v4 release UUID
+        # would silently return a different disc's technical data.
+        seen = []
+        result = movievault_v2.movie_details({"movieVaultId": "mv_matrix"}, self._context(seen=seen))
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(seen, [])
+
+    def test_a_missing_id_is_a_clean_miss(self):
+        seen = []
+        result = movievault_v2.movie_details({"title": "Example Film"}, self._context(seen=seen))
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(seen, [])
+
+    def test_a_raising_catalog_degrades_to_a_miss_instead_of_failing_the_execution(self):
+        result = movievault_v2.movie_details(
+            {"releaseId": self.RELEASE_ID}, self._context(raises=True)
+        )
+        self.assertEqual(result["status"], "miss")
+
+
+class MetadataPipelineIntegrationTests(unittest.TestCase):
+    """Confirms the plugin's output actually reaches next_metadata's
+    technical_updates/movie_updates buckets end to end - not just that the
+    plugin emits the right dict shape in isolation."""
+
+    def test_canonicalize_plugin_result_buckets_tracks_edition_and_release_title(self):
+        item = movievault_v2._release(_synced_release())
+        canonical = next_metadata.canonicalize_plugin_result("movievault_v2", "search_barcode", item)
+        # next_metadata's normalize_value() recursively strips None-valued
+        # keys from nested dicts (e.g. a track with no immersiveFormat), so
+        # the second track loses that key on the way through - by design,
+        # not something this feature changes.
+        self.assertEqual(
+            canonical["technicalUpdates"]["audio_tracks"],
+            [
+                _AUDIO_TRACKS[0],
+                {"languageCode": "nl", "codec": "dolby_digital", "channels": "5.1"},
+            ],
+        )
+        # Structured objects survive canonicalisation intact: normalize_list_field
+        # passes non-strings straight through, and `subtitles` is already a
+        # technical field so it is bucketed without an alias.
+        self.assertEqual(canonical["technicalUpdates"]["subtitles"], _SUBTITLES)
+        self.assertEqual(canonical["technicalUpdates"]["packaging"], _PACKAGING)
+        self.assertEqual(canonical["movieUpdates"]["edition"], "Theatrical")
+        self.assertEqual(canonical["movieUpdates"]["release_title"], "Example Film")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class ContractNegotiationTests(unittest.TestCase):
+    """The shipped manifest is what decides which feed DiscVault actually asks for.
+
+    `_negotiated_contract` returns SUPPORTED_CONTRACTS[index(maximum)] and that value
+    is handed to `run_sync` and `bucket_lookup`. While the manifest was pinned at
+    `distribution-3` the whole v4 code path - poster, audio tracks, subtitles,
+    packaging, video - was unreachable in production no matter how complete it was.
+    """
+
+    def _manifest(self) -> dict:
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "next_plugins",
+            "movievault_v2",
+            "manifest.json",
+        )
+        with open(path, "rb") as handle:
+            return json.load(handle)
+
+    def test_the_shipped_manifest_negotiates_distribution_4(self):
+        manifest = self._manifest()
+        self.assertEqual(
+            next_movievault_v2._negotiated_contract(
+                {"distributionContractRange": manifest["distributionContractRange"]}
+            ),
+            next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+
+    def test_the_manifest_range_stays_within_what_the_code_supports(self):
+        contract_range = self._manifest()["distributionContractRange"]
+        self.assertIn(contract_range["minimum"], next_movievault_v2.SUPPORTED_CONTRACTS)
+        self.assertIn(contract_range["maximum"], next_movievault_v2.SUPPORTED_CONTRACTS)
+
+    def test_an_older_pin_still_negotiates_the_older_contract(self):
+        self.assertEqual(
+            next_movievault_v2._negotiated_contract(
+                {
+                    "distributionContractRange": {
+                        "minimum": "distribution-2",
+                        "maximum": "distribution-3",
+                    }
+                }
+            ),
+            next_movievault_v2.MOVIEVAULT_V3_CONTRACT,
+        )

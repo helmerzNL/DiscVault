@@ -1,1 +1,11 @@
-{"boxSetId":"30000000-0000-0000-0000-000000000001","contractVersion":"distribution-4","cursorAfterDelta":"fixture-distribution-4-r44","expectedPosterAssetId":"40000000-0000-0000-0000-000000000003","expectedPosterRemoval":"30000000-0000-0000-0000-000000000001","expectedRelease":{"posterAssetId":"40000000-0000-0000-0000-000000000003","releaseId":"10000000-0000-0000-0000-000000000001"}}
+{
+  "boxSetId": "30000000-0000-0000-0000-000000000001",
+  "contractVersion": "distribution-4",
+  "cursorAfterDelta": "fixture-distribution-4-r44",
+  "expectedPosterAssetId": "40000000-0000-0000-0000-000000000003",
+  "expectedPosterRemoval": "30000000-0000-0000-0000-000000000001",
+  "expectedRelease": {
+    "posterAssetId": "40000000-0000-0000-0000-000000000003",
+    "releaseId": "10000000-0000-0000-0000-000000000001"
+  }
+}

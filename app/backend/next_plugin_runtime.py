@@ -584,8 +584,14 @@ def _setting_name(field: dict[str, Any]) -> str:
 # settingsSchema at sync time, which removes it from the UI and from the
 # required-settings validation set. Runtime always resolves the enforced value
 # itself (e.g. movievault_v2 via enforced_origin()), regardless of stored data.
+#
+# movievault_v2.bucketFallback is enforced for the same reason: the anonymous
+# bucket lookup is what finds a disc that the locally synced index does not carry
+# yet, so leaving it switchable turns a core part of barcode resolution into an
+# operator footgun. It is always on (enforced_bucket_fallback()), overridable only
+# out of band via MOVIEVAULT_V2_BUCKET_FALLBACK.
 ENFORCED_PLUGIN_SETTINGS: dict[str, frozenset[str]] = {
-    "movievault_v2": frozenset({"origin"}),
+    "movievault_v2": frozenset({"origin", "bucketFallback"}),
 }
 
 
@@ -702,6 +708,23 @@ def validate_plugin_settings(settings_schema: Any, settings: Any) -> dict[str, A
     return resolved
 
 
+def required_secrets_configured(settings_schema: Any, secrets_ref: Any) -> bool:
+    """Return whether every REQUIRED secret of a plugin has a stored value.
+
+    Distinct from the ``secretsConfigured`` flag, which is only "at least one
+    secret exists" - true as soon as any one of a multi-secret plugin's fields is
+    filled in. Auto-enable needs the stricter question, and the two must not be
+    conflated: plugin_requires_config() in next_app/next_worker depends on the
+    loose meaning.
+    """
+    refs = secrets_ref if isinstance(secrets_ref, dict) else {}
+    for field in plugin_setting_items(settings_schema, "secrets"):
+        name = _setting_name(field)
+        if name and field.get("required") and not refs.get(name):
+            return False
+    return True
+
+
 def plugin_config_payload(
     settings_schema: Any,
     settings: Any,
@@ -721,6 +744,7 @@ def plugin_config_payload(
         "settingsConfigured": plugin_settings_configured(settings_schema, resolved),
         "secretNames": sorted(safe_refs),
         "secretsConfigured": bool(safe_refs),
+        "requiredSecretsConfigured": required_secrets_configured(settings_schema, safe_refs),
         "secretsRef": safe_refs,
     }
 
@@ -1014,10 +1038,15 @@ def reconcile_plugin_replacements(
     if not has_metadata_plugins_table:
         return
     replacements: dict[str, list[str]] = {}
+    manifest_orders: dict[str, int] = {}
     for plugin in plugins:
         replaced = replacement_plugin_ids(plugin.manifest)
         if replaced:
             replacements[plugin.plugin_id] = replaced
+            try:
+                manifest_orders[plugin.plugin_id] = int(plugin.manifest.get("orderIndex") or 100)
+            except (TypeError, ValueError):
+                manifest_orders[plugin.plugin_id] = 100
     if not replacements:
         return
 
@@ -1048,7 +1077,16 @@ def reconcile_plugin_replacements(
                     active_legacy_rows,
                     key=lambda row: int(row.get("order_index") or 9999),
                 )
-                order_index = int(legacy_row.get("order_index") or replacement_row.get("order_index") or 100)
+                inherited_order = int(
+                    legacy_row.get("order_index") or replacement_row.get("order_index") or 100
+                )
+                # A replacement inherits the legacy plugin's enabled state, not a
+                # licence to outrank where DiscVault ships it. Without this floor
+                # a legacy row sitting at a low order_index (a v25 import writes
+                # index * 10) would promote the replacement above sources that are
+                # deliberately ranked higher - e.g. movievault_26 above
+                # movievault_v2.
+                order_index = max(inherited_order, manifest_orders.get(replacement_id, 100))
                 cur.execute(
                     """
                     UPDATE metadata_plugins
@@ -1392,6 +1430,17 @@ INTEGRATION_PLUGIN_FALLBACK_NAMES: dict[str, str] = {
     "jellyfin": "Jellyfin",
     "trakt": "Trakt",
 }
+
+# Plugins that switch themselves on the moment their required credentials are
+# stored. Saving a TMDb key and then having to hunt for a second toggle is a dead
+# end users fall into, so configuring one of these IS the intent to use it.
+#
+# Scoped to the integrations DiscVault already nags about being unconfigured
+# rather than applied to every plugin: a blanket rule would silently switch on the
+# price scrapers (keepa, priceapi, amazon, bol, zavvi, arrow) as soon as a key is
+# stored, and starting to scrape shops is a separate, deliberate act. Widening
+# this is one entry.
+AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS: frozenset[str] = frozenset(INTEGRATION_PLUGIN_NOTICE_IDS)
 
 
 def _plugin_has_required_settings(plugin: dict[str, Any]) -> bool:

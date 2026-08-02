@@ -1,6 +1,7 @@
 """Callback-only MovieVault distribution adapter for DiscVault 26."""
 
 import hashlib
+import uuid
 
 PROVIDER_ID = "movievault_v2"
 
@@ -39,6 +40,49 @@ def _lookup(payload, context):
         return []
     result = callback(request)
     return (result or {}).get("results") or []
+
+
+def _bucket_lookup(payload, context):
+    """Resolve a barcode against MovieVault's anonymous bucket index.
+
+    The local index only carries what this instance has synced, so a disc
+    MovieVault knows about but has not distributed here yet misses entirely.
+    Buckets are keyed by the SHA-256 of the EAN, which is why this only serves
+    barcode lookups - there is no title index to fall back to.
+
+    Core already degrades every failure to an empty result set; the guard here is
+    belt-and-braces because the plugin runs in-process and a raise would fail the
+    surrounding lookup rather than just the fallback."""
+    if (context or {}).get("movievaultV2BucketFallback") is False:
+        return []
+    digest = _barcode_hash((payload or {}).get("barcode"))
+    callback = _callback(context, "movievaultV2BucketLookup")
+    if not digest or callback is None:
+        return []
+    try:
+        return (callback({"hash": digest}) or {}).get("results") or []
+    except Exception:
+        return []
+
+
+def _release_uuid(payload):
+    """The v4 catalog keys releases by UUID, so only a well-formed UUID is a usable lookup id.
+
+    The metadata refresh planner hands this entrypoint the movie's stored `movieVaultId`, not a
+    `releaseId` - so that key has to be accepted here or a refresh never reaches the catalog.
+    But it is deliberately filtered: a `movievault_26`-era id (e.g. "mv_matrix") lives in a
+    different namespace and is *not* a v4 release, so treating it as one would look up a
+    different disc. Anything that isn't a UUID is simply no match for this provider.
+    """
+    for key in ("releaseId", "id", "movieVaultId", "movievaultId"):
+        value = str((payload or {}).get(key) or "").strip()
+        if not value:
+            continue
+        try:
+            return str(uuid.UUID(value))
+        except (ValueError, AttributeError, TypeError):
+            continue
+    return ""
 
 
 def _poster_fields(record):
@@ -95,6 +139,51 @@ def _resolved_poster(details, *, box_set=False):
     return {}
 
 
+def _resolved_technical(details):
+    """The technical profile the anonymous resolver carries for a scanned
+    barcode. Only ever pulled from `release` - a box set's members are resolved
+    individually and never inherit the set's technical data.
+
+    The resolver nests its video facts under `video` and names the disc region
+    array `regions`; the sync feed puts them flat on the release and calls the
+    array `discRegions`. Both are flattened to the feed's names here so the
+    merge pipeline downstream sees one vocabulary.
+
+    The resolver reports subtitles as bare language codes; they are lifted into
+    the feed's structured shape with `subtitleType: "full"`, which is what the
+    resolver contract can express and nothing more."""
+    section = (details or {}).get("release")
+    fields = {}
+    if isinstance(section, dict):
+        if section.get("audioTracks"):
+            fields["audioTracks"] = section["audioTracks"]
+        if section.get("subtitleLanguages"):
+            # Converted to the sync feed's structured shape so everything downstream
+            # of this adapter speaks one vocabulary. `full` is not a guess: the
+            # resolver contract has no way to express SDH or any other variant, so
+            # every track it reports is the complete one.
+            fields["subtitles"] = [
+                {"languageCode": language, "subtitleType": "full"}
+                for language in section["subtitleLanguages"]
+                if isinstance(language, str) and language
+            ]
+        if section.get("packaging"):
+            fields["packaging"] = section["packaging"]
+        if section.get("regions"):
+            fields["discRegions"] = section["regions"]
+        video = section.get("video")
+        if isinstance(video, dict):
+            if video.get("resolution"):
+                fields["videoResolution"] = video["resolution"]
+            if video.get("codecs"):
+                fields["videoCodecs"] = video["codecs"]
+            if video.get("hdrFormats"):
+                fields["hdrFormats"] = video["hdrFormats"]
+            if video.get("aspectRatios"):
+                fields["aspectRatios"] = video["aspectRatios"]
+    return fields
+
+
 def _release(record):
     movie = {key: value for key, value in {
         "title": record.get("canonicalTitle") or record.get("releaseTitle") or "",
@@ -102,7 +191,12 @@ def _release(record):
         "format": record.get("format"), "edition": record.get("edition"),
         "studio": record.get("studio"), "distributor": record.get("distributor"),
         "runtimeMinutes": record.get("runtimeMinutes"),
-        **_poster_fields(record)}.items() if value not in (None, "")}
+        "audioTracks": record.get("audioTracks"), "subtitles": record.get("subtitles"),
+        "packaging": record.get("packaging"),
+        "videoResolution": record.get("videoResolution"),
+        "videoCodecs": record.get("videoCodecs"), "hdrFormats": record.get("hdrFormats"),
+        "aspectRatios": record.get("aspectRatios"), "discRegions": record.get("discRegions"),
+        **_poster_fields(record)}.items() if value not in (None, "", [], {})}
     return {key: value for key, value in {
         "provider": PROVIDER_ID, "id": record.get("releaseId"), "releaseId": record.get("releaseId"),
         "filmId": record.get("filmId"), "title": movie["title"], "movie": movie,
@@ -144,10 +238,17 @@ def search_barcode(payload, context=None):
         return _error()
     release = next((item for item in records if item.get("recordType") == "release"), None)
     if release is None:
+        # Not in the synced index - ask the anonymous bucket before giving up.
+        records = _bucket_lookup(payload, context)
+        release = next((item for item in records if item.get("recordType") == "release"), None)
+    if release is None:
         return {"status": "miss", "provider": PROVIDER_ID, "items": []}
-    # Fall back to the resolver's poster when the synced record has none yet.
-    if not (release or {}).get("posterUrl"):
-        resolved = _resolved_poster(_resolved_details(payload, context))
+    # Fall back to the resolver's poster and/or technical specs when the
+    # synced record doesn't carry them yet (not synced, or a v4-sync-disabled
+    # instance still relying purely on the anonymous resolver).
+    if not (release or {}).get("posterUrl") or not (release or {}).get("audioTracks"):
+        details = _resolved_details(payload, context)
+        resolved = {**_resolved_poster(details), **_resolved_technical(details)}
         if resolved:
             release = {**release, **resolved}
     item = _release(release)
@@ -158,6 +259,8 @@ def search_title(payload, context=None):
     records = _lookup(payload, context)
     if records is None:
         return _error()
+    # No bucket fallback here: buckets are keyed by the hash of the EAN, so a
+    # title query has nothing to look up.
     items = [_release(item) for item in records[:_limit(context)] if item.get("recordType") == "release"]
     return {"status": "hit" if items else "miss", "provider": PROVIDER_ID, "items": items}
 
@@ -166,8 +269,16 @@ def movie_details(payload, context=None):
     callback = _callback(context, "movievaultV2Lookup")
     if callback is None:
         return _error()
-    release_id = str((payload or {}).get("releaseId") or (payload or {}).get("id") or "")
-    records = (callback({"kind": "release", "releaseId": release_id, "limit": 1}) or {}).get("results") or []
+    release_id = _release_uuid(payload)
+    if not release_id:
+        return {"status": "miss", "provider": PROVIDER_ID}
+    try:
+        records = (callback({"kind": "release", "releaseId": release_id, "limit": 1}) or {}).get("results") or []
+    except Exception:
+        # A catalog that is unconfigured/mid-resync must degrade to a miss. Letting this raise
+        # failed the *whole* plugin execution, so a refresh returned nothing from MovieVault at
+        # all - no audio, subtitles or packaging - rather than just skipping this one lookup.
+        return {"status": "miss", "provider": PROVIDER_ID}
     return {"status": "miss", "provider": PROVIDER_ID} if not records else {"status": "hit", **_release(records[0])}
 
 
@@ -176,6 +287,10 @@ def box_set_candidates(payload, context=None):
     if records is None:
         return _error()
     box_sets = [item for item in records if item.get("recordType") == "box_set"]
+    if not box_sets:
+        # A box set is reachable by hash too: bucket records match on the set's
+        # own eanHashes as well as on each member's discBarcodeHash.
+        box_sets = [item for item in _bucket_lookup(payload, context) if item.get("recordType") == "box_set"]
     # A scanned box-set's cover arrives on the resolver's `boxSet`, so fill it in
     # when the synced record has none. Only the first proposal matches the
     # scanned barcode, so the resolver's cover is applied to that one alone.

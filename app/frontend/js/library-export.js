@@ -140,12 +140,23 @@
     return Array.isArray(rows) ? rows : [];
   }
 
-  function exportRowCount() {
+  function collectExportRows() {
     try {
-      return exportRows().length;
+      return exportRows();
     } catch (error) {
       console.error("DiscVault export: collecting the rows failed", error);
-      return 0;
+      return [];
+    }
+  }
+
+  /** True while library-paging.js is still fetching movies the export would miss. */
+  function hydrationIncomplete() {
+    var api = bridge();
+    if (!api || typeof api.hasMoreMovies !== "function") return false;
+    try {
+      return api.hasMoreMovies() === true;
+    } catch (error) {
+      return false;
     }
   }
 
@@ -194,10 +205,12 @@
     link.style.display = "none";
     document.body.appendChild(link);
     link.click();
+    // Revoking on the next tick can cancel the download in some browsers before it
+    // has read the blob, so give it room.
     window.setTimeout(function () {
       if (link.parentNode) link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
-    }, 0);
+    }, 60000);
   }
 
   function filenameFromDisposition(disposition, fallback) {
@@ -216,14 +229,7 @@
   }
 
   function runExport(options) {
-    var rows;
-    try {
-      rows = exportRows();
-    } catch (error) {
-      console.error("DiscVault export: collecting the rows failed", error);
-      options.onError(translate("collection.exportFailed", "The export could not be created."));
-      return;
-    }
+    var rows = options.rows || collectExportRows();
     if (!rows.length) {
       options.onError(translate("collection.exportEmpty", "There is nothing to export."));
       return;
@@ -295,7 +301,11 @@
     heading.textContent = translate("collection.exportTitle", "Export library");
     dialog.appendChild(heading);
 
-    var rowCount = exportRowCount();
+    // Collected once and reused by runExport(): getExportRows() re-runs the library
+    // filters and a full sort of the collection, which is not something to pay for
+    // twice per export.
+    var preparedRows = collectExportRows();
+    var rowCount = preparedRows.length;
     var summary = document.createElement("p");
     summary.className = "library-export-summary";
     summary.textContent = formatCount(
@@ -303,6 +313,21 @@
       rowCount
     );
     dialog.appendChild(summary);
+
+    // The rows come from what the SPA has loaded, so exporting before background
+    // hydration finishes silently produces a partial file. Say so instead.
+    if (hydrationIncomplete()) {
+      var incomplete = document.createElement("p");
+      incomplete.className = "library-export-warning";
+      incomplete.textContent = formatCount(
+        translate(
+          "collection.exportIncomplete",
+          "Only {count} of the movies in this library have been loaded so far. Wait until the library has finished loading for a complete export."
+        ),
+        rowCount
+      );
+      dialog.appendChild(incomplete);
+    }
 
     var formatSet = document.createElement("fieldset");
     formatSet.className = "library-export-fieldset";
@@ -429,6 +454,7 @@
       runExport({
         format: chosenFormat,
         columns: chosenColumns,
+        rows: preparedRows,
         onStart: function () {
           state.busy = true;
           submit.disabled = true;
