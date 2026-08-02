@@ -49,6 +49,13 @@ DEFAULT_RELEASE_DETAILS_POLL_ATTEMPTS = 4
 MAX_RELEASE_DETAILS_POLL_ATTEMPTS = 10
 MAX_RELEASE_DETAILS_POLL_WAIT_SECONDS = 5
 MAX_RECORDS = 2_000_000
+# The delta feed serves one MovieVault publication segment per request, keyed by
+# the cursor it starts from. An instance more than one publish cycle behind gets
+# an intermediate segment back, not the head - run_sync() walks the chain one
+# segment at a time. Bounded so a pathological or misbehaving origin cannot make
+# a single sync run forever; an instance this far behind picks up where it left
+# off on the next scheduled or manual sync.
+MAX_DELTA_HOPS_PER_SYNC = 500
 HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COUNTRY_PATTERN = re.compile(r"^[A-Z]{2}$")
 # NOTE: MovieVault public asset paths are deliberately `/v2/assets/...` for both
@@ -1325,6 +1332,32 @@ def _release_details_video(value: Any) -> dict[str, Any]:
     return result
 
 
+def _release_details_subtitle_track(value: Any) -> dict[str, Any]:
+    """One structured subtitle track from the v2 resolver.
+
+    `subtitleType` is an **open** enum, matching how the distribution-4 reader
+    treats the same field: MovieVault may add a variant before this allow-list
+    catches up, and losing a track over a value we simply have not heard of is
+    worse than carrying it through. An unreadable *shape* is still refused.
+    """
+    item = _release_details_object(
+        value,
+        required={"languageCode", "subtitleType"},
+        optional=set(),
+    )
+    subtitle_type = item["subtitleType"]
+    if not isinstance(subtitle_type, str) or not subtitle_type or len(subtitle_type) > 24:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return {
+        "languageCode": _release_details_text(
+            item["languageCode"],
+            maximum=35,
+            pattern=r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$",
+        ),
+        "subtitleType": subtitle_type,
+    }
+
+
 def _release_details_audio_track(value: Any) -> dict[str, Any]:
     item = _release_details_object(
         value,
@@ -1376,6 +1409,13 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             "video",
             "audioTracks",
             "subtitleLanguages",
+            # Structured subtitles, the same shape distribution-4 uses. Accepted
+            # before MovieVault emits it, and that order is not optional: this
+            # reader rejects the *whole* response on an unknown key, so a purely
+            # additive field on the producer side takes barcode resolution down
+            # until this list knows about it. See App-Guidance
+            # `docs/apps/discvault/movievault-route-parity.md` §4.
+            "subtitles",
         },
     )
     barcodes_value = item["barcodes"]
@@ -1437,6 +1477,17 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             item["subtitleLanguages"],
             maximum=50,
         )
+    # Structured subtitles win over the flat list when both arrive. They are the
+    # same tracks - `subtitleLanguages` is the de-duplicated language view of
+    # `subtitles` - so keeping both would hand the merge two representations of
+    # one fact and a rule about which is right. Dropping the poorer one here is
+    # that rule.
+    if "subtitles" in item:
+        tracks = item["subtitles"]
+        if not isinstance(tracks, list) or len(tracks) > 50:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["subtitles"] = [_release_details_subtitle_track(track) for track in tracks]
+        result.pop("subtitleLanguages", None)
     return result
 
 
@@ -2463,7 +2514,16 @@ def _apply_delta(
     expected_cursor: str,
     manifest: dict[str, Any],
     records: list[dict[str, Any]],
+    reached_cursor: str,
+    reached_revision: int,
+    final: bool,
 ) -> dict[str, Any]:
+    """Apply one delta segment. ``reached_cursor``/``reached_revision`` are what this
+    segment's own response actually advances the sync to - the manifest's cursor and
+    revision only when ``final`` is true, an intermediate hop's otherwise (see the
+    hop loop in run_sync). ``status`` and ``dataset_checksum`` only move to 'current'
+    /the manifest's checksum on the final hop: they describe the complete dataset,
+    which an intermediate hop has not reached yet."""
     state = _sync_state(conn, lock=True)
     if not state or str(state.get("cursor") or "") != expected_cursor:
         raise MovieVaultV2Error("sync_state_changed")
@@ -2480,24 +2540,26 @@ def _apply_delta(
             UPDATE movievault_v2_sync_state
             SET cursor = %s,
                 revision = %s,
-                dataset_checksum = %s,
-                status = 'current',
+                dataset_checksum = CASE WHEN %s THEN %s ELSE dataset_checksum END,
+                status = CASE WHEN %s THEN 'current' ELSE status END,
                 last_success_at = now(),
                 last_error_code = NULL,
                 updated_at = now()
             WHERE plugin_id = %s
             """,
             (
-                manifest["currentCursor"],
-                manifest["currentRevision"],
+                reached_cursor,
+                reached_revision,
+                final,
                 manifest["datasetChecksum"],
+                final,
                 MOVIEVAULT_V2_PLUGIN_ID,
             ),
         )
     return {
-        "state": "current",
+        "state": "current" if final else "syncing",
         "mode": "delta",
-        "revision": manifest["currentRevision"],
+        "revision": reached_revision,
         "recordsApplied": len(records),
     }
 
@@ -2618,74 +2680,110 @@ def run_sync(
                 return result
 
             cursor = str(state["cursor"])
-            status, content, headers = _fetch_feed(
-                origin,
-                cursor=cursor,
-                timeout_seconds=timeout_seconds,
-                maximum_bytes=maximum_bytes,
-                contract_version=contract_version,
-            )
-            if status == 409:
+            hops = 0
+            records_applied = 0
+            while True:
                 status, content, headers = _fetch_feed(
                     origin,
-                    cursor=None,
+                    cursor=cursor,
                     timeout_seconds=timeout_seconds,
                     maximum_bytes=maximum_bytes,
                     contract_version=contract_version,
                 )
+                if status == 409:
+                    status, content, headers = _fetch_feed(
+                        origin,
+                        cursor=None,
+                        timeout_seconds=timeout_seconds,
+                        maximum_bytes=maximum_bytes,
+                        contract_version=contract_version,
+                    )
+                    if status != 200:
+                        raise MovieVaultV2Error("full_sync_unavailable")
+                    _verify_digest(content, headers, contract_version=contract_version)
+                    records = parse_ndjson(
+                        content,
+                        full=True,
+                        maximum_revision=manifest["currentRevision"],
+                        contract_version=contract_version,
+                    )
+                    result = _apply_full(
+                        conn,
+                        origin=origin,
+                        manifest=manifest,
+                        records=records,
+                        stale_threshold_hours=stale_threshold_hours,
+                    )
+                    conn.commit()
+                    return result
+                if status == 204:
+                    next_cursor = headers.get("x-next-cursor")
+                    if next_cursor is not None and next_cursor != manifest["currentCursor"]:
+                        raise MovieVaultV2Error("cursor_invalid")
+                    result = _mark_current(conn, manifest)
+                    conn.commit()
+                    return result
                 if status != 200:
-                    raise MovieVaultV2Error("full_sync_unavailable")
+                    raise MovieVaultV2Error("delta_sync_unavailable")
                 _verify_digest(content, headers, contract_version=contract_version)
+                next_cursor = headers.get("x-next-cursor")
+                # The delta feed serves one publication segment per request, keyed by
+                # the cursor it starts from. An instance more than one MovieVault
+                # publish behind gets an intermediate segment back - its next-cursor
+                # is the next hop, not the manifest's head - so treating anything
+                # short of the head as invalid used to fail the sync every time,
+                # permanently, because the stored cursor never advanced past the
+                # first hop. Walk the chain instead; apply each segment as it comes.
+                if not next_cursor or next_cursor == cursor:
+                    raise MovieVaultV2Error("cursor_invalid")
+                at_head = next_cursor == manifest["currentCursor"]
                 records = parse_ndjson(
                     content,
-                    full=True,
+                    full=False,
                     maximum_revision=manifest["currentRevision"],
                     contract_version=contract_version,
                 )
-                result = _apply_full(
+                if (
+                    at_head
+                    and int(manifest["currentRevision"]) > int(state.get("revision") or 0)
+                    and (
+                        not records
+                        or int(records[-1]["revision"]) != int(manifest["currentRevision"])
+                    )
+                ):
+                    raise MovieVaultV2Error("revision_invalid")
+                reached_revision = (
+                    int(manifest["currentRevision"])
+                    if at_head
+                    else (
+                        int(records[-1]["revision"])
+                        if records
+                        else int(state.get("revision") or 0)
+                    )
+                )
+                result = _apply_delta(
                     conn,
                     origin=origin,
+                    expected_cursor=cursor,
                     manifest=manifest,
                     records=records,
-                    stale_threshold_hours=stale_threshold_hours,
+                    reached_cursor=next_cursor,
+                    reached_revision=reached_revision,
+                    final=at_head,
                 )
                 conn.commit()
-                return result
-            if status == 204:
-                next_cursor = headers.get("x-next-cursor")
-                if next_cursor is not None and next_cursor != manifest["currentCursor"]:
-                    raise MovieVaultV2Error("cursor_invalid")
-                result = _mark_current(conn, manifest)
-                conn.commit()
-                return result
-            if status != 200:
-                raise MovieVaultV2Error("delta_sync_unavailable")
-            _verify_digest(content, headers, contract_version=contract_version)
-            if headers.get("x-next-cursor") != manifest["currentCursor"]:
-                raise MovieVaultV2Error("cursor_invalid")
-            records = parse_ndjson(
-                content,
-                full=False,
-                maximum_revision=manifest["currentRevision"],
-                contract_version=contract_version,
-            )
-            if (
-                int(manifest["currentRevision"]) > int(state.get("revision") or 0)
-                and (
-                    not records
-                    or int(records[-1]["revision"]) != int(manifest["currentRevision"])
-                )
-            ):
-                raise MovieVaultV2Error("revision_invalid")
-            result = _apply_delta(
-                conn,
-                origin=origin,
-                expected_cursor=cursor,
-                manifest=manifest,
-                records=records,
-            )
-            conn.commit()
-            return result
+                records_applied += len(records)
+                result["recordsApplied"] = records_applied
+                if at_head:
+                    return result
+                cursor = next_cursor
+                state = _sync_state(conn)
+                hops += 1
+                if hops >= MAX_DELTA_HOPS_PER_SYNC:
+                    # Real, persisted progress either way - just not all the way to
+                    # the head yet. The next sync (scheduled or manual) picks up the
+                    # chain from here rather than starting over.
+                    return result
         except MovieVaultV2Error as exc:
             conn.rollback()
             _mark_error(conn, exc.code)
