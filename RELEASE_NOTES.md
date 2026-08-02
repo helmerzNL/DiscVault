@@ -1,5 +1,85 @@
 # DiscVault Release Notes
 
+## 26.7.40 - A version bump can no longer collide with a parallel pull request
+
+- `bump_version.py` now reads the target branch's `app/VERSION` and raises its
+  floor above it, so a bump computed while another pull request was in flight
+  can never land on a value the branch already carries.
+- It had only ever incremented from the local file. Two pull requests open at
+  the same time both bumped `26.7.35` → `26.7.36`; the first merged fine and the
+  second merged a value equal to its own base, which the version guard correctly
+  rejected. That left the beta channel publishing no image at all until it was
+  cleared by hand — twice.
+- Build tooling only; nothing in the application changes.
+
+## 26.7.39 - The MovieVault catalog catches up instead of failing forever
+
+- An instance more than one publication behind could never sync again. Its
+  catalog stayed frozen at whatever it last managed to fetch, and every retry
+  failed the same way, permanently.
+- The delta branch of `run_sync()` fetched `/index/delta` **once** and demanded
+  that the response already sit on the manifest's head cursor, raising
+  `cursor_invalid` without persisting anything. MovieVault v2 serves one
+  publication segment per request, so an instance that had fallen behind by more
+  than one publish was always handed an intermediate segment — and always
+  rejected it, discarding the progress it had just been given.
+- The delta branch now walks the cursor chain hop by hop and commits progress at
+  each step until it reaches the manifest's current cursor. A lagging instance
+  catches up over several hops instead of failing on the first one.
+- Verified against a real PostgreSQL 16 database: the full MovieVault v2
+  PostgreSQL suite (29 tests) plus the non-PostgreSQL v2 suites (265 tests, 96
+  subtests).
+
+## 26.7.38 - The beta image builds again
+
+- The build pipeline pulled BuildKit from `ghcr.io/moby/buildkit`, which
+  publishes no `buildx-stable-1` tag, so every build died in two seconds with
+  `denied`. It now comes from `mirror.gcr.io`, Google's pull-through cache for
+  Docker Hub — the same image, reached without depending on Docker Hub being
+  reachable.
+- The same cache is configured as a registry mirror inside the builder, so
+  `FROM python:3.12-slim` no longer depends on Docker Hub either. That was the
+  next step the original outage would have failed at.
+- Build pipeline only. No image had been published since 26.7.36, so this is the
+  version that carries 26.7.36 through 26.7.38 to anyone running the beta
+  channel.
+
+## 26.7.37 - Version bump to clear the build
+
+- Housekeeping. 26.7.36 had merged carrying a version its own base already used,
+  which left the version guard red and the image build blocked. No code changes.
+
+## 26.7.36 - Structured subtitles are accepted before MovieVault sends them
+
+- DiscVault now understands subtitles as `{languageCode, subtitleType}` from the
+  release-details resolver, not just as a bare list of languages. Structured
+  subtitles replace the plain language list when both arrive.
+- **This shipped deliberately early, and the ordering is the point.** MovieVault
+  publishes the same physical release on two routes that disagree:
+  `distribution-4` carries the structured form, `release-technical-1` carries the
+  bare list. The resolver's response is validated against a closed key set, so an
+  unknown key fails the *entire* response rather than being ignored. The moment
+  MovieVault adds `subtitles` to that payload, every barcode falling through to
+  the resolver would return `release_details_response_invalid` and scanning would
+  break on discvault.eu. A purely additive change on their side, an outage on
+  ours — unless the key is accepted first.
+- `subtitleType` is treated as an **open** enum, matching the distribution-4
+  reader: MovieVault may introduce a variant before this allow-list catches up,
+  and dropping a track over an unrecognised value is worse than carrying it. A
+  genuinely unreadable shape is still refused.
+- Also in this version, and superseded three versions later: a first attempt at
+  moving BuildKit off Docker Hub, which pointed at an image that does not exist.
+  See 26.7.38.
+
+## 26.7.35 - A rejected version can no longer reach the registry
+
+- The image build now runs the version guard first and refuses to publish if it
+  fails. The image carries `app/VERSION` as its reported version, and the two
+  checks previously ran independently — so a build whose version the guard had
+  already rejected was published anyway, twice reporting a version that belonged
+  to different code.
+- Build pipeline only; nothing in the application changes.
+
 ## 26.7.34 - Edits made in the PWA reach the phones
 
 - A field you edit in the browser now travels over the mobile sync. The push
