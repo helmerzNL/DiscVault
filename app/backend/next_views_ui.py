@@ -19119,6 +19119,7 @@ def ui_preview_html(
             ${execution ? `<span class="tag blue">${escapeHtml(execution.entrypoint || "execution")} ${escapeHtml(execution.state || execution.status || "-")}</span>` : ""}
             ${needsConfig ? `<span class="tag blue">${escapeHtml(tNext("appAdmin.configurationNeeded", "Configuration needed"))}</span>` : ""}
             ${plugin.premiumFeatureKey ? `<span class="tag blue">${escapeHtml(plugin.premiumFeatureKey)}</span>` : ""}
+            ${plugin.bucketFallbackEnforced === true ? `<span class="tag good">${escapeHtml(tNext("appAdmin.movievaultV2BucketFallbackAlwaysOn", "Anonymous fallback: always on"))}</span>` : ""}
           </div>
           <div class="app-admin-plugin-actions">
             ${canManage ? `<button type="button" class="secondary-button" data-app-admin-plugin-enable="${escapeHtml(plugin.id)}" data-enabled="${plugin.enabled ? "false" : "true"}">${escapeHtml(plugin.enabled ? tNext("appAdmin.disablePlugin", "Disable") : tNext("appAdmin.enablePlugin", "Enable"))}</button>` : ""}
