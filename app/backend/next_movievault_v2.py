@@ -1325,6 +1325,32 @@ def _release_details_video(value: Any) -> dict[str, Any]:
     return result
 
 
+def _release_details_subtitle_track(value: Any) -> dict[str, Any]:
+    """One structured subtitle track from the v2 resolver.
+
+    `subtitleType` is an **open** enum, matching how the distribution-4 reader
+    treats the same field: MovieVault may add a variant before this allow-list
+    catches up, and losing a track over a value we simply have not heard of is
+    worse than carrying it through. An unreadable *shape* is still refused.
+    """
+    item = _release_details_object(
+        value,
+        required={"languageCode", "subtitleType"},
+        optional=set(),
+    )
+    subtitle_type = item["subtitleType"]
+    if not isinstance(subtitle_type, str) or not subtitle_type or len(subtitle_type) > 24:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    return {
+        "languageCode": _release_details_text(
+            item["languageCode"],
+            maximum=35,
+            pattern=r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$",
+        ),
+        "subtitleType": subtitle_type,
+    }
+
+
 def _release_details_audio_track(value: Any) -> dict[str, Any]:
     item = _release_details_object(
         value,
@@ -1376,6 +1402,13 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             "video",
             "audioTracks",
             "subtitleLanguages",
+            # Structured subtitles, the same shape distribution-4 uses. Accepted
+            # before MovieVault emits it, and that order is not optional: this
+            # reader rejects the *whole* response on an unknown key, so a purely
+            # additive field on the producer side takes barcode resolution down
+            # until this list knows about it. See App-Guidance
+            # `docs/apps/discvault/movievault-route-parity.md` §4.
+            "subtitles",
         },
     )
     barcodes_value = item["barcodes"]
@@ -1437,6 +1470,17 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             item["subtitleLanguages"],
             maximum=50,
         )
+    # Structured subtitles win over the flat list when both arrive. They are the
+    # same tracks - `subtitleLanguages` is the de-duplicated language view of
+    # `subtitles` - so keeping both would hand the merge two representations of
+    # one fact and a rule about which is right. Dropping the poorer one here is
+    # that rule.
+    if "subtitles" in item:
+        tracks = item["subtitles"]
+        if not isinstance(tracks, list) or len(tracks) > 50:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["subtitles"] = [_release_details_subtitle_track(track) for track in tracks]
+        result.pop("subtitleLanguages", None)
     return result
 
 
