@@ -1,7 +1,7 @@
 {
   "id": "movievault_v2",
   "name": "MovieVault v2",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "minimumDiscVaultVersion": "26.4.53",
