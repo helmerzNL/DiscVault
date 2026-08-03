@@ -13,6 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+try:  # pragma: no cover - import style depends on how this module is loaded
+    from .next_movievault_v2 import enforced_bucket_fallback
+except ImportError:  # pragma: no cover - supports direct module execution
+    from next_movievault_v2 import enforced_bucket_fallback
+
 
 JsonbFactory = Callable[[Any], Any]
 TableExists = Callable[[Any, str], bool]
@@ -1408,6 +1413,16 @@ def plugin_registry_row(row: dict[str, Any]) -> dict[str, Any]:
         "updateAvailable": update_state["updateAvailable"],
         "canRollback": update_state["canRollback"],
         "rollbackVersion": update_state["rollbackVersion"],
+        # movievault_v2's anonymous bucket fallback is enforced server-side (see
+        # ENFORCED_PLUGIN_SETTINGS above) and has no UI control of its own, so
+        # there is nothing in settingsSchema for App Admin to render it from.
+        # Surface the live value directly, analogous to premiumFeatureKey, so
+        # the plugin card can show it's always on instead of saying nothing.
+        **(
+            {"bucketFallbackEnforced": enforced_bucket_fallback()}
+            if row["id"] == "movievault_v2"
+            else {}
+        ),
     }
 
 

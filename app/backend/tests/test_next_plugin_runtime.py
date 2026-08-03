@@ -39,6 +39,7 @@ from app.backend.next_plugin_runtime import PLUGIN_INITIALIZED_MARKER
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import plugin_install_dir
 from app.backend.next_plugin_runtime import plugin_paths
+from app.backend.next_plugin_runtime import plugin_registry_row
 from app.backend.next_plugin_runtime import run_plugin_entrypoint
 from app.backend.next_plugin_runtime import seed_default_plugins_if_needed
 from app.backend.next_plugin_runtime import reconcile_plugin_replacements
@@ -676,6 +677,34 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertIs(legacy["defaultEnabled"], False)
         self.assertLess(v2["orderIndex"], legacy["orderIndex"])
         self.assertLess(v2["orderIndex"], 50)
+
+    def _registry_row(self, plugin_id):
+        return {
+            "id": plugin_id,
+            "name": "Test Plugin",
+            "version": "1.0.0",
+            "enabled": True,
+            "installed": True,
+            "categories": [],
+            "capabilities": [],
+            "settings_schema": {},
+            "settings": {},
+            "secrets_ref": None,
+            "order_index": 1,
+            "manifest": {},
+        }
+
+    def test_movievault_v2_registry_row_reports_the_live_bucket_fallback_flag(self):
+        # bucketFallback has no settings-schema control of its own (it's enforced,
+        # see ENFORCED_PLUGIN_SETTINGS) - App Admin has nothing to render it from
+        # unless the registry row states it directly.
+        result = plugin_registry_row(self._registry_row("movievault_v2"))
+        self.assertIn("bucketFallbackEnforced", result)
+        self.assertIs(result["bucketFallbackEnforced"], True)
+
+    def test_other_plugins_do_not_get_the_bucket_fallback_field(self):
+        result = plugin_registry_row(self._registry_row("tmdb"))
+        self.assertNotIn("bucketFallbackEnforced", result)
 
     def test_upcitemdb_is_tagged_as_bootstrap_metadata_source(self):
         discovery = discover_plugins()

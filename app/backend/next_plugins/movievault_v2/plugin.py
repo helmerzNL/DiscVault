@@ -26,8 +26,7 @@ def _barcode_hash(value):
     digits = "".join(character for character in str(value or "") if character.isdigit())
     if len(digits) not in {8, 12, 13, 14}:
         return ""
-    check = (10 - sum(int(digit) * (3 if index % 2 == 0 else 1) for index, digit in enumerate(reversed(digits[:-1]))) % 10) % 10
-    return hashlib.sha256(digits.encode("ascii")).hexdigest() if check == int(digits[-1]) else ""
+    return hashlib.sha256(digits.encode("ascii")).hexdigest()
 
 
 def _lookup(payload, context):
@@ -52,17 +51,31 @@ def _bucket_lookup(payload, context):
 
     Core already degrades every failure to an empty result set; the guard here is
     belt-and-braces because the plugin runs in-process and a raise would fail the
-    surrounding lookup rather than just the fallback."""
+    surrounding lookup rather than just the fallback.
+
+    Returns {"records": [...], "attempted": bool, "outcome": "hit"|"miss"|"error"|None,
+    "errorCode": str|None}. `outcome`/`errorCode` carry no user-facing data - they exist
+    so a caller can tell a real catalog miss apart from a bucket lookup that was never
+    reached (disabled, no barcode) or that failed (network/contract error), instead of
+    both looking like the same silent "miss"."""
     if (context or {}).get("movievaultV2BucketFallback") is False:
-        return []
+        return {"records": [], "attempted": False, "outcome": None, "errorCode": None}
     digest = _barcode_hash((payload or {}).get("barcode"))
     callback = _callback(context, "movievaultV2BucketLookup")
     if not digest or callback is None:
-        return []
+        return {"records": [], "attempted": False, "outcome": None, "errorCode": None}
     try:
-        return (callback({"hash": digest}) or {}).get("results") or []
+        result = callback({"hash": digest}) or {}
     except Exception:
-        return []
+        return {"records": [], "attempted": True, "outcome": "error", "errorCode": "bucket_callback_exception"}
+    if result.get("state") == "unavailable":
+        return {"records": [], "attempted": True, "outcome": "error", "errorCode": result.get("errorCode")}
+    records = result.get("results") or []
+    return {"records": records, "attempted": True, "outcome": "hit" if records else "miss", "errorCode": None}
+
+
+def _bucket_fallback_audit(bucket):
+    return {"attempted": bucket["attempted"], "outcome": bucket["outcome"], "errorCode": bucket["errorCode"]}
 
 
 def _release_uuid(payload):
@@ -101,17 +114,22 @@ def _poster_fields(record):
     return fields
 
 
-def _resolved_details(payload, context):
-    """Resolve the scanned barcode through the v2 resolver.
+def _resolver_lookup(payload, context):
+    """Resolve a barcode through MovieVault's anonymous release-details resolver.
 
-    The synced catalog carries a poster only once a v4 index sync has published
-    one; the resolver answers per barcode and is the source the poster arrives
-    on for a freshly scanned disc. Artwork is supplementary, so any resolver
-    failure degrades to "no poster" and never fails the surrounding lookup."""
+    Core already degrades every failure (including a `MovieVaultV2Error`) to a
+    stable `{"status": "failed", "errorCode": ...}` dict; the guard here is
+    belt-and-braces, matching `_bucket_lookup()`.
+
+    Returns {"result": {...}|None, "attempted": bool, "outcome":
+    "hit"|"miss"|"ambiguous"|"error"|None, "errorCode": str|None} - the same
+    shape `_bucket_lookup()` returns, and for the same reason: a caller needs
+    to tell "never asked" apart from "asked and got nothing useable" apart
+    from "asked and it failed", not just see a bare miss."""
     callback = _callback(context, "movievaultV2ReleaseDetails")
     barcode = str((payload or {}).get("barcode") or "").strip()
     if callback is None or not _barcode_hash(barcode):
-        return {}
+        return {"result": None, "attempted": False, "outcome": None, "errorCode": None}
     request = {"barcode": barcode}
     title = str((payload or {}).get("title") or "").strip()
     if title:
@@ -119,10 +137,45 @@ def _resolved_details(payload, context):
     try:
         result = callback(request)
     except Exception:
-        return {}
-    if not isinstance(result, dict) or result.get("status") not in ("canonical_hit", "external_hit"):
-        return {}
-    return result
+        return {"result": None, "attempted": True, "outcome": "error", "errorCode": "resolver_callback_exception"}
+    status = (result or {}).get("status") if isinstance(result, dict) else None
+    if status in ("canonical_hit", "external_hit"):
+        return {"result": result, "attempted": True, "outcome": "hit", "errorCode": None}
+    if status in ("ambiguous", "candidates"):
+        return {"result": None, "attempted": True, "outcome": "ambiguous", "errorCode": None}
+    if status == "failed":
+        return {
+            "result": None,
+            "attempted": True,
+            "outcome": "error",
+            "errorCode": (result or {}).get("errorCode") or "resolver_failed",
+        }
+    # "miss", "pending", or an unrecognized/malformed response: nothing usable now.
+    return {"result": None, "attempted": True, "outcome": "miss", "errorCode": None}
+
+
+def _resolver_fallback_audit(resolver):
+    return {
+        "attempted": resolver["attempted"],
+        "outcome": resolver["outcome"],
+        "errorCode": resolver["errorCode"],
+    }
+
+
+def _resolved_details(payload, context):
+    """Resolve the scanned barcode through the v2 resolver, for the
+    supplementary poster/technical enrichment of an already-confirmed hit.
+
+    The synced catalog carries a poster only once a v4 index sync has published
+    one; the resolver answers per barcode and is the source the poster arrives
+    on for a freshly scanned disc. Artwork is supplementary, so any resolver
+    failure degrades to "no poster" and never fails the surrounding lookup.
+
+    Callers that need the outcome/error diagnostic (a genuine local+bucket miss
+    falling through to the resolver as a last resort) use `_resolver_lookup()`
+    directly instead - this wrapper exists only for this narrower, "just the
+    payload or nothing" use."""
+    return _resolver_lookup(payload, context)["result"] or {}
 
 
 def _resolved_poster(details, *, box_set=False):
@@ -184,6 +237,48 @@ def _resolved_technical(details):
     return fields
 
 
+def _resolved_release_record(details):
+    """Map a resolver hit's `film`/`release` shape onto the record shape
+    `_release()` already expects from a synced or bucket record, so one
+    mapper serves all three match sources. There is no `releaseId`/`filmId`:
+    the resolver has no local identity for a release DiscVault has never
+    synced - `_release()` already tolerates a missing one."""
+    film = (details or {}).get("film") or {}
+    release = (details or {}).get("release") or {}
+    record = {
+        "canonicalTitle": film.get("title"),
+        "releaseYear": film.get("year"),
+        "releaseTitle": release.get("title"),
+        "format": release.get("format"),
+        "edition": release.get("edition"),
+    }
+    record.update(_resolved_technical(details))
+    record.update(_resolved_poster(details))
+    return record
+
+
+def _resolved_box_set_record(details):
+    """Map a resolver hit's `boxSet` shape onto the record shape `_proposal()`
+    expects from a synced or bucket box-set record. Members carry no local
+    identity either, for the same reason a release resolved this way doesn't."""
+    box_set = (details or {}).get("boxSet") or {}
+    members = [
+        {
+            key: value
+            for key, value in {
+                "position": member.get("position"),
+                "canonicalTitle": member.get("title"),
+                "format": member.get("discFormat"),
+            }.items()
+            if value not in (None, "")
+        }
+        for member in box_set.get("members") or []
+    ]
+    record = {"title": box_set.get("title"), "members": members}
+    record.update(_resolved_poster(details, box_set=True))
+    return record
+
+
 def _release(record):
     movie = {key: value for key, value in {
         "title": record.get("canonicalTitle") or record.get("releaseTitle") or "",
@@ -237,22 +332,55 @@ def search_barcode(payload, context=None):
     if records is None:
         return _error()
     release = next((item for item in records if item.get("recordType") == "release"), None)
+    match_source = "local_index" if release is not None else None
+    bucket = None
+    resolver = None
     if release is None:
         # Not in the synced index - ask the anonymous bucket before giving up.
-        records = _bucket_lookup(payload, context)
-        release = next((item for item in records if item.get("recordType") == "release"), None)
+        bucket = _bucket_lookup(payload, context)
+        release = next((item for item in bucket["records"] if item.get("recordType") == "release"), None)
+        if release is not None:
+            match_source = "bucket_fallback"
     if release is None:
-        return {"status": "miss", "provider": PROVIDER_ID, "items": []}
+        # Local index and the anonymous bucket both missed - ask the resolver
+        # as a last resort, the same as DiscVaultApp's iOS client does. A hit
+        # here already carries its own technical profile, so it never needs
+        # the supplementary enrichment call below.
+        resolver = _resolver_lookup(payload, context)
+        if resolver["result"] is not None:
+            release = _resolved_release_record(resolver["result"])
+            match_source = "resolver_fallback"
+    if release is None:
+        result = {"status": "miss", "provider": PROVIDER_ID, "items": []}
+        if bucket is not None:
+            result["bucketFallback"] = _bucket_fallback_audit(bucket)
+        if resolver is not None:
+            result["resolverFallback"] = _resolver_fallback_audit(resolver)
+        return result
     # Fall back to the resolver's poster and/or technical specs when the
     # synced record doesn't carry them yet (not synced, or a v4-sync-disabled
-    # instance still relying purely on the anonymous resolver).
-    if not (release or {}).get("posterUrl") or not (release or {}).get("audioTracks"):
+    # instance still relying purely on the anonymous resolver). Skipped when
+    # the release already came from the resolver - that call already carries
+    # everything it has, and a second call would only cost another live
+    # round-trip for nothing.
+    if match_source != "resolver_fallback" and (
+        not (release or {}).get("posterUrl") or not (release or {}).get("audioTracks")
+    ):
         details = _resolved_details(payload, context)
         resolved = {**_resolved_poster(details), **_resolved_technical(details)}
         if resolved:
             release = {**release, **resolved}
     item = _release(release)
-    return {"status": "hit", **item, "items": [item]}
+    result = {"status": "hit", **item, "items": [item], "matchSource": match_source}
+    if bucket is not None:
+        result["bucketFallback"] = _bucket_fallback_audit(bucket)
+    if resolver is not None:
+        result["resolverFallback"] = _resolver_fallback_audit(resolver)
+        # The resolver's own contract marks an unmoderated external match this
+        # way; canonical_hit is MovieVault-verified data and needs no notice.
+        if (resolver["result"] or {}).get("status") == "external_hit":
+            result["verificationStatus"] = "unreviewed_external"
+    return result
 
 
 def search_title(payload, context=None):
@@ -287,16 +415,42 @@ def box_set_candidates(payload, context=None):
     if records is None:
         return _error()
     box_sets = [item for item in records if item.get("recordType") == "box_set"]
+    match_source = "local_index" if box_sets else None
+    bucket = None
+    resolver = None
     if not box_sets:
         # A box set is reachable by hash too: bucket records match on the set's
         # own eanHashes as well as on each member's discBarcodeHash.
-        box_sets = [item for item in _bucket_lookup(payload, context) if item.get("recordType") == "box_set"]
+        bucket = _bucket_lookup(payload, context)
+        box_sets = [item for item in bucket["records"] if item.get("recordType") == "box_set"]
+        if box_sets:
+            match_source = "bucket_fallback"
+    resolver_hit = None
+    if not box_sets:
+        # Local index and the anonymous bucket both missed - ask the resolver
+        # as a last resort, same as search_barcode()'s primary fallback.
+        resolver = _resolver_lookup(payload, context)
+        resolver_hit = resolver["result"]
+        if resolver_hit is not None and (resolver_hit.get("boxSet") or {}).get("members"):
+            box_sets = [_resolved_box_set_record(resolver_hit)]
+            match_source = "resolver_fallback"
     # A scanned box-set's cover arrives on the resolver's `boxSet`, so fill it in
     # when the synced record has none. Only the first proposal matches the
     # scanned barcode, so the resolver's cover is applied to that one alone.
-    if box_sets and not box_sets[0].get("posterUrl"):
+    # Skipped when the proposal already came from the resolver - it already
+    # carries whatever cover that call had.
+    if box_sets and match_source != "resolver_fallback" and not box_sets[0].get("posterUrl"):
         resolved = _resolved_poster(_resolved_details(payload, context), box_set=True)
         if resolved:
             box_sets = [{**box_sets[0], **resolved}, *box_sets[1:]]
     proposals = [_proposal(item) for item in box_sets]
-    return {"status": "hit" if proposals else "miss", "provider": PROVIDER_ID, "boxSetProposal": proposals[0] if proposals else {}, "boxSetProposals": proposals, "items": proposals}
+    result = {"status": "hit" if proposals else "miss", "provider": PROVIDER_ID, "boxSetProposal": proposals[0] if proposals else {}, "boxSetProposals": proposals, "items": proposals}
+    if match_source:
+        result["matchSource"] = match_source
+    if bucket is not None:
+        result["bucketFallback"] = _bucket_fallback_audit(bucket)
+    if resolver is not None:
+        result["resolverFallback"] = _resolver_fallback_audit(resolver)
+        if (resolver_hit or {}).get("status") == "external_hit":
+            result["verificationStatus"] = "unreviewed_external"
+    return result

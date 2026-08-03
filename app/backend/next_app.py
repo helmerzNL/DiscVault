@@ -27675,6 +27675,21 @@ def register_routes(flask_app: Flask) -> None:
                     "candidateCount": item.get("candidateCount"),
                     "elapsedMs": item.get("elapsedMs"),
                     "error": item.get("error"),
+                    # Which route resolved this - currently only movievault_v2 reports
+                    # it, on a local-index hit vs. a live anonymous bucket-fallback
+                    # attempt. `bucketFallback` distinguishes a real catalog miss from
+                    # a bucket attempt that failed (attempted=true, outcome=error,
+                    # errorCode set) - both used to look identical in this log.
+                    "matchSource": item.get("matchSource"),
+                    "bucketFallback": item.get("bucketFallback"),
+                    # Set when local index, bucket, AND resolver were all exhausted or
+                    # skipped/failed on the way to this result - see `resolverFallback`
+                    # in movievault_v2's plugin response for the same reasoning as
+                    # `bucketFallback` above. `verificationStatus: "unreviewed_external"`
+                    # marks a hit that came from the resolver's unmoderated external
+                    # source (e.g. Blu-ray.com) rather than MovieVault's own catalog.
+                    "resolverFallback": item.get("resolverFallback"),
+                    "verificationStatus": item.get("verificationStatus"),
                 }
                 for item in executions
                 if isinstance(item, dict)

@@ -444,6 +444,33 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertNotIn("x-instance-id", headers)
         self.assertNotIn("x-contribution-token", headers)
 
+    def test_release_details_request_accepts_a_barcode_with_a_wrong_check_digit(self):
+        # MovieVault assigned the barcode, not DiscVault - a check digit that
+        # disagrees with the textbook mod-10 formula is not a reason to refuse
+        # even asking (DiscVaultApp's iOS client never validates it either).
+        wrong_check_digit = "4006381333930"
+        opener = SequenceOpener(
+            [
+                FakeResponse(
+                    json.dumps(release_details_hit(), separators=(",", ":")).encode("ascii")
+                )
+            ]
+        )
+
+        with patch.object(
+            next_movievault_v2.urllib.request,
+            "build_opener",
+            return_value=opener,
+        ):
+            result = next_movievault_v2.resolve_release_details(
+                {"origin": "https://movievault.example"},
+                {"barcode": wrong_check_digit},
+            )
+
+        self.assertEqual(result["status"], "canonical_hit")
+        request, _timeout = opener.requests[0]
+        self.assertEqual(json.loads(request.data), {"barcode": wrong_check_digit})
+
     def test_release_details_pending_polls_only_opaque_resolution_id(self):
         resolution_id = "71a6c771-cd83-478e-a2db-109cb4fd6279"
         opener = SequenceOpener(
@@ -1123,6 +1150,60 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
         self.assertTrue(parsed["audioTracks"])
         self.assertTrue(parsed["subtitles"])
 
+    def test_v4_release_without_backdrop_still_parses(self):
+        """The feed served release records with no `backdrop` key at all before
+        MovieVault-v2 added it (Fanart.tv artwork source, ADR 0008) - the same
+        situation as the pre-existing technical fields above."""
+        record = self._v4_release()
+        self.assertNotIn("backdrop", record)
+        parsed = next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        self.assertNotIn("backdrop", parsed)
+
+    def test_v4_release_accepts_a_valid_backdrop(self):
+        """DiscVault has no backdrop feature yet, so a well-formed backdrop is
+        accepted (the sync must not fail on it) but intentionally not stored -
+        see `_backdrop()`'s docstring."""
+        record = self._v4_release(
+            backdrop={
+                "assetId": "40000000-0000-0000-0000-000000000002",
+                "assetType": "backdrop",
+                "attestation": "unverified",
+                "license": "unverified-fan-submitted",
+                "thumbnail": {
+                    "path": "/v2/assets/40000000-0000-0000-0000-000000000002/thumbnail",
+                    "checksum": "c" * 64,
+                },
+                "display": {
+                    "path": "/v2/assets/40000000-0000-0000-0000-000000000002/display",
+                    "checksum": "d" * 64,
+                },
+            }
+        )
+        parsed = next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        self.assertNotIn("backdrop", parsed)
+        self.assertIsNotNone(parsed["poster"])
+
+    def test_v4_release_with_a_null_backdrop_still_parses(self):
+        record = self._v4_release(backdrop=None)
+        parsed = next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        self.assertNotIn("backdrop", parsed)
+
+    def test_v4_release_tolerates_a_malformed_backdrop(self):
+        """A backdrop DiscVault cannot even parse the shape of must not cost the
+        whole release record: nothing downstream reads it yet, so there is
+        nothing to protect by rejecting the record over it."""
+        record = self._v4_release(backdrop="not-an-object")
+        parsed = next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        self.assertNotIn("backdrop", parsed)
+
     def test_v3_release_does_not_require_or_accept_the_new_fields(self):
         record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
         for key in (
@@ -1154,6 +1235,22 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
         with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
             next_movievault_v2.validate_record(
                 record_with_extra, contract_version=next_movievault_v2.MOVIEVAULT_V3_CONTRACT
+            )
+
+    def test_v3_release_rejects_a_backdrop_field(self):
+        # backdrop is v4-only; a v3 record carrying it is contract drift v3
+        # never agreed to, unlike the log-and-keep leniency v4 gets.
+        record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
+        del record["poster"]
+        for key in (
+            "audioTracks", "subtitles", "packaging", "videoResolution",
+            "videoCodecs", "hdrFormats", "aspectRatios", "discRegions",
+        ):
+            del record[key]
+        record["backdrop"] = None
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V3_CONTRACT
             )
 
     def test_rejects_more_than_fifty_audio_tracks(self):

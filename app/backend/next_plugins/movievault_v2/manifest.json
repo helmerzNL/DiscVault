@@ -1,7 +1,7 @@
 {
   "id": "movievault_v2",
   "name": "MovieVault v2",
-  "version": "1.5.0",
+  "version": "1.5.2",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "minimumDiscVaultVersion": "26.4.53",
@@ -18,8 +18,7 @@
       {"name": "origin", "label": "MovieVault origin", "type": "text", "required": true, "placeholder": "https://movievault.example"},
       {"name": "syncIntervalHours", "label": "Sync interval (hours)", "type": "number", "default": 6, "minimum": 1, "maximum": 168},
       {"name": "staleThresholdHours", "label": "Stale threshold (hours)", "type": "number", "default": 48, "minimum": 1, "maximum": 720},
-      {"name": "maximumResults", "label": "Maximum lookup results", "type": "number", "default": 12, "minimum": 1, "maximum": 50},
-      {"name": "bucketFallback", "label": "Allow anonymous bucket fallback", "type": "boolean", "default": false}
+      {"name": "maximumResults", "label": "Maximum lookup results", "type": "number", "default": 12, "minimum": 1, "maximum": 50}
     ],
     "secrets": []
   },
