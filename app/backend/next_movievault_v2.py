@@ -387,6 +387,26 @@ def _poster(value: Any, contract_version: str) -> dict[str, Any] | None:
     }
 
 
+def _backdrop(value: Any, *, release_id: str) -> None:
+    """Log-and-discard MovieVault-v2's distribution-4 `backdrop` field.
+
+    Added after `poster` (Fanart.tv artwork source, MovieVault ADR 0008) as a
+    nullable field on every release upsert. DiscVault has no backdrop feature
+    or storage for it yet, so this intentionally never persists or enforces
+    its shape - only `poster`'s existing required-key/enum strictness matters,
+    because DiscVault actually consumes that value. Treating an unrecognized
+    or malformed backdrop as fatal would repeat the exact mistake the
+    surrounding optional technical fields were made lenient for: a field this
+    version does not use costing the whole release record, and with a full
+    sync being all-or-nothing per `parse_ndjson()`, the whole catalog."""
+    if value is not None and not isinstance(value, dict):
+        logger.warning(
+            "movievault_v2: malformed backdrop %r on release %s - ignoring",
+            value,
+            release_id,
+        )
+
+
 def _language_code(value: Any, *, release_id: str) -> str:
     """Parse a track language code with the same leniency as its neighbours.
 
@@ -676,7 +696,12 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
                 "discRegions",
             }
         )
+        # Nullable, added after poster/assets (Fanart.tv artwork source, ADR
+        # 0008). Not stored - see _backdrop()'s own docstring.
+        optional.add("backdrop")
     _exact_keys(value, required=required, optional=optional, label="release record")
+    if contract_version == MOVIEVAULT_V4_CONTRACT:
+        _backdrop(value.get("backdrop"), release_id=str(value.get("releaseId")))
     provider_ids = value["providerIds"]
     if not isinstance(provider_ids, dict):
         raise MovieVaultV2Error("record_invalid")
