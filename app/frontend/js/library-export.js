@@ -160,6 +160,24 @@
     }
   }
 
+  /**
+   * How many movies the library has actually loaded so far - the whole library, not
+   * the filtered/sorted set exportRows() produces. The two only agree when no
+   * search/format filter is active, so the incomplete-hydration warning below must not
+   * be built from the export row count or it understates or overstates progress
+   * whenever a filter narrows what's shown.
+   */
+  function loadedMovieCount(fallback) {
+    var api = bridge();
+    if (!api || typeof api.getLoadedCount !== "function") return fallback;
+    try {
+      var count = api.getLoadedCount();
+      return typeof count === "number" ? count : fallback;
+    } catch (error) {
+      return fallback;
+    }
+  }
+
   function exportLabels() {
     var api = bridge();
     if (!api || typeof api.getExportColumnLabels !== "function") return {};
@@ -315,7 +333,10 @@
     dialog.appendChild(summary);
 
     // The rows come from what the SPA has loaded, so exporting before background
-    // hydration finishes silently produces a partial file. Say so instead.
+    // hydration finishes silently produces a partial file. Say so instead. The count
+    // here must be the library's raw loaded progress, not `rowCount` above - that one
+    // is the filtered/sorted export set, a different number whenever a filter is
+    // active, and the wrong one for a sentence about how much of the library loaded.
     if (hydrationIncomplete()) {
       var incomplete = document.createElement("p");
       incomplete.className = "library-export-warning";
@@ -324,7 +345,7 @@
           "collection.exportIncomplete",
           "Only {count} of the movies in this library have been loaded so far. Wait until the library has finished loading for a complete export."
         ),
-        rowCount
+        loadedMovieCount(rowCount)
       );
       dialog.appendChild(incomplete);
     }
