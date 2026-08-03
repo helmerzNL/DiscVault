@@ -17991,6 +17991,15 @@ def ui_preview_html(
     function hasAnyPermission(permissions) {
       return (permissions || []).some((permission) => hasPermission(permission));
     }
+    const LIBRARY_LAZY_REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
+    const ENTITY_LAZY_REFRESH_COOLDOWN_MS = 20 * 60 * 1000;
+    function shouldLazyRefresh(key, cooldownMs) {
+      const storageKey = `dv_lazy_refresh:${key}`;
+      const last = Number(sessionStorage.getItem(storageKey) || 0);
+      if (Date.now() - last < cooldownMs) return false;
+      sessionStorage.setItem(storageKey, String(Date.now()));
+      return true;
+    }
     function currentUserId() {
       return currentAuthStatus.user_id || currentAuthStatus.userId || (state.user || {}).id || "";
     }
@@ -27785,6 +27794,18 @@ def ui_preview_html(
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
       }
+      if (hasPermission("metadata.refresh_one") && shouldLazyRefresh(`movie:${movieId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
+        authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/refresh`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({dryRun: false, refreshPeople: true, personRefreshScope: "all"})
+        }).then(async () => {
+          if (activeDetailMovieId !== movieId) return;
+          const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
+          if (activeDetailMovieId !== movieId) return;
+          renderMovieDetail(refreshed.detail || {});
+        }).catch(() => {});
+      }
     }
     function closeAppMovieDetail(pushUrl = true) {
       showLibraryPage(false);
@@ -28660,11 +28681,38 @@ def ui_preview_html(
           history.pushState({personId}, "", nextPath);
         }
       }
+      let personDetailForLazyRefresh = null;
       try {
         const payload = await authApiJson(`/api/next/people/${encodeURIComponent(personId)}`);
-        renderPersonDetail(payload.detail || {});
+        personDetailForLazyRefresh = payload.detail || {};
+        renderPersonDetail(personDetailForLazyRefresh);
       } catch (error) {
         setPersonDetailMessage(error.message || String(error), "bad");
+      }
+      const tmdbEnabled = state.plugins?.find((plugin) => plugin.id === "tmdb")?.enabled === true;
+      if (hasPermission("metadata.refresh_one") && tmdbEnabled
+          && personHasTmdbIdentifier(personDetailForLazyRefresh)
+          && shouldLazyRefresh(`person:${personId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
+        (async () => {
+          try {
+            await authApiJson(`/api/next/people/${encodeURIComponent(personId)}/metadata/refresh`, {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({dryRun: false})
+            });
+            await authApiJson(`/api/next/people/${encodeURIComponent(personId)}/filmography/refresh`, {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({dryRun: false})
+            });
+            if (activePersonId !== personId) return;
+            const refreshed = await authApiJson(`/api/next/people/${encodeURIComponent(personId)}`);
+            if (activePersonId !== personId) return;
+            renderPersonDetail(refreshed.detail || {});
+          } catch (_error) {
+            // silent lazy refresh
+          }
+        })();
       }
     }
     function closeAppPersonDetail(pushUrl = true) {
@@ -36369,6 +36417,9 @@ def ui_preview_html(
       setActiveAppRoute(activeRoute);
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
+      }
+      if (hasPermission("metadata.refresh_one") && shouldLazyRefresh("library", LIBRARY_LAZY_REFRESH_COOLDOWN_MS)) {
+        loadAppSnapshot().catch(() => {});
       }
     }
     function showPeoplePage(pushUrl = true) {
