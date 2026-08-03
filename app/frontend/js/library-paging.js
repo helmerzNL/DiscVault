@@ -29,13 +29,21 @@
   var BRIDGE_POLL_MS = 100;
   var BRIDGE_POLL_ATTEMPTS = 100;
   var RETRY_DELAYS_MS = [1000, 3000, 8000];
+  // Once the fast retries above are spent, a page fetch that keeps failing (a server
+  // hiccup, not a real connectivity loss) used to give up forever - `online` only fires
+  // on an actual OS-level connectivity transition. These slower, capped retries give a
+  // transient failure a way back without hammering a backend that is genuinely down.
+  var SLOW_RETRY_DELAYS_MS = [30000, 60000, 120000, 300000];
+  var SLOW_RETRY_JITTER = 0.2;
 
   var state = {
     hydrating: false,
     hydrated: false,
     truncated: false,
     attempt: 0,
+    slowAttempt: 0,
     retryTimer: null,
+    slowRetryTimer: null,
     observer: null,
     renderTimer: null,
     growthScheduled: false,
@@ -106,6 +114,14 @@
     state.hydrating = false;
     state.hydrated = true;
     state.attempt = 0;
+    // Only a real success resets the slow-retry backoff - every wake attempt against a
+    // still-down backend (a focus regain, a timer tick) must keep escalating it instead
+    // of getting pinned back at the shortest delay.
+    state.slowAttempt = 0;
+    if (state.slowRetryTimer) {
+      window.clearTimeout(state.slowRetryTimer);
+      state.slowRetryTimer = null;
+    }
     if (api && typeof api.setHydrationComplete === "function") api.setHydrationComplete();
     requestRender(true);
   }
@@ -113,6 +129,12 @@
   /**
    * Stop without claiming completeness: the loaded set is a prefix of the library,
    * and the total must stay as the server reported it so the counter stays honest.
+   *
+   * Shared by three call sites, only one of which is transient: a page fetch that
+   * failed can succeed on a later try, but MAX_CHUNKS and the zero-rows anti-loop
+   * guard below cannot self-resolve and must stay permanent. Callers that want a way
+   * back call scheduleSlowRetry() themselves after this returns - it is not automatic
+   * here, since it would be wrong for the other two.
    */
   function stopTruncated(api, key, fallback) {
     // `truncated` must be set before the warning: setHydrationWarning() re-renders,
@@ -129,6 +151,34 @@
       state.retryTimer = null;
       hydrate();
     }, delay);
+  }
+
+  /**
+   * The single entry point back into hydration after a truncation. Consolidated here
+   * rather than duplicated in every "try again" trigger (online, visibility regain, the
+   * slow-retry timer itself) so a stale slow-retry timer can never survive an earlier
+   * wake and double-fire hydrate() later, racing whatever retry that earlier wake is
+   * already in the middle of.
+   */
+  function wakeFromTruncation() {
+    if (state.slowRetryTimer) {
+      window.clearTimeout(state.slowRetryTimer);
+      state.slowRetryTimer = null;
+    }
+    state.attempt = 0;
+    state.truncated = false;
+    hydrate();
+  }
+
+  function scheduleSlowRetry() {
+    if (state.slowRetryTimer || state.hydrated || state.aborted) return;
+    var base = SLOW_RETRY_DELAYS_MS[Math.min(state.slowAttempt, SLOW_RETRY_DELAYS_MS.length - 1)];
+    var jitter = base * SLOW_RETRY_JITTER * (Math.random() * 2 - 1);
+    state.slowAttempt += 1;
+    state.slowRetryTimer = window.setTimeout(function () {
+      state.slowRetryTimer = null;
+      wakeFromTruncation();
+    }, Math.round(base + jitter));
   }
 
   function onPageError(error) {
@@ -149,6 +199,9 @@
       "collection.hydrationFailed",
       "Could not load the rest of the library."
     );
+    // Unlike MAX_CHUNKS and the anti-loop guard below, a page request failing outright
+    // is exactly the kind of transient blip a later retry can clear on its own.
+    scheduleSlowRetry();
   }
 
   function hydrate() {
@@ -287,9 +340,16 @@
   // connectivity returns rather than leaving the library short until a reload.
   window.addEventListener("online", function () {
     if (state.hydrated || state.aborted) return;
-    state.attempt = 0;
-    state.truncated = false;
-    hydrate();
+    wakeFromTruncation();
+  });
+
+  // `online` only fires on a real connectivity transition, not a server hiccup while
+  // the network stays up - regaining focus is the other common moment a stalled
+  // hydration is worth trying again, on top of the slow-retry timer already ticking.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible") return;
+    if (state.hydrated || state.aborted || !state.truncated) return;
+    wakeFromTruncation();
   });
 
   window.addEventListener("pagehide", function () {
@@ -297,6 +357,10 @@
     if (state.retryTimer) {
       window.clearTimeout(state.retryTimer);
       state.retryTimer = null;
+    }
+    if (state.slowRetryTimer) {
+      window.clearTimeout(state.slowRetryTimer);
+      state.slowRetryTimer = null;
     }
     if (state.observer) state.observer.disconnect();
   });
