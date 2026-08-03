@@ -1394,6 +1394,8 @@
   "importCenter.title": "Import",
   "importCenter.nav": "Add",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault found this match through its anonymous external lookup. It has not been reviewed by MovieVault yet - please verify the details below before saving.",
+  "importCenter.unreviewedSourceTitle": "Unverified match from an external source",
   "importCenter.updated": "Updated",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

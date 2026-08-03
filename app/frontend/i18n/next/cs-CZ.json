@@ -1394,6 +1394,8 @@
   "importCenter.title": "Import dat",
   "importCenter.nav": "Přidat",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault našel tuto shodu pomocí svého anonymního externího vyhledávání. Zatím nebyla ověřena společností MovieVault - před uložením prosím zkontrolujte podrobnosti níže.",
+  "importCenter.unreviewedSourceTitle": "Neověřená shoda z externího zdroje",
   "importCenter.updated": "Aktualizováno",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

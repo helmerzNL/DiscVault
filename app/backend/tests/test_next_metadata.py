@@ -1920,6 +1920,73 @@ box_set_candidates = _lookup
             {"attempted": True, "outcome": "error", "errorCode": "bucket_unavailable"},
         )
 
+    @mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={})
+    @mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={})
+    @mock.patch("app.backend.next_metadata.metadata_source_plugins")
+    @mock.patch("app.backend.next_metadata.run_plugin_entrypoint")
+    def test_movievault_v2_resolver_fallback_and_verification_status_reach_the_execution_item(
+        self,
+        run_entrypoint,
+        source_plugins,
+        _plugin_config,
+        _execution_context,
+        _requires_config,
+        _overwrite,
+    ):
+        source_plugins.return_value = [
+            {
+                "id": "movievault_v2",
+                "name": "MovieVault v2",
+                "categories": ["metadata_source"],
+                "capabilities": ["search_barcode"],
+                "manifest": {"capabilities": ["search_barcode"]},
+                "order_index": 52,
+            },
+        ]
+
+        def execute(plugin_id, entrypoint, payload, _context):
+            return {
+                "status": "ok",
+                "state": "available",
+                "elapsedMs": 5,
+                # Local index and bucket both missed; the resolver found an
+                # unreviewed external match as a last resort.
+                "result": {
+                    "status": "hit",
+                    "provider": "movievault_v2",
+                    "title": "Heat",
+                    "movie": {"title": "Heat"},
+                    "items": [{"title": "Heat"}],
+                    "matchSource": "resolver_fallback",
+                    "resolverFallback": {
+                        "attempted": True,
+                        "outcome": "hit",
+                        "errorCode": None,
+                    },
+                    "verificationStatus": "unreviewed_external",
+                },
+            }
+
+        run_entrypoint.side_effect = execute
+        result = run_metadata_source_pipeline(
+            object(),
+            query=query_from_payload({"barcode": "4006381333931", "previewMode": True}),
+            current={"metadata": {}},
+            technical_current={},
+        )
+
+        execution = next(
+            item for item in result["executions"] if item["pluginId"] == "movievault_v2"
+        )
+        self.assertEqual(execution["matchSource"], "resolver_fallback")
+        self.assertEqual(
+            execution["resolverFallback"],
+            {"attempted": True, "outcome": "hit", "errorCode": None},
+        )
+        self.assertEqual(execution["verificationStatus"], "unreviewed_external")
+
     def test_preview_title_lookup_can_request_box_set_candidates(self):
         query = query_from_payload({"title": "Back to the Future Trilogy", "detectBoxSets": True, "previewMode": True})
         plan = plugin_execution_plan(

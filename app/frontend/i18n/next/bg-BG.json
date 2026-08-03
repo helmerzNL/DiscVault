@@ -1394,6 +1394,8 @@
   "importCenter.title": "Импорт",
   "importCenter.nav": "Добавяне",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault намери това съвпадение чрез анонимното си външно търсене. Все още не е прегледано от MovieVault - моля, проверете детайлите по-долу преди да запазите.",
+  "importCenter.unreviewedSourceTitle": "Непотвърдено съвпадение от външен източник",
   "importCenter.updated": "Обновено",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

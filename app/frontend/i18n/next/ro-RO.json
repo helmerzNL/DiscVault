@@ -1394,6 +1394,8 @@
   "importCenter.title": "Importare",
   "importCenter.nav": "Adaugă",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault a găsit această potrivire prin căutarea sa externă anonimă. Nu a fost încă verificată de MovieVault - verificați detaliile de mai jos înainte de a salva.",
+  "importCenter.unreviewedSourceTitle": "Potrivire neverificată dintr-o sursă externă",
   "importCenter.updated": "Actualizat",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

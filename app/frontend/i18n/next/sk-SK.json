@@ -1394,6 +1394,8 @@
   "importCenter.title": "Import údajov",
   "importCenter.nav": "Pridať",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault našiel túto zhodu pomocou svojho anonymného externého vyhľadávania. Zatiaľ ju MovieVault neskontroloval - pred uložením si overte nižšie uvedené podrobnosti.",
+  "importCenter.unreviewedSourceTitle": "Neoverená zhoda z externého zdroja",
   "importCenter.updated": "Aktualizované",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

@@ -1394,6 +1394,8 @@
   "importCenter.title": "Importimine",
   "importCenter.nav": "Lisa",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault leidis selle vaste oma anonüümse välise otsingu kaudu. MovieVault ei ole seda veel üle vaadanud - palun kontrolli allolevaid andmeid enne salvestamist.",
+  "importCenter.unreviewedSourceTitle": "Kinnitamata vaste välisest allikast",
   "importCenter.updated": "Uuendatud",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

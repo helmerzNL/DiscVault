@@ -1394,6 +1394,8 @@
   "importCenter.title": "Імпорт",
   "importCenter.nav": "Додати",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault знайшов цей збіг за допомогою анонімного зовнішнього пошуку. MovieVault ще не перевірив його - будь ласка, перевірте деталі нижче перед збереженням.",
+  "importCenter.unreviewedSourceTitle": "Неперевірений збіг із зовнішнього джерела",
   "importCenter.updated": "Оновлено",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",
