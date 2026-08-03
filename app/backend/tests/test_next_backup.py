@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import uuid
 import zipfile
+from decimal import Decimal
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -15,6 +16,7 @@ from app.backend.next_backup import BACKUP_FORMAT
 from app.backend.next_backup import BACKUP_FORMAT_VERSION
 from app.backend.next_backup import BACKUP_TABLES
 from app.backend.next_backup import TABLE_SPEC_BY_NAME
+from app.backend.next_backup import json_ready
 from app.backend.next_backup import redact_owner_ids
 from app.backend.next_backup import restore_owned_resource
 from app.backend.next_backup import validate_backup_zip
@@ -399,6 +401,16 @@ class NextBackupValidationTests(unittest.TestCase):
             report = validate_backup_zip(path)
 
         self.assertTrue(report["valid"], report)
+
+
+class NextBackupJsonReadyTests(unittest.TestCase):
+    def test_json_ready_converts_decimal_columns_to_float(self):
+        row = {"purchase_price": Decimal("19.99"), "estimated_value": Decimal("42.50")}
+
+        ready = json_ready(row)
+
+        self.assertEqual(ready, {"purchase_price": 19.99, "estimated_value": 42.5})
+        json.dumps(ready)  # must not raise "Object of type Decimal is not JSON serializable"
 
 
 if __name__ == "__main__":

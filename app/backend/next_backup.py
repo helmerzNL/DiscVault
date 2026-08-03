@@ -13,6 +13,7 @@ import os
 import zipfile
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -528,6 +529,8 @@ def json_ready(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, UUID):
         return str(value)
+    if isinstance(value, Decimal):
+        return float(value)
     return value
 
 
