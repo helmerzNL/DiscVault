@@ -165,6 +165,28 @@ class LibraryPagingSourceTests(unittest.TestCase):
         self.assertNotIn("setHydrationComplete", self.js_source[start:end])
         self.assertIn("collection.hydrationTruncated", self.js_source)
 
+    def test_a_finished_hydration_can_restart_after_a_snapshot_reset(self):
+        # The inline SPA reloads its snapshot on its own (returning from a movie, an
+        # import, a bulk action) and resets the bridge's movies/hasMore straight back to
+        # the small first-paint set, entirely outside this module. A `state.hydrated`
+        # latch that blocks hydrate() forever after the first completion would leave the
+        # library stuck short again on every one of those refreshes, with no error and
+        # no way back short of a full reload - hasMoreMovies() must be the only thing
+        # that decides whether there is work to do, checked fresh on every call.
+        start = self.js_source.index("function hydrate() {")
+        end = self.js_source.index("var chunks = 0;", start)
+        body = self.js_source[start:end]
+        guard_line = self.js_source[
+            self.js_source.index("if (!api ||", start):
+            self.js_source.index("return;", start) + len("return;")
+        ]
+        self.assertNotIn("state.hydrated", guard_line)
+        self.assertIn("state.hydrating", guard_line)
+        self.assertIn("state.truncated", guard_line)
+        self.assertIn("state.aborted", guard_line)
+        self.assertIn("hasMoreMovies", body)
+        self.assertIn("state.hydrated = false;", body)
+
     def test_a_network_failure_give_up_can_still_retry_later(self):
         # A page fetch that fails 3 times used to give up forever: nothing but a real
         # `online` transition or a full reload ever called hydrate() again, and a

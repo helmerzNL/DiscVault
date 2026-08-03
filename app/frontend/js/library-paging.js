@@ -8,7 +8,7 @@
  *
  * It talks to the inline SPA exclusively through the `window.DiscVaultLibrary` bridge.
  *
- * Two failure modes have bitten users before and are guarded here explicitly:
+ * Three failure modes have bitten users before and are guarded here explicitly:
  *
  *   - A single failed page request used to disable hydration for the rest of the page
  *     load, leaving the library stuck on its first page with nothing but a console
@@ -18,6 +18,12 @@
  *     the bridge rewrite the total to the loaded count so the counter claimed a
  *     truncated library was whole. Only the server saying `hasMore !== true` counts as
  *     complete now.
+ *   - Finishing once used to disable hydration for the rest of the page's life. The
+ *     inline SPA reloads its snapshot on its own (returning from a movie, an import, a
+ *     bulk action), which resets the bridge's movies/total/hasMore straight back to the
+ *     small first-paint set - completely outside this module. hydrate() must not treat
+ *     "finished before" as "nothing to do now"; the bridge's own hasMoreMovies() is the
+ *     only thing allowed to decide that, checked fresh on every call.
  */
 (function () {
   "use strict";
@@ -206,9 +212,15 @@
 
   function hydrate() {
     var api = bridge();
-    if (!api || state.hydrating || state.hydrated || state.truncated || state.aborted) return;
+    // `state.hydrated` is not checked here on purpose: it only records that a past
+    // cycle finished, and the inline SPA can reset the bridge's movies/hasMore back to
+    // the small first-paint set at any time, entirely outside this module (reloading
+    // its snapshot on returning from a movie, an import, a bulk action). Whether there
+    // is work to do is decided fresh, every call, by hasMoreMovies() alone.
+    if (!api || state.hydrating || state.truncated || state.aborted) return;
     if (typeof api.hasMoreMovies !== "function" || !api.hasMoreMovies()) return;
     state.hydrating = true;
+    state.hydrated = false;
 
     var chunks = 0;
 
