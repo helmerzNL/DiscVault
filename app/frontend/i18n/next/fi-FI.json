@@ -1394,6 +1394,8 @@
   "importCenter.title": "Tuonti",
   "importCenter.nav": "Lisää",
   "importCenter.titlePlaceholder": "Elokuvan nimi",
+  "importCenter.unreviewedSourceHelp": "MovieVault löysi tämän osuman anonyymin ulkoisen haun kautta. MovieVault ei ole vielä tarkistanut sitä - tarkista alla olevat tiedot ennen tallentamista.",
+  "importCenter.unreviewedSourceTitle": "Vahvistamaton osuma ulkoisesta lähteestä",
   "importCenter.updated": "Updated",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

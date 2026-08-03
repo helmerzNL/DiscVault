@@ -3783,6 +3783,10 @@ def run_metadata_source_pipeline(
                     execution_item["matchSource"] = raw_result["matchSource"]
                 if "bucketFallback" in raw_result:
                     execution_item["bucketFallback"] = raw_result["bucketFallback"]
+                if "resolverFallback" in raw_result:
+                    execution_item["resolverFallback"] = raw_result["resolverFallback"]
+                if "verificationStatus" in raw_result:
+                    execution_item["verificationStatus"] = raw_result["verificationStatus"]
             if normalized.get("status") in {"miss", "not_found", "needs_configuration"}:
                 continue
             normalized_results.append(normalized)

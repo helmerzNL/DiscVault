@@ -1394,6 +1394,8 @@
   "importCenter.title": "匯入",
   "importCenter.nav": "新增",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault 透過其匿名外部查詢找到了此匹配項。MovieVault 尚未對其進行審核，請在儲存前核實以下詳細資訊。",
+  "importCenter.unreviewedSourceTitle": "來自外部來源的未驗證匹配",
   "importCenter.updated": "已更新",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

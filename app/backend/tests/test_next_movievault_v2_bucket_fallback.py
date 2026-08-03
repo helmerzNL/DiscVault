@@ -65,7 +65,7 @@ class BucketFallbackPluginTests(unittest.TestCase):
         self.plugin = _load_plugin()
         self.calls = []
 
-    def _context(self, *, local=(), bucket=(), **overrides):
+    def _context(self, *, local=(), bucket=(), resolver=None, **overrides):
         def local_callback(request):
             self.calls.append("local")
             return {"results": list(local)}
@@ -80,6 +80,12 @@ class BucketFallbackPluginTests(unittest.TestCase):
             "movievaultV2BucketLookup": bucket_callback,
             "movievaultV2BucketFallback": True,
         }
+        if resolver is not None:
+            def resolver_callback(request):
+                self.calls.append("resolver")
+                return resolver
+
+            context["movievaultV2ReleaseDetails"] = resolver_callback
         context.update(overrides)
         return context
 
@@ -225,6 +231,114 @@ class BucketFallbackPluginTests(unittest.TestCase):
         result = self.plugin.box_set_candidates({"barcode": BARCODE}, context)
         self.assertEqual(result["matchSource"], "local_index")
         self.assertNotIn("bucketFallback", result)
+
+    def test_resolver_canonical_hit_is_used_as_a_last_resort(self):
+        # Local index and the anonymous bucket both missed - iOS would ask the
+        # resolver here too, so the backend must not give up first.
+        context = self._context(
+            local=(),
+            bucket=(),
+            resolver={
+                "status": "canonical_hit",
+                "film": {"title": "Heat", "year": 1995},
+                "release": {"format": "blu_ray"},
+            },
+        )
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["title"], "Heat")
+        self.assertEqual(result["matchSource"], "resolver_fallback")
+        self.assertEqual(
+            result["resolverFallback"],
+            {"attempted": True, "outcome": "hit", "errorCode": None},
+        )
+        self.assertNotIn("verificationStatus", result)
+        self.assertEqual(self.calls, ["local", "bucket", "resolver"])
+
+    def test_resolver_external_hit_is_marked_unreviewed(self):
+        context = self._context(
+            local=(),
+            bucket=(),
+            resolver={
+                "status": "external_hit",
+                "film": {"title": "Heat", "year": 1995},
+                "release": {"format": "blu_ray"},
+            },
+        )
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["matchSource"], "resolver_fallback")
+        self.assertEqual(result["verificationStatus"], "unreviewed_external")
+
+    def test_resolver_is_never_asked_after_a_local_hit(self):
+        # A poster and audio tracks already present means the *supplementary*
+        # enrichment call (pre-existing, unrelated to the new fallback) is
+        # skipped too, so this isolates the new primary-fallback behavior.
+        complete_release = {**RELEASE, "posterUrl": "https://example/poster.jpg", "audioTracks": [{"languageCode": "en"}]}
+        context = self._context(
+            local=(complete_release,),
+            resolver={"status": "canonical_hit", "film": {"title": "Heat"}, "release": {}},
+        )
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["matchSource"], "local_index")
+        self.assertNotIn("resolverFallback", result)
+        self.assertNotIn("resolver", self.calls)
+
+    def test_resolver_miss_reports_diagnostic(self):
+        context = self._context(local=(), bucket=(), resolver={"status": "miss"})
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "miss")
+        self.assertNotIn("matchSource", result)
+        self.assertEqual(
+            result["resolverFallback"],
+            {"attempted": True, "outcome": "miss", "errorCode": None},
+        )
+
+    def test_resolver_failure_reports_diagnostic_with_the_error_code(self):
+        context = self._context(
+            local=(),
+            bucket=(),
+            resolver={"status": "failed", "errorCode": "provider_unavailable"},
+        )
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(
+            result["resolverFallback"],
+            {"attempted": True, "outcome": "error", "errorCode": "provider_unavailable"},
+        )
+
+    def test_box_set_resolver_hit_is_used_as_a_last_resort(self):
+        context = self._context(
+            local=(),
+            bucket=(),
+            resolver={
+                "status": "external_hit",
+                "film": {"title": "Heat"},
+                "release": {},
+                "boxSet": {
+                    "title": "The Collection",
+                    "members": [{"position": 1, "title": "Heat"}, {"position": 2, "title": "Heat 2"}],
+                },
+            },
+        )
+        result = self.plugin.box_set_candidates({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["matchSource"], "resolver_fallback")
+        self.assertEqual(result["verificationStatus"], "unreviewed_external")
+        self.assertEqual(result["boxSetProposal"]["title"], "The Collection")
+        self.assertEqual(len(result["boxSetProposal"]["members"]), 2)
+
+    def test_box_set_resolver_without_a_box_set_stays_a_miss(self):
+        # A resolver hit for a plain release carries no boxSet - box_set_candidates()
+        # must not invent one from a release-only response.
+        context = self._context(
+            local=(),
+            bucket=(),
+            resolver={"status": "external_hit", "film": {"title": "Heat"}, "release": {}},
+        )
+        result = self.plugin.box_set_candidates({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "miss")
+        self.assertNotIn("matchSource", result)
 
 
 class BucketCallbackDegradationTests(unittest.TestCase):

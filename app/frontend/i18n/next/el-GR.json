@@ -1394,6 +1394,8 @@
   "importCenter.title": "Εισαγωγή",
   "importCenter.nav": "Προσθήκη",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "Το MovieVault βρήκε αυτήν την αντιστοίχιση μέσω της ανώνυμης εξωτερικής αναζήτησής του. Δεν έχει ελεγχθεί ακόμα από το MovieVault - παρακαλώ επαληθεύστε τις παρακάτω λεπτομέρειες πριν την αποθήκευση.",
+  "importCenter.unreviewedSourceTitle": "Μη επαληθευμένη αντιστοίχιση από εξωτερική πηγή",
   "importCenter.updated": "Ενημερώθηκε",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

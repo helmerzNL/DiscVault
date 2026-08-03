@@ -1392,6 +1392,8 @@
   "importCenter.title": "Import",
   "importCenter.nav": "Toevoegen",
   "importCenter.titlePlaceholder": "Filmtitel",
+  "importCenter.unreviewedSourceHelp": "MovieVault heeft deze match gevonden via de anonieme externe zoekopdracht. Dit is nog niet gecontroleerd door MovieVault - controleer de gegevens hieronder voordat je opslaat.",
+  "importCenter.unreviewedSourceTitle": "Niet-geverifieerde match van een externe bron",
   "importCenter.updated": "Bijgewerkt",
   "importCenter.updatedMovies": "Bijgewerkte films",
   "importCenter.useMatch": "Gebruik match",

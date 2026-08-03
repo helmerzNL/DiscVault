@@ -1394,6 +1394,8 @@
   "importCenter.title": "Import",
   "importCenter.nav": "Hinzufügen",
   "importCenter.titlePlaceholder": "Filmtitel",
+  "importCenter.unreviewedSourceHelp": "MovieVault hat diesen Treffer über die anonyme externe Suche gefunden. Er wurde noch nicht von MovieVault überprüft - bitte kontrolliere die Details unten, bevor du speicherst.",
+  "importCenter.unreviewedSourceTitle": "Nicht überprüfter Treffer aus einer externen Quelle",
   "importCenter.updated": "Updated",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

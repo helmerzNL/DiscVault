@@ -1394,6 +1394,8 @@
   "importCenter.title": "Importálás",
   "importCenter.nav": "Hozzáadás",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "A MovieVault ezt a találatot az anonim külső keresésén keresztül találta. A MovieVault még nem ellenőrizte - kérjük, ellenőrizd az alábbi adatokat mentés előtt.",
+  "importCenter.unreviewedSourceTitle": "Nem ellenőrzött találat külső forrásból",
   "importCenter.updated": "Frissítve",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

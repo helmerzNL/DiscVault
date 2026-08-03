@@ -1394,6 +1394,8 @@
   "importCenter.title": "Importowanie",
   "importCenter.nav": "Dodaj",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault znalazł to dopasowanie dzięki anonimowemu wyszukiwaniu zewnętrznemu. Nie zostało ono jeszcze zweryfikowane przez MovieVault - sprawdź poniższe szczegóły przed zapisaniem.",
+  "importCenter.unreviewedSourceTitle": "Niezweryfikowane dopasowanie z zewnętrznego źródła",
   "importCenter.updated": "Zaktualizowano",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

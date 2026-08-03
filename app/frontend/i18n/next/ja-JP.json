@@ -1394,6 +1394,8 @@
   "importCenter.title": "インポート",
   "importCenter.nav": "追加",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVaultは匿名の外部検索でこの一致を見つけました。まだMovieVaultによるレビューは行われていません。保存する前に、以下の詳細を確認してください。",
+  "importCenter.unreviewedSourceTitle": "外部ソースからの未確認の一致",
   "importCenter.updated": "更新済み",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

@@ -27682,6 +27682,14 @@ def register_routes(flask_app: Flask) -> None:
                     # errorCode set) - both used to look identical in this log.
                     "matchSource": item.get("matchSource"),
                     "bucketFallback": item.get("bucketFallback"),
+                    # Set when local index, bucket, AND resolver were all exhausted or
+                    # skipped/failed on the way to this result - see `resolverFallback`
+                    # in movievault_v2's plugin response for the same reasoning as
+                    # `bucketFallback` above. `verificationStatus: "unreviewed_external"`
+                    # marks a hit that came from the resolver's unmoderated external
+                    # source (e.g. Blu-ray.com) rather than MovieVault's own catalog.
+                    "resolverFallback": item.get("resolverFallback"),
+                    "verificationStatus": item.get("verificationStatus"),
                 }
                 for item in executions
                 if isinstance(item, dict)

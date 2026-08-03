@@ -1394,6 +1394,8 @@
   "importCenter.title": "Importa",
   "importCenter.nav": "Aggiungi",
   "importCenter.titlePlaceholder": "Titolo del film",
+  "importCenter.unreviewedSourceHelp": "MovieVault ha trovato questa corrispondenza tramite la sua ricerca esterna anonima. Non è ancora stata verificata da MovieVault - controlla i dettagli qui sotto prima di salvare.",
+  "importCenter.unreviewedSourceTitle": "Corrispondenza non verificata da una fonte esterna",
   "importCenter.updated": "Updated",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

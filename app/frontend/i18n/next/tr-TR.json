@@ -1394,6 +1394,8 @@
   "importCenter.title": "İçe aktarma",
   "importCenter.nav": "Ekle",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault bu eşleşmeyi anonim harici aramasıyla buldu. Henüz MovieVault tarafından incelenmedi - kaydetmeden önce lütfen aşağıdaki ayrıntıları doğrulayın.",
+  "importCenter.unreviewedSourceTitle": "Harici bir kaynaktan doğrulanmamış eşleşme",
   "importCenter.updated": "Güncellendi",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

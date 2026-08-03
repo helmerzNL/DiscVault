@@ -1394,6 +1394,8 @@
   "importCenter.title": "Import",
   "importCenter.nav": "Lägg till",
   "importCenter.titlePlaceholder": "Filmtitel",
+  "importCenter.unreviewedSourceHelp": "MovieVault hittade denna träff via sin anonyma externa sökning. Den har ännu inte granskats av MovieVault - kontrollera uppgifterna nedan innan du sparar.",
+  "importCenter.unreviewedSourceTitle": "Overifierad träff från en extern källa",
   "importCenter.updated": "Updated",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",

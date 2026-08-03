@@ -32093,6 +32093,15 @@ def ui_preview_html(
           </div>
         </div>
       ` : "";
+      const movievaultBarcodeExecution = (Array.isArray(metadata.executions) ? metadata.executions : [])
+        .find((item) => item && item.pluginId === "movievault_v2" && (item.entrypoint === "search_barcode" || item.entrypoint === "box_set_candidates"));
+      const isUnreviewedExternalMatch = movievaultBarcodeExecution?.verificationStatus === "unreviewed_external";
+      const unreviewedSourceNotice = isUnreviewedExternalMatch ? `
+        <div class="preview-empty warn import-unreviewed-guidance" role="status">
+          <strong>${escapeHtml(tNext("importCenter.unreviewedSourceTitle", "Unverified match from an external source"))}</strong>
+          <span>${escapeHtml(tNext("importCenter.unreviewedSourceHelp", "MovieVault found this match through its anonymous external lookup. It has not been reviewed by MovieVault yet - please verify the details below before saving."))}</span>
+        </div>
+      ` : "";
       const boxSetProposals = barcodeBoxSetProposals();
       const movieResultCards = lookupMovieCandidates();
       const addableBoxSetProposal = boxSetProposals.find((item) => {
@@ -32481,13 +32490,13 @@ def ui_preview_html(
       `;
       if (!Array.isArray(results) || !results.length) {
         if (proposalCard || boxSetCard) {
-          list.innerHTML = directResultCard + tmdbGuidance + boxSetCard + proposalCard + lookupActionFooter;
+          list.innerHTML = directResultCard + tmdbGuidance + unreviewedSourceNotice + boxSetCard + proposalCard + lookupActionFooter;
         } else {
           list.innerHTML = directResultCard + tmdbGuidance + `<div class="preview-empty">${escapeHtml(tNext("importCenter.noBarcodeResults", "No barcode candidates found."))}</div>` + lookupActionFooter;
         }
         return;
       }
-      list.innerHTML = directResultCard + tmdbGuidance + boxSetCard + proposalCard + sourceGrid + lookupActionFooter;
+      list.innerHTML = directResultCard + tmdbGuidance + unreviewedSourceNotice + boxSetCard + proposalCard + sourceGrid + lookupActionFooter;
     }
     function renderImportCenter() {
       renderImportTabs();

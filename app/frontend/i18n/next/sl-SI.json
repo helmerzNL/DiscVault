@@ -1394,6 +1394,8 @@
   "importCenter.title": "Uvoz",
   "importCenter.nav": "Dodaj",
   "importCenter.titlePlaceholder": "Movie title",
+  "importCenter.unreviewedSourceHelp": "MovieVault je to ujemanje našel prek anonimnega zunanjega iskanja. MovieVault ga še ni pregledal - pred shranjevanjem preverite spodnje podrobnosti.",
+  "importCenter.unreviewedSourceTitle": "Nepreverjeno ujemanje iz zunanjega vira",
   "importCenter.updated": "Posodobljeno",
   "importCenter.updatedMovies": "Updated movies",
   "importCenter.useMatch": "Use match",
