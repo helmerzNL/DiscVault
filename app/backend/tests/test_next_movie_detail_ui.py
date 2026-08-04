@@ -16,6 +16,15 @@ NEXT_APP_PATH = os.path.abspath(
         "next_app.py",
     )
 )
+TMDB_PLUGIN_PATH = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "next_plugins",
+        "tmdb",
+        "plugin.py",
+    )
+)
 
 
 class NextMovieDetailUiTests(unittest.TestCase):
@@ -25,6 +34,8 @@ class NextMovieDetailUiTests(unittest.TestCase):
             cls.source = handle.read()
         with open(NEXT_APP_PATH, encoding="utf-8") as handle:
             cls.app_source = handle.read()
+        with open(TMDB_PLUGIN_PATH, encoding="utf-8") as handle:
+            cls.tmdb_plugin_source = handle.read()
 
     def test_section_tabs_are_above_personal_lists(self):
         tabs_index = self.source.index(
@@ -414,6 +425,20 @@ class NextMovieDetailUiTests(unittest.TestCase):
             "{mobileRows: 4, desktopRows: 4});",
             self.source,
         )
+
+    def test_movie_credit_entities_row_limit_fits_full_cast_and_crew(self):
+        # TMDb's plugin caps cast at 20 and crew at 75 (next_plugins/tmdb/plugin.py's
+        # CREW_LIMIT), so a movie can legitimately have up to 95 movie_credits rows.
+        # movie_credit_entities()'s own LIMIT must stay above that, or its
+        # `ORDER BY sort_order, name` silently truncates crew before the frontend
+        # ever sees them -- exactly the "not all crew show up" bug this guards.
+        credits_start = self.app_source.index("def movie_credit_entities(")
+        credits_end = self.app_source.index("\ndef ", credits_start + 1)
+        function_source = self.app_source[credits_start:credits_end]
+        self.assertIn("limit: int = 100", function_source)
+
+        self.assertIn('credits.get("cast") or [])[:20]', self.tmdb_plugin_source)
+        self.assertIn("CREW_LIMIT = 75", self.tmdb_plugin_source)
 
     def test_media_grids_are_responsive_and_row_limited(self):
         self.assertIn(
