@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Ocenjena vrednost",
   "movieDetail.estimatedValueCurrency": "Valuta",
-  "movieDetail.estimatedValueCurrencyNone": "Ni nastavljeno"
+  "movieDetail.estimatedValueCurrencyNone": "Ni nastavljeno",
+  "errors.databaseOffline": "DiscVault je začasno nedosegljiv",
+  "errors.databaseOfflineRetry": "Poskusi znova"
 }

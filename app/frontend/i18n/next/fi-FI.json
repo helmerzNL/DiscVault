@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Arvioitu arvo",
   "movieDetail.estimatedValueCurrency": "Valuutta",
-  "movieDetail.estimatedValueCurrencyNone": "Ei asetettu"
+  "movieDetail.estimatedValueCurrencyNone": "Ei asetettu",
+  "errors.databaseOffline": "DiscVault on tilapäisesti offline-tilassa",
+  "errors.databaseOfflineRetry": "Yritä uudelleen"
 }

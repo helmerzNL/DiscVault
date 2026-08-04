@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "估計價值",
   "movieDetail.estimatedValueCurrency": "貨幣",
-  "movieDetail.estimatedValueCurrencyNone": "未設定"
+  "movieDetail.estimatedValueCurrencyNone": "未設定",
+  "errors.databaseOffline": "DiscVault 暫時離線",
+  "errors.databaseOfflineRetry": "重試"
 }

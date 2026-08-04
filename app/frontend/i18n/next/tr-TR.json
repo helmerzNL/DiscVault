@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Tahmini değer",
   "movieDetail.estimatedValueCurrency": "Para birimi",
-  "movieDetail.estimatedValueCurrencyNone": "Ayarlanmadı"
+  "movieDetail.estimatedValueCurrencyNone": "Ayarlanmadı",
+  "errors.databaseOffline": "DiscVault geçici olarak çevrimdışı",
+  "errors.databaseOfflineRetry": "Tekrar dene"
 }

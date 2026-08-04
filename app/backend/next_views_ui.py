@@ -40571,6 +40571,7 @@ def ui_preview_html(
         return;
       }
       await loadAppSnapshot();
+      shouldLazyRefresh("library", LIBRARY_LAZY_REFRESH_COOLDOWN_MS); // boot already just loaded this
       setGate("library");
       const route = appRouteFromPath();
       const routeMovieId = route.view === "movie" ? (route.movieId || initialMovieId) : "";

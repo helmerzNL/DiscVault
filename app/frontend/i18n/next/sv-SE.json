@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Uppskattat värde",
   "movieDetail.estimatedValueCurrency": "Valuta",
-  "movieDetail.estimatedValueCurrencyNone": "Ej angivet"
+  "movieDetail.estimatedValueCurrencyNone": "Ej angivet",
+  "errors.databaseOffline": "DiscVault är tillfälligt offline",
+  "errors.databaseOfflineRetry": "Försök igen"
 }

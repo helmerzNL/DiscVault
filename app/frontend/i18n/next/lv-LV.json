@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Aptuvenā vērtība",
   "movieDetail.estimatedValueCurrency": "Valūta",
-  "movieDetail.estimatedValueCurrencyNone": "Nav iestatīts"
+  "movieDetail.estimatedValueCurrencyNone": "Nav iestatīts",
+  "errors.databaseOffline": "DiscVault īslaicīgi nav pieejams",
+  "errors.databaseOfflineRetry": "Mēģināt vēlreiz"
 }

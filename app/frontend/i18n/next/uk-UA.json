@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Оцінена вартість",
   "movieDetail.estimatedValueCurrency": "Валюта",
-  "movieDetail.estimatedValueCurrencyNone": "Не задано"
+  "movieDetail.estimatedValueCurrencyNone": "Не задано",
+  "errors.databaseOffline": "DiscVault тимчасово офлайн",
+  "errors.databaseOfflineRetry": "Спробувати ще раз"
 }
