@@ -2437,7 +2437,24 @@ def run_once(worker_id: str, *, quiet_idle: bool = False) -> int:
             return 0
         except Exception as exc:
             failure_result = getattr(exc, "result", None)
-            fail_job(conn, job["id"], str(exc), failure_result if isinstance(failure_result, dict) else {"workerId": worker_id})
+            try:
+                fail_job(conn, job["id"], str(exc), failure_result if isinstance(failure_result, dict) else {"workerId": worker_id})
+            except Exception as fail_exc:
+                # If the job failed *because* the database connection died (e.g. a
+                # Postgres restart), this `conn` is almost certainly dead too -- don't
+                # let a failed "record the failure" step become a second, unhandled
+                # exception that crashes the whole worker process (see work_loop()).
+                print(
+                    json.dumps(
+                        {
+                            "status": "failed",
+                            "jobId": str(job["id"]),
+                            "error": str(exc),
+                            "failJobError": str(fail_exc),
+                        }
+                    )
+                )
+                return 1
             print(json.dumps({"status": "failed", "jobId": str(job["id"]), "error": str(exc)}))
             return 1
 
@@ -2595,8 +2612,16 @@ def _movievault_v2_sync_interval(settings: dict[str, Any]) -> int:
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
         _maybe_enqueue_price_sweep(worker_id)
-        _maybe_enqueue_movievault_v2_sync(worker_id)
-        run_once(worker_id, quiet_idle=True)
+        try:
+            _maybe_enqueue_movievault_v2_sync(worker_id)
+        except Exception as exc:  # noqa: BLE001 - never crash the poll loop
+            print(json.dumps({"status": "error", "source": "movievault_v2_sync_scheduler", "error": str(exc)}))
+        try:
+            run_once(worker_id, quiet_idle=True)
+        except Exception as exc:  # noqa: BLE001 - a single bad iteration (e.g. the
+            # database connection dying mid-job) must not take the whole worker
+            # process down; the next poll gets a fresh connection and tries again.
+            print(json.dumps({"status": "error", "source": "run_once", "error": str(exc)}))
         if STOP:
             break
         time.sleep(poll_interval)
