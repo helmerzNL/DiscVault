@@ -7102,15 +7102,19 @@ def ui_preview_html(
     .debug-identity-hint {
       margin-top: 10px;
     }
-    /* IMDb/TMDb marks under the hero title — small, tappable, and only present
-       when the identifier is actually known (see `movieExternalLinkChipsHtml`).
-       Mirrors the iOS app's ratings link strip. */
-    .hero-external-links {
+    /* External-database marks closing out a detail panel — small, tappable, and
+       only present when the identifier is actually known (see
+       `movieExternalLinkChipsHtml`). `.detail-field:last-child` drops its own
+       bottom border, so the rule above this strip reads as the field list's
+       closing separator. */
+    .detail-panel-links {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 10px;
-      margin-top: 8px;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
     }
     .external-service-chip {
       display: inline-flex;
@@ -7136,8 +7140,12 @@ def ui_preview_html(
       line-height: 1;
       letter-spacing: .2px;
     }
+    /* Token-based, not a white wash: the strip used to sit over dark hero
+       artwork, where rgba(255,255,255,.08) read fine. Inside a panel card it has
+       to work on the light theme too. */
     .external-service-chip.tmdb {
-      background: rgba(255,255,255,.08);
+      background: color-mix(in srgb, var(--bg-elevated) 78%, transparent);
+      border: 1px solid var(--line);
       padding: 4px 8px;
     }
     .external-service-chip-logo {
@@ -7692,89 +7700,62 @@ def ui_preview_html(
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
-    .detail-service-card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background:
-        linear-gradient(145deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 58%),
-        var(--bg-solid);
-      padding: 12px;
-      min-width: 0;
-      display: grid;
-      grid-template-columns: 42px minmax(0, 1fr);
-      align-items: center;
-      gap: 11px;
-      color: inherit;
-      text-decoration: none;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.09);
-      transition: transform .16s ease, border-color .16s ease, background .16s ease;
-    }
-    .detail-service-card[href]:hover {
-      transform: translateY(-1px);
-      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
-      background:
-        linear-gradient(145deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 58%),
-        var(--bg-elevated);
-    }
-    .detail-service-logo {
-      width: 42px;
-      height: 42px;
-      border-radius: 13px;
-      display: inline-grid;
-      place-items: center;
-      background: color-mix(in srgb, var(--bg-elevated) 78%, transparent);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 8px 18px rgba(0,0,0,.15);
-      overflow: hidden;
-    }
-    .detail-service-logo svg {
-      width: 28px;
-      height: 28px;
-      display: block;
-    }
-    .detail-service-logo.wordmark {
-      width: auto;
-      min-width: 42px;
-      padding: 0 7px;
-      font-size: .7rem;
-      font-weight: 900;
-      letter-spacing: 0;
-      line-height: 1;
-    }
-    .detail-service-logo.imdb {
-      background: #f5c518;
-      color: #111;
-      border-radius: 9px;
-    }
-    .detail-service-logo.tmdb {
-      background: linear-gradient(135deg, #01b4e4, #90cea1);
-      color: #062033;
-      border-radius: 999px;
-    }
-    .detail-service-logo.plex {
-      background: #16181d;
-    }
-    .detail-service-logo.jellyfin {
-      background: radial-gradient(circle at 65% 35%, #7b61ff, #00a4dc 54%, #111827);
-    }
-    .detail-service-copy {
-      min-width: 0;
-      display: grid;
-      gap: 3px;
-    }
-    .detail-service-copy strong {
-      overflow-wrap: anywhere;
-    }
-    .detail-service-copy span {
-      color: var(--muted);
-      font-size: .82rem;
-      line-height: 1.35;
-      overflow-wrap: anywhere;
-    }
-    .detail-service-meta {
+    /* Plex/Jellyfin, closing out the Collectors field list. A flex row rather
+       than a `.detail-grid`: the 168px minimum track was stretching each service
+       into a card-sized block, which is what made two links dominate the panel. */
+    .movie-collectors-links {
       display: flex;
       flex-wrap: wrap;
-      gap: 5px;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+    /* Sized off `.digital-source-badge` (the poster-tile treatment) so the two
+       places DiscVault draws a Plex/Jellyfin mark finally agree on a scale. */
+    .detail-service-chip {
+      display: inline-flex;
       align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      padding: 4px 12px 4px 5px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      color: inherit;
+      text-decoration: none;
+      font-size: .84rem;
+      font-weight: 700;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .detail-service-chip[href]:hover {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+      background: color-mix(in srgb, var(--accent) 10%, var(--bg-solid));
+    }
+    .detail-service-chip-logo {
+      width: 24px;
+      height: 24px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      display: inline-grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .detail-service-chip-logo svg {
+      width: 15px;
+      height: 15px;
+      display: block;
+    }
+    .detail-service-chip-logo.plex {
+      background: #16181d;
+    }
+    .detail-service-chip-logo.jellyfin {
+      background: radial-gradient(circle at 65% 35%, #7b61ff, #00a4dc 54%, #111827);
+    }
+    .detail-service-chip-count {
+      color: var(--muted);
+      font-weight: 650;
+      font-size: .78rem;
     }
     .container-member-card {
       min-width: 0;
@@ -14631,7 +14612,6 @@ def ui_preview_html(
               <span class="eyebrow" data-next-i18n="movieDetail.title">Movie details</span>
               <h2 class="movie-detail-title" id="movieDetailTitle">-</h2>
               <div class="hero-meta" id="movieDetailTags"></div>
-              <div class="hero-external-links hidden" id="movieDetailExternalLinks"></div>
               <p class="movie-detail-overview" id="movieDetailOverview"></p>
             </div>
           </div>
@@ -14832,6 +14812,7 @@ def ui_preview_html(
           <div class="detail-card full detail-subpanel movie-detail-section-panel" id="movieDetailReleasePanel" role="tabpanel" aria-labelledby="movieDetailReleaseTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.release">Release</h3>
             <div class="detail-fields" id="movieDetailRelease"></div>
+            <div class="detail-panel-links hidden" id="movieDetailExternalLinks"></div>
           </div>
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailTechnicalPanel" role="tabpanel" aria-labelledby="movieDetailTechnicalTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h3>
@@ -14840,7 +14821,7 @@ def ui_preview_html(
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailCollectorsPanel" role="tabpanel" aria-labelledby="movieDetailCollectorsTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.collectors">Collectors</h3>
             <div class="detail-fields" id="movieDetailCollectors"></div>
-            <div class="detail-grid movie-collectors-links hidden" id="movieDetailCollectorsLinks"></div>
+            <div class="movie-collectors-links hidden" id="movieDetailCollectorsLinks"></div>
           </div>
           <div class="detail-card full movie-list-card" id="movieListStateCard">
             <details class="collapse-card-details" id="movieListStateDetails">
@@ -25952,33 +25933,6 @@ def ui_preview_html(
         ? `<a class="detail-mini-card" href="${escapeHtml(href)}"${linkAttrs}>${body}</a>`
         : `<div class="detail-mini-card">${body}</div>`;
     }
-    function externalServiceLogoHtml(service) {
-      const lower = String(service || "").toLowerCase();
-      if (lower.includes("plex") || lower.includes("jellyfin")) {
-        const cls = lower.includes("plex") ? "plex" : "jellyfin";
-        return `<span class="detail-service-logo ${cls}">${digitalSourceLogoHtml(service)}</span>`;
-      }
-      if (lower.includes("imdb")) {
-        return `<span class="detail-service-logo wordmark imdb" aria-hidden="true">IMDb</span>`;
-      }
-      if (lower.includes("tmdb") || lower.includes("movie db") || lower.includes("themoviedb")) {
-        return `<span class="detail-service-logo wordmark tmdb" aria-hidden="true">TMDb</span>`;
-      }
-      return `<span class="detail-service-logo wordmark" aria-hidden="true">${escapeHtml(String(service || "DV").slice(0, 2).toUpperCase())}</span>`;
-    }
-    function externalServiceCard(title, subtitle, href, service, meta = []) {
-      const body = `
-        ${externalServiceLogoHtml(service || title)}
-        <span class="detail-service-copy">
-          <strong>${escapeHtml(title || service || tNext("common.open", "Open"))}</strong>
-          ${subtitle ? `<span>${escapeHtml(subtitle)}</span>` : ""}
-          ${meta.length ? `<span class="detail-service-meta">${meta.map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}</span>` : ""}
-        </span>
-      `;
-      return href
-        ? `<a class="detail-service-card" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${body}</a>`
-        : `<div class="detail-service-card">${body}</div>`;
-    }
     function movieIdentifierUrl(item) {
       const provider = String(item?.provider_id || item?.providerId || "").toLowerCase();
       const identifier = String(item?.identifier || "").trim();
@@ -25993,11 +25947,12 @@ def ui_preview_html(
       if (provider === "tmdb") return "TMDb";
       return item?.provider_id || item?.providerId || "";
     }
-    // Compact, tappable IMDb/TMDb marks in the hero, mirroring the iOS app's
-    // ratings link strip (DiscVaultApp `TitleDetailView.ratingsLinksRow`). A
-    // service only ever appears when its identifier is actually known — a chip
-    // that cannot open anything is worse than no chip, because it reads as "we
-    // have this id" when we do not.
+    // Compact, tappable IMDb/TMDb marks closing out the Release panel — the
+    // block that already carries the release's identifying facts (barcode,
+    // format, release date, country), which is what an external-database link
+    // is. A service only ever appears when its identifier is actually known: a
+    // chip that cannot open anything is worse than no chip, because it reads as
+    // "we have this id" when we do not.
     function movieExternalLinkChipsHtml(identifiers) {
       const byProvider = new Map();
       (identifiers || []).filter(Boolean).forEach((item) => {
@@ -26051,20 +26006,30 @@ def ui_preview_html(
     function digitalPlaybackServiceKey(item) {
       return String(item?.plugin_id || item?.pluginId || item?.source_name || item?.sourceName || "").toLowerCase();
     }
+    // A single-line pill, not a card. The service name carries the meaning; the
+    // film's own title and year were being repeated back on the film's own page,
+    // and "Play with Plex" is a sentence where a label will do. The full phrase
+    // survives as the accessible name, so nothing is lost for a screen reader.
     function digitalPlaybackLinkCard(item, serviceItemCount = 1) {
       item = item || {};
       const rawService = item.source_name || item.sourceName || item.plugin_id || item.pluginId || tNext("uiPreview.digitalItems", "Digital links");
       const service = pluginDisplayName(item.plugin_id || item.pluginId || rawService, rawService);
       const variantCount = Number(item.variant_count || item.variantCount || 0);
       const itemCount = Math.max(Number(serviceItemCount || 0), variantCount || 0);
-      const title = tNext("movieDetail.playWithService", "Play with {service}").replace("{service}", service);
-      const meta = [
-        item.title || "",
-        item.year || "",
-        itemCount > 1 ? tNext("movieDetail.multipleDigitalItems", "{count} items").replace("{count}", String(itemCount)) : "",
-        item.source_type || item.sourceType || ""
-      ].filter(Boolean);
-      return externalServiceCard(title, meta.slice(0, 2).join(" / "), item.playback_url || item.playbackUrl || "", service, meta.slice(2));
+      const label = tNext("movieDetail.playWithService", "Play with {service}").replace("{service}", service);
+      const logoClass = String(service || "").toLowerCase().includes("jellyfin") ? "jellyfin" : "plex";
+      const count = itemCount > 1
+        ? `<span class="detail-service-chip-count">${escapeHtml(tNext("movieDetail.multipleDigitalItems", "{count} items").replace("{count}", String(itemCount)))}</span>`
+        : "";
+      const body = `
+        <span class="detail-service-chip-logo ${logoClass}">${digitalSourceLogoHtml(service)}</span>
+        <span>${escapeHtml(service)}</span>
+        ${count}
+      `;
+      const href = item.playback_url || item.playbackUrl || "";
+      return href
+        ? `<a class="detail-service-chip" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${body}</a>`
+        : `<span class="detail-service-chip" title="${escapeHtml(label)}">${body}</span>`;
     }
     function personImageUrl(credit) {
       return usableImage(credit?.profile_url || credit?.profileUrl || "");
@@ -28169,10 +28134,11 @@ def ui_preview_html(
         debugIdentityAlerts.textContent = alerts ? String(alerts) : "";
         debugIdentityAlerts.classList.toggle("hidden", !alerts);
       }
-      // IMDb and TMDb are hero chips now (see `movieExternalLinkChipsHtml`) and
-      // Plex/Jellyfin live in the Collectors panel, so the Links card is left
-      // with whatever else a plugin recorded — and stays hidden when that is
-      // nothing, rather than showing an empty shell on every film.
+      // IMDb and TMDb close out the Release panel (see
+      // `movieExternalLinkChipsHtml`) and Plex/Jellyfin close out Collectors, so
+      // the Links card is left with whatever else a plugin recorded — and stays
+      // hidden when that is nothing, rather than showing an empty shell on every
+      // film.
       const externalChips = movieExternalLinkChipsHtml(detail.identifiers);
       const externalLinksNode = document.getElementById("movieDetailExternalLinks");
       if (externalLinksNode) {

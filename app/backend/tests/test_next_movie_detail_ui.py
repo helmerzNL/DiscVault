@@ -259,7 +259,7 @@ class NextMovieDetailUiTests(unittest.TestCase):
         )
 
     def test_imdb_and_tmdb_render_as_hero_chips_only_when_known(self):
-        """IMDb/TMDb are compact hero marks, mirroring the iOS ratings strip.
+        """IMDb/TMDb only render when the identifier is actually known.
 
         A chip that cannot open anything reads as "we have this id" when we do
         not, so a service without a usable identifier is dropped entirely.
@@ -274,6 +274,30 @@ class NextMovieDetailUiTests(unittest.TestCase):
         self.assertIn('/api/next/assets/tmdb-logo.svg', chips_source)
         self.assertIn('id="movieDetailExternalLinks"', self.source)
 
+    def test_external_links_close_out_the_release_panel(self):
+        """IMDb/TMDb belong with the release's identifying facts, not the hero.
+
+        The Release panel already carries barcode, format, release date and
+        country — which is what an external-database link is. In the hero the
+        strip read as chrome bolted onto the artwork.
+        """
+        release_fields_index = self.source.index('id="movieDetailRelease"')
+        links_index = self.source.index('id="movieDetailExternalLinks"')
+        technical_panel_index = self.source.index('id="movieDetailTechnicalPanel"')
+
+        self.assertLess(release_fields_index, links_index)
+        self.assertLess(links_index, technical_panel_index)
+        self.assertIn(
+            '<div class="detail-panel-links hidden" id="movieDetailExternalLinks"></div>',
+            self.source,
+        )
+
+        # Gone from the hero copy block entirely.
+        hero_start = self.source.index('<div class="movie-detail-copy">')
+        hero_end = self.source.index('id="movieDetailOverview"', hero_start)
+        self.assertNotIn("movieDetailExternalLinks", self.source[hero_start:hero_end])
+        self.assertNotIn("hero-external-links", self.source)
+
     def test_digital_playback_links_live_in_the_collectors_panel(self):
         panel_index = self.source.index('id="movieDetailCollectorsPanel"')
         links_index = self.source.index('id="movieDetailCollectorsLinks"')
@@ -285,6 +309,53 @@ class NextMovieDetailUiTests(unittest.TestCase):
             'collectorsLinksNode.innerHTML = digital.join("");',
             self.source,
         )
+
+    def test_digital_playback_renders_as_a_compact_chip(self):
+        """Plex/Jellyfin are single-line pills, not cards.
+
+        The old `.detail-service-card` repeated the film's own title and year
+        back on the film's own page and wrapped "Play with Plex" around a name
+        that says it already. The phrase survives as the accessible name.
+        """
+        start = self.source.index("function digitalPlaybackLinkCard(item, serviceItemCount = 1)")
+        end = self.source.index("\n    function ", start + 1)
+        chip_source = self.source[start:end]
+
+        self.assertIn('class="detail-service-chip"', chip_source)
+        self.assertIn('class="detail-service-chip-logo ${logoClass}"', chip_source)
+        self.assertIn("digitalSourceLogoHtml(service)", chip_source)
+        self.assertIn('aria-label="${escapeHtml(label)}"', chip_source)
+        self.assertNotIn("detail-service-card", chip_source)
+        self.assertNotIn("item.title", chip_source)
+
+        # The container is a flex row, not a 168px `.detail-grid` track — that
+        # minimum was what stretched two services into card-sized blocks.
+        self.assertIn(
+            '<div class="movie-collectors-links hidden" id="movieDetailCollectorsLinks"></div>',
+            self.source,
+        )
+        self.assertIn(
+            "    .movie-collectors-links {\n"
+            "      display: flex;\n"
+            "      flex-wrap: wrap;\n",
+            self.source,
+        )
+
+    def test_oversized_service_card_treatment_is_gone(self):
+        """Nothing renders `.detail-service-card` any more, so it is removed.
+
+        `externalServiceCard` / `externalServiceLogoHtml` existed only to build
+        it, and `digitalPlaybackLinkCard` was their only caller.
+        """
+        for dead in (
+            "externalServiceCard",
+            "externalServiceLogoHtml",
+            "detail-service-card",
+            "detail-service-logo",
+            "detail-service-copy",
+            "detail-service-meta",
+        ):
+            self.assertNotIn(dead, self.source)
 
     def test_links_card_hides_when_no_other_identifier_remains(self):
         self.assertIn('<div class="detail-card hidden" id="movieDetailLinksCard">', self.source)
