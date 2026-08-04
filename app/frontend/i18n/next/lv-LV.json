@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Mēģināt vēlreiz",
   "movieDetail.debugIdentityTitle": "Identitāte (Debug)",
   "movieDetail.debugIdentityCopy": "Kopēt diagnostiku",
-  "movieDetail.debugIdentityHint": "Lauku nosaukumi nāk no kopīgā sinhronizācijas līguma un apzināti paliek angļu valodā. Redzams tikai tad, kad ieslēgts atkļūdošanas režīms."
+  "movieDetail.debugIdentityHint": "Lauku nosaukumi nāk no kopīgā sinhronizācijas līguma un apzināti paliek angļu valodā. Redzams tikai tad, kad ieslēgts atkļūdošanas režīms.",
+  "movieDetail.debugSourcesNotWritten": "atlasīts, bet nav saglabāts"
 }

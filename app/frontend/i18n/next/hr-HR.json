@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Pokušaj ponovno",
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiraj dijagnostiku",
-  "movieDetail.debugIdentityHint": "Nazivi polja dolaze iz zajedničkog ugovora o sinkronizaciji i namjerno ostaju na engleskom. Vidljivo samo dok je način za ispravljanje pogrešaka uključen."
+  "movieDetail.debugIdentityHint": "Nazivi polja dolaze iz zajedničkog ugovora o sinkronizaciji i namjerno ostaju na engleskom. Vidljivo samo dok je način za ispravljanje pogrešaka uključen.",
+  "movieDetail.debugSourcesNotWritten": "odabrano, ali nije spremljeno"
 }

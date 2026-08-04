@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Zkusit znovu",
   "movieDetail.debugIdentityTitle": "Identita (Debug)",
   "movieDetail.debugIdentityCopy": "Kopírovat diagnostiku",
-  "movieDetail.debugIdentityHint": "Názvy polí pocházejí ze sdíleného synchronizačního kontraktu a záměrně zůstávají v angličtině. Zobrazuje se jen při zapnutém režimu ladění."
+  "movieDetail.debugIdentityHint": "Názvy polí pocházejí ze sdíleného synchronizačního kontraktu a záměrně zůstávají v angličtině. Zobrazuje se jen při zapnutém režimu ladění.",
+  "movieDetail.debugSourcesNotWritten": "vybráno, ale neuloženo"
 }

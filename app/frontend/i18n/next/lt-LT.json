@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Bandyti dar kartą",
   "movieDetail.debugIdentityTitle": "Tapatybė (Debug)",
   "movieDetail.debugIdentityCopy": "Kopijuoti diagnostiką",
-  "movieDetail.debugIdentityHint": "Laukų pavadinimai kyla iš bendros sinchronizavimo sutarties ir sąmoningai lieka anglų kalba. Matoma tik kai įjungtas derinimo režimas."
+  "movieDetail.debugIdentityHint": "Laukų pavadinimai kyla iš bendros sinchronizavimo sutarties ir sąmoningai lieka anglų kalba. Matoma tik kai įjungtas derinimo režimas.",
+  "movieDetail.debugSourcesNotWritten": "pasirinkta, bet neįrašyta"
 }

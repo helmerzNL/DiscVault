@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Réessayer",
   "movieDetail.debugIdentityTitle": "Identité (Debug)",
   "movieDetail.debugIdentityCopy": "Copier le diagnostic",
-  "movieDetail.debugIdentityHint": "Les noms de champs proviennent du contrat de synchronisation partagé et restent volontairement en anglais. Visible uniquement lorsque le mode Debug est actif."
+  "movieDetail.debugIdentityHint": "Les noms de champs proviennent du contrat de synchronisation partagé et restent volontairement en anglais. Visible uniquement lorsque le mode Debug est actif.",
+  "movieDetail.debugSourcesNotWritten": "sélectionné mais non enregistré"
 }

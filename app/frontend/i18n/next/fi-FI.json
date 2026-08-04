@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Yritä uudelleen",
   "movieDetail.debugIdentityTitle": "Identiteetti (Debug)",
   "movieDetail.debugIdentityCopy": "Kopioi diagnostiikka",
-  "movieDetail.debugIdentityHint": "Kenttien nimet tulevat jaetusta synkronointisopimuksesta ja pysyvät tarkoituksella englanniksi. Näkyy vain, kun virheenkorjaustila on käytössä."
+  "movieDetail.debugIdentityHint": "Kenttien nimet tulevat jaetusta synkronointisopimuksesta ja pysyvät tarkoituksella englanniksi. Näkyy vain, kun virheenkorjaustila on käytössä.",
+  "movieDetail.debugSourcesNotWritten": "valittu mutta ei tallennettu"
 }

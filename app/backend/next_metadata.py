@@ -1648,6 +1648,30 @@ def normalize_date_value(value: Any) -> str | None:
     return None
 
 
+def normalize_year_value(value: Any) -> str | None:
+    """Coerce a release year to the ``text`` shape ``movies.year`` stores.
+
+    Sources disagree on the type: MovieVault v2's index column is an integer
+    (``migrations_next/035_movievault_v2_index.sql``) and its plugin passes the
+    value through untouched, while TMDb and the import paths supply a string.
+    ``movies.year`` is ``text`` (``migrations_next/002_core_domain.sql``), and
+    binding an int against it aborts the whole UPDATE, so the year has to be
+    normalised before it reaches the writer.
+
+    A full date is accepted and reduced to its year, because a source that has
+    only ``release_date`` to offer still answers "what year is this".
+    """
+    if isinstance(value, bool):  # bool is an int subclass; never a year
+        return None
+    if isinstance(value, int):
+        return str(value) if 1000 <= value <= 9999 else None
+    text = clean_text(value)
+    if not text:
+        return None
+    match = re.search(r"\d{4}", text)
+    return match.group(0) if match else None
+
+
 def metadata_stable_uuid(kind: str, key: str) -> uuid.UUID:
     return uuid.uuid5(METADATA_NAMESPACE, f"{kind}:{key}")
 
@@ -2285,6 +2309,18 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
                 parsed_date = normalize_date_value(value)
                 if parsed_date:
                     movie_updates[key] = parsed_date
+                continue
+            # `movies.year` is a text column, but a source can legitimately hold
+            # it as an integer — MovieVault v2's index declares `release_year
+            # integer`, and the value reaches the merge as a Python int. Binding
+            # that raw fails the whole UPDATE (no implicit int -> text cast), so
+            # every field in the same refresh is lost, not just the year.
+            # Normalised here, at the boundary every plugin's output converges
+            # on, so a future source with the same shape is covered too.
+            if key == "year":
+                parsed_year = normalize_year_value(value)
+                if parsed_year:
+                    movie_updates[key] = parsed_year
                 continue
             if key in METADATA_MAIN_FIELDS:
                 movie_updates[key] = value

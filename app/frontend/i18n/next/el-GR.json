@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Δοκιμάστε ξανά",
   "movieDetail.debugIdentityTitle": "Ταυτότητα (Debug)",
   "movieDetail.debugIdentityCopy": "Αντιγραφή διαγνωστικών",
-  "movieDetail.debugIdentityHint": "Τα ονόματα πεδίων προέρχονται από το κοινό συμβόλαιο συγχρονισμού και παραμένουν σκόπιμα στα αγγλικά. Εμφανίζεται μόνο όσο η λειτουργία Debug είναι ενεργή."
+  "movieDetail.debugIdentityHint": "Τα ονόματα πεδίων προέρχονται από το κοινό συμβόλαιο συγχρονισμού και παραμένουν σκόπιμα στα αγγλικά. Εμφανίζεται μόνο όσο η λειτουργία Debug είναι ενεργή.",
+  "movieDetail.debugSourcesNotWritten": "επιλέχθηκε αλλά δεν αποθηκεύτηκε"
 }

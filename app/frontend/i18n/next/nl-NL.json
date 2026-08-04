@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Opnieuw proberen",
   "movieDetail.debugIdentityTitle": "Identiteit (Debug)",
   "movieDetail.debugIdentityCopy": "Diagnostiek kopiëren",
-  "movieDetail.debugIdentityHint": "De veldnamen komen uit het gedeelde synccontract en blijven bewust in het Engels. Alleen zichtbaar zolang Debugmodus aan staat."
+  "movieDetail.debugIdentityHint": "De veldnamen komen uit het gedeelde synccontract en blijven bewust in het Engels. Alleen zichtbaar zolang Debugmodus aan staat.",
+  "movieDetail.debugSourcesNotWritten": "gekozen maar niet opgeslagen"
 }

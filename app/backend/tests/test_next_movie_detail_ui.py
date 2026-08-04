@@ -341,6 +341,80 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
 
+    def test_digital_items_carry_a_browser_openable_web_url(self):
+        """Plex stores an app deep link, which is dead without the app installed.
+
+        `plex://server/...` looks live and does nothing on a desktop that has no
+        Plex app. The web form is derived rather than replacing what is stored,
+        so native clients keep opening the app directly.
+        """
+        self.assertIn("def digital_item_web_url(", self.app_source)
+        self.assertIn('row["web_url"] = digital_item_web_url(row)', self.app_source)
+        # `machine_id` is the one piece the query did not already select.
+        self.assertIn("dms.machine_id,", self.app_source)
+        self.assertIn(
+            'return f"https://app.plex.tv/desktop/#!/server/{machine_id}/details?key={key}"',
+            self.app_source,
+        )
+        # The Plex `key` is a path and must be percent-encoded, or the fragment
+        # breaks at the first slash.
+        self.assertIn('key = quote(f"/library/metadata/{external_id}", safe="")', self.app_source)
+
+    def test_missing_plex_machine_id_yields_no_link_at_all(self):
+        """An empty machine id means Plex's /identity call failed at sync time.
+
+        There is no honest web URL to build from that, and a malformed one is
+        worse than none.
+        """
+        start = self.app_source.index("def digital_item_web_url(")
+        end = self.app_source.index("\ndef movie_digital_item_entities(", start)
+        builder = self.app_source[start:end]
+
+        self.assertIn("if machine_id and external_id:", builder)
+        self.assertIn("if base_url and external_id:", builder)
+        self.assertEqual(builder.count("return None"), 3)
+
+    def test_chip_prefers_the_web_url_over_the_stored_playback_url(self):
+        self.assertIn(
+            "const href = item.web_url || item.webUrl "
+            "|| item.playback_url || item.playbackUrl || \"\";",
+            self.source,
+        )
+
+    def test_native_clients_still_receive_the_raw_playback_url(self):
+        """Native apps *want* the deep link — it opens Plex directly there.
+
+        The web URL is derived alongside the stored value, never in place of it,
+        so this path is deliberately untouched.
+        """
+        people_path = os.path.join(os.path.dirname(NEXT_APP_PATH), "next_people.py")
+        with open(people_path, encoding="utf-8") as handle:
+            people_source = handle.read()
+
+        self.assertIn("playbackUrl", people_source)
+        self.assertNotIn("digital_item_web_url", people_source)
+
+    def test_debug_panel_separates_selected_from_written(self):
+        """`accepted` only means the merge chose the candidate, not that it landed.
+
+        Reporting acceptance alone made a field that was selected and then never
+        written look identical to one that saved — which is how an int-into-a-
+        text-column failure sat in plain sight reading "used".
+        """
+        self.assertIn('written = decision.get("written")', self.app_source)
+        self.assertIn(
+            '"written": None if written is None else (accepted and bool(written)),',
+            self.app_source,
+        )
+        self.assertIn('"writeState": decision.get("writeState"),', self.app_source)
+
+        # Three states in the UI, and a pre-write-tracking event (written null)
+        # must keep reading "used" rather than claiming a failure it cannot see.
+        self.assertIn('movieDetail.debugSourcesNotWritten', self.source)
+        self.assertIn("const fieldLanded = (field) => field.accepted && field.written !== false;", self.source)
+        self.assertIn('if (field.accepted && field.written === false) {', self.source)
+        self.assertIn(".debug-source-marker.not-written {", self.source)
+
     def test_oversized_service_card_treatment_is_gone(self):
         """Nothing renders `.detail-service-card` any more, so it is removed.
 

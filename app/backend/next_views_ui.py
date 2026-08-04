@@ -7387,6 +7387,12 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--muted) 18%, transparent);
       color: var(--muted);
     }
+    /* Selected by the merge but never written — the state worth noticing, so it
+       gets the warning colour rather than blending in with "not used". */
+    .debug-source-marker.not-written {
+      background: color-mix(in srgb, var(--warn, #b26a00) 20%, transparent);
+      color: var(--warn, #b26a00);
+    }
     .debug-source-contrib-fields,
     .debug-source-contrib-sources,
     .debug-source-contrib-reason {
@@ -17892,19 +17898,34 @@ def ui_preview_html(
       const contributed = metadataDebug && Array.isArray(metadataDebug.contributed) ? metadataDebug.contributed : [];
       const usedLabel = tNext("movieDetail.debugSourcesUsed", "used");
       const skippedLabel = tNext("movieDetail.debugSourcesSkipped", "not used");
+      const notWrittenLabel = tNext("movieDetail.debugSourcesNotWritten", "selected but not saved");
       const fieldsLabel = tNext("movieDetail.debugSourcesFields", "Fields");
       const contributedToLabel = tNext("movieDetail.debugSourcesContributedTo", "Sources");
       const reasonLabel = tNext("movieDetail.debugSourcesReasonLabel", "Reason");
       const fetchedCards = fetched.map((plugin) => {
         const fields = Array.isArray(plugin.fields) ? plugin.fields : [];
-        const usedCount = fields.filter((field) => field.accepted).length;
+        // Three states, not two. A field the merge selected and that then never
+        // reached the movies row is neither "used" nor "not used" — reporting it
+        // as either hides the only interesting case. `written === null` means the
+        // audit event predates write tracking, where "used" stays the honest
+        // answer because nothing was recorded either way.
+        const fieldLanded = (field) => field.accepted && field.written !== false;
+        const usedCount = fields.filter(fieldLanded).length;
         const fieldRows = fields.map((field) => {
           const fieldName = field.target ? `${field.target}.${field.field}` : (field.field || "");
-          const marker = field.accepted
-            ? `<span class="debug-source-marker used">${escapeHtml(usedLabel)}</span>`
-            : `<span class="debug-source-marker skipped">${escapeHtml(skippedLabel)}</span>`;
+          let marker;
+          if (field.accepted && field.written === false) {
+            marker = `<span class="debug-source-marker not-written" title="${escapeHtml(String(field.writeState || ""))}">${escapeHtml(notWrittenLabel)}</span>`;
+          } else if (field.accepted) {
+            marker = `<span class="debug-source-marker used">${escapeHtml(usedLabel)}</span>`;
+          } else {
+            marker = `<span class="debug-source-marker skipped">${escapeHtml(skippedLabel)}</span>`;
+          }
+          const rowClass = fieldLanded(field)
+            ? " is-used"
+            : (field.accepted ? " is-not-written" : "");
           return `
-            <li class="debug-source-field${field.accepted ? " is-used" : ""}">
+            <li class="debug-source-field${rowClass}">
               <span class="debug-source-field-name">${escapeHtml(fieldName)}</span>
               <span class="debug-source-field-value">${escapeHtml(debugSourceValueText(field.value))}</span>
               ${marker}
@@ -26026,7 +26047,11 @@ def ui_preview_html(
         <span>${escapeHtml(service)}</span>
         ${count}
       `;
-      const href = item.playback_url || item.playbackUrl || "";
+      // `web_url` is the browser-openable form the backend derives; the stored
+      // `playback_url` can be a `plex://` app deep link, which does nothing on a
+      // desktop without the app installed. Native clients keep reading
+      // `playback_url` and still open the app directly.
+      const href = item.web_url || item.webUrl || item.playback_url || item.playbackUrl || "";
       return href
         ? `<a class="detail-service-chip" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${body}</a>`
         : `<span class="detail-service-chip" title="${escapeHtml(label)}">${body}</span>`;
