@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Becsült érték",
   "movieDetail.estimatedValueCurrency": "Pénznem",
-  "movieDetail.estimatedValueCurrencyNone": "Nincs beállítva"
+  "movieDetail.estimatedValueCurrencyNone": "Nincs beállítva",
+  "errors.databaseOffline": "A DiscVault átmenetileg nem érhető el",
+  "errors.databaseOfflineRetry": "Próbáld újra"
 }

@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Valor estimado",
   "movieDetail.estimatedValueCurrency": "Moneda",
-  "movieDetail.estimatedValueCurrencyNone": "Sin definir"
+  "movieDetail.estimatedValueCurrencyNone": "Sin definir",
+  "errors.databaseOffline": "DiscVault está temporalmente fuera de línea",
+  "errors.databaseOfflineRetry": "Reintentar"
 }

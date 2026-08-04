@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Valoare estimată",
   "movieDetail.estimatedValueCurrency": "Monedă",
-  "movieDetail.estimatedValueCurrencyNone": "Nesetat"
+  "movieDetail.estimatedValueCurrencyNone": "Nesetat",
+  "errors.databaseOffline": "DiscVault este temporar offline",
+  "errors.databaseOfflineRetry": "Încearcă din nou"
 }
