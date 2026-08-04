@@ -9746,7 +9746,7 @@ def attach_movie_technical_specs(conn, movies: list[dict[str, Any]]) -> list[dic
     return movies
 
 
-def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
+def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 100) -> list[dict[str, Any]]:
     if not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
         return []
     media_join = table_exists(conn, "media_assets")
@@ -12612,7 +12612,7 @@ def refresh_movie_person_metadata_cascade(
     normalized_scope = normalize_movie_metadata_person_refresh_scope(scope)
     summary = movie_metadata_person_refresh_empty(requested=True, dry_run=dry_run, limit=limit, scope=normalized_scope)
     movie_uuid = UUID(str(movie_id))
-    credits = movie_credit_entities(conn, movie_uuid, limit=80)
+    credits = movie_credit_entities(conn, movie_uuid, limit=100)
     selected = select_movie_metadata_person_refresh_credits(credits, limit=limit, scope=normalized_scope)
     summary["considered"] = len(credits)
     summary["selected"] = len(selected)

@@ -759,6 +759,31 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertEqual(len(credits), 75)
 
+    def test_tmdb_credits_give_crew_distinct_sort_order_after_cast(self):
+        # A constant sortOrder=0 for every crew member ties them with cast
+        # member #1 in movie_credit_entities()'s `ORDER BY sort_order, name`,
+        # so its LIMIT truncates crew alphabetically instead of by TMDb's
+        # actual department/job order once cast+crew exceeds the row limit.
+        credits = tmdb_plugin._credits(
+            {
+                "credits": {
+                    "cast": [{"id": 1, "name": "Actor One", "character": "Hero"}],
+                    "crew": [
+                        {"id": 10, "name": "Zed Editor", "job": "Editor"},
+                        {"id": 11, "name": "Amy Gaffer", "job": "Gaffer"},
+                    ],
+                }
+            }
+        )
+
+        crew_entries = [item for item in credits if item["role"] == "crew"]
+        sort_orders = [item["sortOrder"] for item in crew_entries]
+        self.assertEqual(sort_orders, sorted(set(sort_orders)))
+        self.assertTrue(all(order >= 20 for order in sort_orders))
+        # Preserves TMDb's own crew ordering (Editor before Gaffer), not
+        # alphabetical by name.
+        self.assertEqual([item["name"] for item in crew_entries], ["Zed Editor", "Amy Gaffer"])
+
     @mock.patch("app.backend.next_plugins.tmdb.plugin._details")
     @mock.patch("app.backend.next_plugins.tmdb.plugin.search_title")
     def test_tmdb_movie_details_selects_exact_title_instead_of_first_result(self, search_title, details):
