@@ -626,6 +626,54 @@ class NextMovieDetailUiTests(unittest.TestCase):
         self.assertIn(".movie-edit-checkbox-group {", self.source)
         self.assertIn(".movie-edit-track-row {", self.source)
 
+    def test_movie_format_is_never_displayed_raw(self):
+        """movies.format is an unconstrained free-text column -- providers and
+        sync clients can (and do, per sync/fixtures/identity-ladder.json) write
+        raw codes like "4K_UHD" or "BLURAY" into it. Every place a movie's
+        format is shown to a user must go through physicalFormatLabel() (or
+        another normalizer, e.g. physicalFormatBadgeHtml/
+        renderMovieEditFormatOptions), which already turns those into "4K UHD"
+        and "Blu-ray" -- not read movie.format directly."""
+        self.assertIn(
+            "document.getElementById(\"movieDetailTags\").innerHTML = detailTagHtml([\n"
+            "        movie.year,\n"
+            "        physicalFormatLabel(movie.format),",
+            self.source,
+        )
+        self.assertIn(
+            '[tNext("movieDetail.format", "Format"), physicalFormatLabel(movie.format)],',
+            self.source,
+        )
+        self.assertIn(
+            '[tNext("movieDetail.format", "Format"), '
+            "physicalFormatLabel(movie.format || specs.format || metadata.format)],",
+            self.source,
+        )
+        self.assertIn(
+            "const subtitle = [movie.year, physicalFormatLabel(movie.format), movie.edition]"
+            ".filter(Boolean).join(\" / \");",
+            self.source,
+        )
+        self.assertIn(
+            "return [movie.year, physicalFormatLabel(movie.format), movie.barcode].filter(Boolean);",
+            self.source,
+        )
+        self.assertIn(
+            "const metaParts = [movie.year, physicalFormatLabel(movie.format)]"
+            '.map((part) => String(part || "").trim()).filter(Boolean);',
+            self.source,
+        )
+        self.assertIn(
+            'const label = [movie.title || tNext("common.untitled", "Untitled"), movie.year, '
+            "physicalFormatLabel(movie.format), movie.barcode].filter(Boolean).join(\" / \");",
+            self.source,
+        )
+        self.assertIn(
+            "const meta = [movie.year, physicalFormatLabel(movie.format), movie.barcode, "
+            "actionLabel || movie.action].filter(Boolean).join(\" / \");",
+            self.source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
