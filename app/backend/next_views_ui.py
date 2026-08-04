@@ -27788,21 +27788,36 @@ def ui_preview_html(
           history.pushState({movieId}, "", nextPath);
         }
       }
+      let loadedMovieDetail = false;
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
         renderMovieDetail(payload.detail || {});
+        loadedMovieDetail = true;
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
       }
-      if (hasPermission("metadata.refresh_one") && shouldLazyRefresh(`movie:${movieId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
-        // Enqueue a background job instead of calling the synchronous refresh
-        // endpoint: MovieVault/TMDB (and up to a dozen cast/crew TMDB calls)
-        // can take real time, and opening a movie must never block on that.
-        authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/jobs`, {
+      if (loadedMovieDetail && hasPermission("metadata.refresh_one")
+          && shouldLazyRefresh(`movie:${movieId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
+        // Visible, synchronous refresh -- same "Refreshing metadata..." feedback
+        // as the manual button. Safe to run inline now: cached people are
+        // skipped (force: false) and any live TMDB calls run concurrently
+        // (see refresh_movie_person_metadata_cascade), so this is fast in the
+        // common case instead of the multi-second cascade it used to be.
+        setMovieDetailMessage(tNext("movieDetail.applyingMetadata", "Refreshing metadata..."));
+        authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/refresh`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({dryRun: false, refreshPeople: true, personRefreshScope: "all", force: false})
-        }).catch(() => {});
+        }).then(async () => {
+          if (activeDetailMovieId !== movieId) return; // user navigated away
+          const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
+          if (activeDetailMovieId !== movieId) return;
+          renderMovieDetail(refreshed.detail || {});
+          setMovieDetailMessage(tNext("movieDetail.applied", "Metadata refreshed."), "good");
+        }).catch((error) => {
+          if (activeDetailMovieId !== movieId) return;
+          setMovieDetailMessage(error.message || String(error), "bad");
+        });
       }
     }
     function closeAppMovieDetail(pushUrl = true) {
