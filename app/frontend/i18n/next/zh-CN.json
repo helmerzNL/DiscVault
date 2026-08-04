@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "重试",
   "movieDetail.debugIdentityTitle": "标识 (Debug)",
   "movieDetail.debugIdentityCopy": "复制诊断信息",
-  "movieDetail.debugIdentityHint": "字段名称来自共享同步契约，特意保持英文。仅在调试模式开启时可见。"
+  "movieDetail.debugIdentityHint": "字段名称来自共享同步契约，特意保持英文。仅在调试模式开启时可见。",
+  "movieDetail.debugSourcesNotWritten": "已选择但未保存"
 }

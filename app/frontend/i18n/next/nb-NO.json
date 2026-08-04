@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Prøv på nytt",
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopier diagnostikk",
-  "movieDetail.debugIdentityHint": "Feltnavnene kommer fra den delte synkroniseringskontrakten og står bevisst på engelsk. Vises bare mens feilsøkingsmodus er på."
+  "movieDetail.debugIdentityHint": "Feltnavnene kommer fra den delte synkroniseringskontrakten og står bevisst på engelsk. Vises bare mens feilsøkingsmodus er på.",
+  "movieDetail.debugSourcesNotWritten": "valgt, men ikke lagret"
 }

@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Опитай отново",
   "movieDetail.debugIdentityTitle": "Идентичност (Debug)",
   "movieDetail.debugIdentityCopy": "Копиране на диагностика",
-  "movieDetail.debugIdentityHint": "Имената на полетата идват от споделения договор за синхронизация и умишлено остават на английски. Видимо само докато режимът за отстраняване на грешки е включен."
+  "movieDetail.debugIdentityHint": "Имената на полетата идват от споделения договор за синхронизация и умишлено остават на английски. Видимо само докато режимът за отстраняване на грешки е включен.",
+  "movieDetail.debugSourcesNotWritten": "избрано, но незапазено"
 }

@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "重試",
   "movieDetail.debugIdentityTitle": "識別 (Debug)",
   "movieDetail.debugIdentityCopy": "複製診斷資訊",
-  "movieDetail.debugIdentityHint": "欄位名稱來自共用同步合約，刻意保持英文。僅在偵錯模式開啟時顯示。"
+  "movieDetail.debugIdentityHint": "欄位名稱來自共用同步合約，刻意保持英文。僅在偵錯模式開啟時顯示。",
+  "movieDetail.debugSourcesNotWritten": "已選擇但未儲存"
 }

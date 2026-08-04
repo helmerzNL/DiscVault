@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Prøv igen",
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiér diagnostik",
-  "movieDetail.debugIdentityHint": "Feltnavnene kommer fra den fælles synkroniseringskontrakt og forbliver bevidst på engelsk. Kun synlig, mens fejlfindingstilstand er slået til."
+  "movieDetail.debugIdentityHint": "Feltnavnene kommer fra den fælles synkroniseringskontrakt og forbliver bevidst på engelsk. Kun synlig, mens fejlfindingstilstand er slået til.",
+  "movieDetail.debugSourcesNotWritten": "valgt, men ikke gemt"
 }

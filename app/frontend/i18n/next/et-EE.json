@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Proovi uuesti",
   "movieDetail.debugIdentityTitle": "Identiteet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopeeri diagnostika",
-  "movieDetail.debugIdentityHint": "Väljade nimed pärinevad ühisest sünkroonimislepingust ja jäävad meelega inglise keelde. Nähtav ainult siis, kui silumisrežiim on sisse lülitatud."
+  "movieDetail.debugIdentityHint": "Väljade nimed pärinevad ühisest sünkroonimislepingust ja jäävad meelega inglise keelde. Nähtav ainult siis, kui silumisrežiim on sisse lülitatud.",
+  "movieDetail.debugSourcesNotWritten": "valitud, kuid salvestamata"
 }

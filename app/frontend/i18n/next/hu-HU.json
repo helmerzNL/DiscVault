@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Próbáld újra",
   "movieDetail.debugIdentityTitle": "Azonosság (Debug)",
   "movieDetail.debugIdentityCopy": "Diagnosztika másolása",
-  "movieDetail.debugIdentityHint": "A mezőnevek a közös szinkronszerződésből származnak, és szándékosan angolul maradnak. Csak bekapcsolt hibakeresési módban látható."
+  "movieDetail.debugIdentityHint": "A mezőnevek a közös szinkronszerződésből származnak, és szándékosan angolul maradnak. Csak bekapcsolt hibakeresési módban látható.",
+  "movieDetail.debugSourcesNotWritten": "kiválasztva, de nem mentve"
 }

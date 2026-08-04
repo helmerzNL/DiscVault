@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Poskusi znova",
   "movieDetail.debugIdentityTitle": "Identiteta (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiraj diagnostiko",
-  "movieDetail.debugIdentityHint": "Imena polj izhajajo iz skupne sinhronizacijske pogodbe in namenoma ostajajo v angleščini. Vidno samo, dokler je način za razhroščevanje vklopljen."
+  "movieDetail.debugIdentityHint": "Imena polj izhajajo iz skupne sinhronizacijske pogodbe in namenoma ostajajo v angleščini. Vidno samo, dokler je način za razhroščevanje vklopljen.",
+  "movieDetail.debugSourcesNotWritten": "izbrano, a ni shranjeno"
 }

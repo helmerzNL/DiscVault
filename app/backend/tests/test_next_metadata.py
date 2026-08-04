@@ -21,6 +21,7 @@ sys.modules.setdefault(
 )
 
 from app.backend.next_metadata import canonicalize_plugin_result
+from app.backend.next_metadata import normalize_year_value
 from app.backend.next_metadata import count_update_fields
 from app.backend.next_metadata import flat_credit_entries
 from app.backend.next_metadata import plugin_credit_updates
@@ -2820,6 +2821,68 @@ class NextArtworkLockTests(unittest.TestCase):
         )
         self.assertIn("poster_url", metadata_updates)
         self.assertIn("poster", media_updates)
+
+
+class NextMetadataYearCoercionTests(unittest.TestCase):
+    """`movies.year` is a text column; sources disagree on the type.
+
+    MovieVault v2's index declares `release_year integer` and its plugin passes
+    the value through untouched, so the year arrives at the merge as a Python
+    int. Bound raw against a text column that aborts the whole UPDATE — every
+    field in the same refresh is lost, not just the year — which is why this is
+    normalised at the merge boundary rather than at any one call site.
+    """
+
+    def test_integer_year_becomes_text(self):
+        self.assertEqual(normalize_year_value(1995), "1995")
+
+    def test_string_year_is_preserved(self):
+        self.assertEqual(normalize_year_value("1995"), "1995")
+        self.assertEqual(normalize_year_value("  1995  "), "1995")
+
+    def test_full_date_is_reduced_to_its_year(self):
+        # A source with only a release date still answers "what year is this".
+        self.assertEqual(normalize_year_value("1995-08-04"), "1995")
+
+    def test_unusable_values_are_dropped_rather_than_guessed(self):
+        for value in (None, "", "   ", "unknown", 12, 99999, [], {}):
+            self.assertIsNone(normalize_year_value(value), value)
+
+    def test_bool_is_never_a_year(self):
+        # bool subclasses int; True must not become "1".
+        self.assertIsNone(normalize_year_value(True))
+        self.assertIsNone(normalize_year_value(False))
+
+    def test_movievault_v2_shaped_payload_yields_a_text_year(self):
+        """The regression this whole change exists for.
+
+        The plugin tests use an int year and the merge tests use a string, and
+        nothing joined the two — so a type mismatch between them was invisible.
+        This is that join.
+        """
+        normalized = canonicalize_plugin_result(
+            "movievault_v2",
+            "movie_details",
+            {
+                "status": "hit",
+                "provider": "movievault_v2",
+                "movie": {"title": "Guardians of the Galaxy", "year": 2014},
+            },
+        )
+        year = normalized["movieUpdates"]["year"]
+        self.assertEqual(year, "2014")
+        self.assertIsInstance(year, str)
+
+    def test_string_year_still_survives_canonicalization(self):
+        normalized = canonicalize_plugin_result(
+            "tmdb",
+            "movie_details",
+            {
+                "status": "hit",
+                "movie": {"title": "Alien", "year": "1979"},
+            },
+        )
+        self.assertEqual(normalized["movieUpdates"]["year"], "1979")
 
 
 if __name__ == "__main__":

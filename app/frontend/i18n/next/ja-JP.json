@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "再試行",
   "movieDetail.debugIdentityTitle": "アイデンティティ (Debug)",
   "movieDetail.debugIdentityCopy": "診断情報をコピー",
-  "movieDetail.debugIdentityHint": "フィールド名は共有の同期コントラクトに由来し、意図的に英語のままにしています。デバッグモードが有効な間のみ表示されます。"
+  "movieDetail.debugIdentityHint": "フィールド名は共有の同期コントラクトに由来し、意図的に英語のままにしています。デバッグモードが有効な間のみ表示されます。",
+  "movieDetail.debugSourcesNotWritten": "選択されたが保存されず"
 }

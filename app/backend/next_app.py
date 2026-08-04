@@ -11618,6 +11618,57 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
     return []
 
 
+def digital_item_web_url(row: dict[str, Any]) -> str | None:
+    """A browser-openable link for a digital media item, or ``None``.
+
+    The stored ``playback_url`` is whatever the plugin emitted, and for Plex that
+    is an **app deep link** (``plex://server/<machineId>/details?key=...``,
+    ``next_plugins/plex/plugin.py``). On a desktop without the Plex app the
+    browser tries a protocol handler and silently does nothing — the link looks
+    live and is dead. So the web form is derived here rather than replacing what
+    is stored: native clients read ``playback_url`` and *should* keep opening the
+    app directly, and deriving costs no migration and no re-sync.
+
+    Plex points at ``app.plex.tv`` rather than the server's own web UI on
+    purpose. The plugin manifest describes ``baseUrl`` as "reachable by the
+    DiscVault container", so it is routinely an internal address
+    (``http://plex:32400``) that the user's browser cannot reach; building the
+    link from it would swap one dead link for another. ``app.plex.tv`` works from
+    any network the user is signed in on, and hands off to the desktop app where
+    that is installed.
+
+    Jellyfin's stored URL is already a web URL, but it is rebuilt from the same
+    parts anyway so both services follow one code path instead of one being
+    trusted and the other derived.
+    """
+    plugin_id = str(row.get("plugin_id") or "").strip().lower()
+    source_type = str(row.get("source_type") or "").strip().lower()
+    service = plugin_id or source_type
+    external_id = str(row.get("external_id") or "").strip()
+    base_url = str(row.get("base_url") or "").strip().rstrip("/")
+    machine_id = str(row.get("machine_id") or "").strip()
+
+    if "plex" in service:
+        # No machine id means Plex's /identity call failed at sync time (the
+        # plugin swallows that and stores ""), and there is no honest web URL to
+        # build. Better no link than a malformed one.
+        if machine_id and external_id:
+            key = quote(f"/library/metadata/{external_id}", safe="")
+            return f"https://app.plex.tv/desktop/#!/server/{machine_id}/details?key={key}"
+        return None
+    if "jellyfin" in service:
+        if base_url and external_id:
+            return f"{base_url}/web/index.html#!/details?id={quote(external_id, safe='')}"
+        return None
+
+    # Any other source: pass its own link through when it is already something a
+    # browser can open, and say nothing when it is not.
+    playback_url = str(row.get("playback_url") or "").strip()
+    if playback_url.startswith("http://") or playback_url.startswith("https://"):
+        return playback_url
+    return None
+
+
 def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
     if not table_exists(conn, "digital_media_items") or not table_exists(conn, "digital_media_sources"):
         return []
@@ -11640,6 +11691,7 @@ def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
                     dms.name AS source_name,
                     dms.source_type,
                     dms.base_url,
+                    dms.machine_id,
                     COUNT(*) OVER (
                         PARTITION BY dms.id, dmi.matched_movie_id
                     )::int AS variant_count,
@@ -11673,6 +11725,7 @@ def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
                 source_name,
                 source_type,
                 base_url,
+                machine_id,
                 variant_count
             FROM ranked
             WHERE source_rank = 1
@@ -11680,7 +11733,10 @@ def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
             """,
             (movie_id,),
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+    for row in rows:
+        row["web_url"] = digital_item_web_url(row)
+    return rows
 
 
 def digital_source_entities(conn) -> list[dict[str, Any]]:
@@ -12389,12 +12445,27 @@ def metadata_debug_fetched_sources(fetched_meta: dict[str, Any] | None) -> list[
             )
             if not entry.get("sourceRef") and candidate.get("sourceRef"):
                 entry["sourceRef"] = candidate.get("sourceRef")
+            # `accepted` only means the merge *selected* this candidate — that
+            # `should_apply_field` said yes. Whether it survived to the movies
+            # row is a separate fact, recorded on the decision by
+            # `metadata_field_decisions_with_write_state`. Reporting acceptance
+            # alone made a field that was chosen and then never written look
+            # identical to one that landed, which is exactly how an int-into-a-
+            # text-column failure could sit in plain sight reading "used".
+            accepted = bool(candidate.get("accepted") or candidate.get("winner"))
+            written = decision.get("written")
             entry["fields"].append(
                 {
                     "target": target,
                     "field": field,
                     "value": candidate.get("value"),
-                    "accepted": bool(candidate.get("accepted") or candidate.get("winner")),
+                    "accepted": accepted,
+                    # None when the event predates write tracking — the UI keeps
+                    # showing "used" there rather than claiming a failure it
+                    # cannot actually see.
+                    "written": None if written is None else (accepted and bool(written)),
+                    "writeState": decision.get("writeState"),
+                    "appliedValue": decision.get("appliedValue"),
                 }
             )
 

@@ -2620,5 +2620,6 @@
   "errors.databaseOfflineRetry": "Försök igen",
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiera diagnostik",
-  "movieDetail.debugIdentityHint": "Fältnamnen kommer från det gemensamma synkkontraktet och står medvetet kvar på engelska. Visas bara medan felsökningsläget är på."
+  "movieDetail.debugIdentityHint": "Fältnamnen kommer från det gemensamma synkkontraktet och står medvetet kvar på engelska. Visas bara medan felsökningsläget är på.",
+  "movieDetail.debugSourcesNotWritten": "vald men inte sparad"
 }
