@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Szacowana wartość",
   "movieDetail.estimatedValueCurrency": "Waluta",
-  "movieDetail.estimatedValueCurrencyNone": "Nie ustawiono"
+  "movieDetail.estimatedValueCurrencyNone": "Nie ustawiono",
+  "errors.databaseOffline": "DiscVault jest tymczasowo offline",
+  "errors.databaseOfflineRetry": "Spróbuj ponownie"
 }

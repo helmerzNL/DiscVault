@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Geschatte waarde",
   "movieDetail.estimatedValueCurrency": "Valuta",
-  "movieDetail.estimatedValueCurrencyNone": "Niet ingesteld"
+  "movieDetail.estimatedValueCurrencyNone": "Niet ingesteld",
+  "errors.databaseOffline": "DiscVault is tijdelijk offline",
+  "errors.databaseOfflineRetry": "Opnieuw proberen"
 }

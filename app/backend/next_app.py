@@ -38,6 +38,7 @@ from flask import Flask, Response, current_app, jsonify, request, send_file
 from flask import after_this_request
 from flask_cors import CORS
 import requests as http_requests
+import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from werkzeug.exceptions import HTTPException
@@ -1014,6 +1015,47 @@ def html_response(html: str):
     result.headers["Pragma"] = "no-cache"
     result.headers["Expires"] = "0"
     return result
+
+
+def render_database_offline_page(locale: str) -> str:
+    """A minimal, translated, dependency-free page for when Postgres is unreachable.
+
+    Deliberately has no dependency on ``ui_preview_html``/``collection_dashboard_snapshot`` —
+    both require a live database connection, which is exactly what's missing here.
+    """
+    headline = next_translate(locale, "errors.databaseOffline", "DiscVault is temporarily offline")
+    retry_label = next_translate(locale, "errors.databaseOfflineRetry", "Try again")
+    return f"""<!doctype html>
+<html lang="{html_lib.escape(locale)}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="20">
+<title>{html_lib.escape(headline)}</title>
+<style>
+  :root {{ color-scheme: light dark; }}
+  body {{
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; text-align: center; padding: 24px;
+    background: #f7f7f8; color: #1a1a1a;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    body {{ background: #14161a; color: #e8e8ea; }}
+  }}
+  h1 {{ font-size: 1.375rem; margin: 0 0 8px; }}
+  button {{
+    margin-top: 20px; padding: 10px 20px; border-radius: 8px; border: 1px solid #8886;
+    background: transparent; color: inherit; font-size: 1rem; cursor: pointer;
+  }}
+</style>
+</head>
+<body>
+  <div>
+    <h1>{html_lib.escape(headline)}</h1>
+    <button type="button" onclick="location.reload()">{html_lib.escape(retry_label)}</button>
+  </div>
+</body>
+</html>"""
 
 
 PWA_ICON_ASSETS = {
@@ -19300,6 +19342,12 @@ def is_public_next_path(path: str) -> bool:
     return path in PUBLIC_NEXT_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_NEXT_PREFIXES)
 
 
+# The only two view functions that render the full HTML app shell (many routes/decorators map to
+# each, but Flask's `request.endpoint` is the view function name regardless of which path matched).
+# Used to decide whether a database-outage error should render a friendly HTML page or clean JSON.
+_HTML_SHELL_ENDPOINTS = {"next_app_shell", "ui_preview"}
+
+
 def register_routes(flask_app: Flask) -> None:
     register_next_auth_routes(
         flask_app,
@@ -19337,6 +19385,28 @@ def register_routes(flask_app: Flask) -> None:
             },
             error.code or 500,
         )
+
+    @flask_app.errorhandler(psycopg.OperationalError)
+    def handle_database_offline_error(error: psycopg.OperationalError):
+        flask_app.logger.warning("Database connection failed on %s: %s", request.path, error)
+        locale_codes = [item["locale"] for item in NEXT_I18N_LOCALES]
+        best_locale = request.accept_languages.best_match(locale_codes, default=NEXT_I18N_DEFAULT_LOCALE)
+        locale = normalize_next_locale(best_locale)
+        if request.endpoint in _HTML_SHELL_ENDPOINTS:
+            result = html_response(render_database_offline_page(locale))
+        else:
+            result = jsonify(
+                json_ready(
+                    {
+                        "status": "error",
+                        "error": next_translate(locale, "errors.databaseOffline", "Database is temporarily unavailable"),
+                        "path": request.path,
+                    }
+                )
+            )
+        result.status_code = 503
+        result.headers["Retry-After"] = "20"
+        return result
 
     @flask_app.errorhandler(Exception)
     def handle_unexpected_error(error: Exception):  # pragma: no cover - Flask integration
