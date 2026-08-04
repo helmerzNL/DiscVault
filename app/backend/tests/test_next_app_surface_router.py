@@ -121,5 +121,68 @@ class NextAppSurfaceRouterTests(unittest.TestCase):
             )
 
 
+class NextDiscoverNavGatingTests(unittest.TestCase):
+    """Discover is a TMDb surface; with the plugin off it cannot render anything.
+
+    Offering the nav entry anyway is a promise the app cannot keep — the page's
+    only possible content is its "not configured" panel.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            cls.source = handle.read()
+        cls.handlers = {
+            match.group(1): _function_body(cls.source, match.end())
+            for match in re.finditer(r"\n    (?:async )?function (\w+)\(", cls.source)
+        }
+
+    def test_nav_entry_is_hidden_when_the_tmdb_plugin_is_disabled(self):
+        # One selector, because the sidebar item and the mobile tab both carry
+        # data-app-route="discover".
+        self.assertIn(
+            "setVisible('[data-app-route=\"discover\"]', tmdbPluginEnabled());",
+            self.source,
+        )
+        # Must sit in the function that re-runs on every snapshot and auth change.
+        self.assertIn(
+            "setVisible('[data-app-route=\"discover\"]', tmdbPluginEnabled());",
+            self.handlers["applyAppPermissionVisibility"],
+        )
+
+    def test_unloaded_snapshot_counts_as_unknown_and_stays_visible(self):
+        """An empty plugin list means "not loaded yet", not "TMDb is off".
+
+        The unauthenticated snapshot ships `plugins: []`, so a bare
+        `=== true` check would blink the tab away from someone entitled to it.
+        """
+        body = self.handlers["tmdbPluginEnabled"]
+        self.assertIn("if (!plugins.length) return true;", body)
+        self.assertIn('plugin.id === "tmdb"', body)
+        self.assertIn("?.enabled === true", body)
+
+    def test_discover_routes_bail_out_when_the_plugin_is_disabled(self):
+        """Hiding the nav is not enough — /discover survives as a URL.
+
+        Typed addresses, bookmarks and the back button all still reach it, and
+        landing on a dead surface is worse than never offering it.
+        """
+        for handler in ("showDiscoverPage", "openDiscoverDetail"):
+            body = self.handlers[handler]
+            self.assertIn("if (!tmdbPluginEnabled()) {", body, handler)
+            self.assertIn("showLibraryPage(pushUrl);", body, handler)
+
+    def test_person_page_reuses_the_shared_helper(self):
+        """The lazy-refresh gate asked the same question inline; one source now."""
+        self.assertNotIn(
+            'const tmdbEnabled = state.plugins?.find((plugin) => plugin.id === "tmdb")?.enabled === true;',
+            self.source,
+        )
+        self.assertIn(
+            'hasPermission("metadata.refresh_one") && tmdbPluginEnabled()',
+            self.source,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
