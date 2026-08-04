@@ -27594,12 +27594,12 @@ def ui_preview_html(
       document.getElementById("movieDetailOverview").textContent = localizedMovieOverview(movie, detail.localizations) || tNext("movieDetail.noOverview", "No overview imported yet.");
       const contentRatingInfo = preferredContentRatingInfo(movie, specs);
       const contentRating = contentRatingInfo.rating;
-      const heroContentRatingHtml = contentRatingValueHtml(contentRatingInfo);
+      const heroContentRatingHtml = contentRatingInfo.unknown ? "" : contentRatingValueHtml(contentRatingInfo);
       document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
         movie.year,
         movie.format,
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
-        heroContentRatingHtml ? {html: heroContentRatingHtml} : contentRatingSummaryText(contentRatingInfo),
+        heroContentRatingHtml ? {html: heroContentRatingHtml} : "",
         movieScoreLabel(movie),
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
         (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : "",
@@ -27795,15 +27795,13 @@ def ui_preview_html(
         setMovieDetailMessage(error.message || String(error), "bad");
       }
       if (hasPermission("metadata.refresh_one") && shouldLazyRefresh(`movie:${movieId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
-        authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/refresh`, {
+        // Enqueue a background job instead of calling the synchronous refresh
+        // endpoint: MovieVault/TMDB (and up to a dozen cast/crew TMDB calls)
+        // can take real time, and opening a movie must never block on that.
+        authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/jobs`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({dryRun: false, refreshPeople: true, personRefreshScope: "all"})
-        }).then(async () => {
-          if (activeDetailMovieId !== movieId) return;
-          const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
-          if (activeDetailMovieId !== movieId) return;
-          renderMovieDetail(refreshed.detail || {});
+          body: JSON.stringify({dryRun: false, refreshPeople: true, personRefreshScope: "all", force: false})
         }).catch(() => {});
       }
     }
@@ -28693,26 +28691,13 @@ def ui_preview_html(
       if (hasPermission("metadata.refresh_one") && tmdbEnabled
           && personHasTmdbIdentifier(personDetailForLazyRefresh)
           && shouldLazyRefresh(`person:${personId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
-        (async () => {
-          try {
-            await authApiJson(`/api/next/people/${encodeURIComponent(personId)}/metadata/refresh`, {
-              method: "POST",
-              headers: {"Content-Type": "application/json"},
-              body: JSON.stringify({dryRun: false})
-            });
-            await authApiJson(`/api/next/people/${encodeURIComponent(personId)}/filmography/refresh`, {
-              method: "POST",
-              headers: {"Content-Type": "application/json"},
-              body: JSON.stringify({dryRun: false})
-            });
-            if (activePersonId !== personId) return;
-            const refreshed = await authApiJson(`/api/next/people/${encodeURIComponent(personId)}`);
-            if (activePersonId !== personId) return;
-            renderPersonDetail(refreshed.detail || {});
-          } catch (_error) {
-            // silent lazy refresh
-          }
-        })();
+        // Enqueue a background job (same reasoning as the movie lazy refresh):
+        // never block opening a person page on a live TMDB call.
+        authApiJson(`/api/next/people/${encodeURIComponent(personId)}/metadata/jobs`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({force: false, refreshFilmography: true})
+        }).catch(() => {});
       }
     }
     function closeAppPersonDetail(pushUrl = true) {
