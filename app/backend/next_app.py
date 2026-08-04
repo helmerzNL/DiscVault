@@ -755,10 +755,38 @@ def database_url() -> str:
     return value
 
 
+def _connect_timeout_ms(env_name: str, default_ms: int) -> int:
+    value = os.environ.get(env_name, "").strip()
+    if not value:
+        return default_ms
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default_ms
+    return parsed if parsed > 0 else default_ms
+
+
 def connect():
     import psycopg
 
-    return psycopg.connect(database_url(), row_factory=dict_row, autocommit=False)
+    # Bounds how long a single SQL statement (statement_timeout) or a wait for a
+    # lock (lock_timeout) may run before Postgres cancels it, so a stuck/slow
+    # database fails fast with a normal, catchable psycopg.OperationalError
+    # subclass (QueryCanceled/LockNotAvailable) -- handled by
+    # handle_database_offline_error() -- instead of hanging for gunicorn's full
+    # --timeout (deliberately generous, to tolerate slow imports/exports) before
+    # the worker is killed. Only applied to this API-side connect(); the
+    # background worker (next_worker.py) and migrations (next_database.py) have
+    # their own separate connect() and are intentionally left unbounded, since
+    # their jobs (imports, MovieVault sync, migrations) can legitimately run long.
+    statement_timeout_ms = _connect_timeout_ms("DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS", 10_000)
+    lock_timeout_ms = _connect_timeout_ms("DISCVAULT_NEXT_API_LOCK_TIMEOUT_MS", 5_000)
+    return psycopg.connect(
+        database_url(),
+        row_factory=dict_row,
+        autocommit=False,
+        options=f"-c statement_timeout={statement_timeout_ms} -c lock_timeout={lock_timeout_ms}",
+    )
 
 
 def build_version() -> str:
