@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/helmerzNL/DiscVault/discussions
+    about: Ask usage questions and general discussion here, not as an issue.
+  - name: Report a security vulnerability
+    url: https://github.com/helmerzNL/DiscVault/security/advisories/new
+    about: Report vulnerabilities privately. Never open a public issue for these.
