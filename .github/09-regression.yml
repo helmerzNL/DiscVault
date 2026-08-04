@@ -1,0 +1,64 @@
+name: Regression
+description: Something that used to work is now broken
+title: "[Regression]: "
+labels: ["bug", "regression", "priority:high"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What stopped working?
+    validations:
+      required: true
+
+  - type: input
+    id: last_good
+    attributes:
+      label: Last version where it worked
+      placeholder: "1.4.1"
+    validations:
+      required: true
+
+  - type: input
+    id: first_bad
+    attributes:
+      label: First version where it broke
+      placeholder: "1.4.2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - PWA (browser)
+        - Android
+        - iOS
+        - Backend / API
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Suspected commit or PR
+      description: If you bisected it or have a hunch.
+      placeholder: "#412 or a1b2c3d"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error messages
+      render: shell
