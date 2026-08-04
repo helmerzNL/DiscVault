@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "通貨",
   "movieDetail.estimatedValueCurrencyNone": "未設定",
   "errors.databaseOffline": "DiscVault は一時的にオフラインです",
-  "errors.databaseOfflineRetry": "再試行"
+  "errors.databaseOfflineRetry": "再試行",
+  "movieDetail.debugIdentityTitle": "アイデンティティ (Debug)",
+  "movieDetail.debugIdentityCopy": "診断情報をコピー",
+  "movieDetail.debugIdentityHint": "フィールド名は共有の同期コントラクトに由来し、意図的に英語のままにしています。デバッグモードが有効な間のみ表示されます。"
 }

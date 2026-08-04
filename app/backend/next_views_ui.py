@@ -4664,11 +4664,109 @@ def ui_preview_html(
       color: var(--muted);
       cursor: pointer;
     }
+    .movie-list-card-body {
+      display: grid;
+      gap: 12px;
+    }
+    /* Tags and Loan sit side by side once there is room for two readable
+       columns; below that they stack, because a 300px-wide loan form with a
+       date picker in it is unusable. */
+    .movie-list-subsections {
+      display: grid;
+      gap: 16px;
+      margin-top: 4px;
+    }
+    @media (min-width: 900px) {
+      .movie-list-subsections {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+      .movie-tags-section,
+      .movie-loan-section {
+        margin-top: 0;
+      }
+    }
     .movie-tags-section,
     .movie-loan-section {
       margin-top: 16px;
       display: grid;
       gap: 10px;
+      align-content: start;
+      min-width: 0;
+    }
+    /* The loan block borrows the settings screen's row language (bordered
+       panel, label left, action right) so an action here reads as the same
+       kind of control as the toggles in Preferences. */
+    .movie-loan-panel {
+      display: grid;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--bg-solid) 78%, transparent);
+      padding: 12px;
+      min-width: 0;
+    }
+    .movie-loan-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      min-width: 0;
+    }
+    .movie-loan-row-copy {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .movie-loan-row-copy strong {
+      overflow-wrap: anywhere;
+    }
+    .movie-loan-row-copy span {
+      color: var(--muted);
+      font-size: .84rem;
+      line-height: 1.4;
+    }
+    .movie-loan-row.good strong {
+      color: var(--good, #28c95b);
+    }
+    .movie-loan-row.bad strong {
+      color: var(--red, #d9534f);
+    }
+    .movie-loan-row-actions {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .movie-loan-action {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-solid);
+      color: var(--text);
+      padding: 0 14px;
+      font: inherit;
+      font-size: .85rem;
+      font-weight: 720;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .movie-loan-action:hover {
+      border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+      background: color-mix(in srgb, var(--accent) 10%, var(--bg-solid));
+    }
+    .movie-loan-action.primary {
+      border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      color: var(--accent);
+    }
+    .movie-loan-action.danger {
+      color: var(--red, #d9534f);
+      border-color: color-mix(in srgb, var(--red, #d9534f) 38%, var(--line));
+    }
+    .movie-loan-action.danger:hover {
+      background: color-mix(in srgb, var(--red, #d9534f) 12%, var(--bg-solid));
+      border-color: color-mix(in srgb, var(--red, #d9534f) 58%, var(--line));
     }
     .detail-card-head.compact {
       margin: 0;
@@ -6938,6 +7036,176 @@ def ui_preview_html(
     }
     .debug-card-details[open] > summary.debug-card-summary {
       margin-bottom: 12px;
+    }
+    /* Same disclosure affordance as the debug cards, without the debug tint —
+       used by Personal lists, which opens collapsed. */
+    .collapse-card-details > summary.collapse-card-summary {
+      cursor: pointer;
+      list-style: none;
+      margin-bottom: 0;
+      user-select: none;
+    }
+    .collapse-card-details > summary.collapse-card-summary::-webkit-details-marker {
+      display: none;
+    }
+    .collapse-card-details > summary.collapse-card-summary::after {
+      content: "▸";
+      margin-left: auto;
+      color: var(--muted);
+      font-size: .82rem;
+      transition: transform .15s ease;
+    }
+    .collapse-card-details[open] > summary.collapse-card-summary::after {
+      transform: rotate(90deg);
+    }
+    .collapse-card-details[open] > summary.collapse-card-summary {
+      margin-bottom: 14px;
+    }
+    .debug-identity-rows {
+      display: grid;
+      gap: 4px;
+    }
+    .debug-identity-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+      gap: 12px;
+      align-items: baseline;
+      font-size: .82rem;
+    }
+    .debug-identity-label {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+    .debug-identity-value {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      text-align: right;
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+    .debug-identity-row.absent .debug-identity-value {
+      color: var(--muted);
+    }
+    .debug-identity-row.alert .debug-identity-value {
+      color: #f0932b;
+      font-weight: 700;
+    }
+    .debug-identity-alerts {
+      min-width: 20px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: #f0932b;
+      color: #1b1200;
+      font-size: .72rem;
+      font-weight: 800;
+      text-align: center;
+    }
+    .debug-identity-hint {
+      margin-top: 10px;
+    }
+    /* IMDb/TMDb marks under the hero title — small, tappable, and only present
+       when the identifier is actually known (see `movieExternalLinkChipsHtml`).
+       Mirrors the iOS app's ratings link strip. */
+    .hero-external-links {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .external-service-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 26px;
+      padding: 3px 7px;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: transform .15s ease, filter .15s ease;
+    }
+    .external-service-chip:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.08);
+    }
+    .external-service-chip.imdb {
+      background: #f5c518;
+    }
+    .external-service-chip-wordmark {
+      color: #111;
+      font-size: .74rem;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: .2px;
+    }
+    .external-service-chip.tmdb {
+      background: rgba(255,255,255,.08);
+      padding: 4px 8px;
+    }
+    .external-service-chip-logo {
+      display: block;
+      height: 14px;
+      width: auto;
+    }
+    /* Relationship cards run the full card width with the related poster
+       alongside; the title stays on one line so a long release name cannot
+       push the cards out of alignment. */
+    .detail-relations-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    .detail-relation-card {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      padding: 10px;
+      min-width: 0;
+      color: inherit;
+      text-decoration: none;
+      transition: transform .15s ease, border-color .15s ease;
+    }
+    .detail-relation-card[href]:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+    }
+    .detail-relation-art {
+      width: 46px;
+      height: 69px;
+      border-radius: 8px;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      background: color-mix(in srgb, var(--bg-elevated) 82%, transparent);
+      color: var(--muted);
+      font-weight: 800;
+      font-size: .84rem;
+    }
+    .detail-relation-art img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .detail-relation-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .detail-relation-copy strong {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .detail-relation-copy > span {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
     }
     .debug-field-details > summary {
       cursor: pointer;
@@ -14363,6 +14631,7 @@ def ui_preview_html(
               <span class="eyebrow" data-next-i18n="movieDetail.title">Movie details</span>
               <h2 class="movie-detail-title" id="movieDetailTitle">-</h2>
               <div class="hero-meta" id="movieDetailTags"></div>
+              <div class="hero-external-links hidden" id="movieDetailExternalLinks"></div>
               <p class="movie-detail-overview" id="movieDetailOverview"></p>
             </div>
           </div>
@@ -14571,62 +14840,71 @@ def ui_preview_html(
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailCollectorsPanel" role="tabpanel" aria-labelledby="movieDetailCollectorsTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.collectors">Collectors</h3>
             <div class="detail-fields" id="movieDetailCollectors"></div>
+            <div class="detail-grid movie-collectors-links hidden" id="movieDetailCollectorsLinks"></div>
           </div>
           <div class="detail-card full movie-list-card" id="movieListStateCard">
-            <div class="detail-card-head">
-              <div>
-                <h3 data-next-i18n="lists.personalTitle">Personal lists</h3>
-                <p class="import-source-meta" id="movieListStateSummary" data-next-i18n="lists.personalHelp">Save this film for later or mark when you watched it.</p>
+            <details class="collapse-card-details" id="movieListStateDetails">
+              <summary class="detail-card-head collapse-card-summary">
+                <div>
+                  <h3 data-next-i18n="lists.personalTitle">Personal lists</h3>
+                  <p class="import-source-meta" id="movieListStateSummary" data-next-i18n="lists.personalHelp">Save this film for later or mark when you watched it.</p>
+                </div>
+              </summary>
+              <div class="movie-list-card-body">
+                <div class="movie-list-primary-actions">
+                  <button type="button" class="movie-list-primary-action rewatch" id="movieLogRewatchButton" aria-haspopup="dialog">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M10.2 16.2 6.5 12.5l1.4-1.4 2.3 2.3 5.9-5.9 1.4 1.4z" fill="#28c95b"></path>
+                    </svg>
+                    <span data-next-i18n="lists.logRewatch">Log rewatch</span>
+                  </button>
+                  <button type="button" class="movie-list-primary-action watchlist" id="movieWatchlistToggleButton" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"></path></svg>
+                    <span id="movieWatchlistToggleLabel" data-next-i18n="lists.addToWatchlist">Add to Watchlist</span>
+                  </button>
+                </div>
+                <div class="watch-history-pills" id="movieWatchHistoryPills"></div>
+                <div class="movie-list-subsections">
+                  <div class="movie-tags-section" id="movieTagsSection">
+                    <div class="detail-card-head compact">
+                      <h4 data-next-i18n="lists.tagsTitle">Tags</h4>
+                      <button type="button" class="movie-tag-add-button" id="movieTagAddButton" aria-label="Add tag" title="Add tag" data-next-i18n-aria="lists.tagAdd" data-next-i18n-title="lists.tagAdd">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5H13V11H19V13H13V19H11V13H5V11H11V5Z"></path></svg>
+                      </button>
+                    </div>
+                    <div class="movie-tags-chips" id="movieTagsChips"></div>
+                  </div>
+                  <div class="movie-loan-section" id="movieLoanSection">
+                    <div class="detail-card-head compact">
+                      <h4 data-next-i18n="lists.loanTitle">Loan</h4>
+                    </div>
+                    <div class="movie-loan-panel">
+                      <div class="movie-loan-status" id="movieLoanStatus"></div>
+                      <form class="movie-loan-add hidden" id="movieLoanAddForm" autocomplete="off">
+                        <input type="text" id="movieLoanBorrower" data-next-i18n-placeholder="lists.loanBorrowerPlaceholder" placeholder="Borrower name">
+                        <input type="date" id="movieLoanDue" aria-label="Due date" data-next-i18n-aria="lists.loanDue">
+                        <button type="submit" class="movie-loan-action primary" data-next-i18n="lists.loanLend">Lend disc</button>
+                      </form>
+                      <div class="movie-loan-request-status" id="movieLoanRequestStatus"></div>
+                      <form class="movie-loan-request hidden" id="movieLoanRequestForm" autocomplete="off">
+                        <label class="loan-request-field">
+                          <span data-next-i18n="lists.loanRequestFrom">Borrow from</span>
+                          <input type="date" id="movieLoanRequestFrom" aria-label="Borrow from" data-next-i18n-aria="lists.loanRequestFrom">
+                        </label>
+                        <label class="loan-request-field">
+                          <span data-next-i18n="lists.loanRequestReturnBy">Return by</span>
+                          <input type="date" id="movieLoanRequestReturnBy" aria-label="Return by" data-next-i18n-aria="lists.loanRequestReturnBy">
+                        </label>
+                        <input type="text" id="movieLoanRequestNote" data-next-i18n-placeholder="lists.loanRequestNotePlaceholder" placeholder="Optional message to the owner">
+                        <button type="submit" class="movie-loan-action primary" data-next-i18n="lists.loanRequestSubmit">Send request</button>
+                      </form>
+                      <p class="form-message" id="movieLoanMessage"></p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="movie-list-primary-actions">
-              <button type="button" class="movie-list-primary-action rewatch" id="movieLogRewatchButton" aria-haspopup="dialog">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <path d="M10.2 16.2 6.5 12.5l1.4-1.4 2.3 2.3 5.9-5.9 1.4 1.4z" fill="#28c95b"></path>
-                </svg>
-                <span data-next-i18n="lists.logRewatch">Log rewatch</span>
-              </button>
-              <button type="button" class="movie-list-primary-action watchlist" id="movieWatchlistToggleButton" aria-pressed="false">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"></path></svg>
-                <span id="movieWatchlistToggleLabel" data-next-i18n="lists.addToWatchlist">Add to Watchlist</span>
-              </button>
-            </div>
-            <div class="watch-history-pills" id="movieWatchHistoryPills"></div>
-            <div class="movie-tags-section" id="movieTagsSection">
-              <div class="detail-card-head compact">
-                <h4 data-next-i18n="lists.tagsTitle">Tags</h4>
-                <button type="button" class="movie-tag-add-button" id="movieTagAddButton" aria-label="Add tag" title="Add tag" data-next-i18n-aria="lists.tagAdd" data-next-i18n-title="lists.tagAdd">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5H13V11H19V13H13V19H11V13H5V11H11V5Z"></path></svg>
-                </button>
-              </div>
-              <div class="movie-tags-chips" id="movieTagsChips"></div>
-            </div>
-            <div class="movie-loan-section" id="movieLoanSection">
-              <div class="detail-card-head compact">
-                <h4 data-next-i18n="lists.loanTitle">Loan</h4>
-              </div>
-              <div class="movie-loan-status" id="movieLoanStatus"></div>
-              <form class="movie-loan-add hidden" id="movieLoanAddForm" autocomplete="off">
-                <input type="text" id="movieLoanBorrower" data-next-i18n-placeholder="lists.loanBorrowerPlaceholder" placeholder="Borrower name">
-                <input type="date" id="movieLoanDue" aria-label="Due date" data-next-i18n-aria="lists.loanDue">
-                <button type="submit" class="secondary-button" data-next-i18n="lists.loanLend">Lend disc</button>
-              </form>
-              <div class="movie-loan-request-status" id="movieLoanRequestStatus"></div>
-              <form class="movie-loan-request hidden" id="movieLoanRequestForm" autocomplete="off">
-                <label class="loan-request-field">
-                  <span data-next-i18n="lists.loanRequestFrom">Borrow from</span>
-                  <input type="date" id="movieLoanRequestFrom" aria-label="Borrow from" data-next-i18n-aria="lists.loanRequestFrom">
-                </label>
-                <label class="loan-request-field">
-                  <span data-next-i18n="lists.loanRequestReturnBy">Return by</span>
-                  <input type="date" id="movieLoanRequestReturnBy" aria-label="Return by" data-next-i18n-aria="lists.loanRequestReturnBy">
-                </label>
-                <input type="text" id="movieLoanRequestNote" data-next-i18n-placeholder="lists.loanRequestNotePlaceholder" placeholder="Optional message to the owner">
-                <button type="submit" class="secondary-button" data-next-i18n="lists.loanRequestSubmit">Send request</button>
-              </form>
-              <p class="form-message" id="movieLoanMessage"></p>
-            </div>
+            </details>
           </div>
           <div class="detail-card full debug-card hidden" id="movieMetadataCompareCard">
             <div class="detail-card-head">
@@ -14656,13 +14934,27 @@ def ui_preview_html(
               <div class="debug-sources" id="movieDetailDebugSources"></div>
             </details>
           </div>
-          <div class="detail-card">
+          <div class="detail-card full debug-card hidden" id="movieDetailDebugIdentityCard">
+            <details class="debug-card-details">
+              <summary class="detail-card-head debug-card-summary">
+                <h3 data-next-i18n="movieDetail.debugIdentityTitle">Identity (Debug)</h3>
+                <span class="debug-identity-alerts hidden" id="movieDetailDebugIdentityAlerts"></span>
+                <span class="tag blue" data-next-i18n="appAdmin.debugMode">Debug</span>
+              </summary>
+              <div class="debug-identity-rows" id="movieDetailDebugIdentityRows"></div>
+              <div class="button-row compact">
+                <button type="button" class="secondary-button" id="movieDetailDebugIdentityCopy" data-next-i18n="movieDetail.debugIdentityCopy">Copy diagnostics</button>
+              </div>
+              <p class="import-source-meta debug-identity-hint" data-next-i18n="movieDetail.debugIdentityHint">Field names come from the shared sync contract and stay in English on purpose. Only visible while Debug Mode is on.</p>
+            </details>
+          </div>
+          <div class="detail-card hidden" id="movieDetailLinksCard">
             <h3 data-next-i18n="movieDetail.links">Links</h3>
             <div class="detail-grid" id="movieDetailLinks"></div>
           </div>
-          <div class="detail-card">
+          <div class="detail-card full" id="movieDetailRelationshipsCard">
             <h3 data-next-i18n="movieDetail.relationships">Relationships</h3>
-            <div class="detail-grid" id="movieDetailRelationships"></div>
+            <div class="detail-relations-grid" id="movieDetailRelationships"></div>
           </div>
           <div class="detail-card full">
             <div class="detail-card-head">
@@ -16950,6 +17242,7 @@ def ui_preview_html(
     let activeDetailPayload = null;
     const movieArtworkHiddenKinds = new Set();
     let dvMissingContributionReportData = null;
+    let movieIdentityDebugState = [];
     let activeContainerId = "";
     let activeContainerPayload = null;
     let activePersonId = "";
@@ -17501,6 +17794,117 @@ def ui_preview_html(
       };
       if (!key) return "";
       return map[key] || key.replace(/_/g, " ");
+    }
+    // The PWA/server counterpart to the iOS "Identity (Debug)" card
+    // (DiscVaultApp `Sources/Diagnostics/DebugIdentityPanel.swift`). Same three
+    // rules: nothing is normalized here (the backend ships the values the real
+    // ladder produced), raw sits next to normalized, and the field labels stay
+    // in English because they name columns in the shared sync contract — a
+    // translated label breaks the link to the spec section that governs it, and
+    // this output gets pasted into bug reports read against that spec.
+    function movieIdentityDebugRow(label, value, emphasis) {
+      const text = value === null || value === undefined || value === "" ? "" : String(value);
+      return {
+        label,
+        value: text || "—",
+        emphasis: emphasis || (text ? "normal" : "absent")
+      };
+    }
+    function movieIdentityUuidVersionNote(raw) {
+      const text = String(raw || "").trim();
+      if (!text) return "";
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) return `${text} (not a UUID)`;
+      // App-Guidance `movievault-identity-routing-and-media-formats.md` §1: an
+      // import-derived id is a UUIDv5 and will never resolve against the
+      // catalog, while a real release id is a v4.
+      const version = Number.parseInt(text.split("-")[2][0], 16);
+      if (version === 4) return `${text} (v4 — catalog release id)`;
+      if (version === 5) return `${text} (v5 — import-derived, will not resolve)`;
+      return `${text} (v${version})`;
+    }
+    function movieIdentityLadderRows(ladder) {
+      const labels = {
+        client_id: "ladder tier 1 (client_id)",
+        barcode: "ladder tier 2 (barcode)",
+        tmdb_format_edition: "ladder tier 3 (tmdb+format+edition)",
+        title_year: "ladder tier 4 (title+year)"
+      };
+      return (Array.isArray(ladder) ? ladder : []).map((entry) => {
+        const label = labels[entry.tier] || `ladder (${entry.tier})`;
+        const key = entry.key ? String(entry.key) : "—";
+        if (!entry.matchedMovieId) return movieIdentityDebugRow(label, `no match — key ${key}`, "absent");
+        // Resolving back to this same row is what a healthy ladder looks like.
+        // Resolving to a *different* live movie is the finding: two records the
+        // ladder cannot tell apart, which is what every duplicate report is.
+        if (entry.isSelf) return movieIdentityDebugRow(label, `self-match — key ${key}`, "normal");
+        return movieIdentityDebugRow(
+          label,
+          `MATCHES OTHER RECORD ${entry.matchedTitle || entry.matchedMovieId} (${entry.matchedMovieId})`,
+          "alert"
+        );
+      });
+    }
+    function movieIdentityDebugRows(detail) {
+      const movie = (detail && detail.movie) || {};
+      const metadata = movie.metadata || {};
+      const identity = (detail && detail.identityDebug) || {};
+      const mvIds = movieVaultExternalIds(movie, metadata);
+      const rows = [
+        movieIdentityDebugRow("surface", `PWA / server (${window.DISCVAULT_APP_VERSION || "unknown"})`),
+        movieIdentityDebugRow("id (server movie entity)", movie.id),
+        movieIdentityDebugRow("public_id (release id)", movie.public_id),
+        movieIdentityDebugRow("client_id (record token, tier 1)", movie.client_id),
+        movieIdentityDebugRow("owner_id", movie.owner_id || movie.ownerId),
+        movieIdentityDebugRow("barcode (raw)", movie.barcode),
+        movieIdentityDebugRow("barcode (normalized, tier 2)", identity.normalizedBarcode),
+        movieIdentityDebugRow("tmdbId (tier 3)", identity.tmdbId),
+        movieIdentityDebugRow("format (raw, tier 3)", movie.format),
+        movieIdentityDebugRow("format (normalized, tier 3)", identity.formatKey),
+        movieIdentityDebugRow("edition (tier 3)", movie.edition),
+        movieIdentityDebugRow("title (raw)", movie.title),
+        movieIdentityDebugRow("title (normalized, tier 4)", identity.normalizedTitle),
+        movieIdentityDebugRow("releaseYear (tier 4)", movie.year),
+        movieIdentityDebugRow("movieVaultId", mvIds.movieId ? movieIdentityUuidVersionNote(mvIds.movieId) : "", mvIds.movieId && /\\(v5 /.test(movieIdentityUuidVersionNote(mvIds.movieId)) ? "alert" : undefined),
+        movieIdentityDebugRow("movieVaultReleaseId", mvIds.releaseId ? movieIdentityUuidVersionNote(mvIds.releaseId) : ""),
+        movieIdentityDebugRow("imdbId", identity.imdbId),
+        movieIdentityDebugRow("deleted_at (tombstone)", movie.deleted_at, movie.deleted_at ? "alert" : "normal"),
+        movieIdentityDebugRow("created_at", movie.created_at),
+        movieIdentityDebugRow("updated_at", movie.updated_at),
+        movieIdentityDebugRow("location_id", movie.location_id)
+      ];
+      // The ids an iOS/Android client shows on its own Identity (Debug) panel.
+      // Without them a phone's record and this server row cannot be lined up by
+      // hand at all, which is the whole reason a cross-platform counterpart of
+      // that panel is worth having.
+      const mappings = Array.isArray(identity.clientMappings) ? identity.clientMappings : [];
+      if (!mappings.length) {
+        rows.push(movieIdentityDebugRow("client mappings (iOS/Android)", "none — never pushed by a mobile client"));
+      } else {
+        mappings.forEach((mapping, index) => {
+          rows.push(movieIdentityDebugRow(
+            `client mapping[${index}] device / record token`,
+            `${mapping.deviceClientId || "—"} / ${mapping.recordToken || "—"}`
+          ));
+        });
+      }
+      rows.push(movieIdentityDebugRow("containers", (identity.containerIds || []).join(", ")));
+      rows.push(movieIdentityDebugRow("media groups", (detail.mediaGroups || []).map((group) => group.name).join(", ")));
+      rows.push(movieIdentityDebugRow("digital items", String((detail.digitalItems || []).length)));
+      rows.push(movieIdentityDebugRow("identifiers", (detail.identifiers || []).map((item) => `${item.provider_id || "?"}:${item.identifier || "?"}`).join(", ")));
+      rows.push(...movieIdentityLadderRows(identity.ladder));
+      return rows;
+    }
+    function movieIdentityDebugHtml(rows) {
+      if (!rows.length) return "";
+      return rows.map((row) => `
+        <div class="debug-identity-row ${escapeHtml(row.emphasis)}">
+          <span class="debug-identity-label">${escapeHtml(row.label)}</span>
+          <span class="debug-identity-value">${escapeHtml(row.value)}</span>
+        </div>
+      `).join("");
+    }
+    function movieIdentityDebugPlainText(rows) {
+      return rows.map((row) => `${row.label}\\t${row.value}`).join("\\n");
     }
     function movieMetadataSourcesDebugHtml(metadataDebug) {
       const fetched = metadataDebug && Array.isArray(metadataDebug.fetched) ? metadataDebug.fetched : [];
@@ -25256,6 +25660,17 @@ def ui_preview_html(
         </span>
       `;
     }
+    function heroContentRatingPillHtml(info) {
+      const rating = String(info?.rating || "").trim();
+      if (!rating || info?.unknown) return "";
+      const flag = info.country ? flagIconHtml(info.country, ratingCountryLabel(info.country)) : "";
+      return `
+        <span class="country-list-item content-rating-hero" title="${escapeHtml(contentRatingSummaryText(info))}">
+          ${flag}
+          <span class="content-rating-hero-value">${escapeHtml(rating)}</span>
+        </span>
+      `;
+    }
     function contentRatingDebugHtml(infosOrMovie, technicalSpecs = null) {
       const infos = Array.isArray(infosOrMovie) ? infosOrMovie : allContentRatingInfos(infosOrMovie, technicalSpecs);
       const displayInfos = infos.length ? infos : (Array.isArray(infosOrMovie) ? [] : [preferredContentRatingInfo(infosOrMovie, technicalSpecs)]);
@@ -25578,13 +25993,60 @@ def ui_preview_html(
       if (provider === "tmdb") return "TMDb";
       return item?.provider_id || item?.providerId || "";
     }
-    function movieIdentifierLinkCard(item) {
-      item = item || {};
-      const service = movieIdentifierServiceLabel(item);
-      const href = movieIdentifierUrl(item);
-      const label = service ? tNext("movieDetail.openOnService", "Open on {service}").replace("{service}", service) : tNext("common.open", "Open");
-      const meta = [item.identifier_type || "", item.identifier || ""].filter(Boolean);
-      return externalServiceCard(label, item.identifier || "", href, service, meta);
+    // Compact, tappable IMDb/TMDb marks in the hero, mirroring the iOS app's
+    // ratings link strip (DiscVaultApp `TitleDetailView.ratingsLinksRow`). A
+    // service only ever appears when its identifier is actually known — a chip
+    // that cannot open anything is worse than no chip, because it reads as "we
+    // have this id" when we do not.
+    function movieExternalLinkChipsHtml(identifiers) {
+      const byProvider = new Map();
+      (identifiers || []).filter(Boolean).forEach((item) => {
+        const provider = String(item.provider_id || item.providerId || "").toLowerCase();
+        if (provider !== "imdb" && provider !== "tmdb") return;
+        if (!String(item.identifier || "").trim()) return;
+        if (!byProvider.has(provider)) byProvider.set(provider, item);
+      });
+      return ["imdb", "tmdb"].map((provider) => {
+        const item = byProvider.get(provider);
+        if (!item) return "";
+        const href = movieIdentifierUrl(item);
+        if (!href) return "";
+        const service = movieIdentifierServiceLabel(item);
+        const label = tNext("movieDetail.openOnService", "Open on {service}").replace("{service}", service);
+        const mark = provider === "imdb"
+          ? `<span class="external-service-chip-wordmark" aria-hidden="true">IMDb</span>`
+          : `<img class="external-service-chip-logo" src="/api/next/assets/tmdb-logo.svg" alt="" aria-hidden="true">`;
+        return `<a class="external-service-chip ${provider}" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${mark}</a>`;
+      }).join("");
+    }
+    // Relationship entries get the related poster next to them: a box set or
+    // group is recognised by its artwork long before its title is read, and the
+    // title itself stays on one line so a long release name cannot push the
+    // cards out of alignment.
+    function relationCardHtml({title, subtitle, poster, href, debugId, debugLabel}) {
+      const image = usableImage(poster || "");
+      const name = title || tNext("common.untitled", "Untitled");
+      const art = image
+        ? `<img src="${escapeHtml(image)}" alt="" loading="lazy">`
+        : `<span aria-hidden="true">${escapeHtml(initialsFromName(name))}</span>`;
+      const body = `
+        <span class="detail-relation-art">${art}</span>
+        <span class="detail-relation-copy">
+          <strong title="${escapeHtml(name)}">${escapeHtml(name)}</strong>
+          <span>${escapeHtml(subtitle || "")}</span>
+          ${debugIdHtml(debugId || "", debugLabel || "ID")}
+        </span>
+      `;
+      if (!href) return `<div class="detail-relation-card">${body}</div>`;
+      const containerMatch = String(href).match(/\\/containers\\/([^/?#]+)/);
+      const linkAttrs = containerMatch ? ` data-open-container="${escapeHtml(decodeURIComponent(containerMatch[1]))}"` : "";
+      return `<a class="detail-relation-card" href="${escapeHtml(href)}"${linkAttrs}>${body}</a>`;
+    }
+    function relationEntityPoster(entity) {
+      const metadata = (entity && entity.metadata) || {};
+      return entity?.poster_url || entity?.posterUrl
+        || metadata.poster_url || metadata.posterUrl || metadata.poster
+        || entity?.backdrop_url || metadata.backdrop_url || metadata.backdropUrl || "";
     }
     function digitalPlaybackServiceKey(item) {
       return String(item?.plugin_id || item?.pluginId || item?.source_name || item?.sourceName || "").toLowerCase();
@@ -27147,16 +27609,26 @@ def ui_preview_html(
             const borrower = loan.borrowerName || tNext("lists.loanLinkedAccount", "Linked account");
             const due = loan.dueAt ? `${tNext("lists.loanDue", "Due")} ${escapeHtml(formatAppDate(loan.dueAt))}` : "";
             statusNode.innerHTML = `
-              <div class="movie-loan-active">
-                <span>${escapeHtml(tNext("lists.loanTo", "Lent to"))} <strong>${escapeHtml(borrower)}</strong>${due ? ` · ${due}` : ""}</span>
-                <div class="button-row compact">
-                  <button type="button" class="secondary-button" data-loan-return="${escapeHtml(loan.id)}" data-next-i18n="lists.loanMarkReturned">Mark returned</button>
-                  <button type="button" class="list-pill-button danger" data-loan-delete="${escapeHtml(loan.id)}" data-next-i18n="common.delete">Delete</button>
-                </div>
+              <div class="movie-loan-row">
+                <span class="movie-loan-row-copy">
+                  <strong>${escapeHtml(tNext("lists.loanTo", "Lent to"))} ${escapeHtml(borrower)}</strong>
+                  ${due ? `<span>${due}</span>` : ""}
+                </span>
+                <span class="movie-loan-row-actions">
+                  <button type="button" class="movie-loan-action" data-loan-return="${escapeHtml(loan.id)}" data-next-i18n="lists.loanMarkReturned">Mark returned</button>
+                  <button type="button" class="movie-loan-action danger" data-loan-delete="${escapeHtml(loan.id)}" data-next-i18n="common.delete">Delete</button>
+                </span>
               </div>
             `;
           } else {
-            statusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanNone", "This disc is not on loan."))}</span>`;
+            statusNode.innerHTML = `
+              <div class="movie-loan-row">
+                <span class="movie-loan-row-copy">
+                  <strong>${escapeHtml(tNext("lists.loanTitle", "Loan"))}</strong>
+                  <span>${escapeHtml(tNext("lists.loanNone", "This disc is not on loan."))}</span>
+                </span>
+              </div>
+            `;
           }
         }
         if (addForm) addForm.classList.toggle("hidden", !!loan);
@@ -27176,18 +27648,33 @@ def ui_preview_html(
           const until = req.returnBy ? escapeHtml(formatAppDate(req.returnBy)) : "";
           const range = from && until ? ` · ${from} → ${until}` : "";
           requestStatusNode.innerHTML = `
-            <div class="movie-loan-request-active">
-              <span class="status-pill">${escapeHtml(tNext("lists.loanRequestPending", "Borrow request pending"))}${range}</span>
-              <div class="button-row compact">
-                <button type="button" class="list-pill-button" data-loan-request-cancel="${escapeHtml(req.id)}" data-next-i18n="lists.loanRequestCancel">Cancel request</button>
-              </div>
+            <div class="movie-loan-row">
+              <span class="movie-loan-row-copy">
+                <strong>${escapeHtml(tNext("lists.loanRequestPending", "Borrow request pending"))}</strong>
+                ${range ? `<span>${range.replace(/^ · /, "")}</span>` : ""}
+              </span>
+              <span class="movie-loan-row-actions">
+                <button type="button" class="movie-loan-action" data-loan-request-cancel="${escapeHtml(req.id)}" data-next-i18n="lists.loanRequestCancel">Cancel request</button>
+              </span>
             </div>`;
         } else if (approved) {
-          requestStatusNode.innerHTML = `<span class="status-pill good">${escapeHtml(tNext("lists.loanRequestApproved", "Borrow request approved"))}</span>`;
+          requestStatusNode.innerHTML = `
+            <div class="movie-loan-row good">
+              <span class="movie-loan-row-copy"><strong>${escapeHtml(tNext("lists.loanRequestApproved", "Borrow request approved"))}</strong></span>
+            </div>`;
         } else if (declined) {
-          requestStatusNode.innerHTML = `<span class="status-pill bad">${escapeHtml(tNext("lists.loanRequestDeclined", "Borrow request declined"))}</span>`;
+          requestStatusNode.innerHTML = `
+            <div class="movie-loan-row bad">
+              <span class="movie-loan-row-copy"><strong>${escapeHtml(tNext("lists.loanRequestDeclined", "Borrow request declined"))}</strong></span>
+            </div>`;
         } else {
-          requestStatusNode.innerHTML = `<span class="import-source-meta">${escapeHtml(tNext("lists.loanRequestHelp", "Ask the owner if you may borrow this disc."))}</span>`;
+          requestStatusNode.innerHTML = `
+            <div class="movie-loan-row">
+              <span class="movie-loan-row-copy">
+                <strong>${escapeHtml(tNext("lists.loanTitle", "Loan"))}</strong>
+                <span>${escapeHtml(tNext("lists.loanRequestHelp", "Ask the owner if you may borrow this disc."))}</span>
+              </span>
+            </div>`;
         }
       }
       if (requestForm) requestForm.classList.toggle("hidden", pending || approved);
@@ -27594,7 +28081,10 @@ def ui_preview_html(
       document.getElementById("movieDetailOverview").textContent = localizedMovieOverview(movie, detail.localizations) || tNext("movieDetail.noOverview", "No overview imported yet.");
       const contentRatingInfo = preferredContentRatingInfo(movie, specs);
       const contentRating = contentRatingInfo.rating;
-      const heroContentRatingHtml = contentRatingInfo.unknown ? "" : contentRatingValueHtml(contentRatingInfo);
+      // Flag and age never travel apart in the hero: a bare country flag says
+      // nothing about the film, so the pill is rendered only when the rating
+      // itself is known and it always carries the rating text beside the flag.
+      const heroContentRatingHtml = heroContentRatingPillHtml(contentRatingInfo);
       document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
         movie.year,
         physicalFormatLabel(movie.format),
@@ -27664,12 +28154,38 @@ def ui_preview_html(
       if (debugMetadataCard) debugMetadataCard.classList.toggle("hidden", !appDebugMode);
       const debugSources = document.getElementById("movieDetailDebugSources");
       if (debugSources) debugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
-      const identifiers = (detail.identifiers || []).filter(Boolean).map((item) => {
+      const debugIdentityCard = document.getElementById("movieDetailDebugIdentityCard");
+      if (debugIdentityCard) debugIdentityCard.classList.toggle("hidden", !appDebugMode);
+      movieIdentityDebugState = appDebugMode ? movieIdentityDebugRows(detail) : [];
+      const debugIdentityRows = document.getElementById("movieDetailDebugIdentityRows");
+      if (debugIdentityRows) debugIdentityRows.innerHTML = movieIdentityDebugHtml(movieIdentityDebugState);
+      const debugIdentityAlerts = document.getElementById("movieDetailDebugIdentityAlerts");
+      if (debugIdentityAlerts) {
+        // Surfaced on the collapsed summary on purpose: nobody expands a
+        // diagnostic card on the chance that something is wrong, and the
+        // findings that matter (a tier matching another record, a tombstone)
+        // are the entire reason to open it.
+        const alerts = movieIdentityDebugState.filter((row) => row.emphasis === "alert").length;
+        debugIdentityAlerts.textContent = alerts ? String(alerts) : "";
+        debugIdentityAlerts.classList.toggle("hidden", !alerts);
+      }
+      // IMDb and TMDb are hero chips now (see `movieExternalLinkChipsHtml`) and
+      // Plex/Jellyfin live in the Collectors panel, so the Links card is left
+      // with whatever else a plugin recorded — and stays hidden when that is
+      // nothing, rather than showing an empty shell on every film.
+      const externalChips = movieExternalLinkChipsHtml(detail.identifiers);
+      const externalLinksNode = document.getElementById("movieDetailExternalLinks");
+      if (externalLinksNode) {
+        externalLinksNode.innerHTML = externalChips;
+        externalLinksNode.classList.toggle("hidden", !externalChips);
+      }
+      const otherIdentifiers = (detail.identifiers || []).filter(Boolean).filter((item) => {
         const service = movieIdentifierServiceLabel(item);
-        return service === "IMDb" || service === "TMDb"
-          ? movieIdentifierLinkCard(item)
-          : miniCard(`${item.provider_id || ""} ${item.identifier_type || ""}`.trim(), item.identifier);
-      });
+        return service !== "IMDb" && service !== "TMDb";
+      }).map((item) => miniCard(`${item.provider_id || ""} ${item.identifier_type || ""}`.trim(), item.identifier));
+      const linksCard = document.getElementById("movieDetailLinksCard");
+      document.getElementById("movieDetailLinks").innerHTML = otherIdentifiers.join("");
+      if (linksCard) linksCard.classList.toggle("hidden", !otherIdentifiers.length);
       const digitalItems = (detail.digitalItems || []).filter(Boolean);
       const digitalCounts = digitalItems.reduce((counts, item) => {
         const key = digitalPlaybackServiceKey(item) || "digital";
@@ -27677,20 +28193,28 @@ def ui_preview_html(
         return counts;
       }, {});
       const digital = digitalItems.map((item) => digitalPlaybackLinkCard(item, digitalCounts[digitalPlaybackServiceKey(item) || "digital"] || 1));
-      document.getElementById("movieDetailLinks").innerHTML = [...identifiers, ...digital].join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noLinks", "No links yet."))}</div>`;
-      const containerCards = collectorsModeEnabled() ? (detail.containers || []).map((container) => miniCard(
-        container.title,
-        [String(container.container_type || "").replace(/_/g, " "), container.relationship, container.year].filter(Boolean).join(" / "),
-        `/api/next/app/containers/${encodeURIComponent(container.id)}`
-      )) : [];
-      const groupCards = (detail.mediaGroups || []).map((group) => miniCard(
-        group.name,
-        [
+      const collectorsLinksNode = document.getElementById("movieDetailCollectorsLinks");
+      if (collectorsLinksNode) {
+        collectorsLinksNode.innerHTML = digital.join("");
+        collectorsLinksNode.classList.toggle("hidden", !digital.length);
+      }
+      const containerCards = collectorsModeEnabled() ? (detail.containers || []).map((container) => relationCardHtml({
+        title: container.title,
+        subtitle: [String(container.container_type || "").replace(/_/g, " "), container.relationship, container.year].filter(Boolean).join(" / "),
+        poster: relationEntityPoster(container),
+        href: `/api/next/app/containers/${encodeURIComponent(container.id)}`,
+        debugId: container.id,
+        debugLabel: "Container ID"
+      })) : [];
+      const groupCards = (detail.mediaGroups || []).map((group) => relationCardHtml({
+        title: group.name,
+        subtitle: [
           group.member_count ? `${group.member_count} ${tNext("movieDetail.members", "members")}` : "",
           group.movie_count ? `${group.movie_count} ${tNext("collection.movies", "movies").toLowerCase()}` : "",
           group.hide_digital ? tNext("movieDetail.digitalHidden", "digital hidden") : ""
-        ].filter(Boolean).join(" / ")
-      ));
+        ].filter(Boolean).join(" / "),
+        poster: relationEntityPoster(group)
+      }));
       document.getElementById("movieDetailRelationships").innerHTML = [...containerCards, ...groupCards].join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noRelationships", "No relationships yet."))}</div>`;
       document.querySelectorAll("#movieDetailRelationships a[href*='/containers/']").forEach((anchor) => {
         anchor.addEventListener("click", (event) => {
@@ -27760,6 +28284,22 @@ def ui_preview_html(
       const debugSourcesEl = document.getElementById("movieDetailDebugSources");
       if (debugSourcesEl) debugSourcesEl.innerHTML = "";
       dvMissingContributionReportData = null;
+      document.getElementById("movieDetailDebugIdentityCard")?.classList.add("hidden");
+      document.getElementById("movieDetailDebugIdentityCard")?.querySelector(".debug-card-details")?.removeAttribute("open");
+      const debugIdentityEl = document.getElementById("movieDetailDebugIdentityRows");
+      if (debugIdentityEl) debugIdentityEl.innerHTML = "";
+      movieIdentityDebugState = [];
+      // Personal lists reopens collapsed on every film: the card carries tags,
+      // loans and the whole watch history, and leaving it open pushes the cast
+      // below the fold for the majority of openings that never touch it.
+      document.getElementById("movieListStateDetails")?.removeAttribute("open");
+      document.getElementById("movieDetailExternalLinks")?.classList.add("hidden");
+      const externalLinksResetNode = document.getElementById("movieDetailExternalLinks");
+      if (externalLinksResetNode) externalLinksResetNode.innerHTML = "";
+      document.getElementById("movieDetailCollectorsLinks")?.classList.add("hidden");
+      const collectorsLinksResetNode = document.getElementById("movieDetailCollectorsLinks");
+      if (collectorsLinksResetNode) collectorsLinksResetNode.innerHTML = "";
+      document.getElementById("movieDetailLinksCard")?.classList.add("hidden");
       document.getElementById("movieDetailLinks").innerHTML = "";
       document.getElementById("movieDetailRelationships").innerHTML = "";
       document.getElementById("movieDetailPosterArtwork").innerHTML = "";
@@ -41936,6 +42476,23 @@ def ui_preview_html(
       document.getElementById("movieMetadataDryRunButton")?.addEventListener("click", () => refreshActiveMovieMetadata(true));
       document.getElementById("movieMetadataApplyButton")?.addEventListener("click", () => refreshActiveMovieMetadata(false));
       document.getElementById("movieMetadataCompareButton")?.addEventListener("click", () => loadMovieMetadataComparison());
+      document.getElementById("movieDetailDebugIdentityCopy")?.addEventListener("click", async (event) => {
+        // Tab-separated, one row per line — pasteable straight into a bug
+        // report, and two records' panels line up column-wise when pasted one
+        // after the other. Same format the iOS panel copies.
+        const button = event.currentTarget;
+        const text = movieIdentityDebugPlainText(movieIdentityDebugState);
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          button.textContent = tNext("movieDetail.debugSourcesCopyDone", "Copied");
+        } catch (error) {
+          button.textContent = tNext("movieDetail.debugSourcesCopyFailed", "Action failed");
+        }
+        setTimeout(() => {
+          button.textContent = tNext("movieDetail.debugIdentityCopy", "Copy diagnostics");
+        }, 1600);
+      });
       document.getElementById("shuffleButton")?.addEventListener("click", () => {
         const items = libraryDisplayItems();
         if (!items.length) return;

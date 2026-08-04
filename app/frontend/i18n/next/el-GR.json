@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "Νόμισμα",
   "movieDetail.estimatedValueCurrencyNone": "Δεν έχει οριστεί",
   "errors.databaseOffline": "Το DiscVault είναι προσωρινά εκτός σύνδεσης",
-  "errors.databaseOfflineRetry": "Δοκιμάστε ξανά"
+  "errors.databaseOfflineRetry": "Δοκιμάστε ξανά",
+  "movieDetail.debugIdentityTitle": "Ταυτότητα (Debug)",
+  "movieDetail.debugIdentityCopy": "Αντιγραφή διαγνωστικών",
+  "movieDetail.debugIdentityHint": "Τα ονόματα πεδίων προέρχονται από το κοινό συμβόλαιο συγχρονισμού και παραμένουν σκόπιμα στα αγγλικά. Εμφανίζεται μόνο όσο η λειτουργία Debug είναι ενεργή."
 }

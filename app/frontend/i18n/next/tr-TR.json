@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "Para birimi",
   "movieDetail.estimatedValueCurrencyNone": "Ayarlanmadı",
   "errors.databaseOffline": "DiscVault geçici olarak çevrimdışı",
-  "errors.databaseOfflineRetry": "Tekrar dene"
+  "errors.databaseOfflineRetry": "Tekrar dene",
+  "movieDetail.debugIdentityTitle": "Kimlik (Debug)",
+  "movieDetail.debugIdentityCopy": "Tanılamayı kopyala",
+  "movieDetail.debugIdentityHint": "Alan adları ortak eşitleme sözleşmesinden gelir ve bilerek İngilizce kalır. Yalnızca Hata Ayıklama Modu açıkken görünür."
 }

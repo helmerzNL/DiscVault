@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "Moeda",
   "movieDetail.estimatedValueCurrencyNone": "Não definido",
   "errors.databaseOffline": "O DiscVault está temporariamente offline",
-  "errors.databaseOfflineRetry": "Tentar novamente"
+  "errors.databaseOfflineRetry": "Tentar novamente",
+  "movieDetail.debugIdentityTitle": "Identidade (Debug)",
+  "movieDetail.debugIdentityCopy": "Copiar diagnóstico",
+  "movieDetail.debugIdentityHint": "Os nomes dos campos vêm do contrato de sincronização partilhado e permanecem em inglês de propósito. Visível apenas enquanto o modo Debug estiver ativo."
 }

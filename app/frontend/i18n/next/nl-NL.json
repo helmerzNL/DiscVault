@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "Valuta",
   "movieDetail.estimatedValueCurrencyNone": "Niet ingesteld",
   "errors.databaseOffline": "DiscVault is tijdelijk offline",
-  "errors.databaseOfflineRetry": "Opnieuw proberen"
+  "errors.databaseOfflineRetry": "Opnieuw proberen",
+  "movieDetail.debugIdentityTitle": "Identiteit (Debug)",
+  "movieDetail.debugIdentityCopy": "Diagnostiek kopiëren",
+  "movieDetail.debugIdentityHint": "De veldnamen komen uit het gedeelde synccontract en blijven bewust in het Engels. Alleen zichtbaar zolang Debugmodus aan staat."
 }

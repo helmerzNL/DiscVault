@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "Monedă",
   "movieDetail.estimatedValueCurrencyNone": "Nesetat",
   "errors.databaseOffline": "DiscVault este temporar offline",
-  "errors.databaseOfflineRetry": "Încearcă din nou"
+  "errors.databaseOfflineRetry": "Încearcă din nou",
+  "movieDetail.debugIdentityTitle": "Identitate (Debug)",
+  "movieDetail.debugIdentityCopy": "Copiază diagnosticul",
+  "movieDetail.debugIdentityHint": "Numele câmpurilor provin din contractul de sincronizare partajat și rămân intenționat în engleză. Vizibil doar cât timp modul Debug este activ."
 }

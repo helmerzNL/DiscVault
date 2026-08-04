@@ -197,7 +197,7 @@ class NextMovieDetailUiTests(unittest.TestCase):
         # of rendering the full "Unknown content rating" sentence in a compact
         # tag row (which used to make the badge look oversized).
         self.assertIn(
-            'const heroContentRatingHtml = contentRatingInfo.unknown ? "" : contentRatingValueHtml(contentRatingInfo);',
+            "const heroContentRatingHtml = heroContentRatingPillHtml(contentRatingInfo);",
             render_source,
         )
         self.assertIn(
@@ -208,6 +208,189 @@ class NextMovieDetailUiTests(unittest.TestCase):
             "heroContentRatingTag = contentRatingBadgeHtml(contentRatingInfo)",
             render_source,
         )
+
+    def test_hero_content_rating_pill_pairs_flag_with_the_rating(self):
+        """A country flag never appears in the hero without the rating beside it.
+
+        The flag alone says nothing about the film, so the pill is built only
+        when a rating is actually known — and when it is, the rating text is
+        always rendered next to the flag rather than left to a tooltip.
+        """
+        start = self.source.index("function heroContentRatingPillHtml(info)")
+        end = self.source.index("\n    function ", start + 1)
+        pill_source = self.source[start:end]
+
+        self.assertIn('if (!rating || info?.unknown) return "";', pill_source)
+        self.assertIn("flagIconHtml(info.country", pill_source)
+        self.assertIn(
+            '<span class="content-rating-hero-value">${escapeHtml(rating)}</span>',
+            pill_source,
+        )
+
+    def test_personal_lists_card_opens_collapsed(self):
+        """Personal lists reopens collapsed on every film.
+
+        The card carries tags, loans and the whole watch history; leaving it
+        expanded pushes the cast below the fold for the majority of openings
+        that never touch it.
+        """
+        self.assertIn('id="movieListStateDetails"', self.source)
+        self.assertIn(
+            '<details class="collapse-card-details" id="movieListStateDetails">',
+            self.source,
+        )
+        # No `open` attribute in the markup, and the reset path strips one that a
+        # previous film left behind.
+        self.assertNotIn(
+            '<details class="collapse-card-details" id="movieListStateDetails" open',
+            self.source,
+        )
+        self.assertIn(
+            'document.getElementById("movieListStateDetails")?.removeAttribute("open");',
+            self.source,
+        )
+
+    def test_tags_and_loan_share_a_two_column_row_on_large_screens(self):
+        self.assertIn('<div class="movie-list-subsections">', self.source)
+        self.assertIn(
+            "      .movie-list-subsections {\n"
+            "        grid-template-columns: repeat(2, minmax(0, 1fr));",
+            self.source,
+        )
+
+    def test_imdb_and_tmdb_render_as_hero_chips_only_when_known(self):
+        """IMDb/TMDb are compact hero marks, mirroring the iOS ratings strip.
+
+        A chip that cannot open anything reads as "we have this id" when we do
+        not, so a service without a usable identifier is dropped entirely.
+        """
+        start = self.source.index("function movieExternalLinkChipsHtml(identifiers)")
+        end = self.source.index("\n    // Relationship entries", start + 1)
+        chips_source = self.source[start:end]
+
+        self.assertIn('if (provider !== "imdb" && provider !== "tmdb") return;', chips_source)
+        self.assertIn('if (!String(item.identifier || "").trim()) return;', chips_source)
+        self.assertIn('if (!href) return "";', chips_source)
+        self.assertIn('/api/next/assets/tmdb-logo.svg', chips_source)
+        self.assertIn('id="movieDetailExternalLinks"', self.source)
+
+    def test_digital_playback_links_live_in_the_collectors_panel(self):
+        panel_index = self.source.index('id="movieDetailCollectorsPanel"')
+        links_index = self.source.index('id="movieDetailCollectorsLinks"')
+        release_panel_index = self.source.index('id="movieDetailReleasePanel"')
+
+        self.assertLess(panel_index, links_index)
+        self.assertLess(release_panel_index, panel_index)
+        self.assertIn(
+            'collectorsLinksNode.innerHTML = digital.join("");',
+            self.source,
+        )
+
+    def test_links_card_hides_when_no_other_identifier_remains(self):
+        self.assertIn('<div class="detail-card hidden" id="movieDetailLinksCard">', self.source)
+        self.assertIn(
+            'if (linksCard) linksCard.classList.toggle("hidden", !otherIdentifiers.length);',
+            self.source,
+        )
+
+    def test_relationships_card_is_full_width_with_poster_and_single_line_title(self):
+        self.assertIn(
+            '<div class="detail-card full" id="movieDetailRelationshipsCard">',
+            self.source,
+        )
+        self.assertIn(
+            '<div class="detail-relations-grid" id="movieDetailRelationships">',
+            self.source,
+        )
+        self.assertIn("function relationCardHtml(", self.source)
+        self.assertIn('<span class="detail-relation-art">', self.source)
+        # One line, ellipsised — a long release name must not push the cards out
+        # of alignment.
+        self.assertIn(
+            "    .detail-relation-copy strong {\n"
+            "      display: block;\n"
+            "      min-width: 0;\n"
+            "      overflow: hidden;\n"
+            "      white-space: nowrap;\n"
+            "      text-overflow: ellipsis;\n"
+            "    }",
+            self.source,
+        )
+
+    def test_identity_debug_card_follows_the_metadata_debug_card(self):
+        metadata_index = self.source.index('id="movieDetailDebugMetadataCard"')
+        identity_index = self.source.index('id="movieDetailDebugIdentityCard"')
+
+        self.assertLess(metadata_index, identity_index)
+        self.assertIn(
+            'class="detail-card full debug-card hidden" '
+            'id="movieDetailDebugIdentityCard">',
+            self.source,
+        )
+        self.assertIn('data-next-i18n="movieDetail.debugIdentityTitle"', self.source)
+        self.assertIn(
+            'if (debugIdentityCard) debugIdentityCard.classList.toggle("hidden", !appDebugMode);',
+            self.source,
+        )
+        self.assertIn(
+            "movieIdentityDebugState = appDebugMode ? movieIdentityDebugRows(detail) : [];",
+            self.source,
+        )
+
+    def test_identity_debug_labels_stay_in_english(self):
+        """The row labels name columns in the shared sync contract.
+
+        A translated field name breaks the link to the spec section that
+        governs it, and this output gets pasted into bug reports read against
+        that spec — so the labels are literals, never `tNext` lookups.
+        """
+        start = self.source.index("function movieIdentityDebugRows(detail)")
+        end = self.source.index("\n    function movieIdentityDebugHtml", start + 1)
+        rows_source = self.source[start:end]
+
+        self.assertIn('movieIdentityDebugRow("client_id (record token, tier 1)"', rows_source)
+        self.assertIn('movieIdentityDebugRow("barcode (normalized, tier 2)"', rows_source)
+        self.assertIn('movieIdentityDebugRow("title (normalized, tier 4)"', rows_source)
+        self.assertIn('client mappings (iOS/Android)', rows_source)
+        self.assertNotIn("tNext(", rows_source)
+
+    def test_identity_debug_ladder_flags_a_match_against_another_record(self):
+        start = self.source.index("function movieIdentityLadderRows(ladder)")
+        end = self.source.index("\n    function movieIdentityDebugRows", start + 1)
+        ladder_source = self.source[start:end]
+
+        self.assertIn('if (entry.isSelf) return movieIdentityDebugRow(label, `self-match', ladder_source)
+        self.assertIn("MATCHES OTHER RECORD", ladder_source)
+        self.assertIn('"alert"', ladder_source)
+
+    def test_identity_debug_payload_reuses_the_real_ladder(self):
+        """Rule one of the iOS panel: never re-normalize.
+
+        The values and verdicts are produced by the same `normalize_*` /
+        `find_movie_by_*` functions the sync merge path calls, so the panel
+        cannot show something subtly different from what actually matched.
+        """
+        self.assertIn("def movie_identity_debug_entity(", self.app_source)
+        for call in (
+            "normalize_barcode(barcode)",
+            "normalize_title(title)",
+            "find_movie_by_client_id(",
+            "find_movie_by_barcode_match(",
+            "find_movie_by_tmdb_edition(",
+            "find_movie_by_title_year(",
+        ):
+            self.assertIn(call, self.app_source)
+        self.assertIn('"identityDebug": identity_debug,', self.app_source)
+
+    def test_client_id_mapping_splits_device_and_record_token(self):
+        """`client_id_mappings.client_id` is a composite the sync API writes.
+
+        It stores `"<device client id>:<record token>"`; the two halves are the
+        two different things the sync contract calls `client_id`, so they are
+        split apart rather than shown as one opaque string.
+        """
+        self.assertIn("def movie_client_id_mappings(", self.app_source)
+        self.assertIn('device, _, record_token = composite.partition(":")', self.app_source)
 
     def test_cast_and_crew_block_precedes_media(self):
         self.assertIn('data-next-i18n="movieDetail.castCrew"', self.source)
