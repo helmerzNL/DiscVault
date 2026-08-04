@@ -1,0 +1,86 @@
+name: Incorrect metadata
+description: Wrong or missing data for a film, series or disc edition
+title: "[Metadata]: "
+labels: ["data", "metadata"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for incorrect titles, artwork, cast, release dates or disc
+        editions. Include the TMDB id where possible so we can find the exact
+        record.
+
+  - type: input
+    id: title
+    attributes:
+      label: Title
+      placeholder: "Blade Runner 2049"
+    validations:
+      required: true
+
+  - type: input
+    id: tmdb
+    attributes:
+      label: TMDB id or link
+      placeholder: "335984 or https://www.themoviedb.org/movie/335984"
+
+  - type: dropdown
+    id: field
+    attributes:
+      label: Which data is wrong?
+      multiple: true
+      options:
+        - Title or original title
+        - Cover / artwork
+        - Cast or crew
+        - Release date
+        - Runtime
+        - Genre
+        - Disc edition or format (DVD / Blu-ray / 4K UHD)
+        - Region code
+        - Barcode / EAN
+        - Publisher or distributor
+        - Description or synopsis
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Which format is this about?
+      options:
+        - DVD
+        - Blu-ray
+        - 4K UHD Blu-ray
+        - Box set with multiple formats
+        - Not applicable
+
+  - type: textarea
+    id: current
+    attributes:
+      label: What does it say now?
+      description: Copy the incorrect value, or attach a screenshot.
+    validations:
+      required: true
+
+  - type: textarea
+    id: correct
+    attributes:
+      label: What should it say?
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Where can we verify this? For example TMDB, Blu-ray.com, or a photo of the case.
+      placeholder: "https://www.blu-ray.com/..."
+
+  - type: input
+    id: ean
+    attributes:
+      label: Barcode / EAN on the case
+      description: Helps us identify the exact edition.
+      placeholder: "8717418512345"
