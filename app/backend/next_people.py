@@ -8,6 +8,7 @@ for backward compatibility.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
@@ -1097,6 +1098,19 @@ def person_detail_entity(conn, person_id: UUID, actor: dict[str, Any] | None = N
     }
 
 
+# TMDb recommends not re-fetching a person's data more often than every few
+# months, since biographical/profile data changes rarely. Fixed per TMDb's own
+# guidance -- not an admin-configurable setting.
+PERSON_METADATA_CACHE_DAYS = 180
+
+
+def person_metadata_is_fresh(fetched_at: Any) -> bool:
+    parsed = _next_app().parse_client_timestamp(fetched_at)
+    if parsed is None:
+        return False
+    return (datetime.now(timezone.utc) - parsed) < timedelta(days=PERSON_METADATA_CACHE_DAYS)
+
+
 MOVIE_METADATA_PERSON_REFRESH_LIMIT = 12
 MOVIE_METADATA_PERSON_REFRESH_CREW_JOBS = {
     "director",
@@ -1130,6 +1144,7 @@ def movie_metadata_person_refresh_empty(
         "selected": 0,
         "previewed": 0,
         "refreshed": 0,
+        "cached": 0,
         "skipped": 0,
         "errorCount": 0,
         "errors": [],
@@ -1188,6 +1203,47 @@ def movie_metadata_person_refresh_skipped_people(selected: list[dict[str, Any]],
         }
         for credit in selected
     ]
+
+
+def movie_metadata_person_refresh_cached_people(selected: list[dict[str, Any]], reason: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "personId": str(credit.get("person_id") or credit.get("personId") or ""),
+            "name": credit.get("name"),
+            "creditType": credit.get("credit_type") or credit.get("creditType"),
+            "job": credit.get("job"),
+            "character": credit.get("character"),
+            "status": "cached",
+            "reason": reason,
+        }
+        for credit in selected
+    ]
+
+
+def select_movie_metadata_person_refresh_credits_needing_fetch(
+    selected: list[dict[str, Any]],
+    *,
+    force: bool = True,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split already-selected credits into (needs_fetch, cached).
+
+    A credit is considered cached when its joined ``person_metadata`` (already
+    selected by ``movie_credit_entities()``, no extra query) has a
+    ``person_metadata_fetched_at`` within ``PERSON_METADATA_CACHE_DAYS`` and the
+    caller did not request a forced live refresh.
+    """
+    if force:
+        return list(selected), []
+    needs_fetch: list[dict[str, Any]] = []
+    cached: list[dict[str, Any]] = []
+    for credit in selected:
+        person_metadata = credit.get("person_metadata")
+        fetched_at = person_metadata.get("person_metadata_fetched_at") if isinstance(person_metadata, dict) else None
+        if fetched_at and person_metadata_is_fresh(fetched_at):
+            cached.append(credit)
+        else:
+            needs_fetch.append(credit)
+    return needs_fetch, cached
 
 
 def register_next_people_routes(flask_app: Flask, *, connect) -> None:  # pragma: no cover - Flask integration
