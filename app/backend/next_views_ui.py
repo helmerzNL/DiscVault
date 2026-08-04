@@ -18413,6 +18413,19 @@ def ui_preview_html(
       const settings = (state && state.instanceSettings) || {};
       return settings.loansSystemEnabled !== false;
     }
+    // Discover is a TMDb surface and nothing else; with the plugin off it can
+    // only ever render its "not configured" panel, so the nav entry is a promise
+    // the app cannot keep.
+    //
+    // An empty list means the snapshot has not loaded yet (the unauthenticated
+    // fallback ships `plugins: []`), not that TMDb is off — treated as unknown
+    // and left visible, the same way `loansSystemEnabled` defaults to on rather
+    // than flickering a surface away from someone who is entitled to it.
+    function tmdbPluginEnabled() {
+      const plugins = (state && state.plugins) || [];
+      if (!plugins.length) return true;
+      return plugins.find((plugin) => plugin.id === "tmdb")?.enabled === true;
+    }
     function canManageLoansSystem() {
       return hasActualPermission("security.manage_loans_system");
     }
@@ -18486,6 +18499,8 @@ def ui_preview_html(
       setVisible('[data-app-route="import"]', hasAnyPermission(APP_PERMISSION_GROUPS.importCenter));
       setVisible('[data-app-route="lists"]', hasPermission("watchlist.manage"));
       setVisible('[data-app-route="statistics"]', hasPermission("watchlist.manage"));
+      // One selector covers both the sidebar item and the mobile tab.
+      setVisible('[data-app-route="discover"]', tmdbPluginEnabled());
       renderAppAdminVisibility();
       setElementVisible(document.querySelector('[data-preferences-tab="collectors"]'), canUseCollectorPreferences);
       if (!canUseCollectorPreferences && activePreferenceTab === "collectors") {
@@ -29233,8 +29248,7 @@ def ui_preview_html(
       } catch (error) {
         setPersonDetailMessage(error.message || String(error), "bad");
       }
-      const tmdbEnabled = state.plugins?.find((plugin) => plugin.id === "tmdb")?.enabled === true;
-      if (personDetailForLazyRefresh && hasPermission("metadata.refresh_one") && tmdbEnabled
+      if (personDetailForLazyRefresh && hasPermission("metadata.refresh_one") && tmdbPluginEnabled()
           && personHasTmdbIdentifier(personDetailForLazyRefresh)
           && shouldLazyRefresh(`person:${personId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
         // Visible, synchronous refresh (person, then filmography) -- same
@@ -36844,6 +36858,14 @@ def ui_preview_html(
     }
     async function openDiscoverDetail(item, pushUrl = true) {
       if (!item || !item.id) return;
+      // Same reason as `showDiscoverPage`: a /discover/<type>/<id> link would
+      // otherwise open a detail page whose only possible content is a TMDb
+      // lookup that cannot run. Guarding here covers every caller — the three
+      // route-dispatch sites and the person-detail return route.
+      if (!tmdbPluginEnabled()) {
+        showLibraryPage(pushUrl);
+        return;
+      }
       activeDiscoverItem = item;
       showDiscoverDetailPage();
       updateDiscoverWishlistButtonState(activeDiscoverItem);
@@ -36923,6 +36945,14 @@ def ui_preview_html(
       }
     }
     function showDiscoverPage(pushUrl = true) {
+      // Hiding the nav entry is not enough: /discover stays reachable by typed
+      // URL, bookmark and back-button, and landing on a dead surface is worse
+      // than never offering it. Mirrors how collectors mode bails out of the
+      // container detail in `applyAppPermissionVisibility`.
+      if (!tmdbPluginEnabled()) {
+        showLibraryPage(pushUrl);
+        return;
+      }
       showAppSurface("discoverView");
       setActiveAppRoute("discover");
       bindDiscoverCategories();
