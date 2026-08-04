@@ -25959,7 +25959,7 @@ def ui_preview_html(
       const metadata = movie.metadata || {};
       const poster = usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
       const title = movie.title || tNext("common.untitled", "Untitled");
-      const subtitle = [movie.year, movie.format, movie.edition].filter(Boolean).join(" / ");
+      const subtitle = [movie.year, physicalFormatLabel(movie.format), movie.edition].filter(Boolean).join(" / ");
       const href = `/movies/${encodeURIComponent(movie.id)}`;
       const removeAttrs = options.removeKind === "item"
         ? `data-container-remove-item="${escapeHtml(options.removeValue || movie.id || "")}" data-item-type="${escapeHtml(options.itemType || "movie")}"`
@@ -27597,7 +27597,7 @@ def ui_preview_html(
       const heroContentRatingHtml = contentRatingInfo.unknown ? "" : contentRatingValueHtml(contentRatingInfo);
       document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
         movie.year,
-        movie.format,
+        physicalFormatLabel(movie.format),
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
         heroContentRatingHtml ? {html: heroContentRatingHtml} : "",
         movieScoreLabel(movie),
@@ -27616,7 +27616,7 @@ def ui_preview_html(
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
         [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title],
         [tNext("movieDetail.barcode", "Barcode"), movie.barcode],
-        [tNext("movieDetail.format", "Format"), movie.format],
+        [tNext("movieDetail.format", "Format"), physicalFormatLabel(movie.format)],
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
         [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
@@ -27631,7 +27631,7 @@ def ui_preview_html(
         [tNext("movieDetail.videoResolution", "Resolution"), specs.video_resolution || metadata.video_resolution],
         [tNext("movieDetail.videoCodecs", "Video codec"), enumListText(specs.video_codecs || metadata.video_codecs, videoCodecLabel)],
         [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
-        [tNext("movieDetail.format", "Format"), movie.format || specs.format || metadata.format],
+        [tNext("movieDetail.format", "Format"), physicalFormatLabel(movie.format || specs.format || metadata.format)],
         [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
         [tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)],
         [tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)]
@@ -27888,7 +27888,7 @@ def ui_preview_html(
     }
     function movieSelectOptions(availableMovies, selectedId = "") {
       return sortedByTitle(availableMovies).map((movie) => {
-        const label = [movie.title || tNext("common.untitled", "Untitled"), movie.year, movie.format, movie.barcode].filter(Boolean).join(" / ");
+        const label = [movie.title || tNext("common.untitled", "Untitled"), movie.year, physicalFormatLabel(movie.format), movie.barcode].filter(Boolean).join(" / ");
         return `<option value="${escapeHtml(movie.id)}" ${String(movie.id) === String(selectedId) ? "selected" : ""}>${escapeHtml(label)}</option>`;
       }).join("");
     }
@@ -29165,7 +29165,7 @@ def ui_preview_html(
       list.innerHTML = members.map((movie, index) => {
         const id = String(movie.id || movie.movieId || "");
         const title = String(movie.title || movie.name || tNext("importCenter.boxSetUntitledMember", "Untitled film"));
-        const metaParts = [movie.year, movie.format].map((part) => String(part || "").trim()).filter(Boolean);
+        const metaParts = [movie.year, physicalFormatLabel(movie.format)].map((part) => String(part || "").trim()).filter(Boolean);
         const meta = metaParts.join(" / ");
         return `
           <div class="import-batch-row" data-box-builder-member="${escapeHtml(id)}">
@@ -30701,7 +30701,7 @@ def ui_preview_html(
         .slice(0, 50);
     }
     function renderImportPostMovieRow(movie, actionLabel) {
-      const meta = [movie.year, movie.format, movie.barcode, actionLabel || movie.action].filter(Boolean).join(" / ");
+      const meta = [movie.year, physicalFormatLabel(movie.format), movie.barcode, actionLabel || movie.action].filter(Boolean).join(" / ");
       return `
         <div class="import-post-row">
           <div>
@@ -40627,7 +40627,7 @@ def ui_preview_html(
       else showLibraryPage(false);
     }
     function movieMeta(movie) {
-      return [movie.year, movie.format, movie.barcode].filter(Boolean);
+      return [movie.year, physicalFormatLabel(movie.format), movie.barcode].filter(Boolean);
     }
     function selectMovie(movieId) {
       const movie = movies.find((item) => String(item.id) === String(movieId)) || movies[0] || {};
