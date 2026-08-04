@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "통화",
   "movieDetail.estimatedValueCurrencyNone": "설정되지 않음",
   "errors.databaseOffline": "DiscVault가 일시적으로 오프라인 상태입니다",
-  "errors.databaseOfflineRetry": "다시 시도"
+  "errors.databaseOfflineRetry": "다시 시도",
+  "movieDetail.debugIdentityTitle": "아이덴티티 (Debug)",
+  "movieDetail.debugIdentityCopy": "진단 정보 복사",
+  "movieDetail.debugIdentityHint": "필드 이름은 공유 동기화 계약에서 가져오며 의도적으로 영어로 유지됩니다. 디버그 모드가 켜져 있을 때만 표시됩니다."
 }

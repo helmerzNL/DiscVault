@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "Devise",
   "movieDetail.estimatedValueCurrencyNone": "Non défini",
   "errors.databaseOffline": "DiscVault est temporairement hors ligne",
-  "errors.databaseOfflineRetry": "Réessayer"
+  "errors.databaseOfflineRetry": "Réessayer",
+  "movieDetail.debugIdentityTitle": "Identité (Debug)",
+  "movieDetail.debugIdentityCopy": "Copier le diagnostic",
+  "movieDetail.debugIdentityHint": "Les noms de champs proviennent du contrat de synchronisation partagé et restent volontairement en anglais. Visible uniquement lorsque le mode Debug est actif."
 }

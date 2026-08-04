@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "货币",
   "movieDetail.estimatedValueCurrencyNone": "未设置",
   "errors.databaseOffline": "DiscVault 暂时离线",
-  "errors.databaseOfflineRetry": "重试"
+  "errors.databaseOfflineRetry": "重试",
+  "movieDetail.debugIdentityTitle": "标识 (Debug)",
+  "movieDetail.debugIdentityCopy": "复制诊断信息",
+  "movieDetail.debugIdentityHint": "字段名称来自共享同步契约，特意保持英文。仅在调试模式开启时可见。"
 }

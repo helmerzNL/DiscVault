@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "Валюта",
   "movieDetail.estimatedValueCurrencyNone": "Не задано",
   "errors.databaseOffline": "DiscVault тимчасово офлайн",
-  "errors.databaseOfflineRetry": "Спробувати ще раз"
+  "errors.databaseOfflineRetry": "Спробувати ще раз",
+  "movieDetail.debugIdentityTitle": "Ідентичність (Debug)",
+  "movieDetail.debugIdentityCopy": "Скопіювати діагностику",
+  "movieDetail.debugIdentityHint": "Назви полів походять зі спільного контракту синхронізації та навмисно залишаються англійською. Видно лише доки увімкнено режим налагодження."
 }

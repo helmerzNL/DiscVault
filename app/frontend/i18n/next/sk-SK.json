@@ -2617,5 +2617,8 @@
   "movieDetail.estimatedValueCurrency": "Mena",
   "movieDetail.estimatedValueCurrencyNone": "Nenastavené",
   "errors.databaseOffline": "DiscVault je dočasne offline",
-  "errors.databaseOfflineRetry": "Skúsiť znova"
+  "errors.databaseOfflineRetry": "Skúsiť znova",
+  "movieDetail.debugIdentityTitle": "Identita (Debug)",
+  "movieDetail.debugIdentityCopy": "Kopírovať diagnostiku",
+  "movieDetail.debugIdentityHint": "Názvy polí pochádzajú zo zdieľaného synchronizačného kontraktu a zámerne zostávajú v angličtine. Zobrazuje sa len pri zapnutom režime ladenia."
 }

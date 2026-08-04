@@ -12479,6 +12479,165 @@ def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | 
     }
 
 
+def movie_client_id_mappings(conn, movie_id: UUID) -> list[dict[str, Any]]:
+    """Every device/record token pair the sync API has bound to this movie.
+
+    ``client_id_mappings.client_id`` stores the composite ``"<device client
+    id>:<record token>"`` written by :func:`store_client_entity_mapping`; it is
+    split back apart here so the two halves stay recognisable as the two
+    different things the sync contract calls ``client_id`` (§1). These are the
+    ids an iOS or Android client shows on its own Identity (Debug) panel, and
+    the only way to line a phone's record up with the server row from this side.
+    """
+    if not table_exists(conn, "client_id_mappings"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT client_id, created_at
+            FROM client_id_mappings
+            WHERE entity_id=%s AND entity_type='movie'
+            ORDER BY created_at
+            """,
+            (movie_id,),
+        )
+        rows = cur.fetchall()
+    mappings: list[dict[str, Any]] = []
+    for row in rows:
+        composite = str(row.get("client_id") or "")
+        device, _, record_token = composite.partition(":")
+        mappings.append(
+            {
+                "deviceClientId": device or None,
+                "recordToken": record_token or None,
+                "createdAt": row.get("created_at"),
+            }
+        )
+    return mappings
+
+
+def movie_identity_debug_entity(conn, movie_id: UUID, movie: dict[str, Any]) -> dict[str, Any]:
+    """Identity fields plus a real ladder scan for one movie record.
+
+    The server/PWA counterpart to the iOS ``Identity (Debug)`` card
+    (DiscVaultApp ``Sources/Diagnostics/DebugIdentityPanel.swift``), and it
+    keeps that panel's first rule: never re-normalize. Every normalized value
+    and every verdict below comes out of the same ``normalize_*`` /
+    ``find_movie_by_*`` functions the sync merge path calls, so the panel can
+    never display something subtly different from what actually matched.
+
+    A tier that resolves back to this same movie is the healthy case and is
+    reported as a self-match. A tier that resolves to a *different* live movie
+    is the finding worth chasing: two rows the ladder cannot tell apart.
+    """
+    barcode = movie.get("barcode")
+    title = movie.get("title")
+    fmt = movie.get("format")
+    edition = movie.get("edition")
+    year = movie.get("year")
+
+    tmdb_id = None
+    imdb_id = None
+    for row in movie_identifier_entities(conn, movie_id):
+        provider = str(row.get("provider_id") or "").lower()
+        identifier = str(row.get("identifier") or "").strip()
+        if not identifier:
+            continue
+        if provider == "tmdb" and tmdb_id is None:
+            tmdb_id = identifier
+        elif provider == "imdb" and imdb_id is None:
+            imdb_id = identifier
+
+    container_ids: list[str] = []
+    if table_exists(conn, "container_movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT container_id::text AS container_id FROM container_movies WHERE movie_id=%s ORDER BY container_id",
+                (movie_id,),
+            )
+            container_ids = [str(row["container_id"]) for row in cur.fetchall()]
+
+    def _resolved(tier: str, resolved_id: UUID | None, *, key: str | None) -> dict[str, Any]:
+        entry: dict[str, Any] = {
+            "tier": tier,
+            "key": key,
+            "matchedMovieId": str(resolved_id) if resolved_id else None,
+            "isSelf": bool(resolved_id) and str(resolved_id) == str(movie_id),
+            "matchedTitle": None,
+        }
+        if resolved_id and not entry["isSelf"]:
+            with conn.cursor() as cur:
+                cur.execute("SELECT title FROM movies WHERE id=%s", (resolved_id,))
+                row = cur.fetchone()
+            entry["matchedTitle"] = (row or {}).get("title")
+        return entry
+
+    normalized_barcode = normalize_barcode(barcode)
+    normalized_title = normalize_title(title)
+
+    ladder: list[dict[str, Any]] = []
+    # Each call is wrapped: a diagnostic panel must never be the reason a movie
+    # page fails to load, and these run four extra queries against live tables.
+    try:
+        ladder.append(
+            _resolved(
+                "client_id",
+                find_movie_by_client_id(conn, movie.get("client_id")),
+                key=movie.get("client_id"),
+            )
+        )
+        ladder.append(
+            _resolved(
+                "barcode",
+                find_movie_by_barcode_match(conn, barcode),
+                key=normalized_barcode,
+            )
+        )
+        ladder.append(
+            _resolved(
+                "tmdb_format_edition",
+                find_movie_by_tmdb_edition(
+                    conn,
+                    tmdb_id=tmdb_id,
+                    fmt=fmt,
+                    edition=edition,
+                    incoming_title=title,
+                    incoming_year=year,
+                    incoming_barcode=barcode,
+                ),
+                key=f"{tmdb_id or '-'} / {physical_media_format_key(fmt) or '-'} / {edition or '-'}",
+            )
+        )
+        ladder.append(
+            _resolved(
+                "title_year",
+                find_movie_by_title_year(
+                    conn,
+                    title=title,
+                    year=year,
+                    fmt=fmt,
+                    incoming_barcode=barcode,
+                    incoming_edition=edition,
+                    incoming_container_ids=container_ids,
+                ),
+                key=f"{normalized_title or '-'} / {year or '-'}",
+            )
+        )
+    except Exception:  # pragma: no cover - a scan failure must not hide the fields
+        pass
+
+    return {
+        "normalizedBarcode": normalized_barcode,
+        "normalizedTitle": normalized_title,
+        "formatKey": physical_media_format_key(fmt),
+        "tmdbId": tmdb_id,
+        "imdbId": imdb_id,
+        "containerIds": container_ids,
+        "clientMappings": movie_client_id_mappings(conn, movie_id),
+        "ladder": ladder,
+    }
+
+
 def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     movie = movie_entity(conn, movie_id)
     if not movie:
@@ -12489,8 +12648,14 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         metadata_debug = movie_metadata_debug_entity(conn, movie_id)
     except Exception:  # pragma: no cover - debug info must never break detail load
         metadata_debug = None
+    identity_debug = None
+    try:
+        identity_debug = movie_identity_debug_entity(conn, movie_id, movie)
+    except Exception:  # pragma: no cover - debug info must never break detail load
+        identity_debug = None
     return {
         "movie": movie,
+        "identityDebug": identity_debug,
         "identifiers": movie_identifier_entities(conn, movie_id),
         "localizations": movie_localization_entities(conn, movie_id),
         "technicalSpecs": movie_technical_spec_entity(conn, movie_id),
