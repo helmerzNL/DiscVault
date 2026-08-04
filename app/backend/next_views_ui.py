@@ -27713,7 +27713,7 @@ def ui_preview_html(
         credit.character || credit.job || credit.credit_type || "",
         movie
       )).join("") || `<div class="preview-empty">${escapeHtml(tNext("movieDetail.noCast", "No cast imported yet."))}</div>`;
-      document.getElementById("movieDetailCrew").innerHTML = crewCredits.slice(0, 64).map((credit) => personCardHtml(
+      document.getElementById("movieDetailCrew").innerHTML = crewCredits.slice(0, 75).map((credit) => personCardHtml(
         credit,
         credit.job || credit.character || credit.credit_type || "",
         movie
@@ -28703,16 +28703,37 @@ def ui_preview_html(
         setPersonDetailMessage(error.message || String(error), "bad");
       }
       const tmdbEnabled = state.plugins?.find((plugin) => plugin.id === "tmdb")?.enabled === true;
-      if (hasPermission("metadata.refresh_one") && tmdbEnabled
+      if (personDetailForLazyRefresh && hasPermission("metadata.refresh_one") && tmdbEnabled
           && personHasTmdbIdentifier(personDetailForLazyRefresh)
           && shouldLazyRefresh(`person:${personId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
-        // Enqueue a background job (same reasoning as the movie lazy refresh):
-        // never block opening a person page on a live TMDB call.
-        authApiJson(`/api/next/people/${encodeURIComponent(personId)}/metadata/jobs`, {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({force: false, refreshFilmography: true})
-        }).catch(() => {});
+        // Visible, synchronous refresh (person, then filmography) -- same
+        // feedback the manual buttons already show. Safe to run inline: cached
+        // people (force: false) resolve near-instantly with no TMDB call at all.
+        (async () => {
+          try {
+            setPersonDetailMessage(tNext("personDetail.refreshingMetadata", "Refreshing person metadata..."), "info");
+            await authApiJson(`/api/next/people/${encodeURIComponent(personId)}/metadata/refresh`, {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({dryRun: false, force: false})
+            });
+            if (activePersonId !== personId) return; // user navigated away
+            setPersonDetailMessage(tNext("personDetail.refreshingFilmography", "Refreshing filmography..."), "info");
+            await authApiJson(`/api/next/people/${encodeURIComponent(personId)}/filmography/refresh`, {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({dryRun: false, force: false})
+            });
+            if (activePersonId !== personId) return;
+            const refreshed = await authApiJson(`/api/next/people/${encodeURIComponent(personId)}`);
+            if (activePersonId !== personId) return;
+            renderPersonDetail(refreshed.detail || {});
+            setPersonDetailMessage(tNext("personDetail.filmographyRefreshed", "Filmography refreshed."), "good");
+          } catch (error) {
+            if (activePersonId !== personId) return;
+            setPersonDetailMessage(error.message || String(error), "bad");
+          }
+        })();
       }
     }
     function closeAppPersonDetail(pushUrl = true) {

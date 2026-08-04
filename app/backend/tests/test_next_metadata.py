@@ -729,6 +729,36 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertEqual(details["genreIds"], [])
 
+    def test_tmdb_credits_include_profile_photo_for_cast_and_crew(self):
+        credits = tmdb_plugin._credits(
+            {
+                "credits": {
+                    "cast": [{"id": 1, "name": "Actor One", "character": "Hero", "profile_path": "/actor.jpg"}],
+                    "crew": [{"id": 2, "name": "Editor One", "job": "Editor", "profile_path": "/editor.jpg"}],
+                }
+            }
+        )
+
+        cast_entry = next(item for item in credits if item["role"] == "actor")
+        crew_entry = next(item for item in credits if item["role"] == "crew")
+        self.assertEqual(cast_entry["profileUrl"], "https://image.tmdb.org/t/p/original/actor.jpg")
+        self.assertEqual(crew_entry["profileUrl"], "https://image.tmdb.org/t/p/original/editor.jpg")
+
+    def test_tmdb_credits_include_crew_beyond_the_old_job_title_allowlist(self):
+        # "Editor" was previously dropped entirely -- only director/writer/
+        # producer/composer/cinematographer job titles were kept.
+        credits = tmdb_plugin._credits(
+            {"credits": {"cast": [], "crew": [{"id": 9, "name": "Editor One", "job": "Editor"}]}}
+        )
+
+        self.assertEqual([item["name"] for item in credits], ["Editor One"])
+
+    def test_tmdb_credits_cap_crew_at_75(self):
+        crew = [{"id": index, "name": f"Crew {index}", "job": "Gaffer"} for index in range(100)]
+        credits = tmdb_plugin._credits({"credits": {"cast": [], "crew": crew}})
+
+        self.assertEqual(len(credits), 75)
+
     @mock.patch("app.backend.next_plugins.tmdb.plugin._details")
     @mock.patch("app.backend.next_plugins.tmdb.plugin.search_title")
     def test_tmdb_movie_details_selects_exact_title_instead_of_first_result(self, search_title, details):
