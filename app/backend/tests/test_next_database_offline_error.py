@@ -10,10 +10,54 @@ if repo_root not in sys.path:
 
 try:
     from app.backend.next_app import create_app
+    from app.backend import next_app
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit Flask.
     if exc.name != "flask":
         raise
     create_app = None
+    next_app = None
+
+
+@unittest.skipIf(next_app is None, "Flask is not installed in this test environment")
+class ConnectStatementTimeoutTests(unittest.TestCase):
+    """next-api connections must fail fast on a stuck query/lock instead of
+    hanging for gunicorn's full --timeout; next-worker/migrations are
+    deliberately left unbounded (imports/sync can legitimately run long) and
+    have their own separate connect(), untouched by this."""
+
+    def _captured_options(self, env_overrides=None):
+        captured = {}
+
+        def fake_connect(dsn, **kwargs):
+            captured.update(kwargs)
+            raise RuntimeError("stop before an actual connection is attempted")
+
+        with (
+            patch.dict(os.environ, {"DATABASE_URL": "postgresql://u:p@127.0.0.1:1/db", **(env_overrides or {})}),
+            patch("psycopg.connect", side_effect=fake_connect),
+        ):
+            with self.assertRaises(RuntimeError):
+                next_app.connect()
+        return captured["options"]
+
+    def test_defaults_are_10s_statement_and_5s_lock_timeout(self):
+        options = self._captured_options()
+        self.assertIn("statement_timeout=10000", options)
+        self.assertIn("lock_timeout=5000", options)
+
+    def test_env_vars_override_the_defaults(self):
+        options = self._captured_options(
+            {
+                "DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS": "25000",
+                "DISCVAULT_NEXT_API_LOCK_TIMEOUT_MS": "2000",
+            }
+        )
+        self.assertIn("statement_timeout=25000", options)
+        self.assertIn("lock_timeout=2000", options)
+
+    def test_invalid_env_value_falls_back_to_default(self):
+        options = self._captured_options({"DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS": "not-a-number"})
+        self.assertIn("statement_timeout=10000", options)
 
 
 @unittest.skipIf(create_app is None, "Flask is not installed in this test environment")
