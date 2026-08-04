@@ -50,6 +50,79 @@ class PersonMetadataRefreshWorkerTests(unittest.TestCase):
             )
 
 
+class RunOnceAndWorkLoopResilienceTests(unittest.TestCase):
+    """A single bad iteration (e.g. Postgres restarting mid-job) must never
+    crash the worker process -- see the 2026-08-04 incident: a job failure
+    caused by a dead connection made fail_job() reuse that same dead
+    connection, raising a second, unhandled exception that killed the worker
+    and left it crash-looping."""
+
+    def _fake_conn(self):
+        conn = MagicMock()
+        conn.__enter__.return_value = conn
+        conn.__exit__.return_value = False
+        return conn
+
+    def test_run_once_survives_fail_job_also_raising(self):
+        conn = self._fake_conn()
+        job = {"id": "00000000-0000-0000-0000-000000000099", "job_type": "sync.noop"}
+        with (
+            patch.object(next_worker, "connect", return_value=conn),
+            patch.object(next_worker, "background_jobs_ready", return_value=True),
+            patch.object(next_worker, "claim_job", return_value=job),
+            patch.object(next_worker, "process_job", side_effect=RuntimeError("original failure")),
+            patch.object(next_worker, "fail_job", side_effect=RuntimeError("connection is dead too")),
+        ):
+            result = next_worker.run_once("worker-1")
+
+        self.assertEqual(result, 1)
+
+    def test_work_loop_continues_after_run_once_raises(self):
+        next_worker.STOP = False
+        calls = {"count": 0}
+
+        def fake_run_once(worker_id, quiet_idle=True):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise RuntimeError("simulated database outage")
+            next_worker.STOP = True
+            return 0
+
+        with (
+            patch.object(next_worker, "_maybe_enqueue_price_sweep"),
+            patch.object(next_worker, "_maybe_enqueue_movievault_v2_sync"),
+            patch.object(next_worker, "run_once", side_effect=fake_run_once),
+            patch.object(next_worker.time, "sleep"),
+        ):
+            result = next_worker.work_loop("worker-1", 0.01)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(calls["count"], 2)
+
+    def test_work_loop_continues_after_movievault_sync_scheduler_raises(self):
+        next_worker.STOP = False
+        calls = {"count": 0}
+
+        def fake_sync(worker_id):
+            calls["count"] += 1
+            raise RuntimeError("simulated scheduler failure")
+
+        def fake_run_once(worker_id, quiet_idle=True):
+            next_worker.STOP = True
+            return 0
+
+        with (
+            patch.object(next_worker, "_maybe_enqueue_price_sweep"),
+            patch.object(next_worker, "_maybe_enqueue_movievault_v2_sync", side_effect=fake_sync),
+            patch.object(next_worker, "run_once", side_effect=fake_run_once),
+            patch.object(next_worker.time, "sleep"),
+        ):
+            result = next_worker.work_loop("worker-1", 0.01)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(calls["count"], 1)
+
+
 class _Clock:
     """Monotonic clock that only advances when the code under test sleeps."""
 

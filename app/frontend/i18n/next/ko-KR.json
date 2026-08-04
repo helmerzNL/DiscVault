@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "예상 가치",
   "movieDetail.estimatedValueCurrency": "통화",
-  "movieDetail.estimatedValueCurrencyNone": "설정되지 않음"
+  "movieDetail.estimatedValueCurrencyNone": "설정되지 않음",
+  "errors.databaseOffline": "DiscVault가 일시적으로 오프라인 상태입니다",
+  "errors.databaseOfflineRetry": "다시 시도"
 }

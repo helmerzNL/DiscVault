@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html as html_lib
 import base64
+import concurrent.futures
 from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
 import hashlib
@@ -37,6 +38,7 @@ from flask import Flask, Response, current_app, jsonify, request, send_file
 from flask import after_this_request
 from flask_cors import CORS
 import requests as http_requests
+import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from werkzeug.exceptions import HTTPException
@@ -78,6 +80,7 @@ try:
     from .next_public_http import public_url_hostname
     from .next_public_http import validate_public_url
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
     from .next_metadata import _clean_scanned_title
@@ -216,6 +219,9 @@ try:
     from .next_people import movie_metadata_person_refresh_empty
     from .next_people import normalize_person_refresh_job
     from .next_people import movie_metadata_person_refresh_skipped_people
+    from .next_people import movie_metadata_person_refresh_cached_people
+    from .next_people import select_movie_metadata_person_refresh_credits_needing_fetch
+    from .next_people import person_metadata_is_fresh
     from .next_people import register_next_people_routes
     from .next_preferences import APP_PREFERENCE_DEFAULTS
     from .next_preferences import APP_BOOLEAN_PREFERENCES
@@ -302,6 +308,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_public_http import public_url_hostname
     from next_public_http import validate_public_url
     from next_metadata import METADATA_REFRESH_JOB_TYPE
+    from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
     from next_metadata import _clean_scanned_title
@@ -440,6 +447,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_people import movie_metadata_person_refresh_empty
     from next_people import normalize_person_refresh_job
     from next_people import movie_metadata_person_refresh_skipped_people
+    from next_people import movie_metadata_person_refresh_cached_people
+    from next_people import select_movie_metadata_person_refresh_credits_needing_fetch
+    from next_people import person_metadata_is_fresh
     from next_people import register_next_people_routes
     from next_preferences import APP_PREFERENCE_DEFAULTS
     from next_preferences import APP_BOOLEAN_PREFERENCES
@@ -745,10 +755,38 @@ def database_url() -> str:
     return value
 
 
+def _connect_timeout_ms(env_name: str, default_ms: int) -> int:
+    value = os.environ.get(env_name, "").strip()
+    if not value:
+        return default_ms
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default_ms
+    return parsed if parsed > 0 else default_ms
+
+
 def connect():
     import psycopg
 
-    return psycopg.connect(database_url(), row_factory=dict_row, autocommit=False)
+    # Bounds how long a single SQL statement (statement_timeout) or a wait for a
+    # lock (lock_timeout) may run before Postgres cancels it, so a stuck/slow
+    # database fails fast with a normal, catchable psycopg.OperationalError
+    # subclass (QueryCanceled/LockNotAvailable) -- handled by
+    # handle_database_offline_error() -- instead of hanging for gunicorn's full
+    # --timeout (deliberately generous, to tolerate slow imports/exports) before
+    # the worker is killed. Only applied to this API-side connect(); the
+    # background worker (next_worker.py) and migrations (next_database.py) have
+    # their own separate connect() and are intentionally left unbounded, since
+    # their jobs (imports, MovieVault sync, migrations) can legitimately run long.
+    statement_timeout_ms = _connect_timeout_ms("DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS", 10_000)
+    lock_timeout_ms = _connect_timeout_ms("DISCVAULT_NEXT_API_LOCK_TIMEOUT_MS", 5_000)
+    return psycopg.connect(
+        database_url(),
+        row_factory=dict_row,
+        autocommit=False,
+        options=f"-c statement_timeout={statement_timeout_ms} -c lock_timeout={lock_timeout_ms}",
+    )
 
 
 def build_version() -> str:
@@ -1005,6 +1043,47 @@ def html_response(html: str):
     result.headers["Pragma"] = "no-cache"
     result.headers["Expires"] = "0"
     return result
+
+
+def render_database_offline_page(locale: str) -> str:
+    """A minimal, translated, dependency-free page for when Postgres is unreachable.
+
+    Deliberately has no dependency on ``ui_preview_html``/``collection_dashboard_snapshot`` —
+    both require a live database connection, which is exactly what's missing here.
+    """
+    headline = next_translate(locale, "errors.databaseOffline", "DiscVault is temporarily offline")
+    retry_label = next_translate(locale, "errors.databaseOfflineRetry", "Try again")
+    return f"""<!doctype html>
+<html lang="{html_lib.escape(locale)}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="20">
+<title>{html_lib.escape(headline)}</title>
+<style>
+  :root {{ color-scheme: light dark; }}
+  body {{
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; text-align: center; padding: 24px;
+    background: #f7f7f8; color: #1a1a1a;
+  }}
+  @media (prefers-color-scheme: dark) {{
+    body {{ background: #14161a; color: #e8e8ea; }}
+  }}
+  h1 {{ font-size: 1.375rem; margin: 0 0 8px; }}
+  button {{
+    margin-top: 20px; padding: 10px 20px; border-radius: 8px; border: 1px solid #8886;
+    background: transparent; color: inherit; font-size: 1rem; cursor: pointer;
+  }}
+</style>
+</head>
+<body>
+  <div>
+    <h1>{html_lib.escape(headline)}</h1>
+    <button type="button" onclick="location.reload()">{html_lib.escape(retry_label)}</button>
+  </div>
+</body>
+</html>"""
 
 
 PWA_ICON_ASSETS = {
@@ -12482,6 +12561,44 @@ def person_filmography_plugin(conn) -> dict[str, Any] | None:
 
 
 
+def _refresh_one_movie_person_credit(
+    credit: dict[str, Any],
+    *,
+    dry_run: bool,
+    actor: dict[str, Any] | None,
+    force: bool,
+) -> dict[str, Any]:
+    person_id = str(credit.get("person_id") or credit.get("personId") or "").strip()
+    entry = {
+        "personId": person_id,
+        "name": credit.get("name"),
+        "creditType": credit.get("credit_type") or credit.get("creditType"),
+        "job": credit.get("job"),
+        "character": credit.get("character"),
+    }
+    try:
+        with connect() as person_conn:
+            with person_conn.transaction():
+                result = refresh_person_metadata(person_conn, UUID(person_id), dry_run=dry_run, actor=actor, force=force)
+        cached = (result.get("execution") or {}).get("state") == "cached"
+        entry["status"] = "cached" if cached else ("previewed" if dry_run else "refreshed")
+        entry["plugin"] = (result.get("plugin") or {}).get("id")
+        execution = result.get("execution") or {}
+        if execution:
+            entry["elapsedMs"] = execution.get("elapsedMs")
+    except NextApiError as exc:
+        entry["status"] = "skipped" if exc.status_code in {404, 409, 503} else "error"
+        entry["reason"] = str(exc)
+        if exc.status_code not in {404, 409, 503}:
+            entry["errorMessage"] = str(exc)
+            entry["errorStatusCode"] = exc.status_code
+    except Exception as exc:
+        entry["status"] = "error"
+        entry["reason"] = str(exc)
+        entry["errorMessage"] = str(exc)
+    return entry
+
+
 def refresh_movie_person_metadata_cascade(
     conn,
     movie_id: UUID | str,
@@ -12490,6 +12607,7 @@ def refresh_movie_person_metadata_cascade(
     actor: dict[str, Any] | None = None,
     limit: int = MOVIE_METADATA_PERSON_REFRESH_LIMIT,
     scope: str = "all",
+    force: bool = True,
 ) -> dict[str, Any]:
     normalized_scope = normalize_movie_metadata_person_refresh_scope(scope)
     summary = movie_metadata_person_refresh_empty(requested=True, dry_run=dry_run, limit=limit, scope=normalized_scope)
@@ -12516,40 +12634,44 @@ def refresh_movie_person_metadata_cascade(
         summary["people"] = movie_metadata_person_refresh_skipped_people(selected, skip_reason)
         return summary
 
-    for credit in selected:
-        person_id = str(credit.get("person_id") or credit.get("personId") or "").strip()
-        entry = {
-            "personId": person_id,
-            "name": credit.get("name"),
-            "creditType": credit.get("credit_type") or credit.get("creditType"),
-            "job": credit.get("job"),
-            "character": credit.get("character"),
-        }
-        try:
-            result = refresh_person_metadata(conn, UUID(person_id), dry_run=dry_run, actor=actor)
-            entry["status"] = "previewed" if dry_run else "refreshed"
-            entry["plugin"] = (result.get("plugin") or {}).get("id")
-            execution = result.get("execution") or {}
-            if execution:
-                entry["elapsedMs"] = execution.get("elapsedMs")
-            if dry_run:
+    needs_fetch, already_cached = select_movie_metadata_person_refresh_credits_needing_fetch(selected, force=force)
+    if already_cached:
+        summary["cached"] += len(already_cached)
+        summary["people"].extend(
+            movie_metadata_person_refresh_cached_people(already_cached, "person_metadata_cache_fresh")
+        )
+    if not needs_fetch:
+        return summary
+
+    # Each task opens its own DB connection: psycopg connections are not
+    # thread-safe, so concurrent TMDB fetches can't share the caller's `conn`.
+    max_workers = min(4, len(needs_fetch))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [
+            pool.submit(_refresh_one_movie_person_credit, credit, dry_run=dry_run, actor=actor, force=force)
+            for credit in needs_fetch
+        ]
+        for future in concurrent.futures.as_completed(futures):
+            entry = future.result()
+            status = entry.get("status")
+            if status == "cached":
+                summary["cached"] += 1
+            elif status == "previewed":
                 summary["previewed"] += 1
-            else:
+            elif status == "refreshed":
                 summary["refreshed"] += 1
-        except NextApiError as exc:
-            entry["status"] = "skipped" if exc.status_code in {404, 409, 503} else "error"
-            entry["reason"] = str(exc)
-            if entry["status"] == "skipped":
+            elif status == "skipped":
                 summary["skipped"] += 1
             else:
                 summary["errorCount"] += 1
-                summary["errors"].append({"personId": person_id, "message": str(exc), "statusCode": exc.status_code})
-        except Exception as exc:
-            entry["status"] = "error"
-            entry["reason"] = str(exc)
-            summary["errorCount"] += 1
-            summary["errors"].append({"personId": person_id, "message": str(exc)})
-        summary["people"].append(entry)
+                summary["errors"].append(
+                    {
+                        "personId": entry.get("personId"),
+                        "message": entry.get("errorMessage") or entry.get("reason"),
+                        "statusCode": entry.get("errorStatusCode"),
+                    }
+                )
+            summary["people"].append(entry)
     return summary
 
 
@@ -12662,12 +12784,36 @@ def sync_person_profile_media(
     }
 
 
+def _cached_person_metadata_result(detail: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
+    person = detail.get("person") if isinstance(detail.get("person"), dict) else {}
+    metadata = person.get("metadata") if isinstance(person.get("metadata"), dict) else {}
+    awards = metadata.get("awards") or []
+    award_groups = metadata.get("awardGroups") or []
+    return {
+        "dryRun": dry_run,
+        "plugin": {"id": metadata.get("person_metadata_source"), "name": metadata.get("person_metadata_source")},
+        "sourceProviders": sorted({str(item) for item in (metadata.get("person_metadata_sources") or []) if item}),
+        "execution": {"status": "skipped", "state": "cached", "elapsedMs": 0, "entrypoint": "person_details"},
+        "awards": {
+            "status": "skipped",
+            "state": "cached",
+            "applied": bool(awards),
+            "count": len(awards),
+            "groups": len(award_groups),
+        },
+        "result": {},
+        "receivers": None,
+        "detail": detail,
+    }
+
+
 def refresh_person_metadata(
     conn,
     person_id: UUID,
     *,
     dry_run: bool = False,
     actor: dict[str, Any] | None = None,
+    force: bool = True,
 ) -> dict[str, Any]:
     detail = person_detail_entity(conn, person_id)
     if not detail:
@@ -12675,6 +12821,12 @@ def refresh_person_metadata(
     tmdb_id = detail.get("tmdbId") or ""
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
+
+    if not force:
+        person_metadata = (detail.get("person") or {}).get("metadata")
+        fetched_at = person_metadata.get("person_metadata_fetched_at") if isinstance(person_metadata, dict) else None
+        if fetched_at and person_metadata_is_fresh(fetched_at):
+            return _cached_person_metadata_result(detail, dry_run=dry_run)
 
     candidates = [
         plugin
@@ -12961,12 +13113,25 @@ def refresh_person_metadata(
     }
 
 
+def _cached_person_filmography_result(detail: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
+    person = detail.get("person") if isinstance(detail.get("person"), dict) else {}
+    metadata = person.get("metadata") if isinstance(person.get("metadata"), dict) else {}
+    return {
+        "dryRun": dry_run,
+        "plugin": {"id": metadata.get("filmography_source"), "name": metadata.get("filmography_source")},
+        "execution": {"status": "skipped", "state": "cached", "elapsedMs": 0, "entrypoint": "person_filmography"},
+        "result": {},
+        "detail": detail,
+    }
+
+
 def refresh_person_filmography(
     conn,
     person_id: UUID,
     *,
     dry_run: bool = False,
     actor: dict[str, Any] | None = None,
+    force: bool = True,
 ) -> dict[str, Any]:
     detail = person_detail_entity(conn, person_id, actor=actor)
     if not detail:
@@ -12974,6 +13139,11 @@ def refresh_person_filmography(
     tmdb_id = detail.get("tmdbId") or ""
     if not tmdb_id:
         raise NextApiError("Person has no TMDb identifier", 409)
+    if not force:
+        person_metadata = (detail.get("person") or {}).get("metadata")
+        fetched_at = person_metadata.get("filmography_fetched_at") if isinstance(person_metadata, dict) else None
+        if fetched_at and person_metadata_is_fresh(fetched_at):
+            return _cached_person_filmography_result(detail, dry_run=dry_run)
     candidates = person_filmography_source_plugins(conn, include_disabled=True)
     if not candidates:
         raise NextApiError("No enabled filmography plugin is available", 503)
@@ -19200,6 +19370,12 @@ def is_public_next_path(path: str) -> bool:
     return path in PUBLIC_NEXT_PATHS or any(path.startswith(prefix) for prefix in PUBLIC_NEXT_PREFIXES)
 
 
+# The only two view functions that render the full HTML app shell (many routes/decorators map to
+# each, but Flask's `request.endpoint` is the view function name regardless of which path matched).
+# Used to decide whether a database-outage error should render a friendly HTML page or clean JSON.
+_HTML_SHELL_ENDPOINTS = {"next_app_shell", "ui_preview"}
+
+
 def register_routes(flask_app: Flask) -> None:
     register_next_auth_routes(
         flask_app,
@@ -19237,6 +19413,28 @@ def register_routes(flask_app: Flask) -> None:
             },
             error.code or 500,
         )
+
+    @flask_app.errorhandler(psycopg.OperationalError)
+    def handle_database_offline_error(error: psycopg.OperationalError):
+        flask_app.logger.warning("Database connection failed on %s: %s", request.path, error)
+        locale_codes = [item["locale"] for item in NEXT_I18N_LOCALES]
+        best_locale = request.accept_languages.best_match(locale_codes, default=NEXT_I18N_DEFAULT_LOCALE)
+        locale = normalize_next_locale(best_locale)
+        if request.endpoint in _HTML_SHELL_ENDPOINTS:
+            result = html_response(render_database_offline_page(locale))
+        else:
+            result = jsonify(
+                json_ready(
+                    {
+                        "status": "error",
+                        "error": next_translate(locale, "errors.databaseOffline", "Database is temporarily unavailable"),
+                        "path": request.path,
+                    }
+                )
+            )
+        result.status_code = 503
+        result.headers["Retry-After"] = "20"
+        return result
 
     @flask_app.errorhandler(Exception)
     def handle_unexpected_error(error: Exception):  # pragma: no cover - Flask integration
@@ -26293,6 +26491,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Person metadata refresh body must be an object", 400)
         dry_run = bool(body.get("dryRun", body.get("dry_run", False)))
+        force = parse_bool_value(body.get("force"), default=True)
         with connect() as conn:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "people"):
@@ -26300,7 +26499,7 @@ def register_routes(flask_app: Flask) -> None:
             if not actor_can_view_person(conn, actor, person_uuid):
                 raise NextApiError("Person not found", 404)
             with conn.transaction():
-                result = refresh_person_metadata(conn, person_uuid, dry_run=dry_run, actor=actor)
+                result = refresh_person_metadata(conn, person_uuid, dry_run=dry_run, actor=actor, force=force)
                 audit_event(
                     conn,
                     event_type="metadata.person_previewed" if dry_run else "metadata.person_refreshed",
@@ -26320,6 +26519,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Filmography refresh body must be an object", 400)
         dry_run = bool(body.get("dryRun", body.get("dry_run", False)))
+        force = parse_bool_value(body.get("force"), default=True)
         with connect() as conn:
             actor = require_next_permission(conn, "metadata.refresh_one")
             if not table_exists(conn, "people"):
@@ -26327,7 +26527,7 @@ def register_routes(flask_app: Flask) -> None:
             if not actor_can_view_person(conn, actor, person_uuid):
                 raise NextApiError("Person not found", 404)
             with conn.transaction():
-                result = refresh_person_filmography(conn, person_uuid, dry_run=dry_run, actor=actor)
+                result = refresh_person_filmography(conn, person_uuid, dry_run=dry_run, actor=actor, force=force)
                 audit_event(
                     conn,
                     event_type="metadata.person_filmography_previewed" if dry_run else "metadata.person_filmography_refreshed",
@@ -26339,6 +26539,43 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={"dryRun": dry_run, "result": result},
                 )
         return response({"status": "ok", "filmography": result})
+
+    @flask_app.post("/api/next/people/<person_id>/metadata/jobs")
+    def queue_person_metadata_refresh(person_id: str):
+        person_uuid = parse_uuid(person_id, "personId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Person metadata refresh body must be an object", 400)
+        force = parse_bool_value(body.get("force"), default=True)
+        refresh_filmography = parse_bool_value(body.get("refreshFilmography", body.get("refresh_filmography")), default=False)
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "people"):
+                raise NextApiError("People table is not available", 503)
+            if not actor_can_view_person(conn, actor, person_uuid):
+                raise NextApiError("Person not found", 404)
+            with conn.transaction():
+                job = create_background_job(
+                    conn,
+                    job_type=PERSON_METADATA_REFRESH_JOB_TYPE,
+                    payload={
+                        "personId": str(person_uuid),
+                        "force": force,
+                        "refreshFilmography": refresh_filmography,
+                        "requestedBy": actor_job_payload(actor),
+                    },
+                )
+                audit_event(
+                    conn,
+                    event_type="metadata.person_refresh_queued",
+                    category="metadata",
+                    actor=actor,
+                    target_type="person",
+                    target_id=person_uuid,
+                    summary="Queued person metadata refresh",
+                    metadata={"personId": str(person_uuid), "force": force, "refreshFilmography": refresh_filmography, "jobId": job.get("id")},
+                )
+        return response({"status": "ok", "refreshFilmography": refresh_filmography, "job": job}, 201)
 
     @flask_app.post("/api/next/people/<person_id>/media/primary")
     def person_media_primary(person_id: str):
@@ -28519,6 +28756,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Metadata refresh body must be an object", 400)
         dry_run = parse_bool_value(body.get("dryRun", body.get("dry_run")), default=False)
         refresh_people = parse_bool_value(body.get("refreshPeople", body.get("refresh_people")), default=False)
+        force = parse_bool_value(body.get("force"), default=True)
         person_refresh_scope = normalize_movie_metadata_person_refresh_scope(
             body.get("personRefreshScope", body.get("person_refresh_scope", body.get("refreshPeopleScope", body.get("refresh_people_scope"))))
         )
@@ -28531,7 +28769,7 @@ def register_routes(flask_app: Flask) -> None:
             with conn.transaction():
                 result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
                 result["personRefresh"] = (
-                    refresh_movie_person_metadata_cascade(conn, movie_uuid, dry_run=dry_run, actor=actor, scope=person_refresh_scope)
+                    refresh_movie_person_metadata_cascade(conn, movie_uuid, dry_run=dry_run, actor=actor, scope=person_refresh_scope, force=force)
                     if refresh_people
                     else movie_metadata_person_refresh_empty(requested=False, dry_run=dry_run, scope=person_refresh_scope)
                 )
@@ -28567,6 +28805,7 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Metadata refresh body must be an object", 400)
         dry_run = parse_bool_value(body.get("dryRun", body.get("dry_run")), default=False)
         refresh_people = parse_bool_value(body.get("refreshPeople", body.get("refresh_people")), default=False)
+        force = parse_bool_value(body.get("force"), default=True)
         person_refresh_scope = normalize_movie_metadata_person_refresh_scope(
             body.get("personRefreshScope", body.get("person_refresh_scope", body.get("refreshPeopleScope", body.get("refresh_people_scope"))))
         )
@@ -28585,6 +28824,7 @@ def register_routes(flask_app: Flask) -> None:
                         "dryRun": dry_run,
                         "refreshPeople": refresh_people,
                         "personRefreshScope": person_refresh_scope,
+                        "force": force,
                         "requestedBy": actor_job_payload(actor),
                     },
                 )

@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Hinnanguline väärtus",
   "movieDetail.estimatedValueCurrency": "Valuuta",
-  "movieDetail.estimatedValueCurrencyNone": "Määramata"
+  "movieDetail.estimatedValueCurrencyNone": "Määramata",
+  "errors.databaseOffline": "DiscVault on ajutiselt võrguühenduseta",
+  "errors.databaseOfflineRetry": "Proovi uuesti"
 }

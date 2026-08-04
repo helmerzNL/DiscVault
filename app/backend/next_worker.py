@@ -38,6 +38,7 @@ try:
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import lookup_metadata_sources
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -66,6 +67,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from next_plugin_runtime import run_plugin_entrypoint
     from next_metadata import METADATA_REFRESH_JOB_TYPE
+    from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from next_metadata import lookup_metadata_sources
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -85,7 +87,6 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
 
 STOP = False
 MOVIEVAULT_V2_SCHEDULER_LOCK_KEY = 2_026_262
-PERSON_METADATA_REFRESH_JOB_TYPE = "metadata.refresh_person"
 
 
 class JobFailure(RuntimeError):
@@ -490,6 +491,7 @@ def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[st
         raise RuntimeError("movieId is required for metadata refresh jobs")
     dry_run = bool_value(payload.get("dryRun", payload.get("dry_run")), default=False)
     refresh_people = bool_value(payload.get("refreshPeople", payload.get("refresh_people")), default=False)
+    force = bool_value(payload.get("force"), default=True)
     person_refresh_scope = clean_text(
         payload.get("personRefreshScope")
         or payload.get("person_refresh_scope")
@@ -509,7 +511,9 @@ def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[st
                 from .next_app import refresh_movie_person_metadata_cascade
             except ImportError:  # pragma: no cover - supports python next_worker.py
                 from next_app import refresh_movie_person_metadata_cascade
-            result["personRefresh"] = refresh_movie_person_metadata_cascade(conn, movie_id, dry_run=dry_run, actor=actor, scope=person_refresh_scope)
+            result["personRefresh"] = refresh_movie_person_metadata_cascade(
+                conn, movie_id, dry_run=dry_run, actor=actor, scope=person_refresh_scope, force=force
+            )
     return {
         "workerId": worker_id,
         "handled": True,
@@ -526,6 +530,8 @@ def process_person_metadata_refresh(payload: dict[str, Any], worker_id: str) -> 
     person_id = clean_text(payload.get("personId") or payload.get("person_id"))
     if not person_id:
         raise RuntimeError("personId is required for person metadata refresh jobs")
+    force = bool_value(payload.get("force"), default=True)
+    refresh_filmography = bool_value(payload.get("refreshFilmography", payload.get("refresh_filmography")), default=False)
     actor = payload.get("requestedBy") or payload.get("requested_by") or {}
     if not isinstance(actor, dict):
         actor = {}
@@ -534,11 +540,13 @@ def process_person_metadata_refresh(payload: dict[str, Any], worker_id: str) -> 
     except ValueError as exc:
         raise RuntimeError("personId must be a valid UUID") from exc
     try:
-        from .next_app import refresh_person_metadata
+        from .next_app import refresh_person_metadata, refresh_person_filmography
     except ImportError:  # pragma: no cover - supports python next_worker.py
-        from next_app import refresh_person_metadata
+        from next_app import refresh_person_metadata, refresh_person_filmography
     with connect() as conn:
-        result = refresh_person_metadata(conn, person_uuid, dry_run=False, actor=actor)
+        result = refresh_person_metadata(conn, person_uuid, dry_run=False, actor=actor, force=force)
+        if refresh_filmography:
+            result["filmographyRefresh"] = refresh_person_filmography(conn, person_uuid, dry_run=False, actor=actor, force=force)
     return {
         "workerId": worker_id,
         "handled": True,
@@ -2429,7 +2437,24 @@ def run_once(worker_id: str, *, quiet_idle: bool = False) -> int:
             return 0
         except Exception as exc:
             failure_result = getattr(exc, "result", None)
-            fail_job(conn, job["id"], str(exc), failure_result if isinstance(failure_result, dict) else {"workerId": worker_id})
+            try:
+                fail_job(conn, job["id"], str(exc), failure_result if isinstance(failure_result, dict) else {"workerId": worker_id})
+            except Exception as fail_exc:
+                # If the job failed *because* the database connection died (e.g. a
+                # Postgres restart), this `conn` is almost certainly dead too -- don't
+                # let a failed "record the failure" step become a second, unhandled
+                # exception that crashes the whole worker process (see work_loop()).
+                print(
+                    json.dumps(
+                        {
+                            "status": "failed",
+                            "jobId": str(job["id"]),
+                            "error": str(exc),
+                            "failJobError": str(fail_exc),
+                        }
+                    )
+                )
+                return 1
             print(json.dumps({"status": "failed", "jobId": str(job["id"]), "error": str(exc)}))
             return 1
 
@@ -2587,8 +2612,16 @@ def _movievault_v2_sync_interval(settings: dict[str, Any]) -> int:
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
         _maybe_enqueue_price_sweep(worker_id)
-        _maybe_enqueue_movievault_v2_sync(worker_id)
-        run_once(worker_id, quiet_idle=True)
+        try:
+            _maybe_enqueue_movievault_v2_sync(worker_id)
+        except Exception as exc:  # noqa: BLE001 - never crash the poll loop
+            print(json.dumps({"status": "error", "source": "movievault_v2_sync_scheduler", "error": str(exc)}))
+        try:
+            run_once(worker_id, quiet_idle=True)
+        except Exception as exc:  # noqa: BLE001 - a single bad iteration (e.g. the
+            # database connection dying mid-job) must not take the whole worker
+            # process down; the next poll gets a fresh connection and tries again.
+            print(json.dumps({"status": "error", "source": "run_once", "error": str(exc)}))
         if STOP:
             break
         time.sleep(poll_interval)

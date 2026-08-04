@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Εκτιμώμενη αξία",
   "movieDetail.estimatedValueCurrency": "Νόμισμα",
-  "movieDetail.estimatedValueCurrencyNone": "Δεν έχει οριστεί"
+  "movieDetail.estimatedValueCurrencyNone": "Δεν έχει οριστεί",
+  "errors.databaseOffline": "Το DiscVault είναι προσωρινά εκτός σύνδεσης",
+  "errors.databaseOfflineRetry": "Δοκιμάστε ξανά"
 }

@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Odhadovaná hodnota",
   "movieDetail.estimatedValueCurrency": "Mena",
-  "movieDetail.estimatedValueCurrencyNone": "Nenastavené"
+  "movieDetail.estimatedValueCurrencyNone": "Nenastavené",
+  "errors.databaseOffline": "DiscVault je dočasne offline",
+  "errors.databaseOfflineRetry": "Skúsiť znova"
 }

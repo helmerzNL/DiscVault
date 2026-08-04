@@ -51,6 +51,7 @@ except ImportError:  # pragma: no cover - supports direct module execution
 
 
 METADATA_REFRESH_JOB_TYPE = "metadata.refresh_movie"
+PERSON_METADATA_REFRESH_JOB_TYPE = "metadata.refresh_person"
 
 METADATA_MAIN_FIELDS = {
     "title",

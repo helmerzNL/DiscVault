@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Valor estimado",
   "movieDetail.estimatedValueCurrency": "Moeda",
-  "movieDetail.estimatedValueCurrencyNone": "Não definido"
+  "movieDetail.estimatedValueCurrencyNone": "Não definido",
+  "errors.databaseOffline": "O DiscVault está temporariamente offline",
+  "errors.databaseOfflineRetry": "Tentar novamente"
 }

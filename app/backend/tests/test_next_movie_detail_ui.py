@@ -182,8 +182,11 @@ class NextMovieDetailUiTests(unittest.TestCase):
         render_end = self.source.index("\n    function ", render_start + 1)
         render_source = self.source[render_start:render_end]
 
+        # The hero pill is omitted entirely while the rating is unknown, instead
+        # of rendering the full "Unknown content rating" sentence in a compact
+        # tag row (which used to make the badge look oversized).
         self.assertIn(
-            "const heroContentRatingHtml = contentRatingValueHtml(contentRatingInfo);",
+            'const heroContentRatingHtml = contentRatingInfo.unknown ? "" : contentRatingValueHtml(contentRatingInfo);',
             render_source,
         )
         self.assertIn(

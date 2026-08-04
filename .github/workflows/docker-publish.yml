@@ -150,6 +150,8 @@ jobs:
             eu.discvault.image.family=${{ steps.build-target.outputs.family }}
 
       - name: Build and push
+        id: build-and-push
+        continue-on-error: true
         uses: docker/build-push-action@v7
         with:
           context: ./app
@@ -160,6 +162,28 @@ jobs:
           build-args: |
             BUILD_VERSION=${{ steps.version.outputs.version }}
             BUILD_SHA=${{ steps.version.outputs.sha }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # GHCR can briefly reject uploads with a secondary-rate-limit 403. Wait before
+      # one complete rebuild so the registry has time to clear the limit.
+      - name: Wait before retrying image publish
+        if: steps.build-and-push.outcome == 'failure'
+        run: sleep 120
+
+      - name: Retry build and push
+        if: steps.build-and-push.outcome == 'failure'
+        uses: docker/build-push-action@v7
+        with:
+          context: ./app
+          file: ${{ steps.build-target.outputs.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+           BUILD_VERSION=${{ steps.version.outputs.version }}
+           BUILD_SHA=${{ steps.version.outputs.sha }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max

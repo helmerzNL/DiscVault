@@ -2615,5 +2615,7 @@
   "movieVideoCodec.vc1": "VC-1",
   "movieDetail.estimatedValue": "Прогнозна стойност",
   "movieDetail.estimatedValueCurrency": "Валута",
-  "movieDetail.estimatedValueCurrencyNone": "Не е зададено"
+  "movieDetail.estimatedValueCurrencyNone": "Не е зададено",
+  "errors.databaseOffline": "DiscVault временно е офлайн",
+  "errors.databaseOfflineRetry": "Опитай отново"
 }

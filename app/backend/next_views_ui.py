@@ -17991,6 +17991,15 @@ def ui_preview_html(
     function hasAnyPermission(permissions) {
       return (permissions || []).some((permission) => hasPermission(permission));
     }
+    const LIBRARY_LAZY_REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
+    const ENTITY_LAZY_REFRESH_COOLDOWN_MS = 20 * 60 * 1000;
+    function shouldLazyRefresh(key, cooldownMs) {
+      const storageKey = `dv_lazy_refresh:${key}`;
+      const last = Number(sessionStorage.getItem(storageKey) || 0);
+      if (Date.now() - last < cooldownMs) return false;
+      sessionStorage.setItem(storageKey, String(Date.now()));
+      return true;
+    }
     function currentUserId() {
       return currentAuthStatus.user_id || currentAuthStatus.userId || (state.user || {}).id || "";
     }
@@ -27585,12 +27594,12 @@ def ui_preview_html(
       document.getElementById("movieDetailOverview").textContent = localizedMovieOverview(movie, detail.localizations) || tNext("movieDetail.noOverview", "No overview imported yet.");
       const contentRatingInfo = preferredContentRatingInfo(movie, specs);
       const contentRating = contentRatingInfo.rating;
-      const heroContentRatingHtml = contentRatingValueHtml(contentRatingInfo);
+      const heroContentRatingHtml = contentRatingInfo.unknown ? "" : contentRatingValueHtml(contentRatingInfo);
       document.getElementById("movieDetailTags").innerHTML = detailTagHtml([
         movie.year,
         movie.format,
         movie.runtime_minutes ? `${movie.runtime_minutes} min` : "",
-        heroContentRatingHtml ? {html: heroContentRatingHtml} : contentRatingSummaryText(contentRatingInfo),
+        heroContentRatingHtml ? {html: heroContentRatingHtml} : "",
         movieScoreLabel(movie),
         (detail.digitalItems || []).length ? `${(detail.digitalItems || []).length} ${tNext("uiPreview.digitalItems", "Digital links").toLowerCase()}` : "",
         (detail.mediaGroups || []).length ? `${(detail.mediaGroups || []).length} ${tNext("migration.groups", "Groups").toLowerCase()}` : "",
@@ -27779,11 +27788,36 @@ def ui_preview_html(
           history.pushState({movieId}, "", nextPath);
         }
       }
+      let loadedMovieDetail = false;
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
         renderMovieDetail(payload.detail || {});
+        loadedMovieDetail = true;
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
+      }
+      if (loadedMovieDetail && hasPermission("metadata.refresh_one")
+          && shouldLazyRefresh(`movie:${movieId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
+        // Visible, synchronous refresh -- same "Refreshing metadata..." feedback
+        // as the manual button. Safe to run inline now: cached people are
+        // skipped (force: false) and any live TMDB calls run concurrently
+        // (see refresh_movie_person_metadata_cascade), so this is fast in the
+        // common case instead of the multi-second cascade it used to be.
+        setMovieDetailMessage(tNext("movieDetail.applyingMetadata", "Refreshing metadata..."));
+        authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/refresh`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({dryRun: false, refreshPeople: true, personRefreshScope: "all", force: false})
+        }).then(async () => {
+          if (activeDetailMovieId !== movieId) return; // user navigated away
+          const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
+          if (activeDetailMovieId !== movieId) return;
+          renderMovieDetail(refreshed.detail || {});
+          setMovieDetailMessage(tNext("movieDetail.applied", "Metadata refreshed."), "good");
+        }).catch((error) => {
+          if (activeDetailMovieId !== movieId) return;
+          setMovieDetailMessage(error.message || String(error), "bad");
+        });
       }
     }
     function closeAppMovieDetail(pushUrl = true) {
@@ -28660,11 +28694,25 @@ def ui_preview_html(
           history.pushState({personId}, "", nextPath);
         }
       }
+      let personDetailForLazyRefresh = null;
       try {
         const payload = await authApiJson(`/api/next/people/${encodeURIComponent(personId)}`);
-        renderPersonDetail(payload.detail || {});
+        personDetailForLazyRefresh = payload.detail || {};
+        renderPersonDetail(personDetailForLazyRefresh);
       } catch (error) {
         setPersonDetailMessage(error.message || String(error), "bad");
+      }
+      const tmdbEnabled = state.plugins?.find((plugin) => plugin.id === "tmdb")?.enabled === true;
+      if (hasPermission("metadata.refresh_one") && tmdbEnabled
+          && personHasTmdbIdentifier(personDetailForLazyRefresh)
+          && shouldLazyRefresh(`person:${personId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
+        // Enqueue a background job (same reasoning as the movie lazy refresh):
+        // never block opening a person page on a live TMDB call.
+        authApiJson(`/api/next/people/${encodeURIComponent(personId)}/metadata/jobs`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({force: false, refreshFilmography: true})
+        }).catch(() => {});
       }
     }
     function closeAppPersonDetail(pushUrl = true) {
@@ -36370,6 +36418,9 @@ def ui_preview_html(
       if (pushUrl && appMode && window.location.pathname !== "/") {
         history.pushState({}, "", "/");
       }
+      if (hasPermission("metadata.refresh_one") && shouldLazyRefresh("library", LIBRARY_LAZY_REFRESH_COOLDOWN_MS)) {
+        loadAppSnapshot().catch(() => {});
+      }
     }
     function showPeoplePage(pushUrl = true) {
       showLibraryPage(pushUrl);
@@ -40535,6 +40586,7 @@ def ui_preview_html(
         return;
       }
       await loadAppSnapshot();
+      shouldLazyRefresh("library", LIBRARY_LAZY_REFRESH_COOLDOWN_MS); // boot already just loaded this
       setGate("library");
       const route = appRouteFromPath();
       const routeMovieId = route.view === "movie" ? (route.movieId || initialMovieId) : "";
