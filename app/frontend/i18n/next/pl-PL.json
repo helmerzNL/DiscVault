@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Tożsamość (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiuj diagnostykę",
   "movieDetail.debugIdentityHint": "Nazwy pól pochodzą ze wspólnego kontraktu synchronizacji i celowo pozostają po angielsku. Widoczne tylko przy włączonym trybie debugowania.",
-  "movieDetail.debugSourcesNotWritten": "wybrane, ale niezapisane"
+  "movieDetail.debugSourcesNotWritten": "wybrane, ale niezapisane",
+  "profile.accessConnections": "Połączenia",
+  "profile.connectionSessions": "Sesje: {count}",
+  "profile.showRevokedConnections": "Pokaż unieważnione połączenia",
+  "profile.hideRevokedConnections": "Ukryj unieważnione połączenia",
+  "profile.revokeConnectionConfirm": "Unieważnić to połączenie? Zostanie wylogowanych {count} sesji.",
+  "profile.apiTokenFallbackName": "Token dostępu",
+  "profile.connectionModel": "Urządzenie"
 }

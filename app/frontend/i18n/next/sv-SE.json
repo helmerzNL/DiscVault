@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiera diagnostik",
   "movieDetail.debugIdentityHint": "Fältnamnen kommer från det gemensamma synkkontraktet och står medvetet kvar på engelska. Visas bara medan felsökningsläget är på.",
-  "movieDetail.debugSourcesNotWritten": "vald men inte sparad"
+  "movieDetail.debugSourcesNotWritten": "vald men inte sparad",
+  "profile.accessConnections": "Anslutningar",
+  "profile.connectionSessions": "{count} sessioner",
+  "profile.showRevokedConnections": "Visa återkallade anslutningar",
+  "profile.hideRevokedConnections": "Dölj återkallade anslutningar",
+  "profile.revokeConnectionConfirm": "Återkalla den här anslutningen? {count} sessioner loggas ut.",
+  "profile.apiTokenFallbackName": "Åtkomsttoken",
+  "profile.connectionModel": "Enhet"
 }

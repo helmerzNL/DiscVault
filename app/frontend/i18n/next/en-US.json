@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identity (Debug)",
   "movieDetail.debugIdentityCopy": "Copy diagnostics",
   "movieDetail.debugIdentityHint": "Field names come from the shared sync contract and stay in English on purpose. Only visible while Debug Mode is on.",
-  "movieDetail.debugSourcesNotWritten": "selected but not saved"
+  "movieDetail.debugSourcesNotWritten": "selected but not saved",
+  "profile.accessConnections": "Connections",
+  "profile.connectionSessions": "{count} sessions",
+  "profile.showRevokedConnections": "Show revoked connections",
+  "profile.hideRevokedConnections": "Hide revoked connections",
+  "profile.revokeConnectionConfirm": "Revoke this connection? {count} sessions will be signed out.",
+  "profile.apiTokenFallbackName": "API token",
+  "profile.connectionModel": "Device"
 }

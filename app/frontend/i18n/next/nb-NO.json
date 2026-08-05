@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopier diagnostikk",
   "movieDetail.debugIdentityHint": "Feltnavnene kommer fra den delte synkroniseringskontrakten og står bevisst på engelsk. Vises bare mens feilsøkingsmodus er på.",
-  "movieDetail.debugSourcesNotWritten": "valgt, men ikke lagret"
+  "movieDetail.debugSourcesNotWritten": "valgt, men ikke lagret",
+  "profile.accessConnections": "Tilkoblinger",
+  "profile.connectionSessions": "{count} økter",
+  "profile.showRevokedConnections": "Vis tilbakekalte tilkoblinger",
+  "profile.hideRevokedConnections": "Skjul tilbakekalte tilkoblinger",
+  "profile.revokeConnectionConfirm": "Tilbakekall denne tilkoblingen? {count} økter blir logget ut.",
+  "profile.apiTokenFallbackName": "Tilgangstoken",
+  "profile.connectionModel": "Enhet"
 }

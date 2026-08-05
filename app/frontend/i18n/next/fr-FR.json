@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identité (Debug)",
   "movieDetail.debugIdentityCopy": "Copier le diagnostic",
   "movieDetail.debugIdentityHint": "Les noms de champs proviennent du contrat de synchronisation partagé et restent volontairement en anglais. Visible uniquement lorsque le mode Debug est actif.",
-  "movieDetail.debugSourcesNotWritten": "sélectionné mais non enregistré"
+  "movieDetail.debugSourcesNotWritten": "sélectionné mais non enregistré",
+  "profile.accessConnections": "Connexions",
+  "profile.connectionSessions": "{count} sessions",
+  "profile.showRevokedConnections": "Afficher les connexions révoquées",
+  "profile.hideRevokedConnections": "Masquer les connexions révoquées",
+  "profile.revokeConnectionConfirm": "Révoquer cette connexion ? {count} sessions seront déconnectées.",
+  "profile.apiTokenFallbackName": "Jeton d'accès",
+  "profile.connectionModel": "Appareil"
 }

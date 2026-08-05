@@ -114,6 +114,9 @@ jobs:
           tests.test_next_technical_profile_sync
           tests.test_next_movie_estimated_value
 
+      - name: Test API and MCP connection grouping
+        run: python -m unittest tests.test_next_api_connections
+
       - name: Create minimal legacy SQLite fixture
         run: |
           python - <<'PY'
