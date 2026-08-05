@@ -9117,6 +9117,54 @@ def store_client_entity_mapping(
         )
 
 
+def movie_location_assignment(payload: dict[str, Any]) -> dict[str, Any]:
+    """The location a sync payload assigns, keyed on presence (§4c.3).
+
+    Returns ``{}`` when the client said nothing about the assignment, and
+    ``{"location_id": <uuid or None>}`` when it did. The scalar rule of §4.8
+    applies unchanged:
+
+    - key absent, or present as ``null`` → keep what the server has. kotlinx
+      omits defaults and Swift uses ``encodeIfPresent``, so an untouched field
+      is indistinguishable from an explicit null and must mean the same thing.
+    - explicit empty value → erase the assignment. This is the only way a user
+      can take a movie off its shelf from a phone.
+    """
+    for key in ("locationId", "location_id"):
+        if key not in payload:
+            continue
+        raw = payload.get(key)
+        if raw is None:
+            return {}
+        if isinstance(raw, str) and not raw.strip():
+            return {"location_id": None}
+        return {"location_id": parse_uuid(raw, "locationId")}
+    return {}
+
+
+def apply_movie_location_assignment(cur, movie_uuid: UUID, assignment: dict[str, Any]) -> None:
+    """Write an assignment produced by :func:`movie_location_assignment`.
+
+    A no-op unless the client actually asserted something, so the common case —
+    a movie upsert that never mentions a location — leaves the column alone.
+
+    An id the server does not have is rejected rather than quietly stored as
+    NULL: writing it away would report success for an assignment that did not
+    happen, and a failure that comes back as success is worse than a failure.
+    """
+    if "location_id" not in assignment:
+        return
+    location_id = assignment["location_id"]
+    if location_id is not None:
+        cur.execute("SELECT 1 FROM locations WHERE id=%s", (location_id,))
+        if cur.fetchone() is None:
+            raise NextApiError("Unknown locationId", 400)
+    cur.execute(
+        "UPDATE movies SET location_id=%s, updated_at=now() WHERE id=%s",
+        (location_id, movie_uuid),
+    )
+
+
 def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
@@ -9156,6 +9204,13 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "location": payload.get("location"),
         "metadata": metadata,
+        # Not written by the big upsert below: `location_id` is a uuid column,
+        # so "absent" and "explicitly emptied" both reach SQL as NULL and its
+        # COALESCE cannot tell them apart. Sync-contract §4c.3 needs that
+        # distinction — absent keeps, empty erases — so the assignment is keyed
+        # on presence here and applied separately by the caller, exactly like
+        # `technical_edits`.
+        "location_assignment": movie_location_assignment(payload),
         # Not a `movies` column: this is the technical profile, which lives in
         # movie_technical_specs and is applied separately by the caller. It is
         # carried here so every movie-upsert path picks it up in one place.
@@ -17414,6 +17469,7 @@ def apply_movie_upsert(
     # safe to ship the server ahead of the clients.
     with conn.cursor() as cur:
         upsert_movie_technical_edits(cur, entity_id, fields.get("technical_edits") or {})
+        apply_movie_location_assignment(cur, entity_id, fields.get("location_assignment") or {})
 
     # Persist the TMDB identifier so trede 3 (tmdb+format+edition) can match on a
     # later sync. Idempotent: the composite PK makes re-writes a no-op.

@@ -137,7 +137,11 @@ class MovieSyncPayloadParityPostgresTests(unittest.TestCase):
         row on a payload that named one field.
         """
         fields = next_app.movie_payload_fields(body)
-        columns = [column for column in fields if column not in ("metadata", "technical_edits")]
+        columns = [
+            column
+            for column in fields
+            if column not in ("metadata", "technical_edits", "location_assignment")
+        ]
         with conn.cursor() as cur:
             if columns:
                 assignments = ", ".join(f"{column}=COALESCE(%s, {column})" for column in columns)
@@ -149,6 +153,11 @@ class MovieSyncPayloadParityPostgresTests(unittest.TestCase):
                     (json.dumps(fields["metadata"]), movie_id),
                 )
             next_app.upsert_movie_technical_edits(cur, movie_id, fields["technical_edits"])
+            # `location_id` is a uuid column, so the COALESCE above cannot carry
+            # it: an absent key and an explicitly emptied one both arrive as
+            # NULL. It is keyed on presence instead and written separately, and
+            # this helper mirrors `apply_movie_upsert`, so it does the same.
+            next_app.apply_movie_location_assignment(cur, movie_id, fields["location_assignment"])
         conn.commit()
 
     # ---- The two structural guards ----
@@ -189,10 +198,15 @@ class MovieSyncPayloadParityPostgresTests(unittest.TestCase):
         symptom. Anything `movie_payload_fields` maps to a column has to appear
         in the payload a client reads.
         """
+        # `metadata`, `technical_edits` and `location_assignment` are not plain
+        # column mappings — they are sub-objects the caller applies separately,
+        # so their key names are not what a client reads back. The columns
+        # behind them are covered elsewhere: the technical wire keys below, and
+        # `location_id` in `test_next_location_sync.py`.
         accepted = {
             column
             for column in next_app.movie_payload_fields({})
-            if column not in ("metadata", "technical_edits")
+            if column not in ("metadata", "technical_edits", "location_assignment")
         }
         technical_wire_keys = {wire for wire, _ in next_app.MOVIE_TECHNICAL_SYNC_KEYS.values()}
 
