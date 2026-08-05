@@ -145,7 +145,11 @@ try:
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_connection import refresh_movievault_connection
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from .next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
+    from .next_movievault_v2 import MovieVaultV2Error
     from .next_movievault_v2 import movievault_v2_plugin_context
+    from .next_movievault_v2 import resolve_release_details
+    from .next_movievault_v2 import search_release_details
     from .next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
     from .dedup_identity import title_year_identity_compatible
     from .versioning import backend_version
@@ -379,7 +383,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_connection import refresh_movievault_connection
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
+    from next_movievault_v2 import MovieVaultV2Error
     from next_movievault_v2 import movievault_v2_plugin_context
+    from next_movievault_v2 import resolve_release_details
+    from next_movievault_v2 import search_release_details
     from next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
     from dedup_identity import title_year_identity_compatible
     from versioning import backend_version
@@ -8757,6 +8765,193 @@ def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
             cur.execute("DELETE FROM plugins WHERE id=%s", (plugin_id,))
             deleted["plugins"] = cur.rowcount
     return deleted
+
+
+# How a release-details failure must be *reported*. "Not in the catalogue" is a
+# dead end that correctly sends the user to manual entry; "could not reach
+# MovieVault" is a temporary condition where waiting costs nothing. A client
+# that shows the first message for the second condition turns a five-minute
+# outage into permanently hand-typed data, so every failure code carries the
+# kind it belongs to and whether a retry is worth offering.
+#
+# `retryable` follows the resolver's own rule: only a failure that proves the
+# request never arrived may be retried, because a resolve POST can mint a
+# resolution job server-side. A timeout proves nothing - which is why it is the
+# one that feels most retryable and is not.
+RELEASE_DETAILS_FAILURE_KINDS: dict[str, tuple[str, bool]] = {
+    "release_details_unreachable": ("transport", True),
+    "release_details_network_error": ("transport", False),
+    "release_details_http_error": ("transport", False),
+    "redirect_rejected": ("transport", False),
+    "release_details_unavailable": ("unavailable", True),
+    "release_details_rate_limited": ("unavailable", True),
+    "release_details_cache_unavailable": ("unavailable", True),
+    # The server is still working and caches the finished result for about
+    # fifteen minutes, so asking again is cheap and usually instant.
+    "release_details_poll_timeout": ("pending", True),
+    "release_details_expired": ("expired", True),
+    # Server-owned, and each one means "no data", not "the lookup broke".
+    "no_approved_sources": ("no_data", False),
+    "not_found": ("no_data", False),
+    "ambiguous_title": ("needs_year", False),
+    "canonical_release_unusable": ("catalog_defect", False),
+}
+# Failure kinds where MovieVault never actually answered. A client may not say
+# "not found" for any of these.
+RELEASE_DETAILS_UNANSWERED_KINDS = {"transport", "unavailable", "pending", "expired"}
+
+
+def movievault_v2_release_details_settings(conn) -> dict[str, Any]:
+    """The stored v2 plugin settings, or the defaults when it has none.
+
+    Only the request timeout and poll budget are read from here; the origin is
+    enforced by DiscVault and never user-supplied.
+    """
+    if not table_exists(conn, "plugin_settings"):
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT settings FROM plugin_settings WHERE plugin_id=%s",
+            (MOVIEVAULT_V2_PLUGIN_ID,),
+        )
+        row = cur.fetchone()
+    settings = row.get("settings") if row else None
+    return dict(settings) if isinstance(settings, dict) else {}
+
+
+def release_details_summary_from_release(release: dict[str, Any], *, source: str) -> dict[str, Any]:
+    """Express a resolved technical release in the candidate-summary shape.
+
+    A confirmed single release and a list of pressings are different answers,
+    and `status` keeps them apart. The *rows* are the same thing though - one
+    physical release described by the same vocabulary - so they share one shape
+    and one renderer rather than drifting into two.
+    """
+    summary: dict[str, Any] = {
+        # A resolved release has no candidate reference: there is nothing to
+        # hand back to the server, because it is already the answer.
+        "releaseRef": "",
+        "source": source,
+        "title": release.get("title") or "",
+    }
+    for key in ("edition", "format", "discCount", "packaging", "video", "audioTracks"):
+        if release.get(key):
+            summary[key] = release[key]
+    if release.get("regions"):
+        summary["discRegions"] = release["regions"]
+    if release.get("subtitles"):
+        summary["subtitles"] = release["subtitles"]
+    elif release.get("subtitleLanguages"):
+        summary["subtitleLanguages"] = release["subtitleLanguages"]
+    if release.get("barcodes"):
+        summary["barcodes"] = release["barcodes"]
+    return summary
+
+
+def release_details_search_payload(result: dict[str, Any], *, entrypoint: str) -> dict[str, Any]:
+    """Normalize a resolver answer into what the Add flow needs to act on."""
+    status = str(result.get("status") or "failed")
+    film = result.get("film") if isinstance(result.get("film"), dict) else {}
+    identifiers = film.get("identifiers") if isinstance(film.get("identifiers"), dict) else {}
+    payload: dict[str, Any] = {
+        "entrypoint": entrypoint,
+        "status": status,
+        "answered": True,
+        "retryable": False,
+        "film": {
+            "title": film.get("title") or "",
+            "year": film.get("year"),
+            "tmdbMovieId": identifiers.get("tmdbMovieId"),
+            "imdbId": identifiers.get("imdbId"),
+        }
+        if film
+        else {},
+        "releases": [],
+    }
+    if result.get("verificationStatus"):
+        payload["verificationStatus"] = result["verificationStatus"]
+    if status == "candidates":
+        payload["releases"] = [
+            item for item in (result.get("releases") or []) if isinstance(item, dict)
+        ]
+    elif status in {"canonical_hit", "external_hit"}:
+        release = result.get("release") if isinstance(result.get("release"), dict) else {}
+        if release:
+            payload["releases"] = [
+                release_details_summary_from_release(
+                    release,
+                    source="canonical" if status == "canonical_hit" else "external",
+                )
+            ]
+    elif status == "failed":
+        error_code = str(result.get("errorCode") or "release_details_failed")
+        kind, retryable = RELEASE_DETAILS_FAILURE_KINDS.get(error_code, ("server", False))
+        payload["errorCode"] = error_code
+        payload["failureKind"] = kind
+        payload["retryable"] = retryable
+        payload["answered"] = kind not in RELEASE_DETAILS_UNANSWERED_KINDS
+    return payload
+
+
+def release_candidate_movie_payload(candidate: Any) -> dict[str, Any]:
+    """Map a chosen release candidate onto movie-upsert payload keys.
+
+    Every field the edition governs is emitted whenever the candidate names it,
+    so the caller can assign rather than fill-if-empty. Keys the candidate does
+    not carry are left out entirely: `movie_technical_edits` reads on presence,
+    so an absent key means "no opinion" while an explicit empty list clears.
+
+    `format` is the deliberate exception to that. It has no unset value, so a
+    candidate that names no format leaves whatever was already chosen rather
+    than blanking it - the standing never-guess-a-format rule.
+    """
+    if not isinstance(candidate, dict):
+        return {}
+    payload: dict[str, Any] = {}
+    release_title = clean_text(candidate.get("title"))
+    if release_title:
+        payload["releaseTitle"] = release_title
+    for source, target in (("format", "format"), ("edition", "edition")):
+        value = clean_text(candidate.get(source))
+        if value:
+            payload[target] = value
+    country = clean_text(candidate.get("countryCode"))
+    if country:
+        payload["country"] = country
+    language = clean_text(candidate.get("languageCode"))
+    if language:
+        payload["language"] = language
+    release_date = clean_text(candidate.get("releaseDate"))
+    if release_date:
+        payload["releaseDate"] = release_date
+    runtime = candidate.get("runtimeMinutes")
+    if isinstance(runtime, int) and not isinstance(runtime, bool) and runtime > 0:
+        payload["runtimeMinutes"] = runtime
+    for key in ("packaging", "discRegions", "audioTracks", "subtitles"):
+        if isinstance(candidate.get(key), list):
+            payload[key] = candidate[key]
+    # Only when there are no structured tracks: the tracks are the fact and the
+    # flat list is their language view, so sending both hands the merge two
+    # spellings of one thing.
+    if not isinstance(candidate.get("subtitles"), list) and isinstance(
+        candidate.get("subtitleLanguages"), list
+    ):
+        payload["subtitles"] = [
+            {"languageCode": code, "subtitleType": "full"}
+            for code in candidate["subtitleLanguages"]
+            if isinstance(code, str) and code
+        ]
+    video = candidate.get("video") if isinstance(candidate.get("video"), dict) else {}
+    if video.get("resolution"):
+        payload["videoResolution"] = video["resolution"]
+    for source, target in (
+        ("codecs", "videoCodecs"),
+        ("hdrFormats", "hdrFormats"),
+        ("aspectRatios", "aspectRatios"),
+    ):
+        if isinstance(video.get(source), list):
+            payload[target] = video[source]
+    return payload
 
 
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
@@ -21297,6 +21492,111 @@ def register_routes(flask_app: Flask) -> None:
                 }
             )
 
+    @flask_app.post("/api/next/import/release-details/search")
+    def search_import_release_details():
+        """The v2 fallback for a disc the local route could not identify.
+
+        The catalog-first order is unchanged: this runs only after the normal
+        metadata lookup produced nothing for the scanned barcode. It asks
+        MovieVault's anonymous release-details resolver directly - by barcode,
+        or by the title the user typed once the barcode led nowhere - and hands
+        back whatever it answers, including a `candidates` list of pressings of
+        one film for the user to choose between.
+
+        A failure is never reported as "not in the catalogue": the outcome
+        carries a `failureKind` so the client can say what actually happened,
+        and `retryable` marks the failures where waiting costs nothing.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Release details search body must be an object", 400)
+        barcode = normalize_barcode(clean_text(body.get("barcode")) or "")
+        title = clean_text(body.get("title") or body.get("query")) or ""
+        edition = clean_text(body.get("edition")) or ""
+        media_format = clean_text(body.get("format") or body.get("mediaFormat")) or ""
+        year_text = clean_text(body.get("year")) or ""
+        year = int(year_text) if year_text.isdigit() and 1870 <= int(year_text) <= 2200 else None
+        if not barcode and not title:
+            raise NextApiError("barcode or title is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                (
+                    "metadata.search",
+                    "collection.add",
+                    "collection.add_own",
+                    "collection.import",
+                    "collection.edit_all",
+                ),
+            )
+            settings = movievault_v2_release_details_settings(conn)
+            # The Add flow waits longer than a metadata refresh does; an
+            # operator who configured an even longer budget keeps theirs.
+            configured_attempts = settings.get("releaseDetailsPollAttempts")
+            if (
+                not isinstance(configured_attempts, int)
+                or isinstance(configured_attempts, bool)
+                or configured_attempts < ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
+            ):
+                settings = {
+                    **settings,
+                    "releaseDetailsPollAttempts": ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS,
+                }
+            # A barcode is the more specific question, so it is asked first and
+            # the title rides along as a hint. Only a request with no barcode at
+            # all goes to the title entry point.
+            entrypoint = "resolve" if barcode else "search"
+            request_payload: dict[str, Any] = {}
+            try:
+                if barcode:
+                    request_payload = {"barcode": barcode}
+                    if title:
+                        request_payload["title"] = title
+                    if year is not None:
+                        request_payload["year"] = year
+                    if edition:
+                        request_payload["edition"] = edition
+                    if media_format:
+                        request_payload["format"] = media_format
+                    result = resolve_release_details(settings, request_payload)
+                else:
+                    request_payload = {"title": title}
+                    if year is not None:
+                        request_payload["year"] = year
+                    if edition:
+                        request_payload["edition"] = edition
+                    if media_format:
+                        request_payload["format"] = media_format
+                    result = search_release_details(settings, request_payload)
+            except MovieVaultV2Error as exc:
+                result = {
+                    "contractVersion": "release-technical-1",
+                    "status": "failed",
+                    "errorCode": exc.code,
+                }
+            payload = release_details_search_payload(result, entrypoint=entrypoint)
+            audit_event(
+                conn,
+                event_type="metadata.release_details_search",
+                category="metadata",
+                actor=actor,
+                target_type="release_details_search",
+                target_id=None,
+                summary=f"MovieVault v2 {entrypoint} for {barcode or title}",
+                metadata={
+                    "entrypoint": entrypoint,
+                    "barcode": barcode,
+                    "title": title,
+                    "year": year,
+                    "status": payload["status"],
+                    "errorCode": payload.get("errorCode"),
+                    "failureKind": payload.get("failureKind"),
+                    "candidateCount": len(payload.get("releases") or []),
+                    "verificationStatus": payload.get("verificationStatus"),
+                },
+            )
+        return response({"status": "ok", "result": payload})
+
     @flask_app.post("/api/next/movies/<movie_id>/collections/<collection_id>")
     def add_movie_to_collection(movie_id: str, collection_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
@@ -28850,6 +29150,9 @@ def register_routes(flask_app: Flask) -> None:
         wants_movie_import = import_mode == "movie"
         wants_box_set_import = import_mode in {"box-set", "boxset"}
         provided_metadata_result = metadata_result_from_import_body(body)
+        release_candidate = body.get("releaseCandidate") or body.get("release_candidate")
+        if not isinstance(release_candidate, dict):
+            release_candidate = {}
         selected_box_set_key_from_body = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
         provided_box_set_body = body.get("boxSetProposal") or body.get("box_set_proposal")
         if not isinstance(provided_box_set_body, dict):
@@ -29188,6 +29491,13 @@ def register_routes(flask_app: Flask) -> None:
                     payload["format"] = clean_text(body.get("format"))
                 if body.get("year") and not payload.get("year"):
                     payload["year"] = clean_text(body.get("year"))
+                # An edition the user picked from a v2 candidate list describes
+                # the disc in their hand, so it wins over whatever a metadata
+                # source guessed for the film. Applied last, and by assignment
+                # rather than fill-if-empty: picking a second edition after a
+                # first must not leave the first one's audio or packaging
+                # behind.
+                payload.update(release_candidate_movie_payload(release_candidate))
 
                 mutation_id = f"import-movie-{uuid.uuid4()}"
                 upsert = apply_movie_upsert(
@@ -29228,6 +29538,14 @@ def register_routes(flask_app: Flask) -> None:
                         "title": import_title,
                         "sources": metadata_result.get("sources") or [],
                         "selectedCandidate": selected_movie_candidate,
+                        "releaseCandidate": {
+                            "releaseRef": clean_text(release_candidate.get("releaseRef")),
+                            "source": clean_text(release_candidate.get("source")),
+                            "edition": clean_text(release_candidate.get("edition")),
+                            "format": clean_text(release_candidate.get("format")),
+                        }
+                        if release_candidate
+                        else {},
                         "applied": applied,
                         "metadataRefreshQueued": bool(metadata_refresh_job),
                         "metadataJobId": str(metadata_refresh_job.get("id")) if metadata_refresh_job else None,

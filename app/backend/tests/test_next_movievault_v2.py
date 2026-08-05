@@ -137,6 +137,59 @@ def release_details_hit(*, external: bool = False) -> dict:
     return payload
 
 
+def release_details_candidates(*, count: int = 2) -> dict:
+    """A barcode or title that identified the film but not the pressing.
+
+    Mirrors what `exclude_none=True` actually puts on the wire: the optional
+    scalars are dropped while the list fields are always present, empty or not.
+    """
+    releases = []
+    for index in range(count):
+        releases.append(
+            {
+                "releaseRef": f"candidate-{index}",
+                "source": "external",
+                "title": "Example Film",
+                "edition": "SteelBook" if index else None,
+                "format": "4K UHD",
+                "region": "Benelux",
+                "discRegions": ["B"],
+                "discCount": index + 1,
+                "packaging": ["steelbook"] if index else [],
+                "video": {
+                    "resolution": "2160p",
+                    "codecs": ["hevc"],
+                    "hdrFormats": ["dolby_vision"],
+                    "aspectRatios": ["2.39:1"],
+                },
+                "audioTracks": [
+                    {"languageCode": "en", "codec": "dolby_truehd", "channels": "7.1"}
+                ],
+                "subtitles": [
+                    {"languageCode": "en", "subtitleType": "full"},
+                    {"languageCode": "en", "subtitleType": "sdh"},
+                ],
+                "subtitleLanguages": ["en"],
+                "barcodes": [],
+            }
+        )
+    for release in releases:
+        for key in [key for key, value in release.items() if value is None]:
+            del release[key]
+    return {
+        "contractVersion": "release-technical-1",
+        "status": "candidates",
+        "verificationStatus": "unreviewed_external",
+        "film": {
+            "title": "Example Film",
+            "year": 2024,
+            "identifiers": {"tmdbMovieId": "123"},
+            "links": {"tmdb": "https://www.themoviedb.org/movie/123"},
+        },
+        "releases": releases,
+    }
+
+
 def release_details_poster(*, asset_id: str = "40000000-0000-0000-0000-000000000001") -> dict:
     """The approved poster reference reuses the `distribution-4` poster type
     verbatim, so this mirrors the shape already pinned in
@@ -617,6 +670,137 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertEqual(
             [member["position"] for member in result["boxSet"]["members"]],
             [1, 2],
+        )
+
+    def test_release_details_accepts_a_candidate_list(self):
+        result = next_movievault_v2.validate_release_details_response(
+            release_details_candidates()
+        )
+
+        self.assertEqual(result["status"], "candidates")
+        self.assertEqual(result["verificationStatus"], "unreviewed_external")
+        self.assertEqual(result["film"]["title"], "Example Film")
+        self.assertEqual(len(result["releases"]), 2)
+        first = result["releases"][0]
+        self.assertEqual(first["releaseRef"], "candidate-0")
+        self.assertEqual(first["source"], "external")
+        self.assertEqual(first["discRegions"], ["B"])
+        self.assertEqual(first["video"]["resolution"], "2160p")
+        # The structured tracks are the fact; the flat language view is dropped
+        # so the picker is never shown one subtitle set twice.
+        self.assertEqual(
+            first["subtitles"],
+            [
+                {"languageCode": "en", "subtitleType": "full"},
+                {"languageCode": "en", "subtitleType": "sdh"},
+            ],
+        )
+        self.assertNotIn("subtitleLanguages", first)
+
+    def test_release_details_candidates_require_a_film_and_a_release(self):
+        for mutate in (
+            lambda payload: payload.pop("film"),
+            lambda payload: payload.update({"releases": []}),
+            # `candidates` never carries a single release: that would be a hit.
+            lambda payload: payload.update({"release": release_details_hit()["release"]}),
+        ):
+            with self.subTest(mutate=mutate):
+                payload = release_details_candidates()
+                mutate(payload)
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error,
+                    "^release_details_response_invalid$",
+                ):
+                    next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_candidates_reject_an_unknown_source(self):
+        payload = release_details_candidates()
+        payload["releases"][0]["source"] = "guess"
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_title_search_posts_to_the_search_route_and_rejects_a_barcode(self):
+        opener = SequenceOpener(
+            [
+                FakeResponse(
+                    json.dumps(
+                        release_details_candidates(), separators=(",", ":")
+                    ).encode("ascii")
+                )
+            ]
+        )
+
+        with patch.object(
+            next_movievault_v2.urllib.request,
+            "build_opener",
+            return_value=opener,
+        ):
+            result = next_movievault_v2.search_release_details(
+                {"origin": "https://movievault.example"},
+                {"title": "  Example   Film  ", "year": 2024},
+            )
+
+        self.assertEqual(result["status"], "candidates")
+        request, _timeout = opener.requests[0]
+        self.assertEqual(request.full_url, "https://movievault.example/v2/release-details/search")
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(json.loads(request.data), {"title": "Example Film", "year": 2024})
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_request_invalid$",
+        ):
+            next_movievault_v2.search_release_details(
+                {"origin": "https://movievault.example"},
+                {"title": "Example Film", "barcode": "4006381333931"},
+            )
+
+    def test_title_search_polls_the_shared_resolve_route(self):
+        # There is exactly one poll route; a title search does not get its own.
+        resolution_id = "71a6c771-cd83-478e-a2db-109cb4fd6279"
+        opener = SequenceOpener(
+            [
+                FakeResponse(
+                    json.dumps(
+                        {
+                            "contractVersion": "release-technical-1",
+                            "status": "pending",
+                            "resolutionId": resolution_id,
+                            "retryAfterSeconds": 2,
+                        }
+                    ).encode("ascii"),
+                    status=202,
+                ),
+                FakeResponse(
+                    json.dumps(
+                        release_details_candidates(), separators=(",", ":")
+                    ).encode("ascii")
+                ),
+            ]
+        )
+        waits: list[float] = []
+
+        with patch.object(
+            next_movievault_v2.urllib.request,
+            "build_opener",
+            return_value=opener,
+        ):
+            result = next_movievault_v2.search_release_details(
+                {"origin": "https://movievault.example"},
+                {"title": "Example Film"},
+                sleep=waits.append,
+            )
+
+        self.assertEqual(result["status"], "candidates")
+        self.assertEqual(waits, [2])
+        poll_request, _timeout = opener.requests[1]
+        self.assertEqual(
+            poll_request.full_url,
+            f"https://movievault.example/v2/release-details/resolve/{resolution_id}",
         )
 
     def test_release_details_accepts_optional_poster_on_both_hit_statuses(self):

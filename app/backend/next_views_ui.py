@@ -6404,6 +6404,76 @@ def ui_preview_html(
     .import-barcode-form button {
       min-height: 40px;
     }
+    .release-fallback:empty {
+      display: none;
+    }
+    .release-fallback-card {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .release-fallback-stage {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+    }
+    .release-fallback-stage::before {
+      content: "";
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--line);
+      border-top-color: var(--accent, currentColor);
+      animation: releaseFallbackSpin .9s linear infinite;
+      flex: none;
+    }
+    @keyframes releaseFallbackSpin {
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .release-fallback-stage::before {
+        animation-duration: 3s;
+      }
+    }
+    .release-fallback-meta {
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    .release-fallback-list {
+      display: grid;
+      gap: 10px;
+    }
+    .release-fallback-option {
+      display: grid;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .release-fallback-option.selected {
+      border-color: var(--accent, currentColor);
+    }
+    .release-fallback-facts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .release-fallback-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    @media (max-width: 720px) {
+      .release-fallback-actions .primary-button,
+      .release-fallback-actions .secondary-button {
+        width: 100%;
+      }
+    }
     @media (max-width: 720px) {
       .import-result-action-footer {
         justify-content: stretch;
@@ -14361,6 +14431,7 @@ def ui_preview_html(
                 <div class="import-batch-list" id="boxSetBuilderMemberList"></div>
               </section>
             </div>
+            <div class="release-fallback" id="importReleaseFallback"></div>
             <div class="import-result-list" id="importBarcodeResults"></div>
           </div>
         </section>
@@ -17416,7 +17487,7 @@ def ui_preview_html(
       window.addEventListener("focus", checkForAppUpdate);
     }
     registerAppUpdateChecks();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera", boxSetBuilder: {target: null, members: [], captureToCamera: false, busy: false}};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera", boxSetBuilder: {target: null, members: [], captureToCamera: false, busy: false}, releaseFallback: null};
     let bulkLastResult = null;
     let longPressSuppressUntil = 0;
     let importScanner = {
@@ -33211,6 +33282,7 @@ def ui_preview_html(
       renderImportJobs();
       renderImportFormatOptions();
       renderBarcodeLookup();
+      renderReleaseFallback();
       renderImportBatchList();
       renderBoxSetBuilder();
       applyAppPermissionVisibility();
@@ -33348,6 +33420,375 @@ def ui_preview_html(
       if (barcodeBoxSetProposals().length) return true;
       return false;
     }
+    // ---- MovieVault v2 release-details fallback ------------------------------
+    //
+    // A scanned barcode used to have two endings: a film, or nothing. This is
+    // the third. When no source can identify the EAN, MovieVault can still find
+    // the title printed on the box and search it, which returns several
+    // pressings of one film. The server cannot choose between them; the person
+    // holding the disc can. See App-Guidance
+    // `docs/apps/discvault/adding-a-title.md` for the rules this implements.
+    //
+    // The chain behind the answer is three network calls into an external source
+    // that paces itself at one request every five seconds, so ten to twenty
+    // seconds is normal rather than a symptom. The client waits out the server's
+    // whole poll budget: quitting early cancels nothing - the resolution
+    // completes and stays cached for about fifteen minutes either way - it only
+    // means this scan shows nothing while the next scan of the same disc answers
+    // instantly.
+    const RELEASE_FALLBACK_TIMEOUT_MS = 45000;
+    // Stage text advances on a clock so a long wait reads as progress rather
+    // than as a stall. This is the accessible content of the wait screen.
+    const RELEASE_FALLBACK_STAGES = [
+      {at: 0, key: "releaseFallback.stageShelf", text: "Checking your shelf..."},
+      {at: 2000, key: "releaseFallback.stageAsk", text: "Asking MovieVault..."},
+      {at: 8000, key: "releaseFallback.stageRelease", text: "Looking up the release..."},
+      {at: 18000, key: "releaseFallback.stageDisc", text: "Reading the disc details..."}
+    ];
+    let releaseFallbackStageTimers = [];
+    function stopReleaseFallbackStages() {
+      releaseFallbackStageTimers.forEach((timer) => window.clearTimeout(timer));
+      releaseFallbackStageTimers = [];
+    }
+    function startReleaseFallbackStages() {
+      stopReleaseFallbackStages();
+      releaseFallbackStageTimers = RELEASE_FALLBACK_STAGES.slice(1).map((stage, index) =>
+        window.setTimeout(() => {
+          if (!importCenter.releaseFallback || importCenter.releaseFallback.phase !== "waiting") return;
+          importCenter.releaseFallback.stageIndex = index + 1;
+          renderReleaseFallback();
+        }, stage.at)
+      );
+    }
+    // The list is dropped when the flow starts over - a new scan, a new search,
+    // manual entry from the hub - and when a save completes. Otherwise a Back
+    // button turns up on an unrelated screen, pointing at a previous scan's
+    // editions.
+    function resetReleaseFallback() {
+      stopReleaseFallbackStages();
+      importCenter.releaseFallback = null;
+      renderReleaseFallback();
+    }
+    function releaseFallbackCandidates() {
+      const fallback = importCenter.releaseFallback;
+      return Array.isArray(fallback?.releases) ? fallback.releases : [];
+    }
+    function selectedReleaseFallbackCandidate() {
+      const fallback = importCenter.releaseFallback;
+      const index = Number(fallback?.chosenIndex);
+      const candidates = releaseFallbackCandidates();
+      return Number.isInteger(index) && index >= 0 && index < candidates.length ? candidates[index] : null;
+    }
+    function setImportFormatValue(value) {
+      const select = document.getElementById("importFormatInput");
+      const normalized = normalizedMovieFormatValue(value || "");
+      if (!select || !normalized) return;
+      // A collector-only format the picker currently hides must still be
+      // representable, or the control cannot show its own value and the next
+      // save silently rewrites the disc to whatever the picker defaulted to.
+      if (!Array.from(select.options).some((option) => option.value === normalized)) {
+        select.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(normalized)}">${escapeHtml(normalized)}</option>`);
+      }
+      select.value = normalized;
+    }
+    // The format is filled in only when every candidate names the same one.
+    // When they disagree, the client's default stays and the user chooses:
+    // guessing between a DVD and a 4K UHD is wrong half the time, and a wrong
+    // format attaches a wrong technical profile to the disc.
+    function agreedReleaseFallbackFormat() {
+      const formats = releaseFallbackCandidates()
+        .map((candidate) => normalizedMovieFormatValue(candidate?.format || ""))
+        .filter(Boolean);
+      if (!formats.length || formats.length !== releaseFallbackCandidates().length) return "";
+      return formats.every((value) => value === formats[0]) ? formats[0] : "";
+    }
+    // They are all editions of one film. What is in doubt is which pressing,
+    // not which film - so the title, year and identifiers the server just named
+    // are carried over rather than made the user's work again.
+    function applyReleaseFallbackFilm() {
+      const film = importCenter.releaseFallback?.film || {};
+      const titleInput = document.getElementById("importTitleInput");
+      const yearInput = document.getElementById("importYearInput");
+      const tmdbInput = document.getElementById("importTmdbIdInput");
+      const imdbInput = document.getElementById("importImdbIdInput");
+      if (titleInput && film.title) titleInput.value = film.title;
+      if (yearInput && film.year) yearInput.value = String(film.year);
+      if (tmdbInput && film.tmdbMovieId) tmdbInput.value = String(film.tmdbMovieId);
+      if (imdbInput && film.imdbId) imdbInput.value = String(film.imdbId);
+    }
+    // Picking a second edition fully reassigns every field an edition governs.
+    // Filling only what the new candidate happens to carry would let the first
+    // choice's release title or format survive into the second.
+    function chooseReleaseFallbackCandidate(index) {
+      const candidates = releaseFallbackCandidates();
+      const position = Number(index);
+      if (!importCenter.releaseFallback || !Number.isInteger(position)) return;
+      if (position < 0 || position >= candidates.length) return;
+      importCenter.releaseFallback.chosenIndex = position;
+      importCenter.releaseFallback.manual = false;
+      applyReleaseFallbackFilm();
+      // `format` is the deliberate exception: it has no unset value, so a
+      // candidate that names none leaves whatever was already selected.
+      setImportFormatValue(candidates[position]?.format || "");
+      renderReleaseFallback();
+      setImportLookupActionMessage(
+        tNext("releaseFallback.editionSelected", "Edition selected. Add the movie to save it."),
+        "good"
+      );
+    }
+    // The list always offers a way out that is not "cancel".
+    function useReleaseFallbackManualEntry() {
+      if (!importCenter.releaseFallback) return;
+      importCenter.releaseFallback.chosenIndex = -1;
+      importCenter.releaseFallback.manual = true;
+      applyReleaseFallbackFilm();
+      setImportFormatValue(agreedReleaseFallbackFormat());
+      renderReleaseFallback();
+      setImportMethodTab("single");
+      document.getElementById("importTitleInput")?.focus();
+      setImportLookupActionMessage(
+        tNext("releaseFallback.manualPrefilled", "Details carried over. Complete the form and add the movie."),
+        ""
+      );
+    }
+    function releaseFallbackFactList(candidate) {
+      const facts = [];
+      const push = (value) => { if (value) facts.push(value); };
+      // Only what actually differs between editions of one film: the title is
+      // stated once at the top, so repeating it per row is six identical rows.
+      push(normalizedMovieFormatValue(candidate.format || ""));
+      push(candidate.edition);
+      push(candidate.region);
+      push(enumListText(candidate.discRegions, discRegionLabel));
+      if (candidate.discCount) {
+        push(`${candidate.discCount} ${tNext("releaseFallback.discs", "discs")}`);
+      }
+      push(enumListText(candidate.packaging, packagingLabel));
+      const video = candidate.video && typeof candidate.video === "object" ? candidate.video : {};
+      push(video.resolution);
+      push(enumListText(video.codecs, videoCodecLabel));
+      push(enumListText(video.hdrFormats, hdrFormatLabel));
+      push(enumListText(video.aspectRatios, (value) => String(value || "")));
+      if (candidate.countryCode) push(candidate.countryCode);
+      if (candidate.releaseDate) push(candidate.releaseDate);
+      return facts;
+    }
+    function releaseFallbackOptionHtml(candidate, index) {
+      const selected = Number(importCenter.releaseFallback?.chosenIndex) === index;
+      const facts = releaseFallbackFactList(candidate);
+      const audio = audioTracksText(candidate.audioTracks);
+      // Show the typed tracks only. `subtitleLanguages` is derived from
+      // `subtitles` upstream, so showing both is showing one fact twice.
+      const subtitles = Array.isArray(candidate.subtitles) && candidate.subtitles.length
+        ? subtitlesText(candidate.subtitles)
+        : (Array.isArray(candidate.subtitleLanguages) ? candidate.subtitleLanguages.map(languageWithCode).filter(Boolean).join(", ") : "");
+      return `
+        <div class="release-fallback-option ${selected ? "selected" : ""}">
+          <div class="release-fallback-facts">
+            ${facts.map((fact) => `<span class="tag">${escapeHtml(fact)}</span>`).join("")
+              || `<span class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.noDistinguishingFacts", "This source published no distinguishing details for this pressing."))}</span>`}
+          </div>
+          ${audio ? `<div class="release-fallback-meta"><strong>${escapeHtml(tNext("movieDetail.audio", "Audio"))}:</strong> ${escapeHtml(audio)}</div>` : ""}
+          ${subtitles ? `<div class="release-fallback-meta"><strong>${escapeHtml(tNext("movieDetail.subtitles", "Subtitles"))}:</strong> ${escapeHtml(subtitles)}</div>` : ""}
+          <div class="release-fallback-actions">
+            <button type="button" class="${selected ? "secondary-button" : "primary-button"}" data-release-fallback-choose="${index}">
+              ${escapeHtml(selected
+                ? tNext("releaseFallback.editionChosen", "Chosen")
+                : tNext("releaseFallback.useEdition", "Use this edition"))}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    function releaseFallbackRetryHtml() {
+      const fallback = importCenter.releaseFallback || {};
+      if (!fallback.retryable) return "";
+      return `<button type="button" class="secondary-button" data-release-fallback-retry="1">${escapeHtml(tNext("releaseFallback.retry", "Try again"))}</button>`;
+    }
+    // A client may only report "not found" when a MovieVault route actually
+    // answered. A transport failure is reported as a transport failure, with
+    // the suggestion to retry - collapsing the two tells the user something
+    // false about the catalogue's contents.
+    function releaseFallbackOutcomeMessage() {
+      const fallback = importCenter.releaseFallback || {};
+      if (fallback.status === "miss") {
+        return {
+          tone: "",
+          text: tNext("releaseFallback.miss", "MovieVault does not have this disc. Add it by hand below.")
+        };
+      }
+      if (fallback.status === "ambiguous") {
+        return {
+          tone: "warn",
+          text: tNext("releaseFallback.ambiguous", "The sources did not agree on which film this disc is, so it was not identified. Add it by hand below.")
+        };
+      }
+      if (fallback.failureKind === "needs_year") {
+        return {
+          tone: "warn",
+          text: tNext("releaseFallback.needsYear", "Several films share this title. Add the year and search again.")
+        };
+      }
+      if (fallback.failureKind === "catalog_defect") {
+        return {
+          tone: "bad",
+          text: tNext("releaseFallback.catalogDefect", "MovieVault holds this release but cannot publish it. Trying again will not help; add the disc by hand below.")
+        };
+      }
+      if (fallback.answered === false) {
+        return {
+          tone: "bad",
+          text: fallback.failureKind === "pending"
+            ? tNext("releaseFallback.stillWorking", "MovieVault is still working on this lookup. Search again in a moment - the finished result is kept ready.")
+            : tNext("releaseFallback.unreachable", "MovieVault could not be reached, so nothing is known about this disc yet. This is usually temporary.")
+        };
+      }
+      if (fallback.status === "failed") {
+        return {
+          tone: "bad",
+          text: tNext("releaseFallback.failed", "MovieVault could not complete this lookup.")
+        };
+      }
+      return {tone: "", text: ""};
+    }
+    function renderReleaseFallback() {
+      const host = document.getElementById("importReleaseFallback");
+      if (!host) return;
+      const fallback = importCenter.releaseFallback;
+      if (!fallback) {
+        host.innerHTML = "";
+        return;
+      }
+      const query = fallback.query || {};
+      const queryLabel = query.barcode || query.title || "";
+      if (fallback.phase === "waiting") {
+        const stage = RELEASE_FALLBACK_STAGES[Math.min(Number(fallback.stageIndex) || 0, RELEASE_FALLBACK_STAGES.length - 1)];
+        host.innerHTML = `
+          <div class="release-fallback-card">
+            <div class="release-fallback-stage" role="status" aria-live="polite">${escapeHtml(tNext(stage.key, stage.text))}</div>
+            <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.waitHelp", "Looking this disc up outside your own catalogue can take up to half a minute."))}${queryLabel ? ` ${escapeHtml(queryLabel)}` : ""}</div>
+          </div>
+        `;
+        return;
+      }
+      const candidates = releaseFallbackCandidates();
+      const film = fallback.film || {};
+      const outcome = releaseFallbackOutcomeMessage();
+      if (!candidates.length) {
+        host.innerHTML = `
+          <div class="release-fallback-card">
+            <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.title", "Not recognized by barcode"))}</div>
+            ${outcome.text ? `<div class="login-message ${escapeHtml(outcome.tone)}">${escapeHtml(outcome.text)}</div>` : ""}
+            <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.searchByTitleHelp", "Type the title printed on the box and search MovieVault for its pressings."))}</div>
+            <div class="release-fallback-actions">
+              <button type="button" class="primary-button" data-release-fallback-title="1">${escapeHtml(tNext("releaseFallback.searchByTitle", "Search by title"))}</button>
+              ${releaseFallbackRetryHtml()}
+              <button type="button" class="secondary-button" data-release-fallback-dismiss="1">${escapeHtml(tNext("common.close", "Close"))}</button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+      const filmLine = [film.title, film.year ? `(${film.year})` : ""].filter(Boolean).join(" ");
+      host.innerHTML = `
+        <div class="release-fallback-card">
+          <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.pickEdition", "Which pressing is this?"))}</div>
+          <div><strong>${escapeHtml(filmLine)}</strong></div>
+          <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.pickEditionHelp", "The film was identified but the barcode was not confirmed by any of these pressings. Pick the one you are holding."))}</div>
+          ${fallback.verificationStatus === "unreviewed_external"
+            ? `<div class="login-message warn">${escapeHtml(tNext("releaseFallback.unreviewed", "These details come from an outside source and have not been reviewed by MovieVault yet. Check them before saving."))}</div>`
+            : ""}
+          <div class="release-fallback-list">
+            ${candidates.map(releaseFallbackOptionHtml).join("")}
+          </div>
+          <div class="release-fallback-actions">
+            <button type="button" class="secondary-button" data-release-fallback-manual="1">${escapeHtml(tNext("releaseFallback.noneOfThese", "None of these - enter details myself"))}</button>
+            <button type="button" class="secondary-button" data-release-fallback-dismiss="1">${escapeHtml(tNext("common.close", "Close"))}</button>
+          </div>
+        </div>
+      `;
+    }
+    async function runReleaseDetailsFallback(query) {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return null;
+      const request = {
+        barcode: String(query?.barcode || "").trim(),
+        title: String(query?.title || "").trim(),
+        year: String(query?.year || "").trim(),
+        format: String(query?.format || "").trim(),
+        edition: String(query?.edition || "").trim()
+      };
+      if (!request.barcode && !request.title) return null;
+      stopReleaseFallbackStages();
+      importCenter.releaseFallback = {
+        phase: "waiting",
+        query: request,
+        stageIndex: 0,
+        film: {},
+        releases: [],
+        chosenIndex: -1,
+        manual: false
+      };
+      renderReleaseFallback();
+      startReleaseFallbackStages();
+      try {
+        const payload = await authApiJson("/api/next/import/release-details/search", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          timeoutMs: RELEASE_FALLBACK_TIMEOUT_MS,
+          body: JSON.stringify(request)
+        });
+        const result = payload.result || {};
+        importCenter.releaseFallback = {
+          ...importCenter.releaseFallback,
+          phase: "done",
+          status: String(result.status || ""),
+          answered: result.answered !== false,
+          retryable: Boolean(result.retryable),
+          failureKind: String(result.failureKind || ""),
+          errorCode: String(result.errorCode || ""),
+          verificationStatus: String(result.verificationStatus || ""),
+          film: result.film || {},
+          releases: Array.isArray(result.releases) ? result.releases : []
+        };
+        return importCenter.releaseFallback;
+      } catch (error) {
+        // The route answers resolver failures in its body, so only a
+        // DiscVault-side transport failure reaches here. Keep the specific
+        // message: one generic label for every failure mode records only that
+        // something went wrong, which the status already said.
+        importCenter.releaseFallback = {
+          ...importCenter.releaseFallback,
+          phase: "done",
+          status: "failed",
+          answered: false,
+          retryable: true,
+          failureKind: "transport",
+          errorCode: "request_failed",
+          message: error.message || String(error),
+          film: {},
+          releases: []
+        };
+        console.warn("release-details fallback failed", error);
+        return importCenter.releaseFallback;
+      } finally {
+        stopReleaseFallbackStages();
+        renderReleaseFallback();
+      }
+    }
+    async function searchReleaseFallbackByTitle() {
+      const title = String(document.getElementById("importTitleInput")?.value || "").trim();
+      if (!title) {
+        setImportMethodTab("single");
+        document.getElementById("importTitleInput")?.focus();
+        setImportCenterMessage(tNext("releaseFallback.titleRequired", "Type the title printed on the box first."), "warn");
+        return;
+      }
+      await runReleaseDetailsFallback({
+        title,
+        year: String(document.getElementById("importYearInput")?.value || "").trim(),
+        format: String(document.getElementById("importFormatInput")?.value || "").trim()
+      });
+    }
     async function previewBarcodeImport(event) {
       event?.preventDefault();
       if (event) importCenter.activeBatchBarcode = "";
@@ -33366,6 +33807,8 @@ def ui_preview_html(
         return;
       }
       setImportCenterMessage(tNext("importCenter.previewingLookup", "Searching metadata..."));
+      // A new search starts the flow over, so the previous scan's editions go.
+      resetReleaseFallback();
       importCenter.barcodeLookup = null;
       importCenter.addResult = null;
       importCenter.selectedMovieCandidateKey = "";
@@ -33390,10 +33833,27 @@ def ui_preview_html(
         importCenter.lookupPreviewTone = "";
         setImportLookupActionMessage("", "");
         renderBarcodeLookup();
-        if (barcode && !title && !barcodeLookupHasMatch()) {
-          const notRecognized = tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this movie manually.");
-          setImportLookupActionMessage(notRecognized, "warn");
-          setImportCenterMessage(notRecognized, "warn");
+        // Not during a bulk batch sweep: the fallback is a ten-to-twenty second
+        // chain per barcode, which would turn a twenty-line batch into ten
+        // minutes of waiting. The sweep reports the miss and the deeper lookup
+        // runs when the user opens that line.
+        if (barcode && !barcodeLookupHasMatch() && !importCenter.batchRunning) {
+          // The catalog-first order is unchanged: only once the local route has
+          // recognized nothing does the anonymous v2 resolver get asked. It may
+          // still identify the film by the title on the box and answer with the
+          // pressings it found, which is a choice - not a miss.
+          setImportCenterMessage(tNext("releaseFallback.stageAsk", "Asking MovieVault..."));
+          const fallback = await runReleaseDetailsFallback({barcode, title, year, format});
+          if (fallback?.releases?.length) {
+            setImportCenterMessage(tNext("releaseFallback.pickEdition", "Which pressing is this?"), "warn");
+            setImportLookupActionMessage(tNext("releaseFallback.pickEdition", "Which pressing is this?"), "warn");
+          } else {
+            const outcome = releaseFallbackOutcomeMessage();
+            const notRecognized = outcome.text
+              || tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this movie manually.");
+            setImportLookupActionMessage(notRecognized, outcome.tone || "warn");
+            setImportCenterMessage(notRecognized, outcome.tone || "warn");
+          }
         } else {
           setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
         }
@@ -33523,6 +33983,10 @@ def ui_preview_html(
             boxSetProposal: wantsBoxSet ? selectedProposalPayload : null,
             selectedBoxSetCandidate: wantsBoxSet ? selectedProposalPayload : null,
             boxSetMembers: wantsBoxSet ? boxSetMembers : [],
+            // The edition the user picked from the v2 candidate list describes
+            // the disc in their hand, so the server applies it over whatever a
+            // metadata source guessed for the film.
+            releaseCandidate: wantsBoxSet ? null : selectedReleaseFallbackCandidate(),
             metadataPreview: importCenter.barcodeLookup || null
           })
         });
@@ -33541,6 +34005,8 @@ def ui_preview_html(
             : "Movie added.";
         setImportLookupActionMessage(tNext(messageKey, messageFallback), "good");
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
+        // The save completed, so the list it came from is done with.
+        resetReleaseFallback();
         renderBarcodeLookup();
         const activeBatchBarcode = importCenter.activeBatchBarcode || "";
         const batchRow = activeBatchBarcode && normalizeImportBarcode(activeBatchBarcode) === barcode
@@ -42393,6 +42859,37 @@ def ui_preview_html(
           try { results.scrollIntoView({behavior: "smooth", block: "start"}); } catch (error) { results.scrollIntoView(); }
         }
         previewImportBatchBarcode(barcode);
+      });
+      document.getElementById("importReleaseFallback")?.addEventListener("click", (event) => {
+        const chooseButton = event.target.closest("[data-release-fallback-choose]");
+        const manualButton = event.target.closest("[data-release-fallback-manual]");
+        const titleButton = event.target.closest("[data-release-fallback-title]");
+        const retryButton = event.target.closest("[data-release-fallback-retry]");
+        const dismissButton = event.target.closest("[data-release-fallback-dismiss]");
+        if (chooseButton) {
+          event.preventDefault();
+          chooseReleaseFallbackCandidate(chooseButton.dataset.releaseFallbackChoose);
+          return;
+        }
+        if (manualButton) {
+          event.preventDefault();
+          useReleaseFallbackManualEntry();
+          return;
+        }
+        if (titleButton) {
+          event.preventDefault();
+          searchReleaseFallbackByTitle();
+          return;
+        }
+        if (retryButton) {
+          event.preventDefault();
+          runReleaseDetailsFallback(importCenter.releaseFallback?.query || {});
+          return;
+        }
+        if (dismissButton) {
+          event.preventDefault();
+          resetReleaseFallback();
+        }
       });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const configureTmdbButton = event.target.closest("[data-import-configure-tmdb]");
