@@ -21,6 +21,7 @@ sys.modules.setdefault(
 )
 
 from app.backend.next_metadata import canonicalize_plugin_result
+from app.backend.next_metadata import normalize_year_value
 from app.backend.next_metadata import count_update_fields
 from app.backend.next_metadata import flat_credit_entries
 from app.backend.next_metadata import plugin_credit_updates
@@ -728,6 +729,61 @@ class NextMetadataPolicyTests(unittest.TestCase):
         details = tmdb_plugin._normalize_details({"id": 1234, "title": "Heat", "genres": []})
 
         self.assertEqual(details["genreIds"], [])
+
+    def test_tmdb_credits_include_profile_photo_for_cast_and_crew(self):
+        credits = tmdb_plugin._credits(
+            {
+                "credits": {
+                    "cast": [{"id": 1, "name": "Actor One", "character": "Hero", "profile_path": "/actor.jpg"}],
+                    "crew": [{"id": 2, "name": "Editor One", "job": "Editor", "profile_path": "/editor.jpg"}],
+                }
+            }
+        )
+
+        cast_entry = next(item for item in credits if item["role"] == "actor")
+        crew_entry = next(item for item in credits if item["role"] == "crew")
+        self.assertEqual(cast_entry["profileUrl"], "https://image.tmdb.org/t/p/original/actor.jpg")
+        self.assertEqual(crew_entry["profileUrl"], "https://image.tmdb.org/t/p/original/editor.jpg")
+
+    def test_tmdb_credits_include_crew_beyond_the_old_job_title_allowlist(self):
+        # "Editor" was previously dropped entirely -- only director/writer/
+        # producer/composer/cinematographer job titles were kept.
+        credits = tmdb_plugin._credits(
+            {"credits": {"cast": [], "crew": [{"id": 9, "name": "Editor One", "job": "Editor"}]}}
+        )
+
+        self.assertEqual([item["name"] for item in credits], ["Editor One"])
+
+    def test_tmdb_credits_cap_crew_at_75(self):
+        crew = [{"id": index, "name": f"Crew {index}", "job": "Gaffer"} for index in range(100)]
+        credits = tmdb_plugin._credits({"credits": {"cast": [], "crew": crew}})
+
+        self.assertEqual(len(credits), 75)
+
+    def test_tmdb_credits_give_crew_distinct_sort_order_after_cast(self):
+        # A constant sortOrder=0 for every crew member ties them with cast
+        # member #1 in movie_credit_entities()'s `ORDER BY sort_order, name`,
+        # so its LIMIT truncates crew alphabetically instead of by TMDb's
+        # actual department/job order once cast+crew exceeds the row limit.
+        credits = tmdb_plugin._credits(
+            {
+                "credits": {
+                    "cast": [{"id": 1, "name": "Actor One", "character": "Hero"}],
+                    "crew": [
+                        {"id": 10, "name": "Zed Editor", "job": "Editor"},
+                        {"id": 11, "name": "Amy Gaffer", "job": "Gaffer"},
+                    ],
+                }
+            }
+        )
+
+        crew_entries = [item for item in credits if item["role"] == "crew"]
+        sort_orders = [item["sortOrder"] for item in crew_entries]
+        self.assertEqual(sort_orders, sorted(set(sort_orders)))
+        self.assertTrue(all(order >= 20 for order in sort_orders))
+        # Preserves TMDb's own crew ordering (Editor before Gaffer), not
+        # alphabetical by name.
+        self.assertEqual([item["name"] for item in crew_entries], ["Zed Editor", "Amy Gaffer"])
 
     @mock.patch("app.backend.next_plugins.tmdb.plugin._details")
     @mock.patch("app.backend.next_plugins.tmdb.plugin.search_title")
@@ -2765,6 +2821,68 @@ class NextArtworkLockTests(unittest.TestCase):
         )
         self.assertIn("poster_url", metadata_updates)
         self.assertIn("poster", media_updates)
+
+
+class NextMetadataYearCoercionTests(unittest.TestCase):
+    """`movies.year` is a text column; sources disagree on the type.
+
+    MovieVault v2's index declares `release_year integer` and its plugin passes
+    the value through untouched, so the year arrives at the merge as a Python
+    int. Bound raw against a text column that aborts the whole UPDATE — every
+    field in the same refresh is lost, not just the year — which is why this is
+    normalised at the merge boundary rather than at any one call site.
+    """
+
+    def test_integer_year_becomes_text(self):
+        self.assertEqual(normalize_year_value(1995), "1995")
+
+    def test_string_year_is_preserved(self):
+        self.assertEqual(normalize_year_value("1995"), "1995")
+        self.assertEqual(normalize_year_value("  1995  "), "1995")
+
+    def test_full_date_is_reduced_to_its_year(self):
+        # A source with only a release date still answers "what year is this".
+        self.assertEqual(normalize_year_value("1995-08-04"), "1995")
+
+    def test_unusable_values_are_dropped_rather_than_guessed(self):
+        for value in (None, "", "   ", "unknown", 12, 99999, [], {}):
+            self.assertIsNone(normalize_year_value(value), value)
+
+    def test_bool_is_never_a_year(self):
+        # bool subclasses int; True must not become "1".
+        self.assertIsNone(normalize_year_value(True))
+        self.assertIsNone(normalize_year_value(False))
+
+    def test_movievault_v2_shaped_payload_yields_a_text_year(self):
+        """The regression this whole change exists for.
+
+        The plugin tests use an int year and the merge tests use a string, and
+        nothing joined the two — so a type mismatch between them was invisible.
+        This is that join.
+        """
+        normalized = canonicalize_plugin_result(
+            "movievault_v2",
+            "movie_details",
+            {
+                "status": "hit",
+                "provider": "movievault_v2",
+                "movie": {"title": "Guardians of the Galaxy", "year": 2014},
+            },
+        )
+        year = normalized["movieUpdates"]["year"]
+        self.assertEqual(year, "2014")
+        self.assertIsInstance(year, str)
+
+    def test_string_year_still_survives_canonicalization(self):
+        normalized = canonicalize_plugin_result(
+            "tmdb",
+            "movie_details",
+            {
+                "status": "hit",
+                "movie": {"title": "Alien", "year": "1979"},
+            },
+        )
+        self.assertEqual(normalized["movieUpdates"]["year"], "1979")
 
 
 if __name__ == "__main__":
