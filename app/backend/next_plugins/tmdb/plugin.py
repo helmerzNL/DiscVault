@@ -72,6 +72,9 @@ def _videos(data):
     return trailer, extras
 
 
+CREW_LIMIT = 75
+
+
 def _credits(data):
     credits = data.get("credits") or {}
     cast = []
@@ -84,19 +87,31 @@ def _credits(data):
                 "character": item.get("character") or "",
                 "tmdbId": item.get("id"),
                 "sortOrder": index,
+                "profileUrl": _image(item.get("profile_path")),
             }
         )
-    for item in credits.get("crew") or []:
-        if item.get("job") in {"Director", "Producer", "Screenplay", "Writer", "Original Music Composer", "Director of Photography"}:
-            crew.append(
-                {
-                    "role": "crew",
-                    "name": item.get("name") or "",
-                    "job": item.get("job") or "",
-                    "tmdbId": item.get("id"),
-                    "sortOrder": 0,
-                }
-            )
+    # TMDb's combined movie-credits response already lists every crew member
+    # (and their profile photo) in this same call -- no extra API request per
+    # person, unlike person_details(). Kept to a generous cap rather than a
+    # job-title allowlist so departments beyond director/writer/producer show
+    # up too, without one huge blockbuster's credits list growing unbounded.
+    for index, item in enumerate((credits.get("crew") or [])[:CREW_LIMIT]):
+        crew.append(
+            {
+                "role": "crew",
+                "name": item.get("name") or "",
+                "job": item.get("job") or "",
+                "tmdbId": item.get("id"),
+                # Offset past cast's own 0..19 range and kept in TMDb's original
+                # department/job order -- previously a constant 0 tied every crew
+                # member with cast member #1 in movie_credit_entities()'s
+                # `ORDER BY sort_order, name`, so the (sort_order, name)-ordered,
+                # LIMIT-ed query silently dropped crew alphabetically instead of
+                # by TMDb's actual importance order once the list got large.
+                "sortOrder": 20 + index,
+                "profileUrl": _image(item.get("profile_path")),
+            }
+        )
     return cast + crew
 
 

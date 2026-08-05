@@ -5244,6 +5244,81 @@ def container_type_for_id(conn, container_id: UUID) -> str:
     return str(row["container_type"] or "")
 
 
+def optional_container_type(conn, container_id: UUID) -> str | None:
+    """``container_type`` for a container id, or None when there is no such row.
+
+    The 404-raising ``container_type_for_id()`` is right on a write that has to
+    land somewhere real. A delete has to stay safe to repeat (sync contract
+    §4b.6), so the delete paths ask this instead and simply do nothing when the
+    container is already gone."""
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT container_type FROM containers WHERE id=%s", (container_id,))
+        row = cur.fetchone()
+    return str(row["container_type"] or "") if row else None
+
+
+COLLECTION_ITEM_TYPES = ("movie", "vault", "box_set", "collection")
+COLLECTION_ITEM_CONTAINER_TYPES = ("vault", "box_set", "collection")
+
+
+def collection_ancestor_container_ids(conn, container_id: UUID) -> set[UUID]:
+    """Every container that reaches ``container_id`` through collection membership.
+
+    Walks upward through ``collection_items``, so the result is the set of
+    collections that already contain ``container_id`` directly or indirectly.
+    The ``seen`` guard means a cycle that is already in the data terminates the
+    walk instead of hanging it -- such cycles exist, which is exactly why
+    ``delete_container_records()`` carries its own guard."""
+    if not table_exists(conn, "collection_items"):
+        return set()
+    ancestors: set[UUID] = set()
+    frontier = [container_id]
+    while frontier:
+        current = frontier.pop()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT collection_id
+                FROM collection_items
+                WHERE item_id=%s AND item_type = ANY(%s::text[])
+                """,
+                (current, list(COLLECTION_ITEM_CONTAINER_TYPES)),
+            )
+            rows = cur.fetchall()
+        for row in rows:
+            parent = row.get("collection_id")
+            if parent and parent not in ancestors:
+                ancestors.add(parent)
+                frontier.append(parent)
+    return ancestors
+
+
+def guard_collection_item_cycle(
+    conn,
+    *,
+    collection_id: UUID,
+    item_type: str,
+    item_id: UUID,
+) -> None:
+    """Refuse a collection membership that would close a nesting loop.
+
+    Sync contract §4b.7 rejects the cycle at *write* time. Filtering only the
+    direct self-reference is not enough: adding A to B while B already sits
+    inside A closes the loop just as well, and the read-side expansion has
+    never been specified against one."""
+    if item_type not in COLLECTION_ITEM_CONTAINER_TYPES:
+        return
+    if item_id == collection_id:
+        raise NextApiError("A container cannot contain itself", 400)
+    if item_id in collection_ancestor_container_ids(conn, collection_id):
+        raise NextApiError(
+            "Adding this container would create a collection membership cycle",
+            400,
+        )
+
+
 def container_types_for_ids(
     conn,
     container_ids: list[UUID],
@@ -6427,7 +6502,42 @@ def user_sync_change(
 
 
 def container_membership_snapshot(conn, container_id) -> list[dict[str, Any]]:
-    """Full member list for one container (box-set), ordered for the client."""
+    """Full member list for one container, ordered for the client.
+
+    A box set or vault keeps its members in ``container_movies``; a collection
+    keeps them in ``collection_items`` and may hold containers as well as
+    movies. Reading only ``container_movies`` would publish an *empty* member
+    list for every collection -- a delta that says "this collection has no
+    members" rather than one that says nothing, which is the difference between
+    a quiet no-op and a client wiping a collection it just filled.
+
+    Collection rows carry the same ``relationship`` / ``child_container_id``
+    vocabulary the bootstrap already uses in
+    ``collection_container_membership_entities()``, so a client parses one
+    shape on both paths."""
+    container_type = optional_container_type(conn, container_id)
+    if container_type == "collection":
+        if not table_exists(conn, "collection_items"):
+            return []
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    collection_id AS container_id,
+                    CASE WHEN item_type = 'movie' THEN item_id END AS movie_id,
+                    CASE WHEN item_type <> 'movie' THEN item_id END AS child_container_id,
+                    CASE WHEN item_type = 'movie' THEN 'collection_movie'
+                         ELSE 'collection_container' END AS relationship,
+                    item_type,
+                    sort_order,
+                    created_at
+                FROM collection_items
+                WHERE collection_id=%s
+                ORDER BY sort_order, created_at
+                """,
+                (container_id,),
+            )
+            return cur.fetchall()
     if not table_exists(conn, "container_movies"):
         return []
     with conn.cursor() as cur:
@@ -9746,7 +9856,7 @@ def attach_movie_technical_specs(conn, movies: list[dict[str, Any]]) -> list[dic
     return movies
 
 
-def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 80) -> list[dict[str, Any]]:
+def movie_credit_entities(conn, movie_id: UUID, *, limit: int = 100) -> list[dict[str, Any]]:
     if not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
         return []
     media_join = table_exists(conn, "media_assets")
@@ -11618,6 +11728,57 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
     return []
 
 
+def digital_item_web_url(row: dict[str, Any]) -> str | None:
+    """A browser-openable link for a digital media item, or ``None``.
+
+    The stored ``playback_url`` is whatever the plugin emitted, and for Plex that
+    is an **app deep link** (``plex://server/<machineId>/details?key=...``,
+    ``next_plugins/plex/plugin.py``). On a desktop without the Plex app the
+    browser tries a protocol handler and silently does nothing — the link looks
+    live and is dead. So the web form is derived here rather than replacing what
+    is stored: native clients read ``playback_url`` and *should* keep opening the
+    app directly, and deriving costs no migration and no re-sync.
+
+    Plex points at ``app.plex.tv`` rather than the server's own web UI on
+    purpose. The plugin manifest describes ``baseUrl`` as "reachable by the
+    DiscVault container", so it is routinely an internal address
+    (``http://plex:32400``) that the user's browser cannot reach; building the
+    link from it would swap one dead link for another. ``app.plex.tv`` works from
+    any network the user is signed in on, and hands off to the desktop app where
+    that is installed.
+
+    Jellyfin's stored URL is already a web URL, but it is rebuilt from the same
+    parts anyway so both services follow one code path instead of one being
+    trusted and the other derived.
+    """
+    plugin_id = str(row.get("plugin_id") or "").strip().lower()
+    source_type = str(row.get("source_type") or "").strip().lower()
+    service = plugin_id or source_type
+    external_id = str(row.get("external_id") or "").strip()
+    base_url = str(row.get("base_url") or "").strip().rstrip("/")
+    machine_id = str(row.get("machine_id") or "").strip()
+
+    if "plex" in service:
+        # No machine id means Plex's /identity call failed at sync time (the
+        # plugin swallows that and stores ""), and there is no honest web URL to
+        # build. Better no link than a malformed one.
+        if machine_id and external_id:
+            key = quote(f"/library/metadata/{external_id}", safe="")
+            return f"https://app.plex.tv/desktop/#!/server/{machine_id}/details?key={key}"
+        return None
+    if "jellyfin" in service:
+        if base_url and external_id:
+            return f"{base_url}/web/index.html#!/details?id={quote(external_id, safe='')}"
+        return None
+
+    # Any other source: pass its own link through when it is already something a
+    # browser can open, and say nothing when it is not.
+    playback_url = str(row.get("playback_url") or "").strip()
+    if playback_url.startswith("http://") or playback_url.startswith("https://"):
+        return playback_url
+    return None
+
+
 def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
     if not table_exists(conn, "digital_media_items") or not table_exists(conn, "digital_media_sources"):
         return []
@@ -11640,6 +11801,7 @@ def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
                     dms.name AS source_name,
                     dms.source_type,
                     dms.base_url,
+                    dms.machine_id,
                     COUNT(*) OVER (
                         PARTITION BY dms.id, dmi.matched_movie_id
                     )::int AS variant_count,
@@ -11673,6 +11835,7 @@ def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
                 source_name,
                 source_type,
                 base_url,
+                machine_id,
                 variant_count
             FROM ranked
             WHERE source_rank = 1
@@ -11680,7 +11843,10 @@ def movie_digital_item_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
             """,
             (movie_id,),
         )
-        return cur.fetchall()
+        rows = cur.fetchall()
+    for row in rows:
+        row["web_url"] = digital_item_web_url(row)
+    return rows
 
 
 def digital_source_entities(conn) -> list[dict[str, Any]]:
@@ -12389,12 +12555,27 @@ def metadata_debug_fetched_sources(fetched_meta: dict[str, Any] | None) -> list[
             )
             if not entry.get("sourceRef") and candidate.get("sourceRef"):
                 entry["sourceRef"] = candidate.get("sourceRef")
+            # `accepted` only means the merge *selected* this candidate — that
+            # `should_apply_field` said yes. Whether it survived to the movies
+            # row is a separate fact, recorded on the decision by
+            # `metadata_field_decisions_with_write_state`. Reporting acceptance
+            # alone made a field that was chosen and then never written look
+            # identical to one that landed, which is exactly how an int-into-a-
+            # text-column failure could sit in plain sight reading "used".
+            accepted = bool(candidate.get("accepted") or candidate.get("winner"))
+            written = decision.get("written")
             entry["fields"].append(
                 {
                     "target": target,
                     "field": field,
                     "value": candidate.get("value"),
-                    "accepted": bool(candidate.get("accepted") or candidate.get("winner")),
+                    "accepted": accepted,
+                    # None when the event predates write tracking — the UI keeps
+                    # showing "used" there rather than claiming a failure it
+                    # cannot actually see.
+                    "written": None if written is None else (accepted and bool(written)),
+                    "writeState": decision.get("writeState"),
+                    "appliedValue": decision.get("appliedValue"),
                 }
             )
 
@@ -12479,6 +12660,165 @@ def movie_metadata_debug_entity(conn, movie_id: UUID | str) -> dict[str, Any] | 
     }
 
 
+def movie_client_id_mappings(conn, movie_id: UUID) -> list[dict[str, Any]]:
+    """Every device/record token pair the sync API has bound to this movie.
+
+    ``client_id_mappings.client_id`` stores the composite ``"<device client
+    id>:<record token>"`` written by :func:`store_client_entity_mapping`; it is
+    split back apart here so the two halves stay recognisable as the two
+    different things the sync contract calls ``client_id`` (§1). These are the
+    ids an iOS or Android client shows on its own Identity (Debug) panel, and
+    the only way to line a phone's record up with the server row from this side.
+    """
+    if not table_exists(conn, "client_id_mappings"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT client_id, created_at
+            FROM client_id_mappings
+            WHERE entity_id=%s AND entity_type='movie'
+            ORDER BY created_at
+            """,
+            (movie_id,),
+        )
+        rows = cur.fetchall()
+    mappings: list[dict[str, Any]] = []
+    for row in rows:
+        composite = str(row.get("client_id") or "")
+        device, _, record_token = composite.partition(":")
+        mappings.append(
+            {
+                "deviceClientId": device or None,
+                "recordToken": record_token or None,
+                "createdAt": row.get("created_at"),
+            }
+        )
+    return mappings
+
+
+def movie_identity_debug_entity(conn, movie_id: UUID, movie: dict[str, Any]) -> dict[str, Any]:
+    """Identity fields plus a real ladder scan for one movie record.
+
+    The server/PWA counterpart to the iOS ``Identity (Debug)`` card
+    (DiscVaultApp ``Sources/Diagnostics/DebugIdentityPanel.swift``), and it
+    keeps that panel's first rule: never re-normalize. Every normalized value
+    and every verdict below comes out of the same ``normalize_*`` /
+    ``find_movie_by_*`` functions the sync merge path calls, so the panel can
+    never display something subtly different from what actually matched.
+
+    A tier that resolves back to this same movie is the healthy case and is
+    reported as a self-match. A tier that resolves to a *different* live movie
+    is the finding worth chasing: two rows the ladder cannot tell apart.
+    """
+    barcode = movie.get("barcode")
+    title = movie.get("title")
+    fmt = movie.get("format")
+    edition = movie.get("edition")
+    year = movie.get("year")
+
+    tmdb_id = None
+    imdb_id = None
+    for row in movie_identifier_entities(conn, movie_id):
+        provider = str(row.get("provider_id") or "").lower()
+        identifier = str(row.get("identifier") or "").strip()
+        if not identifier:
+            continue
+        if provider == "tmdb" and tmdb_id is None:
+            tmdb_id = identifier
+        elif provider == "imdb" and imdb_id is None:
+            imdb_id = identifier
+
+    container_ids: list[str] = []
+    if table_exists(conn, "container_movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT container_id::text AS container_id FROM container_movies WHERE movie_id=%s ORDER BY container_id",
+                (movie_id,),
+            )
+            container_ids = [str(row["container_id"]) for row in cur.fetchall()]
+
+    def _resolved(tier: str, resolved_id: UUID | None, *, key: str | None) -> dict[str, Any]:
+        entry: dict[str, Any] = {
+            "tier": tier,
+            "key": key,
+            "matchedMovieId": str(resolved_id) if resolved_id else None,
+            "isSelf": bool(resolved_id) and str(resolved_id) == str(movie_id),
+            "matchedTitle": None,
+        }
+        if resolved_id and not entry["isSelf"]:
+            with conn.cursor() as cur:
+                cur.execute("SELECT title FROM movies WHERE id=%s", (resolved_id,))
+                row = cur.fetchone()
+            entry["matchedTitle"] = (row or {}).get("title")
+        return entry
+
+    normalized_barcode = normalize_barcode(barcode)
+    normalized_title = normalize_title(title)
+
+    ladder: list[dict[str, Any]] = []
+    # Each call is wrapped: a diagnostic panel must never be the reason a movie
+    # page fails to load, and these run four extra queries against live tables.
+    try:
+        ladder.append(
+            _resolved(
+                "client_id",
+                find_movie_by_client_id(conn, movie.get("client_id")),
+                key=movie.get("client_id"),
+            )
+        )
+        ladder.append(
+            _resolved(
+                "barcode",
+                find_movie_by_barcode_match(conn, barcode),
+                key=normalized_barcode,
+            )
+        )
+        ladder.append(
+            _resolved(
+                "tmdb_format_edition",
+                find_movie_by_tmdb_edition(
+                    conn,
+                    tmdb_id=tmdb_id,
+                    fmt=fmt,
+                    edition=edition,
+                    incoming_title=title,
+                    incoming_year=year,
+                    incoming_barcode=barcode,
+                ),
+                key=f"{tmdb_id or '-'} / {physical_media_format_key(fmt) or '-'} / {edition or '-'}",
+            )
+        )
+        ladder.append(
+            _resolved(
+                "title_year",
+                find_movie_by_title_year(
+                    conn,
+                    title=title,
+                    year=year,
+                    fmt=fmt,
+                    incoming_barcode=barcode,
+                    incoming_edition=edition,
+                    incoming_container_ids=container_ids,
+                ),
+                key=f"{normalized_title or '-'} / {year or '-'}",
+            )
+        )
+    except Exception:  # pragma: no cover - a scan failure must not hide the fields
+        pass
+
+    return {
+        "normalizedBarcode": normalized_barcode,
+        "normalizedTitle": normalized_title,
+        "formatKey": physical_media_format_key(fmt),
+        "tmdbId": tmdb_id,
+        "imdbId": imdb_id,
+        "containerIds": container_ids,
+        "clientMappings": movie_client_id_mappings(conn, movie_id),
+        "ladder": ladder,
+    }
+
+
 def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     movie = movie_entity(conn, movie_id)
     if not movie:
@@ -12489,8 +12829,14 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         metadata_debug = movie_metadata_debug_entity(conn, movie_id)
     except Exception:  # pragma: no cover - debug info must never break detail load
         metadata_debug = None
+    identity_debug = None
+    try:
+        identity_debug = movie_identity_debug_entity(conn, movie_id, movie)
+    except Exception:  # pragma: no cover - debug info must never break detail load
+        identity_debug = None
     return {
         "movie": movie,
+        "identityDebug": identity_debug,
         "identifiers": movie_identifier_entities(conn, movie_id),
         "localizations": movie_localization_entities(conn, movie_id),
         "technicalSpecs": movie_technical_spec_entity(conn, movie_id),
@@ -12612,7 +12958,7 @@ def refresh_movie_person_metadata_cascade(
     normalized_scope = normalize_movie_metadata_person_refresh_scope(scope)
     summary = movie_metadata_person_refresh_empty(requested=True, dry_run=dry_run, limit=limit, scope=normalized_scope)
     movie_uuid = UUID(str(movie_id))
-    credits = movie_credit_entities(conn, movie_uuid, limit=80)
+    credits = movie_credit_entities(conn, movie_uuid, limit=100)
     selected = select_movie_metadata_person_refresh_credits(credits, limit=limit, scope=normalized_scope)
     summary["considered"] = len(credits)
     summary["selected"] = len(selected)
@@ -17722,6 +18068,16 @@ def apply_container_movie_upsert(
         raise NextApiError("containerMovie upsert requires containerId and movieId", 400)
     if not container_entity(conn, container_id):
         raise NextApiError("Container not found", 404)
+    # A collection keeps its members in collection_items, and
+    # container_direct_member_ids() never reads container_movies for one. Writing
+    # the row anyway would return `applied` for a link nothing ever reads back --
+    # and per contract §4b.6 `isApplied` is the only confirmation a client has, so
+    # it would book the membership as settled and never offer it again. Failing
+    # loudly is the whole point.
+    if container_type_for_id(conn, container_id) == "collection":
+        raise NextApiError(
+            "containerMovie does not apply to a collection; use collectionItem", 400
+        )
     if not movie_entity(conn, movie_id):
         raise NextApiError("Movie not found", 404)
 
@@ -17787,6 +18143,14 @@ def apply_container_movie_delete(
     )
     if not container_id or not movie_id:
         raise NextApiError("containerMovie delete requires containerId and movieId", 400)
+    # Same reasoning as the upsert: a delete against a collection removes a row
+    # that was never the collection's membership, and reports success for it.
+    # `optional_container_type` rather than `container_type_for_id` so a delete
+    # for an already-removed container stays a no-op success (§4b.6 retries).
+    if optional_container_type(conn, container_id) == "collection":
+        raise NextApiError(
+            "containerMovie does not apply to a collection; use collectionItem", 400
+        )
     with conn.cursor() as cur:
         cur.execute(
             "DELETE FROM container_movies WHERE container_id=%s AND movie_id=%s",
@@ -17807,6 +18171,168 @@ def apply_container_movie_delete(
         "operation": "delete",
         "entityId": container_id,
         "movieId": movie_id,
+        "changed": int(changed or 0),
+        "revision": revision,
+    }
+
+
+def collection_item_reference(
+    conn,
+    *,
+    client_id: str,
+    payload: dict[str, Any],
+    label: str,
+) -> tuple[UUID, str, UUID]:
+    """Read and resolve a collectionItem payload into (collectionId, itemType, itemId).
+
+    Both ids go through ``resolve_sync_entity_id()`` so a client-minted
+    temporary id from an earlier queued create resolves the same way it does
+    everywhere else. snake_case aliases are accepted alongside camelCase, as the
+    containerMovie payload does; the *entity type* token itself stays
+    casing-strict."""
+    collection_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        raw_value=payload.get("collectionId") or payload.get("collection_id"),
+    )
+    item_type = clean_text(payload.get("itemType") or payload.get("item_type"))
+    raw_item_id = payload.get("itemId") or payload.get("item_id")
+    if not collection_id or not item_type or raw_item_id in (None, ""):
+        raise NextApiError(f"{label} requires collectionId, itemType and itemId", 400)
+    if item_type not in COLLECTION_ITEM_TYPES:
+        raise NextApiError(
+            "itemType must be one of movie, vault, box_set, collection", 400
+        )
+    item_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="movie" if item_type == "movie" else "container",
+        raw_value=raw_item_id,
+    )
+    if not item_id:
+        raise NextApiError(f"{label} requires a resolvable itemId", 400)
+    return collection_id, item_type, item_id
+
+
+def apply_collection_item_upsert(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("collectionItem upsert payload must be an object", 400)
+    if not table_exists(conn, "collection_items"):
+        raise NextApiError("Collection items are not available yet", 503)
+
+    collection_id, item_type, item_id = collection_item_reference(
+        conn, client_id=client_id, payload=payload, label="collectionItem upsert"
+    )
+    if container_type_for_id(conn, collection_id) != "collection":
+        raise NextApiError("collectionId must reference a collection", 400)
+
+    if item_type == "movie":
+        if not movie_entity(conn, item_id):
+            raise NextApiError("Movie not found", 404)
+    else:
+        # The declared itemType must match what the id actually is. An itemType
+        # of box_set pointing at a vault is a client bug worth surfacing; a
+        # server that normalised it silently would hide the client's confusion
+        # about its own data.
+        actual_type = container_type_for_id(conn, item_id)
+        if actual_type != item_type:
+            raise NextApiError(
+                f"itemType {item_type} does not match the container's type {actual_type}",
+                400,
+            )
+    guard_collection_item_cycle(
+        conn, collection_id=collection_id, item_type=item_type, item_id=item_id
+    )
+
+    sort_order_raw = payload.get("sortOrder", payload.get("sort_order"))
+    with conn.cursor() as cur:
+        if sort_order_raw is None:
+            cur.execute(
+                "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM collection_items WHERE collection_id=%s",
+                (collection_id,),
+            )
+            sort_order = int(cur.fetchone()["max_sort"]) + 1
+        else:
+            try:
+                sort_order = int(sort_order_raw)
+            except (TypeError, ValueError):
+                raise NextApiError("sortOrder must be an integer", 400)
+        # PRIMARY KEY (collection_id, item_type, item_id) makes the repeat a
+        # no-op update rather than a second row, so the client may retry an
+        # unconfirmed upsert unconditionally (§4b.6).
+        cur.execute(
+            """
+            INSERT INTO collection_items (collection_id, item_type, item_id, sort_order, created_at)
+            VALUES (%s, %s, %s, %s, now())
+            ON CONFLICT (collection_id, item_type, item_id) DO UPDATE SET sort_order=EXCLUDED.sort_order
+            """,
+            (collection_id, item_type, item_id, sort_order),
+        )
+        cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_id,))
+    revision = emit_container_membership_change(conn, collection_id)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "collectionItem",
+        "operation": "upsert",
+        "entityId": collection_id,
+        "itemType": item_type,
+        "itemId": item_id,
+        "sortOrder": sort_order,
+        "revision": revision,
+    }
+
+
+def apply_collection_item_delete(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("collectionItem delete payload must be an object", 400)
+    if not table_exists(conn, "collection_items"):
+        raise NextApiError("Collection items are not available yet", 503)
+
+    collection_id, item_type, item_id = collection_item_reference(
+        conn, client_id=client_id, payload=payload, label="collectionItem delete"
+    )
+    # Deliberately lenient about the target: a delete must be safe to repeat, so
+    # a collection that is already gone is a no-op success and only a *wrong*
+    # live target (a box set, a vault) is refused. Nor is a missing row a 404 --
+    # clients retry unapplied deletes, and "already not a member" is the state
+    # the client asked for.
+    existing_type = optional_container_type(conn, collection_id)
+    if existing_type is not None and existing_type != "collection":
+        raise NextApiError("collectionId must reference a collection", 400)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM collection_items WHERE collection_id=%s AND item_type=%s AND item_id=%s",
+            (collection_id, item_type, item_id),
+        )
+        changed = cur.rowcount
+        if changed:
+            cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_id,))
+    revision = emit_container_membership_change(conn, collection_id) if changed else current_revision(conn)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "collectionItem",
+        "operation": "delete",
+        "entityId": collection_id,
+        "itemType": item_type,
+        "itemId": item_id,
         "changed": int(changed or 0),
         "revision": revision,
     }
@@ -17854,6 +18380,10 @@ def apply_sync_mutation(
         result = apply_container_movie_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "containerMovie" and operation == "delete":
         result = apply_container_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "collectionItem" and operation == "upsert":
+        result = apply_collection_item_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "collectionItem" and operation == "delete":
+        result = apply_collection_item_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
     else:
         raise NextApiError(f"Unsupported mutation: {entity_type}.{operation}", 400)
 
@@ -21453,6 +21983,18 @@ def register_routes(flask_app: Flask) -> None:
                 allowed_container_ids = [
                     item for item in container_ids if container_types.get(item) in {"box_set", "vault", "collection"}
                 ]
+                if operation == "add":
+                    # Filtering the direct self-reference above is not enough:
+                    # adding A to B while B already sits inside A closes a loop
+                    # just as well. Contract §4b.7 rejects the cycle on write,
+                    # matching what collectionItem.upsert does on the sync path.
+                    ancestors = collection_ancestor_container_ids(conn, collection_uuid)
+                    for item in allowed_container_ids:
+                        if item in ancestors:
+                            raise NextApiError(
+                                "Adding this container would create a collection membership cycle",
+                                400,
+                            )
                 requested = len(movie_ids) + len(allowed_container_ids)
                 with conn.cursor() as cur:
                     if operation == "remove":
@@ -30139,6 +30681,8 @@ def register_routes(flask_app: Flask) -> None:
                     "container.delete",
                     "containerMovie.upsert",
                     "containerMovie.delete",
+                    "collectionItem.upsert",
+                    "collectionItem.delete",
                 ],
                 "userEntityTypes": [
                     "watchlist",

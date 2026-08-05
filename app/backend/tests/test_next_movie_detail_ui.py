@@ -16,6 +16,15 @@ NEXT_APP_PATH = os.path.abspath(
         "next_app.py",
     )
 )
+TMDB_PLUGIN_PATH = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "next_plugins",
+        "tmdb",
+        "plugin.py",
+    )
+)
 
 
 class NextMovieDetailUiTests(unittest.TestCase):
@@ -25,6 +34,8 @@ class NextMovieDetailUiTests(unittest.TestCase):
             cls.source = handle.read()
         with open(NEXT_APP_PATH, encoding="utf-8") as handle:
             cls.app_source = handle.read()
+        with open(TMDB_PLUGIN_PATH, encoding="utf-8") as handle:
+            cls.tmdb_plugin_source = handle.read()
 
     def test_section_tabs_are_above_personal_lists(self):
         tabs_index = self.source.index(
@@ -186,7 +197,7 @@ class NextMovieDetailUiTests(unittest.TestCase):
         # of rendering the full "Unknown content rating" sentence in a compact
         # tag row (which used to make the badge look oversized).
         self.assertIn(
-            'const heroContentRatingHtml = contentRatingInfo.unknown ? "" : contentRatingValueHtml(contentRatingInfo);',
+            "const heroContentRatingHtml = heroContentRatingPillHtml(contentRatingInfo);",
             render_source,
         )
         self.assertIn(
@@ -197,6 +208,334 @@ class NextMovieDetailUiTests(unittest.TestCase):
             "heroContentRatingTag = contentRatingBadgeHtml(contentRatingInfo)",
             render_source,
         )
+
+    def test_hero_content_rating_pill_pairs_flag_with_the_rating(self):
+        """A country flag never appears in the hero without the rating beside it.
+
+        The flag alone says nothing about the film, so the pill is built only
+        when a rating is actually known — and when it is, the rating text is
+        always rendered next to the flag rather than left to a tooltip.
+        """
+        start = self.source.index("function heroContentRatingPillHtml(info)")
+        end = self.source.index("\n    function ", start + 1)
+        pill_source = self.source[start:end]
+
+        self.assertIn('if (!rating || info?.unknown) return "";', pill_source)
+        self.assertIn("flagIconHtml(info.country", pill_source)
+        self.assertIn(
+            '<span class="content-rating-hero-value">${escapeHtml(rating)}</span>',
+            pill_source,
+        )
+
+    def test_personal_lists_card_opens_collapsed(self):
+        """Personal lists reopens collapsed on every film.
+
+        The card carries tags, loans and the whole watch history; leaving it
+        expanded pushes the cast below the fold for the majority of openings
+        that never touch it.
+        """
+        self.assertIn('id="movieListStateDetails"', self.source)
+        self.assertIn(
+            '<details class="collapse-card-details" id="movieListStateDetails">',
+            self.source,
+        )
+        # No `open` attribute in the markup, and the reset path strips one that a
+        # previous film left behind.
+        self.assertNotIn(
+            '<details class="collapse-card-details" id="movieListStateDetails" open',
+            self.source,
+        )
+        self.assertIn(
+            'document.getElementById("movieListStateDetails")?.removeAttribute("open");',
+            self.source,
+        )
+
+    def test_tags_and_loan_share_a_two_column_row_on_large_screens(self):
+        self.assertIn('<div class="movie-list-subsections">', self.source)
+        self.assertIn(
+            "      .movie-list-subsections {\n"
+            "        grid-template-columns: repeat(2, minmax(0, 1fr));",
+            self.source,
+        )
+
+    def test_imdb_and_tmdb_render_as_hero_chips_only_when_known(self):
+        """IMDb/TMDb only render when the identifier is actually known.
+
+        A chip that cannot open anything reads as "we have this id" when we do
+        not, so a service without a usable identifier is dropped entirely.
+        """
+        start = self.source.index("function movieExternalLinkChipsHtml(identifiers)")
+        end = self.source.index("\n    // Relationship entries", start + 1)
+        chips_source = self.source[start:end]
+
+        self.assertIn('if (provider !== "imdb" && provider !== "tmdb") return;', chips_source)
+        self.assertIn('if (!String(item.identifier || "").trim()) return;', chips_source)
+        self.assertIn('if (!href) return "";', chips_source)
+        self.assertIn('/api/next/assets/tmdb-logo.svg', chips_source)
+        self.assertIn('id="movieDetailExternalLinks"', self.source)
+
+    def test_external_links_close_out_the_release_panel(self):
+        """IMDb/TMDb belong with the release's identifying facts, not the hero.
+
+        The Release panel already carries barcode, format, release date and
+        country — which is what an external-database link is. In the hero the
+        strip read as chrome bolted onto the artwork.
+        """
+        release_fields_index = self.source.index('id="movieDetailRelease"')
+        links_index = self.source.index('id="movieDetailExternalLinks"')
+        technical_panel_index = self.source.index('id="movieDetailTechnicalPanel"')
+
+        self.assertLess(release_fields_index, links_index)
+        self.assertLess(links_index, technical_panel_index)
+        self.assertIn(
+            '<div class="detail-panel-links hidden" id="movieDetailExternalLinks"></div>',
+            self.source,
+        )
+
+        # Gone from the hero copy block entirely.
+        hero_start = self.source.index('<div class="movie-detail-copy">')
+        hero_end = self.source.index('id="movieDetailOverview"', hero_start)
+        self.assertNotIn("movieDetailExternalLinks", self.source[hero_start:hero_end])
+        self.assertNotIn("hero-external-links", self.source)
+
+    def test_digital_playback_links_live_in_the_collectors_panel(self):
+        panel_index = self.source.index('id="movieDetailCollectorsPanel"')
+        links_index = self.source.index('id="movieDetailCollectorsLinks"')
+        release_panel_index = self.source.index('id="movieDetailReleasePanel"')
+
+        self.assertLess(panel_index, links_index)
+        self.assertLess(release_panel_index, panel_index)
+        self.assertIn(
+            'collectorsLinksNode.innerHTML = digital.join("");',
+            self.source,
+        )
+
+    def test_digital_playback_renders_as_a_compact_chip(self):
+        """Plex/Jellyfin are single-line pills, not cards.
+
+        The old `.detail-service-card` repeated the film's own title and year
+        back on the film's own page and wrapped "Play with Plex" around a name
+        that says it already. The phrase survives as the accessible name.
+        """
+        start = self.source.index("function digitalPlaybackLinkCard(item, serviceItemCount = 1)")
+        end = self.source.index("\n    function ", start + 1)
+        chip_source = self.source[start:end]
+
+        self.assertIn('class="detail-service-chip"', chip_source)
+        self.assertIn('class="detail-service-chip-logo ${logoClass}"', chip_source)
+        self.assertIn("digitalSourceLogoHtml(service)", chip_source)
+        self.assertIn('aria-label="${escapeHtml(label)}"', chip_source)
+        self.assertNotIn("detail-service-card", chip_source)
+        self.assertNotIn("item.title", chip_source)
+
+        # The container is a flex row, not a 168px `.detail-grid` track — that
+        # minimum was what stretched two services into card-sized blocks.
+        self.assertIn(
+            '<div class="movie-collectors-links hidden" id="movieDetailCollectorsLinks"></div>',
+            self.source,
+        )
+        self.assertIn(
+            "    .movie-collectors-links {\n"
+            "      display: flex;\n"
+            "      flex-wrap: wrap;\n",
+            self.source,
+        )
+
+    def test_digital_items_carry_a_browser_openable_web_url(self):
+        """Plex stores an app deep link, which is dead without the app installed.
+
+        `plex://server/...` looks live and does nothing on a desktop that has no
+        Plex app. The web form is derived rather than replacing what is stored,
+        so native clients keep opening the app directly.
+        """
+        self.assertIn("def digital_item_web_url(", self.app_source)
+        self.assertIn('row["web_url"] = digital_item_web_url(row)', self.app_source)
+        # `machine_id` is the one piece the query did not already select.
+        self.assertIn("dms.machine_id,", self.app_source)
+        self.assertIn(
+            'return f"https://app.plex.tv/desktop/#!/server/{machine_id}/details?key={key}"',
+            self.app_source,
+        )
+        # The Plex `key` is a path and must be percent-encoded, or the fragment
+        # breaks at the first slash.
+        self.assertIn('key = quote(f"/library/metadata/{external_id}", safe="")', self.app_source)
+
+    def test_missing_plex_machine_id_yields_no_link_at_all(self):
+        """An empty machine id means Plex's /identity call failed at sync time.
+
+        There is no honest web URL to build from that, and a malformed one is
+        worse than none.
+        """
+        start = self.app_source.index("def digital_item_web_url(")
+        end = self.app_source.index("\ndef movie_digital_item_entities(", start)
+        builder = self.app_source[start:end]
+
+        self.assertIn("if machine_id and external_id:", builder)
+        self.assertIn("if base_url and external_id:", builder)
+        self.assertEqual(builder.count("return None"), 3)
+
+    def test_chip_prefers_the_web_url_over_the_stored_playback_url(self):
+        self.assertIn(
+            "const href = item.web_url || item.webUrl "
+            "|| item.playback_url || item.playbackUrl || \"\";",
+            self.source,
+        )
+
+    def test_native_clients_still_receive_the_raw_playback_url(self):
+        """Native apps *want* the deep link — it opens Plex directly there.
+
+        The web URL is derived alongside the stored value, never in place of it,
+        so this path is deliberately untouched.
+        """
+        people_path = os.path.join(os.path.dirname(NEXT_APP_PATH), "next_people.py")
+        with open(people_path, encoding="utf-8") as handle:
+            people_source = handle.read()
+
+        self.assertIn("playbackUrl", people_source)
+        self.assertNotIn("digital_item_web_url", people_source)
+
+    def test_debug_panel_separates_selected_from_written(self):
+        """`accepted` only means the merge chose the candidate, not that it landed.
+
+        Reporting acceptance alone made a field that was selected and then never
+        written look identical to one that saved — which is how an int-into-a-
+        text-column failure sat in plain sight reading "used".
+        """
+        self.assertIn('written = decision.get("written")', self.app_source)
+        self.assertIn(
+            '"written": None if written is None else (accepted and bool(written)),',
+            self.app_source,
+        )
+        self.assertIn('"writeState": decision.get("writeState"),', self.app_source)
+
+        # Three states in the UI, and a pre-write-tracking event (written null)
+        # must keep reading "used" rather than claiming a failure it cannot see.
+        self.assertIn('movieDetail.debugSourcesNotWritten', self.source)
+        self.assertIn("const fieldLanded = (field) => field.accepted && field.written !== false;", self.source)
+        self.assertIn('if (field.accepted && field.written === false) {', self.source)
+        self.assertIn(".debug-source-marker.not-written {", self.source)
+
+    def test_oversized_service_card_treatment_is_gone(self):
+        """Nothing renders `.detail-service-card` any more, so it is removed.
+
+        `externalServiceCard` / `externalServiceLogoHtml` existed only to build
+        it, and `digitalPlaybackLinkCard` was their only caller.
+        """
+        for dead in (
+            "externalServiceCard",
+            "externalServiceLogoHtml",
+            "detail-service-card",
+            "detail-service-logo",
+            "detail-service-copy",
+            "detail-service-meta",
+        ):
+            self.assertNotIn(dead, self.source)
+
+    def test_links_card_hides_when_no_other_identifier_remains(self):
+        self.assertIn('<div class="detail-card hidden" id="movieDetailLinksCard">', self.source)
+        self.assertIn(
+            'if (linksCard) linksCard.classList.toggle("hidden", !otherIdentifiers.length);',
+            self.source,
+        )
+
+    def test_relationships_card_is_full_width_with_poster_and_single_line_title(self):
+        self.assertIn(
+            '<div class="detail-card full" id="movieDetailRelationshipsCard">',
+            self.source,
+        )
+        self.assertIn(
+            '<div class="detail-relations-grid" id="movieDetailRelationships">',
+            self.source,
+        )
+        self.assertIn("function relationCardHtml(", self.source)
+        self.assertIn('<span class="detail-relation-art">', self.source)
+        # One line, ellipsised — a long release name must not push the cards out
+        # of alignment.
+        self.assertIn(
+            "    .detail-relation-copy strong {\n"
+            "      display: block;\n"
+            "      min-width: 0;\n"
+            "      overflow: hidden;\n"
+            "      white-space: nowrap;\n"
+            "      text-overflow: ellipsis;\n"
+            "    }",
+            self.source,
+        )
+
+    def test_identity_debug_card_follows_the_metadata_debug_card(self):
+        metadata_index = self.source.index('id="movieDetailDebugMetadataCard"')
+        identity_index = self.source.index('id="movieDetailDebugIdentityCard"')
+
+        self.assertLess(metadata_index, identity_index)
+        self.assertIn(
+            'class="detail-card full debug-card hidden" '
+            'id="movieDetailDebugIdentityCard">',
+            self.source,
+        )
+        self.assertIn('data-next-i18n="movieDetail.debugIdentityTitle"', self.source)
+        self.assertIn(
+            'if (debugIdentityCard) debugIdentityCard.classList.toggle("hidden", !appDebugMode);',
+            self.source,
+        )
+        self.assertIn(
+            "movieIdentityDebugState = appDebugMode ? movieIdentityDebugRows(detail) : [];",
+            self.source,
+        )
+
+    def test_identity_debug_labels_stay_in_english(self):
+        """The row labels name columns in the shared sync contract.
+
+        A translated field name breaks the link to the spec section that
+        governs it, and this output gets pasted into bug reports read against
+        that spec — so the labels are literals, never `tNext` lookups.
+        """
+        start = self.source.index("function movieIdentityDebugRows(detail)")
+        end = self.source.index("\n    function movieIdentityDebugHtml", start + 1)
+        rows_source = self.source[start:end]
+
+        self.assertIn('movieIdentityDebugRow("client_id (record token, tier 1)"', rows_source)
+        self.assertIn('movieIdentityDebugRow("barcode (normalized, tier 2)"', rows_source)
+        self.assertIn('movieIdentityDebugRow("title (normalized, tier 4)"', rows_source)
+        self.assertIn('client mappings (iOS/Android)', rows_source)
+        self.assertNotIn("tNext(", rows_source)
+
+    def test_identity_debug_ladder_flags_a_match_against_another_record(self):
+        start = self.source.index("function movieIdentityLadderRows(ladder)")
+        end = self.source.index("\n    function movieIdentityDebugRows", start + 1)
+        ladder_source = self.source[start:end]
+
+        self.assertIn('if (entry.isSelf) return movieIdentityDebugRow(label, `self-match', ladder_source)
+        self.assertIn("MATCHES OTHER RECORD", ladder_source)
+        self.assertIn('"alert"', ladder_source)
+
+    def test_identity_debug_payload_reuses_the_real_ladder(self):
+        """Rule one of the iOS panel: never re-normalize.
+
+        The values and verdicts are produced by the same `normalize_*` /
+        `find_movie_by_*` functions the sync merge path calls, so the panel
+        cannot show something subtly different from what actually matched.
+        """
+        self.assertIn("def movie_identity_debug_entity(", self.app_source)
+        for call in (
+            "normalize_barcode(barcode)",
+            "normalize_title(title)",
+            "find_movie_by_client_id(",
+            "find_movie_by_barcode_match(",
+            "find_movie_by_tmdb_edition(",
+            "find_movie_by_title_year(",
+        ):
+            self.assertIn(call, self.app_source)
+        self.assertIn('"identityDebug": identity_debug,', self.app_source)
+
+    def test_client_id_mapping_splits_device_and_record_token(self):
+        """`client_id_mappings.client_id` is a composite the sync API writes.
+
+        It stores `"<device client id>:<record token>"`; the two halves are the
+        two different things the sync contract calls `client_id`, so they are
+        split apart rather than shown as one opaque string.
+        """
+        self.assertIn("def movie_client_id_mappings(", self.app_source)
+        self.assertIn('device, _, record_token = composite.partition(":")', self.app_source)
 
     def test_cast_and_crew_block_precedes_media(self):
         self.assertIn('data-next-i18n="movieDetail.castCrew"', self.source)
@@ -415,6 +754,20 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
 
+    def test_movie_credit_entities_row_limit_fits_full_cast_and_crew(self):
+        # TMDb's plugin caps cast at 20 and crew at 75 (next_plugins/tmdb/plugin.py's
+        # CREW_LIMIT), so a movie can legitimately have up to 95 movie_credits rows.
+        # movie_credit_entities()'s own LIMIT must stay above that, or its
+        # `ORDER BY sort_order, name` silently truncates crew before the frontend
+        # ever sees them -- exactly the "not all crew show up" bug this guards.
+        credits_start = self.app_source.index("def movie_credit_entities(")
+        credits_end = self.app_source.index("\ndef ", credits_start + 1)
+        function_source = self.app_source[credits_start:credits_end]
+        self.assertIn("limit: int = 100", function_source)
+
+        self.assertIn('credits.get("cast") or [])[:20]', self.tmdb_plugin_source)
+        self.assertIn("CREW_LIMIT = 75", self.tmdb_plugin_source)
+
     def test_media_grids_are_responsive_and_row_limited(self):
         self.assertIn(
             'grid-template-columns: repeat(4, minmax(0, 1fr));',
@@ -600,6 +953,54 @@ class NextMovieDetailUiTests(unittest.TestCase):
         browser default fieldset border."""
         self.assertIn(".movie-edit-checkbox-group {", self.source)
         self.assertIn(".movie-edit-track-row {", self.source)
+
+    def test_movie_format_is_never_displayed_raw(self):
+        """movies.format is an unconstrained free-text column -- providers and
+        sync clients can (and do, per sync/fixtures/identity-ladder.json) write
+        raw codes like "4K_UHD" or "BLURAY" into it. Every place a movie's
+        format is shown to a user must go through physicalFormatLabel() (or
+        another normalizer, e.g. physicalFormatBadgeHtml/
+        renderMovieEditFormatOptions), which already turns those into "4K UHD"
+        and "Blu-ray" -- not read movie.format directly."""
+        self.assertIn(
+            "document.getElementById(\"movieDetailTags\").innerHTML = detailTagHtml([\n"
+            "        movie.year,\n"
+            "        physicalFormatLabel(movie.format),",
+            self.source,
+        )
+        self.assertIn(
+            '[tNext("movieDetail.format", "Format"), physicalFormatLabel(movie.format)],',
+            self.source,
+        )
+        self.assertIn(
+            '[tNext("movieDetail.format", "Format"), '
+            "physicalFormatLabel(movie.format || specs.format || metadata.format)],",
+            self.source,
+        )
+        self.assertIn(
+            "const subtitle = [movie.year, physicalFormatLabel(movie.format), movie.edition]"
+            ".filter(Boolean).join(\" / \");",
+            self.source,
+        )
+        self.assertIn(
+            "return [movie.year, physicalFormatLabel(movie.format), movie.barcode].filter(Boolean);",
+            self.source,
+        )
+        self.assertIn(
+            "const metaParts = [movie.year, physicalFormatLabel(movie.format)]"
+            '.map((part) => String(part || "").trim()).filter(Boolean);',
+            self.source,
+        )
+        self.assertIn(
+            'const label = [movie.title || tNext("common.untitled", "Untitled"), movie.year, '
+            "physicalFormatLabel(movie.format), movie.barcode].filter(Boolean).join(\" / \");",
+            self.source,
+        )
+        self.assertIn(
+            "const meta = [movie.year, physicalFormatLabel(movie.format), movie.barcode, "
+            "actionLabel || movie.action].filter(Boolean).join(\" / \");",
+            self.source,
+        )
 
 
 if __name__ == "__main__":
