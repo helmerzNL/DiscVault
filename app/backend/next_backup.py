@@ -327,6 +327,8 @@ USER_ACCOUNT_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
             "device_label",
             "device_model",
             "user_agent",
+            "last_seen_ip",
+            "last_seen_ip_source",
         ),
         frozenset({"scopes", "permission_keys"}),
     ),
