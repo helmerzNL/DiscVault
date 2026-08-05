@@ -5244,6 +5244,81 @@ def container_type_for_id(conn, container_id: UUID) -> str:
     return str(row["container_type"] or "")
 
 
+def optional_container_type(conn, container_id: UUID) -> str | None:
+    """``container_type`` for a container id, or None when there is no such row.
+
+    The 404-raising ``container_type_for_id()`` is right on a write that has to
+    land somewhere real. A delete has to stay safe to repeat (sync contract
+    §4b.6), so the delete paths ask this instead and simply do nothing when the
+    container is already gone."""
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT container_type FROM containers WHERE id=%s", (container_id,))
+        row = cur.fetchone()
+    return str(row["container_type"] or "") if row else None
+
+
+COLLECTION_ITEM_TYPES = ("movie", "vault", "box_set", "collection")
+COLLECTION_ITEM_CONTAINER_TYPES = ("vault", "box_set", "collection")
+
+
+def collection_ancestor_container_ids(conn, container_id: UUID) -> set[UUID]:
+    """Every container that reaches ``container_id`` through collection membership.
+
+    Walks upward through ``collection_items``, so the result is the set of
+    collections that already contain ``container_id`` directly or indirectly.
+    The ``seen`` guard means a cycle that is already in the data terminates the
+    walk instead of hanging it -- such cycles exist, which is exactly why
+    ``delete_container_records()`` carries its own guard."""
+    if not table_exists(conn, "collection_items"):
+        return set()
+    ancestors: set[UUID] = set()
+    frontier = [container_id]
+    while frontier:
+        current = frontier.pop()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT collection_id
+                FROM collection_items
+                WHERE item_id=%s AND item_type = ANY(%s::text[])
+                """,
+                (current, list(COLLECTION_ITEM_CONTAINER_TYPES)),
+            )
+            rows = cur.fetchall()
+        for row in rows:
+            parent = row.get("collection_id")
+            if parent and parent not in ancestors:
+                ancestors.add(parent)
+                frontier.append(parent)
+    return ancestors
+
+
+def guard_collection_item_cycle(
+    conn,
+    *,
+    collection_id: UUID,
+    item_type: str,
+    item_id: UUID,
+) -> None:
+    """Refuse a collection membership that would close a nesting loop.
+
+    Sync contract §4b.7 rejects the cycle at *write* time. Filtering only the
+    direct self-reference is not enough: adding A to B while B already sits
+    inside A closes the loop just as well, and the read-side expansion has
+    never been specified against one."""
+    if item_type not in COLLECTION_ITEM_CONTAINER_TYPES:
+        return
+    if item_id == collection_id:
+        raise NextApiError("A container cannot contain itself", 400)
+    if item_id in collection_ancestor_container_ids(conn, collection_id):
+        raise NextApiError(
+            "Adding this container would create a collection membership cycle",
+            400,
+        )
+
+
 def container_types_for_ids(
     conn,
     container_ids: list[UUID],
@@ -6427,7 +6502,42 @@ def user_sync_change(
 
 
 def container_membership_snapshot(conn, container_id) -> list[dict[str, Any]]:
-    """Full member list for one container (box-set), ordered for the client."""
+    """Full member list for one container, ordered for the client.
+
+    A box set or vault keeps its members in ``container_movies``; a collection
+    keeps them in ``collection_items`` and may hold containers as well as
+    movies. Reading only ``container_movies`` would publish an *empty* member
+    list for every collection -- a delta that says "this collection has no
+    members" rather than one that says nothing, which is the difference between
+    a quiet no-op and a client wiping a collection it just filled.
+
+    Collection rows carry the same ``relationship`` / ``child_container_id``
+    vocabulary the bootstrap already uses in
+    ``collection_container_membership_entities()``, so a client parses one
+    shape on both paths."""
+    container_type = optional_container_type(conn, container_id)
+    if container_type == "collection":
+        if not table_exists(conn, "collection_items"):
+            return []
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    collection_id AS container_id,
+                    CASE WHEN item_type = 'movie' THEN item_id END AS movie_id,
+                    CASE WHEN item_type <> 'movie' THEN item_id END AS child_container_id,
+                    CASE WHEN item_type = 'movie' THEN 'collection_movie'
+                         ELSE 'collection_container' END AS relationship,
+                    item_type,
+                    sort_order,
+                    created_at
+                FROM collection_items
+                WHERE collection_id=%s
+                ORDER BY sort_order, created_at
+                """,
+                (container_id,),
+            )
+            return cur.fetchall()
     if not table_exists(conn, "container_movies"):
         return []
     with conn.cursor() as cur:
@@ -17958,6 +18068,16 @@ def apply_container_movie_upsert(
         raise NextApiError("containerMovie upsert requires containerId and movieId", 400)
     if not container_entity(conn, container_id):
         raise NextApiError("Container not found", 404)
+    # A collection keeps its members in collection_items, and
+    # container_direct_member_ids() never reads container_movies for one. Writing
+    # the row anyway would return `applied` for a link nothing ever reads back --
+    # and per contract §4b.6 `isApplied` is the only confirmation a client has, so
+    # it would book the membership as settled and never offer it again. Failing
+    # loudly is the whole point.
+    if container_type_for_id(conn, container_id) == "collection":
+        raise NextApiError(
+            "containerMovie does not apply to a collection; use collectionItem", 400
+        )
     if not movie_entity(conn, movie_id):
         raise NextApiError("Movie not found", 404)
 
@@ -18023,6 +18143,14 @@ def apply_container_movie_delete(
     )
     if not container_id or not movie_id:
         raise NextApiError("containerMovie delete requires containerId and movieId", 400)
+    # Same reasoning as the upsert: a delete against a collection removes a row
+    # that was never the collection's membership, and reports success for it.
+    # `optional_container_type` rather than `container_type_for_id` so a delete
+    # for an already-removed container stays a no-op success (§4b.6 retries).
+    if optional_container_type(conn, container_id) == "collection":
+        raise NextApiError(
+            "containerMovie does not apply to a collection; use collectionItem", 400
+        )
     with conn.cursor() as cur:
         cur.execute(
             "DELETE FROM container_movies WHERE container_id=%s AND movie_id=%s",
@@ -18043,6 +18171,168 @@ def apply_container_movie_delete(
         "operation": "delete",
         "entityId": container_id,
         "movieId": movie_id,
+        "changed": int(changed or 0),
+        "revision": revision,
+    }
+
+
+def collection_item_reference(
+    conn,
+    *,
+    client_id: str,
+    payload: dict[str, Any],
+    label: str,
+) -> tuple[UUID, str, UUID]:
+    """Read and resolve a collectionItem payload into (collectionId, itemType, itemId).
+
+    Both ids go through ``resolve_sync_entity_id()`` so a client-minted
+    temporary id from an earlier queued create resolves the same way it does
+    everywhere else. snake_case aliases are accepted alongside camelCase, as the
+    containerMovie payload does; the *entity type* token itself stays
+    casing-strict."""
+    collection_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="container",
+        raw_value=payload.get("collectionId") or payload.get("collection_id"),
+    )
+    item_type = clean_text(payload.get("itemType") or payload.get("item_type"))
+    raw_item_id = payload.get("itemId") or payload.get("item_id")
+    if not collection_id or not item_type or raw_item_id in (None, ""):
+        raise NextApiError(f"{label} requires collectionId, itemType and itemId", 400)
+    if item_type not in COLLECTION_ITEM_TYPES:
+        raise NextApiError(
+            "itemType must be one of movie, vault, box_set, collection", 400
+        )
+    item_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type="movie" if item_type == "movie" else "container",
+        raw_value=raw_item_id,
+    )
+    if not item_id:
+        raise NextApiError(f"{label} requires a resolvable itemId", 400)
+    return collection_id, item_type, item_id
+
+
+def apply_collection_item_upsert(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("collectionItem upsert payload must be an object", 400)
+    if not table_exists(conn, "collection_items"):
+        raise NextApiError("Collection items are not available yet", 503)
+
+    collection_id, item_type, item_id = collection_item_reference(
+        conn, client_id=client_id, payload=payload, label="collectionItem upsert"
+    )
+    if container_type_for_id(conn, collection_id) != "collection":
+        raise NextApiError("collectionId must reference a collection", 400)
+
+    if item_type == "movie":
+        if not movie_entity(conn, item_id):
+            raise NextApiError("Movie not found", 404)
+    else:
+        # The declared itemType must match what the id actually is. An itemType
+        # of box_set pointing at a vault is a client bug worth surfacing; a
+        # server that normalised it silently would hide the client's confusion
+        # about its own data.
+        actual_type = container_type_for_id(conn, item_id)
+        if actual_type != item_type:
+            raise NextApiError(
+                f"itemType {item_type} does not match the container's type {actual_type}",
+                400,
+            )
+    guard_collection_item_cycle(
+        conn, collection_id=collection_id, item_type=item_type, item_id=item_id
+    )
+
+    sort_order_raw = payload.get("sortOrder", payload.get("sort_order"))
+    with conn.cursor() as cur:
+        if sort_order_raw is None:
+            cur.execute(
+                "SELECT COALESCE(MAX(sort_order), 0)::int AS max_sort FROM collection_items WHERE collection_id=%s",
+                (collection_id,),
+            )
+            sort_order = int(cur.fetchone()["max_sort"]) + 1
+        else:
+            try:
+                sort_order = int(sort_order_raw)
+            except (TypeError, ValueError):
+                raise NextApiError("sortOrder must be an integer", 400)
+        # PRIMARY KEY (collection_id, item_type, item_id) makes the repeat a
+        # no-op update rather than a second row, so the client may retry an
+        # unconfirmed upsert unconditionally (§4b.6).
+        cur.execute(
+            """
+            INSERT INTO collection_items (collection_id, item_type, item_id, sort_order, created_at)
+            VALUES (%s, %s, %s, %s, now())
+            ON CONFLICT (collection_id, item_type, item_id) DO UPDATE SET sort_order=EXCLUDED.sort_order
+            """,
+            (collection_id, item_type, item_id, sort_order),
+        )
+        cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_id,))
+    revision = emit_container_membership_change(conn, collection_id)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "collectionItem",
+        "operation": "upsert",
+        "entityId": collection_id,
+        "itemType": item_type,
+        "itemId": item_id,
+        "sortOrder": sort_order,
+        "revision": revision,
+    }
+
+
+def apply_collection_item_delete(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("collectionItem delete payload must be an object", 400)
+    if not table_exists(conn, "collection_items"):
+        raise NextApiError("Collection items are not available yet", 503)
+
+    collection_id, item_type, item_id = collection_item_reference(
+        conn, client_id=client_id, payload=payload, label="collectionItem delete"
+    )
+    # Deliberately lenient about the target: a delete must be safe to repeat, so
+    # a collection that is already gone is a no-op success and only a *wrong*
+    # live target (a box set, a vault) is refused. Nor is a missing row a 404 --
+    # clients retry unapplied deletes, and "already not a member" is the state
+    # the client asked for.
+    existing_type = optional_container_type(conn, collection_id)
+    if existing_type is not None and existing_type != "collection":
+        raise NextApiError("collectionId must reference a collection", 400)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM collection_items WHERE collection_id=%s AND item_type=%s AND item_id=%s",
+            (collection_id, item_type, item_id),
+        )
+        changed = cur.rowcount
+        if changed:
+            cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_id,))
+    revision = emit_container_membership_change(conn, collection_id) if changed else current_revision(conn)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "collectionItem",
+        "operation": "delete",
+        "entityId": collection_id,
+        "itemType": item_type,
+        "itemId": item_id,
         "changed": int(changed or 0),
         "revision": revision,
     }
@@ -18090,6 +18380,10 @@ def apply_sync_mutation(
         result = apply_container_movie_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "containerMovie" and operation == "delete":
         result = apply_container_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "collectionItem" and operation == "upsert":
+        result = apply_collection_item_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    elif entity_type == "collectionItem" and operation == "delete":
+        result = apply_collection_item_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
     else:
         raise NextApiError(f"Unsupported mutation: {entity_type}.{operation}", 400)
 
@@ -21689,6 +21983,18 @@ def register_routes(flask_app: Flask) -> None:
                 allowed_container_ids = [
                     item for item in container_ids if container_types.get(item) in {"box_set", "vault", "collection"}
                 ]
+                if operation == "add":
+                    # Filtering the direct self-reference above is not enough:
+                    # adding A to B while B already sits inside A closes a loop
+                    # just as well. Contract §4b.7 rejects the cycle on write,
+                    # matching what collectionItem.upsert does on the sync path.
+                    ancestors = collection_ancestor_container_ids(conn, collection_uuid)
+                    for item in allowed_container_ids:
+                        if item in ancestors:
+                            raise NextApiError(
+                                "Adding this container would create a collection membership cycle",
+                                400,
+                            )
                 requested = len(movie_ids) + len(allowed_container_ids)
                 with conn.cursor() as cur:
                     if operation == "remove":
@@ -30375,6 +30681,8 @@ def register_routes(flask_app: Flask) -> None:
                     "container.delete",
                     "containerMovie.upsert",
                     "containerMovie.delete",
+                    "collectionItem.upsert",
+                    "collectionItem.delete",
                 ],
                 "userEntityTypes": [
                     "watchlist",
