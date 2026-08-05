@@ -199,6 +199,101 @@ class LocationDetachmentTests(unittest.TestCase):
         self.assertEqual(0, next_app.emit_location_detachments(None, [], []))
 
 
+@unittest.skipIf(next_app is None, "Flask is not installed in this test environment")
+class MovieLocationAssignmentTests(unittest.TestCase):
+    """The write path a client uses to shelve a movie (§4c.2, §4c.3).
+
+    `container_payload` handled `locationId` from the day locations existed;
+    `movie_payload_fields` — the map behind `movie.upsert`, which is the route a
+    phone actually takes — did not mention it at all. The key was accepted,
+    dropped, and answered with `isApplied`, so a client booked an assignment
+    that never happened.
+    """
+
+    def test_an_untouched_field_asserts_nothing(self):
+        # kotlinx omits defaults and Swift uses encodeIfPresent, so this is the
+        # shape of every upsert that is not about a location.
+        self.assertEqual({}, next_app.movie_location_assignment({"title": "Heat"}))
+
+    def test_an_explicit_null_is_the_same_as_absent(self):
+        # §4.8: the two are indistinguishable by construction, so they must mean
+        # the same thing. Keep.
+        self.assertEqual({}, next_app.movie_location_assignment({"locationId": None}))
+
+    def test_an_explicit_empty_value_erases_the_assignment(self):
+        # The only way a user takes a movie off its shelf from a phone.
+        self.assertEqual({"location_id": None}, next_app.movie_location_assignment({"locationId": ""}))
+        self.assertEqual({"location_id": None}, next_app.movie_location_assignment({"locationId": "   "}))
+
+    def test_a_uuid_is_parsed(self):
+        assignment = next_app.movie_location_assignment(
+            {"locationId": "6f1b0f2e-0f2e-4f2e-8f2e-0f2e4f2e8f2e"}
+        )
+        self.assertEqual(
+            "6f1b0f2e-0f2e-4f2e-8f2e-0f2e4f2e8f2e", str(assignment["location_id"])
+        )
+
+    def test_the_snake_case_alias_is_accepted(self):
+        assignment = next_app.movie_location_assignment(
+            {"location_id": "6f1b0f2e-0f2e-4f2e-8f2e-0f2e4f2e8f2e"}
+        )
+        self.assertIn("location_id", assignment)
+
+    def test_the_upsert_field_map_carries_the_assignment(self):
+        fields = next_app.movie_payload_fields({"locationId": ""})
+        self.assertEqual({"location_id": None}, fields["location_assignment"])
+
+    def test_the_free_text_field_is_untouched_by_an_assignment(self):
+        """§4c.6: two fields that never overwrite each other."""
+        fields = next_app.movie_payload_fields(
+            {"location": "Bottom shelf", "locationId": "6f1b0f2e-0f2e-4f2e-8f2e-0f2e4f2e8f2e"}
+        )
+        self.assertEqual("Bottom shelf", fields["location"])
+        self.assertIn("location_id", fields["location_assignment"])
+
+    def test_nothing_is_written_when_the_client_said_nothing(self):
+        calls = []
+
+        class _Cur:
+            def execute(self, sql, params=None):
+                calls.append(sql)
+
+            def fetchone(self):
+                return None
+
+        next_app.apply_movie_location_assignment(_Cur(), "movie-1", {})
+        self.assertEqual([], calls)
+
+    def test_an_unknown_location_is_rejected_rather_than_stored_as_null(self):
+        """A failure that comes back as success is worse than a failure."""
+
+        class _Cur:
+            def execute(self, sql, params=None):
+                self.last = sql
+
+            def fetchone(self):
+                return None  # the location does not exist
+
+        with self.assertRaises(next_app.NextApiError):
+            next_app.apply_movie_location_assignment(
+                _Cur(), "movie-1", {"location_id": "6f1b0f2e-0f2e-4f2e-8f2e-0f2e4f2e8f2e"}
+            )
+
+    def test_erasing_needs_no_existence_check(self):
+        statements = []
+
+        class _Cur:
+            def execute(self, sql, params=None):
+                statements.append(sql)
+
+            def fetchone(self):
+                raise AssertionError("an erase must not look a location up")
+
+        next_app.apply_movie_location_assignment(_Cur(), "movie-1", {"location_id": None})
+        self.assertEqual(1, len(statements))
+        self.assertIn("UPDATE movies", statements[0])
+
+
 @unittest.skipIf(next_preferences is None, "Flask is not installed in this test environment")
 class LocationMobileContractTests(unittest.TestCase):
     def test_the_endpoint_contract_names_the_location_routes(self):

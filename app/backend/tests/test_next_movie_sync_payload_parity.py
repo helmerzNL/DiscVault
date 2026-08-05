@@ -189,10 +189,15 @@ class MovieSyncPayloadParityPostgresTests(unittest.TestCase):
         symptom. Anything `movie_payload_fields` maps to a column has to appear
         in the payload a client reads.
         """
+        # `metadata`, `technical_edits` and `location_assignment` are not plain
+        # column mappings — they are sub-objects the caller applies separately,
+        # so their key names are not what a client reads back. The columns
+        # behind them are covered elsewhere: the technical wire keys below, and
+        # `location_id` in `test_next_location_sync.py`.
         accepted = {
             column
             for column in next_app.movie_payload_fields({})
-            if column not in ("metadata", "technical_edits")
+            if column not in ("metadata", "technical_edits", "location_assignment")
         }
         technical_wire_keys = {wire for wire, _ in next_app.MOVIE_TECHNICAL_SYNC_KEYS.values()}
 
