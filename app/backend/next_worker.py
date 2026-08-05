@@ -46,6 +46,9 @@ try:
     from .next_backup import restore_functional_backup
     from .next_price_alerts import PRICE_ALERT_JOB_TYPE
     from .next_price_alerts import run_price_alert_sweep
+    from .next_collection_value import COLLECTION_VALUE_JOB_TYPE
+    from .next_collection_value import capture_collection_value_snapshots
+    from .next_collection_value import snapshot_interval_hours
     from .next_database import db_wait_timeout
     from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
@@ -75,6 +78,9 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_backup import restore_functional_backup
     from next_price_alerts import PRICE_ALERT_JOB_TYPE
     from next_price_alerts import run_price_alert_sweep
+    from next_collection_value import COLLECTION_VALUE_JOB_TYPE
+    from next_collection_value import capture_collection_value_snapshots
+    from next_collection_value import snapshot_interval_hours
     from next_database import db_wait_timeout
     from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
@@ -476,6 +482,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == PRICE_ALERT_JOB_TYPE:
         return process_price_alert_sweep(payload, worker_id)
 
+    if job_type == COLLECTION_VALUE_JOB_TYPE:
+        return process_collection_value_snapshot(payload, worker_id)
+
     if job_type == POSTER_CACHE_JOB_TYPE:
         return process_movievault_v2_poster_cache(payload, worker_id)
 
@@ -598,6 +607,17 @@ def process_price_alert_sweep(payload: dict[str, Any], worker_id: str) -> dict[s
         "workerId": worker_id,
         "handled": True,
         "jobType": PRICE_ALERT_JOB_TYPE,
+        **summary,
+    }
+
+
+def process_collection_value_snapshot(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    with connect() as conn:
+        summary = capture_collection_value_snapshots(conn)
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": COLLECTION_VALUE_JOB_TYPE,
         **summary,
     }
 
@@ -2505,6 +2525,51 @@ def _maybe_enqueue_price_sweep(worker_id: str) -> None:
         pass
 
 
+def _maybe_enqueue_collection_value_snapshot(worker_id: str) -> None:
+    """Auto-enqueue a collection-value snapshot if today's is not in flight.
+
+    Interval via ``DISCVAULT_VALUE_SNAPSHOT_INTERVAL_HOURS`` (default: 24).
+    The capture itself is idempotent per day, so an extra run overwrites rather
+    than duplicating — this check exists to avoid pointless work, not to protect
+    correctness.
+    """
+    interval_hours = snapshot_interval_hours()
+    try:
+        with connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1 FROM background_jobs
+                    WHERE job_type = %s
+                      AND status IN ('pending', 'running')
+                    LIMIT 1
+                    """,
+                    (COLLECTION_VALUE_JOB_TYPE,),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    """
+                    SELECT 1 FROM background_jobs
+                    WHERE job_type = %s
+                      AND created_at >= now() - (%s * interval '1 hour')
+                    LIMIT 1
+                    """,
+                    (COLLECTION_VALUE_JOB_TYPE, interval_hours),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    "INSERT INTO background_jobs (job_type, payload) VALUES (%s, %s)",
+                    (
+                        COLLECTION_VALUE_JOB_TYPE,
+                        Jsonb(json_ready({"source": "scheduler", "workerId": worker_id})),
+                    ),
+                )
+    except Exception:  # noqa: BLE001 - never crash the poll loop
+        pass
+
+
 def _maybe_enqueue_movievault_v2_sync(worker_id: str) -> None:
     with connect() as conn:
         with conn.cursor() as cur:
@@ -2612,6 +2677,7 @@ def _movievault_v2_sync_interval(settings: dict[str, Any]) -> int:
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
         _maybe_enqueue_price_sweep(worker_id)
+        _maybe_enqueue_collection_value_snapshot(worker_id)
         try:
             _maybe_enqueue_movievault_v2_sync(worker_id)
         except Exception as exc:  # noqa: BLE001 - never crash the poll loop

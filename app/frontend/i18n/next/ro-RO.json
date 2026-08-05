@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Citirea listei de vizionat",
   "profile.perm.mcp.tool.get_watch_history": "Citirea istoricului",
   "profile.perm.mcp.tool.get_groups": "Citirea grupurilor",
-  "profile.connectionLastSeenFrom": "Ultima utilizare de la"
+  "profile.connectionLastSeenFrom": "Ultima utilizare de la",
+  "stats.collectionValueTitle": "Valoarea colecției în timp",
+  "stats.collectionValueEmpty": "Încă nu a fost înregistrat niciun istoric. De acum se face zilnic o captură.",
+  "stats.collectionValueOnePoint": "Înregistrarea a început. Graficul apare când există mai mult de o zi de istoric.",
+  "stats.collectionValueCurrent": "Acum",
+  "stats.collectionValueChange": "Modificare",
+  "stats.collectionValueDiscs": "Discuri evaluate",
+  "stats.collectionValueUnpriced": "{count} discuri nu au valoare estimată și nu sunt numărate.",
+  "stats.collectionValueUnconvertible": "{count} discuri au o valoare fără monedă înregistrată și nu pot fi convertite.",
+  "stats.collectionValueMixedCurrency": "Punctele mai vechi au fost înregistrate în altă monedă și nu sunt direct comparabile.",
+  "stats.purchaseTrendTitle": "Cât a costat construirea colecției",
+  "stats.purchaseTrendEmpty": "Adaugă date și prețuri de achiziție la discuri pentru a vedea cum s-a format colecția.",
+  "stats.purchaseTrendTotal": "Total cheltuit",
+  "stats.purchaseTrendDiscs": "Discuri cu dată de achiziție",
+  "stats.purchaseTrendUnpriced": "{count} discuri cu dată nu au preț de achiziție și contează la număr, nu la total.",
+  "stats.purchaseTrendUnconvertible": "{count} prețuri de achiziție nu au monedă înregistrată și nu pot fi convertite."
 }

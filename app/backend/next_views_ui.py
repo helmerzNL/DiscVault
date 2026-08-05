@@ -3801,6 +3801,12 @@ def ui_preview_html(
       width: 100%;
       height: 220px;
     }
+    .stats-value-note {
+      color: var(--muted);
+      font-size: .78rem;
+      margin: 8px 0 0;
+      line-height: 1.45;
+    }
     .stats-price-axis {
       display: flex;
       justify-content: space-between;
@@ -14053,6 +14059,36 @@ def ui_preview_html(
           <div class="stats-block">
             <h2 data-next-i18n="stats.byRating">By rating</h2>
             <div class="stats-bars" id="statsByRating"></div>
+          </div>
+          <div class="stats-block stats-price-trend" id="statsCollectionValueSection">
+            <div class="stats-price-toolbar">
+              <h2 data-next-i18n="stats.collectionValueTitle">Collection value over time</h2>
+            </div>
+            <p class="stats-empty hidden" id="statsCollectionValueEmpty"></p>
+            <div class="stats-price-chart hidden" id="statsCollectionValueChartWrap">
+              <svg viewBox="0 0 640 220" preserveAspectRatio="none" id="statsCollectionValueChart" aria-hidden="true"></svg>
+              <div class="stats-price-axis">
+                <span id="statsCollectionValueRangeStart"></span>
+                <span id="statsCollectionValueRangeEnd"></span>
+              </div>
+            </div>
+            <div class="stats-price-summary" id="statsCollectionValueSummary"></div>
+            <p class="stats-value-note hidden" id="statsCollectionValueNote"></p>
+          </div>
+          <div class="stats-block stats-price-trend" id="statsPurchaseTrendSection">
+            <div class="stats-price-toolbar">
+              <h2 data-next-i18n="stats.purchaseTrendTitle">What the collection cost to build</h2>
+            </div>
+            <p class="stats-empty hidden" id="statsPurchaseTrendEmpty"></p>
+            <div class="stats-price-chart hidden" id="statsPurchaseTrendChartWrap">
+              <svg viewBox="0 0 640 220" preserveAspectRatio="none" id="statsPurchaseTrendChart" aria-hidden="true"></svg>
+              <div class="stats-price-axis">
+                <span id="statsPurchaseTrendRangeStart"></span>
+                <span id="statsPurchaseTrendRangeEnd"></span>
+              </div>
+            </div>
+            <div class="stats-price-summary" id="statsPurchaseTrendSummary"></div>
+            <p class="stats-value-note hidden" id="statsPurchaseTrendNote"></p>
           </div>
           <div class="stats-block stats-price-trend hidden" id="statsPriceTrendSection">
             <div class="stats-price-toolbar">
@@ -35718,6 +35754,185 @@ def ui_preview_html(
         };
       }
 
+      // Shared line-chart renderer for the statistics page.
+      //
+      // The wishlist trend below grew its own copy of this maths first; the two
+      // collection charts use this one rather than adding a third. Points are
+      // {at, value}; everything else is presentation.
+      function renderStatsLineChart(chartNode, rangeStartNode, rangeEndNode, rawPoints) {
+        const points = (rawPoints || [])
+          .map((point, index) => {
+            const value = Number(point && point.value);
+            const timeValue = Date.parse(String(point && point.at ? point.at : ""));
+            return {
+              value,
+              at: String(point && point.at ? point.at : ""),
+              time: Number.isFinite(timeValue) ? timeValue : index,
+            };
+          })
+          .filter((point) => Number.isFinite(point.value));
+        if (!points.length) {
+          if (chartNode) chartNode.innerHTML = "";
+          if (rangeStartNode) rangeStartNode.textContent = "";
+          if (rangeEndNode) rangeEndNode.textContent = "";
+          return false;
+        }
+        const width = 640;
+        const height = 220;
+        const padding = { left: 40, right: 12, top: 10, bottom: 26 };
+        const minX = Math.min(...points.map((point) => point.time));
+        const maxXRaw = Math.max(...points.map((point) => point.time));
+        const maxX = maxXRaw === minX ? minX + 1 : maxXRaw;
+        const minYRaw = Math.min(...points.map((point) => point.value));
+        const maxYRaw = Math.max(...points.map((point) => point.value));
+        // A collection's worth is a magnitude, so the axis starts at zero: a
+        // zoomed baseline turns a 2% drift into a cliff.
+        const minY = Math.min(0, minYRaw);
+        const maxY = maxYRaw === minY ? minY + 1 : maxYRaw + Math.max((maxYRaw - minY) * 0.1, 0.5);
+        const xScale = (point) => padding.left + ((point.time - minX) / (maxX - minX)) * (width - padding.left - padding.right);
+        const yScale = (point) => height - padding.bottom - ((point.value - minY) / Math.max(maxY - minY, 0.0001)) * (height - padding.top - padding.bottom);
+        const coords = points.map((point) => ({ x: xScale(point), y: yScale(point) }));
+        const pathData = coords.map((coord, index) => `${index ? "L" : "M"}${coord.x.toFixed(2)} ${coord.y.toFixed(2)}`).join(" ");
+        const areaData = `${pathData} L${coords[coords.length - 1].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} L${coords[0].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} Z`;
+        const gridLines = [0, 1, 2, 3, 4].map((idx) => {
+          const y = padding.top + ((height - padding.top - padding.bottom) / 4) * idx;
+          return `<line x1="${padding.left}" y1="${y.toFixed(2)}" x2="${width - padding.right}" y2="${y.toFixed(2)}" stroke="var(--line)" stroke-width="1" opacity="0.45" />`;
+        }).join("");
+        // One marker per point is unreadable once a daily series runs for a
+        // year, so they appear only while the series is short enough to read.
+        const circles = coords.length <= 40
+          ? coords.map((coord) => `<circle cx="${coord.x.toFixed(2)}" cy="${coord.y.toFixed(2)}" r="2.8" fill="var(--accent)" />`).join("")
+          : "";
+        if (chartNode) {
+          chartNode.innerHTML = `
+            <rect x="0" y="0" width="${width}" height="${height}" fill="transparent"></rect>
+            ${gridLines}
+            <path d="${areaData}" fill="var(--accent)" opacity="0.12"></path>
+            <path d="${pathData}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            ${circles}
+          `;
+        }
+        if (rangeStartNode) rangeStartNode.textContent = formatAppDate(points[0].at);
+        if (rangeEndNode) rangeEndNode.textContent = formatAppDate(points[points.length - 1].at);
+        return true;
+      }
+
+      function renderStatsSummaryTiles(node, tiles) {
+        if (!node) return;
+        node.innerHTML = (tiles || [])
+          .map((tile) => `<div class="stats-price-summary-item"><span>${escapeHtml(tile.label)}</span><strong>${escapeHtml(tile.value)}</strong></div>`)
+          .join("");
+      }
+
+      function renderCollectionValueTrend(data) {
+        const trend = (data && data.collectionValueTrend) || {};
+        const chartWrap = document.getElementById("statsCollectionValueChartWrap");
+        const emptyNode = document.getElementById("statsCollectionValueEmpty");
+        const noteNode = document.getElementById("statsCollectionValueNote");
+        const currency = String(trend.currency || "EUR").toUpperCase();
+        const points = trend.points || [];
+
+        // One point is not a trend. Saying so beats drawing a flat line that
+        // looks like a measured result — this series necessarily starts empty,
+        // because nothing recorded a collection's worth before today.
+        if (points.length < 2) {
+          if (chartWrap) chartWrap.classList.add("hidden");
+          renderStatsSummaryTiles(document.getElementById("statsCollectionValueSummary"), []);
+          if (emptyNode) {
+            emptyNode.classList.remove("hidden");
+            emptyNode.textContent = points.length === 1
+              ? tNext("stats.collectionValueOnePoint", "Recording has started. The chart appears once there is more than one day of history.")
+              : tNext("stats.collectionValueEmpty", "No history has been recorded yet. A snapshot is taken daily from now on.");
+          }
+          if (noteNode) noteNode.classList.add("hidden");
+          return;
+        }
+
+        if (emptyNode) emptyNode.classList.add("hidden");
+        if (chartWrap) chartWrap.classList.remove("hidden");
+        renderStatsLineChart(
+          document.getElementById("statsCollectionValueChart"),
+          document.getElementById("statsCollectionValueRangeStart"),
+          document.getElementById("statsCollectionValueRangeEnd"),
+          points
+        );
+
+        const change = Number(trend.changeFromStart || 0);
+        renderStatsSummaryTiles(document.getElementById("statsCollectionValueSummary"), [
+          { label: tNext("stats.collectionValueCurrent", "Current"), value: formatStatsPrice(trend.currentValue, currency) },
+          { label: tNext("stats.collectionValueChange", "Change"), value: `${change >= 0 ? "+" : ""}${formatStatsPrice(change, currency)}` },
+          { label: tNext("stats.collectionValueDiscs", "Discs valued"), value: String((points[points.length - 1] || {}).valuedCount || 0) },
+        ]);
+
+        // A total is a claim about completeness, so the discs it could not
+        // include are named rather than quietly dropped.
+        const notes = [];
+        const latest = points[points.length - 1] || {};
+        if (Number(latest.unpricedCount || 0) > 0) {
+          notes.push(tNext("stats.collectionValueUnpriced", "{count} discs have no estimated value and are not counted.")
+            .replace("{count}", String(latest.unpricedCount)));
+        }
+        if (Number(latest.unconvertibleCount || 0) > 0) {
+          notes.push(tNext("stats.collectionValueUnconvertible", "{count} discs have a value with no recorded currency and cannot be converted.")
+            .replace("{count}", String(latest.unconvertibleCount)));
+        }
+        if (trend.mixedCurrency) {
+          notes.push(tNext("stats.collectionValueMixedCurrency", "Older points were recorded in a different currency and are not directly comparable."));
+        }
+        if (noteNode) {
+          noteNode.textContent = notes.join(" ");
+          noteNode.classList.toggle("hidden", !notes.length);
+        }
+      }
+
+      function renderPurchaseTrend(data) {
+        const trend = (data && data.purchaseTrend) || {};
+        const chartWrap = document.getElementById("statsPurchaseTrendChartWrap");
+        const emptyNode = document.getElementById("statsPurchaseTrendEmpty");
+        const noteNode = document.getElementById("statsPurchaseTrendNote");
+        const currency = String(trend.currency || "EUR").toUpperCase();
+        const rawPoints = trend.points || [];
+
+        if (rawPoints.length < 2) {
+          if (chartWrap) chartWrap.classList.add("hidden");
+          renderStatsSummaryTiles(document.getElementById("statsPurchaseTrendSummary"), []);
+          if (emptyNode) {
+            emptyNode.classList.remove("hidden");
+            emptyNode.textContent = tNext("stats.purchaseTrendEmpty", "Add purchase dates and prices to your discs to see how your collection was built.");
+          }
+          if (noteNode) noteNode.classList.add("hidden");
+          return;
+        }
+
+        if (emptyNode) emptyNode.classList.add("hidden");
+        if (chartWrap) chartWrap.classList.remove("hidden");
+        renderStatsLineChart(
+          document.getElementById("statsPurchaseTrendChart"),
+          document.getElementById("statsPurchaseTrendRangeStart"),
+          document.getElementById("statsPurchaseTrendRangeEnd"),
+          rawPoints.map((point) => ({ at: point.at, value: point.cumulativeSpend }))
+        );
+
+        renderStatsSummaryTiles(document.getElementById("statsPurchaseTrendSummary"), [
+          { label: tNext("stats.purchaseTrendTotal", "Total spent"), value: formatStatsPrice(trend.totalSpend, currency) },
+          { label: tNext("stats.purchaseTrendDiscs", "Discs with a purchase date"), value: String(trend.totalCount || 0) },
+        ]);
+
+        const notes = [];
+        if (Number(trend.unpricedCount || 0) > 0) {
+          notes.push(tNext("stats.purchaseTrendUnpriced", "{count} dated discs have no purchase price and add to the count but not the total.")
+            .replace("{count}", String(trend.unpricedCount)));
+        }
+        if (Number(trend.unconvertibleCount || 0) > 0) {
+          notes.push(tNext("stats.purchaseTrendUnconvertible", "{count} purchase prices have no recorded currency and cannot be converted.")
+            .replace("{count}", String(trend.unconvertibleCount)));
+        }
+        if (noteNode) {
+          noteNode.textContent = notes.join(" ");
+          noteNode.classList.toggle("hidden", !notes.length);
+        }
+      }
+
       if (!movies.length) {
         if (gateMessage) {
           gateMessage.textContent = tNext("stats.priceTrendNoData", "No wishlist price history is available yet.");
@@ -35896,6 +36111,8 @@ def ui_preview_html(
       const byRating = document.getElementById("statsByRating");
       if (byRating) byRating.innerHTML = statsBarsHtml(data.byRating);
       renderStatsPriceTrend(data);
+      renderCollectionValueTrend(data);
+      renderPurchaseTrend(data);
       if (empty) empty.classList.add("hidden");
     }
     async function loadStatisticsView(force = false) {

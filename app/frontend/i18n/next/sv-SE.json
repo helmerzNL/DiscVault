@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Läsa bevakningslistan",
   "profile.perm.mcp.tool.get_watch_history": "Läsa visningshistoriken",
   "profile.perm.mcp.tool.get_groups": "Läsa grupper",
-  "profile.connectionLastSeenFrom": "Senast använd från"
+  "profile.connectionLastSeenFrom": "Senast använd från",
+  "stats.collectionValueTitle": "Samlingens värde över tid",
+  "stats.collectionValueEmpty": "Ingen historik har registrerats ännu. Från och med nu tas en ögonblicksbild varje dag.",
+  "stats.collectionValueOnePoint": "Registreringen har börjat. Diagrammet visas när det finns mer än en dags historik.",
+  "stats.collectionValueCurrent": "Nu",
+  "stats.collectionValueChange": "Förändring",
+  "stats.collectionValueDiscs": "Värderade skivor",
+  "stats.collectionValueUnpriced": "{count} skivor saknar uppskattat värde och räknas inte.",
+  "stats.collectionValueUnconvertible": "{count} skivor har ett värde utan registrerad valuta och kan inte omräknas.",
+  "stats.collectionValueMixedCurrency": "Äldre punkter registrerades i en annan valuta och är inte direkt jämförbara.",
+  "stats.purchaseTrendTitle": "Vad samlingen kostade att bygga",
+  "stats.purchaseTrendEmpty": "Lägg till inköpsdatum och priser på dina skivor för att se hur samlingen växte fram.",
+  "stats.purchaseTrendTotal": "Totalt spenderat",
+  "stats.purchaseTrendDiscs": "Skivor med inköpsdatum",
+  "stats.purchaseTrendUnpriced": "{count} daterade skivor saknar inköpspris och räknas i antalet men inte i summan.",
+  "stats.purchaseTrendUnconvertible": "{count} inköpspriser saknar registrerad valuta och kan inte omräknas."
 }

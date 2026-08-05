@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Leer la lista de pendientes",
   "profile.perm.mcp.tool.get_watch_history": "Leer el historial",
   "profile.perm.mcp.tool.get_groups": "Leer grupos",
-  "profile.connectionLastSeenFrom": "Último uso desde"
+  "profile.connectionLastSeenFrom": "Último uso desde",
+  "stats.collectionValueTitle": "Valor de la colección a lo largo del tiempo",
+  "stats.collectionValueEmpty": "Aún no se ha registrado historial. A partir de ahora se tomará una instantánea diaria.",
+  "stats.collectionValueOnePoint": "El registro ha comenzado. El gráfico aparecerá cuando haya más de un día de historial.",
+  "stats.collectionValueCurrent": "Actual",
+  "stats.collectionValueChange": "Cambio",
+  "stats.collectionValueDiscs": "Discos valorados",
+  "stats.collectionValueUnpriced": "{count} discos no tienen valor estimado y no se cuentan.",
+  "stats.collectionValueUnconvertible": "{count} discos tienen un valor sin moneda registrada y no se pueden convertir.",
+  "stats.collectionValueMixedCurrency": "Los puntos más antiguos se registraron en otra moneda y no son directamente comparables.",
+  "stats.purchaseTrendTitle": "Lo que ha costado la colección",
+  "stats.purchaseTrendEmpty": "Añade fechas y precios de compra a tus discos para ver cómo se formó tu colección.",
+  "stats.purchaseTrendTotal": "Total gastado",
+  "stats.purchaseTrendDiscs": "Discos con fecha de compra",
+  "stats.purchaseTrendUnpriced": "{count} discos con fecha no tienen precio de compra y suman al recuento, no al total.",
+  "stats.purchaseTrendUnconvertible": "{count} precios de compra no tienen moneda registrada y no se pueden convertir."
 }

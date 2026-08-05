@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "보관함 읽기",
   "profile.perm.mcp.tool.get_watch_history": "시청 기록 읽기",
   "profile.perm.mcp.tool.get_groups": "그룹 읽기",
-  "profile.connectionLastSeenFrom": "마지막 사용 위치"
+  "profile.connectionLastSeenFrom": "마지막 사용 위치",
+  "stats.collectionValueTitle": "시간에 따른 컬렉션 가치",
+  "stats.collectionValueEmpty": "아직 기록된 이력이 없습니다. 지금부터 매일 스냅샷을 저장합니다.",
+  "stats.collectionValueOnePoint": "기록이 시작되었습니다. 하루 이상의 이력이 쌓이면 그래프가 표시됩니다.",
+  "stats.collectionValueCurrent": "현재",
+  "stats.collectionValueChange": "변동",
+  "stats.collectionValueDiscs": "가치가 있는 디스크",
+  "stats.collectionValueUnpriced": "{count}개의 디스크에는 추정 가치가 없어 집계되지 않습니다.",
+  "stats.collectionValueUnconvertible": "{count}개의 디스크는 통화가 기록되지 않은 가치를 가지고 있어 환산할 수 없습니다.",
+  "stats.collectionValueMixedCurrency": "이전 지점은 다른 통화로 기록되어 직접 비교할 수 없습니다.",
+  "stats.purchaseTrendTitle": "컬렉션을 만드는 데 든 비용",
+  "stats.purchaseTrendEmpty": "디스크에 구매 날짜와 가격을 추가하면 컬렉션이 어떻게 만들어졌는지 볼 수 있습니다.",
+  "stats.purchaseTrendTotal": "총 지출",
+  "stats.purchaseTrendDiscs": "구매 날짜가 있는 디스크",
+  "stats.purchaseTrendUnpriced": "{count}개의 날짜가 있는 디스크에는 구매 가격이 없어 개수에는 포함되지만 금액에는 포함되지 않습니다.",
+  "stats.purchaseTrendUnconvertible": "{count}개의 구매 가격에는 기록된 통화가 없어 환산할 수 없습니다."
 }

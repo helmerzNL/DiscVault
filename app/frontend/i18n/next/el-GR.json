@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Ανάγνωση λίστας παρακολούθησης",
   "profile.perm.mcp.tool.get_watch_history": "Ανάγνωση ιστορικού",
   "profile.perm.mcp.tool.get_groups": "Ανάγνωση ομάδων",
-  "profile.connectionLastSeenFrom": "Τελευταία χρήση από"
+  "profile.connectionLastSeenFrom": "Τελευταία χρήση από",
+  "stats.collectionValueTitle": "Αξία της συλλογής στον χρόνο",
+  "stats.collectionValueEmpty": "Δεν έχει καταγραφεί ακόμη ιστορικό. Από τώρα λαμβάνεται καθημερινό στιγμιότυπο.",
+  "stats.collectionValueOnePoint": "Η καταγραφή ξεκίνησε. Το γράφημα εμφανίζεται μόλις υπάρχει ιστορικό πάνω από μία ημέρα.",
+  "stats.collectionValueCurrent": "Τώρα",
+  "stats.collectionValueChange": "Μεταβολή",
+  "stats.collectionValueDiscs": "Δίσκοι με αξία",
+  "stats.collectionValueUnpriced": "{count} δίσκοι δεν έχουν εκτιμώμενη αξία και δεν προσμετρώνται.",
+  "stats.collectionValueUnconvertible": "{count} δίσκοι έχουν αξία χωρίς καταγεγραμμένο νόμισμα και δεν μπορούν να μετατραπούν.",
+  "stats.collectionValueMixedCurrency": "Παλαιότερα σημεία καταγράφηκαν σε άλλο νόμισμα και δεν είναι άμεσα συγκρίσιμα.",
+  "stats.purchaseTrendTitle": "Πόσο κόστισε η δημιουργία της συλλογής",
+  "stats.purchaseTrendEmpty": "Προσθέστε ημερομηνίες και τιμές αγοράς στους δίσκους σας για να δείτε πώς χτίστηκε η συλλογή.",
+  "stats.purchaseTrendTotal": "Σύνολο δαπανών",
+  "stats.purchaseTrendDiscs": "Δίσκοι με ημερομηνία αγοράς",
+  "stats.purchaseTrendUnpriced": "{count} δίσκοι με ημερομηνία δεν έχουν τιμή αγοράς και μετρούν στο πλήθος, όχι στο σύνολο.",
+  "stats.purchaseTrendUnconvertible": "{count} τιμές αγοράς δεν έχουν καταγεγραμμένο νόμισμα και δεν μπορούν να μετατραπούν."
 }

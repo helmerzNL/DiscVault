@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Čítať zoznam na pozretie",
   "profile.perm.mcp.tool.get_watch_history": "Čítať históriu sledovania",
   "profile.perm.mcp.tool.get_groups": "Čítať skupiny",
-  "profile.connectionLastSeenFrom": "Naposledy použité z"
+  "profile.connectionLastSeenFrom": "Naposledy použité z",
+  "stats.collectionValueTitle": "Hodnota zbierky v čase",
+  "stats.collectionValueEmpty": "Zatiaľ nebola zaznamenaná žiadna história. Odteraz sa denne vytvára snímka.",
+  "stats.collectionValueOnePoint": "Zaznamenávanie sa začalo. Graf sa zobrazí, keď bude história dlhšia ako jeden deň.",
+  "stats.collectionValueCurrent": "Teraz",
+  "stats.collectionValueChange": "Zmena",
+  "stats.collectionValueDiscs": "Ocenené disky",
+  "stats.collectionValueUnpriced": "{count} diskov nemá odhadovanú hodnotu a nepočíta sa.",
+  "stats.collectionValueUnconvertible": "{count} diskov má hodnotu bez zaznamenanej meny a nedajú sa prepočítať.",
+  "stats.collectionValueMixedCurrency": "Staršie body boli zaznamenané v inej mene a nie sú priamo porovnateľné.",
+  "stats.purchaseTrendTitle": "Koľko stálo vybudovanie zbierky",
+  "stats.purchaseTrendEmpty": "Doplňte pri diskoch dátumy a ceny nákupu, aby ste videli, ako zbierka vznikala.",
+  "stats.purchaseTrendTotal": "Celkovo minuté",
+  "stats.purchaseTrendDiscs": "Disky s dátumom nákupu",
+  "stats.purchaseTrendUnpriced": "{count} datovaných diskov nemá nákupnú cenu a počíta sa do počtu, nie do sumy.",
+  "stats.purchaseTrendUnconvertible": "{count} nákupných cien nemá zaznamenanú menu a nedajú sa prepočítať."
 }

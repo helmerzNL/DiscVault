@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "De kijklijst lezen",
   "profile.perm.mcp.tool.get_watch_history": "De kijkgeschiedenis lezen",
   "profile.perm.mcp.tool.get_groups": "Groepen lezen",
-  "profile.connectionLastSeenFrom": "Laatst gebruikt vanaf"
+  "profile.connectionLastSeenFrom": "Laatst gebruikt vanaf",
+  "stats.collectionValueTitle": "Waarde van je collectie over tijd",
+  "stats.collectionValueEmpty": "Er is nog geen historie vastgelegd. Vanaf nu wordt er dagelijks een momentopname gemaakt.",
+  "stats.collectionValueOnePoint": "Het vastleggen is begonnen. De grafiek verschijnt zodra er meer dan één dag historie is.",
+  "stats.collectionValueCurrent": "Nu",
+  "stats.collectionValueChange": "Verschil",
+  "stats.collectionValueDiscs": "Discs met waarde",
+  "stats.collectionValueUnpriced": "{count} discs hebben geen geschatte waarde en tellen niet mee.",
+  "stats.collectionValueUnconvertible": "{count} discs hebben een waarde zonder vastgelegde valuta en kunnen niet worden omgerekend.",
+  "stats.collectionValueMixedCurrency": "Oudere punten zijn in een andere valuta vastgelegd en zijn niet direct vergelijkbaar.",
+  "stats.purchaseTrendTitle": "Wat de collectie heeft gekost",
+  "stats.purchaseTrendEmpty": "Vul aankoopdatums en -prijzen in bij je discs om te zien hoe je collectie is opgebouwd.",
+  "stats.purchaseTrendTotal": "Totaal uitgegeven",
+  "stats.purchaseTrendDiscs": "Discs met een aankoopdatum",
+  "stats.purchaseTrendUnpriced": "{count} discs met datum hebben geen aankoopprijs en tellen wel mee in het aantal, niet in het bedrag.",
+  "stats.purchaseTrendUnconvertible": "{count} aankoopprijzen hebben geen vastgelegde valuta en kunnen niet worden omgerekend."
 }

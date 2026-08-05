@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Skaityti stebėjimo sąrašą",
   "profile.perm.mcp.tool.get_watch_history": "Skaityti žiūrėjimo istoriją",
   "profile.perm.mcp.tool.get_groups": "Skaityti grupes",
-  "profile.connectionLastSeenFrom": "Paskutinį kartą naudota iš"
+  "profile.connectionLastSeenFrom": "Paskutinį kartą naudota iš",
+  "stats.collectionValueTitle": "Kolekcijos vertė laikui bėgant",
+  "stats.collectionValueEmpty": "Istorija dar neįrašyta. Nuo dabar kasdien daroma momentinė kopija.",
+  "stats.collectionValueOnePoint": "Įrašymas prasidėjo. Diagrama pasirodys, kai istorijos bus daugiau nei viena diena.",
+  "stats.collectionValueCurrent": "Dabar",
+  "stats.collectionValueChange": "Pokytis",
+  "stats.collectionValueDiscs": "Įvertinti diskai",
+  "stats.collectionValueUnpriced": "{count} diskų neturi numatomos vertės ir nėra skaičiuojami.",
+  "stats.collectionValueUnconvertible": "{count} diskų turi vertę be įrašytos valiutos ir jų negalima konvertuoti.",
+  "stats.collectionValueMixedCurrency": "Senesni taškai įrašyti kita valiuta ir nėra tiesiogiai palyginami.",
+  "stats.purchaseTrendTitle": "Kiek kainavo sukurti kolekciją",
+  "stats.purchaseTrendEmpty": "Pridėkite diskams pirkimo datas ir kainas, kad matytumėte, kaip kūrėsi jūsų kolekcija.",
+  "stats.purchaseTrendTotal": "Iš viso išleista",
+  "stats.purchaseTrendDiscs": "Diskai su pirkimo data",
+  "stats.purchaseTrendUnpriced": "{count} datuotų diskų neturi pirkimo kainos ir skaičiuojami į kiekį, bet ne į sumą.",
+  "stats.purchaseTrendUnconvertible": "{count} pirkimo kainų neturi įrašytos valiutos ir jų negalima konvertuoti."
 }

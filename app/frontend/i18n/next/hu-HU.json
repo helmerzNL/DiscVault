@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Megnézendők listájának olvasása",
   "profile.perm.mcp.tool.get_watch_history": "Megtekintési előzmények olvasása",
   "profile.perm.mcp.tool.get_groups": "Csoportok olvasása",
-  "profile.connectionLastSeenFrom": "Utoljára használva innen"
+  "profile.connectionLastSeenFrom": "Utoljára használva innen",
+  "stats.collectionValueTitle": "A gyűjtemény értéke az idő során",
+  "stats.collectionValueEmpty": "Még nincs rögzített előzmény. Mostantól naponta készül pillanatkép.",
+  "stats.collectionValueOnePoint": "A rögzítés elindult. A grafikon akkor jelenik meg, ha egy napnál több előzmény van.",
+  "stats.collectionValueCurrent": "Jelenleg",
+  "stats.collectionValueChange": "Változás",
+  "stats.collectionValueDiscs": "Értékelt lemezek",
+  "stats.collectionValueUnpriced": "{count} lemeznek nincs becsült értéke, ezért nem számít bele.",
+  "stats.collectionValueUnconvertible": "{count} lemeznek van értéke rögzített pénznem nélkül, így nem átváltható.",
+  "stats.collectionValueMixedCurrency": "A régebbi pontok más pénznemben lettek rögzítve, ezért közvetlenül nem hasonlíthatók össze.",
+  "stats.purchaseTrendTitle": "Mennyibe került a gyűjtemény felépítése",
+  "stats.purchaseTrendEmpty": "Adj meg vásárlási dátumot és árat a lemezeidnél, hogy lásd, hogyan épült fel a gyűjteményed.",
+  "stats.purchaseTrendTotal": "Összesen elköltve",
+  "stats.purchaseTrendDiscs": "Vásárlási dátummal rendelkező lemezek",
+  "stats.purchaseTrendUnpriced": "{count} dátumozott lemeznek nincs vételára; a darabszámba beleszámít, az összegbe nem.",
+  "stats.purchaseTrendUnconvertible": "{count} vételárnak nincs rögzített pénzneme, így nem átváltható."
 }

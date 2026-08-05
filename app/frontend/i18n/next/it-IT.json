@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Leggere la lista da vedere",
   "profile.perm.mcp.tool.get_watch_history": "Leggere la cronologia",
   "profile.perm.mcp.tool.get_groups": "Leggere i gruppi",
-  "profile.connectionLastSeenFrom": "Ultimo utilizzo da"
+  "profile.connectionLastSeenFrom": "Ultimo utilizzo da",
+  "stats.collectionValueTitle": "Valore della collezione nel tempo",
+  "stats.collectionValueEmpty": "Non è stato ancora registrato alcuno storico. Da ora verrà acquisita un'istantanea al giorno.",
+  "stats.collectionValueOnePoint": "La registrazione è iniziata. Il grafico apparirà quando ci sarà più di un giorno di storico.",
+  "stats.collectionValueCurrent": "Attuale",
+  "stats.collectionValueChange": "Variazione",
+  "stats.collectionValueDiscs": "Dischi valutati",
+  "stats.collectionValueUnpriced": "{count} dischi non hanno un valore stimato e non vengono conteggiati.",
+  "stats.collectionValueUnconvertible": "{count} dischi hanno un valore senza valuta registrata e non possono essere convertiti.",
+  "stats.collectionValueMixedCurrency": "I punti più vecchi sono stati registrati in un'altra valuta e non sono direttamente confrontabili.",
+  "stats.purchaseTrendTitle": "Quanto è costata la collezione",
+  "stats.purchaseTrendEmpty": "Aggiungi date e prezzi di acquisto ai tuoi dischi per vedere come è nata la tua collezione.",
+  "stats.purchaseTrendTotal": "Totale speso",
+  "stats.purchaseTrendDiscs": "Dischi con data di acquisto",
+  "stats.purchaseTrendUnpriced": "{count} dischi con data non hanno un prezzo di acquisto e contano nel numero, non nel totale.",
+  "stats.purchaseTrendUnconvertible": "{count} prezzi di acquisto non hanno una valuta registrata e non possono essere convertiti."
 }

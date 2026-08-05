@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "读取待看清单",
   "profile.perm.mcp.tool.get_watch_history": "读取观看记录",
   "profile.perm.mcp.tool.get_groups": "读取分组",
-  "profile.connectionLastSeenFrom": "上次使用来自"
+  "profile.connectionLastSeenFrom": "上次使用来自",
+  "stats.collectionValueTitle": "收藏价值随时间变化",
+  "stats.collectionValueEmpty": "尚未记录任何历史。从现在起每天生成一次快照。",
+  "stats.collectionValueOnePoint": "已开始记录。当历史超过一天时，图表就会出现。",
+  "stats.collectionValueCurrent": "当前",
+  "stats.collectionValueChange": "变化",
+  "stats.collectionValueDiscs": "已估值的碟片",
+  "stats.collectionValueUnpriced": "{count} 张碟片没有估计价值，未计入统计。",
+  "stats.collectionValueUnconvertible": "{count} 张碟片的价值没有记录币种，无法换算。",
+  "stats.collectionValueMixedCurrency": "较早的数据点使用了不同币种记录，无法直接比较。",
+  "stats.purchaseTrendTitle": "建立收藏的花费",
+  "stats.purchaseTrendEmpty": "为碟片填写购买日期和价格，即可看到收藏是如何积累起来的。",
+  "stats.purchaseTrendTotal": "总支出",
+  "stats.purchaseTrendDiscs": "有购买日期的碟片",
+  "stats.purchaseTrendUnpriced": "{count} 张有日期的碟片没有购买价格，计入数量但不计入金额。",
+  "stats.purchaseTrendUnconvertible": "{count} 个购买价格没有记录币种，无法换算。"
 }

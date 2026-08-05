@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Merkliste lesen",
   "profile.perm.mcp.tool.get_watch_history": "Sehverlauf lesen",
   "profile.perm.mcp.tool.get_groups": "Gruppen lesen",
-  "profile.connectionLastSeenFrom": "Zuletzt verwendet von"
+  "profile.connectionLastSeenFrom": "Zuletzt verwendet von",
+  "stats.collectionValueTitle": "Sammlungswert im Zeitverlauf",
+  "stats.collectionValueEmpty": "Es wurde noch kein Verlauf aufgezeichnet. Ab jetzt wird täglich eine Momentaufnahme erstellt.",
+  "stats.collectionValueOnePoint": "Die Aufzeichnung hat begonnen. Das Diagramm erscheint, sobald mehr als ein Tag Verlauf vorliegt.",
+  "stats.collectionValueCurrent": "Aktuell",
+  "stats.collectionValueChange": "Veränderung",
+  "stats.collectionValueDiscs": "Bewertete Discs",
+  "stats.collectionValueUnpriced": "{count} Discs haben keinen geschätzten Wert und werden nicht mitgezählt.",
+  "stats.collectionValueUnconvertible": "{count} Discs haben einen Wert ohne erfasste Währung und können nicht umgerechnet werden.",
+  "stats.collectionValueMixedCurrency": "Ältere Punkte wurden in einer anderen Währung erfasst und sind nicht direkt vergleichbar.",
+  "stats.purchaseTrendTitle": "Was die Sammlung gekostet hat",
+  "stats.purchaseTrendEmpty": "Trage Kaufdaten und -preise bei deinen Discs ein, um zu sehen, wie deine Sammlung entstanden ist.",
+  "stats.purchaseTrendTotal": "Gesamtausgaben",
+  "stats.purchaseTrendDiscs": "Discs mit Kaufdatum",
+  "stats.purchaseTrendUnpriced": "{count} datierte Discs haben keinen Kaufpreis und zählen zur Anzahl, nicht zur Summe.",
+  "stats.purchaseTrendUnconvertible": "{count} Kaufpreise haben keine erfasste Währung und können nicht umgerechnet werden."
 }

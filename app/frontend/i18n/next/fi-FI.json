@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Lukea katselulistan",
   "profile.perm.mcp.tool.get_watch_history": "Lukea katseluhistorian",
   "profile.perm.mcp.tool.get_groups": "Lukea ryhmät",
-  "profile.connectionLastSeenFrom": "Viimeksi käytetty osoitteesta"
+  "profile.connectionLastSeenFrom": "Viimeksi käytetty osoitteesta",
+  "stats.collectionValueTitle": "Kokoelman arvo ajan mittaan",
+  "stats.collectionValueEmpty": "Historiaa ei ole vielä tallennettu. Tästä lähtien tilannekuva otetaan päivittäin.",
+  "stats.collectionValueOnePoint": "Tallennus on alkanut. Kaavio ilmestyy, kun historiaa on yli yhden päivän verran.",
+  "stats.collectionValueCurrent": "Nyt",
+  "stats.collectionValueChange": "Muutos",
+  "stats.collectionValueDiscs": "Arvotetut levyt",
+  "stats.collectionValueUnpriced": "{count} levyllä ei ole arvioitua arvoa eikä niitä lasketa mukaan.",
+  "stats.collectionValueUnconvertible": "{count} levyllä on arvo ilman tallennettua valuuttaa, eikä niitä voi muuntaa.",
+  "stats.collectionValueMixedCurrency": "Vanhemmat pisteet tallennettiin eri valuutassa eivätkä ne ole suoraan vertailukelpoisia.",
+  "stats.purchaseTrendTitle": "Mitä kokoelman rakentaminen maksoi",
+  "stats.purchaseTrendEmpty": "Lisää levyillesi ostopäivät ja -hinnat nähdäksesi, miten kokoelmasi rakentui.",
+  "stats.purchaseTrendTotal": "Käytetty yhteensä",
+  "stats.purchaseTrendDiscs": "Levyt, joilla on ostopäivä",
+  "stats.purchaseTrendUnpriced": "{count} päivätyllä levyllä ei ole ostohintaa; ne lasketaan määrään mutta ei summaan.",
+  "stats.purchaseTrendUnconvertible": "{count} ostohinnalla ei ole tallennettua valuuttaa eikä niitä voi muuntaa."
 }

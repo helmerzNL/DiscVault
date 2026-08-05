@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Læse ønskelisten",
   "profile.perm.mcp.tool.get_watch_history": "Læse seerhistorikken",
   "profile.perm.mcp.tool.get_groups": "Læse grupper",
-  "profile.connectionLastSeenFrom": "Sidst brugt fra"
+  "profile.connectionLastSeenFrom": "Sidst brugt fra",
+  "stats.collectionValueTitle": "Samlingens værdi over tid",
+  "stats.collectionValueEmpty": "Der er endnu ikke registreret historik. Fra nu af tages der et øjebliksbillede dagligt.",
+  "stats.collectionValueOnePoint": "Registreringen er begyndt. Diagrammet vises, når der er mere end én dags historik.",
+  "stats.collectionValueCurrent": "Nu",
+  "stats.collectionValueChange": "Ændring",
+  "stats.collectionValueDiscs": "Vurderede diske",
+  "stats.collectionValueUnpriced": "{count} diske har ingen anslået værdi og tælles ikke med.",
+  "stats.collectionValueUnconvertible": "{count} diske har en værdi uden registreret valuta og kan ikke omregnes.",
+  "stats.collectionValueMixedCurrency": "Ældre punkter blev registreret i en anden valuta og kan ikke sammenlignes direkte.",
+  "stats.purchaseTrendTitle": "Hvad samlingen har kostet",
+  "stats.purchaseTrendEmpty": "Tilføj købsdatoer og -priser til dine diske for at se, hvordan samlingen blev bygget op.",
+  "stats.purchaseTrendTotal": "Samlet forbrug",
+  "stats.purchaseTrendDiscs": "Diske med købsdato",
+  "stats.purchaseTrendUnpriced": "{count} daterede diske har ingen købspris og tælles med i antallet, men ikke i summen.",
+  "stats.purchaseTrendUnconvertible": "{count} købspriser har ingen registreret valuta og kan ikke omregnes."
 }

@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "İzleme listesini okuma",
   "profile.perm.mcp.tool.get_watch_history": "İzleme geçmişini okuma",
   "profile.perm.mcp.tool.get_groups": "Grupları okuma",
-  "profile.connectionLastSeenFrom": "Son kullanım yeri"
+  "profile.connectionLastSeenFrom": "Son kullanım yeri",
+  "stats.collectionValueTitle": "Koleksiyon değerinin zaman içindeki seyri",
+  "stats.collectionValueEmpty": "Henüz geçmiş kaydedilmedi. Bundan sonra her gün bir anlık görüntü alınır.",
+  "stats.collectionValueOnePoint": "Kayıt başladı. Grafik, bir günden fazla geçmiş oluştuğunda görünür.",
+  "stats.collectionValueCurrent": "Şu an",
+  "stats.collectionValueChange": "Değişim",
+  "stats.collectionValueDiscs": "Değerlenen diskler",
+  "stats.collectionValueUnpriced": "{count} diskin tahmini değeri yok ve sayıma dahil edilmiyor.",
+  "stats.collectionValueUnconvertible": "{count} diskin değeri var ancak para birimi kayıtlı değil, bu yüzden dönüştürülemiyor.",
+  "stats.collectionValueMixedCurrency": "Eski noktalar farklı bir para biriminde kaydedildi ve doğrudan karşılaştırılamaz.",
+  "stats.purchaseTrendTitle": "Koleksiyonu kurmak ne kadara mal oldu",
+  "stats.purchaseTrendEmpty": "Koleksiyonunuzun nasıl oluştuğunu görmek için disklerinize satın alma tarihi ve fiyatı ekleyin.",
+  "stats.purchaseTrendTotal": "Toplam harcama",
+  "stats.purchaseTrendDiscs": "Satın alma tarihi olan diskler",
+  "stats.purchaseTrendUnpriced": "{count} tarihli diskin satın alma fiyatı yok; sayıya dahil, tutara değil.",
+  "stats.purchaseTrendUnconvertible": "{count} satın alma fiyatının para birimi kayıtlı değil ve dönüştürülemiyor."
 }

@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "ウォッチリストの取得",
   "profile.perm.mcp.tool.get_watch_history": "視聴履歴の取得",
   "profile.perm.mcp.tool.get_groups": "グループの取得",
-  "profile.connectionLastSeenFrom": "最後の使用元"
+  "profile.connectionLastSeenFrom": "最後の使用元",
+  "stats.collectionValueTitle": "コレクション価値の推移",
+  "stats.collectionValueEmpty": "履歴はまだ記録されていません。今後は毎日スナップショットを取得します。",
+  "stats.collectionValueOnePoint": "記録を開始しました。履歴が1日分を超えるとグラフが表示されます。",
+  "stats.collectionValueCurrent": "現在",
+  "stats.collectionValueChange": "変化",
+  "stats.collectionValueDiscs": "評価額のあるディスク",
+  "stats.collectionValueUnpriced": "{count} 枚のディスクには推定価値がなく、集計に含まれません。",
+  "stats.collectionValueUnconvertible": "{count} 枚のディスクは通貨が記録されていない価値を持つため、換算できません。",
+  "stats.collectionValueMixedCurrency": "古いデータポイントは別の通貨で記録されているため、直接は比較できません。",
+  "stats.purchaseTrendTitle": "コレクションの構築にかかった費用",
+  "stats.purchaseTrendEmpty": "購入日と購入価格をディスクに追加すると、コレクションの成り立ちが表示されます。",
+  "stats.purchaseTrendTotal": "支出合計",
+  "stats.purchaseTrendDiscs": "購入日のあるディスク",
+  "stats.purchaseTrendUnpriced": "{count} 枚の日付付きディスクには購入価格がなく、枚数には含まれますが金額には含まれません。",
+  "stats.purchaseTrendUnconvertible": "{count} 件の購入価格は通貨が記録されておらず、換算できません。"
 }

@@ -237,6 +237,9 @@ try:
     from .next_preferences import mobile_feature_capabilities
     from .next_preferences import normalized_app_preference_key
     from .next_preferences import price_display_context
+    from .next_collection_value import collection_value_trend
+    from .next_collection_value import preferred_snapshot_currency
+    from .next_collection_value import purchase_trend
     from .next_preferences import register_next_preferences_routes
     from .next_preferences import set_app_user_preferences
     from .next_preferences import validate_app_preference
@@ -467,6 +470,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_preferences import register_next_preferences_routes
     from next_preferences import set_app_user_preferences
     from next_preferences import validate_app_preference
+    from next_collection_value import collection_value_trend
+    from next_collection_value import preferred_snapshot_currency
+    from next_collection_value import purchase_trend
     from next_notifications import NOTIFICATION_PREF_DEFAULTS
     from next_notifications import create_user_notification
     from next_notifications import notification_counts
@@ -27042,10 +27048,25 @@ def register_routes(flask_app: Flask) -> None:
                 movies.sort(key=lambda item: (str(item.get("title") or "").lower(), str(item.get("year") or "")))
                 wishlist_price_trend["movies"] = movies
 
+            # Both of these are scoped to what the user *owns*, not to what they
+            # may look at. A value chart answers "what is mine worth", and on a
+            # multi-user instance that is a different set from the one the
+            # counters above use — see next_collection_value's module docstring.
+            snapshot_currency = preferred_snapshot_currency(conn, user_id)
+            collection_value = collection_value_trend(conn, user_id)
+            purchase_history = purchase_trend(
+                conn,
+                user_id,
+                currency=snapshot_currency,
+                rates=dict(price_display_exchange_rates().get("exchangeRates") or {}),
+            )
+
             return response(
                 {
                     "status": "ok",
                     "totalMovies": total,
+                    "collectionValueTrend": collection_value,
+                    "purchaseTrend": purchase_history,
                     "byFormat": by_format,
                     "byDecade": by_decade,
                     "byGenre": by_genre,

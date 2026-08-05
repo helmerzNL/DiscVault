@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Brati seznam za ogled",
   "profile.perm.mcp.tool.get_watch_history": "Brati zgodovino ogledov",
   "profile.perm.mcp.tool.get_groups": "Brati skupine",
-  "profile.connectionLastSeenFrom": "Nazadnje uporabljeno z"
+  "profile.connectionLastSeenFrom": "Nazadnje uporabljeno z",
+  "stats.collectionValueTitle": "Vrednost zbirke skozi čas",
+  "stats.collectionValueEmpty": "Zgodovina še ni zabeležena. Od zdaj naprej se dnevno naredi posnetek.",
+  "stats.collectionValueOnePoint": "Beleženje se je začelo. Graf se prikaže, ko bo zgodovine za več kot en dan.",
+  "stats.collectionValueCurrent": "Zdaj",
+  "stats.collectionValueChange": "Sprememba",
+  "stats.collectionValueDiscs": "Ovrednoteni diski",
+  "stats.collectionValueUnpriced": "{count} diskov nima ocenjene vrednosti in se ne šteje.",
+  "stats.collectionValueUnconvertible": "{count} diskov ima vrednost brez zabeležene valute in jih ni mogoče pretvoriti.",
+  "stats.collectionValueMixedCurrency": "Starejše točke so bile zabeležene v drugi valuti in niso neposredno primerljive.",
+  "stats.purchaseTrendTitle": "Koliko je stala izgradnja zbirke",
+  "stats.purchaseTrendEmpty": "Diskom dodajte datume in cene nakupa, da vidite, kako je zbirka nastajala.",
+  "stats.purchaseTrendTotal": "Skupaj porabljeno",
+  "stats.purchaseTrendDiscs": "Diski z datumom nakupa",
+  "stats.purchaseTrendUnpriced": "{count} datiranih diskov nima nakupne cene in se šteje v število, ne v znesek.",
+  "stats.purchaseTrendUnconvertible": "{count} nakupnih cen nima zabeležene valute in jih ni mogoče pretvoriti."
 }

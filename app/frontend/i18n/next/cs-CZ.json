@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Číst seznam ke zhlédnutí",
   "profile.perm.mcp.tool.get_watch_history": "Číst historii sledování",
   "profile.perm.mcp.tool.get_groups": "Číst skupiny",
-  "profile.connectionLastSeenFrom": "Naposledy použito z"
+  "profile.connectionLastSeenFrom": "Naposledy použito z",
+  "stats.collectionValueTitle": "Hodnota sbírky v čase",
+  "stats.collectionValueEmpty": "Zatím nebyla zaznamenána žádná historie. Od nynějška se denně pořizuje snímek.",
+  "stats.collectionValueOnePoint": "Zaznamenávání začalo. Graf se objeví, jakmile bude historie delší než jeden den.",
+  "stats.collectionValueCurrent": "Nyní",
+  "stats.collectionValueChange": "Změna",
+  "stats.collectionValueDiscs": "Oceněné disky",
+  "stats.collectionValueUnpriced": "{count} disků nemá odhadovanou hodnotu a nepočítá se.",
+  "stats.collectionValueUnconvertible": "{count} disků má hodnotu bez zaznamenané měny a nelze je převést.",
+  "stats.collectionValueMixedCurrency": "Starší body byly zaznamenány v jiné měně a nejsou přímo srovnatelné.",
+  "stats.purchaseTrendTitle": "Kolik stálo vybudování sbírky",
+  "stats.purchaseTrendEmpty": "Doplňte u disků data a ceny nákupu, abyste viděli, jak sbírka vznikala.",
+  "stats.purchaseTrendTotal": "Celkem utraceno",
+  "stats.purchaseTrendDiscs": "Disky s datem nákupu",
+  "stats.purchaseTrendUnpriced": "{count} datovaných disků nemá nákupní cenu a počítá se do počtu, ne do částky.",
+  "stats.purchaseTrendUnconvertible": "{count} nákupních cen nemá zaznamenanou měnu a nelze je převést."
 }

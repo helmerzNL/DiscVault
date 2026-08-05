@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Lasīt skatīšanās sarakstu",
   "profile.perm.mcp.tool.get_watch_history": "Lasīt skatīšanās vēsturi",
   "profile.perm.mcp.tool.get_groups": "Lasīt grupas",
-  "profile.connectionLastSeenFrom": "Pēdējoreiz lietots no"
+  "profile.connectionLastSeenFrom": "Pēdējoreiz lietots no",
+  "stats.collectionValueTitle": "Kolekcijas vērtība laika gaitā",
+  "stats.collectionValueEmpty": "Vēsture vēl nav reģistrēta. No šī brīža katru dienu tiek veikts momentuzņēmums.",
+  "stats.collectionValueOnePoint": "Reģistrēšana ir sākusies. Diagramma parādīsies, kad būs vairāk nekā vienas dienas vēsture.",
+  "stats.collectionValueCurrent": "Tagad",
+  "stats.collectionValueChange": "Izmaiņas",
+  "stats.collectionValueDiscs": "Novērtētie diski",
+  "stats.collectionValueUnpriced": "{count} diskiem nav aplēstās vērtības, un tie netiek ieskaitīti.",
+  "stats.collectionValueUnconvertible": "{count} diskiem ir vērtība bez reģistrētas valūtas, un tos nevar konvertēt.",
+  "stats.collectionValueMixedCurrency": "Vecākie punkti reģistrēti citā valūtā un nav tieši salīdzināmi.",
+  "stats.purchaseTrendTitle": "Cik maksāja kolekcijas izveide",
+  "stats.purchaseTrendEmpty": "Pievieno diskiem iegādes datumus un cenas, lai redzētu, kā veidojās tava kolekcija.",
+  "stats.purchaseTrendTotal": "Kopā iztērēts",
+  "stats.purchaseTrendDiscs": "Diski ar iegādes datumu",
+  "stats.purchaseTrendUnpriced": "{count} datētiem diskiem nav iegādes cenas; tie tiek skaitīti skaitā, bet ne summā.",
+  "stats.purchaseTrendUnconvertible": "{count} iegādes cenām nav reģistrētas valūtas, un tās nevar konvertēt."
 }

@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Lugeda vaatamisnimekirja",
   "profile.perm.mcp.tool.get_watch_history": "Lugeda vaatamisajalugu",
   "profile.perm.mcp.tool.get_groups": "Lugeda gruppe",
-  "profile.connectionLastSeenFrom": "Viimati kasutatud aadressilt"
+  "profile.connectionLastSeenFrom": "Viimati kasutatud aadressilt",
+  "stats.collectionValueTitle": "Kogu väärtus ajas",
+  "stats.collectionValueEmpty": "Ajalugu pole veel salvestatud. Edaspidi tehakse iga päev hetktõmmis.",
+  "stats.collectionValueOnePoint": "Salvestamine on alanud. Graafik ilmub, kui ajalugu on rohkem kui üks päev.",
+  "stats.collectionValueCurrent": "Praegu",
+  "stats.collectionValueChange": "Muutus",
+  "stats.collectionValueDiscs": "Hinnatud plaadid",
+  "stats.collectionValueUnpriced": "{count} plaadil pole hinnangulist väärtust ja neid ei arvestata.",
+  "stats.collectionValueUnconvertible": "{count} plaadil on väärtus ilma salvestatud valuutata ja neid ei saa teisendada.",
+  "stats.collectionValueMixedCurrency": "Vanemad punktid salvestati teises valuutas ega ole otseselt võrreldavad.",
+  "stats.purchaseTrendTitle": "Kui palju kogu kokkupanek maksis",
+  "stats.purchaseTrendEmpty": "Lisa plaatidele ostukuupäevad ja hinnad, et näha, kuidas kogu on kujunenud.",
+  "stats.purchaseTrendTotal": "Kokku kulutatud",
+  "stats.purchaseTrendDiscs": "Ostukuupäevaga plaadid",
+  "stats.purchaseTrendUnpriced": "{count} kuupäevaga plaadil pole ostuhinda; need lähevad arvesse koguses, mitte summas.",
+  "stats.purchaseTrendUnconvertible": "{count} ostuhinnal pole salvestatud valuutat ja neid ei saa teisendada."
 }

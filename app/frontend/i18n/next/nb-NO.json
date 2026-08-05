@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Lese ønskelisten",
   "profile.perm.mcp.tool.get_watch_history": "Lese visningsloggen",
   "profile.perm.mcp.tool.get_groups": "Lese grupper",
-  "profile.connectionLastSeenFrom": "Sist brukt fra"
+  "profile.connectionLastSeenFrom": "Sist brukt fra",
+  "stats.collectionValueTitle": "Samlingens verdi over tid",
+  "stats.collectionValueEmpty": "Ingen historikk er registrert ennå. Fra nå av tas et øyeblikksbilde daglig.",
+  "stats.collectionValueOnePoint": "Registreringen har startet. Diagrammet vises når det finnes mer enn én dag med historikk.",
+  "stats.collectionValueCurrent": "Nå",
+  "stats.collectionValueChange": "Endring",
+  "stats.collectionValueDiscs": "Vurderte plater",
+  "stats.collectionValueUnpriced": "{count} plater har ingen estimert verdi og telles ikke med.",
+  "stats.collectionValueUnconvertible": "{count} plater har en verdi uten registrert valuta og kan ikke konverteres.",
+  "stats.collectionValueMixedCurrency": "Eldre punkter ble registrert i en annen valuta og er ikke direkte sammenlignbare.",
+  "stats.purchaseTrendTitle": "Hva samlingen kostet å bygge",
+  "stats.purchaseTrendEmpty": "Legg til kjøpsdatoer og priser på platene dine for å se hvordan samlingen ble bygd opp.",
+  "stats.purchaseTrendTotal": "Totalt brukt",
+  "stats.purchaseTrendDiscs": "Plater med kjøpsdato",
+  "stats.purchaseTrendUnpriced": "{count} daterte plater har ingen kjøpspris og telles i antallet, men ikke i summen.",
+  "stats.purchaseTrendUnconvertible": "{count} kjøpspriser har ingen registrert valuta og kan ikke konverteres."
 }

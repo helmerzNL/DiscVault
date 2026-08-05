@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Odczyt listy do obejrzenia",
   "profile.perm.mcp.tool.get_watch_history": "Odczyt historii oglądania",
   "profile.perm.mcp.tool.get_groups": "Odczyt grup",
-  "profile.connectionLastSeenFrom": "Ostatnio użyte z"
+  "profile.connectionLastSeenFrom": "Ostatnio użyte z",
+  "stats.collectionValueTitle": "Wartość kolekcji w czasie",
+  "stats.collectionValueEmpty": "Nie zarejestrowano jeszcze historii. Od teraz codziennie tworzona jest migawka.",
+  "stats.collectionValueOnePoint": "Rejestrowanie się rozpoczęło. Wykres pojawi się, gdy będzie więcej niż jeden dzień historii.",
+  "stats.collectionValueCurrent": "Obecnie",
+  "stats.collectionValueChange": "Zmiana",
+  "stats.collectionValueDiscs": "Wycenione płyty",
+  "stats.collectionValueUnpriced": "{count} płyt nie ma szacowanej wartości i nie jest liczonych.",
+  "stats.collectionValueUnconvertible": "{count} płyt ma wartość bez zapisanej waluty i nie można ich przeliczyć.",
+  "stats.collectionValueMixedCurrency": "Starsze punkty zapisano w innej walucie i nie są bezpośrednio porównywalne.",
+  "stats.purchaseTrendTitle": "Ile kosztowało zbudowanie kolekcji",
+  "stats.purchaseTrendEmpty": "Dodaj daty i ceny zakupu do swoich płyt, aby zobaczyć, jak powstawała kolekcja.",
+  "stats.purchaseTrendTotal": "Łącznie wydano",
+  "stats.purchaseTrendDiscs": "Płyty z datą zakupu",
+  "stats.purchaseTrendUnpriced": "{count} płyt z datą nie ma ceny zakupu — liczą się do liczby, ale nie do sumy.",
+  "stats.purchaseTrendUnconvertible": "{count} cen zakupu nie ma zapisanej waluty i nie można ich przeliczyć."
 }

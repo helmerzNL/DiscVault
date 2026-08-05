@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Четене на списъка за гледане",
   "profile.perm.mcp.tool.get_watch_history": "Четене на историята на гледане",
   "profile.perm.mcp.tool.get_groups": "Четене на групи",
-  "profile.connectionLastSeenFrom": "Последно използвано от"
+  "profile.connectionLastSeenFrom": "Последно използвано от",
+  "stats.collectionValueTitle": "Стойност на колекцията във времето",
+  "stats.collectionValueEmpty": "Все още няма записана история. Отсега нататък се прави ежедневна снимка.",
+  "stats.collectionValueOnePoint": "Записването започна. Графиката се появява, когато има повече от един ден история.",
+  "stats.collectionValueCurrent": "Сега",
+  "stats.collectionValueChange": "Промяна",
+  "stats.collectionValueDiscs": "Оценени дискове",
+  "stats.collectionValueUnpriced": "{count} диска нямат прогнозна стойност и не се броят.",
+  "stats.collectionValueUnconvertible": "{count} диска имат стойност без записана валута и не могат да бъдат конвертирани.",
+  "stats.collectionValueMixedCurrency": "По-старите точки са записани в друга валута и не са пряко сравними.",
+  "stats.purchaseTrendTitle": "Колко струваше изграждането на колекцията",
+  "stats.purchaseTrendEmpty": "Добавете дати и цени на покупка към дисковете, за да видите как е изградена колекцията ви.",
+  "stats.purchaseTrendTotal": "Общо похарчено",
+  "stats.purchaseTrendDiscs": "Дискове с дата на покупка",
+  "stats.purchaseTrendUnpriced": "{count} диска с дата нямат покупна цена и се броят в количеството, но не в сумата.",
+  "stats.purchaseTrendUnconvertible": "{count} покупни цени нямат записана валута и не могат да бъдат конвертирани."
 }

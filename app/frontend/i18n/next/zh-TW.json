@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "讀取待看清單",
   "profile.perm.mcp.tool.get_watch_history": "讀取觀看紀錄",
   "profile.perm.mcp.tool.get_groups": "讀取群組",
-  "profile.connectionLastSeenFrom": "上次使用來源"
+  "profile.connectionLastSeenFrom": "上次使用來源",
+  "stats.collectionValueTitle": "收藏價值隨時間變化",
+  "stats.collectionValueEmpty": "尚未記錄任何歷史。從現在起每天產生一次快照。",
+  "stats.collectionValueOnePoint": "已開始記錄。當歷史超過一天時，圖表就會出現。",
+  "stats.collectionValueCurrent": "目前",
+  "stats.collectionValueChange": "變化",
+  "stats.collectionValueDiscs": "已估值的光碟",
+  "stats.collectionValueUnpriced": "{count} 張光碟沒有估計價值，未計入統計。",
+  "stats.collectionValueUnconvertible": "{count} 張光碟的價值沒有記錄幣別，無法換算。",
+  "stats.collectionValueMixedCurrency": "較早的資料點使用不同幣別記錄，無法直接比較。",
+  "stats.purchaseTrendTitle": "建立收藏的花費",
+  "stats.purchaseTrendEmpty": "為光碟填寫購買日期與價格，即可看到收藏是如何累積起來的。",
+  "stats.purchaseTrendTotal": "總支出",
+  "stats.purchaseTrendDiscs": "有購買日期的光碟",
+  "stats.purchaseTrendUnpriced": "{count} 張有日期的光碟沒有購買價格，計入數量但不計入金額。",
+  "stats.purchaseTrendUnconvertible": "{count} 個購買價格沒有記錄幣別，無法換算。"
 }

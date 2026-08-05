@@ -2658,5 +2658,20 @@
   "profile.perm.mcp.tool.get_watchlist": "Read the watchlist",
   "profile.perm.mcp.tool.get_watch_history": "Read the watch history",
   "profile.perm.mcp.tool.get_groups": "Read groups",
-  "profile.connectionLastSeenFrom": "Last used from"
+  "profile.connectionLastSeenFrom": "Last used from",
+  "stats.collectionValueTitle": "Collection value over time",
+  "stats.collectionValueEmpty": "No history has been recorded yet. A snapshot is taken daily from now on.",
+  "stats.collectionValueOnePoint": "Recording has started. The chart appears once there is more than one day of history.",
+  "stats.collectionValueCurrent": "Current",
+  "stats.collectionValueChange": "Change",
+  "stats.collectionValueDiscs": "Discs valued",
+  "stats.collectionValueUnpriced": "{count} discs have no estimated value and are not counted.",
+  "stats.collectionValueUnconvertible": "{count} discs have a value with no recorded currency and cannot be converted.",
+  "stats.collectionValueMixedCurrency": "Older points were recorded in a different currency and are not directly comparable.",
+  "stats.purchaseTrendTitle": "What the collection cost to build",
+  "stats.purchaseTrendEmpty": "Add purchase dates and prices to your discs to see how your collection was built.",
+  "stats.purchaseTrendTotal": "Total spent",
+  "stats.purchaseTrendDiscs": "Discs with a purchase date",
+  "stats.purchaseTrendUnpriced": "{count} dated discs have no purchase price and add to the count but not the total.",
+  "stats.purchaseTrendUnconvertible": "{count} purchase prices have no recorded currency and cannot be converted."
 }
