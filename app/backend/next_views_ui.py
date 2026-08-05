@@ -17273,6 +17273,7 @@ def ui_preview_html(
     let profileLegacy = {};
     let profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
     let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
+    let profileApiShowRevoked = false;
     let profileApiAudit = {loaded: false, loading: false, events: [], tokenId: "all", category: "all", search: "", diagnostics: null, error: "", lastUrl: ""};
     let activeProfileTab = localStorage.getItem("dv_next_profile_tab") || "account";
     let activeProfileApiTab = localStorage.getItem("dv_next_profile_api_tab") || "general";
@@ -40746,7 +40747,7 @@ def ui_preview_html(
             <strong>${escapeHtml(String(allowed.length))}</strong>
           </div>
           <div class="profile-api-summary-item">
-            <span>${escapeHtml(tNext("profile.accessTokens", "Access tokens"))}</span>
+            <span>${escapeHtml(tNext("profile.accessConnections", "Connections"))}</span>
             <strong>${escapeHtml(String(tokens.length))}</strong>
           </div>
           <div class="profile-api-summary-item action">
@@ -40785,25 +40786,41 @@ def ui_preview_html(
       }
       if (tokenList) {
         const tokens = access.tokens || [];
-        tokenList.innerHTML = tokens.length ? tokens.map((token) => {
+        const revokedToggle = access.revokedCount
+          ? `<div class="profile-api-token-toggle"><button type="button" class="secondary-button compact-button" data-profile-api-revoked-toggle="1">${escapeHtml(
+              access.includesRevoked
+                ? tNext("profile.hideRevokedConnections", "Hide revoked connections")
+                : tNext("profile.showRevokedConnections", "Show revoked connections")
+            )} (${escapeHtml(String(access.revokedCount))})</button></div>`
+          : "";
+        const cards = tokens.length ? tokens.map((token) => {
           const revoked = !!token.revokedAt;
           const permissionKeys = token.permissionKeys || [];
+          // One card is one connection. A device that predates the device-id
+          // contract can still sit behind several tokens, so name the card after
+          // the device and say how many sessions it stands for.
+          const title = token.displayName || token.deviceLabel || token.deviceModel || token.name || tNext("profile.apiTokenFallbackName", "API token");
+          const model = token.deviceModel && token.deviceModel !== title ? token.deviceModel : "";
+          const sessions = Number(token.sessionCount || 1);
           return `
             <article class="profile-passkey profile-api-token-card ${revoked ? "disabled" : ""}">
               <div class="profile-passkey-head">
-                <strong>${escapeHtml(token.name || "API token")}</strong>
+                <strong>${escapeHtml(title)}</strong>
+                ${sessions > 1 ? `<span class="tag">${escapeHtml(tNext("profile.connectionSessions", "{count} sessions").replace("{count}", String(sessions)))}</span>` : ""}
                 <span class="tag ${revoked ? "" : "good"}">${escapeHtml(revoked ? tNext("profile.revoked", "Revoked") : tNext("profile.active", "Active"))}</span>
-              </article>
+              </div>
               <div class="profile-passkey-meta">
+                ${model ? `${escapeHtml(tNext("profile.connectionModel", "Device"))}: ${escapeHtml(model)}<br>` : ""}
                 ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(token.createdAt))}
                 &middot;
                 ${escapeHtml(tNext("profile.lastUsed", "Last used"))}: ${escapeHtml(shortDateTime(token.lastUsedAt))}
               </div>
               <div class="admin-member-cloud">${permissionKeys.slice(0, 12).map((permission) => `<span class="tag">${escapeHtml(permission)}</span>`).join("")}</div>
-              ${!revoked ? `<div class="profile-passkey-actions"><button type="button" class="secondary-button danger" data-profile-api-token-revoke="${escapeHtml(token.id)}">${escapeHtml(tNext("profile.revokeToken", "Revoke token"))}</button></div>` : ""}
-            </div>
+              ${!revoked ? `<div class="profile-passkey-actions"><button type="button" class="secondary-button danger" data-profile-api-token-revoke="${escapeHtml(token.id)}" data-profile-api-token-sessions="${escapeHtml(String(sessions))}">${escapeHtml(tNext("profile.revokeToken", "Revoke token"))}</button></div>` : ""}
+            </article>
           `;
         }).join("") : `<div class="preview-empty">${escapeHtml(tNext("profile.noAccessTokens", "No access tokens yet."))}</div>`;
+        tokenList.innerHTML = cards + revokedToggle;
       }
       renderProfileApiAuditFilters();
       renderProfileApiAudit();
@@ -41017,14 +41034,40 @@ def ui_preview_html(
         if (button) button.disabled = false;
       }
     }
-    async function revokeProfileApiToken(tokenId) {
+    async function loadProfileApiAccess() {
+      const query = profileApiShowRevoked ? "?includeRevoked=1" : "";
+      const payload = await authApiJson(`/api/next/profile/api-tokens${query}`);
+      profileApiAccess = payload.apiAccess || profileApiAccess;
+      renderProfileApiAccess();
+    }
+    async function toggleProfileApiRevoked() {
+      profileApiShowRevoked = !profileApiShowRevoked;
+      try {
+        await loadProfileApiAccess();
+      } catch (error) {
+        profileApiShowRevoked = !profileApiShowRevoked;
+        setProfileApiMessage(error.message || String(error), "bad");
+      }
+    }
+    async function revokeProfileApiToken(tokenId, sessionCount) {
       if (!tokenId) return;
-      if (!window.confirm(tNext("profile.revokeTokenConfirm", "Revoke this access token?"))) return;
+      const sessions = Number(sessionCount || 1);
+      // Revoking a connection takes every session behind it, so say how many.
+      const confirmMessage = sessions > 1
+        ? tNext("profile.revokeConnectionConfirm", "Revoke this connection? {count} sessions will be signed out.").replace("{count}", String(sessions))
+        : tNext("profile.revokeTokenConfirm", "Revoke this access token?");
+      if (!window.confirm(confirmMessage)) return;
       setProfileApiMessage(tNext("profile.revokingToken", "Revoking token..."));
       try {
         const payload = await authApiJson(`/api/next/profile/api-tokens/${encodeURIComponent(tokenId)}`, {method: "DELETE"});
         profileApiAccess = payload.apiAccess || profileApiAccess;
-        renderProfileApiAccess();
+        if (profileApiShowRevoked) {
+          // The mutation response never carries revoked entries; refetch so the
+          // list keeps showing what the user asked to see.
+          await loadProfileApiAccess();
+        } else {
+          renderProfileApiAccess();
+        }
         if (activeProfileApiTab === "activity") loadProfileApiAuditEvents(true);
         setProfileApiMessage(tNext("profile.tokenRevoked", "Access token revoked."), "good");
       } catch (error) {
@@ -41893,7 +41936,14 @@ def ui_preview_html(
       });
       document.getElementById("profileApiTokenList")?.addEventListener("click", (event) => {
         const revokeButton = event.target.closest("[data-profile-api-token-revoke]");
-        if (revokeButton) revokeProfileApiToken(revokeButton.dataset.profileApiTokenRevoke);
+        if (revokeButton) {
+          revokeProfileApiToken(
+            revokeButton.dataset.profileApiTokenRevoke,
+            revokeButton.dataset.profileApiTokenSessions
+          );
+          return;
+        }
+        if (event.target.closest("[data-profile-api-revoked-toggle]")) toggleProfileApiRevoked();
       });
       document.querySelectorAll("[data-profile-api-tab]").forEach((button) => {
         button.addEventListener("click", () => setProfileApiTab(button.dataset.profileApiTab));

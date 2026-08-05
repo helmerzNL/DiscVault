@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "아이덴티티 (Debug)",
   "movieDetail.debugIdentityCopy": "진단 정보 복사",
   "movieDetail.debugIdentityHint": "필드 이름은 공유 동기화 계약에서 가져오며 의도적으로 영어로 유지됩니다. 디버그 모드가 켜져 있을 때만 표시됩니다.",
-  "movieDetail.debugSourcesNotWritten": "선택됨, 저장 안 됨"
+  "movieDetail.debugSourcesNotWritten": "선택됨, 저장 안 됨",
+  "profile.accessConnections": "연결",
+  "profile.connectionSessions": "세션 {count}개",
+  "profile.showRevokedConnections": "취소된 연결 표시",
+  "profile.hideRevokedConnections": "취소된 연결 숨기기",
+  "profile.revokeConnectionConfirm": "이 연결을 취소할까요? 세션 {count}개가 로그아웃됩니다.",
+  "profile.apiTokenFallbackName": "액세스 토큰",
+  "profile.connectionModel": "기기"
 }

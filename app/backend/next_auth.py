@@ -163,6 +163,22 @@ MOBILE_AUTH_TOKEN_PERMISSIONS = (
     "watchlist.manage",
 )
 
+# Native clients that may mint their own API token by logging in. The mobile
+# PKCE exchange and the deep-link scheme are shared between platforms, so the
+# client has to say which one it is: without this the Android app's tokens end
+# up under the iOS label, indistinguishable from real iOS ones.
+NATIVE_CLIENT_KINDS = ("ios", "android")
+NATIVE_CLIENT_TOKEN_NAMES = {
+    "ios": "DiscVault iOS",
+    "android": "DiscVault Android",
+}
+# The mobile PKCE exchange carries no client kind today, and the shipped apps
+# predate the field. Treating an absent kind as iOS keeps their tokens named the
+# way they already are instead of relabelling every existing connection.
+NATIVE_CLIENT_DEFAULT_KIND = "ios"
+# Matches the API-token name limit enforced in next_profile.create_next_profile_api_token.
+NATIVE_DEVICE_FIELD_MAX_LENGTH = 120
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -180,6 +196,59 @@ def _json_ready(value: Any) -> Any:
     if isinstance(value, UUID):
         return str(value)
     return value
+
+
+def next_normalize_client_kind(value: Any) -> str:
+    """Return a known native client kind, or ``""`` for anything else."""
+
+    kind = str(value or "").strip().lower()
+    return kind if kind in NATIVE_CLIENT_KINDS else ""
+
+
+def next_native_client_kind_or_default(value: Any) -> str:
+    return next_normalize_client_kind(value) or NATIVE_CLIENT_DEFAULT_KIND
+
+
+def next_native_token_name(client_kind: str) -> str:
+    return NATIVE_CLIENT_TOKEN_NAMES[next_native_client_kind_or_default(client_kind)]
+
+
+def next_normalize_device_field(value: Any) -> str | None:
+    """Trim a client-supplied device string, or ``None`` when it carries nothing."""
+
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return text[:NATIVE_DEVICE_FIELD_MAX_LENGTH]
+
+
+def next_native_device_context(body: Any, *, user_agent: Any = None) -> dict[str, Any]:
+    """Read the device identity a native client sends when it pairs.
+
+    ``deviceId`` is the stable per-install identifier that lets a re-login rotate
+    the existing token instead of adding a row. ``deviceLabel`` is the name the
+    user gave the device and ``deviceModel`` the hardware it runs on — both are
+    display-only, and the app is responsible for turning a raw model identifier
+    (``iPhone16,2``) into something readable, so a new device never needs a
+    server release to show up properly.
+    """
+
+    values = body if isinstance(body, dict) else {}
+    return {
+        "clientKind": next_normalize_client_kind(
+            values.get("client_kind") or values.get("clientKind")
+        ),
+        "deviceId": next_normalize_device_field(
+            values.get("device_id") or values.get("deviceId")
+        ),
+        "deviceLabel": next_normalize_device_field(
+            values.get("device_label") or values.get("deviceLabel")
+        ),
+        "deviceModel": next_normalize_device_field(
+            values.get("device_model") or values.get("deviceModel")
+        ),
+        "userAgent": next_normalize_device_field(user_agent),
+    }
 
 
 def _b64url_encode(data: bytes) -> str:
@@ -1112,9 +1181,16 @@ def register_next_auth_routes(
             "state": flow.get("state"),
         }
 
-    def issue_mobile_api_token(conn, *, user_id: UUID | str, username: str) -> dict[str, Any]:
+    def issue_mobile_api_token(
+        conn,
+        *,
+        user_id: UUID | str,
+        username: str,
+        device: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         if not table_exists(conn, "api_access_tokens"):
             raise next_api_error("API token table is not available", 503)
+        device = device or {}
         known_permissions = permission_keys_catalog(conn)
         role = primary_role(conn, user_id)
         user_permission_keys = set(user_permissions(conn, user_id))
@@ -1130,10 +1206,42 @@ def register_next_auth_routes(
             permission_keys.insert(0, "api.read")
         scopes = sorted({key.split(".", 1)[0] for key in permission_keys})
         token_value = next_create_api_token_value()
-        token_name = "DiscVault iOS"
+        client_kind = next_native_client_kind_or_default(device.get("clientKind"))
+        token_name = next_native_token_name(client_kind)
+        device_id = device.get("deviceId")
+        # A native client has no refresh endpoint, so it logs in again whenever
+        # its token stops working. When the client identifies its install, the
+        # secret is rotated on the row that device already owns instead of a new
+        # row being added — that is what made the API & MCP page grow an entry
+        # per login. Without a device id there is nothing to recognise the
+        # client by, so the insert stands and the profile payload collapses the
+        # rows for display: deduping on the name alone would treat an iPhone and
+        # an iPad as one device and log one of them out.
+        #
+        # The upsert is one statement on purpose. Two logins racing on a device's
+        # first token would both miss a separate SELECT and then collide on
+        # idx_api_access_tokens_user_device_active.
+        conflict_clause = (
+            """
+            ON CONFLICT (user_id, device_id) WHERE device_id IS NOT NULL AND revoked_at IS NULL
+            DO UPDATE SET
+                token_hash=EXCLUDED.token_hash,
+                name=EXCLUDED.name,
+                scopes=EXCLUDED.scopes,
+                permission_keys=EXCLUDED.permission_keys,
+                client_kind=EXCLUDED.client_kind,
+                device_label=COALESCE(EXCLUDED.device_label, api_access_tokens.device_label),
+                device_model=COALESCE(EXCLUDED.device_model, api_access_tokens.device_model),
+                user_agent=COALESCE(EXCLUDED.user_agent, api_access_tokens.user_agent),
+                expires_at=NULL,
+                last_used_at=now()
+            """
+            if device_id
+            else ""
+        )
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 INSERT INTO api_access_tokens (
                     user_id,
                     name,
@@ -1141,9 +1249,15 @@ def register_next_auth_routes(
                     scopes,
                     permission_keys,
                     created_by,
-                    expires_at
+                    expires_at,
+                    client_kind,
+                    device_id,
+                    device_label,
+                    device_model,
+                    user_agent
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, NULL)
+                VALUES (%s, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s)
+                {conflict_clause}
                 RETURNING id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
                 """,
                 (
@@ -1153,6 +1267,11 @@ def register_next_auth_routes(
                     Jsonb(scopes),
                     Jsonb(permission_keys),
                     user_id,
+                    client_kind,
+                    device_id,
+                    device.get("deviceLabel"),
+                    device.get("deviceModel"),
+                    device.get("userAgent"),
                 ),
             )
             token_row = cur.fetchone()
@@ -1164,9 +1283,11 @@ def register_next_auth_routes(
         user_id: UUID | str,
         username: str,
         expires_at: datetime | None,
+        device: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if not table_exists(conn, "api_access_tokens"):
             raise next_api_error("API token table is not available", 503)
+        device = device or {}
         known_permissions = permission_keys_catalog(conn)
         permission_keys = [
             key for key in REVIEW_LOGIN_TOKEN_PERMISSIONS if key in known_permissions
@@ -1184,9 +1305,14 @@ def register_next_auth_routes(
                     scopes,
                     permission_keys,
                     created_by,
-                    expires_at
+                    expires_at,
+                    client_kind,
+                    device_id,
+                    device_label,
+                    device_model,
+                    user_agent
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
                 """,
                 (
@@ -1197,6 +1323,11 @@ def register_next_auth_routes(
                     Jsonb(permission_keys),
                     user_id,
                     expires_at,
+                    next_native_client_kind_or_default(device.get("clientKind")),
+                    device.get("deviceId"),
+                    device.get("deviceLabel"),
+                    device.get("deviceModel"),
+                    device.get("userAgent"),
                 ),
             )
             token_row = cur.fetchone()
@@ -1208,8 +1339,11 @@ def register_next_auth_routes(
         user_id: UUID | str,
         username: str,
         display_name: str | None,
+        device: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        token_payload = issue_mobile_api_token(conn, user_id=user_id, username=username)
+        token_payload = issue_mobile_api_token(
+            conn, user_id=user_id, username=username, device=device
+        )
         role = primary_role(conn, user_id)
         effective_permission_keys = sorted(user_permissions(conn, user_id))
         token = token_payload["token"]
@@ -1447,10 +1581,11 @@ def register_next_auth_routes(
         mobile_flow = _parse_uuid(mobile_flow_raw)
         if mobile_flow_raw and not mobile_flow:
             raise next_api_error("mobile_flow is invalid", 400)
-        client_kind = str(body.get("client_kind") or body.get("clientKind") or "").strip().lower()
+        device = next_native_device_context(body, user_agent=request.headers.get("User-Agent"))
         return {
             "mobileFlow": str(mobile_flow) if mobile_flow else None,
-            "clientKind": client_kind if client_kind == "ios" else "",
+            "clientKind": device["clientKind"],
+            "device": device,
         }
 
     def legacy_complete_login(
@@ -1503,13 +1638,14 @@ def register_next_auth_routes(
                     "state": mobile_code.get("state"),
                 }
             )
-        if context.get("clientKind") == "ios":
+        if context.get("clientKind") in NATIVE_CLIENT_KINDS:
             return response(
                 native_login_response(
                     conn,
                     user_id=user["id"],
                     username=user["username"],
                     display_name=user.get("display_name"),
+                    device=context.get("device"),
                 )
             )
         token = _create_token(str(user["id"]), user["username"])
@@ -3488,6 +3624,10 @@ def register_next_auth_routes(
                     payload={
                         "mobileFlow": flow["payload"].get("mobileFlow"),
                         "clientKind": flow["payload"].get("clientKind"),
+                        # Carried across the recovery acknowledgement so the token
+                        # minted at the end of a multi-step login still knows which
+                        # device it belongs to.
+                        "device": flow["payload"].get("device"),
                         "profileEnrollment": flow["payload"].get("profileEnrollment") is True,
                     },
                     seconds=RECOVERY_ACK_FLOW_TTL_SECONDS,
@@ -3711,6 +3851,10 @@ def register_next_auth_routes(
                     user_id=reviewer["id"],
                     username=reviewer["username"],
                     expires_at=expires_at,
+                    device=next_native_device_context(
+                        request.get_json(silent=True) or {},
+                        user_agent=request.headers.get("User-Agent"),
+                    ),
                 )
                 reviewer_role = primary_role(conn, reviewer["id"])
                 effective_permission_keys = sorted(user_permissions(conn, reviewer["id"]))
@@ -3804,7 +3948,9 @@ def register_next_auth_routes(
     def login_options():
         require_passkey_access()
         body = request.get_json(silent=True) or {}
-        client_kind = str(body.get("client_kind") or body.get("clientKind") or "").strip().lower()
+        client_kind = next_normalize_client_kind(
+            body.get("client_kind") or body.get("clientKind")
+        )
         username_raw = body.get("username")
         username = str(username_raw or "").strip()
         if username:
@@ -3828,7 +3974,7 @@ def register_next_auth_routes(
                         (username,),
                     )
                     credentials = cur.fetchall()
-                elif client_kind == "ios":
+                elif client_kind in NATIVE_CLIENT_KINDS:
                     credentials = []
                 else:
                     cur.execute("SELECT id FROM passkey_credentials ORDER BY created_at")
@@ -3873,7 +4019,8 @@ def register_next_auth_routes(
         require_passkey_access()
         body = request.get_json(silent=True) or {}
         credential = body.get("credential") or {}
-        client_kind = str(body.get("client_kind") or body.get("clientKind") or "").strip().lower()
+        device = next_native_device_context(body, user_agent=request.headers.get("User-Agent"))
+        client_kind = device["clientKind"]
         mobile_flow_raw = body.get("mobile_flow") or body.get("mobileFlow")
         mobile_flow = _parse_uuid(mobile_flow_raw)
         if mobile_flow_raw and not mobile_flow:
@@ -3976,12 +4123,13 @@ def register_next_auth_routes(
                             "state": mobile_code.get("state"),
                         }
                     )
-                if client_kind == "ios":
+                if client_kind in NATIVE_CLIENT_KINDS:
                     payload = native_login_response(
                         conn,
                         user_id=stored["user_id"],
                         username=stored["username"],
                         display_name=stored.get("display_name"),
+                        device=device,
                     )
                     audit_event(
                         conn,
@@ -3994,9 +4142,11 @@ def register_next_auth_routes(
                         },
                         target_type="api_access_token",
                         target_id=payload["api_token"]["id"],
-                        summary=f"Issued native iOS token for {stored['username']}",
+                        summary=f"Issued {next_native_token_name(client_kind)} token for {stored['username']}",
                         metadata={
-                            "clientKind": "ios",
+                            "clientKind": client_kind,
+                            "deviceLabel": device.get("deviceLabel"),
+                            "deviceModel": device.get("deviceModel"),
                             "apiTokenId": payload["api_token"]["id"],
                             "permissionKeys": payload["api_token"]["permission_keys"],
                             "effectivePermissionKeys": payload["effectivePermissionKeys"],
@@ -4010,6 +4160,10 @@ def register_next_auth_routes(
     @route("/api/next/auth/mobile/exchange", "/api/auth/mobile/exchange", methods=["POST"])
     def mobile_auth_exchange():
         body = request.get_json(silent=True) or {}
+        # The deep-link scheme is shared between platforms and this route never
+        # sees the login itself, so the device identity has to come from the
+        # exchange body — otherwise every native client lands under one label.
+        device = next_native_device_context(body, user_agent=request.headers.get("User-Agent"))
         code = str(body.get("code") or "").strip()
         code_verifier = str(body.get("code_verifier") or body.get("codeVerifier") or "").strip()
         if not code:
@@ -4045,7 +4199,12 @@ def register_next_auth_routes(
                     if not secrets.compare_digest(str(row["code_challenge"]), expected_challenge):
                         raise next_api_error("PKCE verification failed", 400)
                     cur.execute("UPDATE mobile_auth_codes SET used_at=now() WHERE id=%s", (row["id"],))
-                    token_payload = issue_mobile_api_token(conn, user_id=row["user_id"], username=row["username"])
+                    token_payload = issue_mobile_api_token(
+                        conn,
+                        user_id=row["user_id"],
+                        username=row["username"],
+                        device=device,
+                    )
                     role = primary_role(conn, row["user_id"])
                     effective_permission_keys = sorted(user_permissions(conn, row["user_id"]))
                 audit_event(
@@ -4062,6 +4221,9 @@ def register_next_auth_routes(
                     summary=f"Exchanged mobile auth code for {row['username']}",
                     metadata={
                         "mobileFlowId": str(row["mobile_flow_id"]),
+                        "clientKind": next_native_client_kind_or_default(device.get("clientKind")),
+                        "deviceLabel": device.get("deviceLabel"),
+                        "deviceModel": device.get("deviceModel"),
                         "apiTokenId": str(token_payload["tokenRow"]["id"]),
                         "permissionKeys": token_payload["permissionKeys"],
                         "tokenPermissionKeys": token_payload["permissionKeys"],

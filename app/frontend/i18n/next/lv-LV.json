@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identitāte (Debug)",
   "movieDetail.debugIdentityCopy": "Kopēt diagnostiku",
   "movieDetail.debugIdentityHint": "Lauku nosaukumi nāk no kopīgā sinhronizācijas līguma un apzināti paliek angļu valodā. Redzams tikai tad, kad ieslēgts atkļūdošanas režīms.",
-  "movieDetail.debugSourcesNotWritten": "atlasīts, bet nav saglabāts"
+  "movieDetail.debugSourcesNotWritten": "atlasīts, bet nav saglabāts",
+  "profile.accessConnections": "Savienojumi",
+  "profile.connectionSessions": "{count} sesijas",
+  "profile.showRevokedConnections": "Rādīt atsauktos savienojumus",
+  "profile.hideRevokedConnections": "Slēpt atsauktos savienojumus",
+  "profile.revokeConnectionConfirm": "Vai atsaukt šo savienojumu? Tiks izrakstītas {count} sesijas.",
+  "profile.apiTokenFallbackName": "Piekļuves tokens",
+  "profile.connectionModel": "Ierīce"
 }

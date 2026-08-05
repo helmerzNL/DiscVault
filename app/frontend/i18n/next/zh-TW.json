@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "識別 (Debug)",
   "movieDetail.debugIdentityCopy": "複製診斷資訊",
   "movieDetail.debugIdentityHint": "欄位名稱來自共用同步合約，刻意保持英文。僅在偵錯模式開啟時顯示。",
-  "movieDetail.debugSourcesNotWritten": "已選擇但未儲存"
+  "movieDetail.debugSourcesNotWritten": "已選擇但未儲存",
+  "profile.accessConnections": "連線",
+  "profile.connectionSessions": "{count} 個工作階段",
+  "profile.showRevokedConnections": "顯示已撤銷的連線",
+  "profile.hideRevokedConnections": "隱藏已撤銷的連線",
+  "profile.revokeConnectionConfirm": "要撤銷此連線嗎？將登出 {count} 個工作階段。",
+  "profile.apiTokenFallbackName": "存取權杖",
+  "profile.connectionModel": "裝置"
 }

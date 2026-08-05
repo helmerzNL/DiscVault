@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identita (Debug)",
   "movieDetail.debugIdentityCopy": "Kopírovat diagnostiku",
   "movieDetail.debugIdentityHint": "Názvy polí pocházejí ze sdíleného synchronizačního kontraktu a záměrně zůstávají v angličtině. Zobrazuje se jen při zapnutém režimu ladění.",
-  "movieDetail.debugSourcesNotWritten": "vybráno, ale neuloženo"
+  "movieDetail.debugSourcesNotWritten": "vybráno, ale neuloženo",
+  "profile.accessConnections": "Připojení",
+  "profile.connectionSessions": "{count} relací",
+  "profile.showRevokedConnections": "Zobrazit zneplatněná připojení",
+  "profile.hideRevokedConnections": "Skrýt zneplatněná připojení",
+  "profile.revokeConnectionConfirm": "Zneplatnit toto připojení? Bude odhlášeno {count} relací.",
+  "profile.apiTokenFallbackName": "Přístupový token",
+  "profile.connectionModel": "Zařízení"
 }
