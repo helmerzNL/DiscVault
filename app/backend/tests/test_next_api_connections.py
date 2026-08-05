@@ -51,6 +51,8 @@ def token_row(**overrides):
         "device_label": None,
         "device_model": None,
         "user_agent": "DiscVault/26.7 (iOS)",
+        "last_seen_ip": None,
+        "last_seen_ip_source": None,
     }
     row.update(overrides)
     return row
@@ -141,6 +143,24 @@ class ApiAccessConnectionGroupingTests(unittest.TestCase):
         )
 
         self.assertEqual(next_api_token.api_access_connection_display_name(entry), "Google Pixel 8")
+
+    def test_the_address_shown_belongs_to_the_most_recent_use(self):
+        # The representative is the newest *created* token, which need not be
+        # the one that was used last.
+        rows = [
+            token_row(id="new", created_at=NOW, last_used_at=NOW - timedelta(days=5), last_seen_ip="1.1.1.1"),
+            token_row(id="old", created_at=NOW - timedelta(days=9), last_used_at=NOW, last_seen_ip="8.8.8.8"),
+        ]
+
+        connection = next_api_token.group_api_access_tokens(rows)[0]
+
+        self.assertEqual(connection["lastSeenIp"], "8.8.8.8")
+        self.assertEqual(connection["lastUsedAt"], NOW)
+
+    def test_a_connection_without_a_recorded_address_keeps_none(self):
+        rows = [token_row(id="only", last_seen_ip=None)]
+
+        self.assertIsNone(next_api_token.group_api_access_tokens(rows)[0]["lastSeenIp"])
 
     def test_a_device_that_sent_neither_falls_back_to_the_token_name(self):
         entry = next_api_token.api_access_token_row(token_row(device_label=None, device_model=None))

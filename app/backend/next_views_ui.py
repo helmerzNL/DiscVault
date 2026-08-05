@@ -40519,8 +40519,48 @@ def ui_preview_html(
       }
       return {key: "other", order: 90, label: tNext("profile.permissionGroupOther", "Other")};
     }
+    function profileApiMcpToolLabels() {
+      return new Map(((profileApiAccess || {}).mcpTools || []).map((tool) => [tool.permission, tool.name]));
+    }
+    // Permission keys are wire identifiers, not something to put in front of a
+    // reader: "collection.add" says nothing about what a token may do. Every
+    // grantable key gets a plain-language name; the key itself stays available
+    // as the tag's tooltip and under the checkbox for anyone who needs it.
+    const PROFILE_API_PERMISSION_LABELS = {
+      "api.read": "Read your collection",
+      "api.write": "Change your collection",
+      "api.tokens.manage": "Manage API tokens",
+      "mcp.use": "Connect through MCP",
+      "mcp.logs.view": "View MCP activity",
+      "collection.view": "View films",
+      "collection.add": "Add films",
+      "collection.add_own": "Add own films",
+      "collection.import": "Import films",
+      "collection.edit_all": "Edit every film",
+      "collection.bulk_edit": "Edit films in bulk",
+      "containers.view": "View box sets and vaults",
+      "containers.create": "Create box sets and vaults",
+      "containers.edit": "Edit box sets and vaults",
+      "groups.view": "View groups",
+      "metadata.search": "Look up film data",
+      "metadata.refresh_one": "Refresh one film",
+      "metadata.refresh_bulk": "Refresh films in bulk",
+      "admin.view_jobs": "View background jobs",
+      "mcp.tool.search_collection": "Search the collection",
+      "mcp.tool.get_collection_stats": "Read collection statistics",
+      "mcp.tool.get_movie_details": "Read film details",
+      "mcp.tool.add_movie": "Add a film",
+      "mcp.tool.delete_movie": "Delete a film",
+      "mcp.tool.lookup_barcode": "Look up a barcode",
+      "mcp.tool.list_all_movies": "List every film",
+      "mcp.tool.get_watchlist": "Read the watchlist",
+      "mcp.tool.get_watch_history": "Read the watch history",
+      "mcp.tool.get_groups": "Read groups"
+    };
     function profileApiPermissionLabel(permission, mcpToolLabels) {
       const value = String(permission || "");
+      const known = PROFILE_API_PERMISSION_LABELS[value];
+      if (known) return tNext("profile.perm." + value, known);
       const toolLabel = mcpToolLabels && mcpToolLabels.get(value);
       if (toolLabel) return String(toolLabel).replaceAll("_", " ");
       if (value.startsWith("mcp.tool.")) return value.slice("mcp.tool.".length).replaceAll("_", " ");
@@ -40557,6 +40597,7 @@ def ui_preview_html(
                 <span>
                   ${escapeHtml(profileApiPermissionLabel(permission, toolLabels))}
                   <small>${escapeHtml(profileApiPermissionDescription(permission))}</small>
+                  <code>${escapeHtml(permission)}</code>
                 </span>
               </label>
             `).join("")}
@@ -40814,8 +40855,9 @@ def ui_preview_html(
                 ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(token.createdAt))}
                 &middot;
                 ${escapeHtml(tNext("profile.lastUsed", "Last used"))}: ${escapeHtml(shortDateTime(token.lastUsedAt))}
+                ${token.lastSeenIp ? `<br>${escapeHtml(tNext("profile.connectionLastSeenFrom", "Last used from"))}: <code>${escapeHtml(token.lastSeenIp)}</code>` : ""}
               </div>
-              <div class="admin-member-cloud">${permissionKeys.slice(0, 12).map((permission) => `<span class="tag">${escapeHtml(permission)}</span>`).join("")}</div>
+              <div class="admin-member-cloud">${permissionKeys.slice(0, 12).map((permission) => `<span class="tag" title="${escapeHtml(permission)}">${escapeHtml(profileApiPermissionLabel(permission, profileApiMcpToolLabels()))}</span>`).join("")}</div>
               ${!revoked ? `<div class="profile-passkey-actions"><button type="button" class="secondary-button danger" data-profile-api-token-revoke="${escapeHtml(token.id)}" data-profile-api-token-sessions="${escapeHtml(String(sessions))}">${escapeHtml(tNext("profile.revokeToken", "Revoke token"))}</button></div>` : ""}
             </article>
           `;
