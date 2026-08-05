@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Четене на списъка за гледане",
   "profile.perm.mcp.tool.get_watch_history": "Четене на историята на гледане",
   "profile.perm.mcp.tool.get_groups": "Четене на групи",
-  "profile.connectionLastSeenFrom": "Последно използвано от"
+  "profile.connectionLastSeenFrom": "Последно използвано от",
+  "stats.collectionValueChartTitle": "Стойност на колекцията във времето",
+  "stats.collectionValueChartEmpty": "Все още няма записана история. Точките се създават, когато колекцията се променя.",
+  "stats.collectionValueChartOnePoint": "Записването започна. Графиката се появява, когато има повече от един ден история.",
+  "stats.collectionValueChartCurrent": "Сега",
+  "stats.collectionValueChartChange": "Промяна",
+  "stats.collectionValueChartPriced": "Артикули с цена"
 }

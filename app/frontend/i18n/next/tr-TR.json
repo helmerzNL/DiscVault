@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "İzleme listesini okuma",
   "profile.perm.mcp.tool.get_watch_history": "İzleme geçmişini okuma",
   "profile.perm.mcp.tool.get_groups": "Grupları okuma",
-  "profile.connectionLastSeenFrom": "Son kullanım yeri"
+  "profile.connectionLastSeenFrom": "Son kullanım yeri",
+  "stats.collectionValueChartTitle": "Koleksiyon değerinin zaman içindeki seyri",
+  "stats.collectionValueChartEmpty": "Henüz geçmiş kaydedilmedi. Koleksiyonunuz değiştikçe noktalar oluşur.",
+  "stats.collectionValueChartOnePoint": "Kayıt başladı. Grafik, bir günden fazla geçmiş oluştuğunda görünür.",
+  "stats.collectionValueChartCurrent": "Şu an",
+  "stats.collectionValueChartChange": "Değişim",
+  "stats.collectionValueChartPriced": "Fiyatlı öğeler"
 }

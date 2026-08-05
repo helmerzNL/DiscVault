@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Odczyt listy do obejrzenia",
   "profile.perm.mcp.tool.get_watch_history": "Odczyt historii oglądania",
   "profile.perm.mcp.tool.get_groups": "Odczyt grup",
-  "profile.connectionLastSeenFrom": "Ostatnio użyte z"
+  "profile.connectionLastSeenFrom": "Ostatnio użyte z",
+  "stats.collectionValueChartTitle": "Wartość kolekcji w czasie",
+  "stats.collectionValueChartEmpty": "Nie zarejestrowano jeszcze historii. Punkty powstają, gdy zmienia się kolekcja.",
+  "stats.collectionValueChartOnePoint": "Rejestrowanie się rozpoczęło. Wykres pojawi się, gdy będzie więcej niż jeden dzień historii.",
+  "stats.collectionValueChartCurrent": "Obecnie",
+  "stats.collectionValueChartChange": "Zmiana",
+  "stats.collectionValueChartPriced": "Pozycje z ceną"
 }

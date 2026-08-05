@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Читати список до перегляду",
   "profile.perm.mcp.tool.get_watch_history": "Читати історію переглядів",
   "profile.perm.mcp.tool.get_groups": "Читати групи",
-  "profile.connectionLastSeenFrom": "Востаннє використано з"
+  "profile.connectionLastSeenFrom": "Востаннє використано з",
+  "stats.collectionValueChartTitle": "Вартість колекції з часом",
+  "stats.collectionValueChartEmpty": "Історію ще не записано. Точки з’являються, коли колекція змінюється.",
+  "stats.collectionValueChartOnePoint": "Запис розпочато. Графік з’явиться, коли історії буде більше ніж один день.",
+  "stats.collectionValueChartCurrent": "Зараз",
+  "stats.collectionValueChartChange": "Зміна",
+  "stats.collectionValueChartPriced": "Позиції з ціною"
 }

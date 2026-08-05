@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Merkliste lesen",
   "profile.perm.mcp.tool.get_watch_history": "Sehverlauf lesen",
   "profile.perm.mcp.tool.get_groups": "Gruppen lesen",
-  "profile.connectionLastSeenFrom": "Zuletzt verwendet von"
+  "profile.connectionLastSeenFrom": "Zuletzt verwendet von",
+  "stats.collectionValueChartTitle": "Sammlungswert im Zeitverlauf",
+  "stats.collectionValueChartEmpty": "Es wurde noch kein Verlauf aufgezeichnet. Punkte entstehen, sobald sich deine Sammlung ändert.",
+  "stats.collectionValueChartOnePoint": "Die Aufzeichnung hat begonnen. Das Diagramm erscheint, sobald mehr als ein Tag Verlauf vorliegt.",
+  "stats.collectionValueChartCurrent": "Aktuell",
+  "stats.collectionValueChartChange": "Veränderung",
+  "stats.collectionValueChartPriced": "Artikel mit Preis"
 }

@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Lukea katselulistan",
   "profile.perm.mcp.tool.get_watch_history": "Lukea katseluhistorian",
   "profile.perm.mcp.tool.get_groups": "Lukea ryhmät",
-  "profile.connectionLastSeenFrom": "Viimeksi käytetty osoitteesta"
+  "profile.connectionLastSeenFrom": "Viimeksi käytetty osoitteesta",
+  "stats.collectionValueChartTitle": "Kokoelman arvo ajan mittaan",
+  "stats.collectionValueChartEmpty": "Historiaa ei ole vielä tallennettu. Pisteet syntyvät, kun kokoelma muuttuu.",
+  "stats.collectionValueChartOnePoint": "Tallennus on alkanut. Kaavio ilmestyy, kun historiaa on yli yhden päivän verran.",
+  "stats.collectionValueChartCurrent": "Nyt",
+  "stats.collectionValueChartChange": "Muutos",
+  "stats.collectionValueChartPriced": "Hinnoitellut kohteet"
 }

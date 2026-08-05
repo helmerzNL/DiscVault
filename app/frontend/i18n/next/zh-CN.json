@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "读取待看清单",
   "profile.perm.mcp.tool.get_watch_history": "读取观看记录",
   "profile.perm.mcp.tool.get_groups": "读取分组",
-  "profile.connectionLastSeenFrom": "上次使用来自"
+  "profile.connectionLastSeenFrom": "上次使用来自",
+  "stats.collectionValueChartTitle": "收藏价值随时间变化",
+  "stats.collectionValueChartEmpty": "尚未记录任何历史。收藏发生变化时会记录数据点。",
+  "stats.collectionValueChartOnePoint": "已开始记录。当历史超过一天时，图表就会出现。",
+  "stats.collectionValueChartCurrent": "当前",
+  "stats.collectionValueChartChange": "变化",
+  "stats.collectionValueChartPriced": "已定价项目"
 }

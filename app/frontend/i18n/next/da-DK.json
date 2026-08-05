@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Læse ønskelisten",
   "profile.perm.mcp.tool.get_watch_history": "Læse seerhistorikken",
   "profile.perm.mcp.tool.get_groups": "Læse grupper",
-  "profile.connectionLastSeenFrom": "Sidst brugt fra"
+  "profile.connectionLastSeenFrom": "Sidst brugt fra",
+  "stats.collectionValueChartTitle": "Samlingens værdi over tid",
+  "stats.collectionValueChartEmpty": "Der er endnu ikke registreret historik. Punkter oprettes, når samlingen ændrer sig.",
+  "stats.collectionValueChartOnePoint": "Registreringen er begyndt. Diagrammet vises, når der er mere end én dags historik.",
+  "stats.collectionValueChartCurrent": "Nu",
+  "stats.collectionValueChartChange": "Ændring",
+  "stats.collectionValueChartPriced": "Poster med pris"
 }

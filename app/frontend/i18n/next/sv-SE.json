@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Läsa bevakningslistan",
   "profile.perm.mcp.tool.get_watch_history": "Läsa visningshistoriken",
   "profile.perm.mcp.tool.get_groups": "Läsa grupper",
-  "profile.connectionLastSeenFrom": "Senast använd från"
+  "profile.connectionLastSeenFrom": "Senast använd från",
+  "stats.collectionValueChartTitle": "Samlingens värde över tid",
+  "stats.collectionValueChartEmpty": "Ingen historik har registrerats ännu. Punkter skapas när samlingen förändras.",
+  "stats.collectionValueChartOnePoint": "Registreringen har börjat. Diagrammet visas när det finns mer än en dags historik.",
+  "stats.collectionValueChartCurrent": "Nu",
+  "stats.collectionValueChartChange": "Förändring",
+  "stats.collectionValueChartPriced": "Poster med pris"
 }

@@ -14054,6 +14054,20 @@ def ui_preview_html(
             <h2 data-next-i18n="stats.byRating">By rating</h2>
             <div class="stats-bars" id="statsByRating"></div>
           </div>
+          <div class="stats-block stats-price-trend" id="statsCollectionValueChartSection">
+            <div class="stats-price-toolbar">
+              <h2 data-next-i18n="stats.collectionValueChartTitle">Collection value over time</h2>
+            </div>
+            <p class="stats-empty hidden" id="statsCollectionValueChartEmpty"></p>
+            <div class="stats-price-chart hidden" id="statsCollectionValueChartWrap">
+              <svg viewBox="0 0 640 220" preserveAspectRatio="none" id="statsCollectionValueChart" aria-hidden="true"></svg>
+              <div class="stats-price-axis">
+                <span id="statsCollectionValueChartRangeStart"></span>
+                <span id="statsCollectionValueChartRangeEnd"></span>
+              </div>
+            </div>
+            <div class="stats-price-summary" id="statsCollectionValueChartSummary"></div>
+          </div>
           <div class="stats-block stats-price-trend hidden" id="statsPriceTrendSection">
             <div class="stats-price-toolbar">
               <h2 data-next-i18n="stats.priceTrendTitle">Wishlist price trend</h2>
@@ -35660,7 +35674,7 @@ def ui_preview_html(
       };
       render();
     }
-    const statsState = {loaded: false, data: null, selectedPriceTrendMovieId: null, showPriceTrendFigures: false};
+    const statsState = {loaded: false, data: null, valueHistory: [], selectedPriceTrendMovieId: null, showPriceTrendFigures: false};
     function statsBarsHtml(rows) {
       const items = (rows || []).filter((row) => (row.count || 0) > 0);
       if (!items.length) {
@@ -35955,6 +35969,99 @@ def ui_preview_html(
         note: notes.join(" - ")
       };
     }
+    // The stored value-over-time series (sync-contract-side: the snapshots that
+    // `collection-value-and-box-set-pricing.md` §3 defines). Read-only: the chart
+    // never recomputes, so a gap is a day on which nothing changed and nobody
+    // opened this view.
+    function renderCollectionValueChart() {
+      const points = statsState.valueHistory || [];
+      const wrap = document.getElementById("statsCollectionValueChartWrap");
+      const emptyNode = document.getElementById("statsCollectionValueChartEmpty");
+      const summaryNode = document.getElementById("statsCollectionValueChartSummary");
+
+      // One point is not a trend. The series starts the day the snapshots
+      // shipped and there is deliberately no backfill, so saying "not yet"
+      // beats drawing a flat line that looks like a measurement.
+      if (points.length < 2) {
+        if (wrap) wrap.classList.add("hidden");
+        if (summaryNode) summaryNode.innerHTML = "";
+        if (emptyNode) {
+          emptyNode.classList.remove("hidden");
+          emptyNode.textContent = points.length === 1
+            ? tNext("stats.collectionValueChartOnePoint", "Recording has started. The chart appears once there is more than one day of history.")
+            : tNext("stats.collectionValueChartEmpty", "No history has been recorded yet. Points are captured as your collection changes.");
+        }
+        return;
+      }
+      if (emptyNode) emptyNode.classList.add("hidden");
+      if (wrap) wrap.classList.remove("hidden");
+
+      const display = preferredPriceCurrency() || String(points[points.length - 1].baseCurrency || "EUR");
+      // Convert for display only. The snapshot keeps its own base currency and
+      // its raw per-currency sums, so re-expressing a point here never rewrites
+      // what was recorded (§3.1).
+      const series = points.map((point) => ({
+        at: String(point.capturedOn || ""),
+        value: convertPriceAmount(Number(point.total || 0), String(point.baseCurrency || "EUR"), display),
+      }));
+
+      const chartNode = document.getElementById("statsCollectionValueChart");
+      const width = 640;
+      const height = 220;
+      const padding = { left: 40, right: 12, top: 10, bottom: 26 };
+      const times = series.map((point, index) => {
+        const parsed = Date.parse(point.at);
+        return Number.isFinite(parsed) ? parsed : index;
+      });
+      const minX = Math.min(...times);
+      const maxX = Math.max(...times) === minX ? minX + 1 : Math.max(...times);
+      const values = series.map((point) => point.value).filter((value) => Number.isFinite(value));
+      // A collection's worth is a magnitude, so the axis starts at zero: a
+      // zoomed baseline turns a 2% drift into a cliff.
+      const minY = Math.min(0, ...values);
+      const maxRaw = Math.max(...values);
+      const maxY = maxRaw === minY ? minY + 1 : maxRaw + Math.max((maxRaw - minY) * 0.1, 0.5);
+      const coords = series.map((point, index) => ({
+        x: padding.left + ((times[index] - minX) / (maxX - minX)) * (width - padding.left - padding.right),
+        y: height - padding.bottom - ((point.value - minY) / Math.max(maxY - minY, 0.0001)) * (height - padding.top - padding.bottom),
+      }));
+      const pathData = coords.map((coord, index) => `${index ? "L" : "M"}${coord.x.toFixed(2)} ${coord.y.toFixed(2)}`).join(" ");
+      const areaData = `${pathData} L${coords[coords.length - 1].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} L${coords[0].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} Z`;
+      const gridLines = [0, 1, 2, 3, 4].map((idx) => {
+        const y = padding.top + ((height - padding.top - padding.bottom) / 4) * idx;
+        return `<line x1="${padding.left}" y1="${y.toFixed(2)}" x2="${width - padding.right}" y2="${y.toFixed(2)}" stroke="var(--line)" stroke-width="1" opacity="0.45" />`;
+      }).join("");
+      // Markers stop helping once a daily series runs for a couple of months.
+      const circles = coords.length <= 40
+        ? coords.map((coord) => `<circle cx="${coord.x.toFixed(2)}" cy="${coord.y.toFixed(2)}" r="2.8" fill="var(--accent)" />`).join("")
+        : "";
+      if (chartNode) {
+        chartNode.innerHTML = `
+          <rect x="0" y="0" width="${width}" height="${height}" fill="transparent"></rect>
+          ${gridLines}
+          <path d="${areaData}" fill="var(--accent)" opacity="0.12"></path>
+          <path d="${pathData}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          ${circles}
+        `;
+      }
+      const startNode = document.getElementById("statsCollectionValueChartRangeStart");
+      const endNode = document.getElementById("statsCollectionValueChartRangeEnd");
+      if (startNode) startNode.textContent = formatAppDate(series[0].at);
+      if (endNode) endNode.textContent = formatAppDate(series[series.length - 1].at);
+
+      const change = series[series.length - 1].value - series[0].value;
+      const latest = points[points.length - 1] || {};
+      const tiles = [
+        { label: tNext("stats.collectionValueChartCurrent", "Current"), value: formatStatsPrice(series[series.length - 1].value, display) },
+        { label: tNext("stats.collectionValueChartChange", "Change"), value: `${change >= 0 ? "+" : ""}${formatStatsPrice(change, display)}` },
+        { label: tNext("stats.collectionValueChartPriced", "Items priced"), value: String(latest.pricedCount || 0) },
+      ];
+      if (summaryNode) {
+        summaryNode.innerHTML = tiles
+          .map((tile) => `<div class="stats-price-summary-item"><span>${escapeHtml(tile.label)}</span><strong>${escapeHtml(tile.value)}</strong></div>`)
+          .join("");
+      }
+    }
     function renderStatisticsView() {
       const data = statsState.data;
       const empty = document.getElementById("statsEmptyMessage");
@@ -35994,6 +36101,7 @@ def ui_preview_html(
       const byRating = document.getElementById("statsByRating");
       if (byRating) byRating.innerHTML = statsBarsHtml(data.byRating);
       renderStatsPriceTrend(data);
+      renderCollectionValueChart();
       if (empty) empty.classList.add("hidden");
     }
     async function loadStatisticsView(force = false) {
@@ -36010,6 +36118,15 @@ def ui_preview_html(
       try {
         const payload = await authApiJson("/api/next/stats/personal");
         statsState.data = payload;
+        // Separate endpoint, and deliberately not fatal: the snapshot series is
+        // a nice-to-have on this page, and losing it must not blank the counters
+        // the user came for.
+        try {
+          const history = await authApiJson("/api/next/stats/collection-value/history?scope=total");
+          statsState.valueHistory = Array.isArray(history && history.points) ? history.points : [];
+        } catch (historyError) {
+          statsState.valueHistory = [];
+        }
         statsState.loaded = true;
         renderStatisticsView();
       } catch (error) {

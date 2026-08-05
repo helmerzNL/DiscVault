@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "讀取待看清單",
   "profile.perm.mcp.tool.get_watch_history": "讀取觀看紀錄",
   "profile.perm.mcp.tool.get_groups": "讀取群組",
-  "profile.connectionLastSeenFrom": "上次使用來源"
+  "profile.connectionLastSeenFrom": "上次使用來源",
+  "stats.collectionValueChartTitle": "收藏價值隨時間變化",
+  "stats.collectionValueChartEmpty": "尚未記錄任何歷史。收藏發生變化時會記錄資料點。",
+  "stats.collectionValueChartOnePoint": "已開始記錄。當歷史超過一天時，圖表就會出現。",
+  "stats.collectionValueChartCurrent": "目前",
+  "stats.collectionValueChartChange": "變化",
+  "stats.collectionValueChartPriced": "已定價項目"
 }
