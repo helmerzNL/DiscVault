@@ -122,10 +122,15 @@ def _resolver_lookup(payload, context):
     belt-and-braces, matching `_bucket_lookup()`.
 
     Returns {"result": {...}|None, "attempted": bool, "outcome":
-    "hit"|"miss"|"ambiguous"|"error"|None, "errorCode": str|None} - the same
-    shape `_bucket_lookup()` returns, and for the same reason: a caller needs
-    to tell "never asked" apart from "asked and got nothing useable" apart
-    from "asked and it failed", not just see a bare miss."""
+    "hit"|"candidates"|"miss"|"ambiguous"|"error"|None, "errorCode": str|None} -
+    the same shape `_bucket_lookup()` returns, and for the same reason: a caller
+    needs to tell "never asked" apart from "asked and got nothing useable" apart
+    from "asked and it failed", not just see a bare miss.
+
+    `candidates` is kept apart from `ambiguous` on purpose. A list of pressings
+    of one identified film is an answer a person can settle; `ambiguous` means
+    the sources did not agree on which film this even is. Collapsing them would
+    record a resolvable choice as a failed identification."""
     callback = _callback(context, "movievaultV2ReleaseDetails")
     barcode = str((payload or {}).get("barcode") or "").strip()
     if callback is None or not _barcode_hash(barcode):
@@ -141,7 +146,22 @@ def _resolver_lookup(payload, context):
     status = (result or {}).get("status") if isinstance(result, dict) else None
     if status in ("canonical_hit", "external_hit"):
         return {"result": result, "attempted": True, "outcome": "hit", "errorCode": None}
-    if status in ("ambiguous", "candidates"):
+    if status == "candidates":
+        # Not a hit: no single release was confirmed, so nothing here may be
+        # merged onto a movie. It is also not a miss - the film was identified
+        # and its pressings are on offer. The list is carried through so the
+        # caller can hand it to the user instead of reporting "not found".
+        return {
+            "result": None,
+            "attempted": True,
+            "outcome": "candidates",
+            "errorCode": None,
+            "candidates": {
+                "film": (result or {}).get("film") or {},
+                "releases": (result or {}).get("releases") or [],
+            },
+        }
+    if status == "ambiguous":
         return {"result": None, "attempted": True, "outcome": "ambiguous", "errorCode": None}
     if status == "failed":
         return {
@@ -155,11 +175,14 @@ def _resolver_lookup(payload, context):
 
 
 def _resolver_fallback_audit(resolver):
-    return {
+    audit = {
         "attempted": resolver["attempted"],
         "outcome": resolver["outcome"],
         "errorCode": resolver["errorCode"],
     }
+    if resolver.get("candidates"):
+        audit["candidateCount"] = len(resolver["candidates"].get("releases") or [])
+    return audit
 
 
 def _resolved_details(payload, context):
@@ -356,6 +379,11 @@ def search_barcode(payload, context=None):
             result["bucketFallback"] = _bucket_fallback_audit(bucket)
         if resolver is not None:
             result["resolverFallback"] = _resolver_fallback_audit(resolver)
+            if resolver.get("candidates"):
+                # A miss for the merge pipeline - nothing was confirmed for this
+                # barcode - but not a dead end for the user: these are the
+                # pressings a source found under the film's title.
+                result["releaseCandidates"] = resolver["candidates"]
         return result
     # Fall back to the resolver's poster and/or technical specs when the
     # synced record doesn't carry them yet (not synced, or a v4-sync-disabled
