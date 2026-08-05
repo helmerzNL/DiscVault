@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Číst seznam ke zhlédnutí",
   "profile.perm.mcp.tool.get_watch_history": "Číst historii sledování",
   "profile.perm.mcp.tool.get_groups": "Číst skupiny",
-  "profile.connectionLastSeenFrom": "Naposledy použito z"
+  "profile.connectionLastSeenFrom": "Naposledy použito z",
+  "stats.collectionValueChartTitle": "Hodnota sbírky v čase",
+  "stats.collectionValueChartEmpty": "Zatím nebyla zaznamenána žádná historie. Body vznikají, když se sbírka změní.",
+  "stats.collectionValueChartOnePoint": "Zaznamenávání začalo. Graf se objeví, jakmile bude historie delší než jeden den.",
+  "stats.collectionValueChartCurrent": "Nyní",
+  "stats.collectionValueChartChange": "Změna",
+  "stats.collectionValueChartPriced": "Položky s cenou"
 }

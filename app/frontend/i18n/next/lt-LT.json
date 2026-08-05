@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Skaityti stebėjimo sąrašą",
   "profile.perm.mcp.tool.get_watch_history": "Skaityti žiūrėjimo istoriją",
   "profile.perm.mcp.tool.get_groups": "Skaityti grupes",
-  "profile.connectionLastSeenFrom": "Paskutinį kartą naudota iš"
+  "profile.connectionLastSeenFrom": "Paskutinį kartą naudota iš",
+  "stats.collectionValueChartTitle": "Kolekcijos vertė laikui bėgant",
+  "stats.collectionValueChartEmpty": "Istorija dar neįrašyta. Taškai atsiranda, kai kolekcija pasikeičia.",
+  "stats.collectionValueChartOnePoint": "Įrašymas prasidėjo. Diagrama pasirodys, kai istorijos bus daugiau nei viena diena.",
+  "stats.collectionValueChartCurrent": "Dabar",
+  "stats.collectionValueChartChange": "Pokytis",
+  "stats.collectionValueChartPriced": "Elementai su kaina"
 }

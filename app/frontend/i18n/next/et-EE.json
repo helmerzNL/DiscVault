@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Lugeda vaatamisnimekirja",
   "profile.perm.mcp.tool.get_watch_history": "Lugeda vaatamisajalugu",
   "profile.perm.mcp.tool.get_groups": "Lugeda gruppe",
-  "profile.connectionLastSeenFrom": "Viimati kasutatud aadressilt"
+  "profile.connectionLastSeenFrom": "Viimati kasutatud aadressilt",
+  "stats.collectionValueChartTitle": "Kogu väärtus ajas",
+  "stats.collectionValueChartEmpty": "Ajalugu pole veel salvestatud. Punktid tekivad siis, kui kogu muutub.",
+  "stats.collectionValueChartOnePoint": "Salvestamine on alanud. Graafik ilmub, kui ajalugu on rohkem kui üks päev.",
+  "stats.collectionValueChartCurrent": "Praegu",
+  "stats.collectionValueChartChange": "Muutus",
+  "stats.collectionValueChartPriced": "Hinnaga üksused"
 }

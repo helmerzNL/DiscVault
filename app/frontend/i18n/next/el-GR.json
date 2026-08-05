@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Ανάγνωση λίστας παρακολούθησης",
   "profile.perm.mcp.tool.get_watch_history": "Ανάγνωση ιστορικού",
   "profile.perm.mcp.tool.get_groups": "Ανάγνωση ομάδων",
-  "profile.connectionLastSeenFrom": "Τελευταία χρήση από"
+  "profile.connectionLastSeenFrom": "Τελευταία χρήση από",
+  "stats.collectionValueChartTitle": "Αξία της συλλογής στον χρόνο",
+  "stats.collectionValueChartEmpty": "Δεν έχει καταγραφεί ακόμη ιστορικό. Τα σημεία δημιουργούνται καθώς αλλάζει η συλλογή σας.",
+  "stats.collectionValueChartOnePoint": "Η καταγραφή ξεκίνησε. Το γράφημα εμφανίζεται μόλις υπάρχει ιστορικό πάνω από μία ημέρα.",
+  "stats.collectionValueChartCurrent": "Τώρα",
+  "stats.collectionValueChartChange": "Μεταβολή",
+  "stats.collectionValueChartPriced": "Αντικείμενα με τιμή"
 }

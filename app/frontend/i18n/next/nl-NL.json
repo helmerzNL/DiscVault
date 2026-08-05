@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "De kijklijst lezen",
   "profile.perm.mcp.tool.get_watch_history": "De kijkgeschiedenis lezen",
   "profile.perm.mcp.tool.get_groups": "Groepen lezen",
-  "profile.connectionLastSeenFrom": "Laatst gebruikt vanaf"
+  "profile.connectionLastSeenFrom": "Laatst gebruikt vanaf",
+  "stats.collectionValueChartTitle": "Waarde van je collectie over tijd",
+  "stats.collectionValueChartEmpty": "Er is nog geen historie vastgelegd. Punten worden vastgelegd zodra je collectie verandert.",
+  "stats.collectionValueChartOnePoint": "Het vastleggen is begonnen. De grafiek verschijnt zodra er meer dan één dag historie is.",
+  "stats.collectionValueChartCurrent": "Nu",
+  "stats.collectionValueChartChange": "Verschil",
+  "stats.collectionValueChartPriced": "Items met prijs"
 }

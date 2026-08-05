@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Citirea listei de vizionat",
   "profile.perm.mcp.tool.get_watch_history": "Citirea istoricului",
   "profile.perm.mcp.tool.get_groups": "Citirea grupurilor",
-  "profile.connectionLastSeenFrom": "Ultima utilizare de la"
+  "profile.connectionLastSeenFrom": "Ultima utilizare de la",
+  "stats.collectionValueChartTitle": "Valoarea colecției în timp",
+  "stats.collectionValueChartEmpty": "Încă nu a fost înregistrat niciun istoric. Punctele apar pe măsură ce colecția se schimbă.",
+  "stats.collectionValueChartOnePoint": "Înregistrarea a început. Graficul apare când există mai mult de o zi de istoric.",
+  "stats.collectionValueChartCurrent": "Acum",
+  "stats.collectionValueChartChange": "Modificare",
+  "stats.collectionValueChartPriced": "Articole cu preț"
 }

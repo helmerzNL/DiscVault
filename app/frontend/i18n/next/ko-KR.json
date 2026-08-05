@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "보관함 읽기",
   "profile.perm.mcp.tool.get_watch_history": "시청 기록 읽기",
   "profile.perm.mcp.tool.get_groups": "그룹 읽기",
-  "profile.connectionLastSeenFrom": "마지막 사용 위치"
+  "profile.connectionLastSeenFrom": "마지막 사용 위치",
+  "stats.collectionValueChartTitle": "시간에 따른 컬렉션 가치",
+  "stats.collectionValueChartEmpty": "아직 기록된 이력이 없습니다. 컬렉션이 바뀔 때마다 지점이 기록됩니다.",
+  "stats.collectionValueChartOnePoint": "기록이 시작되었습니다. 하루 이상의 이력이 쌓이면 그래프가 표시됩니다.",
+  "stats.collectionValueChartCurrent": "현재",
+  "stats.collectionValueChartChange": "변동",
+  "stats.collectionValueChartPriced": "가격이 있는 항목"
 }

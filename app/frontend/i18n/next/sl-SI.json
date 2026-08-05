@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Brati seznam za ogled",
   "profile.perm.mcp.tool.get_watch_history": "Brati zgodovino ogledov",
   "profile.perm.mcp.tool.get_groups": "Brati skupine",
-  "profile.connectionLastSeenFrom": "Nazadnje uporabljeno z"
+  "profile.connectionLastSeenFrom": "Nazadnje uporabljeno z",
+  "stats.collectionValueChartTitle": "Vrednost zbirke skozi čas",
+  "stats.collectionValueChartEmpty": "Zgodovina še ni zabeležena. Točke nastanejo, ko se zbirka spremeni.",
+  "stats.collectionValueChartOnePoint": "Beleženje se je začelo. Graf se prikaže, ko bo zgodovine za več kot en dan.",
+  "stats.collectionValueChartCurrent": "Zdaj",
+  "stats.collectionValueChartChange": "Sprememba",
+  "stats.collectionValueChartPriced": "Elementi s ceno"
 }

@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Lire la liste de visionnage",
   "profile.perm.mcp.tool.get_watch_history": "Lire l'historique",
   "profile.perm.mcp.tool.get_groups": "Lire les groupes",
-  "profile.connectionLastSeenFrom": "Dernière utilisation depuis"
+  "profile.connectionLastSeenFrom": "Dernière utilisation depuis",
+  "stats.collectionValueChartTitle": "Valeur de la collection dans le temps",
+  "stats.collectionValueChartEmpty": "Aucun historique n'a encore été enregistré. Les points sont créés à mesure que votre collection change.",
+  "stats.collectionValueChartOnePoint": "L'enregistrement a commencé. Le graphique apparaîtra dès qu'il y aura plus d'un jour d'historique.",
+  "stats.collectionValueChartCurrent": "Actuel",
+  "stats.collectionValueChartChange": "Évolution",
+  "stats.collectionValueChartPriced": "Articles valorisés"
 }

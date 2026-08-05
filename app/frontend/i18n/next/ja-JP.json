@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "ウォッチリストの取得",
   "profile.perm.mcp.tool.get_watch_history": "視聴履歴の取得",
   "profile.perm.mcp.tool.get_groups": "グループの取得",
-  "profile.connectionLastSeenFrom": "最後の使用元"
+  "profile.connectionLastSeenFrom": "最後の使用元",
+  "stats.collectionValueChartTitle": "コレクション価値の推移",
+  "stats.collectionValueChartEmpty": "履歴はまだ記録されていません。コレクションが変わるたびにポイントが記録されます。",
+  "stats.collectionValueChartOnePoint": "記録を開始しました。履歴が1日分を超えるとグラフが表示されます。",
+  "stats.collectionValueChartCurrent": "現在",
+  "stats.collectionValueChartChange": "変化",
+  "stats.collectionValueChartPriced": "価格のある項目"
 }

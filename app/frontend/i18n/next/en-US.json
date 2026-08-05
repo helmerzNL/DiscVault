@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Read the watchlist",
   "profile.perm.mcp.tool.get_watch_history": "Read the watch history",
   "profile.perm.mcp.tool.get_groups": "Read groups",
-  "profile.connectionLastSeenFrom": "Last used from"
+  "profile.connectionLastSeenFrom": "Last used from",
+  "stats.collectionValueChartTitle": "Collection value over time",
+  "stats.collectionValueChartEmpty": "No history has been recorded yet. Points are captured as your collection changes.",
+  "stats.collectionValueChartOnePoint": "Recording has started. The chart appears once there is more than one day of history.",
+  "stats.collectionValueChartCurrent": "Current",
+  "stats.collectionValueChartChange": "Change",
+  "stats.collectionValueChartPriced": "Items priced"
 }

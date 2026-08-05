@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Megnézendők listájának olvasása",
   "profile.perm.mcp.tool.get_watch_history": "Megtekintési előzmények olvasása",
   "profile.perm.mcp.tool.get_groups": "Csoportok olvasása",
-  "profile.connectionLastSeenFrom": "Utoljára használva innen"
+  "profile.connectionLastSeenFrom": "Utoljára használva innen",
+  "stats.collectionValueChartTitle": "A gyűjtemény értéke az idő során",
+  "stats.collectionValueChartEmpty": "Még nincs rögzített előzmény. A pontok akkor keletkeznek, amikor a gyűjtemény változik.",
+  "stats.collectionValueChartOnePoint": "A rögzítés elindult. A grafikon akkor jelenik meg, ha egy napnál több előzmény van.",
+  "stats.collectionValueChartCurrent": "Jelenleg",
+  "stats.collectionValueChartChange": "Változás",
+  "stats.collectionValueChartPriced": "Árazott tételek"
 }

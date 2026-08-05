@@ -2666,5 +2666,11 @@
   "profile.perm.mcp.tool.get_watchlist": "Lasīt skatīšanās sarakstu",
   "profile.perm.mcp.tool.get_watch_history": "Lasīt skatīšanās vēsturi",
   "profile.perm.mcp.tool.get_groups": "Lasīt grupas",
-  "profile.connectionLastSeenFrom": "Pēdējoreiz lietots no"
+  "profile.connectionLastSeenFrom": "Pēdējoreiz lietots no",
+  "stats.collectionValueChartTitle": "Kolekcijas vērtība laika gaitā",
+  "stats.collectionValueChartEmpty": "Vēsture vēl nav reģistrēta. Punkti rodas, kad kolekcija mainās.",
+  "stats.collectionValueChartOnePoint": "Reģistrēšana ir sākusies. Diagramma parādīsies, kad būs vairāk nekā vienas dienas vēsture.",
+  "stats.collectionValueChartCurrent": "Tagad",
+  "stats.collectionValueChartChange": "Izmaiņas",
+  "stats.collectionValueChartPriced": "Vienumi ar cenu"
 }
