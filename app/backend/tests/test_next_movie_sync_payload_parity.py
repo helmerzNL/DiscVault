@@ -137,7 +137,11 @@ class MovieSyncPayloadParityPostgresTests(unittest.TestCase):
         row on a payload that named one field.
         """
         fields = next_app.movie_payload_fields(body)
-        columns = [column for column in fields if column not in ("metadata", "technical_edits")]
+        columns = [
+            column
+            for column in fields
+            if column not in ("metadata", "location_assignment", "technical_edits")
+        ]
         with conn.cursor() as cur:
             if columns:
                 assignments = ", ".join(f"{column}=COALESCE(%s, {column})" for column in columns)
