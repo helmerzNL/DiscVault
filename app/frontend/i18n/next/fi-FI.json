@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identiteetti (Debug)",
   "movieDetail.debugIdentityCopy": "Kopioi diagnostiikka",
   "movieDetail.debugIdentityHint": "Kenttien nimet tulevat jaetusta synkronointisopimuksesta ja pysyvät tarkoituksella englanniksi. Näkyy vain, kun virheenkorjaustila on käytössä.",
-  "movieDetail.debugSourcesNotWritten": "valittu mutta ei tallennettu"
+  "movieDetail.debugSourcesNotWritten": "valittu mutta ei tallennettu",
+  "profile.accessConnections": "Yhteydet",
+  "profile.connectionSessions": "{count} istuntoa",
+  "profile.showRevokedConnections": "Näytä perutut yhteydet",
+  "profile.hideRevokedConnections": "Piilota perutut yhteydet",
+  "profile.revokeConnectionConfirm": "Perutaanko tämä yhteys? {count} istuntoa kirjataan ulos.",
+  "profile.apiTokenFallbackName": "Käyttötunnus",
+  "profile.connectionModel": "Laite"
 }

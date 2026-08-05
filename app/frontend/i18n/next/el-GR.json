@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Ταυτότητα (Debug)",
   "movieDetail.debugIdentityCopy": "Αντιγραφή διαγνωστικών",
   "movieDetail.debugIdentityHint": "Τα ονόματα πεδίων προέρχονται από το κοινό συμβόλαιο συγχρονισμού και παραμένουν σκόπιμα στα αγγλικά. Εμφανίζεται μόνο όσο η λειτουργία Debug είναι ενεργή.",
-  "movieDetail.debugSourcesNotWritten": "επιλέχθηκε αλλά δεν αποθηκεύτηκε"
+  "movieDetail.debugSourcesNotWritten": "επιλέχθηκε αλλά δεν αποθηκεύτηκε",
+  "profile.accessConnections": "Συνδέσεις",
+  "profile.connectionSessions": "{count} συνεδρίες",
+  "profile.showRevokedConnections": "Εμφάνιση ανακλημένων συνδέσεων",
+  "profile.hideRevokedConnections": "Απόκρυψη ανακλημένων συνδέσεων",
+  "profile.revokeConnectionConfirm": "Να ανακληθεί αυτή η σύνδεση; Θα αποσυνδεθούν {count} συνεδρίες.",
+  "profile.apiTokenFallbackName": "Διακριτικό πρόσβασης",
+  "profile.connectionModel": "Συσκευή"
 }

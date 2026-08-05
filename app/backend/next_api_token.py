@@ -85,7 +85,98 @@ def api_access_token_row(row: dict[str, Any]) -> dict[str, Any]:
         "lastUsedAt": row.get("last_used_at"),
         "expiresAt": row.get("expires_at"),
         "revokedAt": row.get("revoked_at"),
+        "clientKind": row.get("client_kind") or row.get("clientKind"),
+        "deviceId": row.get("device_id") or row.get("deviceId"),
+        "deviceLabel": row.get("device_label") or row.get("deviceLabel"),
+        "deviceModel": row.get("device_model") or row.get("deviceModel"),
     }
+
+
+def api_access_connection_key(row: dict[str, Any]) -> tuple:
+    """The identity of the *connection* a token belongs to.
+
+    A device that sends a ``device_id`` owns one row and keeps it, so the id is
+    the whole key. Tokens minted before that field existed carry nothing to tell
+    them apart, so they are keyed on what the client happened to leave behind —
+    enough to collapse the repeated logins of one app install for display,
+    without pretending the server can prove two rows are the same device.
+    """
+
+    entry = api_access_token_row(row)
+    device_id = entry.get("deviceId")
+    if device_id:
+        return ("device", device_id)
+    return (
+        "legacy",
+        entry.get("name") or "",
+        entry.get("clientKind") or "",
+        row.get("user_agent") or row.get("userAgent") or "",
+    )
+
+
+def _max_timestamp(left: Any, right: Any) -> Any:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return max(left, right)
+
+
+def _min_timestamp(left: Any, right: Any) -> Any:
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return min(left, right)
+
+
+def api_access_connection_display_name(entry: dict[str, Any]) -> str:
+    """What to call this connection: the user's own name for the device wins."""
+
+    return (
+        entry.get("deviceLabel")
+        or entry.get("deviceModel")
+        or entry.get("name")
+        or "DiscVault app"
+    )
+
+
+def group_api_access_tokens(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse token rows into one entry per connection.
+
+    Native clients have no refresh endpoint, so before device ids existed every
+    login added a row. Grouping keeps the page readable for the tokens already
+    in the database; new logins from a device-aware client reuse their row and
+    never reach here with more than one.
+
+    ``rows`` is expected in the query's order (active first, newest first); the
+    grouping preserves it, so the first row of a group is its representative.
+    """
+
+    grouped: dict[tuple, dict[str, Any]] = {}
+    for row in rows:
+        entry = api_access_token_row(row)
+        key = api_access_connection_key(row)
+        existing = grouped.get(key)
+        if existing is None:
+            entry["tokenIds"] = [entry["id"]]
+            entry["sessionCount"] = 1
+            entry["displayName"] = api_access_connection_display_name(entry)
+            grouped[key] = entry
+            continue
+        existing["tokenIds"].append(entry["id"])
+        existing["sessionCount"] += 1
+        existing["createdAt"] = _min_timestamp(existing.get("createdAt"), entry.get("createdAt"))
+        existing["lastUsedAt"] = _max_timestamp(existing.get("lastUsedAt"), entry.get("lastUsedAt"))
+        # A connection only counts as revoked once nothing in it still works;
+        # the representative is an active row whenever the group has one.
+        if existing.get("revokedAt") is not None:
+            existing["revokedAt"] = (
+                _max_timestamp(existing["revokedAt"], entry.get("revokedAt"))
+                if entry.get("revokedAt") is not None
+                else None
+            )
+    return list(grouped.values())
 
 
 def api_token_permission_is_grantable(permission_key: str) -> bool:
@@ -95,7 +186,9 @@ def api_token_permission_is_grantable(permission_key: str) -> bool:
     )
 
 
-def profile_api_access_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
+def profile_api_access_payload(
+    conn, actor: dict[str, Any], *, include_revoked: bool = False
+) -> dict[str, Any]:
     next_app = _next_app()
     permissions = set(actor.get("permissions") or [])
     if actor.get("role") == "owner":
@@ -105,22 +198,32 @@ def profile_api_access_payload(conn, actor: dict[str, Any]) -> dict[str, Any]:
         for key in ("api.tokens.manage", "api.read", "api.write", "mcp.use")
     ) or bool({key for key in permissions if key.startswith("mcp.tool.")})
     tokens: list[dict[str, Any]] = []
+    revoked_count = 0
     if next_app.table_exists(conn, "api_access_tokens") and actor.get("id"):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
+                SELECT id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at,
+                       client_kind, device_id, device_label, device_model, user_agent
                 FROM api_access_tokens
                 WHERE user_id=%s
                 ORDER BY revoked_at NULLS FIRST, created_at DESC
                 """,
                 (actor["id"],),
             )
-            tokens = [api_access_token_row(row) for row in cur.fetchall()]
+            connections = group_api_access_tokens(cur.fetchall())
+            revoked_count = sum(1 for entry in connections if entry.get("revokedAt") is not None)
+            tokens = (
+                connections
+                if include_revoked
+                else [entry for entry in connections if entry.get("revokedAt") is None]
+            )
     return {
         "available": next_app.table_exists(conn, "api_access_tokens"),
         "manageable": manageable,
         "tokens": tokens,
+        "includesRevoked": include_revoked,
+        "revokedCount": revoked_count,
         "allowedPermissions": sorted(
             key for key in permissions
             if api_token_permission_is_grantable(key)

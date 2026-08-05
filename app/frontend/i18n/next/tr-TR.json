@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Kimlik (Debug)",
   "movieDetail.debugIdentityCopy": "Tanılamayı kopyala",
   "movieDetail.debugIdentityHint": "Alan adları ortak eşitleme sözleşmesinden gelir ve bilerek İngilizce kalır. Yalnızca Hata Ayıklama Modu açıkken görünür.",
-  "movieDetail.debugSourcesNotWritten": "seçildi ama kaydedilmedi"
+  "movieDetail.debugSourcesNotWritten": "seçildi ama kaydedilmedi",
+  "profile.accessConnections": "Bağlantılar",
+  "profile.connectionSessions": "{count} oturum",
+  "profile.showRevokedConnections": "İptal edilen bağlantıları göster",
+  "profile.hideRevokedConnections": "İptal edilen bağlantıları gizle",
+  "profile.revokeConnectionConfirm": "Bu bağlantı iptal edilsin mi? {count} oturum kapatılacak.",
+  "profile.apiTokenFallbackName": "Erişim belirteci",
+  "profile.connectionModel": "Cihaz"
 }

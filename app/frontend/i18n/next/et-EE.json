@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identiteet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopeeri diagnostika",
   "movieDetail.debugIdentityHint": "Väljade nimed pärinevad ühisest sünkroonimislepingust ja jäävad meelega inglise keelde. Nähtav ainult siis, kui silumisrežiim on sisse lülitatud.",
-  "movieDetail.debugSourcesNotWritten": "valitud, kuid salvestamata"
+  "movieDetail.debugSourcesNotWritten": "valitud, kuid salvestamata",
+  "profile.accessConnections": "Ühendused",
+  "profile.connectionSessions": "{count} seanssi",
+  "profile.showRevokedConnections": "Näita tühistatud ühendusi",
+  "profile.hideRevokedConnections": "Peida tühistatud ühendused",
+  "profile.revokeConnectionConfirm": "Kas tühistada see ühendus? {count} seanssi logitakse välja.",
+  "profile.apiTokenFallbackName": "Juurdepääsutoken",
+  "profile.connectionModel": "Seade"
 }

@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Tapatybė (Debug)",
   "movieDetail.debugIdentityCopy": "Kopijuoti diagnostiką",
   "movieDetail.debugIdentityHint": "Laukų pavadinimai kyla iš bendros sinchronizavimo sutarties ir sąmoningai lieka anglų kalba. Matoma tik kai įjungtas derinimo režimas.",
-  "movieDetail.debugSourcesNotWritten": "pasirinkta, bet neįrašyta"
+  "movieDetail.debugSourcesNotWritten": "pasirinkta, bet neįrašyta",
+  "profile.accessConnections": "Ryšiai",
+  "profile.connectionSessions": "{count} seansai",
+  "profile.showRevokedConnections": "Rodyti atšauktus ryšius",
+  "profile.hideRevokedConnections": "Slėpti atšauktus ryšius",
+  "profile.revokeConnectionConfirm": "Atšaukti šį ryšį? Bus atjungta {count} seansų.",
+  "profile.apiTokenFallbackName": "Prieigos žetonas",
+  "profile.connectionModel": "Įrenginys"
 }

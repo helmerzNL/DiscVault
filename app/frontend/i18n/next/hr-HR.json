@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiraj dijagnostiku",
   "movieDetail.debugIdentityHint": "Nazivi polja dolaze iz zajedničkog ugovora o sinkronizaciji i namjerno ostaju na engleskom. Vidljivo samo dok je način za ispravljanje pogrešaka uključen.",
-  "movieDetail.debugSourcesNotWritten": "odabrano, ali nije spremljeno"
+  "movieDetail.debugSourcesNotWritten": "odabrano, ali nije spremljeno",
+  "profile.accessConnections": "Veze",
+  "profile.connectionSessions": "{count} sesija",
+  "profile.showRevokedConnections": "Prikaži opozvane veze",
+  "profile.hideRevokedConnections": "Sakrij opozvane veze",
+  "profile.revokeConnectionConfirm": "Opozvati ovu vezu? {count} sesija bit će odjavljeno.",
+  "profile.apiTokenFallbackName": "Pristupni token",
+  "profile.connectionModel": "Uređaj"
 }

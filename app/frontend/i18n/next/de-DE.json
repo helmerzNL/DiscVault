@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identität (Debug)",
   "movieDetail.debugIdentityCopy": "Diagnose kopieren",
   "movieDetail.debugIdentityHint": "Die Feldnamen stammen aus dem gemeinsamen Sync-Vertrag und bleiben bewusst englisch. Nur sichtbar, solange der Debug-Modus aktiv ist.",
-  "movieDetail.debugSourcesNotWritten": "ausgewählt, aber nicht gespeichert"
+  "movieDetail.debugSourcesNotWritten": "ausgewählt, aber nicht gespeichert",
+  "profile.accessConnections": "Verbindungen",
+  "profile.connectionSessions": "{count} Sitzungen",
+  "profile.showRevokedConnections": "Widerrufene Verbindungen anzeigen",
+  "profile.hideRevokedConnections": "Widerrufene Verbindungen ausblenden",
+  "profile.revokeConnectionConfirm": "Diese Verbindung widerrufen? {count} Sitzungen werden abgemeldet.",
+  "profile.apiTokenFallbackName": "Zugriffstoken",
+  "profile.connectionModel": "Geraet"
 }
