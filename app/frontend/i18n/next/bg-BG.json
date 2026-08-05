@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Идентичност (Debug)",
   "movieDetail.debugIdentityCopy": "Копиране на диагностика",
   "movieDetail.debugIdentityHint": "Имената на полетата идват от споделения договор за синхронизация и умишлено остават на английски. Видимо само докато режимът за отстраняване на грешки е включен.",
-  "movieDetail.debugSourcesNotWritten": "избрано, но незапазено"
+  "movieDetail.debugSourcesNotWritten": "избрано, но незапазено",
+  "profile.accessConnections": "Връзки",
+  "profile.connectionSessions": "{count} сесии",
+  "profile.showRevokedConnections": "Показване на отменените връзки",
+  "profile.hideRevokedConnections": "Скриване на отменените връзки",
+  "profile.revokeConnectionConfirm": "Да се отмени ли тази връзка? {count} сесии ще бъдат прекратени.",
+  "profile.apiTokenFallbackName": "Токен за достъп",
+  "profile.connectionModel": "Устройство"
 }

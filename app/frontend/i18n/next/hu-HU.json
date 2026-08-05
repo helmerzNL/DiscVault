@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Azonosság (Debug)",
   "movieDetail.debugIdentityCopy": "Diagnosztika másolása",
   "movieDetail.debugIdentityHint": "A mezőnevek a közös szinkronszerződésből származnak, és szándékosan angolul maradnak. Csak bekapcsolt hibakeresési módban látható.",
-  "movieDetail.debugSourcesNotWritten": "kiválasztva, de nem mentve"
+  "movieDetail.debugSourcesNotWritten": "kiválasztva, de nem mentve",
+  "profile.accessConnections": "Kapcsolatok",
+  "profile.connectionSessions": "{count} munkamenet",
+  "profile.showRevokedConnections": "Visszavont kapcsolatok megjelenítése",
+  "profile.hideRevokedConnections": "Visszavont kapcsolatok elrejtése",
+  "profile.revokeConnectionConfirm": "Visszavonod ezt a kapcsolatot? {count} munkamenet kijelentkezik.",
+  "profile.apiTokenFallbackName": "Hozzáférési token",
+  "profile.connectionModel": "Eszköz"
 }

@@ -257,10 +257,20 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
     @flask_app.get("/api/next/profile/api-tokens")
     def get_next_profile_api_tokens():
         _app = _next_app()
+        include_revoked = str(
+            request.args.get("includeRevoked") or request.args.get("include_revoked") or ""
+        ).strip().lower() in {"1", "true", "yes"}
         with connect() as conn:
             actor = _app.require_next_authenticated_user(conn)
             actor["permissions"] = sorted(_app.next_user_permission_keys(conn, actor["id"]))
-            return response({"status": "ok", "apiAccess": profile_api_access_payload(conn, actor)})
+            return response(
+                {
+                    "status": "ok",
+                    "apiAccess": profile_api_access_payload(
+                        conn, actor, include_revoked=include_revoked
+                    ),
+                }
+            )
 
     @flask_app.post("/api/next/profile/api-tokens")
     def create_next_profile_api_token():
@@ -344,18 +354,48 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
                 raise NextApiError("API token table is not available", 503)
             with conn.transaction():
                 with conn.cursor() as cur:
+                    # The page shows one card per connection, and a native client
+                    # may sit behind several tokens from repeated logins. Revoking
+                    # only the representative would leave the others working while
+                    # the card disappeared.
                     cur.execute(
                         """
-                        UPDATE api_access_tokens
-                        SET revoked_at=COALESCE(revoked_at, now())
-                        WHERE id=%s AND user_id=%s
-                        RETURNING id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at
+                        WITH target AS (
+                            SELECT id, name, client_kind, device_id, user_agent
+                            FROM api_access_tokens
+                            WHERE id=%s AND user_id=%s
+                        )
+                        UPDATE api_access_tokens t
+                        SET revoked_at=COALESCE(t.revoked_at, now())
+                        FROM target
+                        WHERE t.user_id=%s
+                          AND (
+                                t.id = target.id
+                                OR (
+                                    target.device_id IS NOT NULL
+                                    AND t.device_id = target.device_id
+                                )
+                                OR (
+                                    target.device_id IS NULL
+                                    AND t.device_id IS NULL
+                                    AND t.name IS NOT DISTINCT FROM target.name
+                                    AND t.client_kind IS NOT DISTINCT FROM target.client_kind
+                                    AND t.user_agent IS NOT DISTINCT FROM target.user_agent
+                                )
+                          )
+                        RETURNING t.id, t.name, t.scopes, t.permission_keys, t.created_at,
+                                  t.last_used_at, t.expires_at, t.revoked_at,
+                                  t.client_kind, t.device_id, t.device_label, t.device_model
                         """,
-                        (token_uuid, actor["id"]),
+                        (token_uuid, actor["id"], actor["id"]),
                     )
-                    token_row = cur.fetchone()
-                    if not token_row:
+                    revoked_rows = cur.fetchall()
+                    if not revoked_rows:
                         raise NextApiError("API token not found", 404)
+                    token_row = next(
+                        (row for row in revoked_rows if row["id"] == token_uuid), revoked_rows[0]
+                    )
+                    revoked_token_ids = [str(row["id"]) for row in revoked_rows]
                 audit_event(
                     conn,
                     event_type="api_token.revoked",
@@ -367,6 +407,11 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
                     metadata={
                         "apiTokenId": token_uuid,
                         "apiTokenName": token_row.get("name"),
+                        "apiTokenIds": revoked_token_ids,
+                        "sessionCount": len(revoked_token_ids),
+                        "deviceLabel": token_row.get("device_label"),
+                        "deviceModel": token_row.get("device_model"),
+                        "clientKind": token_row.get("client_kind"),
                         "command": "revoke_api_token",
                         "method": request.method,
                         "endpoint": request.path,
@@ -378,6 +423,7 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
                 {
                     "status": "deleted",
                     "apiToken": api_access_token_row(token_row),
+                    "revokedTokenIds": revoked_token_ids,
                     "apiAccess": profile_api_access_payload(conn, actor),
                 }
             )
@@ -399,7 +445,9 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
         with connect() as conn:
             actor = _app.require_next_authenticated_user(conn)
             actor["permissions"] = sorted(_app.next_user_permission_keys(conn, actor["id"]))
-            access = profile_api_access_payload(conn, actor)
+            # Revoked connections are hidden from the list, but their history is
+            # exactly what someone comes to the activity tab for.
+            access = profile_api_access_payload(conn, actor, include_revoked=True)
             if not access.get("manageable") and not (access.get("tokens") or []):
                 raise NextApiError("Permission required: API or MCP access", 403)
             api_tokens_available = table_exists(conn, "api_access_tokens")

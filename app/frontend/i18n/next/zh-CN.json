@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "标识 (Debug)",
   "movieDetail.debugIdentityCopy": "复制诊断信息",
   "movieDetail.debugIdentityHint": "字段名称来自共享同步契约，特意保持英文。仅在调试模式开启时可见。",
-  "movieDetail.debugSourcesNotWritten": "已选择但未保存"
+  "movieDetail.debugSourcesNotWritten": "已选择但未保存",
+  "profile.accessConnections": "连接",
+  "profile.connectionSessions": "{count} 个会话",
+  "profile.showRevokedConnections": "显示已撤销的连接",
+  "profile.hideRevokedConnections": "隐藏已撤销的连接",
+  "profile.revokeConnectionConfirm": "要撤销此连接吗？将退出 {count} 个会话。",
+  "profile.apiTokenFallbackName": "访问令牌",
+  "profile.connectionModel": "设备"
 }

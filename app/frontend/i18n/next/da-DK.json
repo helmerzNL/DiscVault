@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiér diagnostik",
   "movieDetail.debugIdentityHint": "Feltnavnene kommer fra den fælles synkroniseringskontrakt og forbliver bevidst på engelsk. Kun synlig, mens fejlfindingstilstand er slået til.",
-  "movieDetail.debugSourcesNotWritten": "valgt, men ikke gemt"
+  "movieDetail.debugSourcesNotWritten": "valgt, men ikke gemt",
+  "profile.accessConnections": "Forbindelser",
+  "profile.connectionSessions": "{count} sessioner",
+  "profile.showRevokedConnections": "Vis tilbagekaldte forbindelser",
+  "profile.hideRevokedConnections": "Skjul tilbagekaldte forbindelser",
+  "profile.revokeConnectionConfirm": "Tilbagekald denne forbindelse? {count} sessioner bliver logget ud.",
+  "profile.apiTokenFallbackName": "Adgangstoken",
+  "profile.connectionModel": "Enhed"
 }

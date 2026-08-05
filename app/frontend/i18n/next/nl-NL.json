@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identiteit (Debug)",
   "movieDetail.debugIdentityCopy": "Diagnostiek kopiëren",
   "movieDetail.debugIdentityHint": "De veldnamen komen uit het gedeelde synccontract en blijven bewust in het Engels. Alleen zichtbaar zolang Debugmodus aan staat.",
-  "movieDetail.debugSourcesNotWritten": "gekozen maar niet opgeslagen"
+  "movieDetail.debugSourcesNotWritten": "gekozen maar niet opgeslagen",
+  "profile.accessConnections": "Koppelingen",
+  "profile.connectionSessions": "{count} sessies",
+  "profile.showRevokedConnections": "Ingetrokken koppelingen tonen",
+  "profile.hideRevokedConnections": "Ingetrokken koppelingen verbergen",
+  "profile.revokeConnectionConfirm": "Deze koppeling intrekken? {count} sessies worden afgemeld.",
+  "profile.apiTokenFallbackName": "Toegangstoken",
+  "profile.connectionModel": "Apparaat"
 }

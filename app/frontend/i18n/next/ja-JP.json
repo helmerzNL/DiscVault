@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "アイデンティティ (Debug)",
   "movieDetail.debugIdentityCopy": "診断情報をコピー",
   "movieDetail.debugIdentityHint": "フィールド名は共有の同期コントラクトに由来し、意図的に英語のままにしています。デバッグモードが有効な間のみ表示されます。",
-  "movieDetail.debugSourcesNotWritten": "選択されたが保存されず"
+  "movieDetail.debugSourcesNotWritten": "選択されたが保存されず",
+  "profile.accessConnections": "接続",
+  "profile.connectionSessions": "{count} セッション",
+  "profile.showRevokedConnections": "取り消し済みの接続を表示",
+  "profile.hideRevokedConnections": "取り消し済みの接続を非表示",
+  "profile.revokeConnectionConfirm": "この接続を取り消しますか？{count} 件のセッションがサインアウトされます。",
+  "profile.apiTokenFallbackName": "アクセストークン",
+  "profile.connectionModel": "デバイス"
 }

@@ -2621,5 +2621,12 @@
   "movieDetail.debugIdentityTitle": "Identiteta (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiraj diagnostiko",
   "movieDetail.debugIdentityHint": "Imena polj izhajajo iz skupne sinhronizacijske pogodbe in namenoma ostajajo v angleščini. Vidno samo, dokler je način za razhroščevanje vklopljen.",
-  "movieDetail.debugSourcesNotWritten": "izbrano, a ni shranjeno"
+  "movieDetail.debugSourcesNotWritten": "izbrano, a ni shranjeno",
+  "profile.accessConnections": "Povezave",
+  "profile.connectionSessions": "{count} sej",
+  "profile.showRevokedConnections": "Pokaži preklicane povezave",
+  "profile.hideRevokedConnections": "Skrij preklicane povezave",
+  "profile.revokeConnectionConfirm": "Prekliči to povezavo? Odjavljenih bo {count} sej.",
+  "profile.apiTokenFallbackName": "Dostopni žeton",
+  "profile.connectionModel": "Naprava"
 }
