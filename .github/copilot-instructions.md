@@ -45,6 +45,32 @@ git config core.hooksPath .githooks
 After that, every commit that touches a protected path bumps `app/VERSION` automatically, so
 the version guard never fails.
 
+### Re-check the bump right before merging
+
+**A bump is only valid against the base as it is at merge time.** The guard requires
+`app/VERSION` to be *strictly greater* than the version on `release/v26-beta`, and the helper
+can only compare against the base as it looked when you committed. If another PR merges into
+beta while yours is open and bumps to the same patch number, your bump silently becomes stale
+and the guard fails with:
+
+```
+app/VERSION 26.7.63 is not strictly greater than the actual base 26.7.63 - this is
+stale/redundant, not a real bump
+```
+
+So before merging — not only before opening the PR:
+
+```sh
+git fetch origin release/v26-beta
+git rebase origin/release/v26-beta      # or merge the base in
+python app/scripts/bump_version.py      # moves past the *new* base
+```
+
+**Do not merge a PR whose version guard is red.** Merging anyway lands two different code
+states on beta under one version, so the beta image tag stops identifying a build; fixing that
+afterwards costs a second PR that does nothing but bump. This has happened: #473/#474, and
+again with #516/#517 (repaired by #520).
+
 ## Branch & release workflow
 
 DiscVault uses a **two-branch model**. Keep it that way.
@@ -243,8 +269,11 @@ do not wait to be asked.
    title (feature PRs into beta may be squashed).
 5. Confirm translations are complete across all locales (no missing i18n keys and no new
    untranslated UI strings).
-6. Let it build/test on the beta channel before considering promotion.
-7. **After the PR merges, delete the feature branch** (`git push origin --delete <branch>`) —
+6. **Before the PR is merged, re-check the bump against the current base** — beta may have moved
+   while the PR was open, which makes an earlier bump stale (see "Re-check the bump right before
+   merging" above). Never merge with a red version guard.
+7. Let it build/test on the beta channel before considering promotion.
+8. **After the PR merges, delete the feature branch** (`git push origin --delete <branch>`) —
    unless it is the active Copilot session/worktree branch (reused across PRs) or a
    permanent branch (`main`, `release/v26-beta`, `legacy`). If unsure, ask before deleting.
 
