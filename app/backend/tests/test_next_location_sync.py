@@ -317,3 +317,130 @@ class LocationMobileContractTests(unittest.TestCase):
         source = inspect.getsource(next_preferences.mobile_feature_capabilities)
         block = source[source.index('"locations"') :]
         self.assertIn('"manage": False', block)
+
+
+@unittest.skipUnless(
+    os.environ.get("DATABASE_URL") and next_app is not None,
+    "PostgreSQL test database is not configured",
+)
+class MovieLocationAssignmentPostgresTests(unittest.TestCase):
+    """The assignment against a real database.
+
+    The unit tests above use fake cursors, and fakes accept things postgres
+    does not: the first version of this change put a dict where a uuid column
+    was expected and every fake-backed test still passed. This class writes and
+    reads back for real.
+    """
+
+    def setUp(self):
+        import psycopg
+        from psycopg.rows import dict_row
+
+        self._psycopg = psycopg
+        self._dict_row = dict_row
+
+    def connect(self):
+        return self._psycopg.connect(
+            os.environ["DATABASE_URL"], row_factory=self._dict_row, autocommit=False
+        )
+
+    def tearDown(self):
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM movies WHERE public_id LIKE 'location-sync-test-%'")
+                cur.execute("DELETE FROM locations WHERE public_id LIKE 'location-sync-test-%'")
+            conn.commit()
+
+    def _movie(self, conn):
+        import uuid as _uuid
+
+        movie_id = _uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO movies (id, public_id, title, sort_title) VALUES (%s, %s, %s, %s)",
+                (movie_id, f"location-sync-test-{movie_id}", "Shelved", "Shelved"),
+            )
+        conn.commit()
+        return movie_id
+
+    def _location(self, conn, name="Kast 01"):
+        import uuid as _uuid
+
+        location_id = _uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO locations (id, public_id, name, qr_token, sort_order)
+                VALUES (%s, %s, %s, %s, 0)
+                """,
+                (location_id, f"location-sync-test-{location_id}", name, str(_uuid.uuid4())),
+            )
+        conn.commit()
+        return location_id
+
+    def _apply(self, conn, movie_id, payload):
+        fields = next_app.movie_payload_fields(payload)
+        with conn.cursor() as cur:
+            next_app.apply_movie_location_assignment(cur, movie_id, fields["location_assignment"])
+        conn.commit()
+
+    def _stored(self, conn, movie_id):
+        with conn.cursor() as cur:
+            cur.execute("SELECT location_id FROM movies WHERE id=%s", (movie_id,))
+            return cur.fetchone()["location_id"]
+
+    def test_assign_keep_and_erase_round_trip(self):
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            location_id = self._location(conn)
+
+            self._apply(conn, movie_id, {"locationId": str(location_id)})
+            self.assertEqual(location_id, self._stored(conn, movie_id))
+
+            # Absent and explicit null both keep — the rule a phone relies on,
+            # since an untouched field is omitted by both client encoders.
+            self._apply(conn, movie_id, {"title": "Shelved"})
+            self.assertEqual(location_id, self._stored(conn, movie_id))
+            self._apply(conn, movie_id, {"locationId": None})
+            self.assertEqual(location_id, self._stored(conn, movie_id))
+
+            self._apply(conn, movie_id, {"locationId": ""})
+            self.assertIsNone(self._stored(conn, movie_id))
+
+    def test_the_bootstrap_publishes_the_assignment(self):
+        """§4c: the id has to come back, or the client cannot show the shelf."""
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            location_id = self._location(conn)
+            self._apply(conn, movie_id, {"locationId": str(location_id)})
+
+            published = next(
+                movie
+                for movie in next_app.all_movie_entities(conn, limit=1000)
+                if str(movie["id"]) == str(movie_id)
+            )
+            self.assertEqual(location_id, published["location_id"])
+            self.assertEqual(published["location_id"], next_app.movie_entity(conn, movie_id)["location_id"])
+
+    def test_an_unknown_location_is_rejected_and_changes_nothing(self):
+        import uuid as _uuid
+
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            location_id = self._location(conn)
+            self._apply(conn, movie_id, {"locationId": str(location_id)})
+
+            with self.assertRaises(next_app.NextApiError):
+                self._apply(conn, movie_id, {"locationId": str(_uuid.uuid4())})
+            conn.rollback()
+
+            self.assertEqual(location_id, self._stored(conn, movie_id))
+
+    def test_the_locations_array_resolves_what_movies_point_at(self):
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            location_id = self._location(conn)
+            self._apply(conn, movie_id, {"locationId": str(location_id)})
+
+            ids = {str(row["id"]) for row in next_app.location_sync_entities(conn)}
+            self.assertIn(str(self._stored(conn, movie_id)), ids)
