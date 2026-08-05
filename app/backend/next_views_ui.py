@@ -15087,6 +15087,15 @@ def ui_preview_html(
                       <span data-next-i18n="locations.assign">Storage location</span>
                       <select id="containerEditLocationSelect" name="locationId"></select>
                     </label>
+                    <label for="containerEditEstimatedValue" class="container-value-field hidden" id="containerEditEstimatedValueField">
+                      <span data-next-i18n="containerDetail.estimatedValue">Estimated value</span>
+                      <input id="containerEditEstimatedValue" name="estimated_value" inputmode="decimal" maxlength="12" autocomplete="off">
+                      <small class="field-hint" data-next-i18n="containerDetail.estimatedValueHelp">The price of the box-set as a whole. Films inside it do not carry a price of their own.</small>
+                    </label>
+                    <label for="containerEditEstimatedValueCurrency" class="container-value-field hidden" id="containerEditEstimatedValueCurrencyField">
+                      <span data-next-i18n="containerDetail.estimatedValueCurrency">Currency</span>
+                      <select id="containerEditEstimatedValueCurrency" name="estimated_value_currency"></select>
+                    </label>
                   </div>
                 </div>
               </form>
@@ -27448,8 +27457,8 @@ def ui_preview_html(
         ...codes.map((code) => `<option value="${escapeHtml(code)}"${code === chosen ? " selected" : ""}>${escapeHtml(code)}</option>`)
       ].join("");
     }
-    function fillMovieEditEstimatedValueCurrency(stored) {
-      const select = document.getElementById("movieEditEstimatedValueCurrency");
+    function fillMovieEditEstimatedValueCurrency(stored, elementId) {
+      const select = document.getElementById(elementId || "movieEditEstimatedValueCurrency");
       if (!select || document.activeElement === select) return;
       // Empty stays empty rather than being pre-filled with the display
       // preference: that preference can change later, and it must never
@@ -27514,6 +27523,7 @@ def ui_preview_html(
       fillMovieEditCheckboxGroup("movieEditVideoCodecs", specList("video_codecs"));
       fillMovieEditCheckboxGroup("movieEditRegions", specList("regions"));
       fillMovieEditEstimatedValueCurrency(movie.estimated_value_currency);
+      applyMovieEstimatedValueLock(detail);
       fillMovieEditAudioTracks(specList("audio_tracks"));
       fillMovieEditSubtitles(specList("subtitles"));
       setupMovieEditTrackEditors();
@@ -27523,6 +27533,35 @@ def ui_preview_html(
         populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
       }
       setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
+    }
+    // While a film sits inside a box-set, the set carries the money for
+    // everything in it. The field is blanked and disabled rather than cleared in
+    // the database: taking the film back out restores exactly what was typed.
+    function applyMovieEstimatedValueLock(detail) {
+      const locked = !!(detail || {}).estimatedValueLocked;
+      const owner = (detail || {}).estimatedValueLockedBy || {};
+      const valueInput = document.getElementById("movieEditEstimatedValue");
+      const currencySelect = document.getElementById("movieEditEstimatedValueCurrency");
+      [valueInput, currencySelect].forEach((element) => {
+        if (!element) return;
+        element.disabled = locked;
+        if (locked) element.value = "";
+      });
+      const hintId = "movieEditEstimatedValueLockHint";
+      let hint = document.getElementById(hintId);
+      if (!locked) {
+        if (hint) hint.remove();
+        return;
+      }
+      if (!hint) {
+        hint = document.createElement("small");
+        hint.id = hintId;
+        hint.className = "field-hint";
+        valueInput?.closest("label")?.appendChild(hint);
+      }
+      hint.textContent = owner.title
+        ? tNext("movieDetail.estimatedValueLockedBy", "Managed by box-set {title}").replace("{title}", owner.title)
+        : tNext("movieDetail.estimatedValueLocked", "Managed by the box-set this film belongs to");
     }
     function movie_locked_fields_from_metadata(metadata) {
       const raw = (metadata && (metadata.field_locks || metadata.fieldLocks)) || [];
@@ -28145,7 +28184,16 @@ def ui_preview_html(
         [tNext("locations.assign", "Storage location"), storageLocationHtml ? {text: storageLocationLabel, html: storageLocationHtml} : storageLocationLabel],
         [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
         [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
-        [tNext("movieDetail.estimatedValue", "Estimated value"), formatEstimatedValue(movie.estimated_value, movie.estimated_value_currency)],
+        [
+          tNext("movieDetail.estimatedValue", "Estimated value"),
+          // A member of a box-set shows why it has no value of its own rather
+          // than an empty cell that reads like missing data.
+          detail.estimatedValueLocked
+            ? ((detail.estimatedValueLockedBy || {}).title
+                ? tNext("movieDetail.estimatedValueLockedBy", "Managed by box-set {title}").replace("{title}", detail.estimatedValueLockedBy.title)
+                : tNext("movieDetail.estimatedValueLocked", "Managed by the box-set this film belongs to"))
+            : formatEstimatedValue(movie.estimated_value, movie.estimated_value_currency)
+        ],
         ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
       ];
       document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
@@ -28483,6 +28531,21 @@ def ui_preview_html(
         const currentLocationId = (container.location && container.location.id) || container.location_id || "";
         populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
       }
+      const valueInput = document.getElementById("containerEditEstimatedValue");
+      if (valueInput && document.activeElement !== valueInput) {
+        valueInput.value = container.estimated_value == null ? "" : String(container.estimated_value);
+      }
+      fillMovieEditEstimatedValueCurrency(container.estimated_value_currency, "containerEditEstimatedValueCurrency");
+      syncContainerValueFieldVisibility(typeInput ? typeInput.value : container.container_type);
+    }
+    // Only a box-set is bought as one product for one price. A vault or a
+    // collection arranges what you already own, so offering a second amount
+    // there would double-count the shelf - the backend rejects it too.
+    function syncContainerValueFieldVisibility(containerType) {
+      const isBoxSet = String(containerType || "") === "box_set";
+      document.querySelectorAll(".container-value-field").forEach((field) => {
+        field.classList.toggle("hidden", !isBoxSet);
+      });
     }
     function renderContainerAddForms(detail = activeContainerPayload || {}) {
       const container = detail.container || {};
@@ -28654,7 +28717,12 @@ def ui_preview_html(
         [tNext("containerDetail.aggregateMovieCount", "Movies in scope"), summary.movieCount || directMovieCount],
         [tNext("containerDetail.items", "items"), collectionItemCount || directMovieCount],
         [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork],
-        [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
+        [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount],
+        // Only a box-set carries a price of its own; a vault or a collection is
+        // worth the sum of what it holds.
+        ...(container.container_type === "box_set"
+          ? [[tNext("containerDetail.estimatedValue", "Estimated value"), formatEstimatedValue(container.estimated_value, container.estimated_value_currency)]]
+          : [])
       ]);
       bindContainerDetailLinks("containerDetailOverviewFields");
       renderContainerEditSummary(detail);
@@ -29365,6 +29433,12 @@ def ui_preview_html(
         description: formTextValue("containerEditDescription"),
         locationId: document.getElementById("containerEditLocationSelect")?.value || null
       };
+      // Only send the value for a box-set. Sending it for a vault or a
+      // collection - even as an empty string - is a 400 from the API.
+      if (requestedType === "box_set") {
+        body.estimatedValue = formTextValue("containerEditEstimatedValue");
+        body.estimatedValueCurrency = formTextValue("containerEditEstimatedValueCurrency");
+      }
       try {
         const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`, {
           method: "PATCH",
@@ -35859,6 +35933,28 @@ def ui_preview_html(
         }).join("");
       }
     }
+    // The worth of everything the user can see: every film that is not inside a
+    // box-set, plus each box-set's own price. The sub-label names what the total
+    // does not cover, so a half-filled collection is not read as a hard number.
+    function collectionValueCard(summary) {
+      if (!summary) return null;
+      const base = String(summary.baseCurrency || "EUR");
+      const total = Number(summary.total || 0);
+      const converted = convertPriceAmount(total, base, preferredPriceCurrency() || base);
+      const notes = [];
+      if (Number(summary.unpricedCount || 0) > 0) {
+        notes.push(tNext("stats.collectionValueUnpriced", "{count} without a price")
+          .replace("{count}", String(summary.unpricedCount)));
+      }
+      if (Number(summary.unconvertible || 0) > 0) {
+        notes.push(tNext("stats.collectionValueMixedCurrency", "excludes amounts with no currency"));
+      }
+      return {
+        label: tNext("stats.cardCollectionValue", "Collection value"),
+        value: formatStatsPrice(converted, preferredPriceCurrency() || base),
+        note: notes.join(" - ")
+      };
+    }
     function renderStatisticsView() {
       const data = statsState.data;
       const empty = document.getElementById("statsEmptyMessage");
@@ -35875,14 +35971,16 @@ def ui_preview_html(
         {label: tNext("stats.cardThisYear", "Watched this year"), value: watch.thisYear || 0},
         {label: tNext("stats.cardWishlist", "Wishlist"), value: data.wishlistCount || 0},
         {label: tNext("stats.cardOnLoan", "On loan"), value: loans.active || 0},
-        {label: tNext("stats.cardOverdue", "Overdue"), value: loans.overdue || 0}
-      ];
+        {label: tNext("stats.cardOverdue", "Overdue"), value: loans.overdue || 0},
+        collectionValueCard(data.collectionValue)
+      ].filter(Boolean);
       if (cards) {
         cards.innerHTML = cardDefs
           .map((card) => `
             <div class="stat-card">
               <strong>${escapeHtml(card.value)}</strong>
               <span>${escapeHtml(card.label)}</span>
+              ${card.note ? `<small>${escapeHtml(card.note)}</small>` : ""}
             </div>
           `)
           .join("");
@@ -37294,6 +37392,13 @@ def ui_preview_html(
         notes: formTextValue("movieEditNotes"),
         fieldLocks: Array.from(movieEditLockedFields)
       };
+      // The box-set owns the value of its members: sending the blanked field
+      // would be a 409, and would ask the API to erase an amount the user still
+      // gets back the moment the film leaves the set.
+      if (document.getElementById("movieEditEstimatedValue")?.disabled) {
+        delete body.estimatedValue;
+        delete body.estimatedValueCurrency;
+      }
       let clearedUnlockedField = false;
       Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
         if (movieEditLockedFields.has(field)) return;
@@ -42472,6 +42577,7 @@ def ui_preview_html(
       document.getElementById("containerEditToggleButton")?.addEventListener("click", () => handleContainerEditAction());
       document.getElementById("containerEditCancelTopButton")?.addEventListener("click", () => cancelContainerEdit());
       document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));
+      document.getElementById("containerEditType")?.addEventListener("change", (event) => syncContainerValueFieldVisibility(event.target.value));
       document.getElementById("containerMetadataDryRunButton")?.addEventListener("click", () => refreshActiveContainerMetadata(true));
       document.getElementById("containerMetadataApplyButton")?.addEventListener("click", () => refreshActiveContainerMetadata(false));
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());

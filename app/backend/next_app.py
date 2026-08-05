@@ -159,6 +159,12 @@ try:
     from .next_common import parse_uuid_list
     from .next_common import response
     from .next_common import table_exists
+    from .next_collection_value import SNAPSHOT_SCOPE_TYPES
+    from .next_collection_value import collection_value_history
+    from .next_collection_value import compute_collection_value
+    from .next_collection_value import movie_value_lock
+    from .next_collection_value import movie_value_locked_sql
+    from .next_collection_value import record_collection_value_snapshot
     from .next_mcp_activity import MCP_TOOL_NAMES
     from .next_mcp_activity import mcp_request_api_token_value
     from .next_mcp_activity import register_next_mcp_routes
@@ -387,6 +393,12 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import parse_uuid_list
     from next_common import response
     from next_common import table_exists
+    from next_collection_value import SNAPSHOT_SCOPE_TYPES
+    from next_collection_value import collection_value_history
+    from next_collection_value import compute_collection_value
+    from next_collection_value import movie_value_lock
+    from next_collection_value import movie_value_locked_sql
+    from next_collection_value import record_collection_value_snapshot
     from next_mcp_activity import MCP_TOOL_NAMES
     from next_mcp_activity import mcp_request_api_token_value
     from next_mcp_activity import register_next_mcp_routes
@@ -4636,6 +4648,8 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                 c.description,
                 c.metadata,
                 c.location_id,
+                c.estimated_value,
+                c.estimated_value_currency,
                 c.created_at,
                 c.updated_at
             FROM containers c
@@ -5380,7 +5394,12 @@ def lock_box_set_barcode(conn, barcode: str) -> None:
         )
 
 
-def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None = None) -> dict[str, Any]:
+def container_payload(
+    body: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None = None,
+    container_type: str | None = None,
+) -> dict[str, Any]:
     existing = existing or {}
     title = clean_text(body.get("title")) if "title" in body else existing.get("title")
     if not title:
@@ -5408,6 +5427,14 @@ def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None =
         location_id = parse_uuid(raw_location, "locationId") if raw_location else None
     else:
         location_id = existing.get("location_id")
+    # A box set is bought as one product for one price, so it - and only it -
+    # carries a value of its own. A vault or a collection is a way of arranging
+    # what you already own; its worth is the sum of its contents, and letting a
+    # user type a second number there would silently double-count the shelf.
+    effective_type = clean_text(container_type) or clean_text(existing.get("container_type"))
+    value_keys = ("estimatedValue", "estimated_value", "estimatedValueCurrency", "estimated_value_currency")
+    if effective_type != "box_set" and any(key in body for key in value_keys):
+        raise NextApiError("Estimated value is only available for box sets", 400)
     return {
         "title": title,
         "description": description,
@@ -5416,6 +5443,10 @@ def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None =
         "badge_label": badge_label,
         "metadata": metadata,
         "location_id": location_id,
+        # Same parsers as the movie field: comma decimals, two-decimal quantize,
+        # ISO 4217 shape check, and no invented default currency.
+        "estimated_value": movie_estimated_value(body, existing),
+        "estimated_value_currency": movie_estimated_value_currency(body, existing),
     }
 
 
@@ -6710,6 +6741,8 @@ def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
                 c.year,
                 c.description,
                 c.location_id,
+                c.estimated_value,
+                c.estimated_value_currency,
                 c.metadata,
                 c.created_at,
                 c.updated_at
@@ -9367,6 +9400,55 @@ def movie_estimated_value_currency(body: dict[str, Any], existing: dict[str, Any
     if not re.fullmatch(r"[A-Z]{3}", text):
         raise NextApiError("estimatedValueCurrency must be a three-letter ISO 4217 code", 400)
     return text
+
+
+def guard_movie_estimated_value_lock(conn, movie_id: UUID, body: dict[str, Any]) -> dict[str, Any] | None:
+    """Refuse to change a movie's value while a box set owns it.
+
+    The amount is not cleared when a film joins a set - it is only suppressed, so
+    pulling the film back out restores exactly what the user typed. Accepting a
+    write here would edit a number nobody can see, which would then reappear on
+    removal as a silent change.
+
+    Requests that do not mention the value at all pass through untouched, so an
+    unrelated edit to a box-set member keeps working.
+    """
+    keys = ("estimatedValue", "estimated_value", "estimatedValueCurrency", "estimated_value_currency")
+    if not any(key in body for key in keys):
+        return None
+    lock = movie_value_lock(conn, movie_id)
+    if lock:
+        raise NextApiError(
+            "Estimated value is managed by the box set this movie belongs to",
+            409,
+        )
+    return None
+
+
+def capture_collection_value_snapshot(conn, actor: dict[str, Any] | None) -> None:
+    """Best-effort: record today's collection value after a price-affecting write.
+
+    Never allowed to fail the edit that triggered it - a missing snapshot costs a
+    point on a chart, a raised exception costs the user their change.
+    """
+    if not actor or not actor.get("id"):
+        return
+    try:
+        movie_where, movie_params = visible_movie_where_sql(conn, actor, "m")
+        container_where, container_params = visible_container_where_sql(conn, actor, "c")
+        record_collection_value_snapshot(
+            conn,
+            user_id=actor.get("id"),
+            movie_where=movie_where,
+            movie_params=movie_params,
+            container_where=container_where,
+            container_params=container_params,
+        )
+    except Exception:  # pragma: no cover - defensive, snapshots are not critical
+        try:
+            current_app.logger.warning("Collection value snapshot failed", exc_info=True)
+        except Exception:
+            pass
 
 
 def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
@@ -12956,8 +13038,17 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         identity_debug = movie_identity_debug_entity(conn, movie_id, movie)
     except Exception:  # pragma: no cover - debug info must never break detail load
         identity_debug = None
+    # The box set a member film's value belongs to. Present means the price
+    # field is read-only: the set carries the money for everything inside it.
+    value_lock = None
+    try:
+        value_lock = movie_value_lock(conn, movie_id)
+    except Exception:  # pragma: no cover - never break detail load over a hint
+        value_lock = None
     return {
         "movie": movie,
+        "estimatedValueLocked": bool(value_lock),
+        "estimatedValueLockedBy": value_lock,
         "identityDebug": identity_debug,
         "identifiers": movie_identifier_entities(conn, movie_id),
         "localizations": movie_localization_entities(conn, movie_id),
@@ -15325,6 +15416,8 @@ def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
                 primary_movie_id,
                 location_id,
                 owner_id,
+                estimated_value,
+                estimated_value_currency,
                 metadata,
                 created_at,
                 updated_at
@@ -16603,6 +16696,8 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.description,
                 c.location_id,
                 c.owner_id,
+                c.estimated_value,
+                c.estimated_value_currency,
                 c.metadata,
                 c.created_at,
                 c.updated_at
@@ -18020,7 +18115,7 @@ def apply_container_upsert(
     else:
         container_type = normalize_container_type(None)
 
-    fields = container_payload(payload, existing=existing)
+    fields = container_payload(payload, existing=existing, container_type=container_type)
     public_id = clean_text(payload.get("publicId") or payload.get("public_id"))
     public_id = public_id or (existing or {}).get("public_id") or f"next-container-{entity_id.hex[:12]}"
     if len(public_id) > 160:
@@ -18030,9 +18125,9 @@ def apply_container_upsert(
         cur.execute(
             """
             INSERT INTO containers (
-                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, client_id, metadata, created_at, updated_at
+                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, client_id, estimated_value, estimated_value_currency, metadata, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=COALESCE(EXCLUDED.title, containers.title),
                 barcode=EXCLUDED.barcode,
@@ -18040,6 +18135,8 @@ def apply_container_upsert(
                 year=EXCLUDED.year,
                 description=EXCLUDED.description,
                 client_id=COALESCE(containers.client_id, EXCLUDED.client_id),
+                estimated_value=COALESCE(EXCLUDED.estimated_value, containers.estimated_value),
+                estimated_value_currency=COALESCE(EXCLUDED.estimated_value_currency, containers.estimated_value_currency),
                 metadata=containers.metadata || EXCLUDED.metadata,
                 updated_at=now()
             """,
@@ -18054,6 +18151,8 @@ def apply_container_upsert(
                 fields["description"],
                 actor_or_instance_owner_id(conn, actor),
                 persistent_client_id,
+                fields["estimated_value"],
+                fields["estimated_value_currency"],
                 Jsonb(json_ready(fields["metadata"])),
             ),
         )
@@ -20960,6 +21059,7 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
             return response(
                 {
                     "status": "ok",
@@ -21012,6 +21112,7 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
             return response(
                 {
                     "status": "ok",
@@ -21405,7 +21506,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Container request body must be an object", 400)
         container_type = normalize_container_type(body.get("containerType", body.get("container_type")))
-        payload = container_payload(body)
+        payload = container_payload(body, container_type=container_type)
         container_uuid = uuid.uuid4()
         public_id = clean_text(body.get("publicId") or body.get("public_id")) or f"next-container-{container_uuid.hex[:12]}"
         if len(public_id) > 160:
@@ -21430,9 +21531,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, estimated_value, estimated_value_currency, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -21445,6 +21546,8 @@ def register_routes(flask_app: Flask) -> None:
                             payload["description"],
                             payload["location_id"],
                             actor_or_instance_owner_id(conn, actor),
+                            payload["estimated_value"],
+                            payload["estimated_value_currency"],
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -21467,6 +21570,7 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid, actor=actor)
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail}, 201)
 
     @flask_app.patch("/api/next/containers/<container_id>")
@@ -21482,13 +21586,16 @@ def register_routes(flask_app: Flask) -> None:
             existing = container_entity(conn, container_uuid)
             if not existing:
                 raise NextApiError("Container not found", 404)
-            payload = container_payload(body, existing=existing)
             type_provided = "containerType" in body or "container_type" in body
             requested_type = body.get("containerType", body.get("container_type")) if type_provided else None
             target_type, type_changed = container_type_change(
                 existing.get("container_type"),
                 requested_type if type_provided else existing.get("container_type"),
             )
+            # Validate the value against the type the container ends up as, so
+            # promoting a vault to a box set in the same request may set a value
+            # and demoting a box set may not.
+            payload = container_payload(body, existing=existing, container_type=target_type)
             primary_provided = "primaryMovieId" in body or "primary_movie_id" in body
             primary_movie_uuid = None
             if primary_provided:
@@ -21520,11 +21627,11 @@ def register_routes(flask_app: Flask) -> None:
                     locked = cur.fetchone()
                 if not locked:
                     raise NextApiError("Container not found", 404)
-                payload = container_payload(body, existing=locked)
                 target_type, type_changed = container_type_change(
                     locked.get("container_type"),
                     requested_type if type_provided else locked.get("container_type"),
                 )
+                payload = container_payload(body, existing=locked, container_type=target_type)
                 if type_changed and not actor_can_convert_container(locked, actor):
                     raise NextApiError("Only the container owner or an instance owner/admin can convert it", 403)
                 receiver_payload = (
@@ -21558,6 +21665,8 @@ def register_routes(flask_app: Flask) -> None:
                             description=%s,
                             location_id=%s,
                             container_type=%s,
+                            estimated_value=%s,
+                            estimated_value_currency=%s,
                             metadata=%s,
                             updated_at=now()
                         WHERE id=%s
@@ -21570,6 +21679,12 @@ def register_routes(flask_app: Flask) -> None:
                             payload["description"],
                             payload["location_id"],
                             target_type,
+                            # A container that is no longer a box set stops
+                            # carrying money: leaving the amount behind would keep
+                            # it in the totals under a type that may never show or
+                            # edit it.
+                            payload["estimated_value"] if target_type == "box_set" else None,
+                            payload["estimated_value_currency"] if target_type == "box_set" else None,
                             Jsonb(json_ready(payload["metadata"])),
                             container_uuid,
                         ),
@@ -21666,6 +21781,7 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid, actor=actor)
+            capture_collection_value_snapshot(conn, actor)
         return response(
             {
                 "status": "ok",
@@ -21754,6 +21870,7 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 )
                 emit_container_change(conn, container_uuid, operation="delete")
+            capture_collection_value_snapshot(conn, actor)
         return response(
             {
                 "status": "ok",
@@ -22085,6 +22202,7 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
         return response(
             {
                 "status": "ok",
@@ -22329,6 +22447,7 @@ def register_routes(flask_app: Flask) -> None:
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
             detail = container_detail_entity(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
         if not detail:
             raise NextApiError("Container not found", 404)
         return response(
@@ -22735,6 +22854,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Movie not found", 404)
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
+            guard_movie_estimated_value_lock(conn, movie_uuid, body)
             payload = movie_update_payload(body, existing=existing)
             effective_locks = (
                 set(payload["field_locks"])
@@ -22792,6 +22912,7 @@ def register_routes(flask_app: Flask) -> None:
                 except Exception as exc:
                     receiver_summary = {"status": "error", "error": str(exc)}
             detail = movie_detail_entity(conn, movie_uuid)
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail, "receivers": receiver_summary})
 
     @flask_app.get("/api/next/api/v1/movies/<movie_id>/field-locks")
@@ -22875,7 +22996,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Container request body must be an object", 400)
         container_type = normalize_container_type(body.get("containerType", body.get("container_type")))
-        payload = container_payload(body)
+        payload = container_payload(body, container_type=container_type)
         container_uuid = uuid.uuid4()
         public_id = clean_text(body.get("publicId") or body.get("public_id")) or f"api-container-{container_uuid.hex[:12]}"
         if len(public_id) > 160:
@@ -22900,9 +23021,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, estimated_value, estimated_value_currency, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -22915,6 +23036,8 @@ def register_routes(flask_app: Flask) -> None:
                             payload["description"],
                             payload["location_id"],
                             actor_or_instance_owner_id(conn, actor),
+                            payload["estimated_value"],
+                            payload["estimated_value_currency"],
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -22938,6 +23061,7 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail}, 201)
 
     @flask_app.get("/api/next/api/v1/containers/<container_id>")
@@ -22975,7 +23099,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Container not found", 404)
             if not actor_can_edit_visible_container(conn, actor, container_uuid):
                 raise NextApiError("Permission required: containers.edit", 403)
-            payload = container_payload(body, existing=existing)
+            payload = container_payload(body, existing=existing, container_type=existing.get("container_type"))
             receiver_payload = container_receiver_payload(conn, existing, payload)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
             with conn.transaction():
@@ -22989,6 +23113,8 @@ def register_routes(flask_app: Flask) -> None:
                             year=%s,
                             description=%s,
                             location_id=%s,
+                            estimated_value=%s,
+                            estimated_value_currency=%s,
                             metadata=%s,
                             updated_at=now()
                         WHERE id=%s
@@ -23000,6 +23126,8 @@ def register_routes(flask_app: Flask) -> None:
                             payload["year"],
                             payload["description"],
                             payload["location_id"],
+                            payload["estimated_value"],
+                            payload["estimated_value_currency"],
                             Jsonb(json_ready(payload["metadata"])),
                             container_uuid,
                         ),
@@ -23047,6 +23175,7 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid, actor=actor)
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
     @flask_app.delete("/api/next/api/v1/containers/<container_id>")
@@ -24459,6 +24588,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Movie not found", 404)
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
+            guard_movie_estimated_value_lock(conn, movie_uuid, body)
             payload = movie_update_payload(body, existing=existing)
             effective_locks = (
                 set(payload["field_locks"])
@@ -24548,6 +24678,7 @@ def register_routes(flask_app: Flask) -> None:
                         "receiverSummary": receiver_summary,
                     },
                 )
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
     @flask_app.get("/api/next/movies/<movie_id>/field-locks")
@@ -24628,6 +24759,7 @@ def register_routes(flask_app: Flask) -> None:
                     summary=f"Deleted movie {existing.get('title')}",
                     metadata={"title": existing.get("title"), "barcode": existing.get("barcode"), "deleted": deleted},
                 )
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "movieId": str(movie_uuid), "deleted": deleted})
 
     @flask_app.get("/api/next/lists")
@@ -27042,6 +27174,20 @@ def register_routes(flask_app: Flask) -> None:
                 movies.sort(key=lambda item: (str(item.get("title") or "").lower(), str(item.get("year") or "")))
                 wishlist_price_trend["movies"] = movies
 
+            # Capturing here as well as on every write keeps the series alive on a
+            # day the user only looked: without it, a quiet week leaves a gap the
+            # chart would have to interpolate across.
+            container_where, container_params = visible_container_where_sql(conn, actor, "c")
+            collection_value = compute_collection_value(
+                conn,
+                movie_where=where,
+                movie_params=params,
+                container_where=container_where,
+                container_params=container_params,
+                exchange_rates=dict(price_display_exchange_rates().get("exchangeRates") or {}),
+            )
+            capture_collection_value_snapshot(conn, actor)
+
             return response(
                 {
                     "status": "ok",
@@ -27054,8 +27200,45 @@ def register_routes(flask_app: Flask) -> None:
                     "wishlistCount": wishlist_count,
                     "loans": loans_stats,
                     "wishlistPriceTrend": wishlist_price_trend,
+                    "collectionValue": collection_value,
                 }
             )
+
+    @flask_app.get("/api/next/stats/collection-value/history")
+    def collection_value_history_view():
+        """The stored value-over-time series for one scope.
+
+        Reads snapshots only - it never recomputes, so a gap in the series is a
+        day on which nothing changed and nobody opened the statistics view.
+        """
+        scope_type = clean_text(request.args.get("scope")) or "total"
+        if scope_type not in SNAPSHOT_SCOPE_TYPES:
+            raise NextApiError(f"scope must be one of: {', '.join(SNAPSHOT_SCOPE_TYPES)}", 400)
+        scope_id = clean_text(request.args.get("scopeId"))
+        if scope_type == "total":
+            scope_id = None
+        elif not scope_id:
+            raise NextApiError("scopeId is required for a vault or collection scope", 400)
+        since = parse_optional_date(request.args.get("from"), "from")
+        until = parse_optional_date(request.args.get("until") or request.args.get("to"), "until")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            points = collection_value_history(
+                conn,
+                user_id=actor.get("id"),
+                scope_type=scope_type,
+                scope_id=scope_id,
+                since=since,
+                until=until,
+            )
+        return response(
+            {
+                "status": "ok",
+                "scope": scope_type,
+                "scopeId": scope_id,
+                "points": points,
+            }
+        )
 
     @flask_app.post("/api/next/movies/<movie_id>/identifiers")
     def add_movie_identifier(movie_id: str):

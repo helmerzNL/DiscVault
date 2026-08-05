@@ -919,7 +919,9 @@ class NextMovieDetailUiTests(unittest.TestCase):
         self.assertIn(
             'estimatedValueCurrency: formTextValue("movieEditEstimatedValueCurrency"),', self.source
         )
-        self.assertIn("function fillMovieEditEstimatedValueCurrency(stored)", self.source)
+        # The optional element id lets the box-set form reuse the same picker
+        # rather than growing a second copy of the currency list.
+        self.assertIn("function fillMovieEditEstimatedValueCurrency(stored, elementId)", self.source)
 
     def test_the_currency_picker_offers_what_the_converter_can_actually_convert(self):
         """A currency outside the price-display set could never be converted to
