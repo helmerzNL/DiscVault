@@ -192,6 +192,8 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
             "description",
             "primary_movie_id",
             "owner_id",
+            "estimated_value",
+            "estimated_value_currency",
             "metadata",
             "created_at",
             "updated_at",
