@@ -1667,5 +1667,260 @@ class NextTombstoneResponseContractTests(unittest.TestCase):
         find_tombstone.assert_not_called()
 
 
+@unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
+class NextCollectionMembershipSyncTests(unittest.TestCase):
+    """Collection membership over sync (contract §4b.6/§4b.7).
+
+    A collection keeps its members in ``collection_items``; ``containerMovie``
+    writes ``container_movies``, which is never read back for a collection. The
+    old behaviour returned ``applied`` for that write, and since ``isApplied`` is
+    the only confirmation a client has, the client booked a membership that does
+    not exist and stopped offering it. These tests pin the refusal and the route
+    that replaces it."""
+
+    def _mutation(self, entity_type, operation, payload):
+        return {
+            "clientMutationId": "mutation-1",
+            "entityType": entity_type,
+            "operation": operation,
+            "payload": payload,
+        }
+
+    # --- change 1: containerMovie refuses a collection -------------------
+
+    def test_container_movie_upsert_refuses_a_collection(self):
+        container_id, movie_id = uuid.uuid4(), uuid.uuid4()
+        with (
+            patch.object(next_app, "table_exists", return_value=True),
+            patch.object(next_app, "resolve_sync_entity_id", side_effect=[container_id, movie_id]),
+            patch.object(next_app, "container_entity", return_value={"id": container_id}),
+            patch.object(next_app, "movie_entity", return_value={"id": movie_id}),
+            patch.object(next_app, "container_type_for_id", return_value="collection"),
+        ):
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.apply_container_movie_upsert(
+                    object(),
+                    client_id="device-a",
+                    idem_key="idem-1",
+                    mutation=self._mutation(
+                        "containerMovie",
+                        "upsert",
+                        {"containerId": str(container_id), "movieId": str(movie_id)},
+                    ),
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+        # The message is the only place a client author will look for the route
+        # that does work, so it has to name it.
+        self.assertIn("collectionItem", str(raised.exception))
+
+    def test_container_movie_delete_refuses_a_collection(self):
+        container_id, movie_id = uuid.uuid4(), uuid.uuid4()
+        with (
+            patch.object(next_app, "table_exists", return_value=True),
+            patch.object(next_app, "resolve_sync_entity_id", side_effect=[container_id, movie_id]),
+            patch.object(next_app, "optional_container_type", return_value="collection"),
+        ):
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.apply_container_movie_delete(
+                    object(),
+                    client_id="device-a",
+                    idem_key="idem-1",
+                    mutation=self._mutation(
+                        "containerMovie",
+                        "delete",
+                        {"containerId": str(container_id), "movieId": str(movie_id)},
+                    ),
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertIn("collectionItem", str(raised.exception))
+
+    # --- change 2: the collectionItem route ------------------------------
+
+    def test_dispatcher_routes_collection_item_mutations(self):
+        for operation, target in (
+            ("upsert", "apply_collection_item_upsert"),
+            ("delete", "apply_collection_item_delete"),
+        ):
+            with self.subTest(operation=operation):
+                applied = {"status": "applied", "entityId": uuid.uuid4()}
+                with (
+                    patch.object(next_app, "stored_idempotency_response", return_value=None),
+                    patch.object(next_app, target, return_value=applied) as handler,
+                    patch.object(next_app, "store_idempotency_response") as store,
+                ):
+                    result = next_app.apply_sync_mutation(
+                        object(),
+                        client_id="device-a",
+                        mutation=self._mutation("collectionItem", operation, {}),
+                    )
+
+                self.assertIs(result, applied)
+                handler.assert_called_once()
+                # Idempotency handling is generic; the new branches inherit it.
+                store.assert_called_once()
+
+    def test_snake_case_entity_type_is_still_unsupported(self):
+        with (
+            patch.object(next_app, "stored_idempotency_response", return_value=None),
+            patch.object(next_app, "store_idempotency_response"),
+        ):
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.apply_sync_mutation(
+                    object(),
+                    client_id="device-a",
+                    mutation=self._mutation("collection_item", "upsert", {}),
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertIn("Unsupported mutation", str(raised.exception))
+
+    def test_sync_state_advertises_the_collection_item_mutations(self):
+        client = next_app.app.test_client()
+        with (
+            patch.object(next_app, "connect") as connect,
+            patch.object(next_app, "table_exists", return_value=False),
+            patch.object(next_app, "current_revision", return_value=7),
+        ):
+            connect.return_value.__enter__.return_value = object()
+            payload = client.get("/api/next/sync/state").get_json()
+
+        self.assertIn("collectionItem.upsert", payload["supportedMutations"])
+        self.assertIn("collectionItem.delete", payload["supportedMutations"])
+
+    def test_reference_accepts_snake_case_aliases(self):
+        collection_id, item_id = uuid.uuid4(), uuid.uuid4()
+        with patch.object(next_app, "resolve_sync_entity_id", side_effect=[collection_id, item_id]):
+            resolved = next_app.collection_item_reference(
+                object(),
+                client_id="device-a",
+                payload={
+                    "collection_id": str(collection_id),
+                    "item_type": "box_set",
+                    "item_id": str(item_id),
+                },
+                label="collectionItem upsert",
+            )
+
+        self.assertEqual(resolved, (collection_id, "box_set", item_id))
+
+    def test_reference_rejects_an_unknown_item_type(self):
+        with patch.object(next_app, "resolve_sync_entity_id", return_value=uuid.uuid4()):
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.collection_item_reference(
+                    object(),
+                    client_id="device-a",
+                    payload={
+                        "collectionId": str(uuid.uuid4()),
+                        "itemType": "series",
+                        "itemId": str(uuid.uuid4()),
+                    },
+                    label="collectionItem upsert",
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_upsert_refuses_a_collection_id_that_is_a_vault(self):
+        collection_id, item_id = uuid.uuid4(), uuid.uuid4()
+        with (
+            patch.object(next_app, "table_exists", return_value=True),
+            patch.object(next_app, "resolve_sync_entity_id", side_effect=[collection_id, item_id]),
+            patch.object(next_app, "container_type_for_id", return_value="vault"),
+        ):
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.apply_collection_item_upsert(
+                    object(),
+                    client_id="device-a",
+                    idem_key="idem-1",
+                    mutation=self._mutation(
+                        "collectionItem",
+                        "upsert",
+                        {
+                            "collectionId": str(collection_id),
+                            "itemType": "movie",
+                            "itemId": str(item_id),
+                        },
+                    ),
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_upsert_refuses_an_item_type_that_lies_about_the_container(self):
+        collection_id, item_id = uuid.uuid4(), uuid.uuid4()
+        types = {collection_id: "collection", item_id: "vault"}
+        with (
+            patch.object(next_app, "table_exists", return_value=True),
+            patch.object(next_app, "resolve_sync_entity_id", side_effect=[collection_id, item_id]),
+            patch.object(next_app, "container_type_for_id", side_effect=lambda _conn, cid: types[cid]),
+        ):
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.apply_collection_item_upsert(
+                    object(),
+                    client_id="device-a",
+                    idem_key="idem-1",
+                    mutation=self._mutation(
+                        "collectionItem",
+                        "upsert",
+                        {
+                            "collectionId": str(collection_id),
+                            "itemType": "box_set",  # actually a vault
+                            "itemId": str(item_id),
+                        },
+                    ),
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+
+    # --- the cycle rule (§4b.7) ------------------------------------------
+
+    def test_cycle_guard_ignores_movies(self):
+        collection_id = uuid.uuid4()
+        with patch.object(next_app, "collection_ancestor_container_ids") as ancestors:
+            next_app.guard_collection_item_cycle(
+                object(), collection_id=collection_id, item_type="movie", item_id=uuid.uuid4()
+            )
+        # A movie holds no members, so it can never close a loop -- and asking
+        # would be a query per membership write.
+        ancestors.assert_not_called()
+
+    def test_cycle_guard_refuses_a_direct_self_reference(self):
+        collection_id = uuid.uuid4()
+        with self.assertRaises(next_app.NextApiError) as raised:
+            next_app.guard_collection_item_cycle(
+                object(),
+                collection_id=collection_id,
+                item_type="collection",
+                item_id=collection_id,
+            )
+
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_cycle_guard_refuses_an_indirect_cycle(self):
+        # B is already inside A; adding A into B closes the loop.
+        collection_a, collection_b = uuid.uuid4(), uuid.uuid4()
+        with patch.object(
+            next_app, "collection_ancestor_container_ids", return_value={collection_a}
+        ):
+            with self.assertRaises(next_app.NextApiError) as raised:
+                next_app.guard_collection_item_cycle(
+                    object(),
+                    collection_id=collection_b,
+                    item_type="collection",
+                    item_id=collection_a,
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_cycle_guard_allows_an_unrelated_collection(self):
+        with patch.object(next_app, "collection_ancestor_container_ids", return_value=set()):
+            next_app.guard_collection_item_cycle(
+                object(),
+                collection_id=uuid.uuid4(),
+                item_type="collection",
+                item_id=uuid.uuid4(),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
