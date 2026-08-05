@@ -5556,6 +5556,52 @@ def location_list_entities(conn) -> list[dict[str, Any]]:
     return rows
 
 
+#: Location keys that stay server-side and never reach a client.
+#:
+#: ``qr_token`` is a capability token. A scan resolves to
+#: ``discvault://locations/<public_id>``, and ``public_id`` *is* on the wire, so
+#: a client can follow a scanned code end to end without ever holding the token.
+#: Sync-contract §4c.1 states this explicitly, because the first implementation
+#: to build the scan flow will otherwise reason its way into needing it.
+#: ``name_path`` is the raw CTE column that ``path`` is built from — the same
+#: value under a second name, and not part of §4c.1's shape.
+_LOCATION_SYNC_OMITTED_KEYS = frozenset(
+    {"qr_token", "movie_count", "container_count", "name_path"}
+)
+
+
+def location_sync_entities(conn) -> list[dict[str, Any]]:
+    """The ``locations`` array as sync-contract §4c.1 defines it.
+
+    Same rows as :func:`location_list_entities` — including its pre-order
+    sort, which §4c.1 promises to clients so that two of them never order the
+    tree differently — minus the keys in
+    :data:`_LOCATION_SYNC_OMITTED_KEYS`.
+
+    The counts are dropped rather than published: a client holds its own copy
+    of every movie and container and can count for itself, and a server-sent
+    tally that drifts out of step with that copy is worse than no tally.
+    """
+    entities: list[dict[str, Any]] = []
+    for row in location_list_entities(conn):
+        entities.append({key: value for key, value in row.items() if key not in _LOCATION_SYNC_OMITTED_KEYS})
+    return entities
+
+
+def single_location_sync_entity(conn, location_id) -> dict[str, Any] | None:
+    """One location in the same shape as the bootstrap ``locations`` array.
+
+    Built by filtering the full list rather than by a second SELECT, so `depth`,
+    `path` and `path_label` — which only exist relative to the rest of the tree
+    — cannot drift from what the bootstrap says.
+    """
+    wanted = str(location_id)
+    for row in location_sync_entities(conn):
+        if str(row.get("id")) == wanted:
+            return row
+    return None
+
+
 def _all_locations_index(conn) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
     if not table_exists(conn, "locations"):
@@ -6663,6 +6709,7 @@ def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
                 c.badge_label,
                 c.year,
                 c.description,
+                c.location_id,
                 c.metadata,
                 c.created_at,
                 c.updated_at
@@ -6699,6 +6746,125 @@ def emit_container_change(conn, container_id, *, operation: str, entity: dict[st
         payload=payload,
     )
     return revision
+
+
+def emit_location_change(conn, location_id, *, operation: str, entity: dict[str, Any] | None = None) -> int:
+    """Emit a ``location`` upsert/delete delta (sync-contract §4c).
+
+    Upserts carry the full location ``entity`` in the same shape as the
+    bootstrap ``locations`` array; deletes carry only the ``id``. No-op when the
+    sync tables are absent.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    payload: dict[str, Any] = {"id": str(location_id)}
+    if operation != "delete":
+        if entity is None:
+            entity = single_location_sync_entity(conn, location_id)
+        if entity is not None:
+            payload["entity"] = entity
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="location",
+        entity_id=str(location_id),
+        operation=operation,
+        payload=payload,
+    )
+    return revision
+
+
+def emit_movie_change(conn, movie_id, *, operation: str = "upsert") -> int:
+    """Emit a ``movie`` upsert delta for a server-side edit.
+
+    The mutation path builds its own richer payload (client ids, match result);
+    this is the plain server-originated form, shaped like that payload's
+    ``entity`` so a client applies both the same way.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    entity = movie_entity(conn, movie_id)
+    if entity is None:
+        return 0
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="movie",
+        entity_id=str(movie_id),
+        operation=operation,
+        payload={"id": str(movie_id), "entity": entity},
+    )
+    return revision
+
+
+def location_subtree_ids(conn, location_id) -> list[str]:
+    """A location's id plus every descendant's, since deletes cascade."""
+    if not table_exists(conn, "locations"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH RECURSIVE subtree AS (
+                SELECT id FROM locations WHERE id=%s
+                UNION ALL
+                SELECT c.id FROM locations c JOIN subtree s ON c.parent_id = s.id
+            )
+            SELECT id FROM subtree
+            """,
+            (location_id,),
+        )
+        return [str(row["id"]) for row in cur.fetchall()]
+
+
+def location_assignment_holders(conn, location_ids: list[str]) -> tuple[list[Any], list[Any]]:
+    """Movies and containers currently assigned to any of ``location_ids``.
+
+    Call this *before* deleting a location. The FK is ``ON DELETE SET NULL``, so
+    afterwards there is nothing left to join against and the affected rows are
+    unrecoverable.
+    """
+    if not location_ids:
+        return [], []
+    movie_ids: list[Any] = []
+    container_ids: list[Any] = []
+    if table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM movies WHERE location_id = ANY(%s::uuid[]) AND deleted_at IS NULL",
+                (location_ids,),
+            )
+            movie_ids = [row["id"] for row in cur.fetchall()]
+    if table_exists(conn, "containers"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM containers WHERE location_id = ANY(%s::uuid[]) AND deleted_at IS NULL",
+                (location_ids,),
+            )
+            container_ids = [row["id"] for row in cur.fetchall()]
+    return movie_ids, container_ids
+
+
+def emit_location_detachments(conn, movie_ids: list[Any], container_ids: list[Any]) -> int:
+    """Re-emit every movie and container a location delete just detached.
+
+    Sync-contract §4c.5 forbids a client from erasing a ``location_id`` it
+    cannot resolve — an unresolvable id means "unknown", never "gone". That rule
+    prevents data loss, and without these deltas it would also keep a ghost
+    reference alive forever: the phone would watch the location disappear and
+    hold its own assignment for good.
+
+    Returns the number of changes emitted.
+    """
+    emitted = 0
+    for movie_id in movie_ids:
+        if emit_movie_change(conn, movie_id):
+            emitted += 1
+    for container_id in container_ids:
+        if emit_container_change(conn, container_id, operation="upsert"):
+            emitted += 1
+    return emitted
 
 
 def idempotency_key(client_id: str, client_mutation_id: str) -> str:
@@ -7609,118 +7775,13 @@ def app_preference_sections_payload(preferences: dict[str, Any]) -> list[dict[st
     return sections
 
 
-def mobile_feature_capabilities(conn, actor: dict[str, Any]) -> dict[str, Any]:
-    permissions = actor_effective_permission_keys(conn, actor)
-
-    def has_any(*keys: str) -> bool:
-        return "*" in permissions or bool(permissions.intersection(keys))
-
-    return {
-        "collection": {
-            "view": has_any("collection.view", "collection.view_all", "collection.view_own", "collection.view_group"),
-            "viewAll": has_any("collection.view_all"),
-            "viewOwn": has_any("collection.view_own", "collection.view"),
-            "viewGroups": has_any("collection.view_group", "collection.view", "groups.view", "groups.view_all"),
-            "add": has_any("collection.add", "collection.add_own", "collection.import", "collection.edit_all"),
-            "addOwn": has_any("collection.add_own", "collection.add"),
-            "import": has_any("collection.import"),
-            "edit": has_any("collection.edit_all", "collection.edit_own", "collection.edit_group"),
-            "delete": has_any("collection.delete_all", "collection.delete_own", "collection.delete_group"),
-            "bulkEdit": has_any("collection.bulk_edit", "collection.edit_all"),
-        },
-        "metadata": {
-            "search": has_any("metadata.search", "collection.import", "collection.add", "collection.add_own", "collection.edit_all"),
-            "refreshOne": has_any("metadata.refresh_one"),
-            "refreshBulk": has_any("metadata.refresh_bulk"),
-            "viewJobs": has_any("admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"),
-            "plugins": has_any("metadata.manage_plugins", "metadata.view_plugin_health", "metadata.manage_plugin_settings"),
-        },
-        "import": {
-            "barcodeScanner": has_any("metadata.search", "collection.add", "collection.add_own", "collection.import"),
-            "manualSearch": has_any("metadata.search", "collection.add", "collection.add_own", "collection.import"),
-            "boxSetDetection": has_any("metadata.search", "collection.add", "collection.import", "containers.create"),
-            "fileImport": has_any("collection.import"),
-        },
-        "containers": {
-            "view": has_any("containers.view", "collection.view", "collection.view_all", "collection.view_group"),
-            "create": has_any("containers.create", "collection.import"),
-            "edit": has_any("containers.edit"),
-            "delete": has_any("containers.delete"),
-        },
-        "groups": {
-            "view": has_any("groups.view", "groups.view_all", "groups.manage", "users.view"),
-            "create": has_any("groups.create", "groups.manage"),
-            "invite": has_any("groups.invite", "groups.manage"),
-            "manage": has_any("groups.manage"),
-        },
-        "personal": {
-            "watchlist": has_any("watchlist.manage"),
-            "notifications": True,
-            "push": True,
-            "loanRequests": has_any("lending.request"),
-            "manageLoansSystem": has_any("security.manage_loans_system"),
-        },
-        "api": {
-            "read": has_any("api.read"),
-            "write": has_any("api.write"),
-            "tokensManage": has_any("api.tokens.manage"),
-            "mcp": has_any("mcp.use") or any(key.startswith("mcp.tool.") for key in permissions),
-        },
-        "offline": {
-            "readCache": True,
-            "queuedMutations": True,
-            "syncDelta": True,
-            "conflictDetection": True,
-        },
-    }
+# `mobile_feature_capabilities` and `mobile_endpoint_contract_payload` both
+# live in `next_preferences` and are imported at the top of this module.
+# Second copies used to sit here. They were dead code — the import binding
+# wins — and both had silently drifted from the served versions, which is
+# exactly what an unreachable duplicate does over time.
 
 
-def mobile_endpoint_contract_payload() -> dict[str, Any]:
-    return {
-        "auth": {
-            "start": "/api/next/auth/mobile/start",
-            "exchange": "/api/next/auth/mobile/exchange",
-            "status": "/api/next/auth/status",
-        },
-        "bootstrap": "/api/next/mobile/bootstrap",
-        "profile": "/api/next/profile",
-        "preferences": "/api/next/preferences",
-        "notifications": "/api/next/notifications",
-        "push": {
-            "status": "/api/next/push/status",
-            "preferences": "/api/next/push/preferences",
-        },
-        "sync": {
-            "state": "/api/next/sync/state",
-            "bootstrap": "/api/next/sync/bootstrap",
-            "delta": "/api/next/sync/delta",
-            "mutations": "/api/next/sync/mutations",
-            "reconcile": "/api/next/sync/reconcile",
-            "userBootstrap": "/api/next/sync/user/bootstrap",
-            "userDelta": "/api/next/sync/user/delta",
-        },
-        "import": {
-            "metadataLookup": "/api/next/metadata/lookup",
-            "importMovie": "/api/next/import/movie",
-        },
-        "metadata": {
-            "refreshMovie": "/api/next/movies/{movieId}/metadata/refresh",
-            "refreshContainer": "/api/next/containers/{containerId}/metadata/refresh",
-            "jobs": "/api/next/metadata/jobs",
-        },
-        "loans": {
-            "list": "/api/next/loans",
-            "borrowed": "/api/next/loans/borrowed",
-            "return": "/api/next/loans/{loanId}/return",
-        },
-        "loanRequests": {
-            "create": "/api/next/movies/{movieId}/loan-requests",
-            "list": "/api/next/loan-requests",
-            "approve": "/api/next/loan-requests/{loanRequestId}/approve",
-            "decline": "/api/next/loan-requests/{loanRequestId}/decline",
-            "cancel": "/api/next/loan-requests/{loanRequestId}/cancel",
-        },
-    }
 
 
 def require_next_admin_user(conn) -> dict[str, Any]:
@@ -9647,6 +9708,7 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
     "estimated_value",
     "estimated_value_currency",
     "location",
+    "location_id",
     "metadata",
     "created_at",
     "updated_at",
@@ -9655,8 +9717,13 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
 # What the delta legitimately carries on top: routing and tombstone state a
 # bootstrap has no use for. Declared rather than implied, so the parity test can
 # assert the difference is exactly this and no wider.
+#
+# `location_id` used to sit here, which made it delta-only — the same shape of
+# drift this file's comment above describes for `release_title`. A client that
+# only ever saw deltas found the field; a fresh install never did. Sync-contract
+# §4c moved it onto the bootstrap alongside the `locations` array that gives it
+# meaning.
 _MOVIE_ENTITY_ONLY_COLUMNS: tuple[str, ...] = (
-    "location_id",
     "owner_id",
     "client_id",
     "deleted_at",
@@ -16479,6 +16546,7 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.badge_label,
                 c.year,
                 c.description,
+                c.location_id,
                 c.owner_id,
                 c.metadata,
                 c.created_at,
@@ -21706,6 +21774,7 @@ def register_routes(flask_app: Flask) -> None:
                     summary=f"Created location {payload['name']}",
                     metadata={"publicId": public_id, "name": payload["name"], "parentId": str(parent_uuid) if parent_uuid else None},
                 )
+                emit_location_change(conn, location_uuid, operation="upsert")
             detail = location_detail_entity(conn, location_uuid)
         return response({"status": "ok", "detail": detail}, 201)
 
@@ -21763,6 +21832,15 @@ def register_routes(flask_app: Flask) -> None:
                         "reparented": reparent,
                     },
                 )
+                # A rename or a move rewrites `path`/`path_label` — and a move
+                # also `depth` — for every descendant, not just this row. Those
+                # are wire fields (§4c.1), so the whole subtree is stale. Build
+                # the tree once: resolving each id on its own would rebuild it
+                # per node.
+                stale = set(location_subtree_ids(conn, location_uuid)) or {str(location_uuid)}
+                for entity in location_sync_entities(conn):
+                    if str(entity.get("id")) in stale:
+                        emit_location_change(conn, entity["id"], operation="upsert", entity=entity)
             detail = location_detail_entity(conn, location_uuid)
         return response({"status": "ok", "detail": detail})
 
@@ -21776,9 +21854,17 @@ def register_routes(flask_app: Flask) -> None:
             existing = location_entity(conn, location_uuid)
             if not existing:
                 raise NextApiError("Location not found", 404)
+            # Both must be read before the DELETE: the tree cascades, and the
+            # assignments are `ON DELETE SET NULL`, so afterwards there is
+            # nothing left to join against (§4c.5).
+            subtree_ids = location_subtree_ids(conn, location_uuid) or [str(location_uuid)]
+            detached_movies, detached_containers = location_assignment_holders(conn, subtree_ids)
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute("DELETE FROM locations WHERE id=%s", (location_uuid,))
+                for subtree_id in subtree_ids:
+                    emit_location_change(conn, subtree_id, operation="delete")
+                emit_location_detachments(conn, detached_movies, detached_containers)
                 audit_event(
                     conn,
                     event_type="location.deleted",
@@ -21872,6 +21958,7 @@ def register_routes(flask_app: Flask) -> None:
                         "backdropUrl": backdrop_url,
                     },
                 )
+                emit_location_change(conn, location_uuid, operation="upsert")
             detail = location_detail_entity(conn, location_uuid)
         return response(
             {
@@ -30671,6 +30758,7 @@ def register_routes(flask_app: Flask) -> None:
                     "container",
                     "container_membership",
                     "movie_identifier",
+                    "location",
                     "metadata_plugin",
                     "setting",
                 ],
@@ -30714,6 +30802,11 @@ def register_routes(flask_app: Flask) -> None:
                 "movieIdentifiers": all_movie_identifier_entities(
                     conn, limit=min(max(limit * 20, 1000), 200000)
                 ),
+                # Unbounded by `limit`: the tree is at most four levels deep and
+                # a movie's `location_id` is meaningless without the row it
+                # points at, so truncating it would hand clients exactly the
+                # unresolvable ids sync-contract §4c exists to remove.
+                "locations": location_sync_entities(conn),
                 "moviePeople": movie_people,
                 "movieCast": [credit for credit in movie_people if credit.get("department") == "cast"],
                 "movieCrew": [credit for credit in movie_people if credit.get("department") == "crew"],
