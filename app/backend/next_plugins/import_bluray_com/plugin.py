@@ -21,7 +21,11 @@ SOURCE = {
         "title": ("Title", "Movie", "Name"),
         "originalTitle": ("Original Title", "OriginalTitle"),
         "year": ("Year", "Release Year", "Movie Year"),
+        # "Release date" in a Blu-ray.com collection export is the date the disc
+        # was published, never the film's release. See releaseDateIsEditionDate
+        # below: it is read as edition data, not as the film's year.
         "releaseDate": ("Release Date", "Edition Release Date"),
+        "discCount": ("Blu-ray discs", "DVD discs", "4K discs", "Discs"),
         "barcode": ("UPC", "EAN", "Barcode"),
         "format": ("Format", "Media", "Media Type", "Type"),
         "edition": ("Edition", "Packaging", "Release"),
@@ -44,6 +48,26 @@ SOURCE = {
         "vault": ("Vault", "Vault Title", "Version Group", "Edition Group"),
     },
     "defaultFormat": "Blu-ray",
+    # Blu-ray.com exports carry the disc format in the title ("Basic Instinct
+    # 4K") and no box-set column at all, and their date column describes the
+    # disc rather than the film. All three are normalized on import.
+    "normalizeTitleFormats": True,
+    "detectBoxSetsFromTitle": True,
+    "releaseDateIsEditionDate": True,
+    "recognition": {
+        "fileNameHints": ("bluray", "blu-ray", "bluray.com", "blu-ray.com"),
+        "columnHints": (
+            "Blu-ray discs",
+            "DVD discs",
+            "Slipcover",
+            "Casing",
+            "Memorabilia",
+            "Digital copy",
+            "Date added",
+            "Price comment",
+        ),
+        "requiredMappedFields": ("title", "barcode", "releaseDate"),
+    },
 }
 
 PLUGIN = CollectionImportPlugin(SOURCE)

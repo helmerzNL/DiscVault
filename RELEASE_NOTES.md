@@ -1,5 +1,27 @@
 # DiscVault Release Notes
 
+## 26.7.71 - A Blu-ray.com import describes the film, not the disc
+
+- Titles no longer keep the disc format. "Basic Instinct 4K" imports as
+  *Basic Instinct* with format `4K UHD`: a trailing 4K/UHD token is stripped
+  from the title and promoted to the format field, so nothing is lost. A format
+  named by the export's own column still wins over the token.
+- The film year is no longer taken from the disc's release date. Blu-ray.com's
+  "Release date" is the pressing date — Basic Instinct's 4K disc is from 2023,
+  the film from 1992 — and that year also sent every metadata lookup to the
+  wrong film. The date is now kept as `editionReleaseDate`, and a source of this
+  kind supplies a year only when it has a real year column.
+- Long-form dates ("March 1 2023") are parsed, so the disc date survives the
+  import at all instead of being dropped.
+- Multi-film releases are recognised without a box-set column. Blu-ray.com
+  exports have none, so a nine-disc trilogy imported as a single film. Titles
+  that name a multi-film release ("Trilogy", "Complete Collection",
+  "Collection 6 films") now propose a box set; weaker phrases ("Collection",
+  "Guardians of the Galaxy 1-3") need a disc count high enough to hold several
+  films, since a 4K release of one film already ships two or three discs. The
+  export lists no members, so the proposal is never auto-imported — it lands in
+  the review queue for confirmation.
+
 ## 26.7.40 - A version bump can no longer collide with a parallel pull request
 
 - `bump_version.py` now reads the target branch's `app/VERSION` and raises its
