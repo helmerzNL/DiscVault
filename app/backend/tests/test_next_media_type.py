@@ -19,6 +19,7 @@ try:
         normalize_media_type,
     )
     from .. import next_metadata
+    from .. import next_app
 except ImportError:  # pragma: no cover - backend working-directory CI imports
     from dedup_identity import (
         MEDIA_TYPE_MOVIE,
@@ -27,6 +28,7 @@ except ImportError:  # pragma: no cover - backend working-directory CI imports
         normalize_media_type,
     )
     import next_metadata
+    import next_app
 
 
 class NormalizeMediaTypeTests(unittest.TestCase):
@@ -87,6 +89,94 @@ class MediaTypeConflictTests(unittest.TestCase):
 
     def test_an_unrecognised_value_never_vetoes(self):
         self.assertFalse(media_type_conflicts("anime", "SHOW"))
+
+
+class MediaTypeErrorMessageTests(unittest.TestCase):
+    """Both handlers accept two spellings; the rejection must name both.
+
+    A caller who sent `media_type` and is told only about `mediaType` has no way
+    to tell whether the value or the key was wrong.
+    """
+
+    def test_the_edit_path_names_both_spellings(self):
+        with self.assertRaises(next_app.NextApiError) as caught:
+            next_app.movie_update_payload(
+                {"title": "X", "media_type": "miniseries"}, existing={"title": "X"}
+            )
+        message = str(caught.exception)
+        self.assertIn("mediaType", message)
+        self.assertIn("media_type", message)
+
+    def test_both_accepted_spellings_reach_the_same_rejection(self):
+        for key in ("mediaType", "media_type"):
+            with self.subTest(key=key):
+                with self.assertRaises(next_app.NextApiError):
+                    next_app.movie_update_payload(
+                        {"title": "X", key: "anime"}, existing={"title": "X"}
+                    )
+
+
+class BarcodeFinderQueryShapeTests(unittest.TestCase):
+    """The veto decides the query shape, so the shape is worth pinning.
+
+    Scanning every barcode holder is only justified when a conflict is possible.
+    With no incoming type nothing can be vetoed, so the finder must not page in
+    candidates just to accept the first one.
+    """
+
+    class _RecordingConn:
+        def __init__(self, rows):
+            self.rows = rows
+            self.sql = []
+
+        def cursor(self):
+            outer = self
+
+            class _Cur:
+                def __enter__(self_inner):
+                    return self_inner
+
+                def __exit__(self_inner, *_):
+                    return False
+
+                def execute(self_inner, sql, params=None):
+                    outer.sql.append(sql)
+
+                def fetchall(self_inner):
+                    return outer.rows
+
+            return _Cur()
+
+    def test_no_incoming_type_uses_the_single_row_query(self):
+        conn = self._RecordingConn([{"id": "movie-1", "media_type": "MOVIE"}])
+        next_app.find_movie_by_barcode_match(conn, "5051890000000")
+        self.assertIn("LIMIT 1", conn.sql[0])
+
+    def test_an_incoming_type_scans_so_a_conflict_cannot_hide_a_match(self):
+        conn = self._RecordingConn([{"id": "movie-1", "media_type": "MOVIE"}])
+        next_app.find_movie_by_barcode_match(
+            conn, "5051890000000", incoming_media_type="SHOW"
+        )
+        self.assertNotIn("LIMIT 1", conn.sql[0])
+
+    def test_an_unrecognised_incoming_type_cannot_veto_so_it_does_not_scan(self):
+        conn = self._RecordingConn([{"id": "movie-1", "media_type": "MOVIE"}])
+        next_app.find_movie_by_barcode_match(
+            conn, "5051890000000", incoming_media_type="miniseries"
+        )
+        self.assertIn("LIMIT 1", conn.sql[0])
+
+    def test_a_conflicting_first_row_still_does_not_hide_a_later_match(self):
+        conn = self._RecordingConn(
+            [
+                {"id": "the-film", "media_type": "MOVIE"},
+                {"id": "the-series", "media_type": "SHOW"},
+            ]
+        )
+        found = next_app.find_movie_by_barcode_match(
+            conn, "5051890000000", incoming_media_type="SHOW"
+        )
+        self.assertEqual(found, "the-series")
 
 
 class MediaTypeOwnershipTests(unittest.TestCase):
