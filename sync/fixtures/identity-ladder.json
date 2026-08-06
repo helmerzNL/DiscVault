@@ -1,6 +1,6 @@
 {
-  "$schema_note": "Taalonafhankelijke fixtures voor de DiscVault-identiteitsladder (sync-contract.md §2 voor films, §2b voor containers). Server, iOS en Android draaien alle top-level testcategorieën en falen gesloten op onbekende categorieën. 'expected' is het verwachte laddereindresultaat voor het paar (a, b). match_tier geeft de trede die het besluit neemt; null bij no-match — voor films: clientId/barcode/tmdbEdition/titleYear; voor containers: clientId/barcode/containerIdentifier/titleType. context 'create' = gewone create-pad (trede 4 inactief); 'reconcile' = first-connect-adoptiepad (trede 4 actief). 'identifier_cases' pinnen hoe de TMDB- en MovieVault-id uit identifier-records worden gehaald (films). 'container_cases' en 'container_merge_winner_cases' zijn de containeranaloga van 'cases' en 'merge_winner_cases' (sync-contract.md §2b/§8b) — 'container_type' ('box_set'/'vault'/'collection') is nooit een uitzondering: het scoped alléén trede 2 (barcode) en telt mee op trede 4 (titel). Divergentie tussen implementaties hoort hier een falende test te zijn, niet een duplicaat in een collectie.",
-  "version": "1.2",
+  "$schema_note": "Taalonafhankelijke fixtures voor de DiscVault-identiteitsladder (sync-contract.md §2 voor films, §2b voor containers). Server, iOS en Android draaien alle top-level testcategorieën en falen gesloten op onbekende categorieën. 'expected' is het verwachte laddereindresultaat voor het paar (a, b). match_tier geeft de trede die het besluit neemt; null bij no-match — voor films: clientId/barcode/tmdbEdition/titleYear; voor containers: clientId/barcode/containerIdentifier/titleType. context 'create' = gewone create-pad (trede 4 inactief); 'reconcile' = first-connect-adoptiepad (trede 4 actief). 'identifier_cases' pinnen hoe de TMDB- en MovieVault-id uit identifier-records worden gehaald (films). 'container_cases' en 'container_merge_winner_cases' zijn de containeranaloga van 'cases' en 'merge_winner_cases' (sync-contract.md §2b/§8b) — 'container_type' ('box_set'/'vault'/'collection') is nooit een uitzondering: het scoped alléén trede 2 (barcode) en telt mee op trede 4 (titel). Divergentie tussen implementaties hoort hier een falende test te zijn, niet een duplicaat in een collectie. 'media_type' ('MOVIE'/'SHOW', sync-contract.md §3b) is een dwarsdoorsnedeveto: beide kanten aanwezig en verschillend blokkeert tredes 2 t/m 4, eenzijdig afwezig blokkeert niets, en trede 1 (token) is uitgezonderd.",
+  "version": "1.2+mediatype",
   "generated_from": "productie dry-run 2026-07-22 + contract-randgevallen",
   "cases": [
     {
@@ -173,6 +173,60 @@
       "b": { "barcode": "5051888240816", "title": "The Lord of the Rings: The Two Towers", "year": 2002, "format": "4K UHD" },
       "expected": "no_match",
       "match_tier": null
+    },
+    {
+      "id": "mediatype-diff-blocks-barcode",
+      "description": "Mediatype-veto op trede 2: dezelfde barcode, maar de ene kant is een film en de andere een serie. Twee verschillende werken, dus definitief geen match — en het blokkeert ook alle lagere tredes.",
+      "context": "create",
+      "a": { "barcode": "5051892239851", "media_type": "MOVIE", "title": "Fargo", "year": 1996, "format": "Blu-ray" },
+      "b": { "barcode": "5051892239851", "media_type": "SHOW", "title": "Fargo", "year": 1996, "format": "Blu-ray" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "mediatype-diff-blocks-tmdb-edition",
+      "description": "Mediatype-veto op trede 3: gelijk tmdb-id, formaat en editie, maar verschillend type. Een externe identifier mag nooit twee verschillende werken samenvoegen.",
+      "context": "create",
+      "a": { "tmdb_id": "1396", "media_type": "MOVIE", "title": "Breaking Bad", "year": 2008, "format": "Blu-ray" },
+      "b": { "tmdb_id": "1396", "media_type": "SHOW", "title": "Breaking Bad", "year": 2008, "format": "Blu-ray" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "mediatype-diff-blocks-titleyear",
+      "description": "Mediatype-veto op trede 4 — de reden dat deze regel bestaat. Zonder het veto is een gelijknamige serie uit hetzelfde jaar een firme titel+jaar-match met de film.",
+      "context": "reconcile",
+      "a": { "media_type": "MOVIE", "title": "Fargo", "year": 1996, "format": "Blu-ray" },
+      "b": { "media_type": "SHOW", "title": "Fargo", "year": 1996, "format": "Blu-ray" },
+      "expected": "no_match",
+      "match_tier": null
+    },
+    {
+      "id": "mediatype-onesided-inconclusive",
+      "description": "Eenzijdig afwezig mediatype blokkeert niets: een client van voor deze contractversie stuurt het veld niet mee, en dat mag geen merge tegenhouden. Trede 2 beslist gewoon.",
+      "context": "create",
+      "a": { "barcode": "5051892239852", "media_type": "SHOW", "title": "Chernobyl", "year": 2019, "format": "Blu-ray" },
+      "b": { "barcode": "5051892239852", "title": "Chernobyl", "year": 2019, "format": "Blu-ray" },
+      "expected": "match",
+      "match_tier": "barcode"
+    },
+    {
+      "id": "mediatype-same-show-matches",
+      "description": "Twee series met dezelfde barcode en hetzelfde type matchen gewoon — het veto treft alleen verschillen, niet het type zelf.",
+      "context": "create",
+      "a": { "barcode": "5051892239853", "media_type": "SHOW", "title": "Chernobyl", "year": 2019, "format": "Blu-ray" },
+      "b": { "barcode": "5051892239853", "media_type": "SHOW", "title": "Chernobyl", "year": 2019, "format": "Blu-ray" },
+      "expected": "match",
+      "match_tier": "barcode"
+    },
+    {
+      "id": "mediatype-token-wins-over-conflict",
+      "description": "Trede 1 is uitgezonderd van het mediatype-veto, gespiegeld aan de barcodeveto die trede 1 evenmin raakt. Een gedeeld per-record token wijst met zekerheid hetzelfde record aan; een typeverschil betekent dat de gebruiker dat record heeft omgetypeerd, niet dat er twee records zijn.",
+      "context": "create",
+      "a": { "client_id": "tok-mediatype", "media_type": "MOVIE", "title": "Fargo", "year": 1996, "format": "Blu-ray" },
+      "b": { "client_id": "tok-mediatype", "media_type": "SHOW", "title": "Fargo", "year": 1996, "format": "Blu-ray" },
+      "expected": "match",
+      "match_tier": "clientId"
     }
   ],
   "identifier_cases": [
