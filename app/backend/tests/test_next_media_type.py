@@ -114,6 +114,47 @@ class MediaTypeOwnershipTests(unittest.TestCase):
         self.assertEqual(next_metadata.MOVIE_FIELD_ALIASES["media_type"], "media_type")
 
 
+class MediaTypeProposalNormalisationTests(unittest.TestCase):
+    """Whatever a plugin calls it, only MOVIE or SHOW may reach the column.
+
+    ``movies.media_type`` carries a CHECK constraint, and the apply path builds
+    one UPDATE out of every proposed field. So an unnormalised spelling does not
+    merely drop its own value -- it fails the statement and loses the whole
+    refresh, exactly like the `year` int-vs-text case documented beside it.
+    """
+
+    @staticmethod
+    def _proposed(raw):
+        result = next_metadata.canonicalize_plugin_result(
+            "movievault_v2", "release.lookup", {"movie": {"title": "X", "mediaType": raw}}
+        )
+        return result.get("movieUpdates", {}).get("media_type")
+
+    def test_every_dialect_converges_on_the_column_vocabulary(self):
+        for raw, expected in (
+            ("tv", MEDIA_TYPE_SHOW),
+            ("SHOW", MEDIA_TYPE_SHOW),
+            ("tv_series", MEDIA_TYPE_SHOW),
+            ("movie", MEDIA_TYPE_MOVIE),
+            ("MOVIE", MEDIA_TYPE_MOVIE),
+            ("film", MEDIA_TYPE_MOVIE),
+        ):
+            with self.subTest(raw=raw):
+                self.assertEqual(self._proposed(raw), expected)
+
+    def test_an_unknown_spelling_is_dropped_rather_than_guessed(self):
+        for raw in ("miniseries", "anime", "documentary"):
+            with self.subTest(raw=raw):
+                self.assertIsNone(self._proposed(raw))
+
+    def test_nothing_a_plugin_can_say_reaches_the_column_unnormalised(self):
+        proposed = {
+            self._proposed(raw)
+            for raw in ("tv", "movie", "Show", "FILM", "miniseries", "", None)
+        }
+        self.assertEqual(proposed, {MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW, None})
+
+
 V4_FIXTURE_PATH = os.path.join(
     os.path.dirname(__file__), "fixtures", "distribution-v4-full.ndjson"
 )
