@@ -9598,7 +9598,9 @@ def movie_media_type_value(body: dict[str, Any], existing: dict[str, Any]) -> st
     normalized = normalize_media_type(raw)
     if normalized is None:
         raise NextApiError(
-            f"mediaType must be one of {MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}", 400
+            f"mediaType (or media_type) must be one of "
+            f"{MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}",
+            400,
         )
     return normalized
 
@@ -17105,19 +17107,30 @@ def find_movie_by_barcode_match(
     series that happen to share a box EAN are two different works. Hence the scan
     over candidates instead of the older ``LIMIT 1`` -- a conflicting first row
     must not hide a legitimate match behind it.
+
+    The scan is only needed when there is something to veto *with*. A client that
+    states no type -- which is every client shipped before this contract version,
+    so also the common case -- can never conflict, so it takes the single-row
+    query instead of paging in every candidate to accept the first one anyway.
+
+    Deliberately not narrowed with an ``AND media_type = %s`` in SQL: filtering
+    the conflicting rows out would make this return some *other* barcode holder
+    rather than block the match, which is the opposite of a veto.
     """
     normalized = normalize_barcode(barcode)
     if not normalized:
         return None
+    can_conflict = normalize_media_type(incoming_media_type) is not None
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT id, media_type
             FROM movies
             WHERE deleted_at IS NULL
               AND barcode IS NOT NULL
               AND regexp_replace(barcode, '\\D', '', 'g') = %s
             ORDER BY created_at
+            {"" if can_conflict else "LIMIT 1"}
             """,
             (normalized,),
         )
@@ -23126,7 +23139,9 @@ def register_routes(flask_app: Flask) -> None:
         media_type = normalize_media_type(raw_media_type)
         if raw_media_type and media_type is None:
             raise NextApiError(
-                f"media_type must be one of {MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}", 400
+                f"media_type (or mediaType) must be one of "
+                f"{MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}",
+                400,
             )
         searching = bool(query or media_format or media_type)
         with connect() as conn:
