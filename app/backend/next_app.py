@@ -4360,6 +4360,7 @@ def collection_movie_preview_entities(
                     m.original_title,
                     m.year,
                     m.format,
+                    m.media_type,
                     m.edition,
                     m.location,
                     m.metadata->>'audience_rating' AS audience_rating,
@@ -4444,6 +4445,7 @@ def collection_movie_preview_entities(
                 m.original_title,
                 m.year,
                 m.format,
+                m.media_type,
                 m.edition,
                 m.location,
                 m.metadata->>'audience_rating' AS audience_rating,
@@ -12092,6 +12094,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 m.original_title,
                 m.year,
                 m.format,
+                m.media_type,
                 m.edition,
                 m.edition_type,
                 m.metadata,
@@ -12438,6 +12441,7 @@ def media_group_movie_entities(
                     m.original_title,
                     m.year,
                     m.format,
+                    m.media_type,
                     m.edition,
                     COALESCE(m.metadata->>'poster_url', poster_asset.source_url) AS poster_url,
                     COALESCE(m.metadata->>'backdrop_url', backdrop_asset.source_url) AS backdrop_url,
@@ -12501,6 +12505,7 @@ def media_group_movie_entities(
                     m.original_title,
                     m.year,
                     m.format,
+                    m.media_type,
                     m.edition,
                     m.metadata->>'poster_url' AS poster_url,
                     m.metadata->>'backdrop_url' AS backdrop_url,
@@ -15704,6 +15709,7 @@ def container_member_movie_entities(conn, container_id: UUID, actor: dict[str, A
                 m.year,
                 m.release_date,
                 m.format,
+                m.media_type,
                 m.edition,
                 m.edition_type,
                 m.country,
@@ -15752,6 +15758,7 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
                     m.original_title,
                     m.year,
                     m.format,
+                    m.media_type,
                     m.edition,
                     m.metadata,
                     m.metadata->>'poster_url' AS poster_url,
@@ -15901,6 +15908,7 @@ def container_aggregate_movie_entities(
                     m.year,
                     m.release_date,
                     m.format,
+                    m.media_type,
                     m.edition,
                     m.edition_type,
                     m.country,
@@ -23027,10 +23035,17 @@ def register_routes(flask_app: Flask) -> None:
         offset = max(int(request.args.get("offset", 0)), 0)
         query = clean_text(request.args.get("q") or request.args.get("query"))
         media_format = clean_text(request.args.get("format"))
+        raw_media_type = clean_text(request.args.get("media_type") or request.args.get("mediaType"))
+        media_type = normalize_media_type(raw_media_type)
+        if raw_media_type and media_type is None:
+            raise NextApiError(
+                f"media_type must be one of {MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}", 400
+            )
+        searching = bool(query or media_format or media_type)
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
-                ("api.read", "mcp.tool.search_collection") if query or media_format else ("api.read", "mcp.tool.list_all_movies"),
+                ("api.read", "mcp.tool.search_collection") if searching else ("api.read", "mcp.tool.list_all_movies"),
             )
             if not table_exists(conn, "movies"):
                 return response({"status": "ok", "items": [], "limit": limit, "offset": offset})
@@ -23075,6 +23090,9 @@ def register_routes(flask_app: Flask) -> None:
             if media_format:
                 filters.append("m.format=%s")
                 params.append(media_format)
+            if media_type:
+                filters.append("m.media_type=%s")
+                params.append(media_type)
             visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
             filters.append(visibility_where)
             params.extend(visibility_params)
@@ -23092,6 +23110,7 @@ def register_routes(flask_app: Flask) -> None:
                         m.year,
                         m.release_date,
                         m.format,
+                        m.media_type,
                         m.edition,
                         m.country,
                         m.language,
@@ -23114,10 +23133,16 @@ def register_routes(flask_app: Flask) -> None:
             audit_api_interaction(
                 conn,
                 actor,
-                command="search_collection" if query or media_format else "list_all_movies",
+                command="search_collection" if searching else "list_all_movies",
                 event_type="api.movies_read",
                 summary="Read movies through the public API",
-                metadata={"limit": limit, "offset": offset, "query": query, "format": media_format},
+                metadata={
+                    "limit": limit,
+                    "offset": offset,
+                    "query": query,
+                    "format": media_format,
+                    "media_type": media_type,
+                },
             )
         return response({"status": "ok", "items": items, "limit": limit, "offset": offset})
 
@@ -23151,6 +23176,7 @@ def register_routes(flask_app: Flask) -> None:
                             barcode,
                             release_date,
                             format,
+                            media_type,
                             edition,
                             country,
                             language,
@@ -23164,7 +23190,7 @@ def register_routes(flask_app: Flask) -> None:
                             created_at,
                             updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             movie_id,
@@ -23177,6 +23203,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["barcode"],
                             payload["release_date"],
                             payload["format"],
+                            payload["media_type"],
                             payload["edition"],
                             payload["country"],
                             payload["language"],
@@ -24861,6 +24888,7 @@ def register_routes(flask_app: Flask) -> None:
                             m.original_title,
                             m.year,
                             m.format,
+                            m.media_type,
                             m.edition,
                             m.owner_id,
                             m.metadata->>'poster_url' AS poster_url,
@@ -24919,6 +24947,7 @@ def register_routes(flask_app: Flask) -> None:
                             m.original_title,
                             m.year,
                             m.format,
+                            m.media_type,
                             m.edition,
                             m.owner_id,
                             m.metadata->>'poster_url' AS poster_url,
