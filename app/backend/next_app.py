@@ -17777,9 +17777,15 @@ def apply_movie_upsert(
                 updated_at
             )
             VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                -- The insert and the update branch need *different* answers to
+                -- "the client said nothing", so media_type cannot be a plain
+                -- placeholder here. A new row has to land on the column's
+                -- at-rest default; naming the column explicitly and binding
+                -- NULL would defeat the DEFAULT and hit the NOT NULL instead.
+                COALESCE(%s, %s),
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s,
+                %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -17791,7 +17797,12 @@ def apply_movie_upsert(
                 year=COALESCE(EXCLUDED.year, movies.year),
                 release_date=COALESCE(EXCLUDED.release_date, movies.release_date),
                 format=COALESCE(EXCLUDED.format, movies.format),
-                media_type=COALESCE(EXCLUDED.media_type, movies.media_type),
+                -- Deliberately the raw parameter and not EXCLUDED.media_type:
+                -- the inserted row was already coalesced to the default above,
+                -- so reading it back here would let a client that stated no
+                -- type reset a stored SHOW to MOVIE. Only what this client
+                -- actually said may overwrite what is stored.
+                media_type=COALESCE(%s, movies.media_type),
                 edition=COALESCE(EXCLUDED.edition, movies.edition),
                 edition_type=COALESCE(EXCLUDED.edition_type, movies.edition_type),
                 country=COALESCE(EXCLUDED.country, movies.country),
@@ -17823,6 +17834,7 @@ def apply_movie_upsert(
                 fields["release_date"],
                 fields["format"],
                 fields["media_type"],
+                MEDIA_TYPE_MOVIE,
                 fields["edition"],
                 fields["edition_type"],
                 fields["country"],
@@ -17838,6 +17850,8 @@ def apply_movie_upsert(
                 fields["location"],
                 persistent_client_id,
                 Jsonb(fields["metadata"]),
+                # The ON CONFLICT clause's own media_type placeholder.
+                fields["media_type"],
             ),
         )
 
