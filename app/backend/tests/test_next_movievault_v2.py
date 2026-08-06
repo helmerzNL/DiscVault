@@ -1388,6 +1388,43 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
         )
         self.assertNotIn("backdrop", parsed)
 
+    def test_v4_release_without_work_type_still_parses(self):
+        """Records projected before MovieVault added the field have no key at
+        all, and a published artefact is never re-projected on its own."""
+        record = self._v4_release()
+        self.assertNotIn("workType", record)
+        next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+
+    def test_v4_release_accepts_a_work_type(self):
+        """The regression this test exists for is not a wrong value, it is a
+        dead catalog.
+
+        `_exact_keys` rejects any key it does not know, and `parse_ndjson`
+        validates the entire feed before applying any of it, so one unrecognised
+        key fails the whole sync -- full and delta alike, for every instance.
+        That is exactly what `backdrop` did in 26.7.46, and `workType` is the
+        next field MovieVault publishes.
+        """
+        for value in ("movie", "tv"):
+            with self.subTest(work_type=value):
+                record = self._v4_release(workType=value)
+                next_movievault_v2.validate_record(
+                    record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+                )
+
+    def test_v4_release_tolerates_an_unknown_work_type(self):
+        """A value outside the vocabulary must not cost the record either.
+
+        DiscVault does not read the field yet, so there is nothing to protect by
+        refusing it -- and refusing it would take the whole feed down.
+        """
+        record = self._v4_release(workType="miniseries")
+        next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+
     def test_v3_release_does_not_require_or_accept_the_new_fields(self):
         record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
         for key in (
