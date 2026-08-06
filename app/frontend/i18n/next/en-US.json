@@ -1846,6 +1846,9 @@
   "movieDetail.fieldTitle": "Title",
   "movieDetail.fieldYear": "Year",
   "movieDetail.format": "Format",
+  "movieDetail.mediaType": "Type",
+  "movieDetail.mediaTypeMovie": "Movie",
+  "movieDetail.mediaTypeShow": "TV Show",
   "movieDetail.genre": "Genre",
   "movieDetail.jobs": "Refresh history",
   "movieDetail.language": "Language",
@@ -2699,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault is still working on this lookup. Search again in a moment - the finished result is kept ready.",
   "releaseFallback.unreachable": "MovieVault could not be reached, so nothing is known about this disc yet. This is usually temporary.",
   "releaseFallback.failed": "MovieVault could not complete this lookup.",
-  "releaseFallback.retry": "Try again"
+  "releaseFallback.retry": "Try again",
+  "releaseFallback.sharingOn": "Your choice is shared with MovieVault so others scanning this disc find it. Only the release details travel - never anything about you or your collection.",
+  "preferences.cardSharing": "Sharing with MovieVault",
+  "preferences.cardSharingHelp": "Help the shared catalogue by contributing the releases you identify.",
+  "preferences.shareReleaseSelections": "Share the releases I identify",
+  "preferences.shareReleaseSelectionsHelp": "When a barcode is not recognised and you pick the pressing you are holding, send those release details to MovieVault for review. Only public disc information is sent - never your collection, viewing history or anything identifying you."
 }

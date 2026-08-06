@@ -1846,6 +1846,9 @@
   "movieDetail.fieldTitle": "タイトル",
   "movieDetail.fieldYear": "年",
   "movieDetail.format": "形式",
+  "movieDetail.mediaType": "種類",
+  "movieDetail.mediaTypeMovie": "映画",
+  "movieDetail.mediaTypeShow": "テレビ番組",
   "movieDetail.genre": "ジャンル",
   "movieDetail.jobs": "更新履歴",
   "movieDetail.language": "言語",
@@ -2699,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault はまだこの検索を処理中です。少し後で再検索してください - 完了した結果は保持されます。",
   "releaseFallback.unreachable": "MovieVault に接続できなかったため、このディスクについてはまだ何もわかりません。通常は一時的なものです。",
   "releaseFallback.failed": "MovieVault はこの検索を完了できませんでした。",
-  "releaseFallback.retry": "再試行"
+  "releaseFallback.retry": "再試行",
+  "releaseFallback.sharingOn": "あなたの選択は MovieVault と共有され、同じディスクをスキャンした人が見つけられるようになります。送信されるのはリリース情報だけで、あなたやコレクションに関する情報は一切送られません。",
+  "preferences.cardSharing": "MovieVault との共有",
+  "preferences.cardSharingHelp": "識別したリリースを提供して、共有カタログに貢献します。",
+  "preferences.shareReleaseSelections": "識別したリリースを共有する",
+  "preferences.shareReleaseSelectionsHelp": "バーコードが認識されず、手元のプレスを選んだとき、そのリリース情報が確認のために MovieVault へ送信されます。送信されるのは公開されているディスク情報だけで、コレクション、視聴履歴、あなたを特定する情報は送られません。"
 }

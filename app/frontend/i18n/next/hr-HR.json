@@ -1846,6 +1846,9 @@
   "movieDetail.fieldTitle": "Naslov",
   "movieDetail.fieldYear": "Godina",
   "movieDetail.format": "Format izdanja",
+  "movieDetail.mediaType": "Vrsta",
+  "movieDetail.mediaTypeMovie": "Film",
+  "movieDetail.mediaTypeShow": "TV-serija",
   "movieDetail.genre": "Žanr",
   "movieDetail.jobs": "Osvježi povijest",
   "movieDetail.language": "Jezik",
@@ -2699,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault još radi na ovoj pretrazi. Potraži ponovno za trenutak - gotov rezultat ostaje spreman.",
   "releaseFallback.unreachable": "MovieVault nije bio dostupan pa o ovom disku još ništa nije poznato. To je obično privremeno.",
   "releaseFallback.failed": "MovieVault nije mogao dovršiti ovu pretragu.",
-  "releaseFallback.retry": "Pokušaj ponovno"
+  "releaseFallback.retry": "Pokušaj ponovno",
+  "releaseFallback.sharingOn": "Tvoj se odabir dijeli s MovieVaultom kako bi drugi pronašli ovaj disk pri skeniranju. Šalju se samo podaci o izdanju - nikad ništa o tebi ili tvojoj zbirci.",
+  "preferences.cardSharing": "Dijeljenje s MovieVaultom",
+  "preferences.cardSharingHelp": "Pomogni zajedničkom katalogu doprinoseći izdanjima koja prepoznaš.",
+  "preferences.shareReleaseSelections": "Dijeli izdanja koja prepoznam",
+  "preferences.shareReleaseSelectionsHelp": "Kada barkod nije prepoznat i odabereš izdanje koje držiš u ruci, ti se podaci šalju MovieVaultu na provjeru. Šalju se samo javni podaci o disku - nikad tvoja zbirka, povijest gledanja ili bilo što što te identificira."
 }

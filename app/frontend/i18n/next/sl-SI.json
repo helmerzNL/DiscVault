@@ -1846,6 +1846,9 @@
   "movieDetail.fieldTitle": "Naziv",
   "movieDetail.fieldYear": "Razred/letnik",
   "movieDetail.format": "Format izdaje",
+  "movieDetail.mediaType": "Vrsta",
+  "movieDetail.mediaTypeMovie": "Film",
+  "movieDetail.mediaTypeShow": "TV-serija",
   "movieDetail.genre": "Zvrst",
   "movieDetail.jobs": "Osveži zgodovino",
   "movieDetail.language": "Jezik",
@@ -2699,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault še obdeluje to iskanje. Poišči znova čez trenutek - dokončan rezultat ostane pripravljen.",
   "releaseFallback.unreachable": "MovieVault ni bil dosegljiv, zato o tem disku še ni nič znanega. To je običajno začasno.",
   "releaseFallback.failed": "MovieVault tega iskanja ni mogel dokončati.",
-  "releaseFallback.retry": "Poskusi znova"
+  "releaseFallback.retry": "Poskusi znova",
+  "releaseFallback.sharingOn": "Tvoja izbira se deli z MovieVaultom, da jo najdejo tudi drugi ob skeniranju te plošče. Pošljejo se samo podatki o izdaji - nikoli nič o tebi ali tvoji zbirki.",
+  "preferences.cardSharing": "Deljenje z MovieVaultom",
+  "preferences.cardSharingHelp": "Pomagaj skupnemu katalogu s prispevanjem izdaj, ki jih prepoznaš.",
+  "preferences.shareReleaseSelections": "Deli izdaje, ki jih prepoznam",
+  "preferences.shareReleaseSelectionsHelp": "Ko črtna koda ni prepoznana in izbereš izdajo, ki jo držiš v roki, se ti podatki pošljejo MovieVaultu v pregled. Pošljejo se samo javni podatki o plošči - nikoli tvoja zbirka, zgodovina gledanja ali karkoli, kar te identificira."
 }

@@ -1846,6 +1846,9 @@
   "movieDetail.fieldTitle": "Nimi",
   "movieDetail.fieldYear": "Vuosi",
   "movieDetail.format": "Formaatti",
+  "movieDetail.mediaType": "Tyyppi",
+  "movieDetail.mediaTypeMovie": "Elokuva",
+  "movieDetail.mediaTypeShow": "TV-sarja",
   "movieDetail.genre": "Genre",
   "movieDetail.jobs": "Tehtavat",
   "movieDetail.language": "Kieli",
@@ -2699,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault käsittelee hakua yhä. Hae hetken kuluttua uudelleen - valmis tulos pysyy tallessa.",
   "releaseFallback.unreachable": "MovieVaultiin ei saatu yhteyttä, joten tästä levystä ei tiedetä vielä mitään. Tämä on yleensä tilapäistä.",
   "releaseFallback.failed": "MovieVault ei saanut hakua valmiiksi.",
-  "releaseFallback.retry": "Yritä uudelleen"
+  "releaseFallback.retry": "Yritä uudelleen",
+  "releaseFallback.sharingOn": "Valintasi jaetaan MovieVaultin kanssa, jotta muut löytävät tämän levyn skannatessaan. Vain julkaisun tiedot lähetetään - ei koskaan mitään sinusta tai kokoelmastasi.",
+  "preferences.cardSharing": "Jakaminen MovieVaultin kanssa",
+  "preferences.cardSharingHelp": "Auta yhteistä luetteloa lisäämällä tunnistamasi julkaisut.",
+  "preferences.shareReleaseSelections": "Jaa tunnistamani julkaisut",
+  "preferences.shareReleaseSelectionsHelp": "Kun viivakoodia ei tunnisteta ja valitset kädessäsi olevan painoksen, nämä tiedot lähetetään MovieVaultille tarkistettavaksi. Vain julkiset levytiedot lähetetään - ei koskaan kokoelmaasi, katseluhistoriaasi tai mitään sinut tunnistavaa."
 }

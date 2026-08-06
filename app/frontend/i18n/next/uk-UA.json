@@ -1846,6 +1846,9 @@
   "movieDetail.fieldTitle": "Назва",
   "movieDetail.fieldYear": "Роки",
   "movieDetail.format": "Формат",
+  "movieDetail.mediaType": "Тип",
+  "movieDetail.mediaTypeMovie": "Фільм",
+  "movieDetail.mediaTypeShow": "Телесеріал",
   "movieDetail.genre": "Жанр",
   "movieDetail.jobs": "Оновити історію",
   "movieDetail.language": "Мова",
@@ -2699,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault ще працює над цим пошуком. Пошукай знову за мить - готовий результат залишається напоготові.",
   "releaseFallback.unreachable": "Не вдалося зв'язатися з MovieVault, тож про цей диск поки нічого не відомо. Зазвичай це тимчасово.",
   "releaseFallback.failed": "MovieVault не зміг завершити цей пошук.",
-  "releaseFallback.retry": "Спробувати ще раз"
+  "releaseFallback.retry": "Спробувати ще раз",
+  "releaseFallback.sharingOn": "Твій вибір передається до MovieVault, щоб інші знаходили цей диск під час сканування. Надсилаються лише дані видання - ніколи нічого про тебе чи твою колекцію.",
+  "preferences.cardSharing": "Поширення в MovieVault",
+  "preferences.cardSharingHelp": "Допоможи спільному каталогу, надаючи видання, які розпізнаєш.",
+  "preferences.shareReleaseSelections": "Поширювати видання, які я розпізнаю",
+  "preferences.shareReleaseSelectionsHelp": "Коли штрихкод не розпізнано і ти обираєш видання, яке тримаєш у руках, ці дані надсилаються до MovieVault на перевірку. Надсилається лише публічна інформація про диск - ніколи твоя колекція, історія переглядів чи щось, що тебе ідентифікує."
 }

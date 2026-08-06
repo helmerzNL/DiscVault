@@ -1846,6 +1846,9 @@
   "movieDetail.fieldTitle": "Nosaukums",
   "movieDetail.fieldYear": "Gads",
   "movieDetail.format": "Formāts",
+  "movieDetail.mediaType": "Tips",
+  "movieDetail.mediaTypeMovie": "Filma",
+  "movieDetail.mediaTypeShow": "TV seriāls",
   "movieDetail.genre": "Žanrs",
   "movieDetail.jobs": "Atsvaidzināšanas vēsture",
   "movieDetail.language": "Valoda",
@@ -2699,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault vēl strādā pie šīs meklēšanas. Meklē vēlreiz pēc brīža - pabeigtais rezultāts tiek saglabāts.",
   "releaseFallback.unreachable": "MovieVault nebija sasniedzams, tāpēc par šo disku vēl nekas nav zināms. Parasti tas ir īslaicīgi.",
   "releaseFallback.failed": "MovieVault nevarēja pabeigt šo meklēšanu.",
-  "releaseFallback.retry": "Mēģināt vēlreiz"
+  "releaseFallback.retry": "Mēģināt vēlreiz",
+  "releaseFallback.sharingOn": "Tava izvēle tiek kopīgota ar MovieVault, lai citi šo disku, to skenējot, atrastu. Tiek nosūtīti tikai izdevuma dati - nekad nekas par tevi vai tavu kolekciju.",
+  "preferences.cardSharing": "Kopīgošana ar MovieVault",
+  "preferences.cardSharingHelp": "Palīdzi kopīgajam katalogam, sniedzot izdevumus, kurus atpazīsti.",
+  "preferences.shareReleaseSelections": "Kopīgot izdevumus, kurus atpazīstu",
+  "preferences.shareReleaseSelectionsHelp": "Kad svītrkods netiek atpazīts un tu izvēlies izdevumu, ko turi rokās, šie dati tiek nosūtīti MovieVault pārbaudei. Tiek sūtīta tikai publiska informācija par disku - nekad tava kolekcija, skatīšanās vēsture vai kaut kas, kas tevi identificē."
 }

@@ -12,10 +12,18 @@ jobs:
   version-guard:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+      - name: Checkout (git fallback, no action download)
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
+          git fetch --no-tags origin "+refs/heads/*:refs/remotes/origin/*"
+          git fetch --no-tags origin "${GH_SHA}"
+          git checkout --force FETCH_HEAD
 
       - name: Reject forbidden iOS artifacts
         run: python app/scripts/check_forbidden_paths.py --tree HEAD

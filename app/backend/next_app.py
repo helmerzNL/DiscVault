@@ -151,6 +151,13 @@ try:
     from .next_movievault_v2 import resolve_release_details
     from .next_movievault_v2 import search_release_details
     from .next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from .next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from .next_movievault_v2 import release_technical_contribution_payload
+    from .next_movievault_v2_contributions import release_contribution_enabled
+    from .dedup_identity import MEDIA_TYPE_MOVIE
+    from .dedup_identity import MEDIA_TYPE_SHOW
+    from .dedup_identity import media_type_conflicts
+    from .dedup_identity import normalize_media_type
     from .dedup_identity import title_year_identity_compatible
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
@@ -389,6 +396,13 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2 import resolve_release_details
     from next_movievault_v2 import search_release_details
     from next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from next_movievault_v2 import release_technical_contribution_payload
+    from next_movievault_v2_contributions import release_contribution_enabled
+    from dedup_identity import MEDIA_TYPE_MOVIE
+    from dedup_identity import MEDIA_TYPE_SHOW
+    from dedup_identity import media_type_conflicts
+    from dedup_identity import normalize_media_type
     from dedup_identity import title_year_identity_compatible
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
@@ -4353,6 +4367,7 @@ def collection_movie_preview_entities(
                     m.original_title,
                     m.year,
                     m.format,
+                    m.media_type,
                     m.edition,
                     m.location,
                     m.metadata->>'audience_rating' AS audience_rating,
@@ -4437,6 +4452,7 @@ def collection_movie_preview_entities(
                 m.original_title,
                 m.year,
                 m.format,
+                m.media_type,
                 m.edition,
                 m.location,
                 m.metadata->>'audience_rating' AS audience_rating,
@@ -9417,6 +9433,12 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "year": payload.get("year"),
         "release_date": release_date,
         "format": payload.get("format"),
+        # Lenient in, exact out (sync-contract.md §3b). An unrecognised value
+        # normalizes to None, which the upsert's COALESCE reads as "the client
+        # said nothing" -- it must never reset a stored SHOW back to MOVIE.
+        "media_type": normalize_media_type(
+            payload.get("mediaType") or payload.get("media_type")
+        ),
         "edition": payload.get("edition"),
         "edition_type": payload.get("editionType") or payload.get("edition_type"),
         "country": payload.get("country"),
@@ -9555,6 +9577,33 @@ def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int |
         return int(digits)
     except ValueError:
         return None
+
+
+def movie_media_type_value(body: dict[str, Any], existing: dict[str, Any]) -> str:
+    """Resolve the edited media type, keyed on presence like the runtime helper.
+
+    Deliberately not routed through ``pick_text``: this is a closed enum, not a
+    length-limited free-text column, and ``pick_text`` would raise ``KeyError``
+    on the missing ``MOVIE_EDIT_FIELD_LIMITS`` entry rather than a clean 400.
+
+    An unrecognised non-empty value is a client bug and gets a 400. An absent key
+    keeps the stored value; an explicitly empty one falls back to ``MOVIE``,
+    because the column is NOT NULL and the UI's select always has a value.
+    """
+    keys = ("mediaType", "media_type")
+    if not any(key in body for key in keys):
+        return existing.get("media_type") or MEDIA_TYPE_MOVIE
+    raw = next(body[key] for key in keys if key in body)
+    if not clean_text(raw):
+        return MEDIA_TYPE_MOVIE
+    normalized = normalize_media_type(raw)
+    if normalized is None:
+        raise NextApiError(
+            f"mediaType (or media_type) must be one of "
+            f"{MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}",
+            400,
+        )
+    return normalized
 
 
 def movie_estimated_value(body: dict[str, Any], existing: dict[str, Any]) -> Decimal | None:
@@ -9771,6 +9820,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             barcode=%s,
             release_date=%s,
             format=%s,
+            media_type=%s,
             edition=%s,
             country=%s,
             language=%s,
@@ -9794,6 +9844,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             payload["barcode"],
             payload["release_date"],
             payload["format"],
+            payload["media_type"],
             payload["edition"],
             payload["country"],
             payload["language"],
@@ -9868,6 +9919,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "barcode": pick_text("barcode"),
         "release_date": release_date,
         "format": pick_text("format"),
+        "media_type": movie_media_type_value(body, existing),
         "edition": pick_text("edition"),
         "country": pick_text("country"),
         "language": pick_text("language"),
@@ -10028,6 +10080,7 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
     "year",
     "release_date",
     "format",
+    "media_type",
     "edition",
     "edition_type",
     "country",
@@ -12050,6 +12103,7 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 m.original_title,
                 m.year,
                 m.format,
+                m.media_type,
                 m.edition,
                 m.edition_type,
                 m.metadata,
@@ -12396,6 +12450,7 @@ def media_group_movie_entities(
                     m.original_title,
                     m.year,
                     m.format,
+                    m.media_type,
                     m.edition,
                     COALESCE(m.metadata->>'poster_url', poster_asset.source_url) AS poster_url,
                     COALESCE(m.metadata->>'backdrop_url', backdrop_asset.source_url) AS backdrop_url,
@@ -12459,6 +12514,7 @@ def media_group_movie_entities(
                     m.original_title,
                     m.year,
                     m.format,
+                    m.media_type,
                     m.edition,
                     m.metadata->>'poster_url' AS poster_url,
                     m.metadata->>'backdrop_url' AS backdrop_url,
@@ -13170,7 +13226,9 @@ def movie_identity_debug_entity(conn, movie_id: UUID, movie: dict[str, Any]) -> 
         ladder.append(
             _resolved(
                 "barcode",
-                find_movie_by_barcode_match(conn, barcode),
+                find_movie_by_barcode_match(
+                    conn, barcode, incoming_media_type=movie.get("media_type")
+                ),
                 key=normalized_barcode,
             )
         )
@@ -13185,6 +13243,7 @@ def movie_identity_debug_entity(conn, movie_id: UUID, movie: dict[str, Any]) -> 
                     incoming_title=title,
                     incoming_year=year,
                     incoming_barcode=barcode,
+                    incoming_media_type=movie.get("media_type"),
                 ),
                 key=f"{tmdb_id or '-'} / {physical_media_format_key(fmt) or '-'} / {edition or '-'}",
             )
@@ -13200,6 +13259,7 @@ def movie_identity_debug_entity(conn, movie_id: UUID, movie: dict[str, Any]) -> 
                     incoming_barcode=barcode,
                     incoming_edition=edition,
                     incoming_container_ids=container_ids,
+                    incoming_media_type=movie.get("media_type"),
                 ),
                 key=f"{normalized_title or '-'} / {year or '-'}",
             )
@@ -15658,6 +15718,7 @@ def container_member_movie_entities(conn, container_id: UUID, actor: dict[str, A
                 m.year,
                 m.release_date,
                 m.format,
+                m.media_type,
                 m.edition,
                 m.edition_type,
                 m.country,
@@ -15706,6 +15767,7 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
                     m.original_title,
                     m.year,
                     m.format,
+                    m.media_type,
                     m.edition,
                     m.metadata,
                     m.metadata->>'poster_url' AS poster_url,
@@ -15855,6 +15917,7 @@ def container_aggregate_movie_entities(
                     m.year,
                     m.release_date,
                     m.format,
+                    m.media_type,
                     m.edition,
                     m.edition_type,
                     m.country,
@@ -17015,7 +17078,13 @@ def _year_key(value: Any) -> str | None:
 
 
 def find_movie_by_client_id(conn, client_id: str | None) -> UUID | None:
-    """Trede 1: a live movie already carrying this persistent clientId."""
+    """Trede 1: a live movie already carrying this persistent clientId.
+
+    Deliberately exempt from the media-type veto (sync-contract.md §2). A shared
+    per-record token identifies the same record with certainty -- a barcode
+    conflict does not veto this tier either. A type disagreement on one token
+    means the user retyped that record, not that there are two records.
+    """
     if not client_id:
         return None
     with conn.cursor() as cur:
@@ -17027,26 +17096,51 @@ def find_movie_by_client_id(conn, client_id: str | None) -> UUID | None:
     return row["id"] if row else None
 
 
-def find_movie_by_barcode_match(conn, barcode: str | None) -> UUID | None:
-    """Trede 2: a live movie whose barcode matches (digits-only, tombstones excluded)."""
+def find_movie_by_barcode_match(
+    conn,
+    barcode: str | None,
+    *,
+    incoming_media_type: Any = None,
+) -> UUID | None:
+    """Trede 2: a live movie whose barcode matches (digits-only, tombstones excluded).
+
+    A media-type conflict vetoes the match (sync-contract.md §2): a film and a
+    series that happen to share a box EAN are two different works. Hence the scan
+    over candidates instead of the older ``LIMIT 1`` -- a conflicting first row
+    must not hide a legitimate match behind it.
+
+    The scan is only needed when there is something to veto *with*. A client that
+    states no type -- which is every client shipped before this contract version,
+    so also the common case -- can never conflict, so it takes the single-row
+    query instead of paging in every candidate to accept the first one anyway.
+
+    Deliberately not narrowed with an ``AND media_type = %s`` in SQL: filtering
+    the conflicting rows out would make this return some *other* barcode holder
+    rather than block the match, which is the opposite of a veto.
+    """
     normalized = normalize_barcode(barcode)
     if not normalized:
         return None
+    can_conflict = normalize_media_type(incoming_media_type) is not None
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT id
+            f"""
+            SELECT id, media_type
             FROM movies
             WHERE deleted_at IS NULL
               AND barcode IS NOT NULL
               AND regexp_replace(barcode, '\\D', '', 'g') = %s
             ORDER BY created_at
-            LIMIT 1
+            {"" if can_conflict else "LIMIT 1"}
             """,
             (normalized,),
         )
-        row = cur.fetchone()
-    return row["id"] if row else None
+        rows = cur.fetchall()
+    for row in rows:
+        if media_type_conflicts(incoming_media_type, row.get("media_type")):
+            continue
+        return row["id"]
+    return None
 
 
 def find_movie_by_tmdb_edition(
@@ -17058,12 +17152,14 @@ def find_movie_by_tmdb_edition(
     incoming_title: str | None = None,
     incoming_year: Any = None,
     incoming_barcode: Any = None,
+    incoming_media_type: Any = None,
 ) -> UUID | None:
     """Trede 3: same TMDB id AND physical format AND edition (all three).
 
     Over-merge protection:
     - format must normalize equal on both sides (4K_UHD == 4K UHD),
     - both barcodes present but different is a hard mismatch,
+    - both media types present but different is a hard mismatch,
     - materially different title/year never matches on tmdb alone.
     """
     format_key = physical_media_format_key(fmt)
@@ -17076,7 +17172,7 @@ def find_movie_by_tmdb_edition(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT m.id, m.title, m.year, m.barcode, m.format
+            SELECT m.id, m.title, m.year, m.barcode, m.format, m.media_type
             FROM movies m
             JOIN movie_identifiers mi ON mi.movie_id = m.id
             WHERE m.deleted_at IS NULL
@@ -17093,6 +17189,8 @@ def find_movie_by_tmdb_edition(
         if physical_media_format_key(row.get("format")) != format_key:
             continue
         if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
+        if media_type_conflicts(incoming_media_type, row.get("media_type")):
             continue
         candidate_title_key = normalize_title(row.get("title"))
         if incoming_title_key and candidate_title_key and incoming_title_key != candidate_title_key:
@@ -17304,12 +17402,17 @@ def find_movie_by_title_year(
     incoming_barcode: Any = None,
     incoming_edition: Any = None,
     incoming_container_ids: list[Any] | tuple[Any, ...] | None = None,
+    incoming_media_type: Any = None,
 ) -> UUID | None:
     """Trede 4 (adoption-only): normalized title + exact year + matching format.
 
     Over-merge protection: the format must be present and equal on both sides, so
     a DVD and a 4K UHD of the same film never collapse. If the incoming record has
     no format we refuse to match (per contract 1.3) and let the caller create.
+
+    This is the tier the media-type veto exists for: a film and a series sharing a
+    title and a year (Fargo 1996/2014, Westworld 1973/2016) are otherwise a firm
+    match here.
     """
     normalized = normalize_title(title)
     year_text = clean_text(year)
@@ -17319,7 +17422,7 @@ def find_movie_by_title_year(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT m.id, m.title, m.year, m.barcode, m.format, m.edition,
+            SELECT m.id, m.title, m.year, m.barcode, m.format, m.edition, m.media_type,
                    ARRAY(
                        SELECT cm.container_id::text
                        FROM container_movies cm
@@ -17338,6 +17441,8 @@ def find_movie_by_title_year(
         if physical_media_format_key(row.get("format")) != format_key:
             continue
         if _barcode_conflicts(incoming_barcode, row.get("barcode")):
+            continue
+        if media_type_conflicts(incoming_media_type, row.get("media_type")):
             continue
         if not title_year_identity_compatible(
             left_edition=incoming_edition,
@@ -17522,7 +17627,9 @@ def apply_movie_upsert(
                     conn, persistent_client_id
                 ),
                 find_by_barcode=lambda: find_movie_by_barcode_match(
-                    conn, fields["barcode"]
+                    conn,
+                    fields["barcode"],
+                    incoming_media_type=fields["media_type"],
                 ),
                 find_by_tmdb_edition=lambda: find_movie_by_tmdb_edition(
                     conn,
@@ -17532,6 +17639,7 @@ def apply_movie_upsert(
                     incoming_title=fields["title"],
                     incoming_year=fields["year"],
                     incoming_barcode=fields["barcode"],
+                    incoming_media_type=fields["media_type"],
                 ),
             )
 
@@ -17669,6 +17777,7 @@ def apply_movie_upsert(
                 year,
                 release_date,
                 format,
+                media_type,
                 edition,
                 edition_type,
                 country,
@@ -17688,9 +17797,15 @@ def apply_movie_upsert(
                 updated_at
             )
             VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                -- The insert and the update branch need *different* answers to
+                -- "the client said nothing", so media_type cannot be a plain
+                -- placeholder here. A new row has to land on the column's
+                -- at-rest default; naming the column explicitly and binding
+                -- NULL would defeat the DEFAULT and hit the NOT NULL instead.
+                COALESCE(%s, %s),
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s,
+                %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -17702,6 +17817,12 @@ def apply_movie_upsert(
                 year=COALESCE(EXCLUDED.year, movies.year),
                 release_date=COALESCE(EXCLUDED.release_date, movies.release_date),
                 format=COALESCE(EXCLUDED.format, movies.format),
+                -- Deliberately the raw parameter and not EXCLUDED.media_type:
+                -- the inserted row was already coalesced to the default above,
+                -- so reading it back here would let a client that stated no
+                -- type reset a stored SHOW to MOVIE. Only what this client
+                -- actually said may overwrite what is stored.
+                media_type=COALESCE(%s, movies.media_type),
                 edition=COALESCE(EXCLUDED.edition, movies.edition),
                 edition_type=COALESCE(EXCLUDED.edition_type, movies.edition_type),
                 country=COALESCE(EXCLUDED.country, movies.country),
@@ -17732,6 +17853,8 @@ def apply_movie_upsert(
                 fields["year"],
                 fields["release_date"],
                 fields["format"],
+                fields["media_type"],
+                MEDIA_TYPE_MOVIE,
                 fields["edition"],
                 fields["edition_type"],
                 fields["country"],
@@ -17747,6 +17870,8 @@ def apply_movie_upsert(
                 fields["location"],
                 persistent_client_id,
                 Jsonb(fields["metadata"]),
+                # The ON CONFLICT clause's own media_type placeholder.
+                fields["media_type"],
             ),
         )
 
@@ -19047,6 +19172,73 @@ def queue_movie_metadata_refresh_job(
     if extra:
         payload.update(extra)
     return create_background_job(conn, job_type=METADATA_REFRESH_JOB_TYPE, payload=payload)
+
+
+def movie_technical_spec_contribution_source(
+    conn, movie_id: UUID | str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Express a just-saved movie in the candidate shape the mapper reads.
+
+    A hand-typed release arrives as an ordinary Add form, so there is no
+    candidate row to map. What the user actually stated is now on the movie and
+    its technical specs, and reading it back from there is the only way to
+    contribute exactly what was saved rather than a second guess at it.
+
+    Keys are the wire names the mapper already understands, so the two entry
+    points share one mapping instead of growing a parallel one.
+    """
+    specs = movie_technical_spec_entity(conn, movie_id) or {}
+    candidate: dict[str, Any] = {
+        "title": clean_text(payload.get("releaseTitle")) or clean_text(payload.get("title")),
+        "edition": clean_text(payload.get("edition")),
+        "format": clean_text(payload.get("format")),
+        "packaging": specs.get("packaging") or [],
+        "discRegions": specs.get("regions") or [],
+        "audioTracks": specs.get("audio_tracks") or [],
+        "subtitles": specs.get("subtitles") or [],
+        "video": {
+            "resolution": specs.get("video_resolution"),
+            "codecs": specs.get("video_codecs") or [],
+            "hdrFormats": specs.get("hdr") or [],
+            "aspectRatios": specs.get("screen_ratios") or [],
+        },
+    }
+    disc_count = payload.get("discCount") or payload.get("disc_count")
+    if isinstance(disc_count, int) and not isinstance(disc_count, bool):
+        candidate["discCount"] = disc_count
+    return candidate
+
+
+def queue_release_contribution_job(
+    conn,
+    contribution_payload: dict[str, Any],
+    *,
+    actor: dict[str, Any] | None = None,
+    reason: str,
+) -> dict[str, Any] | None:
+    """Queue a chosen release for contribution back to MovieVault.
+
+    Queued rather than sent inline, for three reasons that all matter:
+    a network round-trip has no business inside a user-visible save; a
+    MovieVault outage must not fail an import that already succeeded locally;
+    and a signed, attributable write firing in the same second as the anonymous
+    resolve that produced the candidate would tie the two together for anyone
+    watching the connection.
+
+    Returns None whenever there is nothing to send, so the caller never has to
+    decide - the gate, the payload check and the missing-table case all read
+    the same way from outside.
+    """
+    if not contribution_payload or not table_exists(conn, "background_jobs"):
+        return None
+    payload: dict[str, Any] = {
+        "contribution": contribution_payload,
+        "requestedBy": actor_job_payload(actor or {}),
+        "reason": reason,
+    }
+    return create_background_job(
+        conn, job_type=RELEASE_CONTRIBUTION_JOB_TYPE, payload=payload
+    )
 
 
 def queue_receiver_payload_to_receivers(
@@ -22944,10 +23136,19 @@ def register_routes(flask_app: Flask) -> None:
         offset = max(int(request.args.get("offset", 0)), 0)
         query = clean_text(request.args.get("q") or request.args.get("query"))
         media_format = clean_text(request.args.get("format"))
+        raw_media_type = clean_text(request.args.get("media_type") or request.args.get("mediaType"))
+        media_type = normalize_media_type(raw_media_type)
+        if raw_media_type and media_type is None:
+            raise NextApiError(
+                f"media_type (or mediaType) must be one of "
+                f"{MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}",
+                400,
+            )
+        searching = bool(query or media_format or media_type)
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
-                ("api.read", "mcp.tool.search_collection") if query or media_format else ("api.read", "mcp.tool.list_all_movies"),
+                ("api.read", "mcp.tool.search_collection") if searching else ("api.read", "mcp.tool.list_all_movies"),
             )
             if not table_exists(conn, "movies"):
                 return response({"status": "ok", "items": [], "limit": limit, "offset": offset})
@@ -22992,6 +23193,9 @@ def register_routes(flask_app: Flask) -> None:
             if media_format:
                 filters.append("m.format=%s")
                 params.append(media_format)
+            if media_type:
+                filters.append("m.media_type=%s")
+                params.append(media_type)
             visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
             filters.append(visibility_where)
             params.extend(visibility_params)
@@ -23009,6 +23213,7 @@ def register_routes(flask_app: Flask) -> None:
                         m.year,
                         m.release_date,
                         m.format,
+                        m.media_type,
                         m.edition,
                         m.country,
                         m.language,
@@ -23031,10 +23236,16 @@ def register_routes(flask_app: Flask) -> None:
             audit_api_interaction(
                 conn,
                 actor,
-                command="search_collection" if query or media_format else "list_all_movies",
+                command="search_collection" if searching else "list_all_movies",
                 event_type="api.movies_read",
                 summary="Read movies through the public API",
-                metadata={"limit": limit, "offset": offset, "query": query, "format": media_format},
+                metadata={
+                    "limit": limit,
+                    "offset": offset,
+                    "query": query,
+                    "format": media_format,
+                    "media_type": media_type,
+                },
             )
         return response({"status": "ok", "items": items, "limit": limit, "offset": offset})
 
@@ -23068,6 +23279,7 @@ def register_routes(flask_app: Flask) -> None:
                             barcode,
                             release_date,
                             format,
+                            media_type,
                             edition,
                             country,
                             language,
@@ -23081,7 +23293,7 @@ def register_routes(flask_app: Flask) -> None:
                             created_at,
                             updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             movie_id,
@@ -23094,6 +23306,7 @@ def register_routes(flask_app: Flask) -> None:
                             payload["barcode"],
                             payload["release_date"],
                             payload["format"],
+                            payload["media_type"],
                             payload["edition"],
                             payload["country"],
                             payload["language"],
@@ -24778,6 +24991,7 @@ def register_routes(flask_app: Flask) -> None:
                             m.original_title,
                             m.year,
                             m.format,
+                            m.media_type,
                             m.edition,
                             m.owner_id,
                             m.metadata->>'poster_url' AS poster_url,
@@ -24836,6 +25050,7 @@ def register_routes(flask_app: Flask) -> None:
                             m.original_title,
                             m.year,
                             m.format,
+                            m.media_type,
                             m.edition,
                             m.owner_id,
                             m.metadata->>'poster_url' AS poster_url,
@@ -29154,6 +29369,12 @@ def register_routes(flask_app: Flask) -> None:
         release_candidate = body.get("releaseCandidate") or body.get("release_candidate")
         if not isinstance(release_candidate, dict):
             release_candidate = {}
+        release_fallback_manual = bool(
+            body.get("releaseFallbackManual") or body.get("release_fallback_manual")
+        )
+        release_fallback_film = body.get("releaseFallbackFilm") or body.get("release_fallback_film")
+        if not isinstance(release_fallback_film, dict):
+            release_fallback_film = {}
         selected_box_set_key_from_body = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
         provided_box_set_body = body.get("boxSetProposal") or body.get("box_set_proposal")
         if not isinstance(provided_box_set_body, dict):
@@ -29526,6 +29747,36 @@ def register_routes(flask_app: Flask) -> None:
                         "title": import_title,
                     },
                 )
+                # The disc the user identified is the one fact MovieVault does
+                # not have: its resolver returned a candidate list precisely
+                # because it could not choose, and it creates no moderation
+                # candidate for that. Offering the choice back is what closes
+                # the loop - gated by the owner setting and the user's own
+                # preference, and queued so a MovieVault outage cannot reach
+                # this request.
+                release_contribution_job = None
+                if release_contribution_enabled(conn, actor.get("id") if actor else None):
+                    contribution_payload = release_technical_contribution_payload(
+                        release_candidate
+                        or (
+                            movie_technical_spec_contribution_source(conn, movie_id, payload)
+                            if release_fallback_manual
+                            else {}
+                        ),
+                        scanned_barcode=barcode or "",
+                        film=release_fallback_film
+                        or {
+                            "title": import_title,
+                            "year": payload.get("year"),
+                        },
+                        provenance="manual_entry" if release_fallback_manual else "candidate_selection",
+                    )
+                    release_contribution_job = queue_release_contribution_job(
+                        conn,
+                        contribution_payload,
+                        actor=actor,
+                        reason="import_center_release_selection",
+                    )
                 audit_event(
                     conn,
                     event_type="movie.imported",
@@ -29551,6 +29802,7 @@ def register_routes(flask_app: Flask) -> None:
                         "metadataRefreshQueued": bool(metadata_refresh_job),
                         "metadataJobId": str(metadata_refresh_job.get("id")) if metadata_refresh_job else None,
                         "targetContainerId": str(target_container_uuid) if target_container_uuid else None,
+                        "releaseContributionQueued": bool(release_contribution_job),
                     },
                 )
                 target_link_result = None
@@ -31560,6 +31812,9 @@ def register_routes(flask_app: Flask) -> None:
                     continue
                 title = item.get("title")
                 year = item.get("year")
+                media_type = normalize_media_type(
+                    item.get("media_type") or item.get("mediaType")
+                )
                 matched_id, matched_by = match_reconcile_item(
                     persistent_client_id=persistent_client_id,
                     barcode_normalized=barcode_normalized,
@@ -31570,7 +31825,9 @@ def register_routes(flask_app: Flask) -> None:
                     find_by_client_id=lambda: find_movie_by_client_id(
                         conn, persistent_client_id
                     ),
-                    find_by_barcode=lambda: find_movie_by_barcode_match(conn, barcode),
+                    find_by_barcode=lambda: find_movie_by_barcode_match(
+                        conn, barcode, incoming_media_type=media_type
+                    ),
                     find_by_tmdb_edition=lambda: find_movie_by_tmdb_edition(
                         conn,
                         tmdb_id=tmdb_id,
@@ -31579,6 +31836,7 @@ def register_routes(flask_app: Flask) -> None:
                         incoming_title=title,
                         incoming_year=year,
                         incoming_barcode=barcode,
+                        incoming_media_type=media_type,
                     ),
                     find_by_title_year=lambda: find_movie_by_title_year(
                         conn,
@@ -31588,6 +31846,7 @@ def register_routes(flask_app: Flask) -> None:
                         incoming_barcode=barcode,
                         incoming_edition=edition,
                         incoming_container_ids=container_ids,
+                        incoming_media_type=media_type,
                     ),
                 )
                 if matched_id is not None:

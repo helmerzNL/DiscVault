@@ -1,26 +1,296 @@
 # DiscVault Release Notes
 
-## 26.7.71 - A Blu-ray.com import describes the film, not the disc
+## 26.8.5 - Blu-ray.com imports describe films, not pressings
 
-- Titles no longer keep the disc format. "Basic Instinct 4K" imports as
-  *Basic Instinct* with format `4K UHD`: a trailing 4K/UHD token is stripped
-  from the title and promoted to the format field, so nothing is lost. A format
-  named by the export's own column still wins over the token.
-- The film year is no longer taken from the disc's release date. Blu-ray.com's
-  "Release date" is the pressing date — Basic Instinct's 4K disc is from 2023,
-  the film from 1992 — and that year also sent every metadata lookup to the
-  wrong film. The date is now kept as `editionReleaseDate`, and a source of this
-  kind supplies a year only when it has a real year column.
-- Long-form dates ("March 1 2023") are parsed, so the disc date survives the
-  import at all instead of being dropped.
-- Multi-film releases are recognised without a box-set column. Blu-ray.com
-  exports have none, so a nine-disc trilogy imported as a single film. Titles
-  that name a multi-film release ("Trilogy", "Complete Collection",
-  "Collection 6 films") now propose a box set; weaker phrases ("Collection",
-  "Guardians of the Galaxy 1-3") need a disc count high enough to hold several
-  films, since a 4K release of one film already ships two or three discs. The
-  export lists no members, so the proposal is never auto-imported — it lands in
-  the review queue for confirmation.
+- A trailing `4K` or `UHD` title token is now stored as `4K UHD` format instead
+  of making it part of the film title, unless the export explicitly supplies a
+  format.
+- Blu-ray.com's disc pressing date is retained as edition data rather than used
+  as the film year, and long-form release dates are now parsed.
+- Multi-film releases detected from their title and disc count are proposed for
+  review without inventing any missing members.
+
+## 26.7.71 - Beta and main are one line of history again
+
+- `main` and `release/v26-beta` had genuinely diverged: 18 commits on beta that
+  main did not have, 28 the other way, 69 files different. A back-merge of main
+  into beta with beta as the source of truth put them back on one line, and the
+  promotion that followed made them content-identical.
+- The cause is the one this document has warned about twice. A promotion was
+  squashed, so the promoted commits were no longer ancestors of beta; the
+  fingerprint is still visible in the history, where main carried the API & MCP
+  connection fix as one commit and beta carried the same work as two.
+- Beta gained three things main had been holding on its own: the GHCR
+  rate-limit retry in the image workflow, a `cryptography` 48.0.1 → 50.0.0
+  bump, and the GitHub issue templates. The first two matter — beta builds the
+  beta image and had no retry, and it was running the older dependency.
+- Nothing in the application changed. The version bump exists because two of
+  those files sit in protected paths.
+
+## 26.7.70 - A scan that finds several pressings now offers the choice
+
+- A scanned barcode had two endings in the PWA: a film, or nothing. MovieVault's
+  anonymous resolver has a third — it can read the title printed on the box,
+  search it, and come back with several pressings of one film. iOS already used
+  that answer; the PWA rejected it outright because the response validator did
+  not know the `candidates` status.
+- The PWA now parses candidates and shows them, with the barcode-free title
+  entry point available too.
+- A candidate summary is deliberately more permissive than a confirmed release:
+  barcodes and the technical profile are optional, because the answer may come
+  from an unreviewed external source. It is a suggestion, and it is presented
+  as one.
+- A refused connection is now told apart from a timeout. Only the first proves
+  the request never arrived, which is what makes a retry safe rather than a
+  guess.
+
+## 26.7.69 - The collection value chart
+
+- 26.7.68 started recording daily value snapshots and nothing drew them. The
+  statistics page shows what the collection is worth today; the history was
+  being served all along with no chart on the other end.
+- This adds the chart and nothing else — no table, no job, no migration. The
+  data model and the capture rules were already settled and are untouched.
+- The series is fetched separately and its failure is not fatal. It is a
+  nice-to-have on a page whose counters are the reason the user came, so losing
+  the chart must not blank them.
+
+## 26.7.68 - Box-sets carry their own price, and value is tracked over time
+
+- A film could carry an estimated value; a box-set could not. A set is bought as
+  one product for one price, so pricing its member discs individually either
+  double-counts the shelf or leaves the set unpriced.
+- Box-sets now carry their own value. Vaults and collections deliberately do
+  not: they arrange what you already own, so their worth is the sum of what they
+  hold, and a second amount there would double-count it.
+- **While a film sits in a box-set, the set owns its value.** The price field is
+  disabled and blank, the amount is left out of every total, and the API refuses
+  a write. The stored amount is never erased — take the film back out and
+  exactly what you typed comes back.
+- The total is recomputed on every price-affecting write and stored as a daily
+  snapshot, for the whole collection and per vault and collection, so the chart
+  in 26.7.69 is built on real history rather than on numbers invented after the
+  fact.
+- Runs migrations 061 and 062.
+
+## 26.7.67 - A phone can put a film in a drawer
+
+- 26.7.66 shared the location tree with the mobile apps. They could read it and
+  still not put anything in it: the sync route a phone actually takes accepted a
+  `locationId`, dropped it, and answered `applied`.
+- That is the worst shape of failure. The client books the assignment as
+  confirmed, the user sees nothing happen, and there is no error anywhere — a
+  failure that comes back as success.
+- The assignment is now applied, and absent is kept apart from explicitly
+  cleared, so leaving the key out keeps the current drawer instead of emptying
+  it.
+
+## 26.7.66 - The mobile apps can see where a disc is stored
+
+- Cabinets, drawers, shelves, boxes and their QR codes existed on the server and
+  in the PWA, and nowhere on iOS or Android. A film shelved through the PWA
+  picker showed blank on the phone.
+- The sync bootstrap now carries the location tree, in the same order for every
+  client so no two of them sort it differently. The tree is never truncated: a
+  location id is meaningless without the row it points at.
+- QR tokens stay on the server. A scan resolves through the public id, which is
+  on the wire, so the scan flow works without handing a capability token to
+  every device.
+
+## 26.7.65 - A connection card says where it was last used
+
+- The API & MCP page said what a connection may do but not where it had been
+  used, which is the question that actually answers "is this one mine?".
+- Each connection now records the address the **server observed**, never one the
+  client supplied — the field is meant to be read as evidence, not as a claim.
+- Only globally routable addresses are stored, and a request that yields none —
+  a LAN client on a self-hosted instance — leaves the previous value alone
+  rather than blanking the card.
+- Permissions are named instead of listed as raw keys.
+- Runs migration 060.
+
+## 26.7.64 - Version bump to clear a stale guard
+
+- Bookkeeping only. The version guard compares against the base as it is at
+  merge time, and a parallel merge had made an earlier bump stale.
+- `CLAUDE.md` gained the rule this keeps re-teaching: re-check the bump right
+  before merging, not only before opening the pull request.
+
+## 26.7.63 - One connection per device, Vault stays Vault, and collections sync
+
+- **The API & MCP page listed a device once per login.** Every native login
+  inserted a fresh token row, and because there is no refresh endpoint the app
+  logs in again whenever its token stops working. The rows carried nothing to
+  recognise a device by, so they could not be grouped. They can now.
+- **Collection membership said "applied" when it was not.** Adding a film to a
+  collection wrote a link the reader never read back, and the client — for which
+  that confirmation is the only signal the contract offers — booked it as
+  settled and never offered it again. The write now lands where the read looks.
+- **Vault is a brand term.** It is part of DiscVault, MovieVault and VaultStack,
+  so a Vault in the app is a named surface rather than a common noun. It stays
+  English in all 29 locales, inflected where the grammar requires it.
+
+## 26.7.62 - Discover hides itself when TMDb is off
+
+- Discover is a TMDb surface and nothing else. With the plugin disabled the page
+  could only ever render its "not configured" panel, so offering the nav entry
+  was a promise the app could not keep.
+
+## 26.7.61 - Plex links open, and a numeric year no longer voids a refresh
+
+- **Plex chips did nothing on the desktop.** The link was the app deep link the
+  plugin emits; with no Plex app installed the browser tried a protocol handler
+  and silently gave up. There is now a web link. Jellyfin was never affected.
+- **A year that arrived as a number aborted the whole metadata refresh**, not
+  just the field it came in.
+
+## 26.7.60 - IMDb and TMDb moved to where they belong
+
+- They had been placed in the hero to mirror the iOS layout, where on the PWA
+  they read as chrome bolted onto the artwork. They now close out the Release
+  panel — the block they describe.
+- The Plex and Jellyfin links are slimmer.
+
+## 26.7.59 - A reworked film detail page, and an identity debug panel
+
+- **Personal lists opens collapsed.** That card holds tags, loans and the whole
+  watch history, and leaving it expanded pushed the cast below the fold for the
+  majority of openings that never touch it.
+- A debug panel shows how the identity ladder sees a film — which rung matched,
+  and on what — so a duplicate that should have merged can be diagnosed from the
+  app instead of from the database.
+
+## 26.7.58 - A disc's format reads the same everywhere
+
+- `movies.format` is free text, and providers and sync clients do write raw
+  codes like `4K_UHD` or `BLURAY` into it. The collection grid normalised those
+  for display; the movie detail page and five other renderers did not, so the
+  same disc could read two different ways depending on where you looked.
+
+## 26.7.57 - The whole crew arrives together
+
+- A refresh could leave some crew members without a name or photo even after it
+  reported completion — on the lazy refresh and on the manual button alike.
+  Crew were being truncated before all of them had been refreshed.
+
+## 26.7.56 - Every department in the crew, with photos
+
+- TMDb's response already carried photos and the full crew inline. The plugin
+  was discarding the photos and filtering crew down to six job titles, so
+  editing, art and VFX never appeared. Crew is now capped at 75 entries rather
+  than allowlisted by job.
+- Publishing a container image retries after a transient rate limit instead of
+  failing the run.
+- `cryptography` was bumped by Dependabot.
+
+## 26.7.55 - Opening a movie says that it is refreshing
+
+- The lazy refresh added in 26.7.50 ran silently in the background, so opening a
+  movie gave no sign anything was happening — confusing next to the manual
+  Refresh metadata button, which does show progress. It now shows the same
+  messages the button does.
+
+## 26.7.54 - A stuck database fails fast instead of hanging the request
+
+- An unresponsive Postgres could hang a request for the full three-minute
+  gunicorn timeout before the worker was killed, as seen in production. Postgres
+  statement and lock timeouts are now set, so a stuck statement is cancelled in
+  seconds and surfaces as the friendly database-offline page instead of a
+  multi-minute stall.
+
+## 26.7.53 - A database blip no longer crash-loops the worker
+
+- A job that failed because the connection itself died — a Postgres restart —
+  made the failure handler reuse that same dead connection to record the
+  failure. The second exception went unhandled and killed the worker process,
+  turning a restart into a crash-restart loop. Seen in production.
+- The worker now retries on its next poll, which is what it should have done all
+  along.
+
+## 26.7.52 - Cold loads stopped running the same expensive query three times
+
+- A cold PWA load ran the collection dashboard query three times: once
+  server-side for the inline HTML and twice more from the client, because the
+  boot flow never marked the cooldown that the library page checks moments
+  later.
+- Database outages now show a friendly offline page instead of a raw error.
+
+## 26.7.51 - Opening a movie is no longer blocked on live TMDb calls
+
+- Opening a movie triggered a synchronous refresh that could call TMDb once per
+  cast and crew member — up to twelve calls in sequence, with no caching — which
+  made it slow and easy to time out or fail silently.
+- Person metadata and filmography are now cached for 180 days, TMDb's own
+  recommendation. The Refresh metadata buttons still force a live fetch.
+
+## 26.7.50 - Metadata refreshes itself when you open something
+
+- Opening the library reloads the snapshot, opening a movie refreshes its
+  metadata and cast in the background, and opening a person refreshes their
+  details and filmography — matching how the iOS app feels, instead of relying
+  on the user noticing staleness and pressing a button.
+- Each refresh is throttled per entity so this does not hammer the providers:
+  five minutes for the library snapshot, twenty for a given movie or person.
+
+## 26.7.49 - Hydration restarts after the app reloads its own snapshot
+
+- Returning from a movie, finishing an import and running a bulk action all
+  reload the app snapshot in place, which resets the library back to the small
+  first-paint set — outside the paging module, with nothing to tell it a fresh
+  and incomplete snapshot had landed.
+- Hydration had treated "already hydrated" as a permanent latch, so the library
+  stayed short until a full page reload.
+
+## 26.7.48 - Version bump to clear a collision
+
+- Bookkeeping only. Two pull requests had bumped to the same value.
+
+## 26.7.47 - Backups no longer break on a priced film
+
+- A collection backup failed outright once any film had a purchase price or
+  estimated value: the export helper predated those columns and could not
+  serialise the numeric type the database returns.
+- A library hydration that had failed three times in a row gave up permanently.
+  The only ways back were a real connectivity transition — which never fires
+  while the network stays up — or a full page reload, and the library and export
+  dialog both stayed stuck reporting "still loading" with no way to finish.
+
+## 26.7.46 - The MovieVault catalog syncs again
+
+- MovieVault added a nullable `backdrop` field to every distribution-4 release.
+  DiscVault's parser rejects unrecognised keys, and it validates the whole feed
+  before applying any of it, so one unknown field failed the entire sync — full
+  and delta alike. Every sync attempt had been failing since MovieVault started
+  serving it.
+
+## 26.7.45 - Plugin manifest version for the resolver fallback
+
+- Bookkeeping for 26.7.44.
+
+## 26.7.44 - A barcode that misses the catalog now asks the resolver
+
+- A lookup gave up once the locally synced index and the anonymous bucket had
+  both missed, even though MovieVault's anonymous resolver can still find a
+  release through a live external source. The iOS app already treated the
+  resolver as a genuine third fallback; DiscVault now does too.
+
+## 26.7.43 - A valid barcode is no longer rejected on its checksum
+
+- Barcodes were being turned away by a checksum test strict enough to refuse
+  real ones.
+
+## 26.7.42 - You can see which route answered a MovieVault lookup
+
+- The anonymous bucket fallback is on by default for any lookup that misses the
+  local index, and that was invisible everywhere: the toggle had been dead code
+  since 26.7.28, and nothing in the logs told a local hit from a bucket hit, or
+  a genuine catalog miss from a bucket attempt that failed on a timeout, a rate
+  limit or a checksum mismatch. All of those looked identical.
+- Audit logs and App Admin now name the route that answered.
+
+## 26.7.41 - A new release is noticed even when the service worker stays quiet
+
+- Update detection no longer depends on the service worker announcing itself.
 
 ## 26.7.40 - A version bump can no longer collide with a parallel pull request
 
