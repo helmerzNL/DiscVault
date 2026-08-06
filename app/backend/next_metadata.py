@@ -68,6 +68,20 @@ METADATA_MAIN_FIELDS = {
     "runtime_minutes",
     "overview",
     "rating",
+    # Provider-writable, but only because a human states it.
+    #
+    # This began as local-only: nothing could tell a series from a film, so any
+    # provider value would have been a guess wearing a fact's clothes. That
+    # changed when MovieVault gained content.films.work_type -- an operator sets
+    # it in the MovieVault admin, and a stated value is evidence rather than a
+    # guess. Automatic detection still does not exist on either side, so nothing
+    # infers this field; it is only ever carried.
+    #
+    # The field is structurally load-bearing (it vetoes the identity ladder and
+    # gates whether a row may carry a series link), so the ordinary field-lock
+    # machinery matters more here than elsewhere: a user who sets or locks the
+    # type keeps it. See the merge policy's own precedence rules.
+    "media_type",
 }
 
 METADATA_LOCAL_ONLY_FIELDS = {
@@ -82,24 +96,6 @@ METADATA_LOCAL_ONLY_FIELDS = {
     "estimated_value_currency",
     "location",
     "notes",
-    # Local-only, and deliberately so, even though a metadata source looks like
-    # the natural owner of "is this a film or a series".
-    #
-    # Two reasons. First, nothing can currently tell: the TMDB plugin calls
-    # /movie/{id} only, and MovieVault hardcodes the /movie/ form, so any
-    # provider value would be a guess wearing a fact's clothes. Second, this
-    # field is structurally load-bearing -- it vetoes the identity ladder and
-    # gates whether a row may carry a series link -- so a wrong provider write
-    # does not misrender a label the user would notice and correct, it silently
-    # makes a record unmergeable with its own duplicate.
-    #
-    # Leaving it out of both sets would NOT be neutral: apply_metadata_proposal
-    # silently skips any field missing from METADATA_MAIN_FIELDS, so a proposal
-    # would be accepted and the write would vanish without an error. Naming it
-    # here is how that becomes a deliberate refusal instead of a hole.
-    #
-    # Expected to move to METADATA_MAIN_FIELDS once TV enrichment exists.
-    "media_type",
 }
 
 METADATA_MANUAL_PROTECTED_FIELDS = {

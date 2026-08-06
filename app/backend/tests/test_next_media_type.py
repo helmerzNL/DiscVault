@@ -7,6 +7,7 @@ must not become MOVIE, and a stored SHOW must survive a client that says nothing
 
 from __future__ import annotations
 
+import json
 import os
 import unittest
 
@@ -89,22 +90,33 @@ class MediaTypeConflictTests(unittest.TestCase):
 
 
 class MediaTypeOwnershipTests(unittest.TestCase):
-    def test_media_type_is_local_only(self):
-        self.assertIn("media_type", next_metadata.METADATA_LOCAL_ONLY_FIELDS)
+    def test_media_type_is_provider_writable(self):
+        """MovieVault may state the type, because a human states it there.
 
-    def test_media_type_is_not_provider_writable(self):
-        """Named in exactly one of the two sets, deliberately.
-
-        Being in neither is the dangerous state: apply_metadata_proposal skips
-        unknown fields silently, so a provider proposal would be accepted and
-        the write would disappear with no error at all.
+        This was local-only while nothing could tell a series from a film. It
+        moved once MovieVault gained content.films.work_type, which an operator
+        sets by hand -- a stated value rather than a guess. Nothing infers it on
+        either side.
         """
-        self.assertNotIn("media_type", next_metadata.METADATA_MAIN_FIELDS)
+        self.assertIn("media_type", next_metadata.METADATA_MAIN_FIELDS)
+
+    def test_media_type_is_named_in_exactly_one_field_set(self):
+        """Being in neither is the dangerous state, whichever way it is owned.
+
+        apply_metadata_proposal skips any field missing from
+        METADATA_MAIN_FIELDS silently, so a proposal would be accepted and the
+        write would disappear with no error at all.
+        """
+        self.assertNotIn("media_type", next_metadata.METADATA_LOCAL_ONLY_FIELDS)
 
     def test_both_spellings_resolve_to_the_column_name(self):
         self.assertEqual(next_metadata.MOVIE_FIELD_ALIASES["mediaType"], "media_type")
         self.assertEqual(next_metadata.MOVIE_FIELD_ALIASES["media_type"], "media_type")
 
+
+V4_FIXTURE_PATH = os.path.join(
+    os.path.dirname(__file__), "fixtures", "distribution-v4-full.ndjson"
+)
 
 NEXT_VIEWS_UI_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "next_views_ui.py")
@@ -138,3 +150,78 @@ class MediaTypeFilterUiTests(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+try:
+    from .. import next_movievault_v2
+    from ..next_plugins.movievault_v2 import plugin as movievault_v2_plugin
+except ImportError:  # pragma: no cover - backend working-directory CI imports
+    import next_movievault_v2
+    from next_plugins.movievault_v2 import plugin as movievault_v2_plugin
+
+
+class WorkTypeFromMovieVaultTests(unittest.TestCase):
+    """MovieVault's `movie`/`tv` becoming DiscVault's `MOVIE`/`SHOW`.
+
+    Two dialects meet in exactly one place, the plugin's release mapper, and
+    these tests pin both the translation and the cases where it must stay quiet.
+    """
+
+    @staticmethod
+    def _release(**overrides):
+        record = {
+            "releaseId": "10000000-0000-0000-0000-000000000001",
+            "filmId": "20000000-0000-0000-0000-000000000001",
+            "canonicalTitle": "Fargo",
+            "releaseTitle": "Fargo",
+            "releaseYear": 1996,
+            "format": "Blu-ray",
+        }
+        record.update(overrides)
+        return movievault_v2_plugin._release(record)
+
+    def test_tv_becomes_show(self):
+        self.assertEqual(self._release(workType="tv")["movie"]["mediaType"], "SHOW")
+
+    def test_movie_becomes_movie(self):
+        self.assertEqual(self._release(workType="movie")["movie"]["mediaType"], "MOVIE")
+
+    def test_an_absent_work_type_proposes_nothing(self):
+        """Silence must not be a proposal.
+
+        A record projected before MovieVault added the field carries no value,
+        and a merge policy that saw "MOVIE" here would let an old record
+        overwrite a series the user had typed by hand.
+        """
+        self.assertNotIn("mediaType", self._release()["movie"])
+
+    def test_an_unrecognised_work_type_proposes_nothing(self):
+        self.assertNotIn("mediaType", self._release(workType="miniseries")["movie"])
+
+    @staticmethod
+    def _v4_feed_record(**overrides):
+        with open(V4_FIXTURE_PATH, "rb") as handle:
+            for line in handle.read().splitlines():
+                candidate = json.loads(line)
+                if candidate.get("recordType") == "release":
+                    candidate.update(overrides)
+                    return candidate
+        raise AssertionError("no release record in the v4 fixture")
+
+    def test_the_parser_only_keeps_a_value_the_vocabulary_knows(self):
+        """The index caches what the feed said, not a guess at what it meant."""
+        cases = (("tv", "tv"), ("movie", "movie"), ("miniseries", None))
+        for value, expected in cases:
+            with self.subTest(work_type=value):
+                parsed = next_movievault_v2.validate_record(
+                    self._v4_feed_record(workType=value),
+                    contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+                )
+                self.assertEqual(parsed["workType"], expected)
+
+    def test_the_parser_reports_no_work_type_when_the_feed_omits_it(self):
+        parsed = next_movievault_v2.validate_record(
+            self._v4_feed_record(),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertIsNone(parsed["workType"])

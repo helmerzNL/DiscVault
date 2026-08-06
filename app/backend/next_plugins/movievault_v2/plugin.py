@@ -307,6 +307,12 @@ def _release(record):
         "title": record.get("canonicalTitle") or record.get("releaseTitle") or "",
         "releaseTitle": record.get("releaseTitle"), "year": record.get("releaseYear"),
         "format": record.get("format"), "edition": record.get("edition"),
+        # The one place MovieVault's movie/tv meets DiscVault's MOVIE/SHOW.
+        # An absent or unrecognised workType proposes nothing, so it can never
+        # overwrite a type the user set -- the merge policy only sees a field
+        # when the feed actually stated one.
+        **({"mediaType": "SHOW"} if record.get("workType") == "tv"
+           else {"mediaType": "MOVIE"} if record.get("workType") == "movie" else {}),
         "studio": record.get("studio"), "distributor": record.get("distributor"),
         "runtimeMinutes": record.get("runtimeMinutes"),
         "audioTracks": record.get("audioTracks"), "subtitles": record.get("subtitles"),
