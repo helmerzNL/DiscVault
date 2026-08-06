@@ -1,0 +1,79 @@
+name: Performance
+description: Slowness, high memory use or battery drain
+title: "[Performance]: "
+labels: ["performance"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: What is slow or heavy?
+      placeholder: Opening a collection of 2000 discs takes over 10 seconds.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type of problem
+      multiple: true
+      options:
+        - Slow load time
+        - Janky scrolling or animation
+        - High memory use
+        - Battery drain
+        - High data usage
+        - Slow synchronisation
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: When does it happen?
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: size
+    attributes:
+      label: Size of your collection
+      description: Number of titles and discs helps us spot scaling problems.
+      placeholder: "around 2000 titles, 2400 discs"
+
+  - type: input
+    id: measurement
+    attributes:
+      label: Measured value
+      description: For example load time in seconds or memory use in MB.
+      placeholder: "10.4 s to first render"
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options:
+        - PWA (browser)
+        - Android
+        - iOS
+        - Backend / API
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device and version
+      placeholder: "iPhone 13, iOS 18.5, app 1.4.2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: profile
+    attributes:
+      label: Profiling data
+      description: Lighthouse score, DevTools performance profile, or a trace. Optional but very welcome.

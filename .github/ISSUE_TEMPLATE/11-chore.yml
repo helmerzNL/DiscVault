@@ -1,0 +1,51 @@
+name: Maintenance / tech debt
+description: Refactor, cleanup, dependency upgrade or build improvement
+title: "[Chore]: "
+labels: ["chore"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of work is this?
+      options:
+        - Refactor
+        - Dependency upgrade
+        - Build or CI/CD
+        - Test coverage
+        - Code cleanup / dead code removal
+        - Tooling or developer experience
+        - Migration or deprecation
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Why now?
+      description: What risk or burden does this remove?
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Areas affected
+      description: Which folders, modules or platforms does this touch?
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Estimated risk
+      options:
+        - Low — no behaviour change expected
+        - Medium — touches existing functionality
+        - High — breaking change or migration required
+    validations:
+      required: true
