@@ -13649,7 +13649,7 @@ def ui_preview_html(
                   <div class="segmented compact" id="collectionTypeFilter" role="group" aria-label="Type filter" data-next-i18n-aria="collection.filterType">
                     <button type="button" class="active" data-type-filter="all" data-next-i18n="common.all">All</button>
                     <button type="button" data-type-filter="movie" data-next-i18n="collection.typeMovie">Movie</button>
-                    <button type="button" data-type-filter="tv" class="is-disabled" disabled aria-disabled="true" data-next-i18n="collection.typeTvShow">TV Show</button>
+                    <button type="button" data-type-filter="tv" data-next-i18n="collection.typeTvShow">TV Show</button>
                   </div>
                 </div>
                 <div class="filter-section">
@@ -14742,6 +14742,13 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.barcode">Barcode</span>
                       <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
                     </label>
+                    <label for="movieEditMediaType">
+                      <span data-next-i18n="movieDetail.mediaType">Type</span>
+                      <select id="movieEditMediaType" name="media_type">
+                        <option value="MOVIE" data-next-i18n="movieDetail.mediaTypeMovie">Movie</option>
+                        <option value="SHOW" data-next-i18n="movieDetail.mediaTypeShow">TV series</option>
+                      </select>
+                    </label>
                     <label for="movieEditFormat">
                       <span data-next-i18n="movieDetail.format">Format</span>
                       <select id="movieEditFormat" name="format"></select>
@@ -15434,7 +15441,7 @@ def ui_preview_html(
                     <div class="segmented compact" id="locationCollectionTypeFilter" role="group" aria-label="Type filter" data-next-i18n-aria="collection.filterType">
                       <button type="button" class="active" data-location-type-filter="all" data-next-i18n="common.all">All</button>
                       <button type="button" data-location-type-filter="movie" data-next-i18n="collection.typeMovie">Movie</button>
-                      <button type="button" data-location-type-filter="tv" class="is-disabled" disabled aria-disabled="true" data-next-i18n="collection.typeTvShow">TV Show</button>
+                      <button type="button" data-location-type-filter="tv" data-next-i18n="collection.typeTvShow">TV Show</button>
                     </div>
                   </div>
                   <div class="filter-section">
@@ -24910,16 +24917,28 @@ def ui_preview_html(
       if (!collectionLocationFilter) return true;
       return movieLocationValue(movie).toLowerCase() === collectionLocationFilter.toLowerCase();
     }
+    function movieMediaType(movie) {
+      // The filter token stays "tv" because it is persisted in localStorage and
+      // the i18n key is collection.typeTvShow; the stored value is SHOW. This is
+      // the single place the two spellings meet.
+      return String(movie?.media_type || "MOVIE").toUpperCase() === "SHOW" ? "tv" : "movie";
+    }
     function movieMatchesType(movie) {
       const selected = collectionTypeFilter || "all";
       if (selected === "all") return true;
-      if (selected === "tv") return false;
-      return true;
+      return movieMediaType(movie) === selected;
     }
     function containerMatchesFormat(container) {
       if (!containerGroupingEnabled()) return false;
       if (!collectionFormatFilters || collectionFormatFilters.size === 0) return true;
       return containerMemberMovies(container.id).some((movie) => movieMatchesFormat(movie));
+    }
+    function containerMatchesType(container) {
+      if (!containerGroupingEnabled()) return false;
+      if (!collectionTypeFilter || collectionTypeFilter === "all") return true;
+      // A box set of a series must not vanish under the TV filter just because
+      // the container itself carries no type -- its members do.
+      return containerMemberMovies(container.id).some((movie) => movieMatchesType(movie));
     }
     function itemDateValue(item, mode) {
       if (item.kind === "container") {
@@ -24956,7 +24975,7 @@ def ui_preview_html(
     function visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters = effectiveAdvancedSearchFilters()) {
       if (!containerGroupingEnabled()) return [];
       const visibleItems = (containers || [])
-        .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesAdvancedSearch(container, filters))
+        .filter((container) => containerMatchesGroup(container) && containerMatchesSearch(container) && containerMatchesFormat(container) && containerMatchesType(container) && containerMatchesAdvancedSearch(container, filters))
         .map((container) => {
           const allowedIds = containerMatchesSearch(container) ? eligibleMovieIds : visibleMovieIds;
           const visibleMovies = containerMemberMovies(container.id)
@@ -27307,6 +27326,7 @@ def ui_preview_html(
       movieEditYear: "year",
       movieEditBarcode: "barcode",
       movieEditFormat: "format",
+      movieEditMediaType: "media_type",
       movieEditEdition: "edition",
       movieEditReleaseDate: "release_date",
       movieEditCountry: "country",
@@ -27576,6 +27596,7 @@ def ui_preview_html(
         movieEditSortTitle: movie.sort_title || "",
         movieEditYear: movie.year || "",
         movieEditBarcode: movie.barcode || "",
+        movieEditMediaType: String(movie.media_type || "MOVIE").toUpperCase() === "SHOW" ? "SHOW" : "MOVIE",
         movieEditEdition: movie.edition || "",
         movieEditReleaseDate: movie.release_date || "",
         movieEditCountry: movie.country || "",
@@ -37959,6 +37980,7 @@ def ui_preview_html(
         year: formTextValue("movieEditYear"),
         barcode: formTextValue("movieEditBarcode"),
         format: formTextValue("movieEditFormat"),
+        mediaType: formTextValue("movieEditMediaType") || "MOVIE",
         edition: formTextValue("movieEditEdition"),
         releaseDate: formTextValue("movieEditReleaseDate"),
         country: formTextValue("movieEditCountry"),
