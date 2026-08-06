@@ -16,6 +16,48 @@ def normalize_edition_identity(value: object) -> str:
     return re.sub(r"[^a-z0-9]+", " ", folded.casefold()).strip()
 
 
+MEDIA_TYPE_MOVIE = "MOVIE"
+MEDIA_TYPE_SHOW = "SHOW"
+
+_MEDIA_TYPE_ALIASES = {
+    "movie": MEDIA_TYPE_MOVIE,
+    "film": MEDIA_TYPE_MOVIE,
+    "show": MEDIA_TYPE_SHOW,
+    "tv": MEDIA_TYPE_SHOW,
+    "tv_show": MEDIA_TYPE_SHOW,
+    "tvshow": MEDIA_TYPE_SHOW,
+    "tv_series": MEDIA_TYPE_SHOW,
+    "tvseries": MEDIA_TYPE_SHOW,
+    "series": MEDIA_TYPE_SHOW,
+}
+
+
+def normalize_media_type(value: object) -> str | None:
+    """Normalize a media type to the exact wire vocabulary, or to absent.
+
+    Lenient in, exact out (sync-contract.md §3b). An unrecognised value is
+    **absent**, never ``MOVIE``: the clients' silent fallback to movie is a
+    client-side leniency, and copying it here would turn an unknown value into
+    a confident wrong answer that the ladder then treats as fact.
+    """
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return _MEDIA_TYPE_ALIASES.get(text.casefold().replace(" ", "_"))
+
+
+def media_type_conflicts(left: object, right: object) -> bool:
+    """True when both sides state a media type and the two disagree.
+
+    Shaped like the barcode conflict rule: a one-sided value is inconclusive and
+    blocks nothing. Tier 1 (per-record token) is exempt from this veto entirely --
+    see ``find_movie_by_client_id``.
+    """
+    left_key = normalize_media_type(left)
+    right_key = normalize_media_type(right)
+    return bool(left_key and right_key and left_key != right_key)
+
+
 def normalize_container_identities(values: Iterable[object] | None) -> frozenset[str]:
     return frozenset(
         normalized

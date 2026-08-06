@@ -22,6 +22,7 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
 
 try:
     from .dedup_identity import extract_identity_identifiers
+    from .dedup_identity import normalize_media_type
     from .next_import import clean_text
     from .next_genres import genre_keys_from_tmdb_ids
     from .next_genres import normalize_genre_keys
@@ -36,6 +37,7 @@ try:
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
 except ImportError:  # pragma: no cover - supports direct module execution
     from dedup_identity import extract_identity_identifiers
+    from dedup_identity import normalize_media_type
     from next_import import clean_text
     from next_genres import genre_keys_from_tmdb_ids
     from next_genres import normalize_genre_keys
@@ -68,6 +70,20 @@ METADATA_MAIN_FIELDS = {
     "runtime_minutes",
     "overview",
     "rating",
+    # Provider-writable, but only because a human states it.
+    #
+    # This began as local-only: nothing could tell a series from a film, so any
+    # provider value would have been a guess wearing a fact's clothes. That
+    # changed when MovieVault gained content.films.work_type -- an operator sets
+    # it in the MovieVault admin, and a stated value is evidence rather than a
+    # guess. Automatic detection still does not exist on either side, so nothing
+    # infers this field; it is only ever carried.
+    #
+    # The field is structurally load-bearing (it vetoes the identity ladder and
+    # gates whether a row may carry a series link), so the ordinary field-lock
+    # machinery matters more here than elsewhere: a user who sets or locks the
+    # type keeps it. See the merge policy's own precedence rules.
+    "media_type",
 }
 
 METADATA_LOCAL_ONLY_FIELDS = {
@@ -385,6 +401,10 @@ METADATA_MEDIA_FIELDS = {
 METADATA_NAMESPACE = uuid.UUID("7c76309b-063d-4c63-b925-2f49fdad332c")
 
 MOVIE_FIELD_ALIASES = {
+    # Recognised so a proposal naming the field is explicitly rejected as
+    # local-only, rather than dropped as an unknown key.
+    "mediaType": "media_type",
+    "media_type": "media_type",
     "sortTitle": "sort_title",
     "originalTitle": "original_title",
     "releaseTitle": "release_title",
@@ -2321,6 +2341,19 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
                 parsed_year = normalize_year_value(value)
                 if parsed_year:
                     movie_updates[key] = parsed_year
+                continue
+            # Same failure shape as `year` above, but enforced by a CHECK rather
+            # than a cast: `movies.media_type` accepts only MOVIE and SHOW, so a
+            # source offering its own spelling -- MovieVault says `tv`, and any
+            # plugin may say `Movie` -- fails the whole UPDATE and loses every
+            # other field in the same refresh. Lenient in, exact out
+            # (sync-contract.md §3b); a value the vocabulary does not know is
+            # dropped rather than guessed at, because guessing here means
+            # confidently mislabelling a series as a film.
+            if key == "media_type":
+                normalized_media_type = normalize_media_type(value)
+                if normalized_media_type:
+                    movie_updates[key] = normalized_media_type
                 continue
             if key in METADATA_MAIN_FIELDS:
                 movie_updates[key] = value

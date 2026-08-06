@@ -130,12 +130,17 @@ def api_delete(path: str, bearer: str | None = None) -> Any:
 TOOLS = [
     {
         "name": "search_collection",
-        "description": "Search the DiscVault collection by title, barcode, director, actor, genre or format.",
+        "description": "Search the DiscVault collection by title, barcode, director, actor, genre, format or media type.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search term"},
                 "format": {"type": "string", "enum": ["4K UHD", "Blu-ray", "DVD", ""]},
+                "media_type": {
+                    "type": "string",
+                    "enum": ["MOVIE", "SHOW", ""],
+                    "description": "MOVIE for films, SHOW for TV series",
+                },
             },
             "required": [],
         },
@@ -165,6 +170,11 @@ TOOLS = [
                 "year": {"type": "string"},
                 "original_title": {"type": "string"},
                 "format": {"type": "string", "enum": ["4K UHD", "Blu-ray", "DVD"]},
+                "media_type": {
+                    "type": "string",
+                    "enum": ["MOVIE", "SHOW"],
+                    "description": "MOVIE for films, SHOW for TV series. Defaults to MOVIE.",
+                },
                 "edition": {"type": "string"},
                 "country": {"type": "string"},
                 "language": {"type": "string"},
@@ -225,7 +235,10 @@ def _movie_summary(movie: dict) -> str:
     title = movie.get("title") or metadata.get("title") or "Untitled"
     year = movie.get("year") or metadata.get("year") or "?"
     media_format = movie.get("format") or metadata.get("format") or "?"
-    return f"[{movie.get('id')}] {title} ({year}) - {media_format}"
+    # A flat list is the only thing an agent sees, so a series has to be
+    # distinguishable in it without a follow-up get_movie_details call.
+    suffix = " [TV]" if str(movie.get("media_type") or "").upper() == "SHOW" else ""
+    return f"[{movie.get('id')}] {title} ({year}) - {media_format}{suffix}"
 
 
 def _movie_from_list_entry(entry: dict) -> dict:
