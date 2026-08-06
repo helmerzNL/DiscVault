@@ -46,16 +46,28 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 if __package__ and __package__ != "scripts":
-    from ..dedup_identity import select_tmdb_identifier, title_year_identity_compatible
+    from ..dedup_identity import (
+        media_type_conflicts,
+        select_tmdb_identifier,
+        title_year_identity_compatible,
+    )
     from ..versioning import backend_version, build_sha
 elif __package__ == "scripts":  # pragma: no cover - gunicorn top-level imports
-    from dedup_identity import select_tmdb_identifier, title_year_identity_compatible
+    from dedup_identity import (
+        media_type_conflicts,
+        select_tmdb_identifier,
+        title_year_identity_compatible,
+    )
     from versioning import backend_version, build_sha
 else:  # pragma: no cover - exercised by the published-image CLI path
     backend_dir = Path(__file__).resolve().parents[1]
     if str(backend_dir) not in sys.path:
         sys.path.insert(0, str(backend_dir))
-    from dedup_identity import select_tmdb_identifier, title_year_identity_compatible
+    from dedup_identity import (
+        media_type_conflicts,
+        select_tmdb_identifier,
+        title_year_identity_compatible,
+    )
     from versioning import backend_version, build_sha
 
 
@@ -164,6 +176,8 @@ def _members_are_compatible(
     enforce_titleyear_identity,
 ):
     if _barcode_conflicts(left_movie.get("barcode"), right_movie.get("barcode")):
+        return False
+    if media_type_conflicts(left_movie.get("media_type"), right_movie.get("media_type")):
         return False
     if _format_conflicts(left_movie, right_movie):
         return False
@@ -590,7 +604,22 @@ def detect_groups(conn):
         return {k: v for k, v in groups.items() if len(v) > 1}
 
     return {
-        "barcode": _dups(barcode_groups),
+        # Barcode groups now go through the splitter too. They used to be
+        # returned raw, which meant _members_are_compatible never ran on them --
+        # so the media-type veto would not have reached this, the fourth of the
+        # contract's four ladder moments (§2.1), and a mixed film/series group
+        # sharing a box EAN would still have been offered up for merging.
+        #
+        # enforce_tmdb_sanity stays False here deliberately. Turning it on would
+        # also switch on the contract's tier-2 tmdb/year veto, which this server
+        # does not implement yet; that is a separate defect with its own fixture
+        # cases, and folding it in silently would make a merge regression
+        # unattributable.
+        "barcode": _split_group_map(
+            _dups(barcode_groups),
+            by_id,
+            enforce_tmdb_sanity=False,
+        ),
         "tmdbEdition": _split_group_map(
             _dups(tmdb_groups),
             by_id,
