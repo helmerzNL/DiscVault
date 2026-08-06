@@ -40,6 +40,10 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "preferred_price_currency": "",
     "rating_country": "NL",
     "default_media_group_id": "",
+    # Off by default, and gated again by the owner setting
+    # `movievault_v2_contribution_enabled`: a user cannot turn on sharing that
+    # the instance owner has not allowed. See release_contribution_enabled().
+    "share_release_selections": False,
 }
 APP_PREFERENCE_ALIASES = {
     "show_search_button": "show_collection_search",
@@ -58,6 +62,7 @@ APP_BOOLEAN_PREFERENCES = {
     "delete_container_members_with_container",
     "show_metadata_jobs",
     "price_monitoring_enabled",
+    "share_release_selections",
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
@@ -88,6 +93,10 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "delete_container_members_with_container",
         "show_metadata_jobs",
     ),
+    # Its own section rather than an entry under "library": this is the only
+    # preference that sends anything outside the instance, and burying that
+    # among display toggles would be the wrong kind of quiet.
+    "sharing": ("share_release_selections",),
 }
 
 PRICE_DISPLAY_SUPPORTED_CURRENCIES: tuple[str, ...] = ("EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY")

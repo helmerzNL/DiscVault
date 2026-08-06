@@ -33722,6 +33722,9 @@ def ui_preview_html(
           <div class="release-fallback-list">
             ${candidates.map(releaseFallbackOptionHtml).join("")}
           </div>
+          ${preferences.share_release_selections
+            ? `<div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.sharingOn", "Your choice is shared with MovieVault so others scanning this disc find it. Only the release details travel - never anything about you or your collection."))}</div>`
+            : ""}
           <div class="release-fallback-actions">
             <button type="button" class="secondary-button" data-release-fallback-manual="1">${escapeHtml(tNext("releaseFallback.noneOfThese", "None of these - enter details myself"))}</button>
             <button type="button" class="secondary-button" data-release-fallback-dismiss="1">${escapeHtml(tNext("common.close", "Close"))}</button>
@@ -34008,6 +34011,13 @@ def ui_preview_html(
             // the disc in their hand, so the server applies it over whatever a
             // metadata source guessed for the film.
             releaseCandidate: wantsBoxSet ? null : selectedReleaseFallbackCandidate(),
+            // "None of these" carries no candidate, so the server cannot tell a
+            // hand-typed release apart from an ordinary add without being told.
+            // The film travels with it because the picker already resolved it -
+            // making the user retype what the server just named would be the
+            // same work twice.
+            releaseFallbackManual: wantsBoxSet ? false : Boolean(importCenter.releaseFallback?.manual),
+            releaseFallbackFilm: wantsBoxSet ? null : (importCenter.releaseFallback?.film || null),
             metadataPreview: importCenter.barcodeLookup || null
           })
         });
@@ -39326,6 +39336,19 @@ def ui_preview_html(
         items: [
           ["delete_container_members_with_container", "preferences.deleteContainerMembersWithContainer", "preferences.deleteContainerMembersWithContainerHelp", "collectors_mode"],
           ["show_metadata_jobs", "preferences.showMetadataJobs", "preferences.showMetadataJobsHelp"]
+        ]
+      },
+      {
+        // Its own card rather than a line under "management": this is the only
+        // preference that sends anything outside this instance, and it should
+        // read as that rather than as another display toggle.
+        key: "sharing",
+        titleKey: "preferences.cardSharing",
+        title: "Sharing with MovieVault",
+        helpKey: "preferences.cardSharingHelp",
+        help: "Help the shared catalogue by contributing the releases you identify.",
+        items: [
+          ["share_release_selections", "preferences.shareReleaseSelections", "preferences.shareReleaseSelectionsHelp"]
         ]
       }
     ];

@@ -2702,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault bu aramayı hâlâ sürdürüyor. Birazdan yeniden ara - tamamlanan sonuç hazır tutuluyor.",
   "releaseFallback.unreachable": "MovieVault'a ulaşılamadı, bu yüzden bu disk hakkında henüz bir şey bilinmiyor. Bu genellikle geçicidir.",
   "releaseFallback.failed": "MovieVault bu aramayı tamamlayamadı.",
-  "releaseFallback.retry": "Yeniden dene"
+  "releaseFallback.retry": "Yeniden dene",
+  "releaseFallback.sharingOn": "Seçimin MovieVault ile paylaşılır, böylece bu diski tarayan başkaları da bulur. Yalnızca sürüm bilgileri gönderilir - senin ya da koleksiyonunla ilgili hiçbir şey gönderilmez.",
+  "preferences.cardSharing": "MovieVault ile paylaşım",
+  "preferences.cardSharingHelp": "Tanımladığın sürümleri katkı olarak vererek ortak kataloğa yardım et.",
+  "preferences.shareReleaseSelections": "Tanımladığım sürümleri paylaş",
+  "preferences.shareReleaseSelectionsHelp": "Bir barkod tanınmadığında ve elindeki baskıyı seçtiğinde, bu bilgiler incelenmek üzere MovieVault'a gönderilir. Yalnızca herkese açık disk bilgileri gönderilir - koleksiyonun, izleme geçmişin veya seni tanımlayan hiçbir şey gönderilmez."
 }

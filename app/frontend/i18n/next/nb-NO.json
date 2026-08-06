@@ -2702,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault jobber fortsatt med oppslaget. Søk igjen om litt - det ferdige resultatet ligger klart.",
   "releaseFallback.unreachable": "MovieVault kunne ikke nås, så ingenting er kjent om denne platen ennå. Dette er som regel midlertidig.",
   "releaseFallback.failed": "MovieVault kunne ikke fullføre oppslaget.",
-  "releaseFallback.retry": "Prøv igjen"
+  "releaseFallback.retry": "Prøv igjen",
+  "releaseFallback.sharingOn": "Valget ditt deles med MovieVault slik at andre finner denne platen når de skanner den. Bare utgivelsesdetaljene sendes - aldri noe om deg eller samlingen din.",
+  "preferences.cardSharing": "Deling med MovieVault",
+  "preferences.cardSharingHelp": "Hjelp den delte katalogen ved å bidra med utgivelsene du identifiserer.",
+  "preferences.shareReleaseSelections": "Del utgivelsene jeg identifiserer",
+  "preferences.shareReleaseSelectionsHelp": "Når en strekkode ikke gjenkjennes og du velger pressingen du holder, sendes disse detaljene til MovieVault for gjennomgang. Bare offentlig plateinformasjon sendes - aldri samlingen din, historikken din eller noe som identifiserer deg."
 }

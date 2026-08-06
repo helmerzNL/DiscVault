@@ -78,6 +78,10 @@ try:
         verify_totp,
     )
     from .next_audit import request_ip_details
+    from .next_movievault_v2_contributions import (
+        registration_state as movievault_v2_contribution_state,
+        reset_registration as reset_movievault_v2_contribution_registration,
+    )
     from .next_runtime_secrets import jwt_secret
     from .scripts.sync_dedup_merge import (
         build_report as _dedup_build_report,
@@ -121,6 +125,10 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         verify_totp,
     )
     from next_audit import request_ip_details
+    from next_movievault_v2_contributions import (
+        registration_state as movievault_v2_contribution_state,
+        reset_registration as reset_movievault_v2_contribution_registration,
+    )
     from next_runtime_secrets import jwt_secret
     from scripts.sync_dedup_merge import (
         build_report as _dedup_build_report,
@@ -5390,10 +5398,47 @@ def register_next_auth_routes(
                             summary="MovieVault receiver setting changed",
                             metadata={"enabled": enabled},
                         )
+                # The v2 gate is a separate setting from the v1 receiver above:
+                # they send different things to different systems, and an owner
+                # who allowed one has not thereby allowed the other.
+                if "movievault_v2_contribution_enabled" in body:
+                    v2_enabled = bool(body.get("movievault_v2_contribution_enabled"))
+                    with conn.transaction():
+                        set_setting(conn, "movievault_v2_contribution_enabled", v2_enabled)
+                        audit_event(
+                            conn,
+                            event_type="movievault.release_contribution_setting_changed",
+                            category="plugins",
+                            actor=owner,
+                            target_type="setting",
+                            target_id="movievault_v2_contribution_enabled",
+                            summary="MovieVault release contribution setting changed",
+                            metadata={"enabled": v2_enabled},
+                        )
+                if body.get("movievault_v2_contribution_reset"):
+                    # Registration cannot be recovered - MovieVault attaches no
+                    # account to a pseudonymous instance - so resetting means
+                    # the next send registers a brand new identity.
+                    with conn.transaction():
+                        reset_movievault_v2_contribution_registration(conn)
+                        audit_event(
+                            conn,
+                            event_type="movievault.release_contribution_identity_reset",
+                            category="plugins",
+                            actor=owner,
+                            target_type="setting",
+                            target_id="movievault_v2_contribution_instance_id",
+                            summary="MovieVault contribution identity reset",
+                            metadata={},
+                        )
             settings = {
                 "movievault_contribution_enabled": bool(
                     setting_value(conn, "movievault_contribution_enabled", False)
-                )
+                ),
+                "movievault_v2_contribution_enabled": bool(
+                    setting_value(conn, "movievault_v2_contribution_enabled", False)
+                ),
+                "movievault_v2_contribution": movievault_v2_contribution_state(conn),
             }
         return response({"status": "ok", "settings": settings})
 

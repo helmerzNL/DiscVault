@@ -2702,5 +2702,10 @@
   "releaseFallback.stillWorking": "MovieVault 仍在處理這次查詢。請稍後重新搜尋 - 完成的結果會保留。",
   "releaseFallback.unreachable": "無法連線 MovieVault，因此暫時無法得知這張光碟的資訊。這通常是暫時的。",
   "releaseFallback.failed": "MovieVault 未能完成這次查詢。",
-  "releaseFallback.retry": "重試"
+  "releaseFallback.retry": "重試",
+  "releaseFallback.sharingOn": "你的選擇會分享給 MovieVault，讓其他人掃描這張光碟時也能找到。只會傳送版本資訊，絕不會傳送任何關於你或你收藏的內容。",
+  "preferences.cardSharing": "與 MovieVault 分享",
+  "preferences.cardSharingHelp": "貢獻你辨識出的版本，協助完善共享目錄。",
+  "preferences.shareReleaseSelections": "分享我辨識出的版本",
+  "preferences.shareReleaseSelectionsHelp": "當條碼無法辨識、而你選擇了手上的壓片版本時，這些版本資訊會傳送給 MovieVault 審核。僅傳送公開的光碟資訊，絕不傳送你的收藏、觀看紀錄或任何可識別你身分的內容。"
 }

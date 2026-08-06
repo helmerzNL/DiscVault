@@ -24,6 +24,8 @@ on:
       - "app/backend/next_plugin_runtime.py"
       - "app/backend/next_movievault_connection.py"
       - "app/backend/next_movievault_v2.py"
+      - "app/backend/next_movievault_v2_contributions.py"
+      - "app/backend/next_preferences.py"
       - "app/backend/next_plugins/**"
       - "app/backend/tests/fixtures/distribution-v2*"
       - "app/backend/tests/__init__.py"
@@ -77,7 +79,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_legacy_auth.py next_movievault_connection.py next_runtime_secrets.py next_plugin_runtime.py next_movievault_v2.py next_worker.py
+        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_legacy_auth.py next_movievault_connection.py next_runtime_secrets.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_worker.py
 
       - name: Validate pinned identity-ladder fixture coverage
         run: python scripts/validate_identity_ladder_fixture.py
@@ -93,6 +95,9 @@ jobs:
 
       - name: Test MovieVault v2 contract and privacy policy
         run: python -m unittest tests.test_next_movievault_v2
+
+      - name: Test MovieVault v2 release contributions
+        run: python -m unittest tests.test_next_movievault_v2_contributions
 
       - name: Apply Next migrations
         run: python next_database.py migrate
