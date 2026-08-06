@@ -14749,6 +14749,19 @@ def ui_preview_html(
                         <option value="SHOW" data-next-i18n="movieDetail.mediaTypeShow">TV series</option>
                       </select>
                     </label>
+                    <label for="movieEditSeries" id="movieEditSeriesRow" hidden>
+                      <span data-next-i18n="movieDetail.series">Series</span>
+                      <select id="movieEditSeries" name="series_id"></select>
+                    </label>
+                    <label id="movieEditSeriesNewRow" hidden>
+                      <span data-next-i18n="movieDetail.seriesNewTitle">New series title</span>
+                      <input id="movieEditSeriesNew" maxlength="300" autocomplete="off">
+                    </label>
+                    <div id="movieEditSeasonsRow" class="movie-edit-seasons" hidden>
+                      <span data-next-i18n="movieDetail.seasons">Seasons</span>
+                      <div id="movieEditSeasons" class="movie-edit-seasons-list"></div>
+                      <p class="hint" data-next-i18n="movieDetail.seasonsHint">Leave every season unticked for a complete-series set.</p>
+                    </div>
                     <label for="movieEditFormat">
                       <span data-next-i18n="movieDetail.format">Format</span>
                       <select id="movieEditFormat" name="format"></select>
@@ -27583,8 +27596,144 @@ def ui_preview_html(
       }
       return formatWishlistPrice(value, code);
     }
+    // Series editing. The list is fetched once per edit session rather than per
+    // keystroke: a collection has few series, and the picker must stay usable
+    // offline-ish on a slow link.
+    let movieEditSeriesCatalog = [];
+
+    function movieEditSeriesElements() {
+      return {
+        row: document.getElementById("movieEditSeriesRow"),
+        select: document.getElementById("movieEditSeries"),
+        newRow: document.getElementById("movieEditSeriesNewRow"),
+        newInput: document.getElementById("movieEditSeriesNew"),
+        seasonsRow: document.getElementById("movieEditSeasonsRow"),
+        seasons: document.getElementById("movieEditSeasons")
+      };
+    }
+
+    function renderMovieEditSeasons(seriesId, selectedIds) {
+      const {seasons} = movieEditSeriesElements();
+      if (!seasons) return;
+      const series = movieEditSeriesCatalog.find((entry) => entry.id === seriesId);
+      const list = (series && series.seasons) || [];
+      if (!list.length) {
+        seasons.innerHTML = "";
+        return;
+      }
+      const chosen = new Set(selectedIds || []);
+      seasons.innerHTML = list.map((season) => {
+        const label = season.title
+          ? `${season.seasonNumber} — ${escapeHtml(season.title)}`
+          : `${tNext("movieDetail.seasonNumber", "Season")} ${season.seasonNumber}`;
+        const checked = chosen.has(season.id) ? " checked" : "";
+        return `<label class="movie-edit-season"><input type="checkbox" value="${escapeHtml(season.id)}"${checked}> <span>${label}</span></label>`;
+      }).join("");
+    }
+
+    function syncMovieEditSeriesVisibility(selectedSeasonIds) {
+      const {row, select, newRow, seasonsRow} = movieEditSeriesElements();
+      const isShow = (document.getElementById("movieEditMediaType")?.value || "MOVIE") === "SHOW";
+      if (row) row.hidden = !isShow;
+      const seriesId = select?.value || "";
+      // Only offered while the type is a series, because the backend refuses a
+      // series on a film rather than silently accepting one.
+      if (newRow) newRow.hidden = !isShow || seriesId !== "__new__";
+      if (seasonsRow) {
+        const hasSeasons = !!(movieEditSeriesCatalog.find((entry) => entry.id === seriesId)?.seasons || []).length;
+        seasonsRow.hidden = !isShow || !hasSeasons;
+      }
+      if (isShow && seriesId && seriesId !== "__new__") {
+        renderMovieEditSeasons(seriesId, selectedSeasonIds);
+      }
+    }
+
+    async function loadMovieEditSeries(selectedSeriesId, selectedSeasonIds) {
+      const {select} = movieEditSeriesElements();
+      if (!select) return;
+      try {
+        const payload = await authApiJson("/api/next/series");
+        movieEditSeriesCatalog = (payload && payload.series) || [];
+      } catch (error) {
+        // A failed list must not block the rest of the edit form; the user can
+        // still change every other field and save.
+        movieEditSeriesCatalog = [];
+      }
+      const detail = await Promise.all(movieEditSeriesCatalog.map(async (entry) => {
+        if (entry.id !== selectedSeriesId) return entry;
+        try {
+          const full = await authApiJson(`/api/next/series/${encodeURIComponent(entry.id)}`);
+          return (full && full.series) || entry;
+        } catch (error) {
+          return entry;
+        }
+      }));
+      movieEditSeriesCatalog = detail;
+      const none = `<option value="">${escapeHtml(tNext("movieDetail.seriesNone", "No series"))}</option>`;
+      const create = `<option value="__new__">${escapeHtml(tNext("movieDetail.seriesNew", "New series..."))}</option>`;
+      select.innerHTML = none + movieEditSeriesCatalog.map((entry) => {
+        const selected = entry.id === selectedSeriesId ? " selected" : "";
+        return `<option value="${escapeHtml(entry.id)}"${selected}>${escapeHtml(entry.title)}</option>`;
+      }).join("") + create;
+      select.value = selectedSeriesId || "";
+      syncMovieEditSeriesVisibility(selectedSeasonIds);
+    }
+
+    function movieEditSeriesBody() {
+      const isShow = (document.getElementById("movieEditMediaType")?.value || "MOVIE") === "SHOW";
+      // A film sends an explicit null so switching type away also drops the link,
+      // rather than leaving an orphaned series on a record that is no longer one.
+      if (!isShow) return {seriesId: null, seasonIds: []};
+      const seriesId = document.getElementById("movieEditSeries")?.value || "";
+      if (!seriesId || seriesId === "__new__") return {seriesId: null, seasonIds: []};
+      return {seriesId, seasonIds: collectMovieEditSeasonIds()};
+    }
+
+    async function ensureMovieEditSeries() {
+      // "New series..." has to become a real row before the movie save can name
+      // it, so this runs first and rewrites the select to the created id.
+      const select = document.getElementById("movieEditSeries");
+      if (!select || select.value !== "__new__") return true;
+      const title = (document.getElementById("movieEditSeriesNew")?.value || "").trim();
+      if (!title) {
+        setMovieDetailMessage(tNext("movieDetail.seriesTitleRequired", "A new series needs a title."), "bad");
+        return false;
+      }
+      try {
+        const created = await authApiJson("/api/next/series", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({title})
+        });
+        const series = created && created.series;
+        if (!series || !series.id) throw new Error("no series returned");
+        movieEditSeriesCatalog = movieEditSeriesCatalog.concat([series]);
+        const option = document.createElement("option");
+        option.value = series.id;
+        option.textContent = series.title;
+        select.insertBefore(option, select.lastElementChild);
+        select.value = series.id;
+        syncMovieEditSeriesVisibility([]);
+        return true;
+      } catch (error) {
+        setMovieDetailMessage(tNext("movieDetail.seriesCreateFailed", "Could not create the series."), "bad");
+        return false;
+      }
+    }
+
+    function collectMovieEditSeasonIds() {
+      const {seasons, seasonsRow} = movieEditSeriesElements();
+      if (!seasons || seasonsRow?.hidden) return [];
+      return Array.from(seasons.querySelectorAll("input[type=checkbox]:checked")).map((input) => input.value);
+    }
+
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
+      const seriesDetail = detail.series || null;
+      loadMovieEditSeries(
+        seriesDetail ? seriesDetail.id : "",
+        (seriesDetail && (seriesDetail.seasons || []).map((season) => season.id)) || []
+      );
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
@@ -37956,6 +38105,7 @@ def ui_preview_html(
         setMovieDetailMessage(tNext("movieDetail.titleRequired", "Title is required."), "bad");
         return;
       }
+      if (!(await ensureMovieEditSeries())) return;
       setMovieDetailMessage(tNext("movieDetail.saving", "Saving movie..."));
       const prevDetail = activeDetailPayload || {};
       const prevMovie = prevDetail.movie || {};
@@ -37971,6 +38121,9 @@ def ui_preview_html(
         barcode: formTextValue("movieEditBarcode"),
         format: formTextValue("movieEditFormat"),
         mediaType: formTextValue("movieEditMediaType") || "MOVIE",
+        // Absent keys mean "leave the link alone" server-side, so both are sent
+        // together and only while the type is a series.
+        ...movieEditSeriesBody(),
         edition: formTextValue("movieEditEdition"),
         releaseDate: formTextValue("movieEditReleaseDate"),
         country: formTextValue("movieEditCountry"),
@@ -43173,6 +43326,8 @@ def ui_preview_html(
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
       document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
+      document.getElementById("movieEditMediaType")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));
+      document.getElementById("movieEditSeries")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));
       document.getElementById("movieDeleteButton")?.addEventListener("click", () => deleteActiveMovie());
       document.getElementById("movieWatchlistToggleButton")?.addEventListener("click", () => toggleActiveMovieWatchlist());
       document.getElementById("movieLogRewatchButton")?.addEventListener("click", () => openMovieRewatchDialog());
