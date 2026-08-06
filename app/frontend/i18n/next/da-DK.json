@@ -1849,6 +1849,15 @@
   "movieDetail.mediaType": "Type",
   "movieDetail.mediaTypeMovie": "Film",
   "movieDetail.mediaTypeShow": "Tv-serie",
+  "movieDetail.series": "Serie",
+  "movieDetail.seriesNone": "Ingen serie",
+  "movieDetail.seriesNew": "Ny serie ...",
+  "movieDetail.seriesNewTitle": "Titel på ny serie",
+  "movieDetail.seriesTitleRequired": "En ny serie skal have en titel.",
+  "movieDetail.seriesCreateFailed": "Serien kunne ikke oprettes.",
+  "movieDetail.seasons": "Sæsoner",
+  "movieDetail.seasonNumber": "Sæson",
+  "movieDetail.seasonsHint": "Lad alle sæsoner være umarkerede for en komplet serieboks.",
   "movieDetail.genre": "Genre",
   "movieDetail.jobs": "Opgaver",
   "movieDetail.language": "Sprog",
@@ -2702,5 +2711,10 @@
   "releaseFallback.stillWorking": "MovieVault arbejder stadig på opslaget. Søg igen om lidt - det færdige resultat står klar.",
   "releaseFallback.unreachable": "MovieVault kunne ikke nås, så der vides endnu intet om denne disk. Det er som regel midlertidigt.",
   "releaseFallback.failed": "MovieVault kunne ikke fuldføre opslaget.",
-  "releaseFallback.retry": "Prøv igen"
+  "releaseFallback.retry": "Prøv igen",
+  "releaseFallback.sharingOn": "Dit valg deles med MovieVault, så andre finder denne disc, når de scanner den. Kun udgivelsesoplysningerne sendes - aldrig noget om dig eller din samling.",
+  "preferences.cardSharing": "Deling med MovieVault",
+  "preferences.cardSharingHelp": "Hjælp det fælles katalog ved at bidrage med de udgivelser, du identificerer.",
+  "preferences.shareReleaseSelections": "Del de udgivelser, jeg identificerer",
+  "preferences.shareReleaseSelectionsHelp": "Når en stregkode ikke genkendes, og du vælger den presning, du står med, sendes disse oplysninger til MovieVault til gennemsyn. Kun offentlige discoplysninger sendes - aldrig din samling, din historik eller noget, der identificerer dig."
 }

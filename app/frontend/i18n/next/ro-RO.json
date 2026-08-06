@@ -1849,6 +1849,15 @@
   "movieDetail.mediaType": "Tip",
   "movieDetail.mediaTypeMovie": "Film",
   "movieDetail.mediaTypeShow": "Serial TV",
+  "movieDetail.series": "Serial",
+  "movieDetail.seriesNone": "Fără serial",
+  "movieDetail.seriesNew": "Serial nou...",
+  "movieDetail.seriesNewTitle": "Titlul noului serial",
+  "movieDetail.seriesTitleRequired": "Un serial nou are nevoie de un titlu.",
+  "movieDetail.seriesCreateFailed": "Serialul nu a putut fi creat.",
+  "movieDetail.seasons": "Sezoane",
+  "movieDetail.seasonNumber": "Sezon",
+  "movieDetail.seasonsHint": "Nu bifați niciun sezon pentru un set cu serialul complet.",
   "movieDetail.genre": "Gen",
   "movieDetail.jobs": "Reîmprospătează",
   "movieDetail.language": "Limbă",
@@ -2702,5 +2711,10 @@
   "releaseFallback.stillWorking": "MovieVault încă lucrează la această căutare. Caută din nou peste puțin timp - rezultatul finalizat rămâne pregătit.",
   "releaseFallback.unreachable": "MovieVault nu a putut fi contactat, deci despre acest disc nu se știe încă nimic. De obicei este temporar.",
   "releaseFallback.failed": "MovieVault nu a putut finaliza această căutare.",
-  "releaseFallback.retry": "Încearcă din nou"
+  "releaseFallback.retry": "Încearcă din nou",
+  "releaseFallback.sharingOn": "Alegerea ta este partajată cu MovieVault, ca alții să găsească acest disc când îl scanează. Se trimit doar detaliile ediției - niciodată ceva despre tine sau colecția ta.",
+  "preferences.cardSharing": "Partajare cu MovieVault",
+  "preferences.cardSharingHelp": "Ajută catalogul comun contribuind cu edițiile pe care le identifici.",
+  "preferences.shareReleaseSelections": "Partajează edițiile pe care le identific",
+  "preferences.shareReleaseSelectionsHelp": "Când un cod de bare nu este recunoscut și alegi presarea pe care o ții în mână, aceste detalii sunt trimise la MovieVault pentru verificare. Se trimit doar informații publice despre disc - niciodată colecția ta, istoricul vizionărilor sau ceva care te identifică."
 }

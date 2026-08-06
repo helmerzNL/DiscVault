@@ -1849,6 +1849,15 @@
   "movieDetail.mediaType": "Typ",
   "movieDetail.mediaTypeMovie": "Film",
   "movieDetail.mediaTypeShow": "TV-serie",
+  "movieDetail.series": "Serie",
+  "movieDetail.seriesNone": "Ingen serie",
+  "movieDetail.seriesNew": "Ny serie ...",
+  "movieDetail.seriesNewTitle": "Titel på ny serie",
+  "movieDetail.seriesTitleRequired": "En ny serie behöver en titel.",
+  "movieDetail.seriesCreateFailed": "Det gick inte att skapa serien.",
+  "movieDetail.seasons": "Säsonger",
+  "movieDetail.seasonNumber": "Säsong",
+  "movieDetail.seasonsHint": "Lämna alla säsonger omarkerade för en komplett serielåda.",
   "movieDetail.genre": "Genre",
   "movieDetail.jobs": "Uppgifter",
   "movieDetail.language": "Sprak",
@@ -2702,5 +2711,10 @@
   "releaseFallback.stillWorking": "MovieVault arbetar fortfarande med uppslagningen. Sök igen om en stund - det färdiga resultatet ligger kvar.",
   "releaseFallback.unreachable": "MovieVault gick inte att nå, så inget är känt om skivan ännu. Det är oftast tillfälligt.",
   "releaseFallback.failed": "MovieVault kunde inte slutföra uppslagningen.",
-  "releaseFallback.retry": "Försök igen"
+  "releaseFallback.retry": "Försök igen",
+  "releaseFallback.sharingOn": "Ditt val delas med MovieVault så att andra hittar den här skivan när de skannar den. Endast utgåvans uppgifter skickas - aldrig något om dig eller din samling.",
+  "preferences.cardSharing": "Delning med MovieVault",
+  "preferences.cardSharingHelp": "Hjälp den gemensamma katalogen genom att bidra med de utgåvor du identifierar.",
+  "preferences.shareReleaseSelections": "Dela utgåvorna jag identifierar",
+  "preferences.shareReleaseSelectionsHelp": "När en streckkod inte känns igen och du väljer den pressning du håller i skickas dessa uppgifter till MovieVault för granskning. Endast offentlig skivinformation skickas - aldrig din samling, din historik eller något som identifierar dig."
 }

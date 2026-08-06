@@ -151,6 +151,9 @@ try:
     from .next_movievault_v2 import resolve_release_details
     from .next_movievault_v2 import search_release_details
     from .next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from .next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from .next_movievault_v2 import release_technical_contribution_payload
+    from .next_movievault_v2_contributions import release_contribution_enabled
     from .dedup_identity import MEDIA_TYPE_MOVIE
     from .dedup_identity import MEDIA_TYPE_SHOW
     from .dedup_identity import media_type_conflicts
@@ -213,6 +216,9 @@ try:
     from .next_people import native_person_filmography_payload
     from .next_people import people_list_entities
     from .next_people import person_entity
+    from .next_series import normalize_season_ids
+    from .next_series import season_payload
+    from .next_series import series_payload
     from .next_people import person_identifier_entities
     from .next_people import person_tmdb_identifier
     from .next_people import person_localization_entities
@@ -393,6 +399,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2 import resolve_release_details
     from next_movievault_v2 import search_release_details
     from next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from next_movievault_v2 import release_technical_contribution_payload
+    from next_movievault_v2_contributions import release_contribution_enabled
     from dedup_identity import MEDIA_TYPE_MOVIE
     from dedup_identity import MEDIA_TYPE_SHOW
     from dedup_identity import media_type_conflicts
@@ -455,6 +464,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_people import native_person_filmography_payload
     from next_people import people_list_entities
     from next_people import person_entity
+    from next_series import normalize_season_ids
+    from next_series import season_payload
+    from next_series import series_payload
     from next_people import person_identifier_entities
     from next_people import person_tmdb_identifier
     from next_people import person_localization_entities
@@ -3443,6 +3455,7 @@ def normalize_import_column_mapping(value: Any) -> dict[str, str]:
         "sourceUrl",
         "collectionTitle",
         "boxSetTitle",
+        "discCount",
         "vaultTitle",
         "watchedAt",
         "watchlisted",
@@ -9592,7 +9605,9 @@ def movie_media_type_value(body: dict[str, Any], existing: dict[str, Any]) -> st
     normalized = normalize_media_type(raw)
     if normalized is None:
         raise NextApiError(
-            f"mediaType must be one of {MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}", 400
+            f"mediaType (or media_type) must be one of "
+            f"{MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}",
+            400,
         )
     return normalized
 
@@ -9800,6 +9815,14 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
     field_locks = payload.get("field_locks")
     if field_locks is not None:
         metadata_patch[MOVIE_METADATA_LOCKS_KEY] = field_locks
+    if payload.get("media_type") != MEDIA_TYPE_SHOW:
+        # Ordered before the column write on purpose. movies_series_requires_show
+        # forbids a series on a film, so switching the type back while a link is
+        # still stored would fail this UPDATE itself -- an ordinary edit turning
+        # into a constraint violation. Shedding the link first makes "this is a
+        # film after all" an ordinary edit again.
+        cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
+        cur.execute("UPDATE movies SET series_id = NULL WHERE id = %s", (movie_uuid,))
     cur.execute(
         """
         UPDATE movies
@@ -9851,6 +9874,259 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
         ),
     )
     upsert_movie_technical_edits(cur, movie_uuid, payload.get("technical_edits") or {})
+    apply_movie_series_assignment(
+        cur,
+        movie_uuid,
+        payload.get("series_assignment"),
+        media_type=payload["media_type"],
+    )
+
+
+def series_tables_available(conn) -> bool:
+    """Every series route is a no-op on an instance that has not run 063 yet."""
+    return table_exists(conn, "series") and table_exists(conn, "series_seasons")
+
+
+def season_entities(conn, series_id: UUID) -> list[dict[str, Any]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT s.id,
+                   s.public_id,
+                   s.season_number,
+                   s.title,
+                   s.year,
+                   s.overview,
+                   s.episode_count,
+                   (
+                       SELECT count(*)
+                       FROM movie_seasons ms
+                       JOIN movies m ON m.id = ms.movie_id AND m.deleted_at IS NULL
+                       WHERE ms.season_id = s.id
+                   ) AS disc_count
+            FROM series_seasons s
+            WHERE s.series_id = %s AND s.deleted_at IS NULL
+            ORDER BY s.season_number
+            """,
+            (series_id,),
+        )
+        rows = cur.fetchall()
+    return [
+        {
+            "id": str(row["id"]),
+            "publicId": row["public_id"],
+            "seasonNumber": row["season_number"],
+            "title": row["title"],
+            "year": row["year"],
+            "overview": row["overview"],
+            "episodeCount": row["episode_count"],
+            "discCount": int(row["disc_count"] or 0),
+        }
+        for row in rows
+    ]
+
+
+def series_entity(conn, series_id: UUID, *, with_seasons: bool = True) -> dict[str, Any] | None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, public_id, title, sort_title, original_title,
+                   start_year, end_year, overview
+            FROM series
+            WHERE id = %s AND deleted_at IS NULL
+            """,
+            (series_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    entity = {
+        "id": str(row["id"]),
+        "publicId": row["public_id"],
+        "title": row["title"],
+        "sortTitle": row["sort_title"],
+        "originalTitle": row["original_title"],
+        "startYear": row["start_year"],
+        "endYear": row["end_year"],
+        "overview": row["overview"],
+    }
+    if with_seasons:
+        entity["seasons"] = season_entities(conn, series_id)
+    return entity
+
+
+def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, Any]]:
+    filters = ["deleted_at IS NULL"]
+    params: list[Any] = []
+    if query:
+        filters.append("lower(title) LIKE %s")
+        params.append(f"%{query.casefold()}%")
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT s.id, s.public_id, s.title, s.sort_title, s.start_year, s.end_year,
+                   (
+                       SELECT count(*) FROM series_seasons ss
+                       WHERE ss.series_id = s.id AND ss.deleted_at IS NULL
+                   ) AS season_count,
+                   (
+                       SELECT count(*) FROM movies m
+                       WHERE m.series_id = s.id AND m.deleted_at IS NULL
+                   ) AS disc_count
+            FROM series s
+            WHERE {" AND ".join(filters)}
+            ORDER BY lower(COALESCE(s.sort_title, s.title))
+            LIMIT 500
+            """,
+            tuple(params),
+        )
+        rows = cur.fetchall()
+    return [
+        {
+            "id": str(row["id"]),
+            "publicId": row["public_id"],
+            "title": row["title"],
+            "sortTitle": row["sort_title"],
+            "startYear": row["start_year"],
+            "endYear": row["end_year"],
+            "seasonCount": int(row["season_count"] or 0),
+            "discCount": int(row["disc_count"] or 0),
+        }
+        for row in rows
+    ]
+
+
+def movie_series_payload(conn, movie_id: UUID) -> dict[str, Any] | None:
+    """The series a disc belongs to, with only the seasons it actually carries.
+
+    Returns None when the disc is not linked. Zero seasons on a linked disc is
+    the complete-series case and returns an empty list, not None -- the two mean
+    different things and the UI has to be able to tell them apart.
+    """
+    if not series_tables_available(conn):
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT series_id FROM movies WHERE id = %s", (movie_id,))
+        row = cur.fetchone()
+    if not row or not row.get("series_id"):
+        return None
+    series = series_entity(conn, row["series_id"], with_seasons=False)
+    if series is None:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT s.id, s.season_number, s.title, s.year
+            FROM movie_seasons ms
+            JOIN series_seasons s ON s.id = ms.season_id
+            WHERE ms.movie_id = %s AND s.deleted_at IS NULL
+            ORDER BY s.season_number
+            """,
+            (movie_id,),
+        )
+        season_rows = cur.fetchall()
+    series["seasons"] = [
+        {
+            "id": str(season["id"]),
+            "seasonNumber": season["season_number"],
+            "title": season["title"],
+            "year": season["year"],
+        }
+        for season in season_rows
+    ]
+    return series
+
+
+def apply_movie_series_assignment(
+    cur,
+    movie_uuid: UUID,
+    assignment: dict[str, Any] | None,
+    *,
+    media_type: str,
+) -> None:
+    """Link or unlink a disc, keeping the schema's own rules as clean 400s.
+
+    ``movies_series_requires_show`` would already reject a series on a film, but
+    as a constraint violation -- a 500 with a Postgres message. The caller gets a
+    sentence instead.
+
+    Season rows are replaced wholesale rather than diffed: the set is small, and
+    "these are the seasons on this disc" is the only statement the caller can
+    make, so a merge would have no meaning to attach to.
+    """
+    if assignment is None:
+        return
+    series_id = assignment.get("series_id")
+    if series_id is not None and media_type != MEDIA_TYPE_SHOW:
+        raise NextApiError(
+            "A series can only be assigned to a disc whose type is a TV series",
+            400,
+        )
+    season_ids = assignment.get("season_ids") or []
+    if series_id is None and season_ids:
+        raise NextApiError("Seasons require a series", 400)
+
+    if series_id is not None:
+        cur.execute(
+            "SELECT 1 FROM series WHERE id = %s AND deleted_at IS NULL", (series_id,)
+        )
+        if not cur.fetchone():
+            raise NextApiError("The series does not exist", 404)
+        if season_ids:
+            cur.execute(
+                """
+                SELECT id FROM series_seasons
+                WHERE id = ANY(%s) AND series_id = %s AND deleted_at IS NULL
+                """,
+                (list(season_ids), series_id),
+            )
+            found = {row["id"] for row in cur.fetchall()}
+            missing = [str(value) for value in season_ids if value not in found]
+            if missing:
+                # Named rather than skipped: a caller holding a stale season id
+                # should hear about it instead of silently storing fewer seasons
+                # than it asked for.
+                raise NextApiError(
+                    "These seasons do not belong to that series: "
+                    + ", ".join(missing),
+                    400,
+                )
+
+    # Ordered before the movies update so the composite key never sees a disc
+    # whose series_id no longer matches rows that still reference it.
+    cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
+    cur.execute("UPDATE movies SET series_id = %s WHERE id = %s", (series_id, movie_uuid))
+    for index, season_id in enumerate(season_ids):
+        cur.execute(
+            """
+            INSERT INTO movie_seasons (movie_id, season_id, series_id, sort_order)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (movie_uuid, season_id, series_id, index),
+        )
+
+
+def movie_series_assignment(body: dict[str, Any]) -> dict[str, Any] | None:
+    """Read a series assignment from an edit body, or None when unstated.
+
+    Absent means "leave the link alone"; an explicit null clears it. Same
+    presence-keyed rule the rest of the edit payload uses, because a client that
+    predates this field sends neither key and must not unlink anything.
+    """
+    series_keys = ("seriesId", "series_id")
+    season_keys = ("seasonIds", "season_ids")
+    if not any(key in body for key in (*series_keys, *season_keys)):
+        return None
+    raw_series = next((body[key] for key in series_keys if key in body), None)
+    series_id: UUID | None = None
+    text = clean_text(raw_series)
+    if text is not None:
+        try:
+            series_id = UUID(text)
+        except (TypeError, ValueError):
+            raise NextApiError("seriesId must be a valid id", 400) from None
+    raw_seasons = next((body[key] for key in season_keys if key in body), None)
+    return {"series_id": series_id, "season_ids": normalize_season_ids(raw_seasons)}
 
 
 def set_movie_field_locks(movie_uuid: UUID, body: dict[str, Any], *, permission: str) -> list[str]:
@@ -9911,6 +10187,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "release_date": release_date,
         "format": pick_text("format"),
         "media_type": movie_media_type_value(body, existing),
+        "series_assignment": movie_series_assignment(body),
         "edition": pick_text("edition"),
         "country": pick_text("country"),
         "language": pick_text("language"),
@@ -13302,6 +13579,9 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "technicalSpecs": movie_technical_spec_entity(conn, movie_id),
         "credits": movie_credit_entities(conn, movie_id),
         "containers": movie_container_entities(conn, movie_id),
+        # None means "not linked"; a linked disc with an empty seasons list means
+        # the complete series or unspecified. The UI has to tell those apart.
+        "series": movie_series_payload(conn, movie_id),
         "mediaGroups": movie_media_group_entities(conn, movie_id),
         "mediaAssets": entity_media_asset_entities(
             conn, "movie", movie_id, include_hidden=True
@@ -17099,19 +17379,30 @@ def find_movie_by_barcode_match(
     series that happen to share a box EAN are two different works. Hence the scan
     over candidates instead of the older ``LIMIT 1`` -- a conflicting first row
     must not hide a legitimate match behind it.
+
+    The scan is only needed when there is something to veto *with*. A client that
+    states no type -- which is every client shipped before this contract version,
+    so also the common case -- can never conflict, so it takes the single-row
+    query instead of paging in every candidate to accept the first one anyway.
+
+    Deliberately not narrowed with an ``AND media_type = %s`` in SQL: filtering
+    the conflicting rows out would make this return some *other* barcode holder
+    rather than block the match, which is the opposite of a veto.
     """
     normalized = normalize_barcode(barcode)
     if not normalized:
         return None
+    can_conflict = normalize_media_type(incoming_media_type) is not None
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT id, media_type
             FROM movies
             WHERE deleted_at IS NULL
               AND barcode IS NOT NULL
               AND regexp_replace(barcode, '\\D', '', 'g') = %s
             ORDER BY created_at
+            {"" if can_conflict else "LIMIT 1"}
             """,
             (normalized,),
         )
@@ -19152,6 +19443,73 @@ def queue_movie_metadata_refresh_job(
     if extra:
         payload.update(extra)
     return create_background_job(conn, job_type=METADATA_REFRESH_JOB_TYPE, payload=payload)
+
+
+def movie_technical_spec_contribution_source(
+    conn, movie_id: UUID | str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Express a just-saved movie in the candidate shape the mapper reads.
+
+    A hand-typed release arrives as an ordinary Add form, so there is no
+    candidate row to map. What the user actually stated is now on the movie and
+    its technical specs, and reading it back from there is the only way to
+    contribute exactly what was saved rather than a second guess at it.
+
+    Keys are the wire names the mapper already understands, so the two entry
+    points share one mapping instead of growing a parallel one.
+    """
+    specs = movie_technical_spec_entity(conn, movie_id) or {}
+    candidate: dict[str, Any] = {
+        "title": clean_text(payload.get("releaseTitle")) or clean_text(payload.get("title")),
+        "edition": clean_text(payload.get("edition")),
+        "format": clean_text(payload.get("format")),
+        "packaging": specs.get("packaging") or [],
+        "discRegions": specs.get("regions") or [],
+        "audioTracks": specs.get("audio_tracks") or [],
+        "subtitles": specs.get("subtitles") or [],
+        "video": {
+            "resolution": specs.get("video_resolution"),
+            "codecs": specs.get("video_codecs") or [],
+            "hdrFormats": specs.get("hdr") or [],
+            "aspectRatios": specs.get("screen_ratios") or [],
+        },
+    }
+    disc_count = payload.get("discCount") or payload.get("disc_count")
+    if isinstance(disc_count, int) and not isinstance(disc_count, bool):
+        candidate["discCount"] = disc_count
+    return candidate
+
+
+def queue_release_contribution_job(
+    conn,
+    contribution_payload: dict[str, Any],
+    *,
+    actor: dict[str, Any] | None = None,
+    reason: str,
+) -> dict[str, Any] | None:
+    """Queue a chosen release for contribution back to MovieVault.
+
+    Queued rather than sent inline, for three reasons that all matter:
+    a network round-trip has no business inside a user-visible save; a
+    MovieVault outage must not fail an import that already succeeded locally;
+    and a signed, attributable write firing in the same second as the anonymous
+    resolve that produced the candidate would tie the two together for anyone
+    watching the connection.
+
+    Returns None whenever there is nothing to send, so the caller never has to
+    decide - the gate, the payload check and the missing-table case all read
+    the same way from outside.
+    """
+    if not contribution_payload or not table_exists(conn, "background_jobs"):
+        return None
+    payload: dict[str, Any] = {
+        "contribution": contribution_payload,
+        "requestedBy": actor_job_payload(actor or {}),
+        "reason": reason,
+    }
+    return create_background_job(
+        conn, job_type=RELEASE_CONTRIBUTION_JOB_TYPE, payload=payload
+    )
 
 
 def queue_receiver_payload_to_receivers(
@@ -21906,6 +22264,260 @@ def register_routes(flask_app: Flask) -> None:
                 }
             )
 
+    @flask_app.get("/api/next/series")
+    def list_series():
+        query = clean_text(request.args.get("q") or request.args.get("query"))
+        with connect() as conn:
+            require_next_permission(conn, "collection.view")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            return response({"status": "ok", "series": series_list_entities(conn, query=query)})
+
+    @flask_app.get("/api/next/series/<series_id>")
+    def get_series(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        with connect() as conn:
+            require_next_permission(conn, "collection.view")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            entity = series_entity(conn, series_uuid)
+            if entity is None:
+                raise NextApiError("Series not found", 404)
+            return response({"status": "ok", "series": entity})
+
+    @flask_app.post("/api/next/series")
+    def create_series():
+        body = request.get_json(silent=True) or {}
+        payload = series_payload(body)
+        series_uuid = uuid.uuid4()
+        public_id = clean_text(body.get("publicId") or body.get("public_id")) or f"next-series-{series_uuid.hex[:12]}"
+        if len(public_id) > 160:
+            raise NextApiError("publicId must be 160 characters or fewer", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM series WHERE public_id=%s", (public_id,))
+                    if cur.fetchone():
+                        raise NextApiError("A series with this public id already exists", 409)
+                    cur.execute(
+                        """
+                        INSERT INTO series (
+                            id, public_id, title, sort_title, original_title,
+                            start_year, end_year, overview, owner_id, created_at, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        """,
+                        (
+                            series_uuid,
+                            public_id,
+                            payload["title"],
+                            payload["sort_title"],
+                            payload["original_title"],
+                            payload["start_year"],
+                            payload["end_year"],
+                            payload["overview"],
+                            actor_or_instance_owner_id(conn, actor),
+                        ),
+                    )
+                audit_event(
+                    conn,
+                    event_type="series.created",
+                    category="admin",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary=f"Created series {payload['title']}",
+                    metadata={"publicId": public_id, "title": payload["title"]},
+                )
+            return response({"status": "ok", "series": series_entity(conn, series_uuid)}, 201)
+
+    @flask_app.patch("/api/next/series/<series_id>")
+    def update_series(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        body = request.get_json(silent=True) or {}
+        payload = series_payload(body, require_title=False)
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            if series_entity(conn, series_uuid, with_seasons=False) is None:
+                raise NextApiError("Series not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # COALESCE keeps an unstated column at its stored value, so a
+                    # partial patch cannot blank the rest of the series.
+                    cur.execute(
+                        """
+                        UPDATE series
+                        SET title=COALESCE(%s, title),
+                            sort_title=COALESCE(%s, sort_title),
+                            original_title=COALESCE(%s, original_title),
+                            start_year=COALESCE(%s, start_year),
+                            end_year=COALESCE(%s, end_year),
+                            overview=COALESCE(%s, overview),
+                            updated_at=now()
+                        WHERE id=%s
+                        """,
+                        (
+                            payload["title"],
+                            payload["sort_title"],
+                            payload["original_title"],
+                            payload["start_year"],
+                            payload["end_year"],
+                            payload["overview"],
+                            series_uuid,
+                        ),
+                    )
+                audit_event(
+                    conn,
+                    event_type="series.updated",
+                    category="admin",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary="Updated series",
+                )
+            return response({"status": "ok", "series": series_entity(conn, series_uuid)})
+
+    @flask_app.delete("/api/next/series/<series_id>")
+    def delete_series(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            if series_entity(conn, series_uuid, with_seasons=False) is None:
+                raise NextApiError("Series not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # The discs are unlinked rather than deleted: a series is a
+                    # grouping, and losing it must never take the collection with
+                    # it. movie_seasons rows go first because their composite key
+                    # references the disc's series_id.
+                    cur.execute(
+                        """
+                        DELETE FROM movie_seasons
+                        WHERE movie_id IN (SELECT id FROM movies WHERE series_id = %s)
+                        """,
+                        (series_uuid,),
+                    )
+                    cur.execute(
+                        "UPDATE movies SET series_id = NULL WHERE series_id = %s",
+                        (series_uuid,),
+                    )
+                    cur.execute(
+                        "UPDATE series SET deleted_at = now(), updated_at = now() WHERE id = %s",
+                        (series_uuid,),
+                    )
+                audit_event(
+                    conn,
+                    event_type="series.deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary="Deleted series",
+                )
+            return response({"status": "ok", "seriesId": str(series_uuid)})
+
+    @flask_app.post("/api/next/series/<series_id>/seasons")
+    def create_series_season(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        body = request.get_json(silent=True) or {}
+        payload = season_payload(body)
+        season_uuid = uuid.uuid4()
+        public_id = clean_text(body.get("publicId") or body.get("public_id")) or f"next-season-{season_uuid.hex[:12]}"
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            if series_entity(conn, series_uuid, with_seasons=False) is None:
+                raise NextApiError("Series not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT 1 FROM series_seasons
+                        WHERE series_id = %s AND season_number = %s AND deleted_at IS NULL
+                        """,
+                        (series_uuid, payload["season_number"]),
+                    )
+                    if cur.fetchone():
+                        raise NextApiError(
+                            f"Season {payload['season_number']} already exists for this series",
+                            409,
+                        )
+                    cur.execute(
+                        """
+                        INSERT INTO series_seasons (
+                            id, public_id, series_id, season_number, title, year,
+                            overview, episode_count, created_at, updated_at
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        """,
+                        (
+                            season_uuid,
+                            public_id,
+                            series_uuid,
+                            payload["season_number"],
+                            payload["title"],
+                            payload["year"],
+                            payload["overview"],
+                            payload["episode_count"],
+                        ),
+                    )
+                audit_event(
+                    conn,
+                    event_type="series.season.created",
+                    category="admin",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary=f"Added season {payload['season_number']}",
+                )
+            return response({"status": "ok", "series": series_entity(conn, series_uuid)}, 201)
+
+    @flask_app.delete("/api/next/series/<series_id>/seasons/<season_id>")
+    def delete_series_season(series_id, season_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        season_uuid = parse_uuid(season_id, "season id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT 1 FROM series_seasons
+                        WHERE id = %s AND series_id = %s AND deleted_at IS NULL
+                        """,
+                        (season_uuid, series_uuid),
+                    )
+                    if not cur.fetchone():
+                        raise NextApiError("Season not found", 404)
+                    # Discs keep their series link and simply stop naming this
+                    # season, which lands them on "complete series or
+                    # unspecified" rather than dropping out of the series.
+                    cur.execute("DELETE FROM movie_seasons WHERE season_id = %s", (season_uuid,))
+                    cur.execute(
+                        "UPDATE series_seasons SET deleted_at = now(), updated_at = now() WHERE id = %s",
+                        (season_uuid,),
+                    )
+                audit_event(
+                    conn,
+                    event_type="series.season.deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary="Deleted season",
+                )
+            return response({"status": "ok", "series": series_entity(conn, series_uuid)})
+
     @flask_app.post("/api/next/containers")
     def create_container():
         body = request.get_json(silent=True) or {}
@@ -23053,7 +23665,9 @@ def register_routes(flask_app: Flask) -> None:
         media_type = normalize_media_type(raw_media_type)
         if raw_media_type and media_type is None:
             raise NextApiError(
-                f"media_type must be one of {MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}", 400
+                f"media_type (or mediaType) must be one of "
+                f"{MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}",
+                400,
             )
         searching = bool(query or media_format or media_type)
         with connect() as conn:
@@ -29280,6 +29894,12 @@ def register_routes(flask_app: Flask) -> None:
         release_candidate = body.get("releaseCandidate") or body.get("release_candidate")
         if not isinstance(release_candidate, dict):
             release_candidate = {}
+        release_fallback_manual = bool(
+            body.get("releaseFallbackManual") or body.get("release_fallback_manual")
+        )
+        release_fallback_film = body.get("releaseFallbackFilm") or body.get("release_fallback_film")
+        if not isinstance(release_fallback_film, dict):
+            release_fallback_film = {}
         selected_box_set_key_from_body = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
         provided_box_set_body = body.get("boxSetProposal") or body.get("box_set_proposal")
         if not isinstance(provided_box_set_body, dict):
@@ -29652,6 +30272,36 @@ def register_routes(flask_app: Flask) -> None:
                         "title": import_title,
                     },
                 )
+                # The disc the user identified is the one fact MovieVault does
+                # not have: its resolver returned a candidate list precisely
+                # because it could not choose, and it creates no moderation
+                # candidate for that. Offering the choice back is what closes
+                # the loop - gated by the owner setting and the user's own
+                # preference, and queued so a MovieVault outage cannot reach
+                # this request.
+                release_contribution_job = None
+                if release_contribution_enabled(conn, actor.get("id") if actor else None):
+                    contribution_payload = release_technical_contribution_payload(
+                        release_candidate
+                        or (
+                            movie_technical_spec_contribution_source(conn, movie_id, payload)
+                            if release_fallback_manual
+                            else {}
+                        ),
+                        scanned_barcode=barcode or "",
+                        film=release_fallback_film
+                        or {
+                            "title": import_title,
+                            "year": payload.get("year"),
+                        },
+                        provenance="manual_entry" if release_fallback_manual else "candidate_selection",
+                    )
+                    release_contribution_job = queue_release_contribution_job(
+                        conn,
+                        contribution_payload,
+                        actor=actor,
+                        reason="import_center_release_selection",
+                    )
                 audit_event(
                     conn,
                     event_type="movie.imported",
@@ -29677,6 +30327,7 @@ def register_routes(flask_app: Flask) -> None:
                         "metadataRefreshQueued": bool(metadata_refresh_job),
                         "metadataJobId": str(metadata_refresh_job.get("id")) if metadata_refresh_job else None,
                         "targetContainerId": str(target_container_uuid) if target_container_uuid else None,
+                        "releaseContributionQueued": bool(release_contribution_job),
                     },
                 )
                 target_link_result = None

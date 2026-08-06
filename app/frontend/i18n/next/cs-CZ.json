@@ -1849,6 +1849,15 @@
   "movieDetail.mediaType": "Typ",
   "movieDetail.mediaTypeMovie": "Film",
   "movieDetail.mediaTypeShow": "Seriál",
+  "movieDetail.series": "Seriál",
+  "movieDetail.seriesNone": "Žádný seriál",
+  "movieDetail.seriesNew": "Nový seriál...",
+  "movieDetail.seriesNewTitle": "Název nového seriálu",
+  "movieDetail.seriesTitleRequired": "Nový seriál potřebuje název.",
+  "movieDetail.seriesCreateFailed": "Seriál se nepodařilo vytvořit.",
+  "movieDetail.seasons": "Sezóny",
+  "movieDetail.seasonNumber": "Sezóna",
+  "movieDetail.seasonsHint": "Pro kompletní sadu seriálu nezaškrtávejte žádnou sezónu.",
   "movieDetail.genre": "Žánr",
   "movieDetail.jobs": "Obnovit historii",
   "movieDetail.language": "Jazyk",
@@ -2702,5 +2711,10 @@
   "releaseFallback.stillWorking": "MovieVault na tomto vyhledávání stále pracuje. Vyhledej za chvíli znovu - hotový výsledek zůstane připravený.",
   "releaseFallback.unreachable": "MovieVault nebyl dostupný, o tomto disku tedy zatím nic nevíme. Bývá to dočasné.",
   "releaseFallback.failed": "MovieVault toto vyhledávání nedokončil.",
-  "releaseFallback.retry": "Zkusit znovu"
+  "releaseFallback.retry": "Zkusit znovu",
+  "releaseFallback.sharingOn": "Tvá volba se sdílí s MovieVault, aby ostatní tento disk při skenování našli. Odesílají se pouze údaje o vydání - nikdy nic o tobě ani o tvé sbírce.",
+  "preferences.cardSharing": "Sdílení s MovieVault",
+  "preferences.cardSharingHelp": "Pomoz sdílenému katalogu tím, že přispěješ vydáními, která rozpoznáš.",
+  "preferences.shareReleaseSelections": "Sdílet vydání, která rozpoznám",
+  "preferences.shareReleaseSelectionsHelp": "Když čárový kód není rozpoznán a ty vybereš lis, který držíš v ruce, odešlou se tyto údaje do MovieVault ke kontrole. Odesílají se jen veřejné informace o disku - nikdy tvá sbírka, historie sledování ani nic, co tě identifikuje."
 }

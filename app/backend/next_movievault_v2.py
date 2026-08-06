@@ -2673,6 +2673,7 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any], origin: s
 
 POSTER_CACHE_JOB_TYPE = "movievault_v2.poster_cache"
 POSTER_CLEANUP_JOB_TYPE = "movievault_v2.poster_cleanup"
+RELEASE_CONTRIBUTION_JOB_TYPE = "movievault_v2.release_contribution"
 
 
 def _enqueue_poster_cache(cur: Any, origin: str, poster: dict[str, Any] | None) -> None:
@@ -3776,3 +3777,246 @@ def movievault_v2_plugin_context(
             "maximum": SUPPORTED_CONTRACTS[-1],
         },
     }
+
+
+# --- Contributing a chosen release back to MovieVault -----------------------
+
+#: MovieVault's release-technical contract bounds aspect ratios far more
+#: tightly than DiscVault stores them. `ASPECT_RATIO_PATTERN` above deliberately
+#: accepts "16:9", "4:3" and "1.375:1" because those are real ratios; MovieVault
+#: rejects the whole submission for any of them. Narrowed here rather than
+#: loosened there: a value we cannot express upstream is dropped, not coerced
+#: into a different ratio.
+CONTRIBUTION_ASPECT_RATIO_PATTERN = re.compile(r"^(?:1|2)\.[0-9]{2}:1$")
+CONTRIBUTION_BARCODE_LENGTHS = {8, 12, 13, 14}
+MAX_CONTRIBUTION_BARCODES = 25
+MAX_CONTRIBUTION_SUBTITLES = 100
+MAX_CONTRIBUTION_ALTERNATE_TITLES = 25
+IMDB_ID_PATTERN = re.compile(r"^tt[0-9]{1,16}$")
+TMDB_ID_PATTERN = re.compile(r"^[0-9]{1,20}$")
+
+
+def contribution_barcode(value: Any) -> str:
+    """A GTIN with separators removed, or "" when it is not one.
+
+    Returning "" rather than raising: a disc whose barcode we cannot express is
+    still worth contributing for its technical data, and the scanned barcode is
+    validated separately by the caller that needs it.
+    """
+    digits = re.sub(r"[^0-9]", "", str(value or ""))
+    return digits if len(digits) in CONTRIBUTION_BARCODE_LENGTHS else ""
+
+
+def _contribution_enum_list(values: Any, allowed: set[str], limit: int) -> list[str]:
+    result: list[str] = []
+    for item in values if isinstance(values, list) else []:
+        text = str(item or "").strip()
+        if text in allowed and text not in result:
+            result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _contribution_audio_tracks(values: Any) -> list[dict[str, Any]]:
+    tracks: list[dict[str, Any]] = []
+    for item in values if isinstance(values, list) else []:
+        if not isinstance(item, dict):
+            continue
+        language = str(item.get("languageCode") or item.get("language_code") or "").strip().lower()
+        codec = str(item.get("codec") or "").strip()
+        # MovieVault requires both; a track missing either is dropped rather
+        # than guessed at, since neither has a safe default.
+        if not LANGUAGE_CODE_PATTERN.fullmatch(language) or codec not in AUDIO_TRACK_CODECS:
+            continue
+        track: dict[str, Any] = {"languageCode": language, "codec": codec}
+        channels = str(item.get("channels") or "").strip()
+        if channels in AUDIO_TRACK_CHANNELS:
+            track["channels"] = channels
+        immersive = str(item.get("immersiveFormat") or item.get("immersive_format") or "").strip()
+        if immersive in AUDIO_TRACK_IMMERSIVE_FORMATS:
+            track["immersiveFormat"] = immersive
+        tracks.append(track)
+        if len(tracks) >= MAX_AUDIO_TRACKS:
+            break
+    return tracks
+
+
+def _contribution_subtitles(values: Any) -> list[dict[str, str]]:
+    subtitles: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in values if isinstance(values, list) else []:
+        if isinstance(item, dict):
+            language = str(item.get("languageCode") or item.get("language_code") or "").strip().lower()
+            variant = str(item.get("subtitleType") or item.get("subtitle_type") or "").strip()
+        else:
+            language = str(item or "").strip().lower()
+            variant = ""
+        if not LANGUAGE_CODE_PATTERN.fullmatch(language):
+            continue
+        variant = variant if variant in SUBTITLE_TYPES else DEFAULT_SUBTITLE_TYPE
+        key = (language, variant)
+        if key in seen:
+            continue
+        seen.add(key)
+        subtitles.append({"languageCode": language, "subtitleType": variant})
+        if len(subtitles) >= MAX_CONTRIBUTION_SUBTITLES:
+            break
+    return subtitles
+
+
+def _contribution_video(value: Any) -> dict[str, Any]:
+    source = value if isinstance(value, dict) else {}
+    video: dict[str, Any] = {}
+    resolution = str(source.get("resolution") or "").strip()
+    if resolution in VIDEO_RESOLUTIONS:
+        video["resolution"] = resolution
+    codecs = _contribution_enum_list(source.get("codecs"), VIDEO_CODECS, MAX_VIDEO_CODECS)
+    if codecs:
+        video["codecs"] = codecs
+    hdr = _contribution_enum_list(
+        source.get("hdrFormats") or source.get("hdr_formats"), HDR_FORMATS, MAX_HDR_FORMATS
+    )
+    if hdr:
+        video["hdrFormats"] = hdr
+    ratios: list[str] = []
+    raw_ratios = source.get("aspectRatios") or source.get("aspect_ratios")
+    for item in raw_ratios if isinstance(raw_ratios, list) else []:
+        text = str(item or "").strip()
+        if CONTRIBUTION_ASPECT_RATIO_PATTERN.fullmatch(text) and text not in ratios:
+            ratios.append(text)
+        if len(ratios) >= MAX_ASPECT_RATIOS:
+            break
+    if ratios:
+        video["aspectRatios"] = ratios
+    return video
+
+
+def _contribution_text(value: Any, limit: int) -> str:
+    return " ".join(str(value or "").split())[:limit]
+
+
+def release_technical_contribution_payload(
+    candidate: Any,
+    *,
+    scanned_barcode: str,
+    film: Any,
+    provenance: str,
+) -> dict[str, Any]:
+    """Map a chosen release onto MovieVault's `release_technical` payload.
+
+    Only what MovieVault stores about a physical release travels: public film
+    identity, the disc's own technical description, and the barcodes. Nothing
+    about the owner, the copy, or what any provider said about the film.
+
+    The scanned barcode is carried as `scannedBarcode` and never folded into
+    `release.barcodes`. Those are different claims - see the contribution
+    contract - and collapsing them would assert upstream that a barcode belongs
+    to a pressing nobody confirmed it for.
+
+    `subtitleLanguages` is never emitted: MovieVault derives it from the tracks,
+    and sending both spellings of one fact is how two views drift apart.
+
+    Returns {} when there is nothing worth a moderator's time.
+    """
+    source = candidate if isinstance(candidate, dict) else {}
+    film_source = film if isinstance(film, dict) else {}
+    barcode = contribution_barcode(scanned_barcode)
+    if not barcode or provenance not in {"candidate_selection", "manual_entry"}:
+        return {}
+
+    film_title = _contribution_text(film_source.get("title"), 500)
+    release_title = _contribution_text(source.get("title"), 500) or film_title
+    if not film_title or not release_title:
+        return {}
+
+    release: dict[str, Any] = {"title": release_title}
+    for key, limit in (("edition", 255), ("format", 80)):
+        text = _contribution_text(source.get(key), limit)
+        if text:
+            release[key] = text
+    disc_count = source.get("discCount") or source.get("disc_count")
+    if isinstance(disc_count, int) and not isinstance(disc_count, bool) and 1 <= disc_count <= 999:
+        release["discCount"] = disc_count
+    regions = _contribution_enum_list(
+        source.get("discRegions") or source.get("regions"), DISC_REGIONS, 8
+    )
+    if regions:
+        release["regions"] = regions
+    packaging = _contribution_enum_list(source.get("packaging"), PACKAGING_VALUES, 8)
+    if packaging:
+        release["packaging"] = packaging
+    video = _contribution_video(source.get("video"))
+    if video:
+        release["video"] = video
+    audio_tracks = _contribution_audio_tracks(
+        source.get("audioTracks") or source.get("audio_tracks")
+    )
+    if audio_tracks:
+        release["audioTracks"] = audio_tracks
+    subtitles = _contribution_subtitles(source.get("subtitles"))
+    if subtitles:
+        release["subtitles"] = subtitles
+
+    barcodes: list[str] = []
+    for item in source.get("barcodes") if isinstance(source.get("barcodes"), list) else []:
+        value = item.get("value") if isinstance(item, dict) else item
+        normalized = contribution_barcode(value)
+        if normalized and normalized not in barcodes:
+            barcodes.append(normalized)
+        if len(barcodes) >= MAX_CONTRIBUTION_BARCODES:
+            break
+    if barcodes:
+        release["barcodes"] = barcodes
+
+    # A title plus a barcode is a lookup, not a contribution: it costs a
+    # moderator a review and tells them nothing they could act on.
+    if not any(
+        release.get(key)
+        for key in ("edition", "discCount", "regions", "packaging", "video", "audioTracks", "subtitles")
+    ):
+        return {}
+
+    payload_film: dict[str, Any] = {"title": film_title}
+    year = film_source.get("year")
+    if isinstance(year, int) and not isinstance(year, bool) and 1870 <= year <= 2200:
+        payload_film["year"] = year
+    # Digit strings, the spelling MovieVault itself emits and stores. An
+    # integer is rejected upstream rather than coerced.
+    tmdb_id = str(film_source.get("tmdbMovieId") or film_source.get("tmdb_movie_id") or "").strip()
+    if TMDB_ID_PATTERN.fullmatch(tmdb_id):
+        payload_film["tmdbMovieId"] = tmdb_id
+    imdb_id = str(film_source.get("imdbId") or film_source.get("imdb_id") or "").strip()
+    if IMDB_ID_PATTERN.fullmatch(imdb_id):
+        payload_film["imdbId"] = imdb_id
+
+    if provenance == "manual_entry":
+        # MovieVault holds a hand-typed record to more, having no provider
+        # behind it. Fail here rather than send something it will refuse.
+        if not release.get("format") or payload_film.get("year") is None:
+            return {}
+        stated = sum(
+            1
+            for key in ("edition", "discCount", "regions", "packaging")
+            if release.get(key)
+        )
+        if release.get("video", {}).get("resolution"):
+            stated += 1
+        if stated < 2:
+            return {}
+        # Only the person holding the package can attest to a barcode, and
+        # nothing in the flow asks them, so a manual entry never states one.
+        release.pop("barcodes", None)
+
+    payload: dict[str, Any] = {
+        "scannedBarcode": barcode,
+        "provenance": provenance,
+        "film": payload_film,
+        "release": release,
+    }
+    release_ref = _contribution_text(source.get("releaseRef"), 500)
+    if release_ref:
+        # Underscored: consumed by the submitter to build the opaque source
+        # reference and stripped before signing. MovieVault forbids it.
+        payload["_releaseRef"] = release_ref
+    return payload

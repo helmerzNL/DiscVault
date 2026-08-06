@@ -42,6 +42,18 @@ COMMON_ALIASES: dict[str, tuple[str, ...]] = {
     "boxSet": ("Box Set", "BoxSet", "Boxset", "Set", "Series", "Serie", "Franchise"),
     "isBoxSet": ("IsBoxSet", "Is Box Set", "Box Set?", "Boxset?", "Is Boxset", "Container Type"),
     "boxSetMembers": ("BoxSetMembers", "Box Set Members", "Boxset Members", "Members", "Member Titles", "Box Set Titles"),
+    "discCount": (
+        "Discs",
+        "Disc Count",
+        "Disc Total",
+        "Number of Discs",
+        "No of Discs",
+        "Aantal Discs",
+        "Aantal Schijven",
+        "Blu-ray discs",
+        "DVD discs",
+        "4K discs",
+    ),
     "vault": ("Vault", "Vault Title", "Version Group", "Edition Group"),
     "watchedAt": ("Watched Date", "Bekeken op", "Date Watched", "Viewed At"),
     "watchlisted": ("Watchlist", "Watchlisted", "In Watchlist", "Kijklijst"),
@@ -74,6 +86,7 @@ IMPORT_FIELDS = (
     "boxSet",
     "isBoxSet",
     "boxSetMembers",
+    "discCount",
     "vault",
     "watchedAt",
     "watchlisted",
@@ -131,6 +144,47 @@ def parse_year(value: Any) -> str:
     return ""
 
 
+MONTH_NAMES: dict[str, int] = {
+    name: number
+    for number, names in enumerate(
+        (
+            ("january", "jan", "januari", "januar", "janvier", "enero"),
+            ("february", "feb", "februari", "februar", "février", "fevrier", "febrero"),
+            ("march", "mar", "maart", "märz", "marz", "mars", "marzo"),
+            ("april", "apr", "avril", "abril"),
+            ("may", "mei", "mai", "mayo", "maggio"),
+            ("june", "jun", "juni", "juin", "junio", "giugno"),
+            ("july", "jul", "juli", "juillet", "julio", "luglio"),
+            ("august", "aug", "augustus", "août", "aout", "agosto"),
+            ("september", "sep", "sept", "septembre", "septiembre", "settembre"),
+            ("october", "oct", "okt", "oktober", "octobre", "octubre", "ottobre"),
+            ("november", "nov", "novembre", "noviembre", "novembre"),
+            ("december", "dec", "dez", "december", "dezember", "décembre", "decembre", "diciembre", "dicembre"),
+        ),
+        start=1,
+    )
+    for name in names
+}
+
+# "August 15 2012" / "15 August 2012" / "Aug 15, 2012". Blu-ray.com and several
+# other shop exports write dates in this long form; without it the whole date is
+# dropped and only the bare year survives, which is exactly the value that must
+# not be trusted as a film year (see `derive_year_from_release_date`).
+MONTH_NAME_DATE_RES = (
+    ("mdy", re.compile(r"^([^\W\d_]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$", re.UNICODE)),
+    ("dmy", re.compile(r"^(\d{1,2})(?:st|nd|rd|th)?\.?\s+([^\W\d_]+)\.?,?\s+(\d{4})$", re.UNICODE)),
+)
+
+
+def build_date(year: int, month: int, day: int) -> str:
+    try:
+        if not 1800 <= year <= 2200:
+            return ""
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return ""
+
+
 def parse_release_date(value: Any) -> str:
     raw = text(value)
     if not raw or re.fullmatch(r"\d{4}", raw):
@@ -145,12 +199,126 @@ def parse_release_date(value: Any) -> str:
             continue
         parts = [int(part) for part in match.groups()]
         year, month, day = parts if order == "ymd" else (parts[2], parts[1], parts[0])
-        try:
-            if not 1800 <= year <= 2200:
-                return ""
-            return date(year, month, day).isoformat()
-        except ValueError:
-            return ""
+        return build_date(year, month, day)
+    for order, pattern in MONTH_NAME_DATE_RES:
+        match = pattern.match(raw.strip())
+        if not match:
+            continue
+        name, day_text, year_text = match.groups() if order == "mdy" else (match.group(2), match.group(1), match.group(3))
+        month = MONTH_NAMES.get(name.strip(".").casefold())
+        if not month:
+            continue
+        return build_date(int(year_text), month, int(day_text))
+    return ""
+
+
+# Shop exports append the disc format to the title ("Basic Instinct 4K",
+# "Jurassic Park - Trilogie 4K"). The format is packaging data, not part of the
+# film's name: left in the title it is shown to the user as if the film were
+# called that, and every metadata lookup searches for a title no provider
+# knows. Strip it from the title and promote it to the format field instead, so
+# nothing is lost. Mirrors the display-side policy `_clean_scanned_title`
+# already applies to scanned packaging titles in `next_metadata`.
+TITLE_FORMAT_TAIL_RE = re.compile(
+    r"[\s,;:/+&|-]+(?:4k(?:\s*(?:uhd|ultra\s*hd|blu[-\s]?ray))?|ultra\s*hd(?:\s*blu[-\s]?ray)?|uhd)\s*$",
+    re.IGNORECASE,
+)
+
+# A title that *states* it holds several films is a box set even when the export
+# has no box-set column at all — which is the case for every Blu-ray.com export.
+# Strong phrases name the multi-film release outright and stand on their own.
+BOX_SET_STRONG_TITLE_RES = (
+    re.compile(r"\b(?:tri|quadri|tetra|penta|hexa|du)logy\b", re.I),
+    re.compile(r"\b(?:tri|quadri|tetra|penta|hexa|du)logie\b", re.I),
+    re.compile(r"\btrilog[ií]a\b", re.I),
+    re.compile(r"\banthology\b|\banthologie\b", re.I),
+    re.compile(r"\bbox\s?set\b|\bboxset\b|\bcoffret\b", re.I),
+    re.compile(r"\bcomplete\s+(?:collection|collectie|series|serie|saga|set|movie\s+collection|films?)\b", re.I),
+    re.compile(r"\bcollection\s+compl[eè]te\b", re.I),
+    re.compile(r"\bcollection\s+\d+\s*films?\b|\b\d+\s*films?\s+collection\b", re.I),
+    re.compile(r"\b\d+\s*[-–]\s*(?:film|movie|disc)\b", re.I),
+    re.compile(r"\b\d+\s*(?:films?|movies?)\b", re.I),
+)
+
+# Weak phrases are common in single-film titles too ("The Criterion Collection"),
+# so they only count when the row independently reports enough discs to hold
+# several films.
+BOX_SET_WEAK_TITLE_RES = (
+    re.compile(r"\bcollections?\b|\bcollectie\b|\bcollezione\b|\bcolecci[oó]n\b", re.I),
+    re.compile(r"\bsaga\b", re.I),
+    re.compile(r"\b\d{1,2}\s*[-–]\s*\d{1,2}\b", re.I),
+)
+
+# A 4K release of a single film already ships two or three discs (4K, Blu-ray,
+# bonus), so only a higher count corroborates a weak title phrase.
+BOX_SET_WEAK_DISC_THRESHOLD = 4
+
+
+def split_title_format_token(value: Any) -> tuple[str, str]:
+    """Split a trailing format token off a title.
+
+    Returns the cleaned title and the canonical DiscVault format the token
+    named (currently only the 4K/UHD family, the one vocabulary these exports
+    append and the one that maps onto a canonical format). A title that is
+    nothing *but* a format token is returned unchanged — it carries no film
+    name to fall back on.
+    """
+    raw = text(value)
+    cleaned = raw
+    detected = ""
+    while True:
+        match = TITLE_FORMAT_TAIL_RE.search(cleaned)
+        if not match:
+            break
+        head = cleaned[: match.start()].strip()
+        if not head:
+            break
+        cleaned = head
+        detected = "4K UHD"
+    if not detected:
+        return raw, ""
+    return cleaned.strip(" -_/|,;:+&") or raw, detected
+
+
+def sum_disc_counts(row: dict[str, Any], aliases: tuple[str, ...], column_name: Any = "") -> int | None:
+    """Total the disc-count columns of a row.
+
+    Exports usually split the count per media type ("Blu-ray discs", "DVD
+    discs"), so every matching column is summed rather than taking the first.
+    Negative values are Blu-ray.com's "unknown" marker and count as nothing.
+    Returns None when the row has no disc-count column at all, which callers
+    must treat as "unknown", not as zero.
+    """
+    mapped = text(column_name)
+    wanted = {alias.casefold() for alias in ((mapped,) if mapped else aliases)}
+    total = 0
+    found = False
+    for key, value in (row or {}).items():
+        if text(key).casefold() not in wanted:
+            continue
+        digits = re.fullmatch(r"-?\d+", text(value))
+        if not digits:
+            continue
+        found = True
+        total += max(0, int(digits.group(0)))
+    return total if found else None
+
+
+def detect_box_set_title(title: Any, disc_count: int | None) -> str:
+    """Return the phrase that marks a title as a box set, or "" if none does."""
+    raw = text(title)
+    if not raw:
+        return ""
+    for pattern in BOX_SET_STRONG_TITLE_RES:
+        match = pattern.search(raw)
+        if match:
+            return match.group(0).strip()
+    if disc_count is None or disc_count < BOX_SET_WEAK_DISC_THRESHOLD:
+        return ""
+    for pattern in BOX_SET_WEAK_TITLE_RES:
+        match = pattern.search(raw)
+        if match:
+            return match.group(0).strip()
     return ""
 
 
@@ -234,6 +402,14 @@ class CollectionImportPlugin:
         self.aliases = config["aliases"]
         self.default_format = config.get("defaultFormat", "")
         self.recognition = config.get("recognition") if isinstance(config.get("recognition"), dict) else {}
+        # Normalization policy. The two title rules are on by default because a
+        # trailing format token and a "Trilogy" title mean the same thing in any
+        # export; a source whose titles genuinely contain them can opt out.
+        # The date rule is opt-in: only the source itself knows whether its date
+        # column describes the film or the disc.
+        self.normalize_title_formats = config.get("normalizeTitleFormats", True) is not False
+        self.detect_box_sets_from_title = config.get("detectBoxSetsFromTitle", True) is not False
+        self.release_date_is_edition_date = bool(config.get("releaseDateIsEditionDate", False))
 
     def settings(self, context: dict[str, Any] | None) -> dict[str, Any]:
         return (context or {}).get("settings") or {}
@@ -338,11 +514,18 @@ class CollectionImportPlugin:
     ) -> dict[str, Any]:
         column_mapping = column_mapping or {}
         aliases = {field: self.field_aliases(field) for field in IMPORT_FIELDS}
-        title = text(mapped_value(row, aliases["title"], column_mapping.get("title")))
-        if not title:
+        source_title = text(mapped_value(row, aliases["title"], column_mapping.get("title")))
+        if not source_title:
             return {}
+        title, title_format = (
+            split_title_format_token(source_title) if self.normalize_title_formats else (source_title, "")
+        )
         barcode = text(mapped_value(row, aliases["barcode"], column_mapping.get("barcode")))
-        media_format = text(mapped_value(row, aliases["format"], column_mapping.get("format"))) or self.default_format
+        explicit_format = text(mapped_value(row, aliases["format"], column_mapping.get("format")))
+        # A format named by the source's own column always wins; the title token
+        # only beats the plugin's static default (e.g. Blu-ray.com's "Blu-ray").
+        media_format = explicit_format or title_format or self.default_format
+        disc_count = sum_disc_counts(row, aliases["discCount"], column_mapping.get("discCount"))
         poster = text(mapped_value(row, aliases["poster"], column_mapping.get("poster")))
         backdrop = text(mapped_value(row, aliases["backdrop"], column_mapping.get("backdrop")))
         source_url = text(mapped_value(row, aliases["sourceUrl"], column_mapping.get("sourceUrl")))
@@ -351,6 +534,14 @@ class CollectionImportPlugin:
         member_titles = split_member_titles(mapped_value(row, aliases["boxSetMembers"], column_mapping.get("boxSetMembers")))
         is_box_set = bool_value(mapped_value(row, aliases["isBoxSet"], column_mapping.get("isBoxSet")), default=bool(member_titles))
         verified = bool_value(mapped_value(row, aliases["verified"], column_mapping.get("verified")), default=False)
+        # Exports that carry no box-set column at all (Blu-ray.com) would import
+        # a nine-disc trilogy as a single film. The title phrase is then the only
+        # evidence there is, so use it — as a candidate: without member titles
+        # the proposal is never auto-importable and lands in the review queue.
+        box_set_phrase = ""
+        if not is_box_set and self.detect_box_sets_from_title:
+            box_set_phrase = detect_box_set_title(title, disc_count)
+            is_box_set = bool(box_set_phrase)
         if is_box_set and not box_set_title:
             box_set_title = title
         vault_title = text(mapped_value(row, aliases["vault"], column_mapping.get("vaultTitle")))
@@ -358,13 +549,29 @@ class CollectionImportPlugin:
         tmdb_id = extract_tmdb_id(mapped_value(row, aliases["tmdbId"], column_mapping.get("tmdbId")))
         raw_year = mapped_value(row, aliases["year"], column_mapping.get("year"))
         raw_release_date = mapped_value(row, aliases["releaseDate"], column_mapping.get("releaseDate"))
-        year = parse_year(raw_year) or parse_year(raw_release_date)
+        release_date = parse_release_date(raw_release_date)
+        # For shop exports the date column is the *disc* release date, not the
+        # film's. Deriving the film year from it dates Basic Instinct (1992) to
+        # 2023, the year StudioCanal pressed the 4K disc, and then every
+        # metadata lookup searches for a film that does not exist. Such a source
+        # only supplies a year when it has a real year column; the disc date is
+        # kept separately as edition data.
+        if self.release_date_is_edition_date:
+            year = parse_year(raw_year)
+            edition_release_date = release_date
+            release_date = ""
+        else:
+            year = parse_year(raw_year) or parse_year(raw_release_date)
+            edition_release_date = ""
         movie = {
             "externalId": text(mapped_value(row, aliases["externalId"], column_mapping.get("externalId"))) or f"{source_file.name}:{index}",
             "title": title,
+            "sourceTitle": source_title if source_title != title else "",
             "originalTitle": text(mapped_value(row, aliases["originalTitle"], column_mapping.get("originalTitle"))),
             "year": year,
-            "releaseDate": parse_release_date(raw_release_date),
+            "releaseDate": release_date,
+            "editionReleaseDate": edition_release_date,
+            "editionReleaseYear": parse_year(edition_release_date),
             "barcode": barcode,
             "format": media_format,
             "edition": text(mapped_value(row, aliases["edition"], column_mapping.get("edition"))),
@@ -414,6 +621,13 @@ class CollectionImportPlugin:
                 "format": media_format,
                 "sourceRef": f"{source_file.name}:{index}",
             }
+            if box_set_phrase:
+                # Record *why* the row was called a box set: a reviewer confirming
+                # the proposal can see it came from the title, not from the file.
+                evidence["detectionSource"] = "title_phrase"
+                evidence["detectionPhrase"] = box_set_phrase
+                if disc_count is not None:
+                    evidence["discCount"] = disc_count
             proposal = {
                 "title": box_set_title or title,
                 "name": box_set_title or title,
@@ -536,6 +750,7 @@ class CollectionImportPlugin:
             "boxSetTitle": self.field_aliases("boxSet"),
             "isBoxSet": self.field_aliases("isBoxSet"),
             "boxSetMembers": self.field_aliases("boxSetMembers"),
+            "discCount": self.field_aliases("discCount"),
             "vaultTitle": self.field_aliases("vault"),
             "watchedAt": self.field_aliases("watchedAt"),
             "watchlisted": self.field_aliases("watchlisted"),
@@ -648,6 +863,7 @@ class CollectionImportPlugin:
                     "boxSetTitle",
                     "isBoxSet",
                     "boxSetMembers",
+                    "discCount",
                     "vaultTitle",
                     "watchedAt",
                     "watchlisted",

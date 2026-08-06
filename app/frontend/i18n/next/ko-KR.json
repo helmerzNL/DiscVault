@@ -1849,6 +1849,15 @@
   "movieDetail.mediaType": "유형",
   "movieDetail.mediaTypeMovie": "영화",
   "movieDetail.mediaTypeShow": "TV 프로그램",
+  "movieDetail.series": "시리즈",
+  "movieDetail.seriesNone": "시리즈 없음",
+  "movieDetail.seriesNew": "새 시리즈...",
+  "movieDetail.seriesNewTitle": "새 시리즈 제목",
+  "movieDetail.seriesTitleRequired": "새 시리즈에는 제목이 필요합니다.",
+  "movieDetail.seriesCreateFailed": "시리즈를 만들 수 없습니다.",
+  "movieDetail.seasons": "시즌",
+  "movieDetail.seasonNumber": "시즌",
+  "movieDetail.seasonsHint": "전체 시리즈 세트인 경우 시즌을 선택하지 마세요.",
   "movieDetail.genre": "장르",
   "movieDetail.jobs": "새로 고침 기록",
   "movieDetail.language": "언어",
@@ -2702,5 +2711,10 @@
   "releaseFallback.stillWorking": "MovieVault가 아직 이 조회를 처리하고 있습니다. 잠시 후 다시 검색하세요 - 완료된 결과는 그대로 보관됩니다.",
   "releaseFallback.unreachable": "MovieVault에 연결하지 못해 이 디스크에 대해 아직 아무것도 알 수 없습니다. 대개 일시적입니다.",
   "releaseFallback.failed": "MovieVault가 이 조회를 끝내지 못했습니다.",
-  "releaseFallback.retry": "다시 시도"
+  "releaseFallback.retry": "다시 시도",
+  "releaseFallback.sharingOn": "선택한 내용이 MovieVault와 공유되어 같은 디스크를 스캔하는 다른 사람도 찾을 수 있습니다. 전송되는 것은 릴리스 정보뿐이며, 사용자나 컬렉션에 대한 정보는 전혀 전송되지 않습니다.",
+  "preferences.cardSharing": "MovieVault와 공유",
+  "preferences.cardSharingHelp": "식별한 릴리스를 기여해 공유 카탈로그를 도와주세요.",
+  "preferences.shareReleaseSelections": "내가 식별한 릴리스 공유",
+  "preferences.shareReleaseSelectionsHelp": "바코드가 인식되지 않아 손에 든 프레스를 선택하면 해당 릴리스 정보가 검토를 위해 MovieVault로 전송됩니다. 공개된 디스크 정보만 전송되며, 컬렉션이나 시청 기록, 신원을 식별할 수 있는 정보는 전송되지 않습니다."
 }
