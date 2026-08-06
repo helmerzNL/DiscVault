@@ -709,6 +709,15 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         # Nullable, added after poster/assets (Fanart.tv artwork source, ADR
         # 0008). Not stored - see _backdrop()'s own docstring.
         optional.add("backdrop")
+        # `movie` or `tv`: whether the underlying work is a film or a series.
+        # Optional for the same reason as `backdrop` above, and the reason is
+        # worth restating because forgetting it has cost a full catalog outage
+        # once already: a published artefact is immutable, so records projected
+        # before MovieVault added this field simply have no key, and one
+        # unrecognised key fails the *whole* feed rather than the record that
+        # carries it. Listing the field here is what keeps a MovieVault release
+        # from taking every DiscVault instance's sync down with it.
+        optional.add("workType")
     _exact_keys(value, required=required, optional=optional, label="release record")
     if contract_version == MOVIEVAULT_V4_CONTRACT:
         _backdrop(value.get("backdrop"), release_id=str(value.get("releaseId")))
