@@ -1,5 +1,15 @@
 # DiscVault Release Notes
 
+## 26.8.5 - Blu-ray.com imports describe films, not pressings
+
+- A trailing `4K` or `UHD` title token is now stored as `4K UHD` format instead
+  of making it part of the film title, unless the export explicitly supplies a
+  format.
+- Blu-ray.com's disc pressing date is retained as edition data rather than used
+  as the film year, and long-form release dates are now parsed.
+- Multi-film releases detected from their title and disc count are proposed for
+  review without inventing any missing members.
+
 ## 26.7.71 - Beta and main are one line of history again
 
 - `main` and `release/v26-beta` had genuinely diverged: 18 commits on beta that

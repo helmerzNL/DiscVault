@@ -3449,6 +3449,7 @@ def normalize_import_column_mapping(value: Any) -> dict[str, str]:
         "sourceUrl",
         "collectionTitle",
         "boxSetTitle",
+        "discCount",
         "vaultTitle",
         "watchedAt",
         "watchlisted",
