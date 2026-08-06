@@ -340,6 +340,15 @@ def mobile_feature_capabilities(conn, actor: dict[str, Any]) -> dict[str, Any]:
             "edit": has_any("containers.edit"),
             "delete": has_any("containers.delete"),
         },
+        # Physical storage locations. `assign` is deliberately the only write:
+        # sync-contract §4c.2 keeps creating, renaming and moving the tree a PWA
+        # action, because the `locations` table has no per-record client id and
+        # a create path without identity-ladder rung 1 produces duplicates.
+        "locations": {
+            "view": has_any("containers.view", "collection.view", "collection.view_all", "collection.view_group"),
+            "assign": has_any("collection.edit_all", "collection.edit_own", "collection.edit_group", "containers.edit"),
+            "manage": False,
+        },
         "groups": {
             "view": has_any("groups.view", "groups.view_all", "groups.manage", "users.view"),
             "create": has_any("groups.create", "groups.manage"),
@@ -390,6 +399,16 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "bootstrap": "/api/next/sync/bootstrap",
             "delta": "/api/next/sync/delta",
             "mutations": "/api/next/sync/mutations",
+            "reconcile": "/api/next/sync/reconcile",
+            "userBootstrap": "/api/next/sync/user/bootstrap",
+            "userDelta": "/api/next/sync/user/delta",
+        },
+        # Read-only on purpose (sync-contract §4c.2). The tree arrives in the
+        # sync bootstrap's `locations` array; this route is for a client that
+        # wants it on its own, and `open` is what a scanned QR resolves to.
+        "locations": {
+            "list": "/api/next/locations",
+            "open": "/open/locations/{locationPublicId}",
         },
         "import": {
             "metadataLookup": "/api/next/metadata/lookup",

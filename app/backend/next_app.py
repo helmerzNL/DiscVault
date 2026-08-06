@@ -145,7 +145,11 @@ try:
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_connection import refresh_movievault_connection
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from .next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
+    from .next_movievault_v2 import MovieVaultV2Error
     from .next_movievault_v2 import movievault_v2_plugin_context
+    from .next_movievault_v2 import resolve_release_details
+    from .next_movievault_v2 import search_release_details
     from .next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
     from .dedup_identity import title_year_identity_compatible
     from .versioning import backend_version
@@ -159,6 +163,12 @@ try:
     from .next_common import parse_uuid_list
     from .next_common import response
     from .next_common import table_exists
+    from .next_collection_value import SNAPSHOT_SCOPE_TYPES
+    from .next_collection_value import collection_value_history
+    from .next_collection_value import compute_collection_value
+    from .next_collection_value import movie_value_lock
+    from .next_collection_value import movie_value_locked_sql
+    from .next_collection_value import record_collection_value_snapshot
     from .next_mcp_activity import MCP_TOOL_NAMES
     from .next_mcp_activity import mcp_request_api_token_value
     from .next_mcp_activity import register_next_mcp_routes
@@ -373,7 +383,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_connection import refresh_movievault_connection
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
+    from next_movievault_v2 import MovieVaultV2Error
     from next_movievault_v2 import movievault_v2_plugin_context
+    from next_movievault_v2 import resolve_release_details
+    from next_movievault_v2 import search_release_details
     from next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
     from dedup_identity import title_year_identity_compatible
     from versioning import backend_version
@@ -387,6 +401,12 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import parse_uuid_list
     from next_common import response
     from next_common import table_exists
+    from next_collection_value import SNAPSHOT_SCOPE_TYPES
+    from next_collection_value import collection_value_history
+    from next_collection_value import compute_collection_value
+    from next_collection_value import movie_value_lock
+    from next_collection_value import movie_value_locked_sql
+    from next_collection_value import record_collection_value_snapshot
     from next_mcp_activity import MCP_TOOL_NAMES
     from next_mcp_activity import mcp_request_api_token_value
     from next_mcp_activity import register_next_mcp_routes
@@ -4636,6 +4656,8 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                 c.description,
                 c.metadata,
                 c.location_id,
+                c.estimated_value,
+                c.estimated_value_currency,
                 c.created_at,
                 c.updated_at
             FROM containers c
@@ -5380,7 +5402,12 @@ def lock_box_set_barcode(conn, barcode: str) -> None:
         )
 
 
-def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None = None) -> dict[str, Any]:
+def container_payload(
+    body: dict[str, Any],
+    *,
+    existing: dict[str, Any] | None = None,
+    container_type: str | None = None,
+) -> dict[str, Any]:
     existing = existing or {}
     title = clean_text(body.get("title")) if "title" in body else existing.get("title")
     if not title:
@@ -5408,6 +5435,14 @@ def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None =
         location_id = parse_uuid(raw_location, "locationId") if raw_location else None
     else:
         location_id = existing.get("location_id")
+    # A box set is bought as one product for one price, so it - and only it -
+    # carries a value of its own. A vault or a collection is a way of arranging
+    # what you already own; its worth is the sum of its contents, and letting a
+    # user type a second number there would silently double-count the shelf.
+    effective_type = clean_text(container_type) or clean_text(existing.get("container_type"))
+    value_keys = ("estimatedValue", "estimated_value", "estimatedValueCurrency", "estimated_value_currency")
+    if effective_type != "box_set" and any(key in body for key in value_keys):
+        raise NextApiError("Estimated value is only available for box sets", 400)
     return {
         "title": title,
         "description": description,
@@ -5416,6 +5451,10 @@ def container_payload(body: dict[str, Any], *, existing: dict[str, Any] | None =
         "badge_label": badge_label,
         "metadata": metadata,
         "location_id": location_id,
+        # Same parsers as the movie field: comma decimals, two-decimal quantize,
+        # ISO 4217 shape check, and no invented default currency.
+        "estimated_value": movie_estimated_value(body, existing),
+        "estimated_value_currency": movie_estimated_value_currency(body, existing),
     }
 
 
@@ -5554,6 +5593,52 @@ def location_list_entities(conn) -> list[dict[str, Any]]:
         row["container_count"] = container_counts.get(key, 0)
         row["backdrop_url"] = location_backdrop_url_value(row)
     return rows
+
+
+#: Location keys that stay server-side and never reach a client.
+#:
+#: ``qr_token`` is a capability token. A scan resolves to
+#: ``discvault://locations/<public_id>``, and ``public_id`` *is* on the wire, so
+#: a client can follow a scanned code end to end without ever holding the token.
+#: Sync-contract §4c.1 states this explicitly, because the first implementation
+#: to build the scan flow will otherwise reason its way into needing it.
+#: ``name_path`` is the raw CTE column that ``path`` is built from — the same
+#: value under a second name, and not part of §4c.1's shape.
+_LOCATION_SYNC_OMITTED_KEYS = frozenset(
+    {"qr_token", "movie_count", "container_count", "name_path"}
+)
+
+
+def location_sync_entities(conn) -> list[dict[str, Any]]:
+    """The ``locations`` array as sync-contract §4c.1 defines it.
+
+    Same rows as :func:`location_list_entities` — including its pre-order
+    sort, which §4c.1 promises to clients so that two of them never order the
+    tree differently — minus the keys in
+    :data:`_LOCATION_SYNC_OMITTED_KEYS`.
+
+    The counts are dropped rather than published: a client holds its own copy
+    of every movie and container and can count for itself, and a server-sent
+    tally that drifts out of step with that copy is worse than no tally.
+    """
+    entities: list[dict[str, Any]] = []
+    for row in location_list_entities(conn):
+        entities.append({key: value for key, value in row.items() if key not in _LOCATION_SYNC_OMITTED_KEYS})
+    return entities
+
+
+def single_location_sync_entity(conn, location_id) -> dict[str, Any] | None:
+    """One location in the same shape as the bootstrap ``locations`` array.
+
+    Built by filtering the full list rather than by a second SELECT, so `depth`,
+    `path` and `path_label` — which only exist relative to the rest of the tree
+    — cannot drift from what the bootstrap says.
+    """
+    wanted = str(location_id)
+    for row in location_sync_entities(conn):
+        if str(row.get("id")) == wanted:
+            return row
+    return None
 
 
 def _all_locations_index(conn) -> dict[str, dict[str, Any]]:
@@ -6663,6 +6748,9 @@ def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
                 c.badge_label,
                 c.year,
                 c.description,
+                c.location_id,
+                c.estimated_value,
+                c.estimated_value_currency,
                 c.metadata,
                 c.created_at,
                 c.updated_at
@@ -6699,6 +6787,125 @@ def emit_container_change(conn, container_id, *, operation: str, entity: dict[st
         payload=payload,
     )
     return revision
+
+
+def emit_location_change(conn, location_id, *, operation: str, entity: dict[str, Any] | None = None) -> int:
+    """Emit a ``location`` upsert/delete delta (sync-contract §4c).
+
+    Upserts carry the full location ``entity`` in the same shape as the
+    bootstrap ``locations`` array; deletes carry only the ``id``. No-op when the
+    sync tables are absent.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    payload: dict[str, Any] = {"id": str(location_id)}
+    if operation != "delete":
+        if entity is None:
+            entity = single_location_sync_entity(conn, location_id)
+        if entity is not None:
+            payload["entity"] = entity
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="location",
+        entity_id=str(location_id),
+        operation=operation,
+        payload=payload,
+    )
+    return revision
+
+
+def emit_movie_change(conn, movie_id, *, operation: str = "upsert") -> int:
+    """Emit a ``movie`` upsert delta for a server-side edit.
+
+    The mutation path builds its own richer payload (client ids, match result);
+    this is the plain server-originated form, shaped like that payload's
+    ``entity`` so a client applies both the same way.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    entity = movie_entity(conn, movie_id)
+    if entity is None:
+        return 0
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="movie",
+        entity_id=str(movie_id),
+        operation=operation,
+        payload={"id": str(movie_id), "entity": entity},
+    )
+    return revision
+
+
+def location_subtree_ids(conn, location_id) -> list[str]:
+    """A location's id plus every descendant's, since deletes cascade."""
+    if not table_exists(conn, "locations"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            WITH RECURSIVE subtree AS (
+                SELECT id FROM locations WHERE id=%s
+                UNION ALL
+                SELECT c.id FROM locations c JOIN subtree s ON c.parent_id = s.id
+            )
+            SELECT id FROM subtree
+            """,
+            (location_id,),
+        )
+        return [str(row["id"]) for row in cur.fetchall()]
+
+
+def location_assignment_holders(conn, location_ids: list[str]) -> tuple[list[Any], list[Any]]:
+    """Movies and containers currently assigned to any of ``location_ids``.
+
+    Call this *before* deleting a location. The FK is ``ON DELETE SET NULL``, so
+    afterwards there is nothing left to join against and the affected rows are
+    unrecoverable.
+    """
+    if not location_ids:
+        return [], []
+    movie_ids: list[Any] = []
+    container_ids: list[Any] = []
+    if table_exists(conn, "movies"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM movies WHERE location_id = ANY(%s::uuid[]) AND deleted_at IS NULL",
+                (location_ids,),
+            )
+            movie_ids = [row["id"] for row in cur.fetchall()]
+    if table_exists(conn, "containers"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM containers WHERE location_id = ANY(%s::uuid[]) AND deleted_at IS NULL",
+                (location_ids,),
+            )
+            container_ids = [row["id"] for row in cur.fetchall()]
+    return movie_ids, container_ids
+
+
+def emit_location_detachments(conn, movie_ids: list[Any], container_ids: list[Any]) -> int:
+    """Re-emit every movie and container a location delete just detached.
+
+    Sync-contract §4c.5 forbids a client from erasing a ``location_id`` it
+    cannot resolve — an unresolvable id means "unknown", never "gone". That rule
+    prevents data loss, and without these deltas it would also keep a ghost
+    reference alive forever: the phone would watch the location disappear and
+    hold its own assignment for good.
+
+    Returns the number of changes emitted.
+    """
+    emitted = 0
+    for movie_id in movie_ids:
+        if emit_movie_change(conn, movie_id):
+            emitted += 1
+    for container_id in container_ids:
+        if emit_container_change(conn, container_id, operation="upsert"):
+            emitted += 1
+    return emitted
 
 
 def idempotency_key(client_id: str, client_mutation_id: str) -> str:
@@ -7609,118 +7816,13 @@ def app_preference_sections_payload(preferences: dict[str, Any]) -> list[dict[st
     return sections
 
 
-def mobile_feature_capabilities(conn, actor: dict[str, Any]) -> dict[str, Any]:
-    permissions = actor_effective_permission_keys(conn, actor)
-
-    def has_any(*keys: str) -> bool:
-        return "*" in permissions or bool(permissions.intersection(keys))
-
-    return {
-        "collection": {
-            "view": has_any("collection.view", "collection.view_all", "collection.view_own", "collection.view_group"),
-            "viewAll": has_any("collection.view_all"),
-            "viewOwn": has_any("collection.view_own", "collection.view"),
-            "viewGroups": has_any("collection.view_group", "collection.view", "groups.view", "groups.view_all"),
-            "add": has_any("collection.add", "collection.add_own", "collection.import", "collection.edit_all"),
-            "addOwn": has_any("collection.add_own", "collection.add"),
-            "import": has_any("collection.import"),
-            "edit": has_any("collection.edit_all", "collection.edit_own", "collection.edit_group"),
-            "delete": has_any("collection.delete_all", "collection.delete_own", "collection.delete_group"),
-            "bulkEdit": has_any("collection.bulk_edit", "collection.edit_all"),
-        },
-        "metadata": {
-            "search": has_any("metadata.search", "collection.import", "collection.add", "collection.add_own", "collection.edit_all"),
-            "refreshOne": has_any("metadata.refresh_one"),
-            "refreshBulk": has_any("metadata.refresh_bulk"),
-            "viewJobs": has_any("admin.view_jobs", "metadata.refresh_one", "metadata.refresh_bulk"),
-            "plugins": has_any("metadata.manage_plugins", "metadata.view_plugin_health", "metadata.manage_plugin_settings"),
-        },
-        "import": {
-            "barcodeScanner": has_any("metadata.search", "collection.add", "collection.add_own", "collection.import"),
-            "manualSearch": has_any("metadata.search", "collection.add", "collection.add_own", "collection.import"),
-            "boxSetDetection": has_any("metadata.search", "collection.add", "collection.import", "containers.create"),
-            "fileImport": has_any("collection.import"),
-        },
-        "containers": {
-            "view": has_any("containers.view", "collection.view", "collection.view_all", "collection.view_group"),
-            "create": has_any("containers.create", "collection.import"),
-            "edit": has_any("containers.edit"),
-            "delete": has_any("containers.delete"),
-        },
-        "groups": {
-            "view": has_any("groups.view", "groups.view_all", "groups.manage", "users.view"),
-            "create": has_any("groups.create", "groups.manage"),
-            "invite": has_any("groups.invite", "groups.manage"),
-            "manage": has_any("groups.manage"),
-        },
-        "personal": {
-            "watchlist": has_any("watchlist.manage"),
-            "notifications": True,
-            "push": True,
-            "loanRequests": has_any("lending.request"),
-            "manageLoansSystem": has_any("security.manage_loans_system"),
-        },
-        "api": {
-            "read": has_any("api.read"),
-            "write": has_any("api.write"),
-            "tokensManage": has_any("api.tokens.manage"),
-            "mcp": has_any("mcp.use") or any(key.startswith("mcp.tool.") for key in permissions),
-        },
-        "offline": {
-            "readCache": True,
-            "queuedMutations": True,
-            "syncDelta": True,
-            "conflictDetection": True,
-        },
-    }
+# `mobile_feature_capabilities` and `mobile_endpoint_contract_payload` both
+# live in `next_preferences` and are imported at the top of this module.
+# Second copies used to sit here. They were dead code — the import binding
+# wins — and both had silently drifted from the served versions, which is
+# exactly what an unreachable duplicate does over time.
 
 
-def mobile_endpoint_contract_payload() -> dict[str, Any]:
-    return {
-        "auth": {
-            "start": "/api/next/auth/mobile/start",
-            "exchange": "/api/next/auth/mobile/exchange",
-            "status": "/api/next/auth/status",
-        },
-        "bootstrap": "/api/next/mobile/bootstrap",
-        "profile": "/api/next/profile",
-        "preferences": "/api/next/preferences",
-        "notifications": "/api/next/notifications",
-        "push": {
-            "status": "/api/next/push/status",
-            "preferences": "/api/next/push/preferences",
-        },
-        "sync": {
-            "state": "/api/next/sync/state",
-            "bootstrap": "/api/next/sync/bootstrap",
-            "delta": "/api/next/sync/delta",
-            "mutations": "/api/next/sync/mutations",
-            "reconcile": "/api/next/sync/reconcile",
-            "userBootstrap": "/api/next/sync/user/bootstrap",
-            "userDelta": "/api/next/sync/user/delta",
-        },
-        "import": {
-            "metadataLookup": "/api/next/metadata/lookup",
-            "importMovie": "/api/next/import/movie",
-        },
-        "metadata": {
-            "refreshMovie": "/api/next/movies/{movieId}/metadata/refresh",
-            "refreshContainer": "/api/next/containers/{containerId}/metadata/refresh",
-            "jobs": "/api/next/metadata/jobs",
-        },
-        "loans": {
-            "list": "/api/next/loans",
-            "borrowed": "/api/next/loans/borrowed",
-            "return": "/api/next/loans/{loanId}/return",
-        },
-        "loanRequests": {
-            "create": "/api/next/movies/{movieId}/loan-requests",
-            "list": "/api/next/loan-requests",
-            "approve": "/api/next/loan-requests/{loanRequestId}/approve",
-            "decline": "/api/next/loan-requests/{loanRequestId}/decline",
-            "cancel": "/api/next/loan-requests/{loanRequestId}/cancel",
-        },
-    }
 
 
 def require_next_admin_user(conn) -> dict[str, Any]:
@@ -8665,6 +8767,193 @@ def delete_plugin_records(conn, plugin_id: str) -> dict[str, int]:
     return deleted
 
 
+# How a release-details failure must be *reported*. "Not in the catalogue" is a
+# dead end that correctly sends the user to manual entry; "could not reach
+# MovieVault" is a temporary condition where waiting costs nothing. A client
+# that shows the first message for the second condition turns a five-minute
+# outage into permanently hand-typed data, so every failure code carries the
+# kind it belongs to and whether a retry is worth offering.
+#
+# `retryable` follows the resolver's own rule: only a failure that proves the
+# request never arrived may be retried, because a resolve POST can mint a
+# resolution job server-side. A timeout proves nothing - which is why it is the
+# one that feels most retryable and is not.
+RELEASE_DETAILS_FAILURE_KINDS: dict[str, tuple[str, bool]] = {
+    "release_details_unreachable": ("transport", True),
+    "release_details_network_error": ("transport", False),
+    "release_details_http_error": ("transport", False),
+    "redirect_rejected": ("transport", False),
+    "release_details_unavailable": ("unavailable", True),
+    "release_details_rate_limited": ("unavailable", True),
+    "release_details_cache_unavailable": ("unavailable", True),
+    # The server is still working and caches the finished result for about
+    # fifteen minutes, so asking again is cheap and usually instant.
+    "release_details_poll_timeout": ("pending", True),
+    "release_details_expired": ("expired", True),
+    # Server-owned, and each one means "no data", not "the lookup broke".
+    "no_approved_sources": ("no_data", False),
+    "not_found": ("no_data", False),
+    "ambiguous_title": ("needs_year", False),
+    "canonical_release_unusable": ("catalog_defect", False),
+}
+# Failure kinds where MovieVault never actually answered. A client may not say
+# "not found" for any of these.
+RELEASE_DETAILS_UNANSWERED_KINDS = {"transport", "unavailable", "pending", "expired"}
+
+
+def movievault_v2_release_details_settings(conn) -> dict[str, Any]:
+    """The stored v2 plugin settings, or the defaults when it has none.
+
+    Only the request timeout and poll budget are read from here; the origin is
+    enforced by DiscVault and never user-supplied.
+    """
+    if not table_exists(conn, "plugin_settings"):
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT settings FROM plugin_settings WHERE plugin_id=%s",
+            (MOVIEVAULT_V2_PLUGIN_ID,),
+        )
+        row = cur.fetchone()
+    settings = row.get("settings") if row else None
+    return dict(settings) if isinstance(settings, dict) else {}
+
+
+def release_details_summary_from_release(release: dict[str, Any], *, source: str) -> dict[str, Any]:
+    """Express a resolved technical release in the candidate-summary shape.
+
+    A confirmed single release and a list of pressings are different answers,
+    and `status` keeps them apart. The *rows* are the same thing though - one
+    physical release described by the same vocabulary - so they share one shape
+    and one renderer rather than drifting into two.
+    """
+    summary: dict[str, Any] = {
+        # A resolved release has no candidate reference: there is nothing to
+        # hand back to the server, because it is already the answer.
+        "releaseRef": "",
+        "source": source,
+        "title": release.get("title") or "",
+    }
+    for key in ("edition", "format", "discCount", "packaging", "video", "audioTracks"):
+        if release.get(key):
+            summary[key] = release[key]
+    if release.get("regions"):
+        summary["discRegions"] = release["regions"]
+    if release.get("subtitles"):
+        summary["subtitles"] = release["subtitles"]
+    elif release.get("subtitleLanguages"):
+        summary["subtitleLanguages"] = release["subtitleLanguages"]
+    if release.get("barcodes"):
+        summary["barcodes"] = release["barcodes"]
+    return summary
+
+
+def release_details_search_payload(result: dict[str, Any], *, entrypoint: str) -> dict[str, Any]:
+    """Normalize a resolver answer into what the Add flow needs to act on."""
+    status = str(result.get("status") or "failed")
+    film = result.get("film") if isinstance(result.get("film"), dict) else {}
+    identifiers = film.get("identifiers") if isinstance(film.get("identifiers"), dict) else {}
+    payload: dict[str, Any] = {
+        "entrypoint": entrypoint,
+        "status": status,
+        "answered": True,
+        "retryable": False,
+        "film": {
+            "title": film.get("title") or "",
+            "year": film.get("year"),
+            "tmdbMovieId": identifiers.get("tmdbMovieId"),
+            "imdbId": identifiers.get("imdbId"),
+        }
+        if film
+        else {},
+        "releases": [],
+    }
+    if result.get("verificationStatus"):
+        payload["verificationStatus"] = result["verificationStatus"]
+    if status == "candidates":
+        payload["releases"] = [
+            item for item in (result.get("releases") or []) if isinstance(item, dict)
+        ]
+    elif status in {"canonical_hit", "external_hit"}:
+        release = result.get("release") if isinstance(result.get("release"), dict) else {}
+        if release:
+            payload["releases"] = [
+                release_details_summary_from_release(
+                    release,
+                    source="canonical" if status == "canonical_hit" else "external",
+                )
+            ]
+    elif status == "failed":
+        error_code = str(result.get("errorCode") or "release_details_failed")
+        kind, retryable = RELEASE_DETAILS_FAILURE_KINDS.get(error_code, ("server", False))
+        payload["errorCode"] = error_code
+        payload["failureKind"] = kind
+        payload["retryable"] = retryable
+        payload["answered"] = kind not in RELEASE_DETAILS_UNANSWERED_KINDS
+    return payload
+
+
+def release_candidate_movie_payload(candidate: Any) -> dict[str, Any]:
+    """Map a chosen release candidate onto movie-upsert payload keys.
+
+    Every field the edition governs is emitted whenever the candidate names it,
+    so the caller can assign rather than fill-if-empty. Keys the candidate does
+    not carry are left out entirely: `movie_technical_edits` reads on presence,
+    so an absent key means "no opinion" while an explicit empty list clears.
+
+    `format` is the deliberate exception to that. It has no unset value, so a
+    candidate that names no format leaves whatever was already chosen rather
+    than blanking it - the standing never-guess-a-format rule.
+    """
+    if not isinstance(candidate, dict):
+        return {}
+    payload: dict[str, Any] = {}
+    release_title = clean_text(candidate.get("title"))
+    if release_title:
+        payload["releaseTitle"] = release_title
+    for source, target in (("format", "format"), ("edition", "edition")):
+        value = clean_text(candidate.get(source))
+        if value:
+            payload[target] = value
+    country = clean_text(candidate.get("countryCode"))
+    if country:
+        payload["country"] = country
+    language = clean_text(candidate.get("languageCode"))
+    if language:
+        payload["language"] = language
+    release_date = clean_text(candidate.get("releaseDate"))
+    if release_date:
+        payload["releaseDate"] = release_date
+    runtime = candidate.get("runtimeMinutes")
+    if isinstance(runtime, int) and not isinstance(runtime, bool) and runtime > 0:
+        payload["runtimeMinutes"] = runtime
+    for key in ("packaging", "discRegions", "audioTracks", "subtitles"):
+        if isinstance(candidate.get(key), list):
+            payload[key] = candidate[key]
+    # Only when there are no structured tracks: the tracks are the fact and the
+    # flat list is their language view, so sending both hands the merge two
+    # spellings of one thing.
+    if not isinstance(candidate.get("subtitles"), list) and isinstance(
+        candidate.get("subtitleLanguages"), list
+    ):
+        payload["subtitles"] = [
+            {"languageCode": code, "subtitleType": "full"}
+            for code in candidate["subtitleLanguages"]
+            if isinstance(code, str) and code
+        ]
+    video = candidate.get("video") if isinstance(candidate.get("video"), dict) else {}
+    if video.get("resolution"):
+        payload["videoResolution"] = video["resolution"]
+    for source, target in (
+        ("codecs", "videoCodecs"),
+        ("hdrFormats", "hdrFormats"),
+        ("aspectRatios", "aspectRatios"),
+    ):
+        if isinstance(video.get(source), list):
+            payload[target] = video[source]
+    return payload
+
+
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink", "describe_payload", "activity_summary"}:
         return False
@@ -9056,6 +9345,54 @@ def store_client_entity_mapping(
         )
 
 
+def movie_location_assignment(payload: dict[str, Any]) -> dict[str, Any]:
+    """The location a sync payload assigns, keyed on presence (§4c.3).
+
+    Returns ``{}`` when the client said nothing about the assignment, and
+    ``{"location_id": <uuid or None>}`` when it did. The scalar rule of §4.8
+    applies unchanged:
+
+    - key absent, or present as ``null`` → keep what the server has. kotlinx
+      omits defaults and Swift uses ``encodeIfPresent``, so an untouched field
+      is indistinguishable from an explicit null and must mean the same thing.
+    - explicit empty value → erase the assignment. This is the only way a user
+      can take a movie off its shelf from a phone.
+    """
+    for key in ("locationId", "location_id"):
+        if key not in payload:
+            continue
+        raw = payload.get(key)
+        if raw is None:
+            return {}
+        if isinstance(raw, str) and not raw.strip():
+            return {"location_id": None}
+        return {"location_id": parse_uuid(raw, "locationId")}
+    return {}
+
+
+def apply_movie_location_assignment(cur, movie_uuid: UUID, assignment: dict[str, Any]) -> None:
+    """Write an assignment produced by :func:`movie_location_assignment`.
+
+    A no-op unless the client actually asserted something, so the common case —
+    a movie upsert that never mentions a location — leaves the column alone.
+
+    An id the server does not have is rejected rather than quietly stored as
+    NULL: writing it away would report success for an assignment that did not
+    happen, and a failure that comes back as success is worse than a failure.
+    """
+    if "location_id" not in assignment:
+        return
+    location_id = assignment["location_id"]
+    if location_id is not None:
+        cur.execute("SELECT 1 FROM locations WHERE id=%s", (location_id,))
+        if cur.fetchone() is None:
+            raise NextApiError("Unknown locationId", 400)
+    cur.execute(
+        "UPDATE movies SET location_id=%s, updated_at=now() WHERE id=%s",
+        (location_id, movie_uuid),
+    )
+
+
 def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
@@ -9095,6 +9432,13 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         ),
         "location": payload.get("location"),
         "metadata": metadata,
+        # Not written by the big upsert below: `location_id` is a uuid column,
+        # so "absent" and "explicitly emptied" both reach SQL as NULL and its
+        # COALESCE cannot tell them apart. Sync-contract §4c.3 needs that
+        # distinction — absent keeps, empty erases — so the assignment is keyed
+        # on presence here and applied separately by the caller, exactly like
+        # `technical_edits`.
+        "location_assignment": movie_location_assignment(payload),
         # Not a `movies` column: this is the technical profile, which lives in
         # movie_technical_specs and is applied separately by the caller. It is
         # carried here so every movie-upsert path picks it up in one place.
@@ -9251,6 +9595,55 @@ def movie_estimated_value_currency(body: dict[str, Any], existing: dict[str, Any
     if not re.fullmatch(r"[A-Z]{3}", text):
         raise NextApiError("estimatedValueCurrency must be a three-letter ISO 4217 code", 400)
     return text
+
+
+def guard_movie_estimated_value_lock(conn, movie_id: UUID, body: dict[str, Any]) -> dict[str, Any] | None:
+    """Refuse to change a movie's value while a box set owns it.
+
+    The amount is not cleared when a film joins a set - it is only suppressed, so
+    pulling the film back out restores exactly what the user typed. Accepting a
+    write here would edit a number nobody can see, which would then reappear on
+    removal as a silent change.
+
+    Requests that do not mention the value at all pass through untouched, so an
+    unrelated edit to a box-set member keeps working.
+    """
+    keys = ("estimatedValue", "estimated_value", "estimatedValueCurrency", "estimated_value_currency")
+    if not any(key in body for key in keys):
+        return None
+    lock = movie_value_lock(conn, movie_id)
+    if lock:
+        raise NextApiError(
+            "Estimated value is managed by the box set this movie belongs to",
+            409,
+        )
+    return None
+
+
+def capture_collection_value_snapshot(conn, actor: dict[str, Any] | None) -> None:
+    """Best-effort: record today's collection value after a price-affecting write.
+
+    Never allowed to fail the edit that triggered it - a missing snapshot costs a
+    point on a chart, a raised exception costs the user their change.
+    """
+    if not actor or not actor.get("id"):
+        return
+    try:
+        movie_where, movie_params = visible_movie_where_sql(conn, actor, "m")
+        container_where, container_params = visible_container_where_sql(conn, actor, "c")
+        record_collection_value_snapshot(
+            conn,
+            user_id=actor.get("id"),
+            movie_where=movie_where,
+            movie_params=movie_params,
+            container_where=container_where,
+            container_params=container_params,
+        )
+    except Exception:  # pragma: no cover - defensive, snapshots are not critical
+        try:
+            current_app.logger.warning("Collection value snapshot failed", exc_info=True)
+        except Exception:
+            pass
 
 
 def movie_metadata_edits(body: dict[str, Any]) -> dict[str, Any]:
@@ -9647,6 +10040,7 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
     "estimated_value",
     "estimated_value_currency",
     "location",
+    "location_id",
     "metadata",
     "created_at",
     "updated_at",
@@ -9655,8 +10049,13 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
 # What the delta legitimately carries on top: routing and tombstone state a
 # bootstrap has no use for. Declared rather than implied, so the parity test can
 # assert the difference is exactly this and no wider.
+#
+# `location_id` used to sit here, which made it delta-only — the same shape of
+# drift this file's comment above describes for `release_title`. A client that
+# only ever saw deltas found the field; a fresh install never did. Sync-contract
+# §4c moved it onto the bootstrap alongside the `locations` array that gives it
+# meaning.
 _MOVIE_ENTITY_ONLY_COLUMNS: tuple[str, ...] = (
-    "location_id",
     "owner_id",
     "client_id",
     "deleted_at",
@@ -12834,8 +13233,17 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         identity_debug = movie_identity_debug_entity(conn, movie_id, movie)
     except Exception:  # pragma: no cover - debug info must never break detail load
         identity_debug = None
+    # The box set a member film's value belongs to. Present means the price
+    # field is read-only: the set carries the money for everything inside it.
+    value_lock = None
+    try:
+        value_lock = movie_value_lock(conn, movie_id)
+    except Exception:  # pragma: no cover - never break detail load over a hint
+        value_lock = None
     return {
         "movie": movie,
+        "estimatedValueLocked": bool(value_lock),
+        "estimatedValueLockedBy": value_lock,
         "identityDebug": identity_debug,
         "identifiers": movie_identifier_entities(conn, movie_id),
         "localizations": movie_localization_entities(conn, movie_id),
@@ -15203,6 +15611,8 @@ def container_entity(conn, container_id: UUID) -> dict[str, Any] | None:
                 primary_movie_id,
                 location_id,
                 owner_id,
+                estimated_value,
+                estimated_value_currency,
                 metadata,
                 created_at,
                 updated_at
@@ -16479,7 +16889,10 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.badge_label,
                 c.year,
                 c.description,
+                c.location_id,
                 c.owner_id,
+                c.estimated_value,
+                c.estimated_value_currency,
                 c.metadata,
                 c.created_at,
                 c.updated_at
@@ -17346,6 +17759,7 @@ def apply_movie_upsert(
     # safe to ship the server ahead of the clients.
     with conn.cursor() as cur:
         upsert_movie_technical_edits(cur, entity_id, fields.get("technical_edits") or {})
+        apply_movie_location_assignment(cur, entity_id, fields.get("location_assignment") or {})
 
     # Persist the TMDB identifier so trede 3 (tmdb+format+edition) can match on a
     # later sync. Idempotent: the composite PK makes re-writes a no-op.
@@ -17896,7 +18310,7 @@ def apply_container_upsert(
     else:
         container_type = normalize_container_type(None)
 
-    fields = container_payload(payload, existing=existing)
+    fields = container_payload(payload, existing=existing, container_type=container_type)
     public_id = clean_text(payload.get("publicId") or payload.get("public_id"))
     public_id = public_id or (existing or {}).get("public_id") or f"next-container-{entity_id.hex[:12]}"
     if len(public_id) > 160:
@@ -17906,9 +18320,9 @@ def apply_container_upsert(
         cur.execute(
             """
             INSERT INTO containers (
-                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, client_id, metadata, created_at, updated_at
+                id, public_id, container_type, title, barcode, badge_label, year, description, owner_id, client_id, estimated_value, estimated_value_currency, metadata, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
             ON CONFLICT (id) DO UPDATE SET
                 title=COALESCE(EXCLUDED.title, containers.title),
                 barcode=EXCLUDED.barcode,
@@ -17916,6 +18330,8 @@ def apply_container_upsert(
                 year=EXCLUDED.year,
                 description=EXCLUDED.description,
                 client_id=COALESCE(containers.client_id, EXCLUDED.client_id),
+                estimated_value=COALESCE(EXCLUDED.estimated_value, containers.estimated_value),
+                estimated_value_currency=COALESCE(EXCLUDED.estimated_value_currency, containers.estimated_value_currency),
                 metadata=containers.metadata || EXCLUDED.metadata,
                 updated_at=now()
             """,
@@ -17930,6 +18346,8 @@ def apply_container_upsert(
                 fields["description"],
                 actor_or_instance_owner_id(conn, actor),
                 persistent_client_id,
+                fields["estimated_value"],
+                fields["estimated_value_currency"],
                 Jsonb(json_ready(fields["metadata"])),
             ),
         )
@@ -20836,6 +21254,7 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
             return response(
                 {
                     "status": "ok",
@@ -20888,6 +21307,7 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
             return response(
                 {
                     "status": "ok",
@@ -21071,6 +21491,111 @@ def register_routes(flask_app: Flask) -> None:
                     "candidates": candidates,
                 }
             )
+
+    @flask_app.post("/api/next/import/release-details/search")
+    def search_import_release_details():
+        """The v2 fallback for a disc the local route could not identify.
+
+        The catalog-first order is unchanged: this runs only after the normal
+        metadata lookup produced nothing for the scanned barcode. It asks
+        MovieVault's anonymous release-details resolver directly - by barcode,
+        or by the title the user typed once the barcode led nowhere - and hands
+        back whatever it answers, including a `candidates` list of pressings of
+        one film for the user to choose between.
+
+        A failure is never reported as "not in the catalogue": the outcome
+        carries a `failureKind` so the client can say what actually happened,
+        and `retryable` marks the failures where waiting costs nothing.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Release details search body must be an object", 400)
+        barcode = normalize_barcode(clean_text(body.get("barcode")) or "")
+        title = clean_text(body.get("title") or body.get("query")) or ""
+        edition = clean_text(body.get("edition")) or ""
+        media_format = clean_text(body.get("format") or body.get("mediaFormat")) or ""
+        year_text = clean_text(body.get("year")) or ""
+        year = int(year_text) if year_text.isdigit() and 1870 <= int(year_text) <= 2200 else None
+        if not barcode and not title:
+            raise NextApiError("barcode or title is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                (
+                    "metadata.search",
+                    "collection.add",
+                    "collection.add_own",
+                    "collection.import",
+                    "collection.edit_all",
+                ),
+            )
+            settings = movievault_v2_release_details_settings(conn)
+            # The Add flow waits longer than a metadata refresh does; an
+            # operator who configured an even longer budget keeps theirs.
+            configured_attempts = settings.get("releaseDetailsPollAttempts")
+            if (
+                not isinstance(configured_attempts, int)
+                or isinstance(configured_attempts, bool)
+                or configured_attempts < ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
+            ):
+                settings = {
+                    **settings,
+                    "releaseDetailsPollAttempts": ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS,
+                }
+            # A barcode is the more specific question, so it is asked first and
+            # the title rides along as a hint. Only a request with no barcode at
+            # all goes to the title entry point.
+            entrypoint = "resolve" if barcode else "search"
+            request_payload: dict[str, Any] = {}
+            try:
+                if barcode:
+                    request_payload = {"barcode": barcode}
+                    if title:
+                        request_payload["title"] = title
+                    if year is not None:
+                        request_payload["year"] = year
+                    if edition:
+                        request_payload["edition"] = edition
+                    if media_format:
+                        request_payload["format"] = media_format
+                    result = resolve_release_details(settings, request_payload)
+                else:
+                    request_payload = {"title": title}
+                    if year is not None:
+                        request_payload["year"] = year
+                    if edition:
+                        request_payload["edition"] = edition
+                    if media_format:
+                        request_payload["format"] = media_format
+                    result = search_release_details(settings, request_payload)
+            except MovieVaultV2Error as exc:
+                result = {
+                    "contractVersion": "release-technical-1",
+                    "status": "failed",
+                    "errorCode": exc.code,
+                }
+            payload = release_details_search_payload(result, entrypoint=entrypoint)
+            audit_event(
+                conn,
+                event_type="metadata.release_details_search",
+                category="metadata",
+                actor=actor,
+                target_type="release_details_search",
+                target_id=None,
+                summary=f"MovieVault v2 {entrypoint} for {barcode or title}",
+                metadata={
+                    "entrypoint": entrypoint,
+                    "barcode": barcode,
+                    "title": title,
+                    "year": year,
+                    "status": payload["status"],
+                    "errorCode": payload.get("errorCode"),
+                    "failureKind": payload.get("failureKind"),
+                    "candidateCount": len(payload.get("releases") or []),
+                    "verificationStatus": payload.get("verificationStatus"),
+                },
+            )
+        return response({"status": "ok", "result": payload})
 
     @flask_app.post("/api/next/movies/<movie_id>/collections/<collection_id>")
     def add_movie_to_collection(movie_id: str, collection_id: str):
@@ -21281,7 +21806,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Container request body must be an object", 400)
         container_type = normalize_container_type(body.get("containerType", body.get("container_type")))
-        payload = container_payload(body)
+        payload = container_payload(body, container_type=container_type)
         container_uuid = uuid.uuid4()
         public_id = clean_text(body.get("publicId") or body.get("public_id")) or f"next-container-{container_uuid.hex[:12]}"
         if len(public_id) > 160:
@@ -21306,9 +21831,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, estimated_value, estimated_value_currency, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -21321,6 +21846,8 @@ def register_routes(flask_app: Flask) -> None:
                             payload["description"],
                             payload["location_id"],
                             actor_or_instance_owner_id(conn, actor),
+                            payload["estimated_value"],
+                            payload["estimated_value_currency"],
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -21343,6 +21870,7 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid, actor=actor)
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail}, 201)
 
     @flask_app.patch("/api/next/containers/<container_id>")
@@ -21358,13 +21886,16 @@ def register_routes(flask_app: Flask) -> None:
             existing = container_entity(conn, container_uuid)
             if not existing:
                 raise NextApiError("Container not found", 404)
-            payload = container_payload(body, existing=existing)
             type_provided = "containerType" in body or "container_type" in body
             requested_type = body.get("containerType", body.get("container_type")) if type_provided else None
             target_type, type_changed = container_type_change(
                 existing.get("container_type"),
                 requested_type if type_provided else existing.get("container_type"),
             )
+            # Validate the value against the type the container ends up as, so
+            # promoting a vault to a box set in the same request may set a value
+            # and demoting a box set may not.
+            payload = container_payload(body, existing=existing, container_type=target_type)
             primary_provided = "primaryMovieId" in body or "primary_movie_id" in body
             primary_movie_uuid = None
             if primary_provided:
@@ -21396,11 +21927,11 @@ def register_routes(flask_app: Flask) -> None:
                     locked = cur.fetchone()
                 if not locked:
                     raise NextApiError("Container not found", 404)
-                payload = container_payload(body, existing=locked)
                 target_type, type_changed = container_type_change(
                     locked.get("container_type"),
                     requested_type if type_provided else locked.get("container_type"),
                 )
+                payload = container_payload(body, existing=locked, container_type=target_type)
                 if type_changed and not actor_can_convert_container(locked, actor):
                     raise NextApiError("Only the container owner or an instance owner/admin can convert it", 403)
                 receiver_payload = (
@@ -21434,6 +21965,8 @@ def register_routes(flask_app: Flask) -> None:
                             description=%s,
                             location_id=%s,
                             container_type=%s,
+                            estimated_value=%s,
+                            estimated_value_currency=%s,
                             metadata=%s,
                             updated_at=now()
                         WHERE id=%s
@@ -21446,6 +21979,12 @@ def register_routes(flask_app: Flask) -> None:
                             payload["description"],
                             payload["location_id"],
                             target_type,
+                            # A container that is no longer a box set stops
+                            # carrying money: leaving the amount behind would keep
+                            # it in the totals under a type that may never show or
+                            # edit it.
+                            payload["estimated_value"] if target_type == "box_set" else None,
+                            payload["estimated_value_currency"] if target_type == "box_set" else None,
                             Jsonb(json_ready(payload["metadata"])),
                             container_uuid,
                         ),
@@ -21542,6 +22081,7 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid, actor=actor)
+            capture_collection_value_snapshot(conn, actor)
         return response(
             {
                 "status": "ok",
@@ -21630,6 +22170,7 @@ def register_routes(flask_app: Flask) -> None:
                     },
                 )
                 emit_container_change(conn, container_uuid, operation="delete")
+            capture_collection_value_snapshot(conn, actor)
         return response(
             {
                 "status": "ok",
@@ -21706,6 +22247,7 @@ def register_routes(flask_app: Flask) -> None:
                     summary=f"Created location {payload['name']}",
                     metadata={"publicId": public_id, "name": payload["name"], "parentId": str(parent_uuid) if parent_uuid else None},
                 )
+                emit_location_change(conn, location_uuid, operation="upsert")
             detail = location_detail_entity(conn, location_uuid)
         return response({"status": "ok", "detail": detail}, 201)
 
@@ -21763,6 +22305,15 @@ def register_routes(flask_app: Flask) -> None:
                         "reparented": reparent,
                     },
                 )
+                # A rename or a move rewrites `path`/`path_label` — and a move
+                # also `depth` — for every descendant, not just this row. Those
+                # are wire fields (§4c.1), so the whole subtree is stale. Build
+                # the tree once: resolving each id on its own would rebuild it
+                # per node.
+                stale = set(location_subtree_ids(conn, location_uuid)) or {str(location_uuid)}
+                for entity in location_sync_entities(conn):
+                    if str(entity.get("id")) in stale:
+                        emit_location_change(conn, entity["id"], operation="upsert", entity=entity)
             detail = location_detail_entity(conn, location_uuid)
         return response({"status": "ok", "detail": detail})
 
@@ -21776,9 +22327,17 @@ def register_routes(flask_app: Flask) -> None:
             existing = location_entity(conn, location_uuid)
             if not existing:
                 raise NextApiError("Location not found", 404)
+            # Both must be read before the DELETE: the tree cascades, and the
+            # assignments are `ON DELETE SET NULL`, so afterwards there is
+            # nothing left to join against (§4c.5).
+            subtree_ids = location_subtree_ids(conn, location_uuid) or [str(location_uuid)]
+            detached_movies, detached_containers = location_assignment_holders(conn, subtree_ids)
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute("DELETE FROM locations WHERE id=%s", (location_uuid,))
+                for subtree_id in subtree_ids:
+                    emit_location_change(conn, subtree_id, operation="delete")
+                emit_location_detachments(conn, detached_movies, detached_containers)
                 audit_event(
                     conn,
                     event_type="location.deleted",
@@ -21872,6 +22431,7 @@ def register_routes(flask_app: Flask) -> None:
                         "backdropUrl": backdrop_url,
                     },
                 )
+                emit_location_change(conn, location_uuid, operation="upsert")
             detail = location_detail_entity(conn, location_uuid)
         return response(
             {
@@ -21942,6 +22502,7 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
         return response(
             {
                 "status": "ok",
@@ -22186,6 +22747,7 @@ def register_routes(flask_app: Flask) -> None:
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
             detail = container_detail_entity(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
         if not detail:
             raise NextApiError("Container not found", 404)
         return response(
@@ -22592,6 +23154,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Movie not found", 404)
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
+            guard_movie_estimated_value_lock(conn, movie_uuid, body)
             payload = movie_update_payload(body, existing=existing)
             effective_locks = (
                 set(payload["field_locks"])
@@ -22649,6 +23212,7 @@ def register_routes(flask_app: Flask) -> None:
                 except Exception as exc:
                     receiver_summary = {"status": "error", "error": str(exc)}
             detail = movie_detail_entity(conn, movie_uuid)
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail, "receivers": receiver_summary})
 
     @flask_app.get("/api/next/api/v1/movies/<movie_id>/field-locks")
@@ -22732,7 +23296,7 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("Container request body must be an object", 400)
         container_type = normalize_container_type(body.get("containerType", body.get("container_type")))
-        payload = container_payload(body)
+        payload = container_payload(body, container_type=container_type)
         container_uuid = uuid.uuid4()
         public_id = clean_text(body.get("publicId") or body.get("public_id")) or f"api-container-{container_uuid.hex[:12]}"
         if len(public_id) > 160:
@@ -22757,9 +23321,9 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(
                         """
                         INSERT INTO containers (
-                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, metadata, created_at, updated_at
+                            id, public_id, container_type, title, barcode, badge_label, year, description, location_id, owner_id, estimated_value, estimated_value_currency, metadata, created_at, updated_at
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
                         """,
                         (
                             container_uuid,
@@ -22772,6 +23336,8 @@ def register_routes(flask_app: Flask) -> None:
                             payload["description"],
                             payload["location_id"],
                             actor_or_instance_owner_id(conn, actor),
+                            payload["estimated_value"],
+                            payload["estimated_value_currency"],
                             Jsonb(json_ready(payload["metadata"])),
                         ),
                     )
@@ -22795,6 +23361,7 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid)
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail}, 201)
 
     @flask_app.get("/api/next/api/v1/containers/<container_id>")
@@ -22832,7 +23399,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Container not found", 404)
             if not actor_can_edit_visible_container(conn, actor, container_uuid):
                 raise NextApiError("Permission required: containers.edit", 403)
-            payload = container_payload(body, existing=existing)
+            payload = container_payload(body, existing=existing, container_type=existing.get("container_type"))
             receiver_payload = container_receiver_payload(conn, existing, payload)
             receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_fields_changed"}
             with conn.transaction():
@@ -22846,6 +23413,8 @@ def register_routes(flask_app: Flask) -> None:
                             year=%s,
                             description=%s,
                             location_id=%s,
+                            estimated_value=%s,
+                            estimated_value_currency=%s,
                             metadata=%s,
                             updated_at=now()
                         WHERE id=%s
@@ -22857,6 +23426,8 @@ def register_routes(flask_app: Flask) -> None:
                             payload["year"],
                             payload["description"],
                             payload["location_id"],
+                            payload["estimated_value"],
+                            payload["estimated_value_currency"],
                             Jsonb(json_ready(payload["metadata"])),
                             container_uuid,
                         ),
@@ -22904,6 +23475,7 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 emit_container_change(conn, container_uuid, operation="upsert")
             detail = container_detail_entity(conn, container_uuid, actor=actor)
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
     @flask_app.delete("/api/next/api/v1/containers/<container_id>")
@@ -24316,6 +24888,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Movie not found", 404)
             if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Permission required: collection.edit_all", 403)
+            guard_movie_estimated_value_lock(conn, movie_uuid, body)
             payload = movie_update_payload(body, existing=existing)
             effective_locks = (
                 set(payload["field_locks"])
@@ -24405,6 +24978,7 @@ def register_routes(flask_app: Flask) -> None:
                         "receiverSummary": receiver_summary,
                     },
                 )
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
     @flask_app.get("/api/next/movies/<movie_id>/field-locks")
@@ -24485,6 +25059,7 @@ def register_routes(flask_app: Flask) -> None:
                     summary=f"Deleted movie {existing.get('title')}",
                     metadata={"title": existing.get("title"), "barcode": existing.get("barcode"), "deleted": deleted},
                 )
+            capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "movieId": str(movie_uuid), "deleted": deleted})
 
     @flask_app.get("/api/next/lists")
@@ -26899,6 +27474,20 @@ def register_routes(flask_app: Flask) -> None:
                 movies.sort(key=lambda item: (str(item.get("title") or "").lower(), str(item.get("year") or "")))
                 wishlist_price_trend["movies"] = movies
 
+            # Capturing here as well as on every write keeps the series alive on a
+            # day the user only looked: without it, a quiet week leaves a gap the
+            # chart would have to interpolate across.
+            container_where, container_params = visible_container_where_sql(conn, actor, "c")
+            collection_value = compute_collection_value(
+                conn,
+                movie_where=where,
+                movie_params=params,
+                container_where=container_where,
+                container_params=container_params,
+                exchange_rates=dict(price_display_exchange_rates().get("exchangeRates") or {}),
+            )
+            capture_collection_value_snapshot(conn, actor)
+
             return response(
                 {
                     "status": "ok",
@@ -26911,8 +27500,45 @@ def register_routes(flask_app: Flask) -> None:
                     "wishlistCount": wishlist_count,
                     "loans": loans_stats,
                     "wishlistPriceTrend": wishlist_price_trend,
+                    "collectionValue": collection_value,
                 }
             )
+
+    @flask_app.get("/api/next/stats/collection-value/history")
+    def collection_value_history_view():
+        """The stored value-over-time series for one scope.
+
+        Reads snapshots only - it never recomputes, so a gap in the series is a
+        day on which nothing changed and nobody opened the statistics view.
+        """
+        scope_type = clean_text(request.args.get("scope")) or "total"
+        if scope_type not in SNAPSHOT_SCOPE_TYPES:
+            raise NextApiError(f"scope must be one of: {', '.join(SNAPSHOT_SCOPE_TYPES)}", 400)
+        scope_id = clean_text(request.args.get("scopeId"))
+        if scope_type == "total":
+            scope_id = None
+        elif not scope_id:
+            raise NextApiError("scopeId is required for a vault or collection scope", 400)
+        since = parse_optional_date(request.args.get("from"), "from")
+        until = parse_optional_date(request.args.get("until") or request.args.get("to"), "until")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            points = collection_value_history(
+                conn,
+                user_id=actor.get("id"),
+                scope_type=scope_type,
+                scope_id=scope_id,
+                since=since,
+                until=until,
+            )
+        return response(
+            {
+                "status": "ok",
+                "scope": scope_type,
+                "scopeId": scope_id,
+                "points": points,
+            }
+        )
 
     @flask_app.post("/api/next/movies/<movie_id>/identifiers")
     def add_movie_identifier(movie_id: str):
@@ -28524,6 +29150,9 @@ def register_routes(flask_app: Flask) -> None:
         wants_movie_import = import_mode == "movie"
         wants_box_set_import = import_mode in {"box-set", "boxset"}
         provided_metadata_result = metadata_result_from_import_body(body)
+        release_candidate = body.get("releaseCandidate") or body.get("release_candidate")
+        if not isinstance(release_candidate, dict):
+            release_candidate = {}
         selected_box_set_key_from_body = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
         provided_box_set_body = body.get("boxSetProposal") or body.get("box_set_proposal")
         if not isinstance(provided_box_set_body, dict):
@@ -28862,6 +29491,13 @@ def register_routes(flask_app: Flask) -> None:
                     payload["format"] = clean_text(body.get("format"))
                 if body.get("year") and not payload.get("year"):
                     payload["year"] = clean_text(body.get("year"))
+                # An edition the user picked from a v2 candidate list describes
+                # the disc in their hand, so it wins over whatever a metadata
+                # source guessed for the film. Applied last, and by assignment
+                # rather than fill-if-empty: picking a second edition after a
+                # first must not leave the first one's audio or packaging
+                # behind.
+                payload.update(release_candidate_movie_payload(release_candidate))
 
                 mutation_id = f"import-movie-{uuid.uuid4()}"
                 upsert = apply_movie_upsert(
@@ -28902,6 +29538,14 @@ def register_routes(flask_app: Flask) -> None:
                         "title": import_title,
                         "sources": metadata_result.get("sources") or [],
                         "selectedCandidate": selected_movie_candidate,
+                        "releaseCandidate": {
+                            "releaseRef": clean_text(release_candidate.get("releaseRef")),
+                            "source": clean_text(release_candidate.get("source")),
+                            "edition": clean_text(release_candidate.get("edition")),
+                            "format": clean_text(release_candidate.get("format")),
+                        }
+                        if release_candidate
+                        else {},
                         "applied": applied,
                         "metadataRefreshQueued": bool(metadata_refresh_job),
                         "metadataJobId": str(metadata_refresh_job.get("id")) if metadata_refresh_job else None,
@@ -30671,6 +31315,7 @@ def register_routes(flask_app: Flask) -> None:
                     "container",
                     "container_membership",
                     "movie_identifier",
+                    "location",
                     "metadata_plugin",
                     "setting",
                 ],
@@ -30714,6 +31359,11 @@ def register_routes(flask_app: Flask) -> None:
                 "movieIdentifiers": all_movie_identifier_entities(
                     conn, limit=min(max(limit * 20, 1000), 200000)
                 ),
+                # Unbounded by `limit`: the tree is at most four levels deep and
+                # a movie's `location_id` is meaningless without the row it
+                # points at, so truncating it would hand clients exactly the
+                # unresolvable ids sync-contract §4c exists to remove.
+                "locations": location_sync_entities(conn),
                 "moviePeople": movie_people,
                 "movieCast": [credit for credit in movie_people if credit.get("department") == "cast"],
                 "movieCrew": [credit for credit in movie_people if credit.get("department") == "crew"],

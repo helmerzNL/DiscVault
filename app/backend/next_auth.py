@@ -77,6 +77,7 @@ try:
         verify_recovery_code,
         verify_totp,
     )
+    from .next_audit import request_ip_details
     from .next_runtime_secrets import jwt_secret
     from .scripts.sync_dedup_merge import (
         build_report as _dedup_build_report,
@@ -119,6 +120,7 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         verify_recovery_code,
         verify_totp,
     )
+    from next_audit import request_ip_details
     from next_runtime_secrets import jwt_secret
     from scripts.sync_dedup_merge import (
         build_report as _dedup_build_report,
@@ -931,6 +933,22 @@ def _auth_table_exists(conn, table_name: str) -> bool:
     return bool(row and row["table_name"])
 
 
+def _observed_request_ip() -> dict[str, str]:
+    """The public address this request came from, as the server saw it.
+
+    Returns empty strings outside a request context, and whenever every
+    candidate is private — a LAN address says nothing useful about *where* a
+    connection came from, and self-hosted instances are reached over one all
+    the time.
+    """
+
+    try:
+        details = request_ip_details()
+    except RuntimeError:  # pragma: no cover - no request context (workers, tests)
+        return {"ip": "", "source": ""}
+    return {"ip": details.get("ip") or "", "source": details.get("source") or ""}
+
+
 def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
     if not _auth_table_exists(conn, "api_access_tokens") or not _auth_table_exists(conn, "users"):
         return None
@@ -962,7 +980,20 @@ def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
         row = cur.fetchone()
         if not row:
             return None
-        cur.execute("UPDATE api_access_tokens SET last_used_at=now() WHERE id=%s", (row["api_token_id"],))
+        # Record where the token was used from, so the connections list can
+        # answer "is this one mine?". Always the address the server observed —
+        # a client-supplied one would be a claim rather than evidence.
+        observed = _observed_request_ip()
+        cur.execute(
+            """
+            UPDATE api_access_tokens
+            SET last_used_at=now(),
+                last_seen_ip=COALESCE(NULLIF(%s, ''), last_seen_ip),
+                last_seen_ip_source=COALESCE(NULLIF(%s, ''), last_seen_ip_source)
+            WHERE id=%s
+            """,
+            (observed.get("ip"), observed.get("source"), row["api_token_id"]),
+        )
     row["apiToken"] = {
         "id": row.pop("api_token_id"),
         "name": row.pop("api_token_name"),

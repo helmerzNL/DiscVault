@@ -89,6 +89,8 @@ def api_access_token_row(row: dict[str, Any]) -> dict[str, Any]:
         "deviceId": row.get("device_id") or row.get("deviceId"),
         "deviceLabel": row.get("device_label") or row.get("deviceLabel"),
         "deviceModel": row.get("device_model") or row.get("deviceModel"),
+        "lastSeenIp": row.get("last_seen_ip") or row.get("lastSeenIp"),
+        "lastSeenIpSource": row.get("last_seen_ip_source") or row.get("lastSeenIpSource"),
     }
 
 
@@ -167,6 +169,13 @@ def group_api_access_tokens(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         existing["tokenIds"].append(entry["id"])
         existing["sessionCount"] += 1
         existing["createdAt"] = _min_timestamp(existing.get("createdAt"), entry.get("createdAt"))
+        # The address shown must belong to the most recent use in the group, not
+        # to whichever token happened to represent it.
+        if entry.get("lastSeenIp") and _max_timestamp(
+            existing.get("lastUsedAt"), entry.get("lastUsedAt")
+        ) == entry.get("lastUsedAt"):
+            existing["lastSeenIp"] = entry.get("lastSeenIp")
+            existing["lastSeenIpSource"] = entry.get("lastSeenIpSource")
         existing["lastUsedAt"] = _max_timestamp(existing.get("lastUsedAt"), entry.get("lastUsedAt"))
         # A connection only counts as revoked once nothing in it still works;
         # the representative is an active row whenever the group has one.
@@ -204,7 +213,8 @@ def profile_api_access_payload(
             cur.execute(
                 """
                 SELECT id, name, scopes, permission_keys, created_at, last_used_at, expires_at, revoked_at,
-                       client_kind, device_id, device_label, device_model, user_agent
+                       client_kind, device_id, device_label, device_model, user_agent,
+                       last_seen_ip, last_seen_ip_source
                 FROM api_access_tokens
                 WHERE user_id=%s
                 ORDER BY revoked_at NULLS FIRST, created_at DESC

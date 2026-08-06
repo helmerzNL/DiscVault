@@ -294,6 +294,48 @@ class BucketFallbackPluginTests(unittest.TestCase):
             {"attempted": True, "outcome": "miss", "errorCode": None},
         )
 
+    def test_resolver_candidates_are_carried_through_as_a_choice(self):
+        # A miss for the merge pipeline - nothing was confirmed for this barcode
+        # - but the film was identified, so the pressings must reach the user
+        # rather than being reported as "not found".
+        context = self._context(
+            local=(),
+            bucket=(),
+            resolver={
+                "status": "candidates",
+                "film": {"title": "Heat", "year": 1995},
+                "releases": [
+                    {"releaseRef": "a", "source": "external", "title": "Heat"},
+                    {"releaseRef": "b", "source": "external", "title": "Heat"},
+                ],
+            },
+        )
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(
+            result["resolverFallback"],
+            {
+                "attempted": True,
+                "outcome": "candidates",
+                "errorCode": None,
+                "candidateCount": 2,
+            },
+        )
+        self.assertEqual(result["releaseCandidates"]["film"]["title"], "Heat")
+        self.assertEqual(len(result["releaseCandidates"]["releases"]), 2)
+
+    def test_resolver_ambiguous_stays_apart_from_candidates(self):
+        # `ambiguous` means the sources did not agree on which film this is -
+        # a failed identification, not a choice to offer.
+        context = self._context(local=(), bucket=(), resolver={"status": "ambiguous"})
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(
+            result["resolverFallback"],
+            {"attempted": True, "outcome": "ambiguous", "errorCode": None},
+        )
+        self.assertNotIn("releaseCandidates", result)
+
     def test_resolver_failure_reports_diagnostic_with_the_error_code(self):
         context = self._context(
             local=(),

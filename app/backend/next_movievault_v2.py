@@ -46,7 +46,17 @@ DEFAULT_MAX_BUCKET_BYTES = 8 * 1024 * 1024
 RELEASE_DETAILS_CONTRACT = "release-technical-1"
 DEFAULT_MAX_RELEASE_DETAILS_BYTES = 256 * 1024
 DEFAULT_RELEASE_DETAILS_POLL_ATTEMPTS = 4
-MAX_RELEASE_DETAILS_POLL_ATTEMPTS = 10
+# The Add flow's fallback waits longer than a metadata refresh does. A barcode
+# that falls through to a title search reads several pages from a source that
+# paces itself at one request every five seconds, so twenty seconds sits inside
+# the chain's own pacing and thirty is what a client needs to budget. At the
+# resolver's two-second retry interval that is fifteen attempts.
+#
+# Stopping short does not stop the work: the server finishes the resolution and
+# caches it for about fifteen minutes either way, so a short budget only means
+# this scan shows nothing while the next scan of the same disc answers instantly.
+ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS = 15
+MAX_RELEASE_DETAILS_POLL_ATTEMPTS = 20
 MAX_RELEASE_DETAILS_POLL_WAIT_SECONDS = 5
 MAX_RECORDS = 2_000_000
 # The delta feed serves one MovieVault publication segment per request, keyed by
@@ -1518,6 +1528,129 @@ def _release_details_release(value: Any) -> dict[str, Any]:
     return result
 
 
+def _release_details_release_summary(value: Any) -> dict[str, Any]:
+    """One entry of a `candidates` answer's `releases[]`.
+
+    Deliberately more permissive than `_release_details_release`: a summary can
+    describe a pressing an unreviewed external source merely claims to know, so
+    barcodes and the technical profile are optional here while the technical
+    release requires them.
+
+    `releaseRef` is opaque - a canonical release UUID, or a provider candidate
+    reference - and is never parsed. It is echoed back untouched when the user
+    picks that edition, which is the only thing it is for.
+    """
+    item = _release_details_object(
+        value,
+        required={"releaseRef", "source", "title"},
+        optional={
+            "edition",
+            "format",
+            "countryCode",
+            "region",
+            "discRegions",
+            "languageCode",
+            "releaseDate",
+            "discCount",
+            "runtimeMinutes",
+            "studio",
+            "distributor",
+            "barcodes",
+            "packaging",
+            "video",
+            "audioTracks",
+            "subtitles",
+            "subtitleLanguages",
+        },
+    )
+    if item["source"] not in {"canonical", "external"}:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    result: dict[str, Any] = {
+        "releaseRef": _release_details_text(item["releaseRef"], minimum=1, maximum=500),
+        "source": item["source"],
+        "title": _release_details_text(item["title"], minimum=1, maximum=500),
+    }
+    for key, maximum in (
+        ("edition", 255),
+        ("format", 80),
+        ("region", 80),
+        ("studio", 255),
+        ("distributor", 255),
+    ):
+        if item.get(key) is not None:
+            result[key] = _release_details_text(item[key], minimum=1, maximum=maximum)
+    if item.get("countryCode") is not None:
+        result["countryCode"] = _release_details_text(
+            item["countryCode"],
+            maximum=2,
+            pattern=r"^[A-Z]{2}$",
+        )
+    if item.get("languageCode") is not None:
+        result["languageCode"] = _release_details_text(
+            item["languageCode"],
+            maximum=35,
+            pattern=r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$",
+        )
+    if item.get("releaseDate") is not None:
+        result["releaseDate"] = _release_details_text(
+            item["releaseDate"],
+            maximum=10,
+            pattern=r"^\d{4}-\d{2}-\d{2}$",
+        )
+    if item.get("discCount") is not None:
+        result["discCount"] = _release_details_integer(item["discCount"], minimum=1, maximum=999)
+    if item.get("runtimeMinutes") is not None:
+        result["runtimeMinutes"] = _release_details_integer(
+            item["runtimeMinutes"],
+            minimum=1,
+            maximum=10000,
+        )
+    if "discRegions" in item:
+        result["discRegions"] = _release_details_enum_list(
+            item["discRegions"],
+            maximum=MAX_DISC_REGIONS,
+            allowed=DISC_REGIONS,
+            label="discRegions",
+        )
+    if "barcodes" in item:
+        barcodes_value = item["barcodes"]
+        if not isinstance(barcodes_value, list) or len(barcodes_value) > 25:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["barcodes"] = [
+            _release_details_barcode(barcode, scopes={"package"})
+            for barcode in barcodes_value
+        ]
+    if "packaging" in item:
+        result["packaging"] = _release_details_enum_list(
+            item["packaging"],
+            maximum=MAX_PACKAGING,
+            allowed=PACKAGING_VALUES,
+            label="packaging",
+        )
+    if "video" in item:
+        result["video"] = _release_details_video(item["video"])
+    if "audioTracks" in item:
+        tracks = item["audioTracks"]
+        if not isinstance(tracks, list) or len(tracks) > 50:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["audioTracks"] = [_release_details_audio_track(track) for track in tracks]
+    if "subtitleLanguages" in item:
+        result["subtitleLanguages"] = _release_details_language_list(
+            item["subtitleLanguages"],
+            maximum=50,
+        )
+    # Same rule as the technical release: the structured tracks are the fact and
+    # `subtitleLanguages` is their de-duplicated language view, so keeping both
+    # would hand the picker two representations of one thing.
+    if "subtitles" in item:
+        tracks = item["subtitles"]
+        if not isinstance(tracks, list) or len(tracks) > 100:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result["subtitles"] = [_release_details_subtitle_track(track) for track in tracks]
+        result.pop("subtitleLanguages", None)
+    return result
+
+
 def _release_details_member(value: Any) -> dict[str, Any]:
     item = _release_details_object(
         value,
@@ -1689,6 +1822,8 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             "verificationStatus",
             "film",
             "release",
+            # Only ever present on `candidates`, and never alongside `release`.
+            "releases",
             "boxSet",
             "poster",
             "boxSetPoster",
@@ -1777,6 +1912,32 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
                 "status": moderation["status"],
             }
         return result
+    if status == "candidates":
+        # A source identified the film but could not choose between its
+        # pressings. That is a choice for the person holding the disc, so it
+        # arrives as a list rather than as a failure - see App-Guidance
+        # `docs/apps/discvault/adding-a-title.md`.
+        _release_details_object(
+            item,
+            required={"contractVersion", "status", "film", "releases"},
+            optional={"verificationStatus"},
+        )
+        releases_value = item["releases"]
+        if not isinstance(releases_value, list) or not 1 <= len(releases_value) <= 50:
+            raise MovieVaultV2Error("release_details_response_invalid")
+        result = {
+            "contractVersion": RELEASE_DETAILS_CONTRACT,
+            "status": "candidates",
+            "film": _release_details_film(item["film"]),
+            "releases": [
+                _release_details_release_summary(entry) for entry in releases_value
+            ],
+        }
+        if item.get("verificationStatus") is not None:
+            if item["verificationStatus"] not in {"canonical", "unreviewed_external"}:
+                raise MovieVaultV2Error("release_details_response_invalid")
+            result["verificationStatus"] = item["verificationStatus"]
+        return result
     if status in {"ambiguous", "miss"}:
         _release_details_object(
             item,
@@ -1840,6 +2001,41 @@ def _release_details_payload(value: Any) -> dict[str, Any]:
     return result
 
 
+def _release_details_search_payload(value: Any) -> dict[str, Any]:
+    """The barcode-free title entry point's request body.
+
+    `title` is required and `barcode` is rejected outright - the two entry
+    points are separate routes upstream precisely so a title search can never
+    be mistaken for a barcode lookup that happens to carry a hint.
+    """
+    if not isinstance(value, dict) or "title" not in value:
+        raise MovieVaultV2Error("release_details_request_invalid")
+    allowed = {"title", "year", "edition", "format"}
+    if set(value) - allowed:
+        raise MovieVaultV2Error("release_details_request_invalid")
+    result: dict[str, Any] = {}
+    for key, maximum in (("title", 500), ("edition", 255), ("format", 80)):
+        candidate = value.get(key)
+        if candidate is None:
+            continue
+        if not isinstance(candidate, str):
+            raise MovieVaultV2Error("release_details_request_invalid")
+        clean = " ".join(candidate.split())
+        if not clean:
+            continue
+        if len(clean) > maximum:
+            raise MovieVaultV2Error("release_details_request_invalid")
+        result[key] = clean
+    if not result.get("title"):
+        raise MovieVaultV2Error("release_details_request_invalid")
+    if value.get("year") is not None:
+        year = value["year"]
+        if isinstance(year, bool) or not isinstance(year, int) or not 1870 <= year <= 2200:
+            raise MovieVaultV2Error("release_details_request_invalid")
+        result["year"] = year
+    return result
+
+
 def _release_details_http(
     url: str,
     *,
@@ -1873,6 +2069,14 @@ def _release_details_http(
             return exc.code, b""
         raise MovieVaultV2Error("release_details_http_error") from exc
     except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+        # A refused connection or a name that does not resolve proves the
+        # request never arrived, so retrying it is provably a *first* delivery.
+        # A timeout or a dropped connection proves nothing of the sort - the
+        # server may already have minted a resolution job - so the two are kept
+        # apart under different codes rather than lumped together as "network".
+        reason = getattr(exc, "reason", exc)
+        if isinstance(reason, (ConnectionRefusedError, socket.gaierror)):
+            raise MovieVaultV2Error("release_details_unreachable") from exc
         raise MovieVaultV2Error("release_details_network_error") from exc
     if len(content) > DEFAULT_MAX_RELEASE_DETAILS_BYTES:
         raise MovieVaultV2Error("release_details_response_too_large")
@@ -1906,35 +2110,39 @@ def _decode_release_details_response(status: int, content: bytes) -> dict[str, A
     return result
 
 
-def resolve_release_details(
-    settings: dict[str, Any],
-    request: dict[str, Any],
+def _release_details_bounds(settings: dict[str, Any]) -> tuple[int, int]:
+    return (
+        _bounded_setting(
+            settings.get("requestTimeoutSeconds"),
+            default=DEFAULT_TIMEOUT_SECONDS,
+            minimum=2,
+            maximum=120,
+            code="settings_invalid",
+        ),
+        _bounded_setting(
+            settings.get("releaseDetailsPollAttempts"),
+            default=DEFAULT_RELEASE_DETAILS_POLL_ATTEMPTS,
+            minimum=1,
+            maximum=MAX_RELEASE_DETAILS_POLL_ATTEMPTS,
+            code="settings_invalid",
+        ),
+    )
+
+
+def _poll_release_details(
+    result: dict[str, Any],
     *,
-    sleep: Callable[[float], None] = time.sleep,
+    origin: str,
+    timeout_seconds: int,
+    poll_attempts: int,
+    sleep: Callable[[float], None],
 ) -> dict[str, Any]:
-    origin = enforced_origin()
-    timeout_seconds = _bounded_setting(
-        settings.get("requestTimeoutSeconds"),
-        default=DEFAULT_TIMEOUT_SECONDS,
-        minimum=2,
-        maximum=120,
-        code="settings_invalid",
-    )
-    poll_attempts = _bounded_setting(
-        settings.get("releaseDetailsPollAttempts"),
-        default=DEFAULT_RELEASE_DETAILS_POLL_ATTEMPTS,
-        minimum=1,
-        maximum=MAX_RELEASE_DETAILS_POLL_ATTEMPTS,
-        code="settings_invalid",
-    )
-    payload = _release_details_payload(request)
-    status, content = _release_details_http(
-        f"{origin}/v2/release-details/resolve",
-        method="POST",
-        timeout_seconds=timeout_seconds,
-        payload=payload,
-    )
-    result = _decode_release_details_response(status, content)
+    """Drive a `pending` answer to a terminal one.
+
+    There is exactly one poll route and a title search uses it too - the search
+    entry point hands back the same `resolutionId` shape rather than minting a
+    second polling path.
+    """
     for _attempt in range(poll_attempts):
         if result["status"] != "pending":
             return result
@@ -1952,6 +2160,60 @@ def resolve_release_details(
     if result["status"] == "pending":
         raise MovieVaultV2Error("release_details_poll_timeout")
     return result
+
+
+def resolve_release_details(
+    settings: dict[str, Any],
+    request: dict[str, Any],
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    origin = enforced_origin()
+    timeout_seconds, poll_attempts = _release_details_bounds(settings)
+    payload = _release_details_payload(request)
+    status, content = _release_details_http(
+        f"{origin}/v2/release-details/resolve",
+        method="POST",
+        timeout_seconds=timeout_seconds,
+        payload=payload,
+    )
+    return _poll_release_details(
+        _decode_release_details_response(status, content),
+        origin=origin,
+        timeout_seconds=timeout_seconds,
+        poll_attempts=poll_attempts,
+        sleep=sleep,
+    )
+
+
+def search_release_details(
+    settings: dict[str, Any],
+    request: dict[str, Any],
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """Resolve a film *title* to the physical releases that carry it.
+
+    The entry point a scan falls back to when no source could identify the
+    scanned barcode: the film is known by name, the pressing is not, and the
+    answer is a list to choose from rather than a single release.
+    """
+    origin = enforced_origin()
+    timeout_seconds, poll_attempts = _release_details_bounds(settings)
+    payload = _release_details_search_payload(request)
+    status, content = _release_details_http(
+        f"{origin}/v2/release-details/search",
+        method="POST",
+        timeout_seconds=timeout_seconds,
+        payload=payload,
+    )
+    return _poll_release_details(
+        _decode_release_details_response(status, content),
+        origin=origin,
+        timeout_seconds=timeout_seconds,
+        poll_attempts=poll_attempts,
+        sleep=sleep,
+    )
 
 
 def _content_digest_sha256(value: Any) -> bytes:

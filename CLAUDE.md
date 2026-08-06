@@ -156,6 +156,28 @@ Or enable the pre-commit hook once per clone/worktree so it happens automaticall
 git config core.hooksPath .githooks
 ```
 
+### Re-check the bump right before merging
+
+**A bump is only valid against the base as it is at merge time.** The guard requires
+`app/VERSION` to be *strictly greater* than the version on `release/v26-beta`, and both the
+helper and the pre-commit hook can only compare against the base as it looked when you
+committed. If another PR merges into beta while yours is open and bumps to the same patch
+number, your bump silently goes stale and the guard fails with `… is not strictly greater than
+the actual base … - this is stale/redundant, not a real bump`.
+
+So before merging — not only before opening the PR:
+
+```sh
+git fetch origin release/v26-beta
+git rebase origin/release/v26-beta      # or merge the base in
+python app/scripts/bump_version.py      # moves past the *new* base
+```
+
+**Never merge a PR whose version guard is red, and say so when someone is about to.** Merging
+anyway lands two different code states on beta under one version, so the beta image tag stops
+identifying a build, and repairing it costs a second PR that does nothing but bump. This has
+happened twice: #473/#474, and #516/#517 (repaired by #520).
+
 ---
 
 ## Classify the work first — bug / feature / other
@@ -243,8 +265,10 @@ source.
    (mirroring the Copilot trailer the Copilot doc mandates), unless the user opts out.
 5. Push and open the PR **into `release/v26-beta`** with the same type prefix in its title.
 6. Confirm translations are complete across all locales.
-7. Let it build/test on the beta channel before considering promotion.
-8. After the PR merges, delete the feature branch — unless it is the active session branch or a
+7. Before the PR is merged, re-check the bump against the *current* base — beta may have moved
+   while the PR was open, which makes an earlier bump stale.
+8. Let it build/test on the beta channel before considering promotion.
+9. After the PR merges, delete the feature branch — unless it is the active session branch or a
    permanent branch.
 
 ### When asked to "ship", "promote", or "push to main"

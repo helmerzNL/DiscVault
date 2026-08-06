@@ -6404,6 +6404,76 @@ def ui_preview_html(
     .import-barcode-form button {
       min-height: 40px;
     }
+    .release-fallback:empty {
+      display: none;
+    }
+    .release-fallback-card {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .release-fallback-stage {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+    }
+    .release-fallback-stage::before {
+      content: "";
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--line);
+      border-top-color: var(--accent, currentColor);
+      animation: releaseFallbackSpin .9s linear infinite;
+      flex: none;
+    }
+    @keyframes releaseFallbackSpin {
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .release-fallback-stage::before {
+        animation-duration: 3s;
+      }
+    }
+    .release-fallback-meta {
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    .release-fallback-list {
+      display: grid;
+      gap: 10px;
+    }
+    .release-fallback-option {
+      display: grid;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .release-fallback-option.selected {
+      border-color: var(--accent, currentColor);
+    }
+    .release-fallback-facts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .release-fallback-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    @media (max-width: 720px) {
+      .release-fallback-actions .primary-button,
+      .release-fallback-actions .secondary-button {
+        width: 100%;
+      }
+    }
     @media (max-width: 720px) {
       .import-result-action-footer {
         justify-content: stretch;
@@ -14054,6 +14124,20 @@ def ui_preview_html(
             <h2 data-next-i18n="stats.byRating">By rating</h2>
             <div class="stats-bars" id="statsByRating"></div>
           </div>
+          <div class="stats-block stats-price-trend" id="statsCollectionValueChartSection">
+            <div class="stats-price-toolbar">
+              <h2 data-next-i18n="stats.collectionValueChartTitle">Collection value over time</h2>
+            </div>
+            <p class="stats-empty hidden" id="statsCollectionValueChartEmpty"></p>
+            <div class="stats-price-chart hidden" id="statsCollectionValueChartWrap">
+              <svg viewBox="0 0 640 220" preserveAspectRatio="none" id="statsCollectionValueChart" aria-hidden="true"></svg>
+              <div class="stats-price-axis">
+                <span id="statsCollectionValueChartRangeStart"></span>
+                <span id="statsCollectionValueChartRangeEnd"></span>
+              </div>
+            </div>
+            <div class="stats-price-summary" id="statsCollectionValueChartSummary"></div>
+          </div>
           <div class="stats-block stats-price-trend hidden" id="statsPriceTrendSection">
             <div class="stats-price-toolbar">
               <h2 data-next-i18n="stats.priceTrendTitle">Wishlist price trend</h2>
@@ -14347,6 +14431,7 @@ def ui_preview_html(
                 <div class="import-batch-list" id="boxSetBuilderMemberList"></div>
               </section>
             </div>
+            <div class="release-fallback" id="importReleaseFallback"></div>
             <div class="import-result-list" id="importBarcodeResults"></div>
           </div>
         </section>
@@ -15086,6 +15171,15 @@ def ui_preview_html(
                     <label for="containerEditLocationSelect">
                       <span data-next-i18n="locations.assign">Storage location</span>
                       <select id="containerEditLocationSelect" name="locationId"></select>
+                    </label>
+                    <label for="containerEditEstimatedValue" class="container-value-field hidden" id="containerEditEstimatedValueField">
+                      <span data-next-i18n="containerDetail.estimatedValue">Estimated value</span>
+                      <input id="containerEditEstimatedValue" name="estimated_value" inputmode="decimal" maxlength="12" autocomplete="off">
+                      <small class="field-hint" data-next-i18n="containerDetail.estimatedValueHelp">The price of the box-set as a whole. Films inside it do not carry a price of their own.</small>
+                    </label>
+                    <label for="containerEditEstimatedValueCurrency" class="container-value-field hidden" id="containerEditEstimatedValueCurrencyField">
+                      <span data-next-i18n="containerDetail.estimatedValueCurrency">Currency</span>
+                      <select id="containerEditEstimatedValueCurrency" name="estimated_value_currency"></select>
                     </label>
                   </div>
                 </div>
@@ -17393,7 +17487,7 @@ def ui_preview_html(
       window.addEventListener("focus", checkForAppUpdate);
     }
     registerAppUpdateChecks();
-    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera", boxSetBuilder: {target: null, members: [], captureToCamera: false, busy: false}};
+    let importCenter = {report: null, jobs: [], selectedSourceId: "", sourcePath: "", preview: null, upload: null, uploadCandidates: [], columnMapping: {}, reviewDecisions: {}, reviewMatches: {}, reviewManual: {}, reviewSearch: {}, barcodeLookup: null, selectedMovieCandidateKey: "", selectedBoxSetProposalKey: "", selectedBoxSetProposalSnapshot: null, boxSetMemberEdits: {}, addResult: null, lookupPreviewMessage: "", lookupPreviewTone: "", lookupActionMessage: "", lookupActionTone: "", batchBarcodes: [], batchResults: [], batchRunning: false, activeBatchBarcode: "", activeTab: "add", activeMethod: "camera", boxSetBuilder: {target: null, members: [], captureToCamera: false, busy: false}, releaseFallback: null};
     let bulkLastResult = null;
     let longPressSuppressUntil = 0;
     let importScanner = {
@@ -27448,8 +27542,8 @@ def ui_preview_html(
         ...codes.map((code) => `<option value="${escapeHtml(code)}"${code === chosen ? " selected" : ""}>${escapeHtml(code)}</option>`)
       ].join("");
     }
-    function fillMovieEditEstimatedValueCurrency(stored) {
-      const select = document.getElementById("movieEditEstimatedValueCurrency");
+    function fillMovieEditEstimatedValueCurrency(stored, elementId) {
+      const select = document.getElementById(elementId || "movieEditEstimatedValueCurrency");
       if (!select || document.activeElement === select) return;
       // Empty stays empty rather than being pre-filled with the display
       // preference: that preference can change later, and it must never
@@ -27514,6 +27608,7 @@ def ui_preview_html(
       fillMovieEditCheckboxGroup("movieEditVideoCodecs", specList("video_codecs"));
       fillMovieEditCheckboxGroup("movieEditRegions", specList("regions"));
       fillMovieEditEstimatedValueCurrency(movie.estimated_value_currency);
+      applyMovieEstimatedValueLock(detail);
       fillMovieEditAudioTracks(specList("audio_tracks"));
       fillMovieEditSubtitles(specList("subtitles"));
       setupMovieEditTrackEditors();
@@ -27523,6 +27618,35 @@ def ui_preview_html(
         populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
       }
       setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
+    }
+    // While a film sits inside a box-set, the set carries the money for
+    // everything in it. The field is blanked and disabled rather than cleared in
+    // the database: taking the film back out restores exactly what was typed.
+    function applyMovieEstimatedValueLock(detail) {
+      const locked = !!(detail || {}).estimatedValueLocked;
+      const owner = (detail || {}).estimatedValueLockedBy || {};
+      const valueInput = document.getElementById("movieEditEstimatedValue");
+      const currencySelect = document.getElementById("movieEditEstimatedValueCurrency");
+      [valueInput, currencySelect].forEach((element) => {
+        if (!element) return;
+        element.disabled = locked;
+        if (locked) element.value = "";
+      });
+      const hintId = "movieEditEstimatedValueLockHint";
+      let hint = document.getElementById(hintId);
+      if (!locked) {
+        if (hint) hint.remove();
+        return;
+      }
+      if (!hint) {
+        hint = document.createElement("small");
+        hint.id = hintId;
+        hint.className = "field-hint";
+        valueInput?.closest("label")?.appendChild(hint);
+      }
+      hint.textContent = owner.title
+        ? tNext("movieDetail.estimatedValueLockedBy", "Managed by box-set {title}").replace("{title}", owner.title)
+        : tNext("movieDetail.estimatedValueLocked", "Managed by the box-set this film belongs to");
     }
     function movie_locked_fields_from_metadata(metadata) {
       const raw = (metadata && (metadata.field_locks || metadata.fieldLocks)) || [];
@@ -28145,7 +28269,16 @@ def ui_preview_html(
         [tNext("locations.assign", "Storage location"), storageLocationHtml ? {text: storageLocationLabel, html: storageLocationHtml} : storageLocationLabel],
         [tNext("movieDetail.partOfCollection", "Part of collection"), releaseContainerText ? {text: releaseContainerText, html: releaseContainerHtml} : ""],
         [tNext("movieDetail.distributor", "Distributor"), metadata.distributor],
-        [tNext("movieDetail.estimatedValue", "Estimated value"), formatEstimatedValue(movie.estimated_value, movie.estimated_value_currency)],
+        [
+          tNext("movieDetail.estimatedValue", "Estimated value"),
+          // A member of a box-set shows why it has no value of its own rather
+          // than an empty cell that reads like missing data.
+          detail.estimatedValueLocked
+            ? ((detail.estimatedValueLockedBy || {}).title
+                ? tNext("movieDetail.estimatedValueLockedBy", "Managed by box-set {title}").replace("{title}", detail.estimatedValueLockedBy.title)
+                : tNext("movieDetail.estimatedValueLocked", "Managed by the box-set this film belongs to"))
+            : formatEstimatedValue(movie.estimated_value, movie.estimated_value_currency)
+        ],
         ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
       ];
       document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
@@ -28483,6 +28616,21 @@ def ui_preview_html(
         const currentLocationId = (container.location && container.location.id) || container.location_id || "";
         populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
       }
+      const valueInput = document.getElementById("containerEditEstimatedValue");
+      if (valueInput && document.activeElement !== valueInput) {
+        valueInput.value = container.estimated_value == null ? "" : String(container.estimated_value);
+      }
+      fillMovieEditEstimatedValueCurrency(container.estimated_value_currency, "containerEditEstimatedValueCurrency");
+      syncContainerValueFieldVisibility(typeInput ? typeInput.value : container.container_type);
+    }
+    // Only a box-set is bought as one product for one price. A vault or a
+    // collection arranges what you already own, so offering a second amount
+    // there would double-count the shelf - the backend rejects it too.
+    function syncContainerValueFieldVisibility(containerType) {
+      const isBoxSet = String(containerType || "") === "box_set";
+      document.querySelectorAll(".container-value-field").forEach((field) => {
+        field.classList.toggle("hidden", !isBoxSet);
+      });
     }
     function renderContainerAddForms(detail = activeContainerPayload || {}) {
       const container = detail.container || {};
@@ -28654,7 +28802,12 @@ def ui_preview_html(
         [tNext("containerDetail.aggregateMovieCount", "Movies in scope"), summary.movieCount || directMovieCount],
         [tNext("containerDetail.items", "items"), collectionItemCount || directMovieCount],
         [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork],
-        [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount]
+        [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount],
+        // Only a box-set carries a price of its own; a vault or a collection is
+        // worth the sum of what it holds.
+        ...(container.container_type === "box_set"
+          ? [[tNext("containerDetail.estimatedValue", "Estimated value"), formatEstimatedValue(container.estimated_value, container.estimated_value_currency)]]
+          : [])
       ]);
       bindContainerDetailLinks("containerDetailOverviewFields");
       renderContainerEditSummary(detail);
@@ -29365,6 +29518,12 @@ def ui_preview_html(
         description: formTextValue("containerEditDescription"),
         locationId: document.getElementById("containerEditLocationSelect")?.value || null
       };
+      // Only send the value for a box-set. Sending it for a vault or a
+      // collection - even as an empty string - is a 400 from the API.
+      if (requestedType === "box_set") {
+        body.estimatedValue = formTextValue("containerEditEstimatedValue");
+        body.estimatedValueCurrency = formTextValue("containerEditEstimatedValueCurrency");
+      }
       try {
         const payload = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}`, {
           method: "PATCH",
@@ -33123,6 +33282,7 @@ def ui_preview_html(
       renderImportJobs();
       renderImportFormatOptions();
       renderBarcodeLookup();
+      renderReleaseFallback();
       renderImportBatchList();
       renderBoxSetBuilder();
       applyAppPermissionVisibility();
@@ -33260,6 +33420,375 @@ def ui_preview_html(
       if (barcodeBoxSetProposals().length) return true;
       return false;
     }
+    // ---- MovieVault v2 release-details fallback ------------------------------
+    //
+    // A scanned barcode used to have two endings: a film, or nothing. This is
+    // the third. When no source can identify the EAN, MovieVault can still find
+    // the title printed on the box and search it, which returns several
+    // pressings of one film. The server cannot choose between them; the person
+    // holding the disc can. See App-Guidance
+    // `docs/apps/discvault/adding-a-title.md` for the rules this implements.
+    //
+    // The chain behind the answer is three network calls into an external source
+    // that paces itself at one request every five seconds, so ten to twenty
+    // seconds is normal rather than a symptom. The client waits out the server's
+    // whole poll budget: quitting early cancels nothing - the resolution
+    // completes and stays cached for about fifteen minutes either way - it only
+    // means this scan shows nothing while the next scan of the same disc answers
+    // instantly.
+    const RELEASE_FALLBACK_TIMEOUT_MS = 45000;
+    // Stage text advances on a clock so a long wait reads as progress rather
+    // than as a stall. This is the accessible content of the wait screen.
+    const RELEASE_FALLBACK_STAGES = [
+      {at: 0, key: "releaseFallback.stageShelf", text: "Checking your shelf..."},
+      {at: 2000, key: "releaseFallback.stageAsk", text: "Asking MovieVault..."},
+      {at: 8000, key: "releaseFallback.stageRelease", text: "Looking up the release..."},
+      {at: 18000, key: "releaseFallback.stageDisc", text: "Reading the disc details..."}
+    ];
+    let releaseFallbackStageTimers = [];
+    function stopReleaseFallbackStages() {
+      releaseFallbackStageTimers.forEach((timer) => window.clearTimeout(timer));
+      releaseFallbackStageTimers = [];
+    }
+    function startReleaseFallbackStages() {
+      stopReleaseFallbackStages();
+      releaseFallbackStageTimers = RELEASE_FALLBACK_STAGES.slice(1).map((stage, index) =>
+        window.setTimeout(() => {
+          if (!importCenter.releaseFallback || importCenter.releaseFallback.phase !== "waiting") return;
+          importCenter.releaseFallback.stageIndex = index + 1;
+          renderReleaseFallback();
+        }, stage.at)
+      );
+    }
+    // The list is dropped when the flow starts over - a new scan, a new search,
+    // manual entry from the hub - and when a save completes. Otherwise a Back
+    // button turns up on an unrelated screen, pointing at a previous scan's
+    // editions.
+    function resetReleaseFallback() {
+      stopReleaseFallbackStages();
+      importCenter.releaseFallback = null;
+      renderReleaseFallback();
+    }
+    function releaseFallbackCandidates() {
+      const fallback = importCenter.releaseFallback;
+      return Array.isArray(fallback?.releases) ? fallback.releases : [];
+    }
+    function selectedReleaseFallbackCandidate() {
+      const fallback = importCenter.releaseFallback;
+      const index = Number(fallback?.chosenIndex);
+      const candidates = releaseFallbackCandidates();
+      return Number.isInteger(index) && index >= 0 && index < candidates.length ? candidates[index] : null;
+    }
+    function setImportFormatValue(value) {
+      const select = document.getElementById("importFormatInput");
+      const normalized = normalizedMovieFormatValue(value || "");
+      if (!select || !normalized) return;
+      // A collector-only format the picker currently hides must still be
+      // representable, or the control cannot show its own value and the next
+      // save silently rewrites the disc to whatever the picker defaulted to.
+      if (!Array.from(select.options).some((option) => option.value === normalized)) {
+        select.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(normalized)}">${escapeHtml(normalized)}</option>`);
+      }
+      select.value = normalized;
+    }
+    // The format is filled in only when every candidate names the same one.
+    // When they disagree, the client's default stays and the user chooses:
+    // guessing between a DVD and a 4K UHD is wrong half the time, and a wrong
+    // format attaches a wrong technical profile to the disc.
+    function agreedReleaseFallbackFormat() {
+      const formats = releaseFallbackCandidates()
+        .map((candidate) => normalizedMovieFormatValue(candidate?.format || ""))
+        .filter(Boolean);
+      if (!formats.length || formats.length !== releaseFallbackCandidates().length) return "";
+      return formats.every((value) => value === formats[0]) ? formats[0] : "";
+    }
+    // They are all editions of one film. What is in doubt is which pressing,
+    // not which film - so the title, year and identifiers the server just named
+    // are carried over rather than made the user's work again.
+    function applyReleaseFallbackFilm() {
+      const film = importCenter.releaseFallback?.film || {};
+      const titleInput = document.getElementById("importTitleInput");
+      const yearInput = document.getElementById("importYearInput");
+      const tmdbInput = document.getElementById("importTmdbIdInput");
+      const imdbInput = document.getElementById("importImdbIdInput");
+      if (titleInput && film.title) titleInput.value = film.title;
+      if (yearInput && film.year) yearInput.value = String(film.year);
+      if (tmdbInput && film.tmdbMovieId) tmdbInput.value = String(film.tmdbMovieId);
+      if (imdbInput && film.imdbId) imdbInput.value = String(film.imdbId);
+    }
+    // Picking a second edition fully reassigns every field an edition governs.
+    // Filling only what the new candidate happens to carry would let the first
+    // choice's release title or format survive into the second.
+    function chooseReleaseFallbackCandidate(index) {
+      const candidates = releaseFallbackCandidates();
+      const position = Number(index);
+      if (!importCenter.releaseFallback || !Number.isInteger(position)) return;
+      if (position < 0 || position >= candidates.length) return;
+      importCenter.releaseFallback.chosenIndex = position;
+      importCenter.releaseFallback.manual = false;
+      applyReleaseFallbackFilm();
+      // `format` is the deliberate exception: it has no unset value, so a
+      // candidate that names none leaves whatever was already selected.
+      setImportFormatValue(candidates[position]?.format || "");
+      renderReleaseFallback();
+      setImportLookupActionMessage(
+        tNext("releaseFallback.editionSelected", "Edition selected. Add the movie to save it."),
+        "good"
+      );
+    }
+    // The list always offers a way out that is not "cancel".
+    function useReleaseFallbackManualEntry() {
+      if (!importCenter.releaseFallback) return;
+      importCenter.releaseFallback.chosenIndex = -1;
+      importCenter.releaseFallback.manual = true;
+      applyReleaseFallbackFilm();
+      setImportFormatValue(agreedReleaseFallbackFormat());
+      renderReleaseFallback();
+      setImportMethodTab("single");
+      document.getElementById("importTitleInput")?.focus();
+      setImportLookupActionMessage(
+        tNext("releaseFallback.manualPrefilled", "Details carried over. Complete the form and add the movie."),
+        ""
+      );
+    }
+    function releaseFallbackFactList(candidate) {
+      const facts = [];
+      const push = (value) => { if (value) facts.push(value); };
+      // Only what actually differs between editions of one film: the title is
+      // stated once at the top, so repeating it per row is six identical rows.
+      push(normalizedMovieFormatValue(candidate.format || ""));
+      push(candidate.edition);
+      push(candidate.region);
+      push(enumListText(candidate.discRegions, discRegionLabel));
+      if (candidate.discCount) {
+        push(`${candidate.discCount} ${tNext("releaseFallback.discs", "discs")}`);
+      }
+      push(enumListText(candidate.packaging, packagingLabel));
+      const video = candidate.video && typeof candidate.video === "object" ? candidate.video : {};
+      push(video.resolution);
+      push(enumListText(video.codecs, videoCodecLabel));
+      push(enumListText(video.hdrFormats, hdrFormatLabel));
+      push(enumListText(video.aspectRatios, (value) => String(value || "")));
+      if (candidate.countryCode) push(candidate.countryCode);
+      if (candidate.releaseDate) push(candidate.releaseDate);
+      return facts;
+    }
+    function releaseFallbackOptionHtml(candidate, index) {
+      const selected = Number(importCenter.releaseFallback?.chosenIndex) === index;
+      const facts = releaseFallbackFactList(candidate);
+      const audio = audioTracksText(candidate.audioTracks);
+      // Show the typed tracks only. `subtitleLanguages` is derived from
+      // `subtitles` upstream, so showing both is showing one fact twice.
+      const subtitles = Array.isArray(candidate.subtitles) && candidate.subtitles.length
+        ? subtitlesText(candidate.subtitles)
+        : (Array.isArray(candidate.subtitleLanguages) ? candidate.subtitleLanguages.map(languageWithCode).filter(Boolean).join(", ") : "");
+      return `
+        <div class="release-fallback-option ${selected ? "selected" : ""}">
+          <div class="release-fallback-facts">
+            ${facts.map((fact) => `<span class="tag">${escapeHtml(fact)}</span>`).join("")
+              || `<span class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.noDistinguishingFacts", "This source published no distinguishing details for this pressing."))}</span>`}
+          </div>
+          ${audio ? `<div class="release-fallback-meta"><strong>${escapeHtml(tNext("movieDetail.audio", "Audio"))}:</strong> ${escapeHtml(audio)}</div>` : ""}
+          ${subtitles ? `<div class="release-fallback-meta"><strong>${escapeHtml(tNext("movieDetail.subtitles", "Subtitles"))}:</strong> ${escapeHtml(subtitles)}</div>` : ""}
+          <div class="release-fallback-actions">
+            <button type="button" class="${selected ? "secondary-button" : "primary-button"}" data-release-fallback-choose="${index}">
+              ${escapeHtml(selected
+                ? tNext("releaseFallback.editionChosen", "Chosen")
+                : tNext("releaseFallback.useEdition", "Use this edition"))}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    function releaseFallbackRetryHtml() {
+      const fallback = importCenter.releaseFallback || {};
+      if (!fallback.retryable) return "";
+      return `<button type="button" class="secondary-button" data-release-fallback-retry="1">${escapeHtml(tNext("releaseFallback.retry", "Try again"))}</button>`;
+    }
+    // A client may only report "not found" when a MovieVault route actually
+    // answered. A transport failure is reported as a transport failure, with
+    // the suggestion to retry - collapsing the two tells the user something
+    // false about the catalogue's contents.
+    function releaseFallbackOutcomeMessage() {
+      const fallback = importCenter.releaseFallback || {};
+      if (fallback.status === "miss") {
+        return {
+          tone: "",
+          text: tNext("releaseFallback.miss", "MovieVault does not have this disc. Add it by hand below.")
+        };
+      }
+      if (fallback.status === "ambiguous") {
+        return {
+          tone: "warn",
+          text: tNext("releaseFallback.ambiguous", "The sources did not agree on which film this disc is, so it was not identified. Add it by hand below.")
+        };
+      }
+      if (fallback.failureKind === "needs_year") {
+        return {
+          tone: "warn",
+          text: tNext("releaseFallback.needsYear", "Several films share this title. Add the year and search again.")
+        };
+      }
+      if (fallback.failureKind === "catalog_defect") {
+        return {
+          tone: "bad",
+          text: tNext("releaseFallback.catalogDefect", "MovieVault holds this release but cannot publish it. Trying again will not help; add the disc by hand below.")
+        };
+      }
+      if (fallback.answered === false) {
+        return {
+          tone: "bad",
+          text: fallback.failureKind === "pending"
+            ? tNext("releaseFallback.stillWorking", "MovieVault is still working on this lookup. Search again in a moment - the finished result is kept ready.")
+            : tNext("releaseFallback.unreachable", "MovieVault could not be reached, so nothing is known about this disc yet. This is usually temporary.")
+        };
+      }
+      if (fallback.status === "failed") {
+        return {
+          tone: "bad",
+          text: tNext("releaseFallback.failed", "MovieVault could not complete this lookup.")
+        };
+      }
+      return {tone: "", text: ""};
+    }
+    function renderReleaseFallback() {
+      const host = document.getElementById("importReleaseFallback");
+      if (!host) return;
+      const fallback = importCenter.releaseFallback;
+      if (!fallback) {
+        host.innerHTML = "";
+        return;
+      }
+      const query = fallback.query || {};
+      const queryLabel = query.barcode || query.title || "";
+      if (fallback.phase === "waiting") {
+        const stage = RELEASE_FALLBACK_STAGES[Math.min(Number(fallback.stageIndex) || 0, RELEASE_FALLBACK_STAGES.length - 1)];
+        host.innerHTML = `
+          <div class="release-fallback-card">
+            <div class="release-fallback-stage" role="status" aria-live="polite">${escapeHtml(tNext(stage.key, stage.text))}</div>
+            <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.waitHelp", "Looking this disc up outside your own catalogue can take up to half a minute."))}${queryLabel ? ` ${escapeHtml(queryLabel)}` : ""}</div>
+          </div>
+        `;
+        return;
+      }
+      const candidates = releaseFallbackCandidates();
+      const film = fallback.film || {};
+      const outcome = releaseFallbackOutcomeMessage();
+      if (!candidates.length) {
+        host.innerHTML = `
+          <div class="release-fallback-card">
+            <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.title", "Not recognized by barcode"))}</div>
+            ${outcome.text ? `<div class="login-message ${escapeHtml(outcome.tone)}">${escapeHtml(outcome.text)}</div>` : ""}
+            <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.searchByTitleHelp", "Type the title printed on the box and search MovieVault for its pressings."))}</div>
+            <div class="release-fallback-actions">
+              <button type="button" class="primary-button" data-release-fallback-title="1">${escapeHtml(tNext("releaseFallback.searchByTitle", "Search by title"))}</button>
+              ${releaseFallbackRetryHtml()}
+              <button type="button" class="secondary-button" data-release-fallback-dismiss="1">${escapeHtml(tNext("common.close", "Close"))}</button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+      const filmLine = [film.title, film.year ? `(${film.year})` : ""].filter(Boolean).join(" ");
+      host.innerHTML = `
+        <div class="release-fallback-card">
+          <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.pickEdition", "Which pressing is this?"))}</div>
+          <div><strong>${escapeHtml(filmLine)}</strong></div>
+          <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.pickEditionHelp", "The film was identified but the barcode was not confirmed by any of these pressings. Pick the one you are holding."))}</div>
+          ${fallback.verificationStatus === "unreviewed_external"
+            ? `<div class="login-message warn">${escapeHtml(tNext("releaseFallback.unreviewed", "These details come from an outside source and have not been reviewed by MovieVault yet. Check them before saving."))}</div>`
+            : ""}
+          <div class="release-fallback-list">
+            ${candidates.map(releaseFallbackOptionHtml).join("")}
+          </div>
+          <div class="release-fallback-actions">
+            <button type="button" class="secondary-button" data-release-fallback-manual="1">${escapeHtml(tNext("releaseFallback.noneOfThese", "None of these - enter details myself"))}</button>
+            <button type="button" class="secondary-button" data-release-fallback-dismiss="1">${escapeHtml(tNext("common.close", "Close"))}</button>
+          </div>
+        </div>
+      `;
+    }
+    async function runReleaseDetailsFallback(query) {
+      if (!hasAnyPermission(APP_PERMISSION_GROUPS.mediaAdd)) return null;
+      const request = {
+        barcode: String(query?.barcode || "").trim(),
+        title: String(query?.title || "").trim(),
+        year: String(query?.year || "").trim(),
+        format: String(query?.format || "").trim(),
+        edition: String(query?.edition || "").trim()
+      };
+      if (!request.barcode && !request.title) return null;
+      stopReleaseFallbackStages();
+      importCenter.releaseFallback = {
+        phase: "waiting",
+        query: request,
+        stageIndex: 0,
+        film: {},
+        releases: [],
+        chosenIndex: -1,
+        manual: false
+      };
+      renderReleaseFallback();
+      startReleaseFallbackStages();
+      try {
+        const payload = await authApiJson("/api/next/import/release-details/search", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          timeoutMs: RELEASE_FALLBACK_TIMEOUT_MS,
+          body: JSON.stringify(request)
+        });
+        const result = payload.result || {};
+        importCenter.releaseFallback = {
+          ...importCenter.releaseFallback,
+          phase: "done",
+          status: String(result.status || ""),
+          answered: result.answered !== false,
+          retryable: Boolean(result.retryable),
+          failureKind: String(result.failureKind || ""),
+          errorCode: String(result.errorCode || ""),
+          verificationStatus: String(result.verificationStatus || ""),
+          film: result.film || {},
+          releases: Array.isArray(result.releases) ? result.releases : []
+        };
+        return importCenter.releaseFallback;
+      } catch (error) {
+        // The route answers resolver failures in its body, so only a
+        // DiscVault-side transport failure reaches here. Keep the specific
+        // message: one generic label for every failure mode records only that
+        // something went wrong, which the status already said.
+        importCenter.releaseFallback = {
+          ...importCenter.releaseFallback,
+          phase: "done",
+          status: "failed",
+          answered: false,
+          retryable: true,
+          failureKind: "transport",
+          errorCode: "request_failed",
+          message: error.message || String(error),
+          film: {},
+          releases: []
+        };
+        console.warn("release-details fallback failed", error);
+        return importCenter.releaseFallback;
+      } finally {
+        stopReleaseFallbackStages();
+        renderReleaseFallback();
+      }
+    }
+    async function searchReleaseFallbackByTitle() {
+      const title = String(document.getElementById("importTitleInput")?.value || "").trim();
+      if (!title) {
+        setImportMethodTab("single");
+        document.getElementById("importTitleInput")?.focus();
+        setImportCenterMessage(tNext("releaseFallback.titleRequired", "Type the title printed on the box first."), "warn");
+        return;
+      }
+      await runReleaseDetailsFallback({
+        title,
+        year: String(document.getElementById("importYearInput")?.value || "").trim(),
+        format: String(document.getElementById("importFormatInput")?.value || "").trim()
+      });
+    }
     async function previewBarcodeImport(event) {
       event?.preventDefault();
       if (event) importCenter.activeBatchBarcode = "";
@@ -33278,6 +33807,8 @@ def ui_preview_html(
         return;
       }
       setImportCenterMessage(tNext("importCenter.previewingLookup", "Searching metadata..."));
+      // A new search starts the flow over, so the previous scan's editions go.
+      resetReleaseFallback();
       importCenter.barcodeLookup = null;
       importCenter.addResult = null;
       importCenter.selectedMovieCandidateKey = "";
@@ -33302,10 +33833,27 @@ def ui_preview_html(
         importCenter.lookupPreviewTone = "";
         setImportLookupActionMessage("", "");
         renderBarcodeLookup();
-        if (barcode && !title && !barcodeLookupHasMatch()) {
-          const notRecognized = tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this movie manually.");
-          setImportLookupActionMessage(notRecognized, "warn");
-          setImportCenterMessage(notRecognized, "warn");
+        // Not during a bulk batch sweep: the fallback is a ten-to-twenty second
+        // chain per barcode, which would turn a twenty-line batch into ten
+        // minutes of waiting. The sweep reports the miss and the deeper lookup
+        // runs when the user opens that line.
+        if (barcode && !barcodeLookupHasMatch() && !importCenter.batchRunning) {
+          // The catalog-first order is unchanged: only once the local route has
+          // recognized nothing does the anonymous v2 resolver get asked. It may
+          // still identify the film by the title on the box and answer with the
+          // pressings it found, which is a choice - not a miss.
+          setImportCenterMessage(tNext("releaseFallback.stageAsk", "Asking MovieVault..."));
+          const fallback = await runReleaseDetailsFallback({barcode, title, year, format});
+          if (fallback?.releases?.length) {
+            setImportCenterMessage(tNext("releaseFallback.pickEdition", "Which pressing is this?"), "warn");
+            setImportLookupActionMessage(tNext("releaseFallback.pickEdition", "Which pressing is this?"), "warn");
+          } else {
+            const outcome = releaseFallbackOutcomeMessage();
+            const notRecognized = outcome.text
+              || tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this movie manually.");
+            setImportLookupActionMessage(notRecognized, outcome.tone || "warn");
+            setImportCenterMessage(notRecognized, outcome.tone || "warn");
+          }
         } else {
           setImportCenterMessage(tNext("importCenter.previewReady", "Preview ready."), "good");
         }
@@ -33435,6 +33983,10 @@ def ui_preview_html(
             boxSetProposal: wantsBoxSet ? selectedProposalPayload : null,
             selectedBoxSetCandidate: wantsBoxSet ? selectedProposalPayload : null,
             boxSetMembers: wantsBoxSet ? boxSetMembers : [],
+            // The edition the user picked from the v2 candidate list describes
+            // the disc in their hand, so the server applies it over whatever a
+            // metadata source guessed for the film.
+            releaseCandidate: wantsBoxSet ? null : selectedReleaseFallbackCandidate(),
             metadataPreview: importCenter.barcodeLookup || null
           })
         });
@@ -33453,6 +34005,8 @@ def ui_preview_html(
             : "Movie added.";
         setImportLookupActionMessage(tNext(messageKey, messageFallback), "good");
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
+        // The save completed, so the list it came from is done with.
+        resetReleaseFallback();
         renderBarcodeLookup();
         const activeBatchBarcode = importCenter.activeBatchBarcode || "";
         const batchRow = activeBatchBarcode && normalizeImportBarcode(activeBatchBarcode) === barcode
@@ -35586,7 +36140,7 @@ def ui_preview_html(
       };
       render();
     }
-    const statsState = {loaded: false, data: null, selectedPriceTrendMovieId: null, showPriceTrendFigures: false};
+    const statsState = {loaded: false, data: null, valueHistory: [], selectedPriceTrendMovieId: null, showPriceTrendFigures: false};
     function statsBarsHtml(rows) {
       const items = (rows || []).filter((row) => (row.count || 0) > 0);
       if (!items.length) {
@@ -35859,6 +36413,121 @@ def ui_preview_html(
         }).join("");
       }
     }
+    // The worth of everything the user can see: every film that is not inside a
+    // box-set, plus each box-set's own price. The sub-label names what the total
+    // does not cover, so a half-filled collection is not read as a hard number.
+    function collectionValueCard(summary) {
+      if (!summary) return null;
+      const base = String(summary.baseCurrency || "EUR");
+      const total = Number(summary.total || 0);
+      const converted = convertPriceAmount(total, base, preferredPriceCurrency() || base);
+      const notes = [];
+      if (Number(summary.unpricedCount || 0) > 0) {
+        notes.push(tNext("stats.collectionValueUnpriced", "{count} without a price")
+          .replace("{count}", String(summary.unpricedCount)));
+      }
+      if (Number(summary.unconvertible || 0) > 0) {
+        notes.push(tNext("stats.collectionValueMixedCurrency", "excludes amounts with no currency"));
+      }
+      return {
+        label: tNext("stats.cardCollectionValue", "Collection value"),
+        value: formatStatsPrice(converted, preferredPriceCurrency() || base),
+        note: notes.join(" - ")
+      };
+    }
+    // The stored value-over-time series (sync-contract-side: the snapshots that
+    // `collection-value-and-box-set-pricing.md` §3 defines). Read-only: the chart
+    // never recomputes, so a gap is a day on which nothing changed and nobody
+    // opened this view.
+    function renderCollectionValueChart() {
+      const points = statsState.valueHistory || [];
+      const wrap = document.getElementById("statsCollectionValueChartWrap");
+      const emptyNode = document.getElementById("statsCollectionValueChartEmpty");
+      const summaryNode = document.getElementById("statsCollectionValueChartSummary");
+
+      // One point is not a trend. The series starts the day the snapshots
+      // shipped and there is deliberately no backfill, so saying "not yet"
+      // beats drawing a flat line that looks like a measurement.
+      if (points.length < 2) {
+        if (wrap) wrap.classList.add("hidden");
+        if (summaryNode) summaryNode.innerHTML = "";
+        if (emptyNode) {
+          emptyNode.classList.remove("hidden");
+          emptyNode.textContent = points.length === 1
+            ? tNext("stats.collectionValueChartOnePoint", "Recording has started. The chart appears once there is more than one day of history.")
+            : tNext("stats.collectionValueChartEmpty", "No history has been recorded yet. Points are captured as your collection changes.");
+        }
+        return;
+      }
+      if (emptyNode) emptyNode.classList.add("hidden");
+      if (wrap) wrap.classList.remove("hidden");
+
+      const display = preferredPriceCurrency() || String(points[points.length - 1].baseCurrency || "EUR");
+      // Convert for display only. The snapshot keeps its own base currency and
+      // its raw per-currency sums, so re-expressing a point here never rewrites
+      // what was recorded (§3.1).
+      const series = points.map((point) => ({
+        at: String(point.capturedOn || ""),
+        value: convertPriceAmount(Number(point.total || 0), String(point.baseCurrency || "EUR"), display),
+      }));
+
+      const chartNode = document.getElementById("statsCollectionValueChart");
+      const width = 640;
+      const height = 220;
+      const padding = { left: 40, right: 12, top: 10, bottom: 26 };
+      const times = series.map((point, index) => {
+        const parsed = Date.parse(point.at);
+        return Number.isFinite(parsed) ? parsed : index;
+      });
+      const minX = Math.min(...times);
+      const maxX = Math.max(...times) === minX ? minX + 1 : Math.max(...times);
+      const values = series.map((point) => point.value).filter((value) => Number.isFinite(value));
+      // A collection's worth is a magnitude, so the axis starts at zero: a
+      // zoomed baseline turns a 2% drift into a cliff.
+      const minY = Math.min(0, ...values);
+      const maxRaw = Math.max(...values);
+      const maxY = maxRaw === minY ? minY + 1 : maxRaw + Math.max((maxRaw - minY) * 0.1, 0.5);
+      const coords = series.map((point, index) => ({
+        x: padding.left + ((times[index] - minX) / (maxX - minX)) * (width - padding.left - padding.right),
+        y: height - padding.bottom - ((point.value - minY) / Math.max(maxY - minY, 0.0001)) * (height - padding.top - padding.bottom),
+      }));
+      const pathData = coords.map((coord, index) => `${index ? "L" : "M"}${coord.x.toFixed(2)} ${coord.y.toFixed(2)}`).join(" ");
+      const areaData = `${pathData} L${coords[coords.length - 1].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} L${coords[0].x.toFixed(2)} ${(height - padding.bottom).toFixed(2)} Z`;
+      const gridLines = [0, 1, 2, 3, 4].map((idx) => {
+        const y = padding.top + ((height - padding.top - padding.bottom) / 4) * idx;
+        return `<line x1="${padding.left}" y1="${y.toFixed(2)}" x2="${width - padding.right}" y2="${y.toFixed(2)}" stroke="var(--line)" stroke-width="1" opacity="0.45" />`;
+      }).join("");
+      // Markers stop helping once a daily series runs for a couple of months.
+      const circles = coords.length <= 40
+        ? coords.map((coord) => `<circle cx="${coord.x.toFixed(2)}" cy="${coord.y.toFixed(2)}" r="2.8" fill="var(--accent)" />`).join("")
+        : "";
+      if (chartNode) {
+        chartNode.innerHTML = `
+          <rect x="0" y="0" width="${width}" height="${height}" fill="transparent"></rect>
+          ${gridLines}
+          <path d="${areaData}" fill="var(--accent)" opacity="0.12"></path>
+          <path d="${pathData}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          ${circles}
+        `;
+      }
+      const startNode = document.getElementById("statsCollectionValueChartRangeStart");
+      const endNode = document.getElementById("statsCollectionValueChartRangeEnd");
+      if (startNode) startNode.textContent = formatAppDate(series[0].at);
+      if (endNode) endNode.textContent = formatAppDate(series[series.length - 1].at);
+
+      const change = series[series.length - 1].value - series[0].value;
+      const latest = points[points.length - 1] || {};
+      const tiles = [
+        { label: tNext("stats.collectionValueChartCurrent", "Current"), value: formatStatsPrice(series[series.length - 1].value, display) },
+        { label: tNext("stats.collectionValueChartChange", "Change"), value: `${change >= 0 ? "+" : ""}${formatStatsPrice(change, display)}` },
+        { label: tNext("stats.collectionValueChartPriced", "Items priced"), value: String(latest.pricedCount || 0) },
+      ];
+      if (summaryNode) {
+        summaryNode.innerHTML = tiles
+          .map((tile) => `<div class="stats-price-summary-item"><span>${escapeHtml(tile.label)}</span><strong>${escapeHtml(tile.value)}</strong></div>`)
+          .join("");
+      }
+    }
     function renderStatisticsView() {
       const data = statsState.data;
       const empty = document.getElementById("statsEmptyMessage");
@@ -35875,14 +36544,16 @@ def ui_preview_html(
         {label: tNext("stats.cardThisYear", "Watched this year"), value: watch.thisYear || 0},
         {label: tNext("stats.cardWishlist", "Wishlist"), value: data.wishlistCount || 0},
         {label: tNext("stats.cardOnLoan", "On loan"), value: loans.active || 0},
-        {label: tNext("stats.cardOverdue", "Overdue"), value: loans.overdue || 0}
-      ];
+        {label: tNext("stats.cardOverdue", "Overdue"), value: loans.overdue || 0},
+        collectionValueCard(data.collectionValue)
+      ].filter(Boolean);
       if (cards) {
         cards.innerHTML = cardDefs
           .map((card) => `
             <div class="stat-card">
               <strong>${escapeHtml(card.value)}</strong>
               <span>${escapeHtml(card.label)}</span>
+              ${card.note ? `<small>${escapeHtml(card.note)}</small>` : ""}
             </div>
           `)
           .join("");
@@ -35896,6 +36567,7 @@ def ui_preview_html(
       const byRating = document.getElementById("statsByRating");
       if (byRating) byRating.innerHTML = statsBarsHtml(data.byRating);
       renderStatsPriceTrend(data);
+      renderCollectionValueChart();
       if (empty) empty.classList.add("hidden");
     }
     async function loadStatisticsView(force = false) {
@@ -35912,6 +36584,15 @@ def ui_preview_html(
       try {
         const payload = await authApiJson("/api/next/stats/personal");
         statsState.data = payload;
+        // Separate endpoint, and deliberately not fatal: the snapshot series is
+        // a nice-to-have on this page, and losing it must not blank the counters
+        // the user came for.
+        try {
+          const history = await authApiJson("/api/next/stats/collection-value/history?scope=total");
+          statsState.valueHistory = Array.isArray(history && history.points) ? history.points : [];
+        } catch (historyError) {
+          statsState.valueHistory = [];
+        }
         statsState.loaded = true;
         renderStatisticsView();
       } catch (error) {
@@ -37294,6 +37975,13 @@ def ui_preview_html(
         notes: formTextValue("movieEditNotes"),
         fieldLocks: Array.from(movieEditLockedFields)
       };
+      // The box-set owns the value of its members: sending the blanked field
+      // would be a 409, and would ask the API to erase an amount the user still
+      // gets back the moment the film leaves the set.
+      if (document.getElementById("movieEditEstimatedValue")?.disabled) {
+        delete body.estimatedValue;
+        delete body.estimatedValueCurrency;
+      }
       let clearedUnlockedField = false;
       Object.entries(MOVIE_EDIT_LOCK_FIELDS).forEach(([inputId, field]) => {
         if (movieEditLockedFields.has(field)) return;
@@ -40519,8 +41207,48 @@ def ui_preview_html(
       }
       return {key: "other", order: 90, label: tNext("profile.permissionGroupOther", "Other")};
     }
+    function profileApiMcpToolLabels() {
+      return new Map(((profileApiAccess || {}).mcpTools || []).map((tool) => [tool.permission, tool.name]));
+    }
+    // Permission keys are wire identifiers, not something to put in front of a
+    // reader: "collection.add" says nothing about what a token may do. Every
+    // grantable key gets a plain-language name; the key itself stays available
+    // as the tag's tooltip and under the checkbox for anyone who needs it.
+    const PROFILE_API_PERMISSION_LABELS = {
+      "api.read": "Read your collection",
+      "api.write": "Change your collection",
+      "api.tokens.manage": "Manage API tokens",
+      "mcp.use": "Connect through MCP",
+      "mcp.logs.view": "View MCP activity",
+      "collection.view": "View films",
+      "collection.add": "Add films",
+      "collection.add_own": "Add own films",
+      "collection.import": "Import films",
+      "collection.edit_all": "Edit every film",
+      "collection.bulk_edit": "Edit films in bulk",
+      "containers.view": "View box sets and vaults",
+      "containers.create": "Create box sets and vaults",
+      "containers.edit": "Edit box sets and vaults",
+      "groups.view": "View groups",
+      "metadata.search": "Look up film data",
+      "metadata.refresh_one": "Refresh one film",
+      "metadata.refresh_bulk": "Refresh films in bulk",
+      "admin.view_jobs": "View background jobs",
+      "mcp.tool.search_collection": "Search the collection",
+      "mcp.tool.get_collection_stats": "Read collection statistics",
+      "mcp.tool.get_movie_details": "Read film details",
+      "mcp.tool.add_movie": "Add a film",
+      "mcp.tool.delete_movie": "Delete a film",
+      "mcp.tool.lookup_barcode": "Look up a barcode",
+      "mcp.tool.list_all_movies": "List every film",
+      "mcp.tool.get_watchlist": "Read the watchlist",
+      "mcp.tool.get_watch_history": "Read the watch history",
+      "mcp.tool.get_groups": "Read groups"
+    };
     function profileApiPermissionLabel(permission, mcpToolLabels) {
       const value = String(permission || "");
+      const known = PROFILE_API_PERMISSION_LABELS[value];
+      if (known) return tNext("profile.perm." + value, known);
       const toolLabel = mcpToolLabels && mcpToolLabels.get(value);
       if (toolLabel) return String(toolLabel).replaceAll("_", " ");
       if (value.startsWith("mcp.tool.")) return value.slice("mcp.tool.".length).replaceAll("_", " ");
@@ -40557,6 +41285,7 @@ def ui_preview_html(
                 <span>
                   ${escapeHtml(profileApiPermissionLabel(permission, toolLabels))}
                   <small>${escapeHtml(profileApiPermissionDescription(permission))}</small>
+                  <code>${escapeHtml(permission)}</code>
                 </span>
               </label>
             `).join("")}
@@ -40814,8 +41543,9 @@ def ui_preview_html(
                 ${escapeHtml(tNext("profile.created", "Created"))}: ${escapeHtml(shortDateTime(token.createdAt))}
                 &middot;
                 ${escapeHtml(tNext("profile.lastUsed", "Last used"))}: ${escapeHtml(shortDateTime(token.lastUsedAt))}
+                ${token.lastSeenIp ? `<br>${escapeHtml(tNext("profile.connectionLastSeenFrom", "Last used from"))}: <code>${escapeHtml(token.lastSeenIp)}</code>` : ""}
               </div>
-              <div class="admin-member-cloud">${permissionKeys.slice(0, 12).map((permission) => `<span class="tag">${escapeHtml(permission)}</span>`).join("")}</div>
+              <div class="admin-member-cloud">${permissionKeys.slice(0, 12).map((permission) => `<span class="tag" title="${escapeHtml(permission)}">${escapeHtml(profileApiPermissionLabel(permission, profileApiMcpToolLabels()))}</span>`).join("")}</div>
               ${!revoked ? `<div class="profile-passkey-actions"><button type="button" class="secondary-button danger" data-profile-api-token-revoke="${escapeHtml(token.id)}" data-profile-api-token-sessions="${escapeHtml(String(sessions))}">${escapeHtml(tNext("profile.revokeToken", "Revoke token"))}</button></div>` : ""}
             </article>
           `;
@@ -42130,6 +42860,37 @@ def ui_preview_html(
         }
         previewImportBatchBarcode(barcode);
       });
+      document.getElementById("importReleaseFallback")?.addEventListener("click", (event) => {
+        const chooseButton = event.target.closest("[data-release-fallback-choose]");
+        const manualButton = event.target.closest("[data-release-fallback-manual]");
+        const titleButton = event.target.closest("[data-release-fallback-title]");
+        const retryButton = event.target.closest("[data-release-fallback-retry]");
+        const dismissButton = event.target.closest("[data-release-fallback-dismiss]");
+        if (chooseButton) {
+          event.preventDefault();
+          chooseReleaseFallbackCandidate(chooseButton.dataset.releaseFallbackChoose);
+          return;
+        }
+        if (manualButton) {
+          event.preventDefault();
+          useReleaseFallbackManualEntry();
+          return;
+        }
+        if (titleButton) {
+          event.preventDefault();
+          searchReleaseFallbackByTitle();
+          return;
+        }
+        if (retryButton) {
+          event.preventDefault();
+          runReleaseDetailsFallback(importCenter.releaseFallback?.query || {});
+          return;
+        }
+        if (dismissButton) {
+          event.preventDefault();
+          resetReleaseFallback();
+        }
+      });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const configureTmdbButton = event.target.closest("[data-import-configure-tmdb]");
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
@@ -42430,6 +43191,7 @@ def ui_preview_html(
       document.getElementById("containerEditToggleButton")?.addEventListener("click", () => handleContainerEditAction());
       document.getElementById("containerEditCancelTopButton")?.addEventListener("click", () => cancelContainerEdit());
       document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));
+      document.getElementById("containerEditType")?.addEventListener("change", (event) => syncContainerValueFieldVisibility(event.target.value));
       document.getElementById("containerMetadataDryRunButton")?.addEventListener("click", () => refreshActiveContainerMetadata(true));
       document.getElementById("containerMetadataApplyButton")?.addEventListener("click", () => refreshActiveContainerMetadata(false));
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
