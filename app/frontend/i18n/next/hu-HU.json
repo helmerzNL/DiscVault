@@ -2699,5 +2699,10 @@
   "releaseFallback.stillWorking": "A MovieVault még dolgozik a keresésen. Keress újra egy pillanat múlva - a kész eredmény készenlétben marad.",
   "releaseFallback.unreachable": "A MovieVault nem volt elérhető, ezért erről a lemezről még semmit sem tudunk. Ez általában átmeneti.",
   "releaseFallback.failed": "A MovieVault nem tudta befejezni ezt a keresést.",
-  "releaseFallback.retry": "Újra"
+  "releaseFallback.retry": "Újra",
+  "releaseFallback.sharingOn": "A választásod megosztjuk a MovieVaulttal, hogy mások is megtalálják ezt a lemezt beolvasáskor. Csak a kiadás adatai kerülnek elküldésre - soha semmi rólad vagy a gyűjteményedről.",
+  "preferences.cardSharing": "Megosztás a MovieVaulttal",
+  "preferences.cardSharingHelp": "Segítsd a közös katalógust az általad azonosított kiadásokkal.",
+  "preferences.shareReleaseSelections": "Az általam azonosított kiadások megosztása",
+  "preferences.shareReleaseSelectionsHelp": "Ha egy vonalkódot nem ismer fel a rendszer, és kiválasztod a kezedben tartott kiadást, ezek az adatok ellenőrzésre a MovieVaulthoz kerülnek. Csak nyilvános lemezadatok kerülnek elküldésre - soha a gyűjteményed, a megtekintési előzményeid vagy bármi, ami azonosít téged."
 }

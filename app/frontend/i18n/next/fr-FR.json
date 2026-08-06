@@ -2699,5 +2699,10 @@
   "releaseFallback.stillWorking": "MovieVault traite encore cette recherche. Relancez-la dans un instant - le résultat terminé reste disponible.",
   "releaseFallback.unreachable": "MovieVault n'a pas pu être joint, rien n'est donc encore connu sur ce disque. C'est généralement temporaire.",
   "releaseFallback.failed": "MovieVault n'a pas pu terminer cette recherche.",
-  "releaseFallback.retry": "Réessayer"
+  "releaseFallback.retry": "Réessayer",
+  "releaseFallback.sharingOn": "Votre choix est partagé avec MovieVault afin que d'autres trouvent ce disque en le scannant. Seules les informations de l'édition sont transmises - jamais rien vous concernant ni votre collection.",
+  "preferences.cardSharing": "Partage avec MovieVault",
+  "preferences.cardSharingHelp": "Aidez le catalogue partagé en contribuant les éditions que vous identifiez.",
+  "preferences.shareReleaseSelections": "Partager les éditions que j'identifie",
+  "preferences.shareReleaseSelectionsHelp": "Lorsqu'un code-barres n'est pas reconnu et que vous choisissez le pressage que vous tenez, ces informations sont envoyées à MovieVault pour vérification. Seules des informations publiques sur le disque sont transmises - jamais votre collection, votre historique ni quoi que ce soit qui vous identifie."
 }

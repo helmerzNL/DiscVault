@@ -2699,5 +2699,10 @@
   "releaseFallback.stillWorking": "MovieVault dar vykdo šią paiešką. Paieškok dar kartą po akimirkos - baigtas rezultatas išlieka paruoštas.",
   "releaseFallback.unreachable": "Nepavyko susisiekti su MovieVault, todėl apie šį diską dar nieko nežinoma. Paprastai tai laikina.",
   "releaseFallback.failed": "MovieVault negalėjo užbaigti šios paieškos.",
-  "releaseFallback.retry": "Bandyti dar kartą"
+  "releaseFallback.retry": "Bandyti dar kartą",
+  "releaseFallback.sharingOn": "Tavo pasirinkimas dalijamasi su MovieVault, kad kiti rastų šį diską jį nuskaitę. Siunčiami tik leidimo duomenys - niekada nieko apie tave ar tavo kolekciją.",
+  "preferences.cardSharing": "Dalijimasis su MovieVault",
+  "preferences.cardSharingHelp": "Padėk bendram katalogui prisidėdamas leidimais, kuriuos atpažįsti.",
+  "preferences.shareReleaseSelections": "Dalytis leidimais, kuriuos atpažįstu",
+  "preferences.shareReleaseSelectionsHelp": "Kai brūkšninis kodas neatpažįstamas ir pasirenki rankose laikomą leidimą, šie duomenys siunčiami MovieVault peržiūrėti. Siunčiama tik vieša disko informacija - niekada tavo kolekcija, peržiūrų istorija ar kas nors, kas tave identifikuoja."
 }

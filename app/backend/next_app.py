@@ -151,6 +151,9 @@ try:
     from .next_movievault_v2 import resolve_release_details
     from .next_movievault_v2 import search_release_details
     from .next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from .next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from .next_movievault_v2 import release_technical_contribution_payload
+    from .next_movievault_v2_contributions import release_contribution_enabled
     from .dedup_identity import title_year_identity_compatible
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
@@ -389,6 +392,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2 import resolve_release_details
     from next_movievault_v2 import search_release_details
     from next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
+    from next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from next_movievault_v2 import release_technical_contribution_payload
+    from next_movievault_v2_contributions import release_contribution_enabled
     from dedup_identity import title_year_identity_compatible
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
@@ -19048,6 +19054,73 @@ def queue_movie_metadata_refresh_job(
     return create_background_job(conn, job_type=METADATA_REFRESH_JOB_TYPE, payload=payload)
 
 
+def movie_technical_spec_contribution_source(
+    conn, movie_id: UUID | str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Express a just-saved movie in the candidate shape the mapper reads.
+
+    A hand-typed release arrives as an ordinary Add form, so there is no
+    candidate row to map. What the user actually stated is now on the movie and
+    its technical specs, and reading it back from there is the only way to
+    contribute exactly what was saved rather than a second guess at it.
+
+    Keys are the wire names the mapper already understands, so the two entry
+    points share one mapping instead of growing a parallel one.
+    """
+    specs = movie_technical_spec_entity(conn, movie_id) or {}
+    candidate: dict[str, Any] = {
+        "title": clean_text(payload.get("releaseTitle")) or clean_text(payload.get("title")),
+        "edition": clean_text(payload.get("edition")),
+        "format": clean_text(payload.get("format")),
+        "packaging": specs.get("packaging") or [],
+        "discRegions": specs.get("regions") or [],
+        "audioTracks": specs.get("audio_tracks") or [],
+        "subtitles": specs.get("subtitles") or [],
+        "video": {
+            "resolution": specs.get("video_resolution"),
+            "codecs": specs.get("video_codecs") or [],
+            "hdrFormats": specs.get("hdr") or [],
+            "aspectRatios": specs.get("screen_ratios") or [],
+        },
+    }
+    disc_count = payload.get("discCount") or payload.get("disc_count")
+    if isinstance(disc_count, int) and not isinstance(disc_count, bool):
+        candidate["discCount"] = disc_count
+    return candidate
+
+
+def queue_release_contribution_job(
+    conn,
+    contribution_payload: dict[str, Any],
+    *,
+    actor: dict[str, Any] | None = None,
+    reason: str,
+) -> dict[str, Any] | None:
+    """Queue a chosen release for contribution back to MovieVault.
+
+    Queued rather than sent inline, for three reasons that all matter:
+    a network round-trip has no business inside a user-visible save; a
+    MovieVault outage must not fail an import that already succeeded locally;
+    and a signed, attributable write firing in the same second as the anonymous
+    resolve that produced the candidate would tie the two together for anyone
+    watching the connection.
+
+    Returns None whenever there is nothing to send, so the caller never has to
+    decide - the gate, the payload check and the missing-table case all read
+    the same way from outside.
+    """
+    if not contribution_payload or not table_exists(conn, "background_jobs"):
+        return None
+    payload: dict[str, Any] = {
+        "contribution": contribution_payload,
+        "requestedBy": actor_job_payload(actor or {}),
+        "reason": reason,
+    }
+    return create_background_job(
+        conn, job_type=RELEASE_CONTRIBUTION_JOB_TYPE, payload=payload
+    )
+
+
 def queue_receiver_payload_to_receivers(
     conn,
     *,
@@ -29153,6 +29226,12 @@ def register_routes(flask_app: Flask) -> None:
         release_candidate = body.get("releaseCandidate") or body.get("release_candidate")
         if not isinstance(release_candidate, dict):
             release_candidate = {}
+        release_fallback_manual = bool(
+            body.get("releaseFallbackManual") or body.get("release_fallback_manual")
+        )
+        release_fallback_film = body.get("releaseFallbackFilm") or body.get("release_fallback_film")
+        if not isinstance(release_fallback_film, dict):
+            release_fallback_film = {}
         selected_box_set_key_from_body = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
         provided_box_set_body = body.get("boxSetProposal") or body.get("box_set_proposal")
         if not isinstance(provided_box_set_body, dict):
@@ -29525,6 +29604,36 @@ def register_routes(flask_app: Flask) -> None:
                         "title": import_title,
                     },
                 )
+                # The disc the user identified is the one fact MovieVault does
+                # not have: its resolver returned a candidate list precisely
+                # because it could not choose, and it creates no moderation
+                # candidate for that. Offering the choice back is what closes
+                # the loop - gated by the owner setting and the user's own
+                # preference, and queued so a MovieVault outage cannot reach
+                # this request.
+                release_contribution_job = None
+                if release_contribution_enabled(conn, actor.get("id") if actor else None):
+                    contribution_payload = release_technical_contribution_payload(
+                        release_candidate
+                        or (
+                            movie_technical_spec_contribution_source(conn, movie_id, payload)
+                            if release_fallback_manual
+                            else {}
+                        ),
+                        scanned_barcode=barcode or "",
+                        film=release_fallback_film
+                        or {
+                            "title": import_title,
+                            "year": payload.get("year"),
+                        },
+                        provenance="manual_entry" if release_fallback_manual else "candidate_selection",
+                    )
+                    release_contribution_job = queue_release_contribution_job(
+                        conn,
+                        contribution_payload,
+                        actor=actor,
+                        reason="import_center_release_selection",
+                    )
                 audit_event(
                     conn,
                     event_type="movie.imported",
@@ -29550,6 +29659,7 @@ def register_routes(flask_app: Flask) -> None:
                         "metadataRefreshQueued": bool(metadata_refresh_job),
                         "metadataJobId": str(metadata_refresh_job.get("id")) if metadata_refresh_job else None,
                         "targetContainerId": str(target_container_uuid) if target_container_uuid else None,
+                        "releaseContributionQueued": bool(release_contribution_job),
                     },
                 )
                 target_link_result = None

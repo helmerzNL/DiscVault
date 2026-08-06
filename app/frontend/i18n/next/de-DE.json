@@ -2699,5 +2699,10 @@
   "releaseFallback.stillWorking": "MovieVault arbeitet noch an dieser Suche. Suche gleich erneut - das fertige Ergebnis bleibt bereit.",
   "releaseFallback.unreachable": "MovieVault war nicht erreichbar, daher ist über diese Disc noch nichts bekannt. Das ist meist vorübergehend.",
   "releaseFallback.failed": "MovieVault konnte diese Suche nicht abschließen.",
-  "releaseFallback.retry": "Erneut versuchen"
+  "releaseFallback.retry": "Erneut versuchen",
+  "releaseFallback.sharingOn": "Deine Wahl wird mit MovieVault geteilt, damit andere diese Disc beim Scannen finden. Nur die Release-Daten werden übertragen - niemals etwas über dich oder deine Sammlung.",
+  "preferences.cardSharing": "Mit MovieVault teilen",
+  "preferences.cardSharingHelp": "Hilf dem gemeinsamen Katalog, indem du die von dir erkannten Releases beisteuerst.",
+  "preferences.shareReleaseSelections": "Von mir erkannte Releases teilen",
+  "preferences.shareReleaseSelectionsHelp": "Wenn ein Barcode nicht erkannt wird und du die Pressung auswählst, die du in Händen hältst, werden diese Release-Daten zur Prüfung an MovieVault gesendet. Es werden nur öffentliche Disc-Informationen übertragen - niemals deine Sammlung, dein Verlauf oder etwas, das dich identifiziert."
 }

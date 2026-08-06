@@ -2699,5 +2699,10 @@
   "releaseFallback.stillWorking": "MovieVault wciąż pracuje nad tym wyszukiwaniem. Wyszukaj ponownie za chwilę - gotowy wynik zostanie zachowany.",
   "releaseFallback.unreachable": "Nie udało się połączyć z MovieVault, więc o tej płycie nic jeszcze nie wiadomo. Zwykle jest to chwilowe.",
   "releaseFallback.failed": "MovieVault nie mógł ukończyć tego wyszukiwania.",
-  "releaseFallback.retry": "Spróbuj ponownie"
+  "releaseFallback.retry": "Spróbuj ponownie",
+  "releaseFallback.sharingOn": "Twój wybór jest udostępniany MovieVault, aby inni znaleźli tę płytę po zeskanowaniu. Przesyłane są wyłącznie dane wydania - nigdy nic o Tobie ani Twojej kolekcji.",
+  "preferences.cardSharing": "Udostępnianie MovieVault",
+  "preferences.cardSharingHelp": "Pomóż wspólnemu katalogowi, przekazując rozpoznane przez siebie wydania.",
+  "preferences.shareReleaseSelections": "Udostępniaj wydania, które rozpoznaję",
+  "preferences.shareReleaseSelectionsHelp": "Gdy kod kreskowy nie zostanie rozpoznany, a Ty wybierzesz trzymane w ręku tłoczenie, te dane trafią do MovieVault do weryfikacji. Wysyłane są tylko publiczne informacje o płycie - nigdy Twoja kolekcja, historia oglądania ani nic, co Cię identyfikuje."
 }

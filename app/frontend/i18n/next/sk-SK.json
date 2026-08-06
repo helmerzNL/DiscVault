@@ -2699,5 +2699,10 @@
   "releaseFallback.stillWorking": "MovieVault na tomto vyhľadávaní stále pracuje. Vyhľadaj o chvíľu znova - hotový výsledok zostane pripravený.",
   "releaseFallback.unreachable": "MovieVault nebol dostupný, o tomto disku teda zatiaľ nič nevieme. Býva to dočasné.",
   "releaseFallback.failed": "MovieVault toto vyhľadávanie nedokončil.",
-  "releaseFallback.retry": "Skúsiť znova"
+  "releaseFallback.retry": "Skúsiť znova",
+  "releaseFallback.sharingOn": "Tvoja voľba sa zdieľa s MovieVault, aby ostatní tento disk pri skenovaní našli. Odosielajú sa len údaje o vydaní - nikdy nič o tebe ani o tvojej zbierke.",
+  "preferences.cardSharing": "Zdieľanie s MovieVault",
+  "preferences.cardSharingHelp": "Pomôž zdieľanému katalógu tým, že prispeješ vydaniami, ktoré rozpoznáš.",
+  "preferences.shareReleaseSelections": "Zdieľať vydania, ktoré rozpoznám",
+  "preferences.shareReleaseSelectionsHelp": "Keď čiarový kód nie je rozpoznaný a ty vyberieš lis, ktorý držíš v ruke, tieto údaje sa odošlú do MovieVault na kontrolu. Odosielajú sa len verejné informácie o disku - nikdy tvoja zbierka, história sledovania ani nič, čo ťa identifikuje."
 }
