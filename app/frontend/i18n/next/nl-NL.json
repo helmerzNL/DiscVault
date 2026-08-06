@@ -2711,5 +2711,10 @@
   "releaseFallback.stillWorking": "MovieVault werkt nog aan deze zoekopdracht. Zoek zo meteen opnieuw - het afgeronde resultaat blijft klaarstaan.",
   "releaseFallback.unreachable": "MovieVault was niet bereikbaar, dus over deze schijf is nog niets bekend. Dit is meestal tijdelijk.",
   "releaseFallback.failed": "MovieVault kon deze zoekopdracht niet afronden.",
-  "releaseFallback.retry": "Opnieuw proberen"
+  "releaseFallback.retry": "Opnieuw proberen",
+  "releaseFallback.sharingOn": "Je keuze wordt gedeeld met MovieVault, zodat anderen die deze schijf scannen hem wel vinden. Alleen de releasegegevens gaan mee - nooit iets over jou of je collectie.",
+  "preferences.cardSharing": "Delen met MovieVault",
+  "preferences.cardSharingHelp": "Help de gedeelde catalogus door de releases die jij herkent bij te dragen.",
+  "preferences.shareReleaseSelections": "Releases delen die ik herken",
+  "preferences.shareReleaseSelectionsHelp": "Wanneer een barcode niet wordt herkend en jij de persing kiest die je in handen hebt, worden die releasegegevens ter beoordeling naar MovieVault gestuurd. Alleen publieke schijfinformatie gaat mee - nooit je collectie, kijkgeschiedenis of iets dat jou identificeert."
 }

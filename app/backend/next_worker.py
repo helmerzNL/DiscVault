@@ -49,6 +49,13 @@ try:
     from .next_database import db_wait_timeout
     from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
+    from .next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from .next_movievault_v2_contributions import (
+        MovieVaultContributionError,
+        disable_after_block,
+        record_failure,
+        submit_release_technical,
+    )
     from .next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
     from .next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
     from .next_movievault_v2_posters import link_box_set_poster_to_containers
@@ -78,6 +85,13 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_database import db_wait_timeout
     from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
+    from next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from next_movievault_v2_contributions import (
+        MovieVaultContributionError,
+        disable_after_block,
+        record_failure,
+        submit_release_technical,
+    )
     from next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
     from next_movievault_v2_posters import POSTER_CLEANUP_JOB_TYPE
     from next_movievault_v2_posters import link_box_set_poster_to_containers
@@ -384,6 +398,7 @@ def claim_job(conn, worker_id: str) -> dict[str, Any] | None:
                 SELECT id
                 FROM background_jobs
                 WHERE status='pending'
+                  AND (run_after IS NULL OR run_after <= now())
                 ORDER BY created_at ASC
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1
@@ -405,6 +420,7 @@ def claim_job(conn, worker_id: str) -> dict[str, Any] | None:
                     status,
                     payload,
                     result,
+                    attempts,
                     created_at,
                     started_at
                 """,
@@ -445,6 +461,55 @@ def fail_job(conn, job_id: UUID, error: str, result: dict[str, Any] | None = Non
             )
 
 
+def reschedule_job(
+    conn,
+    job_id: UUID,
+    *,
+    delay_seconds: int,
+    error: str,
+    result: dict[str, Any] | None = None,
+) -> None:
+    """Return a job to the queue to be picked up again later.
+
+    Back to 'pending' rather than a new row, so the retry keeps the job's
+    identity, its `created_at` position in the queue and its attempt count.
+    `error` is kept on the row while it waits: a job that is retrying for the
+    fourth time because MovieVault is unreachable should say so to anyone
+    looking, not present as an ordinary pending job.
+    """
+    with conn.transaction():
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE background_jobs
+                SET status='pending',
+                    attempts=attempts + 1,
+                    run_after=now() + make_interval(secs => %s),
+                    result=%s,
+                    error=%s,
+                    started_at=NULL,
+                    finished_at=NULL
+                WHERE id=%s
+                """,
+                (int(delay_seconds), Jsonb(json_ready(result or {})), error, job_id),
+            )
+
+
+class JobRetry(Exception):
+    """Raised by a handler that wants another attempt after ``delay_seconds``.
+
+    A handler cannot reschedule itself: the run loop owns the job row and the
+    connection it is claimed on. Raising carries the decision out to that loop
+    with the two things only the handler knows - how long to wait, and why.
+    """
+
+    def __init__(self, reason: str, *, delay_seconds: int, result: dict[str, Any] | None = None):
+        super().__init__(reason)
+        self.reason = reason
+        self.delay_seconds = delay_seconds
+        self.result = result or {}
+
+
 def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     job_type = job["job_type"]
     payload = job.get("payload") or {}
@@ -475,6 +540,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
 
     if job_type == PRICE_ALERT_JOB_TYPE:
         return process_price_alert_sweep(payload, worker_id)
+
+    if job_type == RELEASE_CONTRIBUTION_JOB_TYPE:
+        return process_movievault_v2_release_contribution(job, payload, worker_id)
 
     if job_type == POSTER_CACHE_JOB_TYPE:
         return process_movievault_v2_poster_cache(payload, worker_id)
@@ -599,6 +667,56 @@ def process_price_alert_sweep(payload: dict[str, Any], worker_id: str) -> dict[s
         "handled": True,
         "jobType": PRICE_ALERT_JOB_TYPE,
         **summary,
+    }
+
+
+#: Minutes to wait before each retry. Five attempts, spread over about
+#: fourteen hours: long enough to ride out a MovieVault restart or a rate-limit
+#: window, short enough that a contribution is not still trying next week.
+RELEASE_CONTRIBUTION_BACKOFF_MINUTES = (1, 5, 30, 120, 720)
+
+
+def process_movievault_v2_release_contribution(
+    job: dict[str, Any], payload: dict[str, Any], worker_id: str
+) -> dict[str, Any]:
+    """Send one contributed release, retrying only what deserves a retry.
+
+    Never surfaces to the user: the import that produced this already returned
+    successfully, and a catalogue contribution failing is not the importer's
+    problem. It is recorded on the job and, for conditions an owner must act
+    on, on the settings the owner screen reads.
+    """
+    contribution = payload.get("contribution")
+    if not isinstance(contribution, dict) or not contribution:
+        raise RuntimeError("Release contribution job carries no payload")
+    attempts = int(job.get("attempts") or 0)
+    try:
+        with connect() as conn:
+            result = submit_release_technical(conn, contribution)
+    except MovieVaultContributionError as exc:
+        with connect() as conn:
+            if exc.code == "instance_blocked":
+                # MovieVault refuses everything from a blocked instance, so
+                # continuing to queue would pile up failures nobody reads.
+                disable_after_block(conn)
+                raise RuntimeError("MovieVault blocked this instance: contribution disabled") from exc
+            record_failure(conn, exc.code)
+        if exc.retryable and attempts < len(RELEASE_CONTRIBUTION_BACKOFF_MINUTES):
+            raise JobRetry(
+                exc.code,
+                delay_seconds=RELEASE_CONTRIBUTION_BACKOFF_MINUTES[attempts] * 60,
+                result={"jobType": RELEASE_CONTRIBUTION_JOB_TYPE, "attempt": attempts + 1},
+            ) from exc
+        # A payload MovieVault refuses is a mapping bug here, and it will fail
+        # identically forever. Loud and terminal is the correct outcome.
+        raise RuntimeError(f"MovieVault rejected the contribution: {exc.code}") from exc
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": RELEASE_CONTRIBUTION_JOB_TYPE,
+        "contributionId": str(result.get("contributionId") or ""),
+        "status": str(result.get("status") or ""),
+        "duplicateOf": result.get("duplicateOf"),
     }
 
 
@@ -2431,6 +2549,28 @@ def run_once(worker_id: str, *, quiet_idle: bool = False) -> int:
                         "status": "completed",
                         "jobId": str(job["id"]),
                         "result": json_ready(result),
+                    }
+                )
+            )
+            return 0
+        except JobRetry as retry:
+            # Not a failure yet: the handler knows this attempt can be repeated
+            # and said when. Recorded as such so the queue does not look idle
+            # while work is deliberately waiting.
+            reschedule_job(
+                conn,
+                job["id"],
+                delay_seconds=retry.delay_seconds,
+                error=retry.reason,
+                result={**retry.result, "workerId": worker_id},
+            )
+            print(
+                json.dumps(
+                    {
+                        "status": "rescheduled",
+                        "jobId": str(job["id"]),
+                        "retryInSeconds": retry.delay_seconds,
+                        "reason": retry.reason,
                     }
                 )
             )

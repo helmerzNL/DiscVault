@@ -1407,6 +1407,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <div class="admin-controls">
               <button type="button" id="adminAuthToggle" data-admin-action="toggle-auth">Toggle Authentication</button>
               <button type="button" id="adminMovieVaultReceiverToggle" data-admin-action="toggle-movievault-receiver">Toggle MovieVault Receiver</button>
+              <button type="button" id="adminMovieVaultContributionToggle" data-admin-action="toggle-movievault-contribution">Toggle Release Contribution</button>
             </div>
             <p class="muted">Choose how new users can join this DiscVault environment.</p>
             <div class="admin-mode" id="adminRegistrationMode">
@@ -1414,6 +1415,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
               <button type="button" data-admin-registration-mode="public">Public registration</button>
             </div>
             <p class="muted" id="adminSecurityState">-</p>
+            <p class="muted" id="adminMovieVaultContributionState">-</p>
           </div>
           <div class="admin-card">
             <h3>Create Invite</h3>
@@ -3313,6 +3315,25 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           ? "Disable MovieVault Receiver"
           : "Enable MovieVault Receiver";
       }
+      const movieVaultContributionButton = document.getElementById("adminMovieVaultContributionToggle");
+      if (movieVaultContributionButton) {
+        movieVaultContributionButton.classList.toggle("hidden", authState.role !== "owner");
+        movieVaultContributionButton.textContent = ownerSettings.movievault_v2_contribution_enabled
+          ? "Disable Release Contribution"
+          : "Enable Release Contribution";
+      }
+      const contributionState = ownerSettings.movievault_v2_contribution || {};
+      const contributionLine = document.getElementById("adminMovieVaultContributionState");
+      if (contributionLine) {
+        contributionLine.classList.toggle("hidden", authState.role !== "owner");
+        // The last error is worth showing even when sharing is on: a blocked
+        // instance turns the gate off by itself, and the reason is the only
+        // thing that explains why sends stopped.
+        const parts = [`Release contribution ${ownerSettings.movievault_v2_contribution_enabled ? "on" : "off"}`];
+        parts.push(contributionState.registered ? `registered as ${contributionState.instanceId || "unknown"}` : "not registered yet");
+        if (contributionState.lastError) parts.push(`last error: ${contributionState.lastError}`);
+        contributionLine.textContent = parts.join("; ") + ".";
+      }
     }
     async function loadAdmin() {
       if (!isAdminUser()) return;
@@ -3384,6 +3405,19 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       renderAdminSecurity();
       await loadAdmin();
       setAdminStatus(`Registration mode set to ${inviteOnly ? "invite-only login" : "public registration"}.`, "good");
+    }
+    async function setMovieVaultContribution(enabled) {
+      if (authState.role !== "owner") {
+        setAdminStatus("Only the owner can change release contribution.", "bad");
+        return;
+      }
+      const payload = await authJson("/api/next/auth/owner/settings", {
+        method: "POST",
+        body: JSON.stringify({movievault_v2_contribution_enabled: enabled})
+      });
+      ownerSettings = payload.settings || {};
+      renderAdminSecurity();
+      setAdminStatus(`Release contribution ${enabled ? "enabled" : "disabled"}.`, "good");
     }
     async function setMovieVaultReceiver(enabled) {
       if (authState.role !== "owner") {
@@ -3737,6 +3771,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           task = setInviteOnly(!!authState.registration_enabled);
         } else if (action === "toggle-movievault-receiver") {
           task = setMovieVaultReceiver(!ownerSettings.movievault_contribution_enabled);
+        } else if (action === "toggle-movievault-contribution") {
+          task = setMovieVaultContribution(!ownerSettings.movievault_v2_contribution_enabled);
         } else if (action === "create-invite") {
           task = createAdminInvite();
         } else if (action === "metadata-use-first") {

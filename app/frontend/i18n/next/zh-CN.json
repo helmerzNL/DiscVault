@@ -2711,5 +2711,10 @@
   "releaseFallback.stillWorking": "MovieVault 仍在处理这次查询。请稍后重新搜索 - 完成的结果会保留。",
   "releaseFallback.unreachable": "无法连接 MovieVault，因此暂时无法了解这张碟片。这通常是暂时的。",
   "releaseFallback.failed": "MovieVault 未能完成这次查询。",
-  "releaseFallback.retry": "重试"
+  "releaseFallback.retry": "重试",
+  "releaseFallback.sharingOn": "你的选择会共享给 MovieVault，这样其他人扫描这张碟时也能找到。只会发送版本信息，绝不会发送任何关于你或你收藏的内容。",
+  "preferences.cardSharing": "与 MovieVault 共享",
+  "preferences.cardSharingHelp": "贡献你识别出的版本，帮助完善共享目录。",
+  "preferences.shareReleaseSelections": "共享我识别出的版本",
+  "preferences.shareReleaseSelectionsHelp": "当条形码无法识别、而你选择了手中的压制版本时，这些版本信息会发送给 MovieVault 审核。仅发送公开的碟片信息，绝不发送你的收藏、观看记录或任何可识别你身份的内容。"
 }

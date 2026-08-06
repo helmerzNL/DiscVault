@@ -2711,5 +2711,10 @@
   "releaseFallback.stillWorking": "MovieVault arbetar fortfarande med uppslagningen. Sök igen om en stund - det färdiga resultatet ligger kvar.",
   "releaseFallback.unreachable": "MovieVault gick inte att nå, så inget är känt om skivan ännu. Det är oftast tillfälligt.",
   "releaseFallback.failed": "MovieVault kunde inte slutföra uppslagningen.",
-  "releaseFallback.retry": "Försök igen"
+  "releaseFallback.retry": "Försök igen",
+  "releaseFallback.sharingOn": "Ditt val delas med MovieVault så att andra hittar den här skivan när de skannar den. Endast utgåvans uppgifter skickas - aldrig något om dig eller din samling.",
+  "preferences.cardSharing": "Delning med MovieVault",
+  "preferences.cardSharingHelp": "Hjälp den gemensamma katalogen genom att bidra med de utgåvor du identifierar.",
+  "preferences.shareReleaseSelections": "Dela utgåvorna jag identifierar",
+  "preferences.shareReleaseSelectionsHelp": "När en streckkod inte känns igen och du väljer den pressning du håller i skickas dessa uppgifter till MovieVault för granskning. Endast offentlig skivinformation skickas - aldrig din samling, din historik eller något som identifierar dig."
 }
