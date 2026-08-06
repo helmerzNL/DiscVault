@@ -793,6 +793,16 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
             if contract_version == MOVIEVAULT_V4_CONTRACT and "packaging" in value
             else []
         ),
+        # None means "the feed has not said", which must stay distinguishable
+        # from an explicit "movie": only the second may overwrite a stored type.
+        # Anything outside MovieVault's vocabulary is treated as unsaid rather
+        # than guessed at.
+        "workType": (
+            value["workType"]
+            if contract_version == MOVIEVAULT_V4_CONTRACT
+            and value.get("workType") in ("movie", "tv")
+            else None
+        ),
         **(
             _release_video_fields(value, release_id=str(value.get("releaseId")))
             if contract_version == MOVIEVAULT_V4_CONTRACT
@@ -2483,13 +2493,13 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             language_code, release_date, disc_count, studio, distributor,
             runtime_minutes, assets, revision, poster, packaging,
             video_resolution, video_codecs, hdr_formats, aspect_ratios,
-            disc_regions
+            disc_regions, work_type
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s
+            %s, %s, %s
         )
         ON CONFLICT (generation, release_id) DO UPDATE
         SET film_id = EXCLUDED.film_id,
@@ -2515,7 +2525,8 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             video_codecs = EXCLUDED.video_codecs,
             hdr_formats = EXCLUDED.hdr_formats,
             aspect_ratios = EXCLUDED.aspect_ratios,
-            disc_regions = EXCLUDED.disc_regions
+            disc_regions = EXCLUDED.disc_regions,
+            work_type = EXCLUDED.work_type
         """,
         (
             generation,
@@ -2544,6 +2555,7 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             Jsonb(record.get("hdrFormats") or []),
             Jsonb(record.get("aspectRatios") or []),
             Jsonb(record.get("discRegions") or []),
+            record.get("workType"),
         ),
     )
     for lookup_hash in record["eanHashes"]:
@@ -3316,6 +3328,7 @@ def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         "hdrFormats": _json_value(row.get("hdr_formats") or []),
         "aspectRatios": _json_value(row.get("aspect_ratios") or []),
         "discRegions": _json_value(row.get("disc_regions") or []),
+        "workType": row.get("work_type"),
     }
     payload.update(_poster_status_fields(conn, row.get("poster")))
     payload["audioTracks"], payload["subtitles"] = _release_track_fields(

@@ -13,6 +13,7 @@ try:
     from .. import next_app, next_metadata
     from ..dedup_identity import (
         extract_identity_identifiers,
+        media_type_conflicts,
         normalize_edition_identity,
         select_movievault_identifier,
         select_tmdb_identifier,
@@ -28,6 +29,7 @@ except ImportError:  # pragma: no cover - backend working-directory CI imports
     import next_metadata
     from dedup_identity import (
         extract_identity_identifiers,
+        media_type_conflicts,
         normalize_edition_identity,
         select_movievault_identifier,
         select_tmdb_identifier,
@@ -168,6 +170,16 @@ class IdentityLadderFixtureRunner:
         return bool(left_value and right_value and left_value != right_value)
 
     @classmethod
+    def _media_type_conflicts(cls, left, right):
+        """Both sides stated a type and they disagree (sync-contract.md §2).
+
+        Applied to tiers 2, 3 and 4 and never to tier 1: a shared per-record
+        token identifies the same record with certainty, exactly as a barcode
+        conflict leaves tier 1 alone.
+        """
+        return media_type_conflicts(left.get("media_type"), right.get("media_type"))
+
+    @classmethod
     def _tmdb_matches(cls, left, right):
         left_id = str(left.get("tmdb_id") or "").strip()
         right_id = str(right.get("tmdb_id") or "").strip()
@@ -183,11 +195,15 @@ class IdentityLadderFixtureRunner:
             return False
         if cls._barcode_conflicts(left, right):
             return False
+        if cls._media_type_conflicts(left, right):
+            return False
         return not merge._tmdb_sanity_conflicts(left, right)
 
     @classmethod
     def _lower_tiers_blocked(cls, left, right):
         if cls._barcode_conflicts(left, right):
+            return True
+        if cls._media_type_conflicts(left, right):
             return True
         left_id = str(left.get("tmdb_id") or "").strip()
         right_id = str(right.get("tmdb_id") or "").strip()
@@ -233,7 +249,11 @@ class IdentityLadderFixtureRunner:
 
         callbacks = {
             "find_by_client_id": lambda: marker if same_token else None,
-            "find_by_barcode": lambda: marker if same_barcode else None,
+            "find_by_barcode": lambda: (
+                marker
+                if same_barcode and not cls._media_type_conflicts(left, right)
+                else None
+            ),
             "find_by_tmdb_edition": lambda: (
                 marker if not lower_blocked and cls._tmdb_matches(left, right) else None
             ),
@@ -480,7 +500,7 @@ class FixtureCategoryCoverageTests(unittest.TestCase):
         self.assertEqual(
             {category: len(case_ids) for category, case_ids in executed.items()},
             {
-                "cases": 19,
+                "cases": 25,
                 "container_cases": 10,
                 "merge_winner_cases": 3,
                 "container_merge_winner_cases": 3,
