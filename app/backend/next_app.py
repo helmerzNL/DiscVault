@@ -152,8 +152,11 @@ try:
     from .next_movievault_v2 import search_release_details
     from .next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
     from .next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from .next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
     from .next_movievault_v2 import release_technical_contribution_payload
     from .next_movievault_v2_contributions import release_contribution_enabled
+    from .next_movievault_v2_contributions import field_correction_enabled
+    from .next_movievault_v2_field_corrections import correction_preview
     from .dedup_identity import MEDIA_TYPE_MOVIE
     from .dedup_identity import MEDIA_TYPE_SHOW
     from .dedup_identity import infer_media_type_from_title
@@ -401,8 +404,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2 import search_release_details
     from next_movievault_v2 import enforced_origin as enforced_movievault_v2_origin
     from next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
     from next_movievault_v2 import release_technical_contribution_payload
     from next_movievault_v2_contributions import release_contribution_enabled
+    from next_movievault_v2_contributions import field_correction_enabled
+    from next_movievault_v2_field_corrections import correction_preview
     from dedup_identity import MEDIA_TYPE_MOVIE
     from dedup_identity import MEDIA_TYPE_SHOW
     from dedup_identity import infer_media_type_from_title
@@ -19536,6 +19542,60 @@ def queue_release_contribution_job(
     )
 
 
+def queue_field_correction_job(
+    conn,
+    correction_payload: dict[str, Any],
+    *,
+    actor: dict[str, Any] | None = None,
+    reason: str,
+) -> dict[str, Any] | None:
+    """Queue one field correction for MovieVault.
+
+    Queued for the same reasons as a release contribution - the save has
+    already succeeded and must not be undone by a MovieVault outage - with one
+    that is specific to this path: the user is still looking at the sheet they
+    confirmed, and a network round-trip there would make an upstream moderation
+    queue feel like part of saving a local edit.
+
+    The job id is the handle the status endpoint reads, so the caller returns it
+    rather than waiting for anything.
+    """
+    if not correction_payload or not table_exists(conn, "background_jobs"):
+        return None
+    payload: dict[str, Any] = {
+        "correction": correction_payload,
+        "requestedBy": actor_job_payload(actor or {}),
+        "reason": reason,
+    }
+    return create_background_job(conn, job_type=FIELD_CORRECTION_JOB_TYPE, payload=payload)
+
+
+def background_job_entity(conn, job_id: Any) -> dict[str, Any] | None:
+    """One background job by id, in the shape the API renders.
+
+    `attempts` is selected explicitly rather than through `job_row`: it exists
+    only since migration 065, and every other reader of a job predates it and
+    does not want it.
+    """
+    if not table_exists(conn, "background_jobs"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                id, job_type, status, requested_by, payload, result,
+                error, created_at, started_at, finished_at, attempts
+            FROM background_jobs
+            WHERE id = %s
+            """,
+            (job_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    return {**job_row(row), "attempts": int(row.get("attempts") or 0)}
+
+
 def queue_receiver_payload_to_receivers(
     conn,
     *,
@@ -22614,6 +22674,155 @@ def register_routes(flask_app: Flask) -> None:
             detail = container_detail_entity(conn, container_uuid, actor=actor)
             capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail}, 201)
+
+    # ---- MovieVault field corrections -------------------------------------
+    #
+    # Four typed operations, and the split is required rather than stylistic.
+    # `docs/contracts/contribution-v2.md` has every client -- the PWA and both
+    # native apps -- reach MovieVault through its own DiscVault instance, with
+    # the credentials never leaving the server. So the server owns the
+    # judgement (which record, which fields, what the catalogue holds) and the
+    # client owns only the asking and the confirming.
+    #
+    # `eligibility` is separate from `preview` because it decides whether a
+    # button is drawn at all and runs on every detail render; `preview` costs a
+    # mirror read and only runs when someone reaches for it.
+
+    def _correction_record(conn, actor, entity: str, entity_id: str):
+        """The local row a correction would be built from, with its permission.
+
+        Editing is the gate, not viewing: offering a correction is proposing an
+        edit to a shared record, and someone who may not change their own copy
+        has no standing to change everyone's.
+        """
+        if entity == "movie":
+            movie_uuid = parse_uuid(entity_id, "movieId")
+            if not movie_uuid:
+                raise NextApiError("movieId is required", 400)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            if not actor_can_edit_visible_movie(conn, actor, existing):
+                raise NextApiError("Permission required: collection.edit_all", 403)
+            return existing, existing.get("metadata") or {}
+        container_uuid = parse_uuid(entity_id, "containerId")
+        if not container_uuid:
+            raise NextApiError("containerId is required", 400)
+        existing = container_entity(conn, container_uuid)
+        if not existing:
+            raise NextApiError("Container not found", 404)
+        if str(existing.get("container_type") or "") != "box_set":
+            # A Vault and a Collection are personal organisation, not catalogue
+            # facts. There is nothing upstream for them to correct.
+            raise NextApiError("Only a box set can be corrected", 409)
+        return existing, existing.get("metadata") or {}
+
+    def _correction_entity(value: Any) -> str:
+        entity = str(value or "movie")
+        if entity not in {"movie", "container"}:
+            raise NextApiError("entity must be movie or container", 400)
+        return entity
+
+    @flask_app.get("/api/next/movievault/contributions/eligibility")
+    def movievault_correction_eligibility():
+        entity = _correction_entity(request.args.get("entity"))
+        entity_id = str(request.args.get("id") or "")
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            record, metadata = _correction_record(conn, actor, entity, entity_id)
+            enabled = field_correction_enabled(conn, actor.get("id") if actor else None)
+            preview = correction_preview(conn, entity=entity, record=record, metadata=metadata)
+            return response(
+                {
+                    "status": "ok",
+                    "enabled": enabled,
+                    "mode": preview["mode"],
+                    "target": preview["target"],
+                    # The count rather than the diff: a button needs to know
+                    # whether there is anything to send, not what it is.
+                    "changedFields": [item["field"] for item in preview["changes"]],
+                    "withheld": preview["withheld"],
+                }
+            )
+
+    @flask_app.post("/api/next/movievault/contributions/preview")
+    def movievault_correction_preview():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        entity = _correction_entity(body.get("entity"))
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            record, metadata = _correction_record(conn, actor, entity, str(body.get("id") or ""))
+            preview = correction_preview(conn, entity=entity, record=record, metadata=metadata)
+            return response({"status": "ok", **preview})
+
+    @flask_app.post("/api/next/movievault/contributions/submit")
+    def movievault_correction_submit():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        entity = _correction_entity(body.get("entity"))
+        fields = body.get("fields")
+        if fields is not None and not isinstance(fields, list):
+            raise NextApiError("fields must be a list", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not field_correction_enabled(conn, actor.get("id") if actor else None):
+                raise NextApiError("Field corrections are not enabled", 403)
+            record, metadata = _correction_record(conn, actor, entity, str(body.get("id") or ""))
+            # Recomputed here rather than trusted from the request. A client
+            # that sent its own diff could name a field it was never offered,
+            # or an `expected` it never saw -- and `expected` is the whole
+            # conflict check on the other side.
+            preview = correction_preview(
+                conn,
+                entity=entity,
+                record=record,
+                metadata=metadata,
+                fields=[str(item) for item in fields] if fields is not None else None,
+            )
+            if preview["mode"] != "correction" or not preview["changes"]:
+                raise NextApiError("There is nothing to correct", 409)
+            job = queue_field_correction_job(
+                conn,
+                {"target": preview["target"], "changes": preview["changes"]},
+                actor=actor,
+                reason="field_correction",
+            )
+            return response(
+                {
+                    "status": "ok",
+                    "queued": bool(job),
+                    "jobId": (job or {}).get("id"),
+                    "changes": preview["changes"],
+                }
+            )
+
+    @flask_app.get("/api/next/movievault/contributions/status")
+    def movievault_correction_status():
+        job_id = parse_uuid(str(request.args.get("jobId") or ""), "jobId")
+        if not job_id:
+            raise NextApiError("jobId is required", 400)
+        with connect() as conn:
+            require_next_permission(conn, "collection.edit_all")
+            job = background_job_entity(conn, job_id)
+            if not job:
+                raise NextApiError("Job not found", 404)
+            result = job.get("result") or {}
+            return response(
+                {
+                    "status": "ok",
+                    "jobStatus": job.get("status"),
+                    "attempts": job.get("attempts"),
+                    # Present once MovieVault has answered; the moderation
+                    # outcome arrives later still, through the status poll.
+                    "contributionId": result.get("contributionId"),
+                    "contributionStatus": result.get("status"),
+                    "canonicalTargetId": result.get("canonicalTargetId"),
+                    "duplicateOf": result.get("duplicateOf"),
+                }
+            )
 
     @flask_app.patch("/api/next/containers/<container_id>")
     def update_container(container_id: str):

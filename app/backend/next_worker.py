@@ -50,10 +50,15 @@ try:
     from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from .next_movievault_v2 import CONTRIBUTION_STATUS_JOB_TYPE
+    from .next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
     from .next_movievault_v2_contributions import (
+        TERMINAL_CONTRIBUTION_STATUSES,
         MovieVaultContributionError,
         disable_after_block,
+        read_contribution,
         record_failure,
+        submit_field_correction,
         submit_release_technical,
     )
     from .next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
@@ -86,10 +91,15 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from next_movievault_v2 import CONTRIBUTION_STATUS_JOB_TYPE
+    from next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
     from next_movievault_v2_contributions import (
+        TERMINAL_CONTRIBUTION_STATUSES,
         MovieVaultContributionError,
         disable_after_block,
+        read_contribution,
         record_failure,
+        submit_field_correction,
         submit_release_technical,
     )
     from next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
@@ -544,6 +554,12 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == RELEASE_CONTRIBUTION_JOB_TYPE:
         return process_movievault_v2_release_contribution(job, payload, worker_id)
 
+    if job_type == FIELD_CORRECTION_JOB_TYPE:
+        return process_movievault_v2_field_correction(job, payload, worker_id)
+
+    if job_type == CONTRIBUTION_STATUS_JOB_TYPE:
+        return process_movievault_v2_contribution_status(job, payload, worker_id)
+
     if job_type == POSTER_CACHE_JOB_TYPE:
         return process_movievault_v2_poster_cache(payload, worker_id)
 
@@ -718,6 +734,143 @@ def process_movievault_v2_release_contribution(
         "status": str(result.get("status") or ""),
         "duplicateOf": result.get("duplicateOf"),
     }
+
+
+# Moderation is a person reading a queue, so the first useful moment to ask is
+# an hour out and the last is weeks later. Deliberately bounded rather than
+# open-ended: a contribution nobody ever decides is a fact about MovieVault,
+# and polling it forever would leave a job pending in every DiscVault that ever
+# corrected a field.
+CONTRIBUTION_STATUS_BACKOFF_MINUTES = (60, 360, 1440, 4320, 10080, 10080, 10080)
+
+
+def process_movievault_v2_field_correction(
+    job: dict[str, Any], payload: dict[str, Any], worker_id: str
+) -> dict[str, Any]:
+    """Send one field correction, then start watching for its verdict.
+
+    The retry classification is `submit_release_technical`'s, because the
+    failures are the transport's rather than the payload's - the one difference
+    is that a rejected payload here is a bug in the eligible-field rules, which
+    live entirely on this side.
+    """
+    correction = payload.get("correction")
+    if not isinstance(correction, dict) or not correction:
+        raise RuntimeError("Field correction job carries no payload")
+    attempts = int(job.get("attempts") or 0)
+    try:
+        with connect() as conn:
+            result = submit_field_correction(conn, correction)
+    except MovieVaultContributionError as exc:
+        with connect() as conn:
+            if exc.code == "instance_blocked":
+                disable_after_block(conn)
+                raise RuntimeError("MovieVault blocked this instance: contribution disabled") from exc
+            record_failure(conn, exc.code)
+        if exc.retryable and attempts < len(RELEASE_CONTRIBUTION_BACKOFF_MINUTES):
+            raise JobRetry(
+                exc.code,
+                delay_seconds=RELEASE_CONTRIBUTION_BACKOFF_MINUTES[attempts] * 60,
+                result={"jobType": FIELD_CORRECTION_JOB_TYPE, "attempt": attempts + 1},
+            ) from exc
+        raise RuntimeError(f"MovieVault rejected the correction: {exc.code}") from exc
+
+    contribution_id = str(result.get("contributionId") or "")
+    status = str(result.get("status") or "")
+    if contribution_id and status not in TERMINAL_CONTRIBUTION_STATUSES:
+        # Only when there is something still to learn. A duplicate is already
+        # final on arrival, and polling it would ask a question with an answer
+        # in hand.
+        _queue_contribution_status_poll(contribution_id, worker_id)
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": FIELD_CORRECTION_JOB_TYPE,
+        "contributionId": contribution_id,
+        "status": status,
+        "duplicateOf": result.get("duplicateOf"),
+    }
+
+
+def _queue_contribution_status_poll(contribution_id: str, worker_id: str) -> None:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM background_jobs
+            WHERE job_type = %s
+              AND status IN ('pending', 'running')
+              AND payload ->> 'contributionId' = %s
+            LIMIT 1
+            """,
+            (CONTRIBUTION_STATUS_JOB_TYPE, contribution_id),
+        )
+        if cur.fetchone():
+            return
+        cur.execute(
+            """
+            INSERT INTO background_jobs (job_type, payload, run_after)
+            VALUES (%s, %s, now() + make_interval(mins => %s))
+            """,
+            (
+                CONTRIBUTION_STATUS_JOB_TYPE,
+                Jsonb({"contributionId": contribution_id, "workerId": worker_id}),
+                CONTRIBUTION_STATUS_BACKOFF_MINUTES[0],
+            ),
+        )
+
+
+def process_movievault_v2_contribution_status(
+    job: dict[str, Any], payload: dict[str, Any], worker_id: str
+) -> dict[str, Any]:
+    """Ask what became of one contribution, until there is an answer or a cap.
+
+    Every non-terminal status is a retry, which makes "still pending" and "the
+    request failed" the same handling - correct here, because both mean the same
+    thing to the person waiting: not yet. What separates them is the ladder
+    running out, and that ends the job rather than failing it: nothing is wrong
+    with a contribution a moderator has not reached.
+    """
+    contribution_id = clean_text(payload.get("contributionId"))
+    if not contribution_id:
+        raise RuntimeError("Contribution status job carries no contribution id")
+    attempts = int(job.get("attempts") or 0)
+    try:
+        with connect() as conn:
+            result = read_contribution(conn, contribution_id)
+    except MovieVaultContributionError as exc:
+        if exc.code == "contribution_not_found":
+            # The instance was reset, or the contribution belongs to an identity
+            # this DiscVault no longer holds. Nothing further to learn.
+            raise RuntimeError("MovieVault does not know this contribution") from exc
+        if attempts < len(CONTRIBUTION_STATUS_BACKOFF_MINUTES):
+            raise JobRetry(
+                exc.code,
+                delay_seconds=CONTRIBUTION_STATUS_BACKOFF_MINUTES[attempts] * 60,
+                result={"jobType": CONTRIBUTION_STATUS_JOB_TYPE, "attempt": attempts + 1},
+            ) from exc
+        raise RuntimeError(f"Gave up reading the contribution status: {exc.code}") from exc
+
+    status = str(result.get("status") or "")
+    summary = {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": CONTRIBUTION_STATUS_JOB_TYPE,
+        "contributionId": contribution_id,
+        "status": status,
+        "canonicalTargetType": result.get("canonicalTargetType"),
+        "canonicalTargetId": result.get("canonicalTargetId"),
+        "duplicateOf": result.get("duplicateOf"),
+    }
+    if status in TERMINAL_CONTRIBUTION_STATUSES:
+        return summary
+    if attempts < len(CONTRIBUTION_STATUS_BACKOFF_MINUTES):
+        raise JobRetry(
+            "contribution_pending",
+            delay_seconds=CONTRIBUTION_STATUS_BACKOFF_MINUTES[attempts] * 60,
+            result={**summary, "attempt": attempts + 1},
+        )
+    return {**summary, "gaveUp": True}
 
 
 def process_movievault_v2_poster_cache(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
