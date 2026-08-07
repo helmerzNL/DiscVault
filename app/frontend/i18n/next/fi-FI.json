@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Instanssin tila",
   "preferences.movieVaultRegistered": "Rekisteröity",
   "preferences.movieVaultNotRegistered": "Ei vielä rekisteröity. Ensimmäinen osallistuminen rekisteröi tämän instanssin.",
-  "preferences.movieVaultLastError": "Viimeisin virhe"
+  "preferences.movieVaultLastError": "Viimeisin virhe",
+  "contribute.statusPrefix": "Korjauksesi",
+  "contribute.status.queued": "Jonossa",
+  "contribute.status.pending": "Odottaa tarkistusta",
+  "contribute.status.accepted": "Hyväksytty",
+  "contribute.status.partiallyAccepted": "Osittain hyväksytty",
+  "contribute.status.rejected": "Hylätty",
+  "contribute.status.failed": "Ei lähetetty"
 }

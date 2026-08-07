@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "实例状态",
   "preferences.movieVaultRegistered": "已注册",
   "preferences.movieVaultNotRegistered": "尚未注册。首次贡献将注册此实例。",
-  "preferences.movieVaultLastError": "最近一次错误"
+  "preferences.movieVaultLastError": "最近一次错误",
+  "contribute.statusPrefix": "你的更正",
+  "contribute.status.queued": "排队中",
+  "contribute.status.pending": "等待审核",
+  "contribute.status.accepted": "已采纳",
+  "contribute.status.partiallyAccepted": "部分采纳",
+  "contribute.status.rejected": "未采纳",
+  "contribute.status.failed": "未发送"
 }

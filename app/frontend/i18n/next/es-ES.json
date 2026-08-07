@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Estado de la instancia",
   "preferences.movieVaultRegistered": "Registrada",
   "preferences.movieVaultNotRegistered": "Todavía sin registrar. La primera contribución registra esta instancia.",
-  "preferences.movieVaultLastError": "Último error"
+  "preferences.movieVaultLastError": "Último error",
+  "contribute.statusPrefix": "Tu corrección",
+  "contribute.status.queued": "En cola",
+  "contribute.status.pending": "Pendiente de moderación",
+  "contribute.status.accepted": "Aceptada",
+  "contribute.status.partiallyAccepted": "Aceptada en parte",
+  "contribute.status.rejected": "Rechazada",
+  "contribute.status.failed": "No enviada"
 }

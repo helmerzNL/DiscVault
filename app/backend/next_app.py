@@ -158,6 +158,8 @@ try:
     from .next_movievault_v2_contributions import field_correction_enabled
     from .next_movievault_v2_contributions import field_correction_gate
     from .next_movievault_v2_field_corrections import correction_preview
+    from .next_movievault_v2_field_corrections import latest_contribution
+    from .next_movievault_v2_field_corrections import record_contribution
     from .dedup_identity import MEDIA_TYPE_MOVIE
     from .dedup_identity import MEDIA_TYPE_SHOW
     from .dedup_identity import infer_media_type_from_title
@@ -411,6 +413,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2_contributions import field_correction_enabled
     from next_movievault_v2_contributions import field_correction_gate
     from next_movievault_v2_field_corrections import correction_preview
+    from next_movievault_v2_field_corrections import latest_contribution
+    from next_movievault_v2_field_corrections import record_contribution
     from dedup_identity import MEDIA_TYPE_MOVIE
     from dedup_identity import MEDIA_TYPE_SHOW
     from dedup_identity import infer_media_type_from_title
@@ -22751,6 +22755,11 @@ def register_routes(flask_app: Flask) -> None:
                     # whether there is anything to send, not what it is.
                     "changedFields": [item["field"] for item in preview["changes"]],
                     "withheld": preview["withheld"],
+                    # What became of the last correction sent for this record.
+                    # On the same round trip the button already makes: a second
+                    # endpoint for it would double the cost of every detail
+                    # render to answer half a question.
+                    "lastContribution": latest_contribution(conn, entity=entity, record=record),
                 }
             )
 
@@ -22799,6 +22808,20 @@ def register_routes(flask_app: Flask) -> None:
                 actor=actor,
                 reason="field_correction",
             )
+            if job:
+                # Logged at the moment it is queued rather than when it is
+                # sent, so "queued and never delivered" is itself visible. A
+                # row that stays at `queued` says the worker never reached it,
+                # which is a different fault from one that says `failed`.
+                record_contribution(
+                    conn,
+                    entity=entity,
+                    record=record,
+                    target=preview["target"],
+                    changes=preview["changes"],
+                    job_id=job.get("id"),
+                    actor_id=actor.get("id") if actor else None,
+                )
             return response(
                 {
                     "status": "ok",

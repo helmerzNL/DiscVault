@@ -247,12 +247,35 @@ class StatusPollTests(unittest.TestCase):
         self.worker = next_worker
 
     def _poll(self, status, attempts):
+        """Runs the handler with the log write captured rather than stubbed out.
+
+        The write is part of what the poll is *for* -- the outcome has to
+        outlive the job -- so swallowing it here would leave the one behaviour
+        the user sees untested.
+        """
+        self.logged = []
         with patch.object(self.worker, "connect", lambda *a, **k: _NullConnection()), patch.object(
             self.worker, "read_contribution", lambda conn, cid, **k: {"contributionId": cid, "status": status}
+        ), patch.object(
+            self.worker,
+            "update_contribution_by_contribution_id",
+            lambda conn, cid, **values: self.logged.append((cid, values)),
         ):
             return self.worker.process_movievault_v2_contribution_status(
                 {"attempts": attempts}, {"contributionId": "c-1"}, "worker-1"
             )
+
+    def test_every_answer_is_written_to_the_log(self):
+        """Including the ones that are not decisions. A screen showing
+        "awaiting moderation" is only honest if that state was actually
+        confirmed rather than assumed from the absence of news."""
+        for status in ("pending", "accepted"):
+            try:
+                self._poll(status, 0)
+            except self.worker.JobRetry:
+                pass
+            self.assertEqual(self.logged[0][0], "c-1")
+            self.assertEqual(self.logged[0][1]["status"], status)
 
     def test_a_pending_answer_is_asked_again(self):
         with self.assertRaises(self.worker.JobRetry) as caught:
@@ -291,6 +314,8 @@ class StatusPollTests(unittest.TestCase):
 
         with patch.object(self.worker, "connect", lambda *a, **k: _NullConnection()), patch.object(
             self.worker, "read_contribution", _raise
+        ), patch.object(
+            self.worker, "update_contribution_by_contribution_id", lambda *a, **k: None
         ):
             with self.assertRaises(RuntimeError):
                 self.worker.process_movievault_v2_contribution_status(

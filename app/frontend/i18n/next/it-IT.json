@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Stato dell'istanza",
   "preferences.movieVaultRegistered": "Registrata",
   "preferences.movieVaultNotRegistered": "Non ancora registrata. Il primo contributo registra questa istanza.",
-  "preferences.movieVaultLastError": "Ultimo errore"
+  "preferences.movieVaultLastError": "Ultimo errore",
+  "contribute.statusPrefix": "La tua correzione",
+  "contribute.status.queued": "In coda",
+  "contribute.status.pending": "In attesa di moderazione",
+  "contribute.status.accepted": "Accettata",
+  "contribute.status.partiallyAccepted": "Accettata in parte",
+  "contribute.status.rejected": "Rifiutata",
+  "contribute.status.failed": "Non inviata"
 }

@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Instansens status",
   "preferences.movieVaultRegistered": "Registrert",
   "preferences.movieVaultNotRegistered": "Ikke registrert ennå. Det første bidraget registrerer denne instansen.",
-  "preferences.movieVaultLastError": "Siste feil"
+  "preferences.movieVaultLastError": "Siste feil",
+  "contribute.statusPrefix": "Rettelsen din",
+  "contribute.status.queued": "I kø",
+  "contribute.status.pending": "Venter på moderering",
+  "contribute.status.accepted": "Godtatt",
+  "contribute.status.partiallyAccepted": "Delvis godtatt",
+  "contribute.status.rejected": "Avvist",
+  "contribute.status.failed": "Ikke sendt"
 }

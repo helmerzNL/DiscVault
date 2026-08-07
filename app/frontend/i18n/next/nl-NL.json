@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Status van de instantie",
   "preferences.movieVaultRegistered": "Geregistreerd",
   "preferences.movieVaultNotRegistered": "Nog niet geregistreerd. De eerste bijdrage registreert deze instantie.",
-  "preferences.movieVaultLastError": "Laatste fout"
+  "preferences.movieVaultLastError": "Laatste fout",
+  "contribute.statusPrefix": "Jouw correctie",
+  "contribute.status.queued": "In de wachtrij",
+  "contribute.status.pending": "Wacht op moderatie",
+  "contribute.status.accepted": "Overgenomen",
+  "contribute.status.partiallyAccepted": "Deels overgenomen",
+  "contribute.status.rejected": "Afgewezen",
+  "contribute.status.failed": "Niet verstuurd"
 }

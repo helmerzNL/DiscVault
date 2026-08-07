@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Състояние на инстанцията",
   "preferences.movieVaultRegistered": "Регистрирана",
   "preferences.movieVaultNotRegistered": "Още не е регистрирана. Първият принос регистрира тази инстанция.",
-  "preferences.movieVaultLastError": "Последна грешка"
+  "preferences.movieVaultLastError": "Последна грешка",
+  "contribute.statusPrefix": "Вашата корекция",
+  "contribute.status.queued": "В опашката",
+  "contribute.status.pending": "Чака модерация",
+  "contribute.status.accepted": "Приета",
+  "contribute.status.partiallyAccepted": "Частично приета",
+  "contribute.status.rejected": "Отхвърлена",
+  "contribute.status.failed": "Неизпратена"
 }

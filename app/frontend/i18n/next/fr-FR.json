@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "État de l'instance",
   "preferences.movieVaultRegistered": "Enregistrée",
   "preferences.movieVaultNotRegistered": "Pas encore enregistrée. La première contribution enregistre cette instance.",
-  "preferences.movieVaultLastError": "Dernière erreur"
+  "preferences.movieVaultLastError": "Dernière erreur",
+  "contribute.statusPrefix": "Votre correction",
+  "contribute.status.queued": "En file d'attente",
+  "contribute.status.pending": "En attente de modération",
+  "contribute.status.accepted": "Acceptée",
+  "contribute.status.partiallyAccepted": "Partiellement acceptée",
+  "contribute.status.rejected": "Refusée",
+  "contribute.status.failed": "Non envoyée"
 }
