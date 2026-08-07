@@ -90,7 +90,13 @@ class CorrectionRouteTests(unittest.TestCase):
     def test_the_two_gate_halves_are_reported_apart(self):
         """A client that only learns "not enabled" cannot tell the half it can
         act on from the half it cannot. It offered "Agree and send" while the
-        owner flag was off, and the send was then refused."""
+        owner flag was off, and the send was then refused.
+
+        The halves are reported so the client can *explain* which one is off,
+        not so it can hide itself: hiding the button when the owner half was
+        off removed the only clue on an instance where the person looking at
+        the screen is usually the owner who can flip it.
+        """
         response = self._run(
             lambda: self.client.get(f"/api/next/movievault/contributions/eligibility?entity=movie&id={MOVIE_ID}"),
             enabled=False,
@@ -100,6 +106,10 @@ class CorrectionRouteTests(unittest.TestCase):
         self.assertFalse(payload["ownerEnabled"])
         self.assertFalse(payload["userEnabled"])
         self.assertFalse(payload["enabled"])
+        # Still reported as correctable, so the client has something to draw
+        # and something to explain.
+        self.assertEqual(payload["mode"], "correction")
+        self.assertEqual(payload["changedFields"], ["edition", "format"])
 
     def test_eligibility_reports_the_preference_without_enforcing_it(self):
         """The button is drawn before the user has ever agreed, because

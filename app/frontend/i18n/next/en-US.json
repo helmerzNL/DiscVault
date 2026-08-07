@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Send my corrections to MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Adds a Contribute button next to your edits. Nothing is sent until you confirm each field, and a moderator reviews it before the shared catalogue changes.",
   "preferences.confirmEveryUpload": "Explain what is shared every time",
-  "preferences.confirmEveryUploadHelp": "Repeats the explanation of what does and does not travel every time you contribute, instead of only the first time."
+  "preferences.confirmEveryUploadHelp": "Repeats the explanation of what does and does not travel every time you contribute, instead of only the first time.",
+  "contribute.disabledTitle": "Contributing is switched off",
+  "contribute.disabledLead": "This DiscVault does not send anything to MovieVault. That is an owner setting, not a personal one, so agreeing to share here would change nothing.",
+  "contribute.disabledWhere": "An owner can turn it on under Admin, Security, with Toggle Release Contribution. The same switch covers releases and field corrections."
 }

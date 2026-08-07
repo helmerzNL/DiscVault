@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "自分の修正を MovieVault に送信する",
   "preferences.shareFieldCorrectionsHelp": "編集の横に提供ボタンを追加します。各項目を確認するまで何も送信されず、共有カタログが変わる前にモデレーターが確認します。",
   "preferences.confirmEveryUpload": "毎回、共有される内容を説明する",
-  "preferences.confirmEveryUploadHelp": "何が送信され何が送信されないかの説明を、初回だけでなく提供のたびに表示します。"
+  "preferences.confirmEveryUploadHelp": "何が送信され何が送信されないかの説明を、初回だけでなく提供のたびに表示します。",
+  "contribute.disabledTitle": "提供は無効になっています",
+  "contribute.disabledLead": "この DiscVault は MovieVault へ何も送信しません。これは個人設定ではなくオーナー設定なので、ここで共有に同意しても何も変わりません。",
+  "contribute.disabledWhere": "オーナーは Admin の Security にある Toggle Release Contribution で有効にできます。同じスイッチがリリースと項目の修正の両方に適用されます。"
 }

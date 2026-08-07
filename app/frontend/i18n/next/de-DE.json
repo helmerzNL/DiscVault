@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Meine Korrekturen an MovieVault senden",
   "preferences.shareFieldCorrectionsHelp": "Fügt neben deinen Änderungen eine Beitragen-Schaltfläche hinzu. Es wird nichts gesendet, bevor du jedes Feld bestätigst, und eine Moderation prüft es, bevor sich der gemeinsame Katalog ändert.",
   "preferences.confirmEveryUpload": "Jedes Mal erklären, was geteilt wird",
-  "preferences.confirmEveryUploadHelp": "Wiederholt bei jedem Beitrag die Erklärung, was übertragen wird und was nicht, statt nur beim ersten Mal."
+  "preferences.confirmEveryUploadHelp": "Wiederholt bei jedem Beitrag die Erklärung, was übertragen wird und was nicht, statt nur beim ersten Mal.",
+  "contribute.disabledTitle": "Beitragen ist ausgeschaltet",
+  "contribute.disabledLead": "Dieses DiscVault sendet nichts an MovieVault. Das ist eine Eigentümereinstellung und keine persönliche, eine Zustimmung hier würde also nichts ändern.",
+  "contribute.disabledWhere": "Ein Eigentümer kann es unter Admin, Security mit Toggle Release Contribution einschalten. Derselbe Schalter gilt für Releases und Feldkorrekturen."
 }

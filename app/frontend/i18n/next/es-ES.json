@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Enviar mis correcciones a MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Añade un botón Contribuir junto a tus ediciones. No se envía nada hasta que confirmas cada campo, y un moderador lo revisa antes de que cambie el catálogo compartido.",
   "preferences.confirmEveryUpload": "Explicar cada vez qué se comparte",
-  "preferences.confirmEveryUploadHelp": "Repite en cada contribución la explicación de lo que se transmite y lo que no, en lugar de solo la primera vez."
+  "preferences.confirmEveryUploadHelp": "Repite en cada contribución la explicación de lo que se transmite y lo que no, en lugar de solo la primera vez.",
+  "contribute.disabledTitle": "Contribuir está desactivado",
+  "contribute.disabledLead": "Este DiscVault no envía nada a MovieVault. Es un ajuste del propietario, no personal, así que aceptar compartir aquí no cambiaría nada.",
+  "contribute.disabledWhere": "Un propietario puede activarlo en Admin, Security, con Toggle Release Contribution. Ese mismo interruptor cubre las ediciones y las correcciones de campos."
 }

@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Trimite corecturile mele către MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Adaugă un buton Contribuie lângă modificările tale. Nu se trimite nimic până nu confirmi fiecare câmp, iar un moderator îl verifică înainte ca acel catalog comun să se schimbe.",
   "preferences.confirmEveryUpload": "Explică de fiecare dată ce se partajează",
-  "preferences.confirmEveryUploadHelp": "Repetă la fiecare contribuție explicația despre ce se trimite și ce nu, în loc doar de prima dată."
+  "preferences.confirmEveryUploadHelp": "Repetă la fiecare contribuție explicația despre ce se trimite și ce nu, în loc doar de prima dată.",
+  "contribute.disabledTitle": "Contribuția este dezactivată",
+  "contribute.disabledLead": "Acest DiscVault nu trimite nimic către MovieVault. Este o setare a proprietarului, nu una personală, așa că acceptarea partajării aici nu ar schimba nimic.",
+  "contribute.disabledWhere": "Un proprietar o poate activa din Admin, Security, cu Toggle Release Contribution. Același comutator acoperă edițiile și corecturile de câmpuri."
 }

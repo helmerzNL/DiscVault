@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Send mine rettelser til MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Tilføjer en Bidrag-knap ved siden af dine redigeringer. Intet sendes, før du bekræfter hvert felt, og en moderator gennemgår det, før det fælles katalog ændrer sig.",
   "preferences.confirmEveryUpload": "Forklar hver gang, hvad der deles",
-  "preferences.confirmEveryUploadHelp": "Gentager ved hvert bidrag forklaringen på, hvad der sendes med og hvad ikke, i stedet for kun første gang."
+  "preferences.confirmEveryUploadHelp": "Gentager ved hvert bidrag forklaringen på, hvad der sendes med og hvad ikke, i stedet for kun første gang.",
+  "contribute.disabledTitle": "Bidrag er slået fra",
+  "contribute.disabledLead": "Denne DiscVault sender intet til MovieVault. Det er en ejerindstilling og ikke en personlig, så at acceptere deling her ville ikke ændre noget.",
+  "contribute.disabledWhere": "En ejer kan slå det til under Admin, Security med Toggle Release Contribution. Samme kontakt dækker udgivelser og feltrettelser."
 }

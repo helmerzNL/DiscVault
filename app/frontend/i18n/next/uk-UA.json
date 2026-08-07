@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Надсилати мої виправлення до MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Додає кнопку Зробити внесок поряд із вашими змінами. Нічого не надсилається, доки ви не підтвердите кожне поле, і модератор переглядає це, перш ніж спільний каталог зміниться.",
   "preferences.confirmEveryUpload": "Щоразу пояснювати, чим ви ділитеся",
-  "preferences.confirmEveryUploadHelp": "Повторює при кожному внеску пояснення, що передається, а що ні, замість лише першого разу."
+  "preferences.confirmEveryUploadHelp": "Повторює при кожному внеску пояснення, що передається, а що ні, замість лише першого разу.",
+  "contribute.disabledTitle": "Внески вимкнено",
+  "contribute.disabledLead": "Цей DiscVault нічого не надсилає до MovieVault. Це налаштування власника, а не особисте, тож згода на поширення тут нічого не змінить.",
+  "contribute.disabledWhere": "Власник може ввімкнути це в Admin, Security кнопкою Toggle Release Contribution. Той самий перемикач охоплює видання та виправлення полів."
 }

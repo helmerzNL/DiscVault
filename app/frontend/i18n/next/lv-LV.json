@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Sūtīt manus labojumus uz MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Pievieno pogu Sniegt ieguldījumu blakus jūsu labojumiem. Nekas netiek nosūtīts, kamēr neapstiprināt katru lauku, un moderators to pārskata, pirms kopīgais katalogs mainās.",
   "preferences.confirmEveryUpload": "Katru reizi paskaidrot, kas tiek kopīgots",
-  "preferences.confirmEveryUploadHelp": "Atkārto katrā ieguldījumā paskaidrojumu par to, kas tiek nosūtīts un kas ne, nevis tikai pirmajā reizē."
+  "preferences.confirmEveryUploadHelp": "Atkārto katrā ieguldījumā paskaidrojumu par to, kas tiek nosūtīts un kas ne, nevis tikai pirmajā reizē.",
+  "contribute.disabledTitle": "Ieguldījuma sniegšana ir izslēgta",
+  "contribute.disabledLead": "Šis DiscVault nesūta uz MovieVault neko. Tas ir īpašnieka, nevis personisks iestatījums, tāpēc piekrišana kopīgošanai šeit neko nemainītu.",
+  "contribute.disabledWhere": "Īpašnieks to var ieslēgt sadaļā Admin, Security ar Toggle Release Contribution. Tas pats slēdzis attiecas uz izdevumiem un lauku labojumiem."
 }

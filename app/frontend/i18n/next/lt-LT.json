@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Siųsti mano pataisymus į MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Prideda mygtuką Prisidėti šalia jūsų redagavimų. Niekas nesiunčiama, kol nepatvirtinate kiekvieno lauko, o moderatorius tai peržiūri prieš pasikeičiant bendram katalogui.",
   "preferences.confirmEveryUpload": "Kiekvieną kartą paaiškinti, kas dalijamasi",
-  "preferences.confirmEveryUploadHelp": "Kartoja kiekvieną kartą prisidedant paaiškinimą, kas siunčiama ir kas ne, o ne tik pirmą kartą."
+  "preferences.confirmEveryUploadHelp": "Kartoja kiekvieną kartą prisidedant paaiškinimą, kas siunčiama ir kas ne, o ne tik pirmą kartą.",
+  "contribute.disabledTitle": "Prisidėjimas išjungtas",
+  "contribute.disabledLead": "Šis DiscVault į MovieVault nieko nesiunčia. Tai savininko, o ne asmeninis nustatymas, todėl sutikimas dalytis čia nieko nepakeistų.",
+  "contribute.disabledWhere": "Savininkas gali jį įjungti Admin, Security skiltyje mygtuku Toggle Release Contribution. Tas pats jungiklis apima leidimus ir laukų pataisymus."
 }

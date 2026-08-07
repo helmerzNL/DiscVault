@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Saada minu parandused MovieVaulti",
   "preferences.shareFieldCorrectionsHelp": "Lisab sinu muudatuste kõrvale nupu Panusta. Midagi ei saadeta enne, kui kinnitad iga välja, ja moderaator vaatab selle üle, enne kui jagatud kataloog muutub.",
   "preferences.confirmEveryUpload": "Selgita iga kord, mida jagatakse",
-  "preferences.confirmEveryUploadHelp": "Kordab igal panustamisel selgitust selle kohta, mis saadetakse ja mis mitte, mitte ainult esimesel korral."
+  "preferences.confirmEveryUploadHelp": "Kordab igal panustamisel selgitust selle kohta, mis saadetakse ja mis mitte, mitte ainult esimesel korral.",
+  "contribute.disabledTitle": "Panustamine on välja lülitatud",
+  "contribute.disabledLead": "See DiscVault ei saada MovieVaulti midagi. See on omaniku säte, mitte isiklik, nii et jagamisega nõustumine ei muudaks siin midagi.",
+  "contribute.disabledWhere": "Omanik saab selle sisse lülitada jaotises Admin, Security nupuga Toggle Release Contribution. Sama lüliti katab väljaanded ja väljaparandused."
 }
