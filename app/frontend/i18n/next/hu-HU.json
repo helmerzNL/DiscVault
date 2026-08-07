@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Segítsd a közös katalógust az általad azonosított kiadásokkal.",
   "preferences.shareReleaseSelections": "Az általam azonosított kiadások megosztása",
   "preferences.shareReleaseSelectionsHelp": "Ha egy vonalkódot nem ismer fel a rendszer, és kiválasztod a kezedben tartott kiadást, ezek az adatok ellenőrzésre a MovieVaulthoz kerülnek. Csak nyilvános lemezadatok kerülnek elküldésre - soha a gyűjteményed, a megtekintési előzményeid vagy bármi, ami azonosít téged.",
-  "contribute.action": "Feltöltés",
+  "contribute.action": "Hozzájárulás",
   "contribute.title": "Javítások küldése a MovieVaultnak",
   "contribute.introLead": "Az elküldött javításokat egy MovieVault-moderátor ellenőrzi, mielőtt bárki más számára bármi megváltozna.",
   "contribute.introSends": "Csak az alább felsorolt mezők utaznak, azzal az értékkel együtt, amely most a MovieVaultban szerepel, hogy a moderátor összehasonlíthassa őket.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Játékidő",
   "contribute.field.distributor": "Forgalmazó",
   "preferences.shareFieldCorrections": "Javításaim küldése a MovieVaultnak",
-  "preferences.shareFieldCorrectionsHelp": "Feltöltés gombot helyez a szerkesztéseid mellé. Semmi nem indul el, amíg minden mezőt meg nem erősítesz, és egy moderátor átnézi, mielőtt a közös katalógus megváltozna.",
+  "preferences.shareFieldCorrectionsHelp": "Hozzájárulás gombot helyez a szerkesztéseid mellé. Semmi nem indul el, amíg minden mezőt meg nem erősítesz, és egy moderátor átnézi, mielőtt a közös katalógus megváltozna.",
   "preferences.confirmEveryUpload": "Minden alkalommal magyarázza el, mi kerül megosztásra",
-  "preferences.confirmEveryUploadHelp": "Minden feltöltésnél megismétli a magyarázatot arról, mi utazik és mi nem, nem csak az első alkalommal."
+  "preferences.confirmEveryUploadHelp": "Minden hozzájárulásnál megismétli a magyarázatot arról, mi utazik és mi nem, nem csak az első alkalommal."
 }

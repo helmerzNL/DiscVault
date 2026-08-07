@@ -156,6 +156,7 @@ try:
     from .next_movievault_v2 import release_technical_contribution_payload
     from .next_movievault_v2_contributions import release_contribution_enabled
     from .next_movievault_v2_contributions import field_correction_enabled
+    from .next_movievault_v2_contributions import field_correction_gate
     from .next_movievault_v2_field_corrections import correction_preview
     from .dedup_identity import MEDIA_TYPE_MOVIE
     from .dedup_identity import MEDIA_TYPE_SHOW
@@ -408,6 +409,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2 import release_technical_contribution_payload
     from next_movievault_v2_contributions import release_contribution_enabled
     from next_movievault_v2_contributions import field_correction_enabled
+    from next_movievault_v2_contributions import field_correction_gate
     from next_movievault_v2_field_corrections import correction_preview
     from dedup_identity import MEDIA_TYPE_MOVIE
     from dedup_identity import MEDIA_TYPE_SHOW
@@ -22730,12 +22732,19 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             actor = require_next_permission(conn, "collection.edit_all")
             record, metadata = _correction_record(conn, actor, entity, entity_id)
-            enabled = field_correction_enabled(conn, actor.get("id") if actor else None)
+            gate = field_correction_gate(conn, actor.get("id") if actor else None)
             preview = correction_preview(conn, entity=entity, record=record, metadata=metadata)
             return response(
                 {
                     "status": "ok",
-                    "enabled": enabled,
+                    "enabled": gate["owner"] and gate["user"],
+                    # Reported apart as well as composed. A client that only
+                    # learns "not enabled" cannot tell the half it can do
+                    # something about from the half it cannot, and offering a
+                    # consent that the owner flag will refuse anyway reads as
+                    # the consent having failed to register.
+                    "ownerEnabled": gate["owner"],
+                    "userEnabled": gate["user"],
                     "mode": preview["mode"],
                     "target": preview["target"],
                     # The count rather than the diff: a button needs to know

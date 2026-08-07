@@ -598,17 +598,33 @@ def field_correction_enabled(conn, user_id: Any = None) -> bool:
     The owner flag is shared: it answers "does anything leave this instance at
     all", which is one question however many kinds of contribution exist.
     """
+    gate = field_correction_gate(conn, user_id)
+    return gate["owner"] and gate["user"]
+
+
+def field_correction_gate(conn, user_id: Any = None) -> dict[str, bool]:
+    """The two halves of the gate, separately.
+
+    Composed they answer "may this be sent". Apart they answer "and who has to
+    do something about it", which is a different question and the one a screen
+    needs. Collapsing them into one boolean made a client offer the user a
+    consent that could not possibly help: the owner flag was off, the user
+    agreed to sharing, and the send was refused anyway with a message that read
+    as though agreeing had not registered.
+
+    An owner flag that is off is nothing the user can act on. A preference that
+    is off is nothing anyone else can act on. One boolean cannot say which.
+    """
     if not _table_exists(conn, "app_settings"):
-        return False
+        return {"owner": False, "user": False}
     enabled = _setting_value(conn, CONTRIBUTION_ENABLED_KEY, False)
-    if not (enabled is True or _text(enabled).lower() in {"1", "true", "yes", "on"}):
-        return False
+    owner = enabled is True or _text(enabled).lower() in {"1", "true", "yes", "on"}
     try:
         from .next_preferences import app_effective_preferences
     except ImportError:  # pragma: no cover - supports running modules directly
         from next_preferences import app_effective_preferences
     preferences = app_effective_preferences(conn, user_id)
-    return bool(preferences.get("share_field_corrections"))
+    return {"owner": owner, "user": bool(preferences.get("share_field_corrections"))}
 
 
 def record_failure(conn, code: str) -> None:

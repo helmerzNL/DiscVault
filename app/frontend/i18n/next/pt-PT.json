@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Ajude o catálogo partilhado contribuindo as edições que identifica.",
   "preferences.shareReleaseSelections": "Partilhar as edições que identifico",
   "preferences.shareReleaseSelectionsHelp": "Quando um código de barras não é reconhecido e escolhe a prensagem que tem em mãos, esses dados são enviados ao MovieVault para revisão. Apenas informação pública do disco é enviada - nunca a sua coleção, histórico ou algo que o identifique.",
-  "contribute.action": "Enviar",
+  "contribute.action": "Contribuir",
   "contribute.title": "Enviar correções para o MovieVault",
   "contribute.introLead": "As correções que envia são revistas por um moderador do MovieVault antes de mudar algo para os outros.",
   "contribute.introSends": "Só os campos listados abaixo são transmitidos, juntamente com o valor que o MovieVault tem agora para o moderador poder comparar.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Duração",
   "contribute.field.distributor": "Distribuidora",
   "preferences.shareFieldCorrections": "Enviar as minhas correções para o MovieVault",
-  "preferences.shareFieldCorrectionsHelp": "Adiciona um botão Enviar junto às suas edições. Nada é enviado até confirmar cada campo, e um moderador revê antes de o catálogo partilhado mudar.",
+  "preferences.shareFieldCorrectionsHelp": "Adiciona um botão Contribuir junto às suas edições. Nada é enviado até confirmar cada campo, e um moderador revê antes de o catálogo partilhado mudar.",
   "preferences.confirmEveryUpload": "Explicar sempre o que é partilhado",
-  "preferences.confirmEveryUploadHelp": "Repete em cada envio a explicação do que é ou não transmitido, em vez de apenas na primeira vez."
+  "preferences.confirmEveryUploadHelp": "Repete em cada contribuição a explicação do que é ou não transmitido, em vez de apenas na primeira vez."
 }

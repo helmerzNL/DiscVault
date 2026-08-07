@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Pomóż wspólnemu katalogowi, przekazując rozpoznane przez siebie wydania.",
   "preferences.shareReleaseSelections": "Udostępniaj wydania, które rozpoznaję",
   "preferences.shareReleaseSelectionsHelp": "Gdy kod kreskowy nie zostanie rozpoznany, a Ty wybierzesz trzymane w ręku tłoczenie, te dane trafią do MovieVault do weryfikacji. Wysyłane są tylko publiczne informacje o płycie - nigdy Twoja kolekcja, historia oglądania ani nic, co Cię identyfikuje.",
-  "contribute.action": "Wyślij",
+  "contribute.action": "Wnieś wkład",
   "contribute.title": "Wyślij poprawki do MovieVault",
   "contribute.introLead": "Wysłane poprawki sprawdza moderator MovieVault, zanim cokolwiek zmieni się dla innych.",
   "contribute.introSends": "Przesyłane są wyłącznie pola wymienione poniżej wraz z wartością, którą MovieVault ma obecnie, aby moderator mógł je porównać.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Czas trwania",
   "contribute.field.distributor": "Dystrybutor",
   "preferences.shareFieldCorrections": "Wysyłaj moje poprawki do MovieVault",
-  "preferences.shareFieldCorrectionsHelp": "Dodaje przycisk Wyślij obok Twoich zmian. Nic nie zostanie wysłane, dopóki nie potwierdzisz każdego pola, a moderator sprawdzi to, zanim wspólny katalog się zmieni.",
+  "preferences.shareFieldCorrectionsHelp": "Dodaje przycisk Wnieś wkład obok Twoich zmian. Nic nie zostanie wysłane, dopóki nie potwierdzisz każdego pola, a moderator sprawdzi to, zanim wspólny katalog się zmieni.",
   "preferences.confirmEveryUpload": "Za każdym razem wyjaśniaj, co jest udostępniane",
-  "preferences.confirmEveryUploadHelp": "Powtarza przy każdym wysłaniu wyjaśnienie, co jest przesyłane, a co nie, zamiast tylko za pierwszym razem."
+  "preferences.confirmEveryUploadHelp": "Powtarza przy każdym wkładzie wyjaśnienie, co jest przesyłane, a co nie, zamiast tylko za pierwszym razem."
 }

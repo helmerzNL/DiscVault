@@ -200,6 +200,32 @@ class GateTests(unittest.TestCase):
         second by having agreed to the first."""
         self.assertFalse(self._enabled(owner=True, corrections=False, releases=True))
 
+    def _gate(self, *, owner, corrections):
+        with patch.object(contributions, "_table_exists", lambda *a: True), patch.object(
+            contributions, "_setting_value", lambda conn, key, default=None, **k: owner
+        ), patch(
+            "app.backend.next_preferences.app_effective_preferences",
+            lambda conn, user_id=None: {"share_field_corrections": corrections},
+        ):
+            return contributions.field_correction_gate(object(), None)
+
+    def test_the_two_halves_are_reported_apart(self):
+        """Composed they answer "may this be sent". Apart they answer "and who
+        has to do something about it", which is what a screen needs.
+
+        Collapsed into one boolean, a client offered the user a consent that
+        could not possibly help: the owner flag was off, the user agreed, and
+        the send was refused with a message that read as though agreeing had
+        not registered.
+        """
+        self.assertEqual(self._gate(owner=False, corrections=True), {"owner": False, "user": True})
+        self.assertEqual(self._gate(owner=True, corrections=False), {"owner": True, "user": False})
+        self.assertEqual(self._gate(owner=True, corrections=True), {"owner": True, "user": True})
+
+    def test_the_composed_gate_still_needs_both(self):
+        for owner, corrections in ((False, True), (True, False), (False, False)):
+            self.assertFalse(self._enabled(owner=owner, corrections=corrections))
+
     def test_the_preferences_default_to_off(self):
         from app.backend import next_preferences
 

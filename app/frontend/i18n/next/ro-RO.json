@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Ajută catalogul comun contribuind cu edițiile pe care le identifici.",
   "preferences.shareReleaseSelections": "Partajează edițiile pe care le identific",
   "preferences.shareReleaseSelectionsHelp": "Când un cod de bare nu este recunoscut și alegi presarea pe care o ții în mână, aceste detalii sunt trimise la MovieVault pentru verificare. Se trimit doar informații publice despre disc - niciodată colecția ta, istoricul vizionărilor sau ceva care te identifică.",
-  "contribute.action": "Încarcă",
+  "contribute.action": "Contribuie",
   "contribute.title": "Trimite corecturi către MovieVault",
   "contribute.introLead": "Corecturile pe care le trimiți sunt verificate de un moderator MovieVault înainte ca ceva să se schimbe pentru ceilalți.",
   "contribute.introSends": "Se trimit doar câmpurile listate mai jos, împreună cu valoarea pe care MovieVault o are acum, ca moderatorul să le poată compara.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Durată",
   "contribute.field.distributor": "Distribuitor",
   "preferences.shareFieldCorrections": "Trimite corecturile mele către MovieVault",
-  "preferences.shareFieldCorrectionsHelp": "Adaugă un buton Încarcă lângă modificările tale. Nu se trimite nimic până nu confirmi fiecare câmp, iar un moderator îl verifică înainte ca acel catalog comun să se schimbe.",
+  "preferences.shareFieldCorrectionsHelp": "Adaugă un buton Contribuie lângă modificările tale. Nu se trimite nimic până nu confirmi fiecare câmp, iar un moderator îl verifică înainte ca acel catalog comun să se schimbe.",
   "preferences.confirmEveryUpload": "Explică de fiecare dată ce se partajează",
-  "preferences.confirmEveryUploadHelp": "Repetă la fiecare încărcare explicația despre ce se trimite și ce nu, în loc doar de prima dată."
+  "preferences.confirmEveryUploadHelp": "Repetă la fiecare contribuție explicația despre ce se trimite și ce nu, în loc doar de prima dată."
 }

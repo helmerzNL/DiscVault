@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Help de gedeelde catalogus door de releases die jij herkent bij te dragen.",
   "preferences.shareReleaseSelections": "Releases delen die ik herken",
   "preferences.shareReleaseSelectionsHelp": "Wanneer een barcode niet wordt herkend en jij de persing kiest die je in handen hebt, worden die releasegegevens ter beoordeling naar MovieVault gestuurd. Alleen publieke schijfinformatie gaat mee - nooit je collectie, kijkgeschiedenis of iets dat jou identificeert.",
-  "contribute.action": "Uploaden",
+  "contribute.action": "Bijdragen",
   "contribute.title": "Correcties naar MovieVault sturen",
   "contribute.introLead": "Correcties die je stuurt worden door een MovieVault-moderator beoordeeld voordat er voor anderen iets verandert.",
   "contribute.introSends": "Alleen de velden hieronder gaan mee, samen met de waarde die MovieVault nu heeft zodat de moderator ze kan vergelijken.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Speelduur",
   "contribute.field.distributor": "Distributeur",
   "preferences.shareFieldCorrections": "Mijn correcties naar MovieVault sturen",
-  "preferences.shareFieldCorrectionsHelp": "Voegt een Upload-knop toe naast je bewerkingen. Er wordt niets verstuurd tot je elk veld bevestigt, en een moderator beoordeelt het voordat de gedeelde catalogus verandert.",
+  "preferences.shareFieldCorrectionsHelp": "Voegt een Bijdragen-knop toe naast je bewerkingen. Er wordt niets verstuurd tot je elk veld bevestigt, en een moderator beoordeelt het voordat de gedeelde catalogus verandert.",
   "preferences.confirmEveryUpload": "Elke keer uitleggen wat er wordt gedeeld",
-  "preferences.confirmEveryUploadHelp": "Herhaalt bij elke upload de uitleg over wat er wel en niet meegaat, in plaats van alleen de eerste keer."
+  "preferences.confirmEveryUploadHelp": "Herhaalt bij elke bijdrage de uitleg over wat er wel en niet meegaat, in plaats van alleen de eerste keer."
 }

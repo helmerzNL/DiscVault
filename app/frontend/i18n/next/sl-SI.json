@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Pomagaj skupnemu katalogu s prispevanjem izdaj, ki jih prepoznaš.",
   "preferences.shareReleaseSelections": "Deli izdaje, ki jih prepoznam",
   "preferences.shareReleaseSelectionsHelp": "Ko črtna koda ni prepoznana in izbereš izdajo, ki jo držiš v roki, se ti podatki pošljejo MovieVaultu v pregled. Pošljejo se samo javni podatki o plošči - nikoli tvoja zbirka, zgodovina gledanja ali karkoli, kar te identificira.",
-  "contribute.action": "Pošlji",
+  "contribute.action": "Prispevaj",
   "contribute.title": "Pošlji popravke v MovieVault",
   "contribute.introLead": "Popravke, ki jih pošljete, pregleda moderator MovieVault, preden se za druge kar koli spremeni.",
   "contribute.introSends": "Pošljejo se samo spodaj navedena polja, skupaj z vrednostjo, ki jo ima MovieVault zdaj, da jih moderator lahko primerja.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Trajanje",
   "contribute.field.distributor": "Distributer",
   "preferences.shareFieldCorrections": "Pošiljaj moje popravke v MovieVault",
-  "preferences.shareFieldCorrectionsHelp": "Doda gumb Pošlji poleg vaših urejanj. Nič se ne pošlje, dokler ne potrdite vsakega polja, moderator pa to pregleda, preden se skupni katalog spremeni.",
+  "preferences.shareFieldCorrectionsHelp": "Doda gumb Prispevaj poleg vaših urejanj. Nič se ne pošlje, dokler ne potrdite vsakega polja, moderator pa to pregleda, preden se skupni katalog spremeni.",
   "preferences.confirmEveryUpload": "Vsakič pojasni, kaj se deli",
-  "preferences.confirmEveryUploadHelp": "Ob vsakem pošiljanju ponovi razlago, kaj se pošlje in kaj ne, namesto samo prvič."
+  "preferences.confirmEveryUploadHelp": "Ob vsakem prispevku ponovi razlago, kaj se pošlje in kaj ne, namesto samo prvič."
 }

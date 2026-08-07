@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Aita ühist kataloogi, panustades väljaandeid, mille sa tuvastad.",
   "preferences.shareReleaseSelections": "Jaga väljaandeid, mille tuvastan",
   "preferences.shareReleaseSelectionsHelp": "Kui triipkoodi ei tunta ära ja sa valid pressingu, mida käes hoiad, saadetakse need andmed MovieVaultile ülevaatamiseks. Saadetakse ainult avalikku plaaditeavet - mitte kunagi sinu kogu, vaatamisajalugu ega midagi sind tuvastavat.",
-  "contribute.action": "Laadi üles",
+  "contribute.action": "Panusta",
   "contribute.title": "Saada parandused MovieVaulti",
   "contribute.introLead": "Sinu saadetud parandused vaatab üle MovieVaulti moderaator, enne kui teiste jaoks midagi muutub.",
   "contribute.introSends": "Saadetakse ainult allpool loetletud väljad koos väärtusega, mis MovieVaultis praegu on, et moderaator saaks neid võrrelda.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Kestus",
   "contribute.field.distributor": "Levitaja",
   "preferences.shareFieldCorrections": "Saada minu parandused MovieVaulti",
-  "preferences.shareFieldCorrectionsHelp": "Lisab sinu muudatuste kõrvale nupu Laadi üles. Midagi ei saadeta enne, kui kinnitad iga välja, ja moderaator vaatab selle üle, enne kui jagatud kataloog muutub.",
+  "preferences.shareFieldCorrectionsHelp": "Lisab sinu muudatuste kõrvale nupu Panusta. Midagi ei saadeta enne, kui kinnitad iga välja, ja moderaator vaatab selle üle, enne kui jagatud kataloog muutub.",
   "preferences.confirmEveryUpload": "Selgita iga kord, mida jagatakse",
-  "preferences.confirmEveryUploadHelp": "Kordab igal üleslaadimisel selgitust selle kohta, mis saadetakse ja mis mitte, mitte ainult esimesel korral."
+  "preferences.confirmEveryUploadHelp": "Kordab igal panustamisel selgitust selle kohta, mis saadetakse ja mis mitte, mitte ainult esimesel korral."
 }

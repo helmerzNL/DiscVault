@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "식별한 릴리스를 기여해 공유 카탈로그를 도와주세요.",
   "preferences.shareReleaseSelections": "내가 식별한 릴리스 공유",
   "preferences.shareReleaseSelectionsHelp": "바코드가 인식되지 않아 손에 든 프레스를 선택하면 해당 릴리스 정보가 검토를 위해 MovieVault로 전송됩니다. 공개된 디스크 정보만 전송되며, 컬렉션이나 시청 기록, 신원을 식별할 수 있는 정보는 전송되지 않습니다.",
-  "contribute.action": "업로드",
+  "contribute.action": "기여하기",
   "contribute.title": "MovieVault에 수정 사항 보내기",
   "contribute.introLead": "보낸 수정 사항은 다른 사람에게 반영되기 전에 MovieVault 검토자가 확인합니다.",
   "contribute.introSends": "아래에 나열된 항목만 전송되며, 검토자가 비교할 수 있도록 MovieVault가 현재 가지고 있는 값도 함께 보냅니다.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "상영 시간",
   "contribute.field.distributor": "배급사",
   "preferences.shareFieldCorrections": "내 수정 사항을 MovieVault에 보내기",
-  "preferences.shareFieldCorrectionsHelp": "편집 옆에 업로드 버튼을 추가합니다. 각 항목을 확인하기 전에는 아무것도 전송되지 않으며, 공유 카탈로그가 바뀌기 전에 검토자가 확인합니다.",
+  "preferences.shareFieldCorrectionsHelp": "편집 옆에 기여하기 버튼을 추가합니다. 각 항목을 확인하기 전에는 아무것도 전송되지 않으며, 공유 카탈로그가 바뀌기 전에 검토자가 확인합니다.",
   "preferences.confirmEveryUpload": "매번 무엇이 공유되는지 설명",
-  "preferences.confirmEveryUploadHelp": "무엇이 전송되고 무엇이 전송되지 않는지에 대한 설명을 처음 한 번이 아니라 업로드할 때마다 반복합니다."
+  "preferences.confirmEveryUploadHelp": "무엇이 전송되고 무엇이 전송되지 않는지에 대한 설명을 처음 한 번이 아니라 기여할 때마다 반복합니다."
 }

@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Padėk bendram katalogui prisidėdamas leidimais, kuriuos atpažįsti.",
   "preferences.shareReleaseSelections": "Dalytis leidimais, kuriuos atpažįstu",
   "preferences.shareReleaseSelectionsHelp": "Kai brūkšninis kodas neatpažįstamas ir pasirenki rankose laikomą leidimą, šie duomenys siunčiami MovieVault peržiūrėti. Siunčiama tik vieša disko informacija - niekada tavo kolekcija, peržiūrų istorija ar kas nors, kas tave identifikuoja.",
-  "contribute.action": "Įkelti",
+  "contribute.action": "Prisidėti",
   "contribute.title": "Siųsti pataisymus į MovieVault",
   "contribute.introLead": "Jūsų siunčiamus pataisymus peržiūri MovieVault moderatorius, prieš kitiems kas nors pasikeičiant.",
   "contribute.introSends": "Siunčiami tik toliau išvardyti laukai kartu su reikšme, kurią MovieVault turi dabar, kad moderatorius galėtų jas palyginti.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Trukmė",
   "contribute.field.distributor": "Platintojas",
   "preferences.shareFieldCorrections": "Siųsti mano pataisymus į MovieVault",
-  "preferences.shareFieldCorrectionsHelp": "Prideda mygtuką Įkelti šalia jūsų redagavimų. Niekas nesiunčiama, kol nepatvirtinate kiekvieno lauko, o moderatorius tai peržiūri prieš pasikeičiant bendram katalogui.",
+  "preferences.shareFieldCorrectionsHelp": "Prideda mygtuką Prisidėti šalia jūsų redagavimų. Niekas nesiunčiama, kol nepatvirtinate kiekvieno lauko, o moderatorius tai peržiūri prieš pasikeičiant bendram katalogui.",
   "preferences.confirmEveryUpload": "Kiekvieną kartą paaiškinti, kas dalijamasi",
-  "preferences.confirmEveryUploadHelp": "Kartoja per kiekvieną įkėlimą paaiškinimą, kas siunčiama ir kas ne, o ne tik pirmą kartą."
+  "preferences.confirmEveryUploadHelp": "Kartoja kiekvieną kartą prisidedant paaiškinimą, kas siunčiama ir kas ne, o ne tik pirmą kartą."
 }

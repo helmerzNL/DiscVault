@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Palīdzi kopīgajam katalogam, sniedzot izdevumus, kurus atpazīsti.",
   "preferences.shareReleaseSelections": "Kopīgot izdevumus, kurus atpazīstu",
   "preferences.shareReleaseSelectionsHelp": "Kad svītrkods netiek atpazīts un tu izvēlies izdevumu, ko turi rokās, šie dati tiek nosūtīti MovieVault pārbaudei. Tiek sūtīta tikai publiska informācija par disku - nekad tava kolekcija, skatīšanās vēsture vai kaut kas, kas tevi identificē.",
-  "contribute.action": "Augšupielādēt",
+  "contribute.action": "Sniegt ieguldījumu",
   "contribute.title": "Nosūtīt labojumus uz MovieVault",
   "contribute.introLead": "Jūsu nosūtītos labojumus pārskata MovieVault moderators, pirms citiem kaut kas mainās.",
   "contribute.introSends": "Tiek nosūtīti tikai zemāk uzskaitītie lauki kopā ar vērtību, kas MovieVault ir pašlaik, lai moderators varētu tās salīdzināt.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Ilgums",
   "contribute.field.distributor": "Izplatītājs",
   "preferences.shareFieldCorrections": "Sūtīt manus labojumus uz MovieVault",
-  "preferences.shareFieldCorrectionsHelp": "Pievieno pogu Augšupielādēt blakus jūsu labojumiem. Nekas netiek nosūtīts, kamēr neapstiprināt katru lauku, un moderators to pārskata, pirms kopīgais katalogs mainās.",
+  "preferences.shareFieldCorrectionsHelp": "Pievieno pogu Sniegt ieguldījumu blakus jūsu labojumiem. Nekas netiek nosūtīts, kamēr neapstiprināt katru lauku, un moderators to pārskata, pirms kopīgais katalogs mainās.",
   "preferences.confirmEveryUpload": "Katru reizi paskaidrot, kas tiek kopīgots",
-  "preferences.confirmEveryUploadHelp": "Atkārto katrā augšupielādē paskaidrojumu par to, kas tiek nosūtīts un kas ne, nevis tikai pirmajā reizē."
+  "preferences.confirmEveryUploadHelp": "Atkārto katrā ieguldījumā paskaidrojumu par to, kas tiek nosūtīts un kas ne, nevis tikai pirmajā reizē."
 }

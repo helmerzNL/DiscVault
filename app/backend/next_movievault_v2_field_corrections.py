@@ -63,7 +63,6 @@ class FieldCorrectionError(Exception):
 #: fields") mapped onto where DiscVault keeps it. A field absent from this table
 #: is in `RELEASE_FIELDS_WITHHELD` with the reason it cannot travel.
 RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
-    "title": ("movie", "title"),
     "edition": ("movie", "edition"),
     "format": ("movie", "format"),
     "countryCode": ("movie", "country"),
@@ -77,6 +76,20 @@ RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
 #: DiscVault and MovieVault use one word for two things, and translating would
 #: have produced a confident wrong answer rather than a visible gap.
 RELEASE_FIELDS_WITHHELD: dict[str, str] = {
+    # `content.releases.title` is the title of a *pressing*, not of the film:
+    # "Spider-Man: Into the Spider-Verse Blu-ray (Spider-Man: A New Universe)
+    # (Germany)". DiscVault's `movies.title` is the film title, and a film that
+    # is correctly titled therefore reads as a disagreement on every single
+    # release. Proposing the film title here would flatten a product name into
+    # a film name and lose the edition, the alternate title and the country
+    # with it.
+    #
+    # This is the same shape as `region` and `studio` below - one word naming
+    # two different facts - and it is the most misleading of the three, because
+    # the two values look comparable. DiscVault has no release-title field to
+    # offer instead: what it stores per pressing is `edition` and `format`,
+    # which are already correctable separately.
+    "title": "different_field_upstream",
     # MovieVault holds a list and the contract makes it a complete replacement.
     # DiscVault holds one `movies.barcode`. Sending `[barcode]` would delete
     # every other EAN the release has, and the moderator would see a plausible
