@@ -141,6 +141,11 @@ MAX_DISC_REGIONS = 12
 # that while still refusing anything that is not shaped like a ratio.
 ASPECT_RATIO_PATTERN = re.compile(r"^[0-9]{1,2}(?:\.[0-9]{1,3})?:[0-9]{1,2}(?:\.[0-9]{1,3})?$")
 
+try:
+    from .dedup_identity import MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW, normalize_media_type
+except ImportError:  # pragma: no cover - supports running modules directly
+    from dedup_identity import MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW, normalize_media_type
+
 logger = logging.getLogger(__name__)
 
 ConnectionFactory = Callable[[], ContextManager[Any]]
@@ -3978,13 +3983,39 @@ def release_technical_contribution_payload(
         return {}
 
     payload_film: dict[str, Any] = {"title": film_title}
+    # MOVIE/SHOW is DiscVault's vocabulary; MovieVault's is movie/tv. Mapped
+    # through `normalize_media_type` rather than a second lookup table, so the
+    # two spellings of one fact stay one mapping.
+    #
+    # Absence is deliberate and is *not* "movie": it means this side did not
+    # say, and MovieVault leaves whatever it already recorded. A client with no
+    # opinion must not be able to downgrade a series somebody else established.
+    media_type = normalize_media_type(
+        source.get("workType")
+        or source.get("work_type")
+        or film_source.get("workType")
+        or film_source.get("mediaType")
+        or film_source.get("media_type")
+    )
+    if media_type == MEDIA_TYPE_SHOW:
+        payload_film["workType"] = "tv"
+    elif media_type == MEDIA_TYPE_MOVIE:
+        payload_film["workType"] = "movie"
     year = film_source.get("year")
     if isinstance(year, int) and not isinstance(year, bool) and 1870 <= year <= 2200:
         payload_film["year"] = year
     # Digit strings, the spelling MovieVault itself emits and stores. An
     # integer is rejected upstream rather than coerced.
     tmdb_id = str(film_source.get("tmdbMovieId") or film_source.get("tmdb_movie_id") or "").strip()
-    if TMDB_ID_PATTERN.fullmatch(tmdb_id):
+    tmdb_tv_id = str(film_source.get("tmdbTvId") or film_source.get("tmdb_tv_id") or "").strip()
+    # The two TMDB id spaces are separate and mutually exclusive upstream, and
+    # an id that contradicts the stated type is refused there rather than
+    # silently resolved. Send only the one the work type agrees with, so a
+    # mismatch in our own data never becomes a rejected submission.
+    if payload_film.get("workType") == "tv":
+        if TMDB_ID_PATTERN.fullmatch(tmdb_tv_id):
+            payload_film["tmdbTvId"] = tmdb_tv_id
+    elif TMDB_ID_PATTERN.fullmatch(tmdb_id):
         payload_film["tmdbMovieId"] = tmdb_id
     imdb_id = str(film_source.get("imdbId") or film_source.get("imdb_id") or "").strip()
     if IMDB_ID_PATTERN.fullmatch(imdb_id):
