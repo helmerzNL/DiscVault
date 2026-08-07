@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Kordab igal panustamisel selgitust selle kohta, mis saadetakse ja mis mitte, mitte ainult esimesel korral.",
   "contribute.disabledTitle": "Panustamine on välja lülitatud",
   "contribute.disabledLead": "See DiscVault ei saada MovieVaulti midagi. See on omaniku säte, mitte isiklik, nii et jagamisega nõustumine ei muudaks siin midagi.",
-  "contribute.disabledWhere": "Omanik saab selle sisse lülitada jaotises Admin, Security nupuga Toggle Release Contribution. Sama lüliti katab väljaanded ja väljaparandused."
+  "contribute.disabledWhere": "Omanik saab selle sisse lülitada jaotises Admin, Security nupuga Toggle Release Contribution. Sama lüliti katab väljaanded ja väljaparandused.",
+  "preferences.cardMovieVaultContribution": "Panustamine MovieVaulti",
+  "preferences.cardMovieVaultContributionHelp": "Kas see DiscVault tohib jagatud kataloogi üldse midagi saata. Lisaks otsustab iga inimene ise ning midagi ei saadeta ilma väljade kaupa kinnitamata.",
+  "preferences.movieVaultContribution": "Luba panused MovieVaulti",
+  "preferences.movieVaultContributionHelp": "Hõlmab nii tuvastatud väljaandeid kui ka saadetud väljaparandusi. Väljas ei lahku sellest eksemplarist miski, olenemata sellest, millega kasutaja on nõustunud.",
+  "preferences.movieVaultInstanceStatus": "Eksemplari olek",
+  "preferences.movieVaultRegistered": "Registreeritud",
+  "preferences.movieVaultNotRegistered": "Veel registreerimata. Esimene panus registreerib selle eksemplari.",
+  "preferences.movieVaultLastError": "Viimane viga"
 }

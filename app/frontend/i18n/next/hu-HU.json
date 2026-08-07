@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Minden hozzájárulásnál megismétli a magyarázatot arról, mi utazik és mi nem, nem csak az első alkalommal.",
   "contribute.disabledTitle": "A hozzájárulás ki van kapcsolva",
   "contribute.disabledLead": "Ez a DiscVault semmit nem küld a MovieVaultnak. Ez tulajdonosi beállítás, nem személyes, így a megosztás elfogadása itt semmit nem változtatna.",
-  "contribute.disabledWhere": "Egy tulajdonos az Admin, Security alatt kapcsolhatja be a Toggle Release Contribution gombbal. Ugyanaz a kapcsoló vonatkozik a kiadásokra és a mezőjavításokra."
+  "contribute.disabledWhere": "Egy tulajdonos az Admin, Security alatt kapcsolhatja be a Toggle Release Contribution gombbal. Ugyanaz a kapcsoló vonatkozik a kiadásokra és a mezőjavításokra.",
+  "preferences.cardMovieVaultContribution": "Hozzájárulás a MovieVaulthoz",
+  "preferences.cardMovieVaultContributionHelp": "Küldhet-e ez a DiscVault egyáltalán bármit a közös katalógusnak. Ezen felül mindenki maga dönt, és semmi nem indul el mezőnkénti megerősítés nélkül.",
+  "preferences.movieVaultContribution": "Hozzájárulás engedélyezése a MovieVaulthoz",
+  "preferences.movieVaultContributionHelp": "Vonatkozik a felismert kiadásokra és a küldött mezőjavításokra egyaránt. Kikapcsolva semmi nem hagyja el ezt a példányt, bármihez is járult hozzá egy felhasználó.",
+  "preferences.movieVaultInstanceStatus": "A példány állapota",
+  "preferences.movieVaultRegistered": "Regisztrálva",
+  "preferences.movieVaultNotRegistered": "Még nincs regisztrálva. Az első hozzájárulás regisztrálja ezt a példányt.",
+  "preferences.movieVaultLastError": "Utolsó hiba"
 }

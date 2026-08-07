@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Toistaa jokaisella osallistumisella selityksen siitä, mitä lähetetään ja mitä ei, sen sijaan että se näytettäisiin vain ensimmäisellä kerralla.",
   "contribute.disabledTitle": "Osallistuminen on pois käytöstä",
   "contribute.disabledLead": "Tämä DiscVault ei lähetä mitään MovieVaultiin. Se on omistajan asetus eikä henkilökohtainen, joten jakamisen hyväksyminen ei muuttaisi tässä mitään.",
-  "contribute.disabledWhere": "Omistaja voi ottaa sen käyttöön kohdassa Admin, Security painikkeella Toggle Release Contribution. Sama kytkin kattaa julkaisut ja kenttäkorjaukset."
+  "contribute.disabledWhere": "Omistaja voi ottaa sen käyttöön kohdassa Admin, Security painikkeella Toggle Release Contribution. Sama kytkin kattaa julkaisut ja kenttäkorjaukset.",
+  "preferences.cardMovieVaultContribution": "Osallistuminen MovieVaultiin",
+  "preferences.cardMovieVaultContributionHelp": "Saako tämä DiscVault ylipäätään lähettää mitään jaettuun luetteloon. Lisäksi jokainen päättää itse, eikä mitään lähetetä ilman kenttäkohtaista vahvistusta.",
+  "preferences.movieVaultContribution": "Salli osallistuminen MovieVaultiin",
+  "preferences.movieVaultContributionHelp": "Koskee sekä tunnistettuja julkaisuja että lähetettyjä kenttäkorjauksia. Pois päältä mitään ei lähde tästä instanssista, vaikka käyttäjä olisi hyväksynyt sen.",
+  "preferences.movieVaultInstanceStatus": "Instanssin tila",
+  "preferences.movieVaultRegistered": "Rekisteröity",
+  "preferences.movieVaultNotRegistered": "Ei vielä rekisteröity. Ensimmäinen osallistuminen rekisteröi tämän instanssin.",
+  "preferences.movieVaultLastError": "Viimeisin virhe"
 }

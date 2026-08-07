@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Repete em cada contribuição a explicação do que é ou não transmitido, em vez de apenas na primeira vez.",
   "contribute.disabledTitle": "Contribuir está desativado",
   "contribute.disabledLead": "Este DiscVault não envia nada para o MovieVault. É uma definição do proprietário e não pessoal, por isso concordar em partilhar aqui não mudaria nada.",
-  "contribute.disabledWhere": "Um proprietário pode ativá-lo em Admin, Security, com Toggle Release Contribution. O mesmo interruptor abrange as edições e as correções de campos."
+  "contribute.disabledWhere": "Um proprietário pode ativá-lo em Admin, Security, com Toggle Release Contribution. O mesmo interruptor abrange as edições e as correções de campos.",
+  "preferences.cardMovieVaultContribution": "Contribuir para o MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Se este DiscVault pode enviar alguma coisa para o catálogo partilhado. Cada pessoa decide ainda por si, e nada é enviado sem confirmação campo a campo.",
+  "preferences.movieVaultContribution": "Permitir contribuições para o MovieVault",
+  "preferences.movieVaultContributionHelp": "Abrange tanto as edições identificadas como as correções de campos enviadas. Desligado, nada sai desta instância, seja o que for que um utilizador tenha aceite.",
+  "preferences.movieVaultInstanceStatus": "Estado da instância",
+  "preferences.movieVaultRegistered": "Registada",
+  "preferences.movieVaultNotRegistered": "Ainda não registada. A primeira contribuição regista esta instância.",
+  "preferences.movieVaultLastError": "Último erro"
 }

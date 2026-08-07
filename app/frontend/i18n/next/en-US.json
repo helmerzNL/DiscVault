@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Repeats the explanation of what does and does not travel every time you contribute, instead of only the first time.",
   "contribute.disabledTitle": "Contributing is switched off",
   "contribute.disabledLead": "This DiscVault does not send anything to MovieVault. That is an owner setting, not a personal one, so agreeing to share here would change nothing.",
-  "contribute.disabledWhere": "An owner can turn it on under Admin, Security, with Toggle Release Contribution. The same switch covers releases and field corrections."
+  "contribute.disabledWhere": "An owner can turn it on under Admin, Security, with Toggle Release Contribution. The same switch covers releases and field corrections.",
+  "preferences.cardMovieVaultContribution": "Contributing to MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Whether this DiscVault may send anything to the shared catalogue at all. Each user still decides for themselves, and nothing is sent without confirming it field by field.",
+  "preferences.movieVaultContribution": "Allow contributions to MovieVault",
+  "preferences.movieVaultContributionHelp": "Covers both the releases people identify and the field corrections they send. Off means nothing leaves this instance, whatever a user has agreed to.",
+  "preferences.movieVaultInstanceStatus": "Instance status",
+  "preferences.movieVaultRegistered": "Registered",
+  "preferences.movieVaultNotRegistered": "Not registered yet. The first contribution registers this instance.",
+  "preferences.movieVaultLastError": "Last error"
 }

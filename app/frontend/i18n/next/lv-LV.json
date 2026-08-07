@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Atkārto katrā ieguldījumā paskaidrojumu par to, kas tiek nosūtīts un kas ne, nevis tikai pirmajā reizē.",
   "contribute.disabledTitle": "Ieguldījuma sniegšana ir izslēgta",
   "contribute.disabledLead": "Šis DiscVault nesūta uz MovieVault neko. Tas ir īpašnieka, nevis personisks iestatījums, tāpēc piekrišana kopīgošanai šeit neko nemainītu.",
-  "contribute.disabledWhere": "Īpašnieks to var ieslēgt sadaļā Admin, Security ar Toggle Release Contribution. Tas pats slēdzis attiecas uz izdevumiem un lauku labojumiem."
+  "contribute.disabledWhere": "Īpašnieks to var ieslēgt sadaļā Admin, Security ar Toggle Release Contribution. Tas pats slēdzis attiecas uz izdevumiem un lauku labojumiem.",
+  "preferences.cardMovieVaultContribution": "Ieguldījums MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Vai šis DiscVault vispār drīkst kaut ko sūtīt uz kopīgo katalogu. Turklāt katrs izlemj pats, un nekas netiek nosūtīts bez apstiprinājuma pa laukiem.",
+  "preferences.movieVaultContribution": "Atļaut ieguldījumu MovieVault",
+  "preferences.movieVaultContributionHelp": "Attiecas gan uz atpazītajiem izdevumiem, gan uz nosūtītajiem lauku labojumiem. Izslēgts nozīmē, ka no šī eksemplāra nekas neaiziet, lai ar ko lietotājs būtu piekritis.",
+  "preferences.movieVaultInstanceStatus": "Eksemplāra statuss",
+  "preferences.movieVaultRegistered": "Reģistrēts",
+  "preferences.movieVaultNotRegistered": "Vēl nav reģistrēts. Pirmais ieguldījums reģistrēs šo eksemplāru.",
+  "preferences.movieVaultLastError": "Pēdējā kļūda"
 }

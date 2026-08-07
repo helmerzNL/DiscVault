@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "何が送信され何が送信されないかの説明を、初回だけでなく提供のたびに表示します。",
   "contribute.disabledTitle": "提供は無効になっています",
   "contribute.disabledLead": "この DiscVault は MovieVault へ何も送信しません。これは個人設定ではなくオーナー設定なので、ここで共有に同意しても何も変わりません。",
-  "contribute.disabledWhere": "オーナーは Admin の Security にある Toggle Release Contribution で有効にできます。同じスイッチがリリースと項目の修正の両方に適用されます。"
+  "contribute.disabledWhere": "オーナーは Admin の Security にある Toggle Release Contribution で有効にできます。同じスイッチがリリースと項目の修正の両方に適用されます。",
+  "preferences.cardMovieVaultContribution": "MovieVault への提供",
+  "preferences.cardMovieVaultContributionHelp": "この DiscVault が共有カタログへ何かを送ってよいかどうか。加えて各利用者が自分で判断し、項目ごとに確認しない限り何も送信されません。",
+  "preferences.movieVaultContribution": "MovieVault への提供を許可する",
+  "preferences.movieVaultContributionHelp": "識別されたリリースと、送信される項目の修正の両方に適用されます。オフの場合、利用者が何に同意していてもこのインスタンスからは何も出ていきません。",
+  "preferences.movieVaultInstanceStatus": "インスタンスの状態",
+  "preferences.movieVaultRegistered": "登録済み",
+  "preferences.movieVaultNotRegistered": "まだ登録されていません。最初の提供でこのインスタンスが登録されます。",
+  "preferences.movieVaultLastError": "最後のエラー"
 }

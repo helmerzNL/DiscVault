@@ -15776,6 +15776,7 @@ def ui_preview_html(
                 <div id="preferencePanelCollectors" class="preferences-panel-content hidden" role="tabpanel" aria-labelledby="preferenceTabCollectors" tabindex="0" aria-hidden="true" data-preferences-panel="collectors">
                   <div id="profileCollectorPreferenceList"></div>
                   <div class="hidden" id="loansSystemSettingRow"></div>
+                  <div class="hidden" id="movieVaultContributionSettingRow"></div>
                 </div>
                 <div class="login-message" id="preferencesMessage" aria-live="polite"></div>
               </div>
@@ -40145,6 +40146,120 @@ def ui_preview_html(
         setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
       }
     }
+    // ---- MovieVault contribution (owner setting) --------------------------
+    //
+    // The owner half of the contribution gate, on the Collectors tab beside the
+    // Loans system switch. It lived only on the separate `/api/next/collection`
+    // dashboard until now, which meant the whole feature was unreachable from
+    // the app people actually use: the gate was off, and there was no way in
+    // here to turn it on.
+    //
+    // Deliberately *not* a preference row. `preferenceCardsHtml` writes to
+    // `/api/next/preferences`, and effective preferences are
+    // global-default-then-user-override - a flag placed there is user-writable
+    // by construction, which is the opposite of a gate. This is a sibling card
+    // with its own endpoint, exactly like the Loans system switch.
+    const movieVaultContribution = {loaded: false, enabled: false, registration: {}};
+
+    // The owner settings route is `require_owner`, so an admin who is not the
+    // owner would get a 403 from a switch we had drawn for them. Drawing it for
+    // exactly who can use it is the honest gate - showing a control that
+    // answers "no" is the mistake this whole surface already made once.
+    function canManageMovieVaultContribution() {
+      if (!appMode) return true;
+      return !!currentAuthStatus.authenticated && currentRole() === "owner";
+    }
+    async function loadMovieVaultContributionSetting() {
+      if (!canManageMovieVaultContribution()) return;
+      try {
+        const payload = await authApiJson("/api/next/auth/owner/settings");
+        const settings = payload.settings || {};
+        movieVaultContribution.enabled = !!settings.movievault_v2_contribution_enabled;
+        movieVaultContribution.registration = settings.movievault_v2_contribution || {};
+        movieVaultContribution.loaded = true;
+        renderMovieVaultContributionSetting();
+      } catch (error) {
+        /* Not an owner, or offline. The card stays as it was. */
+      }
+    }
+    function movieVaultContributionStatusLine() {
+      const registration = movieVaultContribution.registration || {};
+      const parts = [];
+      parts.push(
+        registration.registered
+          ? `${tNext("preferences.movieVaultRegistered", "Registered")}: ${registration.instanceId || "-"}`
+          : tNext("preferences.movieVaultNotRegistered", "Not registered yet. The first contribution registers this instance.")
+      );
+      // Worth showing even while sharing is on, and the only thing that
+      // explains why sending stopped: MovieVault blocking an instance turns
+      // this switch off by itself.
+      if (registration.lastError) {
+        parts.push(`${tNext("preferences.movieVaultLastError", "Last error")}: ${registration.lastError}`);
+      }
+      return parts.join(" - ");
+    }
+    function renderMovieVaultContributionSetting() {
+      const row = document.getElementById("movieVaultContributionSettingRow");
+      if (!row) return;
+      if (!canManageMovieVaultContribution()) {
+        row.classList.add("hidden");
+        row.innerHTML = "";
+        return;
+      }
+      if (!movieVaultContribution.loaded) {
+        void loadMovieVaultContributionSetting();
+      }
+      const active = movieVaultContribution.enabled;
+      row.classList.remove("hidden");
+      row.innerHTML = `
+        <section class="preferences-setting-card system wide" data-preference-card="movievault-contribution">
+          <div class="preferences-setting-card-head">
+            <h5>${escapeHtml(tNext("preferences.cardMovieVaultContribution", "Contributing to MovieVault"))}</h5>
+            <p>${escapeHtml(tNext("preferences.cardMovieVaultContributionHelp", "Whether this DiscVault may send anything to the shared catalogue at all. Each user still decides for themselves, and nothing is sent without confirming it field by field."))}</p>
+          </div>
+          <div class="preferences-card-list">
+            <div class="preference-row">
+              <span>
+                <strong>${escapeHtml(tNext("preferences.movieVaultContribution", "Allow contributions to MovieVault"))}</strong>
+                <span>${escapeHtml(tNext("preferences.movieVaultContributionHelp", "Covers both the releases people identify and the field corrections they send. Off means nothing leaves this instance, whatever a user has agreed to."))}</span>
+              </span>
+              <button type="button" class="switch ${active ? "on" : ""}" id="movieVaultContributionToggle" aria-label="${escapeHtml(tNext("preferences.movieVaultContribution", "Allow contributions to MovieVault"))}" aria-pressed="${active ? "true" : "false"}"></button>
+            </div>
+            <div class="preference-row">
+              <span>
+                <strong>${escapeHtml(tNext("preferences.movieVaultInstanceStatus", "Instance status"))}</strong>
+                <span id="movieVaultContributionStatus">${escapeHtml(movieVaultContribution.loaded ? movieVaultContributionStatusLine() : tNext("common.loading", "Loading..."))}</span>
+              </span>
+            </div>
+          </div>
+        </section>
+      `;
+      const toggle = document.getElementById("movieVaultContributionToggle");
+      if (toggle) toggle.addEventListener("click", () => toggleMovieVaultContribution(!active));
+    }
+    async function toggleMovieVaultContribution(enabled) {
+      const toggle = document.getElementById("movieVaultContributionToggle");
+      if (toggle) toggle.disabled = true;
+      try {
+        const payload = await authApiJson("/api/next/auth/owner/settings", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movievault_v2_contribution_enabled: !!enabled})
+        });
+        const settings = payload.settings || {};
+        movieVaultContribution.enabled = !!settings.movievault_v2_contribution_enabled;
+        movieVaultContribution.registration = settings.movievault_v2_contribution || {};
+        movieVaultContribution.loaded = true;
+        renderMovieVaultContributionSetting();
+        // The Contribute button on a detail screen is drawn from this gate, so
+        // the screen behind this one is now stale.
+        if (activeDetailPayload) void refreshContributeButton("movie", (activeDetailPayload.movie || {}).id);
+        setPreferencesMessage(tNext("preferences.saved", "Saved."), "good");
+      } catch (error) {
+        if (toggle) toggle.disabled = false;
+        setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
+      }
+    }
     function setPreferencesMessage(message, tone) {
       const node = document.getElementById("preferencesMessage");
       if (!node) return;
@@ -40163,6 +40278,7 @@ def ui_preview_html(
         bindPreferenceList(collectorList);
       }
       renderLoansSystemSetting();
+      renderMovieVaultContributionSetting();
       setProfileMenuStyle(effectiveProfileMenuStyle());
       applyAppPermissionVisibility();
       setPreferenceTab(activePreferenceTab);

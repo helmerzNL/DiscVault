@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Opakuje při každém příspěvku vysvětlení, co se přenáší a co ne, místo jen poprvé.",
   "contribute.disabledTitle": "Přispívání je vypnuté",
   "contribute.disabledLead": "Tento DiscVault neposílá do MovieVault nic. Je to nastavení vlastníka, nikoli osobní, takže souhlas se sdílením by tu nic nezměnil.",
-  "contribute.disabledWhere": "Vlastník to může zapnout v Admin, Security tlačítkem Toggle Release Contribution. Stejný přepínač pokrývá edice i opravy polí."
+  "contribute.disabledWhere": "Vlastník to může zapnout v Admin, Security tlačítkem Toggle Release Contribution. Stejný přepínač pokrývá edice i opravy polí.",
+  "preferences.cardMovieVaultContribution": "Přispívání do MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Zda tento DiscVault vůbec smí něco posílat do sdíleného katalogu. Každý navíc rozhoduje sám za sebe a nic se neodesílá bez potvrzení pole po poli.",
+  "preferences.movieVaultContribution": "Povolit příspěvky do MovieVault",
+  "preferences.movieVaultContributionHelp": "Týká se rozpoznaných edic i odesílaných oprav polí. Vypnuto znamená, že tuto instanci nic neopustí, ať už uživatel souhlasil s čímkoli.",
+  "preferences.movieVaultInstanceStatus": "Stav instance",
+  "preferences.movieVaultRegistered": "Registrována",
+  "preferences.movieVaultNotRegistered": "Zatím neregistrována. První příspěvek tuto instanci zaregistruje.",
+  "preferences.movieVaultLastError": "Poslední chyba"
 }

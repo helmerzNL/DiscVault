@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Повтаря при всеки принос обяснението какво се изпраща и какво не, вместо само първия път.",
   "contribute.disabledTitle": "Приносът е изключен",
   "contribute.disabledLead": "Този DiscVault не изпраща нищо към MovieVault. Това е настройка на собственика, а не лична, така че съгласието за споделяне тук не би променило нищо.",
-  "contribute.disabledWhere": "Собственик може да я включи от Admin, Security с Toggle Release Contribution. Същият превключвател обхваща изданията и корекциите на полета."
+  "contribute.disabledWhere": "Собственик може да я включи от Admin, Security с Toggle Release Contribution. Същият превключвател обхваща изданията и корекциите на полета.",
+  "preferences.cardMovieVaultContribution": "Принос към MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Дали този DiscVault изобщо може да изпраща нещо към споделения каталог. Освен това всеки решава сам за себе си и нищо не се изпраща без потвърждение поле по поле.",
+  "preferences.movieVaultContribution": "Разреши приноси към MovieVault",
+  "preferences.movieVaultContributionHelp": "Обхваща както разпознатите издания, така и изпращаните корекции на полета. Изключено означава, че нищо не напуска тази инстанция, независимо с какво се е съгласил потребител.",
+  "preferences.movieVaultInstanceStatus": "Състояние на инстанцията",
+  "preferences.movieVaultRegistered": "Регистрирана",
+  "preferences.movieVaultNotRegistered": "Още не е регистрирана. Първият принос регистрира тази инстанция.",
+  "preferences.movieVaultLastError": "Последна грешка"
 }

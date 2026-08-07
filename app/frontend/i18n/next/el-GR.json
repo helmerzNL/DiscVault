@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Επαναλαμβάνει σε κάθε συνεισφορά την εξήγηση για το τι στέλνεται και τι όχι, αντί μόνο την πρώτη φορά.",
   "contribute.disabledTitle": "Η συνεισφορά είναι απενεργοποιημένη",
   "contribute.disabledLead": "Αυτό το DiscVault δεν στέλνει τίποτα στο MovieVault. Είναι ρύθμιση του κατόχου και όχι προσωπική, οπότε η αποδοχή κοινοποίησης εδώ δεν θα άλλαζε τίποτα.",
-  "contribute.disabledWhere": "Ένας κάτοχος μπορεί να την ενεργοποιήσει από Admin, Security, με Toggle Release Contribution. Ο ίδιος διακόπτης καλύπτει τις εκδόσεις και τις διορθώσεις πεδίων."
+  "contribute.disabledWhere": "Ένας κάτοχος μπορεί να την ενεργοποιήσει από Admin, Security, με Toggle Release Contribution. Ο ίδιος διακόπτης καλύπτει τις εκδόσεις και τις διορθώσεις πεδίων.",
+  "preferences.cardMovieVaultContribution": "Συνεισφορά στο MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Αν αυτό το DiscVault επιτρέπεται καν να στέλνει οτιδήποτε στον κοινό κατάλογο. Επιπλέον, κάθε άτομο αποφασίζει για τον εαυτό του και τίποτα δεν στέλνεται χωρίς επιβεβαίωση ανά πεδίο.",
+  "preferences.movieVaultContribution": "Να επιτρέπονται οι συνεισφορές στο MovieVault",
+  "preferences.movieVaultContributionHelp": "Καλύπτει τόσο τις εκδόσεις που αναγνωρίζονται όσο και τις διορθώσεις πεδίων που στέλνονται. Απενεργοποιημένο, τίποτα δεν φεύγει από αυτή την εγκατάσταση, ό,τι κι αν έχει αποδεχτεί ένας χρήστης.",
+  "preferences.movieVaultInstanceStatus": "Κατάσταση εγκατάστασης",
+  "preferences.movieVaultRegistered": "Καταχωρημένη",
+  "preferences.movieVaultNotRegistered": "Δεν έχει καταχωρηθεί ακόμη. Η πρώτη συνεισφορά καταχωρεί αυτή την εγκατάσταση.",
+  "preferences.movieVaultLastError": "Τελευταίο σφάλμα"
 }

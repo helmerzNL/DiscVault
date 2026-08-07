@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Powtarza przy każdym wkładzie wyjaśnienie, co jest przesyłane, a co nie, zamiast tylko za pierwszym razem.",
   "contribute.disabledTitle": "Wnoszenie wkładu jest wyłączone",
   "contribute.disabledLead": "Ten DiscVault niczego nie wysyła do MovieVault. To ustawienie właściciela, a nie osobiste, więc zgoda na udostępnianie nic by tu nie zmieniła.",
-  "contribute.disabledWhere": "Właściciel może je włączyć w Admin, Security, przyciskiem Toggle Release Contribution. Ten sam przełącznik obejmuje wydania i poprawki pól."
+  "contribute.disabledWhere": "Właściciel może je włączyć w Admin, Security, przyciskiem Toggle Release Contribution. Ten sam przełącznik obejmuje wydania i poprawki pól.",
+  "preferences.cardMovieVaultContribution": "Wnoszenie wkładu do MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Czy ten DiscVault może w ogóle cokolwiek wysyłać do wspólnego katalogu. Każda osoba decyduje dodatkowo za siebie, a nic nie jest wysyłane bez potwierdzenia pole po polu.",
+  "preferences.movieVaultContribution": "Zezwól na wkład do MovieVault",
+  "preferences.movieVaultContributionHelp": "Obejmuje zarówno rozpoznane wydania, jak i wysyłane poprawki pól. Wyłączone oznacza, że nic nie opuszcza tej instancji, na cokolwiek użytkownik się zgodził.",
+  "preferences.movieVaultInstanceStatus": "Stan instancji",
+  "preferences.movieVaultRegistered": "Zarejestrowana",
+  "preferences.movieVaultNotRegistered": "Jeszcze niezarejestrowana. Pierwszy wkład zarejestruje tę instancję.",
+  "preferences.movieVaultLastError": "Ostatni błąd"
 }

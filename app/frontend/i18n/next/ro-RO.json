@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Repetă la fiecare contribuție explicația despre ce se trimite și ce nu, în loc doar de prima dată.",
   "contribute.disabledTitle": "Contribuția este dezactivată",
   "contribute.disabledLead": "Acest DiscVault nu trimite nimic către MovieVault. Este o setare a proprietarului, nu una personală, așa că acceptarea partajării aici nu ar schimba nimic.",
-  "contribute.disabledWhere": "Un proprietar o poate activa din Admin, Security, cu Toggle Release Contribution. Același comutator acoperă edițiile și corecturile de câmpuri."
+  "contribute.disabledWhere": "Un proprietar o poate activa din Admin, Security, cu Toggle Release Contribution. Același comutator acoperă edițiile și corecturile de câmpuri.",
+  "preferences.cardMovieVaultContribution": "Contribuția la MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Dacă acest DiscVault are voie să trimită ceva către catalogul comun. În plus, fiecare decide pentru sine, iar nimic nu se trimite fără confirmare câmp cu câmp.",
+  "preferences.movieVaultContribution": "Permite contribuțiile către MovieVault",
+  "preferences.movieVaultContributionHelp": "Acoperă atât edițiile identificate, cât și corecturile de câmpuri trimise. Dezactivat, nimic nu părăsește această instanță, indiferent cu ce a fost de acord un utilizator.",
+  "preferences.movieVaultInstanceStatus": "Starea instanței",
+  "preferences.movieVaultRegistered": "Înregistrată",
+  "preferences.movieVaultNotRegistered": "Încă neînregistrată. Prima contribuție înregistrează această instanță.",
+  "preferences.movieVaultLastError": "Ultima eroare"
 }
