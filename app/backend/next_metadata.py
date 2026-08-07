@@ -21,6 +21,7 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
             self.value = value
 
 try:
+    from .dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from .dedup_identity import extract_identity_identifiers
     from .dedup_identity import normalize_media_type
     from .next_import import clean_text
@@ -36,6 +37,7 @@ try:
     from .next_plugin_runtime import sync_plugin_registry
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
 except ImportError:  # pragma: no cover - supports direct module execution
+    from dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from dedup_identity import extract_identity_identifiers
     from dedup_identity import normalize_media_type
     from next_import import clean_text
@@ -4917,6 +4919,24 @@ def apply_metadata_proposal(
             for provider, identifier in identifiers.items():
                 if not identifier:
                     continue
+                if provider in MOVIEVAULT_IDENTIFIER_PROVIDERS:
+                    # A MovieVault id names one *release*, and re-matching a
+                    # movie to a different pressing is routine -- the barcode
+                    # fallback picker exists to do exactly that. The primary key
+                    # includes `identifier`, so plain insert-if-absent would
+                    # accumulate one row per pressing the movie was ever matched
+                    # to, and `movie_identifiers()` reads them ordered by
+                    # identifier: the lexicographically smallest UUID would win,
+                    # which is to say an arbitrary stale one. Superseding keeps
+                    # the row saying what this movie is matched to *now*.
+                    cur.execute(
+                        """
+                        DELETE FROM movie_identifiers
+                        WHERE movie_id=%s AND provider_id=%s AND identifier_type='movie_id'
+                          AND identifier <> %s
+                        """,
+                        (movie_uuid, provider, str(identifier)),
+                    )
                 cur.execute(
                     """
                     INSERT INTO movie_identifiers (movie_id, provider_id, identifier_type, identifier)

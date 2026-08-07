@@ -169,20 +169,27 @@ def select_tmdb_identifier(
     return selected[1]
 
 
+# MovieVault generations, newest first. The order is the whole point: these are
+# separate namespaces, not spellings of one id. A `movievault_26`-era id such as
+# "mv_matrix" is not a v4 release, so a movie holding both must surrender the v2
+# one -- it is the only one a catalog lookup can resolve today. Row order cannot
+# decide this, because callers read `movie_identifiers` sorted by `provider_id`,
+# which would hand "movievault_26" the win alphabetically.
+MOVIEVAULT_IDENTIFIER_PROVIDERS = ("movievault_v2", "movievault_26", "movievault")
+
+
 def select_movievault_identifier(
     identifiers: Iterable[Mapping[str, object]],
 ) -> str | None:
-    """Select the first nonblank MovieVault movie identifier."""
-    for row in identifiers:
-        provider = str(row.get("provider_id") or "").casefold()
-        identifier_type = str(row.get("identifier_type") or "").casefold()
-        value = str(row.get("identifier") or "").strip()
-        if (
-            provider in {"movievault", "movievault_26"}
-            and identifier_type == "movie_id"
-            and value
-        ):
-            return value
+    """Select the newest-generation nonblank MovieVault movie identifier."""
+    rows = list(identifiers)
+    for wanted in MOVIEVAULT_IDENTIFIER_PROVIDERS:
+        for row in rows:
+            provider = str(row.get("provider_id") or "").casefold()
+            identifier_type = str(row.get("identifier_type") or "").casefold()
+            value = str(row.get("identifier") or "").strip()
+            if provider == wanted and identifier_type == "movie_id" and value:
+                return value
     return None
 
 

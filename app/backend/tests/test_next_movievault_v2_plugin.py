@@ -127,6 +127,34 @@ class ReleaseMappingTests(unittest.TestCase):
         item = movievault_v2._release(_synced_release(packaging=[]))
         self.assertNotIn("packaging", item["movie"])
 
+    def test_the_release_id_travels_as_an_identifier_row(self):
+        """`releaseId` on the result is read and discarded; only an identifier
+        row is persisted, and that is what makes the catalog link survive."""
+        item = movievault_v2._release(_synced_release())
+        self.assertEqual(
+            item["identifiers"],
+            [{
+                "provider_id": "movievault_v2",
+                "identifier": "10000000-0000-0000-0000-000000000001",
+                "identifier_type": "movie_id",
+            }],
+        )
+
+    def test_the_film_id_is_not_offered_as_an_identifier(self):
+        """A movie gets one `movie_id` slot per provider, and `movie_details`
+        resolves releases -- a film id there would evict the id that works."""
+        item = movievault_v2._release(_synced_release())
+        emitted = {row["identifier"] for row in item["identifiers"]}
+        self.assertNotIn("20000000-0000-0000-0000-000000000001", emitted)
+
+    def test_a_resolver_hit_without_a_release_id_emits_no_identifier(self):
+        """The resolver has no local identity for a release never synced, so
+        there is nothing to claim -- an empty row would be a false link."""
+        record = _synced_release()
+        record.pop("releaseId")
+        item = movievault_v2._release(record)
+        self.assertNotIn("identifiers", item)
+
 
 class SearchBarcodeResolverFallbackTests(unittest.TestCase):
     def _context(self, *, lookup_results, resolver_result=None):

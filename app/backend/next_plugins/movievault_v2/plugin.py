@@ -302,6 +302,26 @@ def _resolved_box_set_record(details):
     return record
 
 
+def _identifiers(record):
+    """Emit the catalog release id as a durable identifier row.
+
+    Only the release id travels. `movie_details` looks a movie up by release
+    (`_release_uuid()` above), so that is the id a refresh can actually use; a
+    `filmId` would occupy the one `movie_id` slot this provider gets without
+    resolving anything. Records that carry no `releaseId` -- resolver hits,
+    which have no local identity for a release DiscVault never synced -- emit
+    nothing rather than an empty row.
+    """
+    release_id = str((record or {}).get("releaseId") or "").strip()
+    if not release_id:
+        return []
+    return [{
+        "provider_id": PROVIDER_ID,
+        "identifier": release_id,
+        "identifier_type": "movie_id",
+    }]
+
+
 def _release(record):
     movie = {key: value for key, value in {
         "title": record.get("canonicalTitle") or record.get("releaseTitle") or "",
@@ -327,6 +347,13 @@ def _release(record):
         "studio": record.get("studio"), "distributor": record.get("distributor"),
         "runtimeMinutes": record.get("runtimeMinutes"), "format": record.get("format"),
         "edition": record.get("edition"), "sourceRef": f"release:{record.get('releaseId') or ''}",
+        # `releaseId` and `filmId` above are read by the callers that already
+        # hold the whole result dict; nothing persists them, so the link was
+        # lost the moment the refresh finished. Emitting them as identifier rows
+        # is what makes the link durable: the movie then carries the catalog id
+        # it was matched to, and a later refresh can look the release up
+        # directly instead of hoping a barcode still resolves.
+        "identifiers": _identifiers(record),
         **_poster_fields(record)}.items()
         if value not in (None, "", [], {})}
 

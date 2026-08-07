@@ -185,6 +185,68 @@ class ProductionIdentifierExtractionTests(unittest.TestCase):
             "mv-9",
         )
 
+    def test_the_v2_generation_is_selected(self):
+        self.assertEqual(
+            select_movievault_identifier(
+                [
+                    {
+                        "provider_id": "movievault_v2",
+                        "identifier_type": "movie_id",
+                        "identifier": " 4f1c7d2e-0000-4000-8000-000000000001 ",
+                    }
+                ]
+            ),
+            "4f1c7d2e-0000-4000-8000-000000000001",
+        )
+
+    def test_v2_wins_over_an_older_generation_regardless_of_row_order(self):
+        """The generations are separate namespaces, so the newest must win.
+
+        Callers read `movie_identifiers` ordered by `provider_id`, which sorts
+        "movievault_26" before "movievault_v2". A first-match selector would
+        therefore hand a v4 catalog lookup an id from a namespace it cannot
+        resolve, and the movie would stay unreachable.
+        """
+        older_first = [
+            {
+                "provider_id": "movievault_26",
+                "identifier_type": "movie_id",
+                "identifier": "mv-9",
+            },
+            {
+                "provider_id": "movievault_v2",
+                "identifier_type": "movie_id",
+                "identifier": "4f1c7d2e-0000-4000-8000-000000000001",
+            },
+        ]
+        self.assertEqual(
+            select_movievault_identifier(older_first),
+            "4f1c7d2e-0000-4000-8000-000000000001",
+        )
+        self.assertEqual(
+            select_movievault_identifier(list(reversed(older_first))),
+            "4f1c7d2e-0000-4000-8000-000000000001",
+        )
+
+    def test_an_older_generation_still_wins_when_v2_is_blank(self):
+        self.assertEqual(
+            select_movievault_identifier(
+                [
+                    {
+                        "provider_id": "movievault_v2",
+                        "identifier_type": "movie_id",
+                        "identifier": "   ",
+                    },
+                    {
+                        "provider_id": "movievault_26",
+                        "identifier_type": "movie_id",
+                        "identifier": "mv-9",
+                    },
+                ]
+            ),
+            "mv-9",
+        )
+
 
 class _IdentifierCursor:
     def __init__(self, rows):
