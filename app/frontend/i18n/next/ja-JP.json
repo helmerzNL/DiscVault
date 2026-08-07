@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "採用されました",
   "contribute.status.partiallyAccepted": "一部採用されました",
   "contribute.status.rejected": "見送られました",
-  "contribute.status.failed": "未送信"
+  "contribute.status.failed": "未送信",
+  "contribute.comparedAgainstMirror": "この DiscVault が持つカタログの写しと比較しています。写しは古い場合があり、その後変わった値は適用ではなく審査で見送られます。",
+  "contribute.historyTitle": "あなたが送った修正",
+  "contribute.historyHelp": "MovieVault に何を提案し、モデレーターがどう判断したか。審査には数日かかることがあります。",
+  "contribute.historyEmpty": "まだ何も提供していません。",
+  "contribute.historyNoFields": "記録された項目はありません。",
+  "contribute.historyDeletedRecord": "（この端末では削除済み）",
+  "contribute.historyScopeMine": "自分の分だけ表示",
+  "contribute.historyScopeInstance": "全員の分を表示"
 }

@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Elfogadva",
   "contribute.status.partiallyAccepted": "Részben elfogadva",
   "contribute.status.rejected": "Elutasítva",
-  "contribute.status.failed": "Nincs elküldve"
+  "contribute.status.failed": "Nincs elküldve",
+  "contribute.comparedAgainstMirror": "Ennek a DiscVaultnak a katalógusmásolatához hasonlítva, amely elavult lehet. Egy azóta megváltozott érték a bírálatnál elutasításra kerül, nem alkalmazásra.",
+  "contribute.historyTitle": "Az általad küldött javítások",
+  "contribute.historyHelp": "Mit javasoltál a MovieVaultnak, és mit döntött egy moderátor. A bírálat napokig tarthat.",
+  "contribute.historyEmpty": "Még nem járultál hozzá semmivel.",
+  "contribute.historyNoFields": "Nincs rögzített mező.",
+  "contribute.historyDeletedRecord": "(rekord itt törölve)",
+  "contribute.historyScopeMine": "Csak a sajátjaim",
+  "contribute.historyScopeInstance": "Mindenkié"
 }

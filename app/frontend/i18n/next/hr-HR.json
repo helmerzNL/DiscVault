@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Prihvaćen",
   "contribute.status.partiallyAccepted": "Djelomično prihvaćen",
   "contribute.status.rejected": "Odbijen",
-  "contribute.status.failed": "Nije poslan"
+  "contribute.status.failed": "Nije poslan",
+  "contribute.comparedAgainstMirror": "Uspoređeno s kopijom kataloga ovog DiscVaulta, koja može zaostajati. Vrijednost koja se u međuvremenu promijenila odbija se pri pregledu umjesto da se primijeni.",
+  "contribute.historyTitle": "Ispravci koje ste poslali",
+  "contribute.historyHelp": "Što ste predložili MovieVaultu i što je moderator odlučio. Pregled može trajati danima.",
+  "contribute.historyEmpty": "Još niste ništa doprinijeli.",
+  "contribute.historyNoFields": "Nema zabilježenih polja.",
+  "contribute.historyDeletedRecord": "(zapis ovdje izbrisan)",
+  "contribute.historyScopeMine": "Prikaži samo moje",
+  "contribute.historyScopeInstance": "Prikaži sve"
 }

@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Έγινε δεκτή",
   "contribute.status.partiallyAccepted": "Έγινε εν μέρει δεκτή",
   "contribute.status.rejected": "Απορρίφθηκε",
-  "contribute.status.failed": "Δεν στάλθηκε"
+  "contribute.status.failed": "Δεν στάλθηκε",
+  "contribute.comparedAgainstMirror": "Σε σύγκριση με το αντίγραφο του καταλόγου αυτού του DiscVault, που μπορεί να είναι πίσω. Μια τιμή που έχει αλλάξει έκτοτε απορρίπτεται στον έλεγχο αντί να εφαρμοστεί.",
+  "contribute.historyTitle": "Διορθώσεις που στείλατε",
+  "contribute.historyHelp": "Τι προτείνατε στο MovieVault και τι αποφάσισε ένας συντονιστής. Ο έλεγχος μπορεί να πάρει μέρες.",
+  "contribute.historyEmpty": "Δεν έχετε συνεισφέρει ακόμη τίποτα.",
+  "contribute.historyNoFields": "Δεν καταγράφηκαν πεδία.",
+  "contribute.historyDeletedRecord": "(η εγγραφή διαγράφηκε εδώ)",
+  "contribute.historyScopeMine": "Μόνο τα δικά μου",
+  "contribute.historyScopeInstance": "Όλων"
 }

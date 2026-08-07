@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Übernommen",
   "contribute.status.partiallyAccepted": "Teilweise übernommen",
   "contribute.status.rejected": "Abgelehnt",
-  "contribute.status.failed": "Nicht gesendet"
+  "contribute.status.failed": "Nicht gesendet",
+  "contribute.comparedAgainstMirror": "Verglichen mit der Katalogkopie dieses DiscVault, die veraltet sein kann. Ein Wert, der sich seitdem geändert hat, wird bei der Prüfung abgelehnt statt übernommen.",
+  "contribute.historyTitle": "Von dir gesendete Korrekturen",
+  "contribute.historyHelp": "Was du MovieVault vorgeschlagen hast und wie entschieden wurde. Eine Prüfung kann Tage dauern.",
+  "contribute.historyEmpty": "Du hast noch nichts beigetragen.",
+  "contribute.historyNoFields": "Keine Felder erfasst.",
+  "contribute.historyDeletedRecord": "(Eintrag hier gelöscht)",
+  "contribute.historyScopeMine": "Nur meine anzeigen",
+  "contribute.historyScopeInstance": "Alle anzeigen"
 }

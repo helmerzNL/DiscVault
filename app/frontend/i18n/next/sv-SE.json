@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Godtagen",
   "contribute.status.partiallyAccepted": "Delvis godtagen",
   "contribute.status.rejected": "Avvisad",
-  "contribute.status.failed": "Inte skickad"
+  "contribute.status.failed": "Inte skickad",
+  "contribute.comparedAgainstMirror": "Jämfört med den här DiscVaults kopia av katalogen, som kan ligga efter. Ett värde som ändrats sedan dess avvisas vid granskningen i stället för att tillämpas.",
+  "contribute.historyTitle": "Rättelser du skickade",
+  "contribute.historyHelp": "Vad du föreslog MovieVault och vad en granskare beslutade. En granskning kan ta dagar.",
+  "contribute.historyEmpty": "Du har inte bidragit med något än.",
+  "contribute.historyNoFields": "Inga fält registrerade.",
+  "contribute.historyDeletedRecord": "(post borttagen här)",
+  "contribute.historyScopeMine": "Visa bara mina",
+  "contribute.historyScopeInstance": "Visa allas"
 }

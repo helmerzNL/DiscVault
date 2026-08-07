@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Accepted",
   "contribute.status.partiallyAccepted": "Partly accepted",
   "contribute.status.rejected": "Declined",
-  "contribute.status.failed": "Not sent"
+  "contribute.status.failed": "Not sent",
+  "contribute.comparedAgainstMirror": "Compared against this DiscVault's copy of the catalogue, which may be behind. A value that has moved since is refused at review rather than applied.",
+  "contribute.historyTitle": "Corrections you sent",
+  "contribute.historyHelp": "What you proposed to MovieVault and what a moderator decided. A correction can take days to be reviewed.",
+  "contribute.historyEmpty": "You have not contributed anything yet.",
+  "contribute.historyNoFields": "No fields recorded.",
+  "contribute.historyDeletedRecord": "(record deleted here)",
+  "contribute.historyScopeMine": "Show only mine",
+  "contribute.historyScopeInstance": "Show everyone's"
 }

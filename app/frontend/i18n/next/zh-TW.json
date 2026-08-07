@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "已採納",
   "contribute.status.partiallyAccepted": "部分採納",
   "contribute.status.rejected": "未採納",
-  "contribute.status.failed": "未傳送"
+  "contribute.status.failed": "未傳送",
+  "contribute.comparedAgainstMirror": "與此 DiscVault 保存的目錄副本比較，該副本可能已過時。此後變動的值會在審核時被拒絕而不是被採納。",
+  "contribute.historyTitle": "你傳送的更正",
+  "contribute.historyHelp": "你向 MovieVault 提出了什麼，以及審核員如何決定。審核可能需要幾天。",
+  "contribute.historyEmpty": "你還沒有貢獻過任何內容。",
+  "contribute.historyNoFields": "未記錄欄位。",
+  "contribute.historyDeletedRecord": "（此處記錄已刪除）",
+  "contribute.historyScopeMine": "只看我的",
+  "contribute.historyScopeInstance": "查看所有人的"
 }

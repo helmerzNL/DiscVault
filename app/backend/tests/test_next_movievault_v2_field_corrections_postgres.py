@@ -468,6 +468,166 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
             corrections.latest_contribution(self.conn, entity="movie", record=movie)
         )
 
+    # ---- the conflict pre-flight -----------------------------------------
+
+    def _live(self, payload):
+        """Stand in for `GET /v2/films/{id}/releases`."""
+        import unittest.mock as mock
+
+        return mock.patch.object(
+            corrections,
+            "live_release_values",
+            lambda film_id, release_id, **k: payload,
+        )
+
+    def test_the_preflight_beats_a_stale_mirror(self):
+        """`expected` is the conflict check upstream, so a value read from a
+        snapshot that has since moved gets the correction refused for a field
+        the contributor read correctly at the time."""
+        movie = self._movie(barcode=BARCODE, edition="Director's Cut")
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        with self._live({"edition": "Extended", "format": "Blu-ray"}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        edition = next(item for item in preview["changes"] if item["field"] == "edition")
+        # The mirror says "Theatrical"; the catalogue has since moved on.
+        self.assertEqual(edition["expected"], "Extended")
+        self.assertEqual(preview["comparedAgainst"], "catalogue")
+
+    def test_a_field_the_catalogue_has_already_caught_up_on_is_not_a_change(self):
+        """Someone else corrected it first. Sending it again would put a
+        no-op in front of a moderator."""
+        movie = self._movie(barcode=BARCODE, edition="Director's Cut")
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        with self._live({"edition": "Director's Cut"}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertNotIn("edition", {item["field"] for item in preview["changes"]})
+
+    def test_an_unreachable_catalogue_falls_back_rather_than_agreeing(self):
+        """A failed check is not "nothing changed". An offline instance must
+        still be able to compose a correction, and the answer says which of the
+        two it was computed against."""
+        movie = self._movie(barcode=BARCODE, edition="Director's Cut")
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        with self._live(None):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        edition = next(item for item in preview["changes"] if item["field"] == "edition")
+        self.assertEqual(edition["expected"], "Theatrical")
+        self.assertEqual(preview["comparedAgainst"], "mirror")
+
+    def test_a_release_the_catalogue_no_longer_serves_is_unavailable(self):
+        """Merged, retired or deleted upstream. Correcting a record that is no
+        longer served is not something to guess at."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        with self._live({"_gone": True}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertEqual(preview["mode"], "unavailable")
+
+    def test_eligibility_can_skip_the_preflight(self):
+        """It renders on every detail screen and only needs to know whether
+        anything differs; a network round trip there would be paid constantly
+        to sharpen a number nobody has looked at."""
+        import unittest.mock as mock
+
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        called = []
+        with mock.patch.object(
+            corrections,
+            "live_release_values",
+            lambda *a, **k: called.append(a) or None,
+        ):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}, preflight=False
+            )
+
+        self.assertEqual(called, [])
+        self.assertEqual(preview["comparedAgainst"], "mirror")
+
+    def test_a_box_set_has_no_preflight(self):
+        """`/v2/films/{id}/releases` is about films. A box set has no
+        equivalent, so its diff is always against the mirror -- stated rather
+        than silently the same as a release's."""
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movievault_v2_lookup_hashes (
+                    generation, lookup_hash, entity_type, entity_id, source_type, member_position
+                )
+                VALUES (%s, %s, 'box_set', %s, 'box_set_ean', 0)
+                """,
+                (self.generation, corrections.barcode_lookup_hash(BARCODE), self.box_set_id),
+            )
+        container = {"id": uuid.uuid4(), "title": "Corrected Set", "barcode": BARCODE}
+
+        preview = corrections.correction_preview(self.conn, entity="container", record=container)
+
+        self.assertEqual(preview["comparedAgainst"], "mirror")
+
+    # ---- the history ------------------------------------------------------
+
+    def test_the_history_is_newest_first_and_carries_the_record_title(self):
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        target = corrections.resolve_target(self.conn, entity="movie", record=movie)
+        for status in ("rejected", "accepted"):
+            job_id = uuid.uuid4()
+            corrections.record_contribution(
+                self.conn,
+                entity="movie",
+                record=movie,
+                target=target,
+                changes=[{"field": "format", "expected": "Blu-ray", "proposed": "4K UHD"}],
+                job_id=job_id,
+            )
+            corrections.update_contribution_by_job(self.conn, job_id, status=status)
+
+        history = corrections.contribution_history(self.conn, limit=10)
+        mine = [item for item in history if item["recordId"] == str(movie["id"])]
+
+        self.assertEqual([item["status"] for item in mine], ["accepted", "rejected"])
+        self.assertEqual(mine[0]["title"], movie["title"])
+        self.assertEqual(mine[0]["entity"], "movie")
+        self.assertEqual(mine[0]["fields"], ["format"])
+
+    def test_the_history_can_be_scoped_to_one_contributor(self):
+        """A contribution is attributable, and one user reading another's is
+        not something a shared instance should offer by default."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        target = corrections.resolve_target(self.conn, entity="movie", record=movie)
+        mine, theirs = uuid.uuid4(), uuid.uuid4()
+        for actor in (mine, theirs):
+            corrections.record_contribution(
+                self.conn,
+                entity="movie",
+                record=movie,
+                target=target,
+                changes=[{"field": "format", "expected": "Blu-ray", "proposed": "4K UHD"}],
+                job_id=uuid.uuid4(),
+                actor_id=actor,
+            )
+
+        scoped = corrections.contribution_history(self.conn, actor_id=mine, limit=10)
+        self.assertEqual(len(scoped), 1)
+        self.assertEqual(len(corrections.contribution_history(self.conn, limit=10)), 2)
+
     def test_the_barcode_hash_matches_what_the_index_is_keyed_by(self):
         """Computed differently is simply a different hash, and would miss in
         silence. Pinned against the same normalisation both native clients use."""

@@ -20,6 +20,7 @@ Every exclusion below is a place where translating would have invented data.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import uuid
 from typing import Any
@@ -432,6 +433,87 @@ def build_changes(
     return changes
 
 
+
+# ---- The conflict pre-flight ---------------------------------------------
+#
+# The mirror is a snapshot of a distribution generation, so it is exactly as
+# old as the last index sync. A correction composed against it states an
+# `expected` that may already have moved, and `expected` is the whole conflict
+# check upstream -- so the moderator sees a conflict on a field the contributor
+# read correctly at the time. The contributor learns this days later, if at
+# all.
+#
+# `GET /v2/films/{film_id}/releases` answers with the *current* canonical value
+# of every field a release correction may touch, keyed by `releaseRef`, which
+# for a canonical release is the release id. Anonymous, cached nowhere, and the
+# same route the fallback picker already uses -- no new upstream surface.
+#
+# Run at preview time only. Eligibility renders on every detail screen and just
+# needs to know whether anything differs at all; paying a network round trip
+# there to sharpen a number nobody has looked at yet would be the wrong trade.
+
+PREFLIGHT_TIMEOUT_SECONDS = 8
+
+
+def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int = PREFLIGHT_TIMEOUT_SECONDS) -> dict[str, Any] | None:
+    """The catalogue's current values for one release, or None.
+
+    None means "could not be established" and never "nothing changed": the
+    caller falls back to the mirror rather than treating an unreachable
+    MovieVault as agreement. Silent on every failure for that reason -- an
+    offline instance must still be able to compose a correction.
+    """
+    if not film_id or not release_id:
+        return None
+    try:
+        from .next_movievault_v2 import _release_details_http, enforced_origin
+    except ImportError:  # pragma: no cover - supports direct module execution
+        from next_movievault_v2 import _release_details_http, enforced_origin
+    try:
+        status, content = _release_details_http(
+            f"{enforced_origin()}/v2/films/{film_id}/releases",
+            method="GET",
+            timeout_seconds=timeout_seconds,
+        )
+        if status != 200 or not content:
+            return None
+        payload = json.loads(content.decode("utf-8"))
+    except Exception:  # pragma: no cover - every failure is the same answer
+        return None
+    if not isinstance(payload, dict):
+        return None
+    wanted = str(release_id)
+    for summary in payload.get("releases") or []:
+        if not isinstance(summary, dict) or str(summary.get("releaseRef")) != wanted:
+            continue
+        return {
+            "edition": _clean(summary.get("edition")),
+            "format": _clean(summary.get("format")),
+            "countryCode": _clean(summary.get("countryCode")),
+            "languageCode": _clean(summary.get("languageCode")),
+            "releaseDate": _clean(summary.get("releaseDate")),
+            "runtimeMinutes": int(summary["runtimeMinutes"]) if summary.get("runtimeMinutes") else None,
+            "distributor": _clean(summary.get("distributor")),
+        }
+    # The film is known but this release is not among its active ones: it was
+    # merged, retired or deleted. Correcting a record that is no longer served
+    # is not something to guess at, so this is a refusal rather than a
+    # fallback -- distinct from None by carrying the marker below.
+    return {"_gone": True}
+
+
+def _mirror_film_id(conn: Any, target: dict[str, Any]) -> str | None:
+    generation = _active_generation(conn)
+    if not generation or target.get("entityType") != "release":
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT film_id FROM movievault_v2_releases WHERE generation = %s AND release_id = %s",
+            (generation, target["entityId"]),
+        )
+        row = cur.fetchone()
+    return str(dict(row)["film_id"]) if row and dict(row).get("film_id") else None
+
 def correction_preview(
     conn: Any,
     *,
@@ -439,6 +521,7 @@ def correction_preview(
     record: dict[str, Any],
     metadata: dict[str, Any] | None = None,
     fields: list[str] | None = None,
+    preflight: bool = True,
 ) -> dict[str, Any]:
     """Everything a client needs to show a confirmation, in one answer.
 
@@ -446,6 +529,11 @@ def correction_preview(
     revision it was computed from, and a client that fetched the target, then
     the mirror, then the locks would be assembling a view the server could have
     handed it consistent.
+
+    `preflight` checks the catalogue's live values before answering. On by
+    default because this runs when someone reaches for the button, not on every
+    render -- eligibility passes it off, since it only needs to know whether
+    anything differs at all.
     """
     target = resolve_target(conn, entity=entity, record=record)
     if not target:
@@ -460,6 +548,22 @@ def correction_preview(
         # The lookup index named a record the mirror no longer holds. A stale
         # index is not a correction opportunity.
         return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}}
+
+    # `expected` is the conflict check upstream, so the fresher the value the
+    # fewer corrections are refused for having been composed against a snapshot.
+    # A failed check is not agreement: falling back to the mirror keeps an
+    # offline instance able to contribute, and the answer says which was used.
+    source = "mirror"
+    if preflight and target["entityType"] == "release":
+        live = live_release_values(_mirror_film_id(conn, target), target["entityId"])
+        if live and live.get("_gone"):
+            # Known film, but this release is no longer among its active ones -
+            # merged, retired or deleted. Correcting a record the catalogue no
+            # longer serves is not something to guess at.
+            return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}}
+        if live:
+            mirror = live
+            source = "catalogue"
 
     if entity == "movie":
         local = _local_release_values(record, metadata or {})
@@ -477,6 +581,10 @@ def correction_preview(
         "target": target,
         "changes": build_changes(allowed=allowed, local=local, mirror=mirror, fields=fields),
         "withheld": withheld,
+        # Which of the two the diff was computed against. A client shows the
+        # difference: a diff from the mirror may already have moved, and saying
+        # so is more honest than presenting both the same way.
+        "comparedAgainst": source,
     }
 
 
@@ -607,3 +715,69 @@ def latest_contribution(conn: Any, *, entity: str, record: dict[str, Any]) -> di
         "createdAt": row.get("created_at"),
         "updatedAt": row.get("updated_at"),
     }
+
+
+def contribution_history(conn: Any, *, actor_id: Any = None, limit: int = 50) -> list[dict[str, Any]]:
+    """What this instance has contributed, newest first.
+
+    Scoped to one contributor when `actor_id` is given. An owner reading the
+    whole instance and a user reading their own are different questions, and
+    the caller decides which is being asked -- the log itself takes no view.
+
+    The record's current title is joined in rather than stored on the row: a
+    contribution is about a record, not about what that record was called at
+    the time, and a stored copy would slowly drift into naming something that
+    no longer exists under that name.
+    """
+    if not _table_exists(conn, "movievault_v2_contributions"):
+        return []
+    conditions = ["TRUE"]
+    parameters: list[Any] = []
+    if actor_id:
+        conditions.append("c.submitted_by = %s")
+        parameters.append(actor_id)
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT c.id, c.entity_type, c.status, c.fields, c.contribution_id,
+                   c.canonical_target_id, c.duplicate_of, c.last_error,
+                   c.created_at, c.updated_at, c.movie_id, c.container_id,
+                   m.title AS movie_title, m.public_id AS movie_public_id,
+                   ct.title AS container_title, ct.public_id AS container_public_id
+            FROM movievault_v2_contributions c
+            LEFT JOIN movies m ON m.id = c.movie_id
+            LEFT JOIN containers ct ON ct.id = c.container_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY c.created_at DESC
+            LIMIT %s
+            """,
+            (*parameters, max(1, min(int(limit or 50), 200))),
+        )
+        rows = cur.fetchall()
+    history: list[dict[str, Any]] = []
+    for raw in rows:
+        row = dict(raw)
+        is_movie = row.get("movie_id") is not None
+        status = _text(row.get("status")) or "queued"
+        history.append(
+            {
+                "id": str(row["id"]),
+                "entity": "movie" if is_movie else ("container" if row.get("container_id") else None),
+                "entityType": _text(row.get("entity_type")),
+                # Null when the local record was deleted after contributing.
+                # The correction still happened, and saying so beats hiding it.
+                "recordId": str(row["movie_id"] or row["container_id"]) if (row.get("movie_id") or row.get("container_id")) else None,
+                "publicId": _text(row.get("movie_public_id") if is_movie else row.get("container_public_id")) or None,
+                "title": _text(row.get("movie_title") if is_movie else row.get("container_title")) or None,
+                "status": status,
+                "settled": status in TERMINAL_LOG_STATUSES,
+                "fields": list(row.get("fields") or []),
+                "contributionId": _text(row.get("contribution_id")) or None,
+                "canonicalTargetId": _text(row.get("canonical_target_id")) or None,
+                "duplicateOf": _text(row.get("duplicate_of")) or None,
+                "lastError": _text(row.get("last_error")) or None,
+                "createdAt": row.get("created_at"),
+                "updatedAt": row.get("updated_at"),
+            }
+        )
+    return history
