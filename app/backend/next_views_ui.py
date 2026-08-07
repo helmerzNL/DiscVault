@@ -3345,6 +3345,60 @@ def ui_preview_html(
       justify-content: flex-end;
       margin-top: 14px;
     }
+    /* The correction sheet. Each row states MovieVault's value and the proposed
+       one on separate lines rather than inline: an edition string can be long
+       enough that "A -> B" on one line wraps into something unreadable, and
+       comparing the two is the entire purpose of the sheet. */
+    .contribute-intro p {
+      margin: 0 0 8px;
+      color: var(--muted, #888);
+      font-size: .92rem;
+      line-height: 1.45;
+    }
+    .contribute-changes {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 12px 0;
+      max-height: 46vh;
+      overflow-y: auto;
+    }
+    .contribute-change {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .contribute-change-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .contribute-change-from,
+    .contribute-change-to {
+      font-size: .88rem;
+      overflow-wrap: anywhere;
+    }
+    .contribute-change-from {
+      color: var(--muted, #888);
+    }
+    .contribute-withheld summary {
+      cursor: pointer;
+      font-size: .9rem;
+    }
+    .contribute-withheld p {
+      margin: 6px 0 0;
+      color: var(--muted, #888);
+      font-size: .85rem;
+      line-height: 1.4;
+    }
+    .contribute-message:empty {
+      display: none;
+    }
     .lists-modal-actions button {
       padding: 8px 16px;
       border-radius: 10px;
@@ -14692,6 +14746,10 @@ def ui_preview_html(
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4 7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18 8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"></path></svg>
               <span class="button-label" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</span>
             </button>
+            <button type="button" class="movie-detail-icon-action hidden" id="movieContributeButton" aria-label="Send corrections to MovieVault" title="Send corrections to MovieVault" data-next-i18n-aria="contribute.action" data-next-i18n-title="contribute.action">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16V10H5L12 3L19 10H15V16H9M5 20V18H19V20H5Z"></path></svg>
+              <span class="button-label" data-next-i18n="contribute.action">Upload</span>
+            </button>
             <button type="button" class="movie-detail-icon-action danger hidden" id="movieDeleteButton" aria-label="Delete movie" title="Delete movie" data-next-i18n-aria="movieDetail.deleteMovie" data-next-i18n-title="movieDetail.deleteMovie">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
               <span class="button-label" data-next-i18n="movieDetail.deleteMovie">Delete movie</span>
@@ -15122,6 +15180,16 @@ def ui_preview_html(
             <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
             <button type="button" class="action secondary hidden" id="containerEditCancelTopButton" data-next-i18n="common.cancel">Cancel</button>
             <button type="button" class="action secondary hidden" id="containerMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
+            <!--
+              Two gates that must not fight over one class. The wrapper carries
+              `container-value-field`, so `syncContainerValueFieldVisibility()`
+              removes it the moment the type stops being a box set; the button
+              inside carries its own hidden, set by eligibility. Putting both on
+              the button would have each mechanism undo the other's decision.
+            -->
+            <span class="container-value-field hidden" id="containerContributeField">
+              <button type="button" class="action secondary hidden" id="containerContributeButton" data-next-i18n="contribute.action">Upload</button>
+            </span>
             <button type="button" class="action danger hidden" id="containerDeleteButton" data-next-i18n="containerDetail.deleteContainer">Delete container</button>
           </div>
           <div class="detail-message" id="containerDetailMessage"></div>
@@ -28358,9 +28426,229 @@ def ui_preview_html(
         setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
+    // ---- MovieVault field corrections -------------------------------------
+    //
+    // The client asks and confirms; it never decides. Which record this is,
+    // which fields may travel, and what the catalogue currently holds are all
+    // answered by the server (`/api/next/movievault/contributions/*`), because
+    // iOS and Android consume the same four operations and three
+    // re-derivations of the eligible-field rules would be three chances to
+    // send a field that was withheld for a reason.
+    //
+    // So this file holds no field list, no lock check and no mirror value.
+    const CONTRIBUTE_FIELD_LABELS = {
+      title: ["contribute.field.title", "Title"],
+      edition: ["contribute.field.edition", "Edition"],
+      format: ["contribute.field.format", "Format"],
+      countryCode: ["contribute.field.countryCode", "Country"],
+      languageCode: ["contribute.field.languageCode", "Language"],
+      releaseDate: ["contribute.field.releaseDate", "Release date"],
+      runtimeMinutes: ["contribute.field.runtimeMinutes", "Runtime"],
+      distributor: ["contribute.field.distributor", "Distributor"]
+    };
+    const CONTRIBUTE_WITHHELD_REASONS = {
+      discvault_holds_one_barcode: ["contribute.withheld.oneBarcode", "MovieVault keeps a list of barcodes and DiscVault keeps one, so sending it would delete the others."],
+      different_field_upstream: ["contribute.withheld.differentField", "The upstream field is not the same field, so sending it would invent data."],
+      discvault_holds_a_list: ["contribute.withheld.list", "DiscVault keeps a list here and MovieVault keeps one value, so joining them would lose detail."],
+      not_stored_by_discvault: ["contribute.withheld.notStored", "DiscVault does not store this field."]
+    };
+    const contributeState = {movie: null, container: null};
+    function contributeFieldLabel(field) {
+      const entry = CONTRIBUTE_FIELD_LABELS[field];
+      return entry ? tNext(entry[0], entry[1]) : field;
+    }
+    function contributeValueText(value) {
+      if (value === null || value === undefined || value === "") return tNext("contribute.empty", "(empty)");
+      return String(value);
+    }
+    function contributeButton(entity) {
+      return document.getElementById(entity === "container" ? "containerContributeButton" : "movieContributeButton");
+    }
+    // Drawn whenever there is something to send, including before the user has
+    // ever agreed to sharing -- agreeing is what the first-run sheet is for, and
+    // a button hidden until the preference is on would leave no way to reach it.
+    async function refreshContributeButton(entity, id) {
+      const button = contributeButton(entity);
+      if (!button) return;
+      contributeState[entity] = null;
+      button.classList.add("hidden");
+      if (!id || !hasPermission("collection.edit_all")) return;
+      try {
+        const query = `entity=${encodeURIComponent(entity === "container" ? "container" : "movie")}&id=${encodeURIComponent(id)}`;
+        const payload = await apiJson(`/api/next/movievault/contributions/eligibility?${query}`, {headers: authHeaders()});
+        if (payload.mode !== "correction" || !(payload.changedFields || []).length) return;
+        contributeState[entity] = {id: String(id), enabled: !!payload.enabled};
+        button.classList.remove("hidden");
+      } catch (error) {
+        // Eligibility runs on every detail render. A MovieVault that is down,
+        // or an instance that never registered, is the ordinary case and must
+        // not put an error on a screen the user did not ask a question on.
+      }
+    }
+    function contributeSetMessage(entity, message, tone) {
+      if (entity === "container") setContainerDetailMessage(message, tone);
+      else setMovieDetailMessage(message, tone);
+    }
+    async function openContributeDialog(entity) {
+      const state = contributeState[entity];
+      if (!state) return;
+      let preview;
+      try {
+        preview = await apiJson("/api/next/movievault/contributions/preview", {
+          method: "POST",
+          headers: authHeaders({"Content-Type": "application/json"}),
+          body: JSON.stringify({entity, id: state.id})
+        });
+      } catch (error) {
+        contributeSetMessage(entity, error.message || String(error), "bad");
+        return;
+      }
+      const changes = preview.changes || [];
+      if (!changes.length) {
+        contributeSetMessage(entity, tNext("contribute.nothingToSend", "There is nothing to send."), "");
+        await refreshContributeButton(entity, state.id);
+        return;
+      }
+      const {overlay, panel} = listsCreateOverlay("contribute-modal");
+      const selected = new Set(changes.map((change) => change.field));
+      const heading = document.createElement("h3");
+      heading.textContent = tNext("contribute.title", "Send corrections to MovieVault");
+      panel.appendChild(heading);
+
+      // The first-run explanation is not a nicety: agreeing to it is what turns
+      // sharing on, so it has to state what leaves and what never does before
+      // anything can be sent. Afterwards it is repeated only for the user who
+      // asked to be reminded every time; the diff below is shown regardless,
+      // because the contract requires explicit per-field confirmation.
+      if (!state.enabled || preferences.confirm_every_upload) {
+        const intro = document.createElement("div");
+        intro.className = "contribute-intro";
+        const lead = document.createElement("p");
+        lead.textContent = tNext("contribute.introLead", "Corrections you send are reviewed by a MovieVault moderator before anything changes for anyone else.");
+        const sends = document.createElement("p");
+        sends.textContent = tNext("contribute.introSends", "Only the fields listed below travel, together with the value MovieVault currently holds so the moderator can compare them.");
+        const never = document.createElement("p");
+        never.textContent = tNext("contribute.introNever", "Your collection, viewing history, notes, location, purchase details and artwork are never sent.");
+        intro.appendChild(lead);
+        intro.appendChild(sends);
+        intro.appendChild(never);
+        panel.appendChild(intro);
+      }
+
+      const list = document.createElement("div");
+      list.className = "contribute-changes";
+      changes.forEach((change) => {
+        const row = document.createElement("label");
+        row.className = "contribute-change";
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = true;
+        box.addEventListener("change", () => {
+          if (box.checked) selected.add(change.field);
+          else selected.delete(change.field);
+          send.disabled = selected.size === 0;
+        });
+        const body = document.createElement("span");
+        body.className = "contribute-change-body";
+        const name = document.createElement("strong");
+        name.textContent = contributeFieldLabel(change.field);
+        const from = document.createElement("span");
+        from.className = "contribute-change-from";
+        from.textContent = `${tNext("contribute.currently", "MovieVault has")}: ${contributeValueText(change.expected)}`;
+        const to = document.createElement("span");
+        to.className = "contribute-change-to";
+        to.textContent = `${tNext("contribute.proposed", "You propose")}: ${contributeValueText(change.proposed)}`;
+        body.appendChild(name);
+        body.appendChild(from);
+        body.appendChild(to);
+        row.appendChild(box);
+        row.appendChild(body);
+        list.appendChild(row);
+      });
+      panel.appendChild(list);
+
+      // Named, with the reason. A user who wonders why the barcode they fixed
+      // is not in the list gets an answer instead of assuming a bug.
+      const withheld = Object.entries(preview.withheld || {});
+      if (withheld.length) {
+        const note = document.createElement("details");
+        note.className = "contribute-withheld";
+        const summary = document.createElement("summary");
+        summary.textContent = tNext("contribute.withheldTitle", "Fields that are never sent");
+        note.appendChild(summary);
+        withheld.forEach(([field, code]) => {
+          const line = document.createElement("p");
+          const reason = CONTRIBUTE_WITHHELD_REASONS[code];
+          line.textContent = `${contributeFieldLabel(field)}: ${reason ? tNext(reason[0], reason[1]) : code}`;
+          note.appendChild(line);
+        });
+        panel.appendChild(note);
+      }
+
+      const message = document.createElement("p");
+      message.className = "contribute-message";
+      panel.appendChild(message);
+
+      const actions = document.createElement("div");
+      actions.className = "lists-modal-actions";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "action secondary";
+      cancel.textContent = tNext("common.cancel", "Cancel");
+      cancel.addEventListener("click", () => listsCloseOverlay(overlay));
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "action";
+      send.textContent = state.enabled
+        ? tNext("contribute.send", "Send")
+        : tNext("contribute.agreeAndSend", "Agree and send");
+      send.addEventListener("click", async () => {
+        send.disabled = true;
+        message.textContent = tNext("contribute.sending", "Sending...");
+        try {
+          if (!state.enabled) {
+            // Consent precedes the send, and is stored, so the sheet explains
+            // itself once rather than on every correction.
+            await apiJson("/api/next/preferences", {
+              method: "PATCH",
+              headers: authHeaders({"Content-Type": "application/json"}),
+              body: JSON.stringify({preferences: {share_field_corrections: true}})
+            });
+            preferences = Object.assign({}, preferences, {share_field_corrections: true});
+            state.enabled = true;
+            renderPreferences();
+          }
+          const result = await apiJson("/api/next/movievault/contributions/submit", {
+            method: "POST",
+            headers: authHeaders({"Content-Type": "application/json"}),
+            body: JSON.stringify({entity, id: state.id, fields: Array.from(selected)})
+          });
+          listsCloseOverlay(overlay);
+          contributeSetMessage(
+            entity,
+            result.queued
+              ? tNext("contribute.queued", "Sent for moderation. A moderator decides whether it is applied.")
+              : tNext("contribute.notQueued", "Nothing was sent."),
+            result.queued ? "good" : ""
+          );
+          await refreshContributeButton(entity, state.id);
+        } catch (error) {
+          send.disabled = false;
+          message.textContent = error.message || String(error);
+        }
+      });
+      actions.appendChild(cancel);
+      actions.appendChild(send);
+      panel.appendChild(actions);
+      send.focus();
+    }
     function renderMovieDetail(detail) {
       activeDetailPayload = detail;
       const movie = detail.movie || {};
+      // Deliberately not awaited: this render must not wait on a MovieVault
+      // round trip, and the button appearing a beat late is the correct
+      // trade against a detail screen that stalls when MovieVault is slow.
+      void refreshContributeButton("movie", movie.id);
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
       const poster = mediaAssetImage(detail.mediaAssets, "poster") || usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
@@ -28914,6 +29202,7 @@ def ui_preview_html(
       activeContainerPayload = detail;
       const container = detail.container || {};
       activeContainerId = container.id || activeContainerId || "";
+      void refreshContributeButton("container", container.container_type === "box_set" ? activeContainerId : "");
       const metadata = container.metadata || {};
       const poster = containerMediaImage(detail, "poster");
       const backdrop = containerMediaImage(detail, "backdrop");
@@ -39472,7 +39761,12 @@ def ui_preview_html(
         helpKey: "preferences.cardSharingHelp",
         help: "Help the shared catalogue by contributing the releases you identify.",
         items: [
-          ["share_release_selections", "preferences.shareReleaseSelections", "preferences.shareReleaseSelectionsHelp"]
+          ["share_release_selections", "preferences.shareReleaseSelections", "preferences.shareReleaseSelectionsHelp"],
+          ["share_field_corrections", "preferences.shareFieldCorrections", "preferences.shareFieldCorrectionsHelp"],
+          // Depends on the correction preference rather than standing alone:
+          // "ask me every time" is a question about an upload that only
+          // happens once corrections are on.
+          ["confirm_every_upload", "preferences.confirmEveryUpload", "preferences.confirmEveryUploadHelp", "share_field_corrections"]
         ]
       }
     ];
@@ -43358,6 +43652,7 @@ def ui_preview_html(
       document.getElementById("movieEditMediaType")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));
       document.getElementById("movieEditSeries")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));
       document.getElementById("movieDeleteButton")?.addEventListener("click", () => deleteActiveMovie());
+      document.getElementById("movieContributeButton")?.addEventListener("click", () => openContributeDialog("movie"));
       document.getElementById("movieWatchlistToggleButton")?.addEventListener("click", () => toggleActiveMovieWatchlist());
       document.getElementById("movieLogRewatchButton")?.addEventListener("click", () => openMovieRewatchDialog());
       document.getElementById("movieWatchHistoryPills")?.addEventListener("click", (event) => {
@@ -43401,6 +43696,7 @@ def ui_preview_html(
       document.getElementById("containerMetadataDryRunButton")?.addEventListener("click", () => refreshActiveContainerMetadata(true));
       document.getElementById("containerMetadataApplyButton")?.addEventListener("click", () => refreshActiveContainerMetadata(false));
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
+      document.getElementById("containerContributeButton")?.addEventListener("click", () => openContributeDialog("container"));
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerScanAddForm")?.addEventListener("submit", (event) => addContainerScanMember(event));
       wireImportScanPreview("containerScanAddBarcode", "containerScanAddPreview");

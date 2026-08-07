@@ -2679,6 +2679,13 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any], origin: s
 POSTER_CACHE_JOB_TYPE = "movievault_v2.poster_cache"
 POSTER_CLEANUP_JOB_TYPE = "movievault_v2.poster_cleanup"
 RELEASE_CONTRIBUTION_JOB_TYPE = "movievault_v2.release_contribution"
+FIELD_CORRECTION_JOB_TYPE = "movievault_v2.field_correction"
+# Moderation is a human act that takes days, so this is not a retry ladder for a
+# failure -- it is a poll for an answer that is not written yet. It lives on its
+# own job because the submit job is finished the moment MovieVault has the
+# contribution, and holding that job open for a week to watch it would keep a
+# worker slot busy waiting for a person.
+CONTRIBUTION_STATUS_JOB_TYPE = "movievault_v2.contribution_status"
 
 
 def _enqueue_poster_cache(cur: Any, origin: str, poster: dict[str, Any] | None) -> None:
