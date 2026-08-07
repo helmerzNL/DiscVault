@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Vastu võetud",
   "contribute.status.partiallyAccepted": "Osaliselt vastu võetud",
   "contribute.status.rejected": "Tagasi lükatud",
-  "contribute.status.failed": "Saatmata"
+  "contribute.status.failed": "Saatmata",
+  "contribute.comparedAgainstMirror": "Võrreldud selle DiscVaulti kataloogikoopiaga, mis võib olla vananenud. Vahepeal muutunud väärtus lükatakse ülevaatusel tagasi, mitte ei rakendata.",
+  "contribute.historyTitle": "Sinu saadetud parandused",
+  "contribute.historyHelp": "Mida sa MovieVaultile pakkusid ja mida moderaator otsustas. Ülevaatus võib võtta päevi.",
+  "contribute.historyEmpty": "Sa pole veel midagi panustanud.",
+  "contribute.historyNoFields": "Välju ei registreeritud.",
+  "contribute.historyDeletedRecord": "(kirje siin kustutatud)",
+  "contribute.historyScopeMine": "Näita ainult minu omi",
+  "contribute.historyScopeInstance": "Näita kõigi omi"
 }

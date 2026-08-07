@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Kabul edildi",
   "contribute.status.partiallyAccepted": "Kısmen kabul edildi",
   "contribute.status.rejected": "Reddedildi",
-  "contribute.status.failed": "Gönderilmedi"
+  "contribute.status.failed": "Gönderilmedi",
+  "contribute.comparedAgainstMirror": "Bu DiscVault'un katalog kopyasıyla karşılaştırıldı; bu kopya geride kalmış olabilir. O zamandan beri değişmiş bir değer incelemede uygulanmak yerine reddedilir.",
+  "contribute.historyTitle": "Gönderdiğiniz düzeltmeler",
+  "contribute.historyHelp": "MovieVault'a ne önerdiğiniz ve bir moderatörün ne karar verdiği. İnceleme günler sürebilir.",
+  "contribute.historyEmpty": "Henüz hiçbir katkıda bulunmadınız.",
+  "contribute.historyNoFields": "Kaydedilmiş alan yok.",
+  "contribute.historyDeletedRecord": "(kayıt burada silindi)",
+  "contribute.historyScopeMine": "Yalnızca benimkiler",
+  "contribute.historyScopeInstance": "Herkesinki"
 }

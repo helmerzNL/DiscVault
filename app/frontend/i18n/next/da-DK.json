@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Accepteret",
   "contribute.status.partiallyAccepted": "Delvist accepteret",
   "contribute.status.rejected": "Afvist",
-  "contribute.status.failed": "Ikke sendt"
+  "contribute.status.failed": "Ikke sendt",
+  "contribute.comparedAgainstMirror": "Sammenlignet med denne DiscVaults kopi af kataloget, som kan være bagud. En værdi, der er ændret siden, afvises ved gennemgangen i stedet for at blive anvendt.",
+  "contribute.historyTitle": "Rettelser du sendte",
+  "contribute.historyHelp": "Hvad du foreslog MovieVault, og hvad en moderator besluttede. En gennemgang kan tage dage.",
+  "contribute.historyEmpty": "Du har endnu ikke bidraget med noget.",
+  "contribute.historyNoFields": "Ingen felter registreret.",
+  "contribute.historyDeletedRecord": "(post slettet her)",
+  "contribute.historyScopeMine": "Vis kun mine",
+  "contribute.historyScopeInstance": "Vis alles"
 }

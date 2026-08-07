@@ -3399,6 +3399,15 @@ def ui_preview_html(
     .contribute-message:empty {
       display: none;
     }
+    .contribute-stale {
+      margin: 0;
+      font-size: .85rem;
+      color: var(--muted, #888);
+      line-height: 1.45;
+    }
+    .contribute-history-row .contribute-status {
+      white-space: nowrap;
+    }
     /* Sits beside the Contribute button and outlives it: after an accepted
        correction there is nothing left to send, so the button goes and this is
        the only thing that still answers what happened. */
@@ -15794,6 +15803,7 @@ def ui_preview_html(
                   <div id="profileCollectorPreferenceList"></div>
                   <div class="hidden" id="loansSystemSettingRow"></div>
                   <div class="hidden" id="movieVaultContributionSettingRow"></div>
+                  <div class="hidden" id="contributeHistoryRow"></div>
                 </div>
                 <div class="login-message" id="preferencesMessage" aria-live="polite"></div>
               </div>
@@ -28651,6 +28661,19 @@ def ui_preview_html(
         panel.appendChild(intro);
       }
 
+      // Said out loud, because the two are not equally trustworthy: a diff
+      // computed against the local mirror is as old as the last catalogue
+      // sync, and the value shown may already have moved.
+      if (preview.comparedAgainst === "mirror") {
+        const stale = document.createElement("p");
+        stale.className = "contribute-stale";
+        stale.textContent = tNext(
+          "contribute.comparedAgainstMirror",
+          "Compared against this DiscVault's copy of the catalogue, which may be behind. A value that has moved since is refused at review rather than applied."
+        );
+        panel.appendChild(stale);
+      }
+
       const list = document.createElement("div");
       list.className = "contribute-changes";
       changes.forEach((change) => {
@@ -40324,6 +40347,104 @@ def ui_preview_html(
         setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
       }
     }
+    // ---- Contribution history --------------------------------------------
+    //
+    // Per-record the detail screen answers "did my correction land". This
+    // answers the other half: what have I sent at all. Deliberately a separate
+    // surface rather than a badge somewhere -- it is read occasionally and on
+    // purpose, not glanced at.
+    const contributeHistory = {loaded: false, loading: false, items: [], scope: "mine", canReadInstance: false};
+
+    function contributeHistoryStatusLabel(status) {
+      const entry = CONTRIBUTE_STATUS_LABELS[status];
+      return entry ? tNext(entry[0], entry[1]) : status;
+    }
+    async function loadContributeHistory(scope) {
+      if (contributeHistory.loading) return;
+      contributeHistory.loading = true;
+      try {
+        const query = scope === "instance" ? "?scope=instance&limit=50" : "?limit=50";
+        const payload = await apiJson(`/api/next/movievault/contributions/history${query}`, {
+          headers: authHeaders()
+        });
+        contributeHistory.items = payload.contributions || [];
+        // Taken from the answer rather than from what was asked: a non-owner
+        // who requested the instance is narrowed to their own, and the panel
+        // has to say so instead of quietly showing a shorter list.
+        contributeHistory.scope = payload.scope || "mine";
+        contributeHistory.canReadInstance = !!payload.canReadInstance;
+        contributeHistory.loaded = true;
+      } catch (error) {
+        contributeHistory.items = [];
+        contributeHistory.loaded = true;
+      } finally {
+        contributeHistory.loading = false;
+        renderContributeHistory();
+      }
+    }
+    function contributeHistoryRow(item) {
+      const title = item.title || tNext("contribute.historyDeletedRecord", "(record deleted here)");
+      const fields = (item.fields || []).map(contributeFieldLabel).join(", ");
+      const detail = [fields, item.lastError].filter(Boolean).join(" - ");
+      return `
+        <div class="preference-row contribute-history-row">
+          <span>
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(detail || tNext("contribute.historyNoFields", "No fields recorded."))}</span>
+          </span>
+          <span class="contribute-status ${contributeStatusTone(item.status)}">${escapeHtml(contributeHistoryStatusLabel(item.status))}</span>
+        </div>
+      `;
+    }
+    function renderContributeHistory() {
+      const row = document.getElementById("contributeHistoryRow");
+      if (!row) return;
+      // Same gate as the button itself: contributing is an edit to a shared
+      // record, so someone who may not edit has nothing here to read.
+      if (!hasPermission("collection.edit_all")) {
+        row.classList.add("hidden");
+        row.innerHTML = "";
+        return;
+      }
+      if (!contributeHistory.loaded && !contributeHistory.loading) {
+        void loadContributeHistory(contributeHistory.scope);
+      }
+      row.classList.remove("hidden");
+      const items = contributeHistory.items || [];
+      const body = !contributeHistory.loaded
+        ? `<div class="preference-row"><span>${escapeHtml(tNext("common.loading", "Loading..."))}</span></div>`
+        : items.length
+          ? items.map(contributeHistoryRow).join("")
+          : `<div class="preference-row"><span>${escapeHtml(tNext("contribute.historyEmpty", "You have not contributed anything yet."))}</span></div>`;
+      const scopeToggle = contributeHistory.canReadInstance
+        ? `<button type="button" class="secondary-button" id="contributeHistoryScopeButton">${escapeHtml(
+            contributeHistory.scope === "instance"
+              ? tNext("contribute.historyScopeMine", "Show only mine")
+              : tNext("contribute.historyScopeInstance", "Show everyone's")
+          )}</button>`
+        : "";
+      row.innerHTML = `
+        <section class="preferences-setting-card wide" data-preference-card="contribute-history">
+          <div class="preferences-setting-card-head">
+            <h5>${escapeHtml(tNext("contribute.historyTitle", "Corrections you sent"))}</h5>
+            <p>${escapeHtml(tNext("contribute.historyHelp", "What you proposed to MovieVault and what a moderator decided. A correction can take days to be reviewed."))}</p>
+          </div>
+          <div class="preferences-card-list">${body}</div>
+          <div class="app-admin-plugin-actions">
+            <button type="button" class="secondary-button" id="contributeHistoryRefreshButton">${escapeHtml(tNext("common.refresh", "Refresh"))}</button>
+            ${scopeToggle}
+          </div>
+        </section>
+      `;
+      document.getElementById("contributeHistoryRefreshButton")?.addEventListener("click", () => {
+        contributeHistory.loaded = false;
+        void loadContributeHistory(contributeHistory.scope);
+      });
+      document.getElementById("contributeHistoryScopeButton")?.addEventListener("click", () => {
+        contributeHistory.loaded = false;
+        void loadContributeHistory(contributeHistory.scope === "instance" ? "mine" : "instance");
+      });
+    }
     function setPreferencesMessage(message, tone) {
       const node = document.getElementById("preferencesMessage");
       if (!node) return;
@@ -40343,6 +40464,7 @@ def ui_preview_html(
       }
       renderLoansSystemSetting();
       renderMovieVaultContributionSetting();
+      renderContributeHistory();
       setProfileMenuStyle(effectiveProfileMenuStyle());
       applyAppPermissionVisibility();
       setPreferenceTab(activePreferenceTab);

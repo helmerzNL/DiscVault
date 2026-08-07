@@ -158,6 +158,7 @@ try:
     from .next_movievault_v2_contributions import field_correction_enabled
     from .next_movievault_v2_contributions import field_correction_gate
     from .next_movievault_v2_field_corrections import correction_preview
+    from .next_movievault_v2_field_corrections import contribution_history
     from .next_movievault_v2_field_corrections import latest_contribution
     from .next_movievault_v2_field_corrections import record_contribution
     from .dedup_identity import MEDIA_TYPE_MOVIE
@@ -413,6 +414,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2_contributions import field_correction_enabled
     from next_movievault_v2_contributions import field_correction_gate
     from next_movievault_v2_field_corrections import correction_preview
+    from next_movievault_v2_field_corrections import contribution_history
     from next_movievault_v2_field_corrections import latest_contribution
     from next_movievault_v2_field_corrections import record_contribution
     from dedup_identity import MEDIA_TYPE_MOVIE
@@ -22737,7 +22739,13 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "collection.edit_all")
             record, metadata = _correction_record(conn, actor, entity, entity_id)
             gate = field_correction_gate(conn, actor.get("id") if actor else None)
-            preview = correction_preview(conn, entity=entity, record=record, metadata=metadata)
+            # No pre-flight here. This runs on every detail render and only has
+            # to answer "is there anything"; a network round trip to sharpen a
+            # number nobody has looked at yet is the wrong trade. The sheet
+            # pays for it, and the sheet is what the user acts on.
+            preview = correction_preview(
+                conn, entity=entity, record=record, metadata=metadata, preflight=False
+            )
             return response(
                 {
                     "status": "ok",
@@ -22828,6 +22836,35 @@ def register_routes(flask_app: Flask) -> None:
                     "queued": bool(job),
                     "jobId": (job or {}).get("id"),
                     "changes": preview["changes"],
+                }
+            )
+
+    @flask_app.get("/api/next/movievault/contributions/history")
+    def movievault_correction_history():
+        """What this person has contributed, newest first.
+
+        Scoped to the caller unless they are the owner and ask for everything:
+        a contribution is attributable, and one user reading another's is not
+        something a shared instance should offer by default.
+        """
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            everyone = str(request.args.get("scope") or "").lower() == "instance"
+            is_owner = str((actor or {}).get("role") or "") == "owner"
+            history = contribution_history(
+                conn,
+                actor_id=None if (everyone and is_owner) else (actor or {}).get("id"),
+                limit=int(request.args.get("limit") or 50),
+            )
+            return response(
+                {
+                    "status": "ok",
+                    # Told rather than inferred: a user who asked for the
+                    # instance and got their own back should be able to see
+                    # that it was narrowed, not wonder why it is short.
+                    "scope": "instance" if (everyone and is_owner) else "mine",
+                    "canReadInstance": is_owner,
+                    "contributions": history,
                 }
             )
 

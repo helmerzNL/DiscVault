@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Przyjęta",
   "contribute.status.partiallyAccepted": "Przyjęta częściowo",
   "contribute.status.rejected": "Odrzucona",
-  "contribute.status.failed": "Niewysłana"
+  "contribute.status.failed": "Niewysłana",
+  "contribute.comparedAgainstMirror": "Porównane z kopią katalogu w tym DiscVault, która może być nieaktualna. Wartość, która od tego czasu się zmieniła, zostanie odrzucona przy weryfikacji zamiast zastosowana.",
+  "contribute.historyTitle": "Wysłane przez Ciebie poprawki",
+  "contribute.historyHelp": "Co zaproponowałeś MovieVault i co zdecydował moderator. Weryfikacja może potrwać kilka dni.",
+  "contribute.historyEmpty": "Nie wniosłeś jeszcze żadnego wkładu.",
+  "contribute.historyNoFields": "Nie zapisano żadnych pól.",
+  "contribute.historyDeletedRecord": "(rekord usunięty tutaj)",
+  "contribute.historyScopeMine": "Pokaż tylko moje",
+  "contribute.historyScopeInstance": "Pokaż wszystkich"
 }

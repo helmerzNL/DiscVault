@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Прийнято",
   "contribute.status.partiallyAccepted": "Прийнято частково",
   "contribute.status.rejected": "Відхилено",
-  "contribute.status.failed": "Не надіслано"
+  "contribute.status.failed": "Не надіслано",
+  "contribute.comparedAgainstMirror": "Порівняно з копією каталогу в цьому DiscVault, яка може відставати. Значення, що відтоді змінилося, під час перевірки відхиляється, а не застосовується.",
+  "contribute.historyTitle": "Надіслані вами виправлення",
+  "contribute.historyHelp": "Що ви запропонували MovieVault і що вирішив модератор. Перевірка може тривати кілька днів.",
+  "contribute.historyEmpty": "Ви ще нічого не внесли.",
+  "contribute.historyNoFields": "Полів не зафіксовано.",
+  "contribute.historyDeletedRecord": "(запис видалено тут)",
+  "contribute.historyScopeMine": "Лише мої",
+  "contribute.historyScopeInstance": "Усіх"
 }

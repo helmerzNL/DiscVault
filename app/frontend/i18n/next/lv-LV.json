@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Pieņemts",
   "contribute.status.partiallyAccepted": "Daļēji pieņemts",
   "contribute.status.rejected": "Noraidīts",
-  "contribute.status.failed": "Nav nosūtīts"
+  "contribute.status.failed": "Nav nosūtīts",
+  "contribute.comparedAgainstMirror": "Salīdzināts ar šī DiscVault kataloga kopiju, kas var būt novecojusi. Vērtība, kas kopš tā laika mainījusies, tiek noraidīta pārskatīšanā, nevis piemērota.",
+  "contribute.historyTitle": "Jūsu nosūtītie labojumi",
+  "contribute.historyHelp": "Ko piedāvājāt MovieVault un ko izlēma moderators. Pārskatīšana var aizņemt dienas.",
+  "contribute.historyEmpty": "Jūs vēl neko neesat sniedzis.",
+  "contribute.historyNoFields": "Nav reģistrētu lauku.",
+  "contribute.historyDeletedRecord": "(ieraksts šeit dzēsts)",
+  "contribute.historyScopeMine": "Rādīt tikai manus",
+  "contribute.historyScopeInstance": "Rādīt visu"
 }

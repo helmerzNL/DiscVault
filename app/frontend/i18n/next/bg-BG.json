@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Приета",
   "contribute.status.partiallyAccepted": "Частично приета",
   "contribute.status.rejected": "Отхвърлена",
-  "contribute.status.failed": "Неизпратена"
+  "contribute.status.failed": "Неизпратена",
+  "contribute.comparedAgainstMirror": "Сравнено с копието на каталога в този DiscVault, което може да изостава. Стойност, променена оттогава, се отхвърля при прегледа вместо да бъде приложена.",
+  "contribute.historyTitle": "Изпратени от вас корекции",
+  "contribute.historyHelp": "Какво предложихте на MovieVault и какво реши модератор. Прегледът може да отнеме дни.",
+  "contribute.historyEmpty": "Още не сте допринесли с нищо.",
+  "contribute.historyNoFields": "Няма записани полета.",
+  "contribute.historyDeletedRecord": "(записът е изтрит тук)",
+  "contribute.historyScopeMine": "Само моите",
+  "contribute.historyScopeInstance": "На всички"
 }

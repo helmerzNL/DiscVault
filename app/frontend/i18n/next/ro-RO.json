@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Acceptată",
   "contribute.status.partiallyAccepted": "Acceptată parțial",
   "contribute.status.rejected": "Respinsă",
-  "contribute.status.failed": "Netrimisă"
+  "contribute.status.failed": "Netrimisă",
+  "contribute.comparedAgainstMirror": "Comparat cu copia catalogului din acest DiscVault, care poate fi în urmă. O valoare schimbată între timp este respinsă la verificare în loc să fie aplicată.",
+  "contribute.historyTitle": "Corecturi trimise de tine",
+  "contribute.historyHelp": "Ce ai propus către MovieVault și ce a decis un moderator. O verificare poate dura zile.",
+  "contribute.historyEmpty": "Nu ai contribuit încă cu nimic.",
+  "contribute.historyNoFields": "Niciun câmp înregistrat.",
+  "contribute.historyDeletedRecord": "(înregistrare ștearsă aici)",
+  "contribute.historyScopeMine": "Arată doar ale mele",
+  "contribute.historyScopeInstance": "Arată-le pe ale tuturor"
 }

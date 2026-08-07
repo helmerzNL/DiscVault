@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Overgenomen",
   "contribute.status.partiallyAccepted": "Deels overgenomen",
   "contribute.status.rejected": "Afgewezen",
-  "contribute.status.failed": "Niet verstuurd"
+  "contribute.status.failed": "Niet verstuurd",
+  "contribute.comparedAgainstMirror": "Vergeleken met de kopie van de catalogus in deze DiscVault, die achter kan lopen. Een waarde die sindsdien is veranderd wordt bij de beoordeling geweigerd in plaats van toegepast.",
+  "contribute.historyTitle": "Correcties die je stuurde",
+  "contribute.historyHelp": "Wat je aan MovieVault voorstelde en wat een moderator besloot. Een beoordeling kan dagen duren.",
+  "contribute.historyEmpty": "Je hebt nog niets bijgedragen.",
+  "contribute.historyNoFields": "Geen velden vastgelegd.",
+  "contribute.historyDeletedRecord": "(record hier verwijderd)",
+  "contribute.historyScopeMine": "Alleen die van mij",
+  "contribute.historyScopeInstance": "Die van iedereen"
 }

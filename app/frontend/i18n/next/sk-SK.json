@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Prijatá",
   "contribute.status.partiallyAccepted": "Prijatá čiastočne",
   "contribute.status.rejected": "Zamietnutá",
-  "contribute.status.failed": "Neodoslaná"
+  "contribute.status.failed": "Neodoslaná",
+  "contribute.comparedAgainstMirror": "Porovnané s kópiou katalógu v tomto DiscVault, ktorá môže byť zastaraná. Hodnota, ktorá sa medzitým zmenila, bude pri posudzovaní zamietnutá namiesto použitá.",
+  "contribute.historyTitle": "Opravy, ktoré ste odoslali",
+  "contribute.historyHelp": "Čo ste navrhli MovieVault a ako moderátor rozhodol. Posúdenie môže trvať dni.",
+  "contribute.historyEmpty": "Zatiaľ ste nič neprispeli.",
+  "contribute.historyNoFields": "Nezaznamenané žiadne polia.",
+  "contribute.historyDeletedRecord": "(záznam tu zmazaný)",
+  "contribute.historyScopeMine": "Zobraziť len moje",
+  "contribute.historyScopeInstance": "Zobraziť všetky"
 }

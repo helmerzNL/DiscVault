@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "已采纳",
   "contribute.status.partiallyAccepted": "部分采纳",
   "contribute.status.rejected": "未采纳",
-  "contribute.status.failed": "未发送"
+  "contribute.status.failed": "未发送",
+  "contribute.comparedAgainstMirror": "与此 DiscVault 保存的目录副本比较，该副本可能已过时。此后发生变化的值会在审核时被拒绝而不是被采纳。",
+  "contribute.historyTitle": "你发送的更正",
+  "contribute.historyHelp": "你向 MovieVault 提出了什么，以及审核员如何决定。审核可能需要几天。",
+  "contribute.historyEmpty": "你还没有贡献过任何内容。",
+  "contribute.historyNoFields": "未记录字段。",
+  "contribute.historyDeletedRecord": "（此处记录已删除）",
+  "contribute.historyScopeMine": "只看我的",
+  "contribute.historyScopeInstance": "查看所有人的"
 }

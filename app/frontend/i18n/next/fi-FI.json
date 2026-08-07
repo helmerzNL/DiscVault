@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Hyväksytty",
   "contribute.status.partiallyAccepted": "Osittain hyväksytty",
   "contribute.status.rejected": "Hylätty",
-  "contribute.status.failed": "Ei lähetetty"
+  "contribute.status.failed": "Ei lähetetty",
+  "contribute.comparedAgainstMirror": "Verrattu tämän DiscVaultin luettelokopioon, joka voi olla vanhentunut. Sittemmin muuttunut arvo hylätään tarkistuksessa sen sijaan että se otettaisiin käyttöön.",
+  "contribute.historyTitle": "Lähettämäsi korjaukset",
+  "contribute.historyHelp": "Mitä ehdotit MovieVaultille ja mitä tarkistaja päätti. Tarkistus voi kestää päiviä.",
+  "contribute.historyEmpty": "Et ole vielä osallistunut mitenkään.",
+  "contribute.historyNoFields": "Kenttiä ei kirjattu.",
+  "contribute.historyDeletedRecord": "(tietue poistettu täältä)",
+  "contribute.historyScopeMine": "Näytä vain omani",
+  "contribute.historyScopeInstance": "Näytä kaikkien"
 }

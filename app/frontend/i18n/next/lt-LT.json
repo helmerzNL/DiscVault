@@ -2765,5 +2765,13 @@
   "contribute.status.accepted": "Priimtas",
   "contribute.status.partiallyAccepted": "Priimtas iš dalies",
   "contribute.status.rejected": "Atmestas",
-  "contribute.status.failed": "Neišsiųstas"
+  "contribute.status.failed": "Neišsiųstas",
+  "contribute.comparedAgainstMirror": "Palyginta su šio DiscVault katalogo kopija, kuri gali būti pasenusi. Nuo tada pasikeitusi reikšmė peržiūroje atmetama, o ne pritaikoma.",
+  "contribute.historyTitle": "Jūsų išsiųsti pataisymai",
+  "contribute.historyHelp": "Ką pasiūlėte MovieVault ir ką nusprendė moderatorius. Peržiūra gali užtrukti kelias dienas.",
+  "contribute.historyEmpty": "Dar nieko neprisidėjote.",
+  "contribute.historyNoFields": "Laukų neužfiksuota.",
+  "contribute.historyDeletedRecord": "(įrašas čia ištrintas)",
+  "contribute.historyScopeMine": "Rodyti tik mano",
+  "contribute.historyScopeInstance": "Rodyti visų"
 }

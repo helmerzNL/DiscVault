@@ -175,6 +175,69 @@ class ReadBackTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "contribution_not_registered")
 
 
+class PreflightTests(unittest.TestCase):
+    """The live read the sheet makes before showing a diff.
+
+    Asserted at the transport level because the value of the pre-flight is that
+    it uses an *existing* anonymous route: inventing a contributor-authenticated
+    one would have tied the correction surface to the identity, which the
+    resolve path is deliberately kept free of.
+    """
+
+    def _fetch(self, status, payload, film_id="f1", release_id="r1"):
+        from app.backend import next_movievault_v2_field_corrections as fc
+
+        captured = {}
+
+        def _http(url, *, method, timeout_seconds, payload=None):
+            captured["url"] = url
+            captured["method"] = method
+            return status, json.dumps(payload).encode() if payload is not None else b""
+
+        import app.backend.next_movievault_v2 as v2
+
+        with patch.object(v2, "_release_details_http", lambda url, **k: _http(url, **k, payload=payload)):
+            return captured, fc.live_release_values(film_id, release_id)
+
+    def test_it_reads_the_public_film_releases_route(self):
+        captured, _ = self._fetch(200, {"releases": [{"releaseRef": "r1", "edition": "Extended"}]})
+        self.assertEqual(captured["url"], "https://movievault.example/v2/films/f1/releases")
+        self.assertEqual(captured["method"], "GET")
+
+    def test_it_returns_the_matching_release_only(self):
+        _, values = self._fetch(
+            200,
+            {
+                "releases": [
+                    {"releaseRef": "other", "edition": "Wrong"},
+                    {"releaseRef": "r1", "edition": "Extended", "runtimeMinutes": 121},
+                ]
+            },
+        )
+        self.assertEqual(values["edition"], "Extended")
+        self.assertEqual(values["runtimeMinutes"], 121)
+
+    def test_a_release_the_film_no_longer_lists_is_gone_rather_than_unknown(self):
+        """Merged, retired or deleted. Distinct from "could not ask", because
+        one is an answer and the other is the absence of one."""
+        _, values = self._fetch(200, {"releases": [{"releaseRef": "other"}]})
+        self.assertTrue(values["_gone"])
+
+    def test_every_failure_is_the_same_answer(self):
+        """None means "could not be established", never "nothing changed" -- the
+        caller falls back to the mirror rather than treating an unreachable
+        MovieVault as agreement."""
+        for status in (404, 429, 503):
+            _, values = self._fetch(status, {"releases": []})
+            self.assertIsNone(values)
+
+    def test_a_missing_target_is_not_asked_about(self):
+        from app.backend import next_movievault_v2_field_corrections as fc
+
+        self.assertIsNone(fc.live_release_values(None, "r1"))
+        self.assertIsNone(fc.live_release_values("f1", None))
+
+
 class GateTests(unittest.TestCase):
     def _enabled(self, *, owner, corrections, releases=True):
         with patch.object(contributions, "_table_exists", lambda *a: True), patch.object(
