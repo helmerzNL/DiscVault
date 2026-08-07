@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Upprepar vid varje bidrag förklaringen av vad som skickas och inte, i stället för bara första gången.",
   "contribute.disabledTitle": "Bidrag är avstängt",
   "contribute.disabledLead": "Den här DiscVault skickar ingenting till MovieVault. Det är en ägarinställning och inte en personlig, så att godkänna delning här skulle inte ändra något.",
-  "contribute.disabledWhere": "En ägare kan slå på det under Admin, Security med Toggle Release Contribution. Samma reglage täcker utgåvor och fälträttelser."
+  "contribute.disabledWhere": "En ägare kan slå på det under Admin, Security med Toggle Release Contribution. Samma reglage täcker utgåvor och fälträttelser.",
+  "preferences.cardMovieVaultContribution": "Bidra till MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Om den här DiscVault över huvud taget får skicka något till den delade katalogen. Varje person bestämmer dessutom själv, och inget skickas utan bekräftelse fält för fält.",
+  "preferences.movieVaultContribution": "Tillåt bidrag till MovieVault",
+  "preferences.movieVaultContributionHelp": "Gäller både utgåvorna som identifieras och fälträttelserna som skickas. Avstängt lämnar ingenting den här instansen, oavsett vad en användare har godkänt.",
+  "preferences.movieVaultInstanceStatus": "Instansens status",
+  "preferences.movieVaultRegistered": "Registrerad",
+  "preferences.movieVaultNotRegistered": "Inte registrerad än. Det första bidraget registrerar den här instansen.",
+  "preferences.movieVaultLastError": "Senaste fel"
 }

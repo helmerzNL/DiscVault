@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Ponavlja pri svakom doprinosu objašnjenje što se šalje, a što ne, umjesto samo prvi put.",
   "contribute.disabledTitle": "Doprinos je isključen",
   "contribute.disabledLead": "Ovaj DiscVault ne šalje ništa u MovieVault. To je postavka vlasnika, a ne osobna, pa pristanak na dijeljenje ovdje ne bi ništa promijenio.",
-  "contribute.disabledWhere": "Vlasnik ga može uključiti u Admin, Security pomoću Toggle Release Contribution. Isti prekidač pokriva izdanja i ispravke polja."
+  "contribute.disabledWhere": "Vlasnik ga može uključiti u Admin, Security pomoću Toggle Release Contribution. Isti prekidač pokriva izdanja i ispravke polja.",
+  "preferences.cardMovieVaultContribution": "Doprinos MovieVaultu",
+  "preferences.cardMovieVaultContributionHelp": "Smije li ovaj DiscVault uopće išta slati u zajednički katalog. Uz to svatko odlučuje za sebe i ništa se ne šalje bez potvrde polje po polje.",
+  "preferences.movieVaultContribution": "Dopusti doprinose MovieVaultu",
+  "preferences.movieVaultContributionHelp": "Obuhvaća i prepoznata izdanja i poslane ispravke polja. Isključeno znači da ništa ne napušta ovu instancu, na što god je korisnik pristao.",
+  "preferences.movieVaultInstanceStatus": "Stanje instance",
+  "preferences.movieVaultRegistered": "Registrirana",
+  "preferences.movieVaultNotRegistered": "Još nije registrirana. Prvi doprinos registrirat će ovu instancu.",
+  "preferences.movieVaultLastError": "Posljednja pogreška"
 }

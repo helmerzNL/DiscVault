@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Opakuje pri každom príspevku vysvetlenie, čo sa prenáša a čo nie, namiesto len prvýkrát.",
   "contribute.disabledTitle": "Prispievanie je vypnuté",
   "contribute.disabledLead": "Tento DiscVault neposiela do MovieVault nič. Je to nastavenie vlastníka, nie osobné, takže súhlas so zdieľaním by tu nič nezmenil.",
-  "contribute.disabledWhere": "Vlastník to môže zapnúť v Admin, Security tlačidlom Toggle Release Contribution. Rovnaký prepínač pokrýva edície aj opravy polí."
+  "contribute.disabledWhere": "Vlastník to môže zapnúť v Admin, Security tlačidlom Toggle Release Contribution. Rovnaký prepínač pokrýva edície aj opravy polí.",
+  "preferences.cardMovieVaultContribution": "Prispievanie do MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Či tento DiscVault vôbec smie niečo posielať do zdieľaného katalógu. Každý navyše rozhoduje sám za seba a nič sa neodosiela bez potvrdenia pole po poli.",
+  "preferences.movieVaultContribution": "Povoliť príspevky do MovieVault",
+  "preferences.movieVaultContributionHelp": "Týka sa rozpoznaných edícií aj odosielaných opráv polí. Vypnuté znamená, že túto inštanciu nič neopustí, nech už používateľ súhlasil s čímkoľvek.",
+  "preferences.movieVaultInstanceStatus": "Stav inštancie",
+  "preferences.movieVaultRegistered": "Registrovaná",
+  "preferences.movieVaultNotRegistered": "Zatiaľ neregistrovaná. Prvý príspevok túto inštanciu zaregistruje.",
+  "preferences.movieVaultLastError": "Posledná chyba"
 }

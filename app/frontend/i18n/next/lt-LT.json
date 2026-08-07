@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Kartoja kiekvieną kartą prisidedant paaiškinimą, kas siunčiama ir kas ne, o ne tik pirmą kartą.",
   "contribute.disabledTitle": "Prisidėjimas išjungtas",
   "contribute.disabledLead": "Šis DiscVault į MovieVault nieko nesiunčia. Tai savininko, o ne asmeninis nustatymas, todėl sutikimas dalytis čia nieko nepakeistų.",
-  "contribute.disabledWhere": "Savininkas gali jį įjungti Admin, Security skiltyje mygtuku Toggle Release Contribution. Tas pats jungiklis apima leidimus ir laukų pataisymus."
+  "contribute.disabledWhere": "Savininkas gali jį įjungti Admin, Security skiltyje mygtuku Toggle Release Contribution. Tas pats jungiklis apima leidimus ir laukų pataisymus.",
+  "preferences.cardMovieVaultContribution": "Prisidėjimas prie MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Ar šis DiscVault apskritai gali ką nors siųsti į bendrą katalogą. Be to, kiekvienas sprendžia pats, ir niekas nesiunčiama nepatvirtinus laukas po lauko.",
+  "preferences.movieVaultContribution": "Leisti prisidėti prie MovieVault",
+  "preferences.movieVaultContributionHelp": "Apima tiek atpažintus leidimus, tiek siunčiamus laukų pataisymus. Išjungta reiškia, kad iš šio egzemplioriaus niekas neišeina, su kuo bebūtų sutikęs naudotojas.",
+  "preferences.movieVaultInstanceStatus": "Egzemplioriaus būsena",
+  "preferences.movieVaultRegistered": "Užregistruotas",
+  "preferences.movieVaultNotRegistered": "Dar neužregistruotas. Pirmasis prisidėjimas užregistruos šį egzempliorių.",
+  "preferences.movieVaultLastError": "Paskutinė klaida"
 }

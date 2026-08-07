@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Повторює при кожному внеску пояснення, що передається, а що ні, замість лише першого разу.",
   "contribute.disabledTitle": "Внески вимкнено",
   "contribute.disabledLead": "Цей DiscVault нічого не надсилає до MovieVault. Це налаштування власника, а не особисте, тож згода на поширення тут нічого не змінить.",
-  "contribute.disabledWhere": "Власник може ввімкнути це в Admin, Security кнопкою Toggle Release Contribution. Той самий перемикач охоплює видання та виправлення полів."
+  "contribute.disabledWhere": "Власник може ввімкнути це в Admin, Security кнопкою Toggle Release Contribution. Той самий перемикач охоплює видання та виправлення полів.",
+  "preferences.cardMovieVaultContribution": "Внесок до MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Чи може цей DiscVault узагалі щось надсилати до спільного каталогу. Крім того, кожен вирішує сам за себе, і нічого не надсилається без підтвердження по кожному полю.",
+  "preferences.movieVaultContribution": "Дозволити внески до MovieVault",
+  "preferences.movieVaultContributionHelp": "Стосується як розпізнаних видань, так і надісланих виправлень полів. Вимкнено означає, що з цього примірника нічого не виходить, на що б користувач не погодився.",
+  "preferences.movieVaultInstanceStatus": "Стан примірника",
+  "preferences.movieVaultRegistered": "Зареєстровано",
+  "preferences.movieVaultNotRegistered": "Ще не зареєстровано. Перший внесок зареєструє цей примірник.",
+  "preferences.movieVaultLastError": "Остання помилка"
 }

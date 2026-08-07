@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "在每次貢獻時重複說明哪些內容會傳送、哪些不會，而不是只在第一次顯示。",
   "contribute.disabledTitle": "貢獻功能已關閉",
   "contribute.disabledLead": "此 DiscVault 不會向 MovieVault 傳送任何內容。這是擁有者設定而非個人設定，因此在這裡同意分享不會改變什麼。",
-  "contribute.disabledWhere": "擁有者可在 Admin 的 Security 中透過 Toggle Release Contribution 開啟。同一個開關同時適用於版本與欄位更正。"
+  "contribute.disabledWhere": "擁有者可在 Admin 的 Security 中透過 Toggle Release Contribution 開啟。同一個開關同時適用於版本與欄位更正。",
+  "preferences.cardMovieVaultContribution": "向 MovieVault 貢獻",
+  "preferences.cardMovieVaultContributionHelp": "此 DiscVault 是否可以向共用目錄傳送任何內容。此外每位使用者仍自行決定，而且在逐項確認之前不會傳送任何內容。",
+  "preferences.movieVaultContribution": "允許向 MovieVault 貢獻",
+  "preferences.movieVaultContributionHelp": "同時涵蓋辨識出的版本與傳送的欄位更正。關閉時，無論使用者同意過什麼，都不會有內容離開此執行個體。",
+  "preferences.movieVaultInstanceStatus": "執行個體狀態",
+  "preferences.movieVaultRegistered": "已註冊",
+  "preferences.movieVaultNotRegistered": "尚未註冊。首次貢獻將註冊此執行個體。",
+  "preferences.movieVaultLastError": "最近一次錯誤"
 }

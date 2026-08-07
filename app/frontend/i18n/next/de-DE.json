@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Wiederholt bei jedem Beitrag die Erklärung, was übertragen wird und was nicht, statt nur beim ersten Mal.",
   "contribute.disabledTitle": "Beitragen ist ausgeschaltet",
   "contribute.disabledLead": "Dieses DiscVault sendet nichts an MovieVault. Das ist eine Eigentümereinstellung und keine persönliche, eine Zustimmung hier würde also nichts ändern.",
-  "contribute.disabledWhere": "Ein Eigentümer kann es unter Admin, Security mit Toggle Release Contribution einschalten. Derselbe Schalter gilt für Releases und Feldkorrekturen."
+  "contribute.disabledWhere": "Ein Eigentümer kann es unter Admin, Security mit Toggle Release Contribution einschalten. Derselbe Schalter gilt für Releases und Feldkorrekturen.",
+  "preferences.cardMovieVaultContribution": "Beitragen zu MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Ob dieses DiscVault überhaupt etwas an den gemeinsamen Katalog senden darf. Jede Person entscheidet zusätzlich selbst, und nichts wird ohne feldweise Bestätigung gesendet.",
+  "preferences.movieVaultContribution": "Beiträge an MovieVault erlauben",
+  "preferences.movieVaultContributionHelp": "Gilt für die erkannten Releases ebenso wie für gesendete Feldkorrekturen. Aus bedeutet, dass nichts diese Instanz verlässt, egal wem jemand zugestimmt hat.",
+  "preferences.movieVaultInstanceStatus": "Status der Instanz",
+  "preferences.movieVaultRegistered": "Registriert",
+  "preferences.movieVaultNotRegistered": "Noch nicht registriert. Der erste Beitrag registriert diese Instanz.",
+  "preferences.movieVaultLastError": "Letzter Fehler"
 }

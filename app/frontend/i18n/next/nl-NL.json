@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Herhaalt bij elke bijdrage de uitleg over wat er wel en niet meegaat, in plaats van alleen de eerste keer.",
   "contribute.disabledTitle": "Bijdragen staat uit",
   "contribute.disabledLead": "Deze DiscVault stuurt niets naar MovieVault. Dat is een eigenaar-instelling en geen persoonlijke, dus hier akkoord gaan met delen verandert niets.",
-  "contribute.disabledWhere": "Een eigenaar kan het aanzetten onder Admin, Security, met Toggle Release Contribution. Diezelfde schakelaar dekt releases en veldcorrecties."
+  "contribute.disabledWhere": "Een eigenaar kan het aanzetten onder Admin, Security, met Toggle Release Contribution. Diezelfde schakelaar dekt releases en veldcorrecties.",
+  "preferences.cardMovieVaultContribution": "Bijdragen aan MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Of deze DiscVault überhaupt iets naar de gedeelde catalogus mag sturen. Elke gebruiker beslist daarnaast zelf, en er gaat niets weg zonder het veld voor veld te bevestigen.",
+  "preferences.movieVaultContribution": "Bijdragen aan MovieVault toestaan",
+  "preferences.movieVaultContributionHelp": "Geldt zowel voor de releases die mensen herkennen als voor de veldcorrecties die ze sturen. Uit betekent dat er niets deze instantie verlaat, wat een gebruiker ook heeft goedgekeurd.",
+  "preferences.movieVaultInstanceStatus": "Status van de instantie",
+  "preferences.movieVaultRegistered": "Geregistreerd",
+  "preferences.movieVaultNotRegistered": "Nog niet geregistreerd. De eerste bijdrage registreert deze instantie.",
+  "preferences.movieVaultLastError": "Laatste fout"
 }

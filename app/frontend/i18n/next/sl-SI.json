@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Ob vsakem prispevku ponovi razlago, kaj se pošlje in kaj ne, namesto samo prvič.",
   "contribute.disabledTitle": "Prispevanje je izklopljeno",
   "contribute.disabledLead": "Ta DiscVault v MovieVault ne pošilja ničesar. To je nastavitev lastnika in ne osebna, zato soglasje k deljenju tu ne bi ničesar spremenilo.",
-  "contribute.disabledWhere": "Lastnik ga lahko vklopi v Admin, Security z Toggle Release Contribution. Isto stikalo pokriva izdaje in popravke polj."
+  "contribute.disabledWhere": "Lastnik ga lahko vklopi v Admin, Security z Toggle Release Contribution. Isto stikalo pokriva izdaje in popravke polj.",
+  "preferences.cardMovieVaultContribution": "Prispevanje v MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Ali ta DiscVault sploh sme karkoli pošiljati v skupni katalog. Poleg tega vsak odloča zase in nič se ne pošlje brez potrditve po posameznih poljih.",
+  "preferences.movieVaultContribution": "Dovoli prispevke v MovieVault",
+  "preferences.movieVaultContributionHelp": "Zajema tako prepoznane izdaje kot poslane popravke polj. Izklopljeno pomeni, da te instance nič ne zapusti, s čimer koli je uporabnik soglašal.",
+  "preferences.movieVaultInstanceStatus": "Stanje instance",
+  "preferences.movieVaultRegistered": "Registrirana",
+  "preferences.movieVaultNotRegistered": "Še ni registrirana. Prvi prispevek registrira to instanco.",
+  "preferences.movieVaultLastError": "Zadnja napaka"
 }

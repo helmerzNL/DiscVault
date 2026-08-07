@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Gentager ved hvert bidrag forklaringen på, hvad der sendes med og hvad ikke, i stedet for kun første gang.",
   "contribute.disabledTitle": "Bidrag er slået fra",
   "contribute.disabledLead": "Denne DiscVault sender intet til MovieVault. Det er en ejerindstilling og ikke en personlig, så at acceptere deling her ville ikke ændre noget.",
-  "contribute.disabledWhere": "En ejer kan slå det til under Admin, Security med Toggle Release Contribution. Samme kontakt dækker udgivelser og feltrettelser."
+  "contribute.disabledWhere": "En ejer kan slå det til under Admin, Security med Toggle Release Contribution. Samme kontakt dækker udgivelser og feltrettelser.",
+  "preferences.cardMovieVaultContribution": "Bidrag til MovieVault",
+  "preferences.cardMovieVaultContributionHelp": "Om denne DiscVault overhovedet må sende noget til det fælles katalog. Hver person bestemmer desuden selv, og intet sendes uden bekræftelse felt for felt.",
+  "preferences.movieVaultContribution": "Tillad bidrag til MovieVault",
+  "preferences.movieVaultContributionHelp": "Dækker både de udgivelser folk identificerer og de feltrettelser de sender. Slået fra forlader intet denne instans, uanset hvad en bruger har accepteret.",
+  "preferences.movieVaultInstanceStatus": "Instansens status",
+  "preferences.movieVaultRegistered": "Registreret",
+  "preferences.movieVaultNotRegistered": "Endnu ikke registreret. Det første bidrag registrerer denne instans.",
+  "preferences.movieVaultLastError": "Seneste fejl"
 }

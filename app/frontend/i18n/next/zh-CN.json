@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "在每次贡献时重复说明哪些内容会发送、哪些不会，而不是只在第一次显示。",
   "contribute.disabledTitle": "贡献功能已关闭",
   "contribute.disabledLead": "此 DiscVault 不会向 MovieVault 发送任何内容。这是所有者设置而非个人设置，因此在这里同意共享不会改变什么。",
-  "contribute.disabledWhere": "所有者可在 Admin 的 Security 中通过 Toggle Release Contribution 打开。同一个开关同时适用于版本和字段更正。"
+  "contribute.disabledWhere": "所有者可在 Admin 的 Security 中通过 Toggle Release Contribution 打开。同一个开关同时适用于版本和字段更正。",
+  "preferences.cardMovieVaultContribution": "向 MovieVault 贡献",
+  "preferences.cardMovieVaultContributionHelp": "此 DiscVault 是否可以向共享目录发送任何内容。此外每位用户仍自行决定，并且在逐项确认之前不会发送任何内容。",
+  "preferences.movieVaultContribution": "允许向 MovieVault 贡献",
+  "preferences.movieVaultContributionHelp": "同时涵盖识别出的版本和发送的字段更正。关闭时，无论用户同意过什么，都不会有内容离开此实例。",
+  "preferences.movieVaultInstanceStatus": "实例状态",
+  "preferences.movieVaultRegistered": "已注册",
+  "preferences.movieVaultNotRegistered": "尚未注册。首次贡献将注册此实例。",
+  "preferences.movieVaultLastError": "最近一次错误"
 }

@@ -2750,5 +2750,13 @@
   "preferences.confirmEveryUploadHelp": "Neyin gönderilip neyin gönderilmediğine dair açıklamayı yalnızca ilk seferde değil, her katkıda tekrarlar.",
   "contribute.disabledTitle": "Katkıda bulunma kapalı",
   "contribute.disabledLead": "Bu DiscVault MovieVault'a hiçbir şey göndermiyor. Bu kişisel değil, sahip ayarıdır; bu yüzden burada paylaşımı kabul etmek hiçbir şeyi değiştirmez.",
-  "contribute.disabledWhere": "Bir sahip bunu Admin, Security altında Toggle Release Contribution ile açabilir. Aynı anahtar sürümleri ve alan düzeltmelerini kapsar."
+  "contribute.disabledWhere": "Bir sahip bunu Admin, Security altında Toggle Release Contribution ile açabilir. Aynı anahtar sürümleri ve alan düzeltmelerini kapsar.",
+  "preferences.cardMovieVaultContribution": "MovieVault'a katkı",
+  "preferences.cardMovieVaultContributionHelp": "Bu DiscVault'un ortak kataloğa herhangi bir şey gönderip gönderemeyeceği. Ayrıca herkes kendisi için karar verir ve alan alan onaylanmadan hiçbir şey gönderilmez.",
+  "preferences.movieVaultContribution": "MovieVault'a katkılara izin ver",
+  "preferences.movieVaultContributionHelp": "Hem tanınan sürümleri hem de gönderilen alan düzeltmelerini kapsar. Kapalıyken, bir kullanıcı neyi kabul etmiş olursa olsun bu örnekten hiçbir şey çıkmaz.",
+  "preferences.movieVaultInstanceStatus": "Örnek durumu",
+  "preferences.movieVaultRegistered": "Kayıtlı",
+  "preferences.movieVaultNotRegistered": "Henüz kayıtlı değil. İlk katkı bu örneği kaydeder.",
+  "preferences.movieVaultLastError": "Son hata"
 }
