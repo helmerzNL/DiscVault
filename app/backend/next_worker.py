@@ -1453,7 +1453,14 @@ def link_import_movie_to_container(
 
 
 def import_year(value: Any) -> str:
-    raw = clean_text(value)
+    # `clean_text` returns None, not "", for an absent value — so the `or ""` is
+    # load-bearing. Without it every row that carries neither a year nor a
+    # release date died on `len(None)` inside the per-item try, was recorded as
+    # "object of type 'NoneType' has no len()" and never written. That is the
+    # normal shape of a row from a source whose date column describes the disc
+    # rather than the film (see `releaseDateIsEditionDate`), which is exactly
+    # when this function is reached.
+    raw = clean_text(value) or ""
     for idx in range(0, max(len(raw) - 3, 0)):
         candidate = raw[idx : idx + 4]
         if candidate.isdigit() and 1800 <= int(candidate) <= 2200:

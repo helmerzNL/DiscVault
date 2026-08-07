@@ -1,5 +1,19 @@
 # DiscVault Release Notes
 
+## 26.8.11 - A Blu-ray.com import writes rows again
+
+- Every row of a Blu-ray.com import failed with `object of type 'NoneType' has
+  no len()`, was recorded as a per-row import error, and never reached the
+  collection. The messages carry no context, so a whole import surfaced as a
+  wall of identical lines with nothing to act on.
+- `import_year()` measured the result of `clean_text()`, which returns `None`
+  rather than `""` for an absent value. Reaching it needs a row with neither a
+  year nor a release date, which had simply never happened before — until 26.8.5
+  made that the normal shape for a source whose date column describes the disc
+  rather than the film. The latent bug was older than the change that exposed
+  it; the guard belongs in `import_year()` regardless of which import hits it.
+- Nothing about the 26.8.5 normalization rules changes.
+
 ## 26.8.5 - Blu-ray.com imports describe films, not pressings
 
 - A trailing `4K` or `UHD` title token is now stored as `4K UHD` format instead
