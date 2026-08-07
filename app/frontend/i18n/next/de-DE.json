@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Hilf dem gemeinsamen Katalog, indem du die von dir erkannten Releases beisteuerst.",
   "preferences.shareReleaseSelections": "Von mir erkannte Releases teilen",
   "preferences.shareReleaseSelectionsHelp": "Wenn ein Barcode nicht erkannt wird und du die Pressung auswählst, die du in Händen hältst, werden diese Release-Daten zur Prüfung an MovieVault gesendet. Es werden nur öffentliche Disc-Informationen übertragen - niemals deine Sammlung, dein Verlauf oder etwas, das dich identifiziert.",
-  "contribute.action": "Hochladen",
+  "contribute.action": "Beitragen",
   "contribute.title": "Korrekturen an MovieVault senden",
   "contribute.introLead": "Korrekturen, die du sendest, werden von einer MovieVault-Moderation geprüft, bevor sich für andere etwas ändert.",
   "contribute.introSends": "Nur die unten aufgeführten Felder werden übertragen, zusammen mit dem Wert, den MovieVault derzeit hat, damit die Moderation vergleichen kann.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Laufzeit",
   "contribute.field.distributor": "Vertrieb",
   "preferences.shareFieldCorrections": "Meine Korrekturen an MovieVault senden",
-  "preferences.shareFieldCorrectionsHelp": "Fügt neben deinen Änderungen eine Hochladen-Schaltfläche hinzu. Es wird nichts gesendet, bevor du jedes Feld bestätigst, und eine Moderation prüft es, bevor sich der gemeinsame Katalog ändert.",
+  "preferences.shareFieldCorrectionsHelp": "Fügt neben deinen Änderungen eine Beitragen-Schaltfläche hinzu. Es wird nichts gesendet, bevor du jedes Feld bestätigst, und eine Moderation prüft es, bevor sich der gemeinsame Katalog ändert.",
   "preferences.confirmEveryUpload": "Jedes Mal erklären, was geteilt wird",
-  "preferences.confirmEveryUploadHelp": "Wiederholt bei jedem Hochladen die Erklärung, was übertragen wird und was nicht, statt nur beim ersten Mal."
+  "preferences.confirmEveryUploadHelp": "Wiederholt bei jedem Beitrag die Erklärung, was übertragen wird und was nicht, statt nur beim ersten Mal."
 }

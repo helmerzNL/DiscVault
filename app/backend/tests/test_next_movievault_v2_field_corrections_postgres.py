@@ -67,7 +67,8 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
                     edition, format, country_code, language_code, runtime_minutes,
                     distributor, revision
                 )
-                VALUES (%s, %s, %s, 'Mirror Film', 'Mirror Film', 'Theatrical',
+                VALUES (%s, %s, %s, 'Mirror Film',
+                        'Mirror Film Blu-ray (Spiegelfilm) (Germany)', 'Theatrical',
                         'Blu-ray', 'NL', 'nl', 118, 'Mirror Distribution', 43)
                 """,
                 (self.generation, self.release_id, uuid.uuid4()),
@@ -246,6 +247,40 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
 
         self.assertNotIn("edition", {item["field"] for item in preview["changes"]})
         self.assertEqual(preview["withheld"]["edition"], "locked_locally")
+
+    def test_a_release_title_is_not_the_film_title_and_is_never_offered(self):
+        """The most misleading of the withheld fields, because the two values
+        look comparable.
+
+        `content.releases.title` names a pressing -- "Spider-Man: Into the
+        Spider-Verse Blu-ray (Spider-Man: A New Universe) (Germany)" -- while
+        DiscVault's `movies.title` names the film. Offering it made every
+        correctly titled film read as a disagreement on every release, and
+        accepting one would have flattened a product name into a film name,
+        losing the edition, the alternate title and the country with it.
+        """
+        # The film title is correct; the mirror holds a product name. Before
+        # this, that pairing produced a proposed "correction" on every release.
+        movie = self._movie(barcode=BARCODE, title=f"{PREFIX} Mirror Film")
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        mirror = corrections.mirror_values(
+            self.conn, corrections.resolve_target(self.conn, entity="movie", record=movie)
+        )
+        self.assertNotEqual(mirror["title"], "Mirror Film")
+
+        preview = corrections.correction_preview(self.conn, entity="movie", record=movie, metadata={})
+
+        self.assertNotIn("title", {item["field"] for item in preview["changes"]})
+        self.assertEqual(preview["withheld"]["title"], "different_field_upstream")
+        self.assertNotIn("title", corrections.RELEASE_FIELD_SOURCES)
+
+    def test_a_box_set_title_is_still_offered(self):
+        """A box set's title on both sides names the same product, so the
+        release-title reasoning does not carry over to containers -- and it is
+        the only field a box set has."""
+        self.assertIn("title", corrections.BOX_SET_FIELD_SOURCES)
+        self.assertNotIn("title", corrections.BOX_SET_FIELDS_WITHHELD)
 
     def test_a_country_that_is_not_a_code_is_withheld_rather_than_rejected_upstream(self):
         movie = self._movie(barcode=BARCODE, country="Netherlands")

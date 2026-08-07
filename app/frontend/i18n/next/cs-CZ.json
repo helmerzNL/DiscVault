@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Pomoz sdílenému katalogu tím, že přispěješ vydáními, která rozpoznáš.",
   "preferences.shareReleaseSelections": "Sdílet vydání, která rozpoznám",
   "preferences.shareReleaseSelectionsHelp": "Když čárový kód není rozpoznán a ty vybereš lis, který držíš v ruce, odešlou se tyto údaje do MovieVault ke kontrole. Odesílají se jen veřejné informace o disku - nikdy tvá sbírka, historie sledování ani nic, co tě identifikuje.",
-  "contribute.action": "Odeslat",
+  "contribute.action": "Přispět",
   "contribute.title": "Odeslat opravy do MovieVault",
   "contribute.introLead": "Opravy, které odešlete, posoudí moderátor MovieVault dřív, než se pro ostatní cokoli změní.",
   "contribute.introSends": "Přenášejí se jen pole uvedená níže, spolu s hodnotou, kterou MovieVault má nyní, aby je moderátor mohl porovnat.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Délka",
   "contribute.field.distributor": "Distributor",
   "preferences.shareFieldCorrections": "Odesílat mé opravy do MovieVault",
-  "preferences.shareFieldCorrectionsHelp": "Přidá vedle vašich úprav tlačítko Odeslat. Nic se neodešle, dokud nepotvrdíte každé pole, a moderátor to posoudí, než se sdílený katalog změní.",
+  "preferences.shareFieldCorrectionsHelp": "Přidá vedle vašich úprav tlačítko Přispět. Nic se neodešle, dokud nepotvrdíte každé pole, a moderátor to posoudí, než se sdílený katalog změní.",
   "preferences.confirmEveryUpload": "Pokaždé vysvětlit, co se sdílí",
-  "preferences.confirmEveryUploadHelp": "Opakuje při každém odeslání vysvětlení, co se přenáší a co ne, místo jen poprvé."
+  "preferences.confirmEveryUploadHelp": "Opakuje při každém příspěvku vysvětlení, co se přenáší a co ne, místo jen poprvé."
 }

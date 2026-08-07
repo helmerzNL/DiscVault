@@ -14746,7 +14746,7 @@ def ui_preview_html(
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4 7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18 8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"></path></svg>
               <span class="button-label" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</span>
             </button>
-            <button type="button" class="movie-detail-icon-action hidden" id="movieContributeButton" aria-label="Send corrections to MovieVault" title="Send corrections to MovieVault" data-next-i18n-aria="contribute.action" data-next-i18n-title="contribute.action">
+            <button type="button" class="movie-detail-icon-action hidden" id="movieContributeButton" aria-label="Contribute corrections to MovieVault" title="Contribute corrections to MovieVault" data-next-i18n-aria="contribute.action" data-next-i18n-title="contribute.action">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16V10H5L12 3L19 10H15V16H9M5 20V18H19V20H5Z"></path></svg>
               <span class="button-label" data-next-i18n="contribute.action">Upload</span>
             </button>
@@ -28437,6 +28437,8 @@ def ui_preview_html(
     //
     // So this file holds no field list, no lock check and no mirror value.
     const CONTRIBUTE_FIELD_LABELS = {
+      // `title` is no longer offered for a release -- see the withheld map --
+      // but the label stays: the withheld disclosure names it.
       title: ["contribute.field.title", "Title"],
       edition: ["contribute.field.edition", "Edition"],
       format: ["contribute.field.format", "Format"],
@@ -28464,9 +28466,10 @@ def ui_preview_html(
     function contributeButton(entity) {
       return document.getElementById(entity === "container" ? "containerContributeButton" : "movieContributeButton");
     }
-    // Drawn whenever there is something to send, including before the user has
-    // ever agreed to sharing -- agreeing is what the first-run sheet is for, and
-    // a button hidden until the preference is on would leave no way to reach it.
+    // Drawn whenever there is something to send and the owner allows sending at
+    // all, including before this user has ever agreed -- agreeing is what the
+    // first-run sheet is for, and a button hidden until the preference is on
+    // would leave no way to reach it.
     async function refreshContributeButton(entity, id) {
       const button = contributeButton(entity);
       if (!button) return;
@@ -28477,7 +28480,12 @@ def ui_preview_html(
         const query = `entity=${encodeURIComponent(entity === "container" ? "container" : "movie")}&id=${encodeURIComponent(id)}`;
         const payload = await apiJson(`/api/next/movievault/contributions/eligibility?${query}`, {headers: authHeaders()});
         if (payload.mode !== "correction" || !(payload.changedFields || []).length) return;
-        contributeState[entity] = {id: String(id), enabled: !!payload.enabled};
+        // The owner gate is not something this user can act on, so a button
+        // that would always be refused is worse than no button. The user
+        // preference is different: not having agreed yet is exactly what the
+        // first-run sheet exists to fix, so the button is drawn for it.
+        if (!payload.ownerEnabled) return;
+        contributeState[entity] = {id: String(id), enabled: !!payload.userEnabled};
         button.classList.remove("hidden");
       } catch (error) {
         // Eligibility runs on every detail render. A MovieVault that is down,

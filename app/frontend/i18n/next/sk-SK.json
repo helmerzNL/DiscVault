@@ -2717,7 +2717,7 @@
   "preferences.cardSharingHelp": "Pomôž zdieľanému katalógu tým, že prispeješ vydaniami, ktoré rozpoznáš.",
   "preferences.shareReleaseSelections": "Zdieľať vydania, ktoré rozpoznám",
   "preferences.shareReleaseSelectionsHelp": "Keď čiarový kód nie je rozpoznaný a ty vyberieš lis, ktorý držíš v ruke, tieto údaje sa odošlú do MovieVault na kontrolu. Odosielajú sa len verejné informácie o disku - nikdy tvoja zbierka, história sledovania ani nič, čo ťa identifikuje.",
-  "contribute.action": "Odoslať",
+  "contribute.action": "Prispieť",
   "contribute.title": "Odoslať opravy do MovieVault",
   "contribute.introLead": "Opravy, ktoré odošlete, posúdi moderátor MovieVault skôr, než sa pre ostatných čokoľvek zmení.",
   "contribute.introSends": "Prenášajú sa len polia uvedené nižšie spolu s hodnotou, ktorú má MovieVault teraz, aby ich moderátor mohol porovnať.",
@@ -2745,7 +2745,7 @@
   "contribute.field.runtimeMinutes": "Dĺžka",
   "contribute.field.distributor": "Distribútor",
   "preferences.shareFieldCorrections": "Odosielať moje opravy do MovieVault",
-  "preferences.shareFieldCorrectionsHelp": "Pridá vedľa vašich úprav tlačidlo Odoslať. Nič sa neodošle, kým nepotvrdíte každé pole, a moderátor to posúdi, než sa zdieľaný katalóg zmení.",
+  "preferences.shareFieldCorrectionsHelp": "Pridá vedľa vašich úprav tlačidlo Prispieť. Nič sa neodošle, kým nepotvrdíte každé pole, a moderátor to posúdi, než sa zdieľaný katalóg zmení.",
   "preferences.confirmEveryUpload": "Zakaždým vysvetliť, čo sa zdieľa",
-  "preferences.confirmEveryUploadHelp": "Opakuje pri každom odoslaní vysvetlenie, čo sa prenáša a čo nie, namiesto len prvýkrát."
+  "preferences.confirmEveryUploadHelp": "Opakuje pri každom príspevku vysvetlenie, čo sa prenáša a čo nie, namiesto len prvýkrát."
 }

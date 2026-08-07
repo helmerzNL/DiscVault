@@ -47,7 +47,7 @@ class CorrectionRouteTests(unittest.TestCase):
         self.connect_context.__enter__.return_value = self.conn
         self.connect_context.__exit__.return_value = False
 
-    def _patches(self, *, enabled=True, preview=None, movie=None, container=None, job=None):
+    def _patches(self, *, enabled=True, owner_enabled=True, preview=None, movie=None, container=None, job=None):
         return (
             patch("app.backend.next_app.connect", return_value=self.connect_context),
             patch("app.backend.next_app.next_auth_effective_enabled", return_value=False),
@@ -56,6 +56,10 @@ class CorrectionRouteTests(unittest.TestCase):
             patch("app.backend.next_app.container_entity", return_value=container),
             patch("app.backend.next_app.actor_can_edit_visible_movie", return_value=True),
             patch("app.backend.next_app.field_correction_enabled", return_value=enabled),
+            patch(
+                "app.backend.next_app.field_correction_gate",
+                return_value={"owner": owner_enabled, "user": enabled},
+            ),
             patch("app.backend.next_app.correction_preview", return_value=preview if preview is not None else PREVIEW),
             patch("app.backend.next_app.queue_field_correction_job", return_value=job),
         )
@@ -82,6 +86,20 @@ class CorrectionRouteTests(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(payload["changedFields"], ["edition", "format"])
         self.assertNotIn("changes", payload)
+
+    def test_the_two_gate_halves_are_reported_apart(self):
+        """A client that only learns "not enabled" cannot tell the half it can
+        act on from the half it cannot. It offered "Agree and send" while the
+        owner flag was off, and the send was then refused."""
+        response = self._run(
+            lambda: self.client.get(f"/api/next/movievault/contributions/eligibility?entity=movie&id={MOVIE_ID}"),
+            enabled=False,
+            owner_enabled=False,
+        )
+        payload = response.get_json()
+        self.assertFalse(payload["ownerEnabled"])
+        self.assertFalse(payload["userEnabled"])
+        self.assertFalse(payload["enabled"])
 
     def test_eligibility_reports_the_preference_without_enforcing_it(self):
         """The button is drawn before the user has ever agreed, because
