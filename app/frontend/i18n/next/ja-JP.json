@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "記録された項目はありません。",
   "contribute.historyDeletedRecord": "（この端末では削除済み）",
   "contribute.historyScopeMine": "自分の分だけ表示",
-  "contribute.historyScopeInstance": "全員の分を表示"
+  "contribute.historyScopeInstance": "全員の分を表示",
+  "notifications.prefContributions": "提供",
+  "notifications.prefContributionsHelp": "送信した修正について MovieVault のモデレーターが判断したら知らせる。"
 }

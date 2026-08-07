@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Keine Felder erfasst.",
   "contribute.historyDeletedRecord": "(Eintrag hier gelöscht)",
   "contribute.historyScopeMine": "Nur meine anzeigen",
-  "contribute.historyScopeInstance": "Alle anzeigen"
+  "contribute.historyScopeInstance": "Alle anzeigen",
+  "notifications.prefContributions": "Beiträge",
+  "notifications.prefContributionsHelp": "Benachrichtige mich, wenn eine MovieVault-Moderation über eine von mir gesendete Korrektur entscheidet."
 }

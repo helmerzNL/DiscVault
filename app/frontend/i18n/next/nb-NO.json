@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Ingen felt registrert.",
   "contribute.historyDeletedRecord": "(oppføring slettet her)",
   "contribute.historyScopeMine": "Vis bare mine",
-  "contribute.historyScopeInstance": "Vis alles"
+  "contribute.historyScopeInstance": "Vis alles",
+  "notifications.prefContributions": "Bidrag",
+  "notifications.prefContributionsHelp": "Gi meg beskjed når en MovieVault-moderator avgjør en rettelse jeg har sendt."
 }

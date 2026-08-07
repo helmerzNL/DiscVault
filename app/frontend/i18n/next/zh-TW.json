@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "未記錄欄位。",
   "contribute.historyDeletedRecord": "（此處記錄已刪除）",
   "contribute.historyScopeMine": "只看我的",
-  "contribute.historyScopeInstance": "查看所有人的"
+  "contribute.historyScopeInstance": "查看所有人的",
+  "notifications.prefContributions": "貢獻",
+  "notifications.prefContributionsHelp": "當 MovieVault 審核員對我傳送的更正做出決定時通知我。"
 }

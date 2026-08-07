@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Nema zabilježenih polja.",
   "contribute.historyDeletedRecord": "(zapis ovdje izbrisan)",
   "contribute.historyScopeMine": "Prikaži samo moje",
-  "contribute.historyScopeInstance": "Prikaži sve"
+  "contribute.historyScopeInstance": "Prikaži sve",
+  "notifications.prefContributions": "Doprinosi",
+  "notifications.prefContributionsHelp": "Obavijesti me kada MovieVault moderator odluči o ispravku koji sam poslao."
 }

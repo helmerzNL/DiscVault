@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Няма записани полета.",
   "contribute.historyDeletedRecord": "(записът е изтрит тук)",
   "contribute.historyScopeMine": "Само моите",
-  "contribute.historyScopeInstance": "На всички"
+  "contribute.historyScopeInstance": "На всички",
+  "notifications.prefContributions": "Приноси",
+  "notifications.prefContributionsHelp": "Уведоми ме, когато модератор на MovieVault реши за изпратена от мен корекция."
 }

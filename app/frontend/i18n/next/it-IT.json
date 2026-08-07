@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Nessun campo registrato.",
   "contribute.historyDeletedRecord": "(record eliminato qui)",
   "contribute.historyScopeMine": "Mostra solo le mie",
-  "contribute.historyScopeInstance": "Mostra quelle di tutti"
+  "contribute.historyScopeInstance": "Mostra quelle di tutti",
+  "notifications.prefContributions": "Contributi",
+  "notifications.prefContributionsHelp": "Avvisami quando un moderatore MovieVault decide su una correzione che ho inviato."
 }

@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Полів не зафіксовано.",
   "contribute.historyDeletedRecord": "(запис видалено тут)",
   "contribute.historyScopeMine": "Лише мої",
-  "contribute.historyScopeInstance": "Усіх"
+  "contribute.historyScopeInstance": "Усіх",
+  "notifications.prefContributions": "Внески",
+  "notifications.prefContributionsHelp": "Повідом мене, коли модератор MovieVault ухвалить рішення щодо надісланого мною виправлення."
 }

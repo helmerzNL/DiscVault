@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Inga fält registrerade.",
   "contribute.historyDeletedRecord": "(post borttagen här)",
   "contribute.historyScopeMine": "Visa bara mina",
-  "contribute.historyScopeInstance": "Visa allas"
+  "contribute.historyScopeInstance": "Visa allas",
+  "notifications.prefContributions": "Bidrag",
+  "notifications.prefContributionsHelp": "Meddela mig när en MovieVault-granskare beslutar om en rättelse jag skickat."
 }

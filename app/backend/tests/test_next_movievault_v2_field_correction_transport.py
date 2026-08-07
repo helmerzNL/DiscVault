@@ -237,6 +237,45 @@ class PreflightTests(unittest.TestCase):
         self.assertIsNone(fc.live_release_values(None, "r1"))
         self.assertIsNone(fc.live_release_values("f1", None))
 
+    def _fetch_box_set(self, status, payload):
+        from app.backend import next_movievault_v2_field_corrections as fc
+        import app.backend.next_movievault_v2 as v2
+
+        captured = {}
+
+        def _http(url, *, method, timeout_seconds, payload=None):
+            captured["url"] = url
+            captured["method"] = method
+            return status, json.dumps(payload).encode() if payload is not None else b""
+
+        with patch.object(v2, "_release_details_http", lambda url, **k: _http(url, **k, payload=payload)):
+            return captured, fc.live_box_set_values("b1")
+
+    def test_a_box_set_reads_its_own_route(self):
+        """Not a branch inside the film reader: the two return different shapes,
+        one an object and one a list to search."""
+        captured, values = self._fetch_box_set(200, {"boxSetId": "b1", "title": "Complete"})
+        self.assertEqual(captured["url"], "https://movievault.example/v2/box-sets/b1")
+        self.assertEqual(values, {"title": "Complete"})
+
+    def test_a_box_set_404_falls_back_rather_than_declaring_it_gone(self):
+        """Deliberately unlike the release path, where absence from a 200 list
+        can only mean retired upstream.
+
+        A DiscVault newer than its MovieVault gets 404 from a route that does
+        not exist yet. Reading that as gone would mark every box set
+        unavailable for the length of a deploy skew; falling back to the mirror
+        is the behaviour that predates the check, so the worst case is no worse
+        than before rather than a regression.
+        """
+        _, values = self._fetch_box_set(404, None)
+        self.assertIsNone(values)
+
+    def test_a_box_set_read_that_fails_is_the_same_answer_as_a_release(self):
+        for status in (429, 503):
+            _, values = self._fetch_box_set(status, {"title": "Complete"})
+            self.assertIsNone(values)
+
 
 class GateTests(unittest.TestCase):
     def _enabled(self, *, owner, corrections, releases=True):
@@ -327,6 +366,72 @@ class StatusPollTests(unittest.TestCase):
             return self.worker.process_movievault_v2_contribution_status(
                 {"attempts": attempts}, {"contributionId": "c-1"}, "worker-1"
             )
+
+    def test_a_verdict_is_announced_and_a_wait_is_not(self):
+        """The notification hangs off the *transition*, not off the status, so
+        a contribution polled five times while pending must not produce five
+        notifications. The log's update decides; the worker only relays it."""
+        announced = []
+        settled_row = {"status": "accepted", "fields": ["edition"], "submittedBy": "u-1"}
+
+        def _poll(status, settles):
+            announced.clear()
+            with patch.object(self.worker, "connect", lambda *a, **k: _NullConnection()), patch.object(
+                self.worker, "read_contribution", lambda conn, cid, **k: {"contributionId": cid, "status": status}
+            ), patch.object(
+                self.worker,
+                "update_contribution_by_contribution_id",
+                lambda conn, cid, **values: settled_row if settles else None,
+            ), patch.object(
+                self.worker, "notify_contribution_settled", lambda conn, row: announced.append(row)
+            ):
+                try:
+                    self.worker.process_movievault_v2_contribution_status(
+                        {"attempts": 0}, {"contributionId": "c-1"}, "worker-1"
+                    )
+                except self.worker.JobRetry:
+                    pass
+
+        _poll("accepted", True)
+        self.assertEqual(announced, [settled_row])
+
+        # Same status, but the log says someone else already settled it.
+        _poll("accepted", False)
+        self.assertEqual(announced, [])
+
+        # Still waiting: nothing to announce.
+        _poll("pending", False)
+        self.assertEqual(announced, [])
+
+    def test_an_undeliverable_notification_does_not_undo_the_verdict(self):
+        """The verdict is already recorded. Failing the job over delivery would
+        retry a decision that has been stored, and re-announce it if it then
+        succeeded."""
+        from app.backend import next_worker
+
+        def _boom(conn, user_id, **kwargs):
+            raise RuntimeError("no such user")
+
+        with patch.object(next_worker, "create_user_notification", _boom):
+            # Raising would fail the test; the handler swallows it on purpose.
+            next_worker.notify_contribution_settled(
+                _NullConnection(), {"status": "accepted", "fields": [], "submittedBy": "u-1"}
+            )
+
+    def test_a_contribution_with_no_known_submitter_is_not_announced(self):
+        """Logged before an actor was recorded, or submitted by a user since
+        removed. It still has to settle."""
+        from app.backend import next_worker
+
+        called = []
+        with patch.object(next_worker, "create_user_notification", lambda *a, **k: called.append(a)):
+            next_worker.notify_contribution_settled(
+                _NullConnection(), {"status": "accepted", "fields": [], "submittedBy": None}
+            )
+            next_worker.notify_contribution_settled(
+                _NullConnection(), {"status": "queued", "fields": [], "submittedBy": "u-1"}
+            )
+        self.assertEqual(called, [])
 
     def test_every_answer_is_written_to_the_log(self):
         """Including the ones that are not decisions. A screen showing

@@ -502,6 +502,43 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
     return {"_gone": True}
 
 
+def live_box_set_values(box_set_id: Any, *, timeout_seconds: int = PREFLIGHT_TIMEOUT_SECONDS) -> dict[str, Any] | None:
+    """The catalogue's current values for one box set, or None.
+
+    Same contract as `live_release_values`: None means "could not be
+    established", and `_gone` means the catalogue no longer serves it. Kept as
+    a separate function rather than a branch because the two read different
+    routes with different shapes, and the film one returns a *list* to search.
+    """
+    if not box_set_id:
+        return None
+    try:
+        from .next_movievault_v2 import _release_details_http, enforced_origin
+    except ImportError:  # pragma: no cover - supports direct module execution
+        from next_movievault_v2 import _release_details_http, enforced_origin
+    try:
+        status, content = _release_details_http(
+            f"{enforced_origin()}/v2/box-sets/{box_set_id}",
+            method="GET",
+            timeout_seconds=timeout_seconds,
+        )
+        # 404 is *not* read as "retired upstream" here, unlike the release
+        # path where absence from a 200 list can only mean that. A DiscVault
+        # newer than its MovieVault gets 404 from a route that does not exist
+        # yet, and treating that as gone would mark every box set unavailable
+        # for the length of a deploy skew. Falling back to the mirror is the
+        # behaviour that predates this check, so the worst case is no worse
+        # than before rather than a regression.
+        if status != 200 or not content:
+            return None
+        payload = json.loads(content.decode("utf-8"))
+    except Exception:  # pragma: no cover - every failure is the same answer
+        return None
+    if not isinstance(payload, dict) or not payload.get("title"):
+        return None
+    return {"title": _clean(payload.get("title"))}
+
+
 def _mirror_film_id(conn: Any, target: dict[str, Any]) -> str | None:
     generation = _active_generation(conn)
     if not generation or target.get("entityType") != "release":
@@ -554,12 +591,15 @@ def correction_preview(
     # A failed check is not agreement: falling back to the mirror keeps an
     # offline instance able to contribute, and the answer says which was used.
     source = "mirror"
-    if preflight and target["entityType"] == "release":
-        live = live_release_values(_mirror_film_id(conn, target), target["entityId"])
+    if preflight:
+        live = (
+            live_release_values(_mirror_film_id(conn, target), target["entityId"])
+            if target["entityType"] == "release"
+            else live_box_set_values(target["entityId"])
+        )
         if live and live.get("_gone"):
-            # Known film, but this release is no longer among its active ones -
-            # merged, retired or deleted. Correcting a record the catalogue no
-            # longer serves is not something to guess at.
+            # The catalogue no longer serves this record - merged, retired or
+            # deleted. Correcting one is not something to guess at.
             return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}}
         if live:
             mirror = live
@@ -649,8 +689,53 @@ def update_contribution_by_job(conn: Any, job_id: Any, **values: Any) -> None:
     _update_contribution(conn, "job_id", job_id, values)
 
 
-def update_contribution_by_contribution_id(conn: Any, contribution_id: str, **values: Any) -> None:
-    _update_contribution(conn, "contribution_id", _text(contribution_id), values)
+def update_contribution_by_contribution_id(conn: Any, contribution_id: str, **values: Any) -> dict[str, Any] | None:
+    """Record an answer, and say whether *this* call is what settled it.
+
+    Returns the row only on the transition into a terminal status, and only
+    once: the guard is in the WHERE clause, so two workers racing the same
+    verdict produce one winner and one None. That matters because the caller
+    turns a non-None into a notification, and a verdict announced twice is
+    worse than one announced late.
+    """
+    key = _text(contribution_id)
+    status = _text(values.get("status"))
+    if not key or not _table_exists(conn, "movievault_v2_contributions"):
+        return None
+    if status not in TERMINAL_LOG_STATUSES:
+        _update_contribution(conn, "contribution_id", key, values)
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE movievault_v2_contributions
+            SET status = %s,
+                canonical_target_id = COALESCE(%s, canonical_target_id),
+                duplicate_of = COALESCE(%s, duplicate_of),
+                updated_at = now()
+            WHERE contribution_id = %s AND NOT (status = ANY(%s))
+            RETURNING id, status, fields, submitted_by, movie_id, container_id
+            """,
+            (
+                status,
+                values.get("canonical_target_id"),
+                values.get("duplicate_of"),
+                key,
+                list(TERMINAL_LOG_STATUSES),
+            ),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    row = dict(row)
+    return {
+        "id": str(row["id"]),
+        "status": _text(row.get("status")),
+        "fields": list(row.get("fields") or []),
+        "submittedBy": str(row["submitted_by"]) if row.get("submitted_by") else None,
+        "movieId": str(row["movie_id"]) if row.get("movie_id") else None,
+        "containerId": str(row["container_id"]) if row.get("container_id") else None,
+    }
 
 
 def _update_contribution(conn: Any, column: str, key: Any, values: dict[str, Any]) -> None:

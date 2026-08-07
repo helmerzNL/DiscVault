@@ -14289,6 +14289,7 @@ def ui_preview_html(
             <button type="button" data-notification-filter="metadata_jobs" data-next-i18n="notifications.prefMetadataJobs">Metadata jobs</button>
             <button type="button" data-notification-filter="imports" data-next-i18n="notifications.prefImports">Imports</button>
             <button type="button" data-notification-filter="price_alerts" data-next-i18n="notifications.prefPriceAlerts">Price alerts</button>
+            <button type="button" data-notification-filter="contributions" data-next-i18n="notifications.prefContributions">Contributions</button>
             <button type="button" data-notification-filter="security" data-next-i18n="notifications.prefSecurity">Security</button>
           </div>
           <div class="notification-list" id="notificationsList"></div>
@@ -37293,7 +37294,7 @@ def ui_preview_html(
     function renderNotificationsView() {
       const list = document.getElementById("notificationsList");
       const empty = document.getElementById("notificationsEmptyMessage");
-      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "price_alerts", "security"].includes(notificationFilter) ? notificationFilter : "all";
+      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "price_alerts", "contributions", "security"].includes(notificationFilter) ? notificationFilter : "all";
       document.querySelectorAll("[data-notification-filter]").forEach((button) => {
         button.classList.toggle("active", button.dataset.notificationFilter === notificationFilter);
         button.setAttribute("aria-pressed", button.dataset.notificationFilter === notificationFilter ? "true" : "false");
@@ -37441,7 +37442,8 @@ def ui_preview_html(
         ["price_alerts", "notifications.pref.price_alerts", "notifications.prefPriceAlertsHelp"]
       ],
       sharing: [
-        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"]
+        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"],
+        ["contributions", "notifications.prefContributions", "notifications.prefContributionsHelp"]
       ]
     };
     function pushPreferenceRowsHtml(preferencesMap, rows) {
