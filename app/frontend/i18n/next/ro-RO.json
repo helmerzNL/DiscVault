@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Starea instanței",
   "preferences.movieVaultRegistered": "Înregistrată",
   "preferences.movieVaultNotRegistered": "Încă neînregistrată. Prima contribuție înregistrează această instanță.",
-  "preferences.movieVaultLastError": "Ultima eroare"
+  "preferences.movieVaultLastError": "Ultima eroare",
+  "contribute.statusPrefix": "Corectura ta",
+  "contribute.status.queued": "În așteptare",
+  "contribute.status.pending": "Așteaptă moderarea",
+  "contribute.status.accepted": "Acceptată",
+  "contribute.status.partiallyAccepted": "Acceptată parțial",
+  "contribute.status.rejected": "Respinsă",
+  "contribute.status.failed": "Netrimisă"
 }

@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "A példány állapota",
   "preferences.movieVaultRegistered": "Regisztrálva",
   "preferences.movieVaultNotRegistered": "Még nincs regisztrálva. Az első hozzájárulás regisztrálja ezt a példányt.",
-  "preferences.movieVaultLastError": "Utolsó hiba"
+  "preferences.movieVaultLastError": "Utolsó hiba",
+  "contribute.statusPrefix": "A javításod",
+  "contribute.status.queued": "Sorban áll",
+  "contribute.status.pending": "Moderálásra vár",
+  "contribute.status.accepted": "Elfogadva",
+  "contribute.status.partiallyAccepted": "Részben elfogadva",
+  "contribute.status.rejected": "Elutasítva",
+  "contribute.status.failed": "Nincs elküldve"
 }

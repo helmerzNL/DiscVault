@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Κατάσταση εγκατάστασης",
   "preferences.movieVaultRegistered": "Καταχωρημένη",
   "preferences.movieVaultNotRegistered": "Δεν έχει καταχωρηθεί ακόμη. Η πρώτη συνεισφορά καταχωρεί αυτή την εγκατάσταση.",
-  "preferences.movieVaultLastError": "Τελευταίο σφάλμα"
+  "preferences.movieVaultLastError": "Τελευταίο σφάλμα",
+  "contribute.statusPrefix": "Η διόρθωσή σας",
+  "contribute.status.queued": "Σε ουρά",
+  "contribute.status.pending": "Αναμένει έλεγχο",
+  "contribute.status.accepted": "Έγινε δεκτή",
+  "contribute.status.partiallyAccepted": "Έγινε εν μέρει δεκτή",
+  "contribute.status.rejected": "Απορρίφθηκε",
+  "contribute.status.failed": "Δεν στάλθηκε"
 }

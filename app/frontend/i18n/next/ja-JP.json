@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "インスタンスの状態",
   "preferences.movieVaultRegistered": "登録済み",
   "preferences.movieVaultNotRegistered": "まだ登録されていません。最初の提供でこのインスタンスが登録されます。",
-  "preferences.movieVaultLastError": "最後のエラー"
+  "preferences.movieVaultLastError": "最後のエラー",
+  "contribute.statusPrefix": "あなたの修正",
+  "contribute.status.queued": "待機中",
+  "contribute.status.pending": "モデレーション待ち",
+  "contribute.status.accepted": "採用されました",
+  "contribute.status.partiallyAccepted": "一部採用されました",
+  "contribute.status.rejected": "見送られました",
+  "contribute.status.failed": "未送信"
 }

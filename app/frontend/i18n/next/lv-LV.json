@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Eksemplāra statuss",
   "preferences.movieVaultRegistered": "Reģistrēts",
   "preferences.movieVaultNotRegistered": "Vēl nav reģistrēts. Pirmais ieguldījums reģistrēs šo eksemplāru.",
-  "preferences.movieVaultLastError": "Pēdējā kļūda"
+  "preferences.movieVaultLastError": "Pēdējā kļūda",
+  "contribute.statusPrefix": "Jūsu labojums",
+  "contribute.status.queued": "Rindā",
+  "contribute.status.pending": "Gaida moderāciju",
+  "contribute.status.accepted": "Pieņemts",
+  "contribute.status.partiallyAccepted": "Daļēji pieņemts",
+  "contribute.status.rejected": "Noraidīts",
+  "contribute.status.failed": "Nav nosūtīts"
 }

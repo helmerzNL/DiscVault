@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Stanje instance",
   "preferences.movieVaultRegistered": "Registrirana",
   "preferences.movieVaultNotRegistered": "Još nije registrirana. Prvi doprinos registrirat će ovu instancu.",
-  "preferences.movieVaultLastError": "Posljednja pogreška"
+  "preferences.movieVaultLastError": "Posljednja pogreška",
+  "contribute.statusPrefix": "Vaš ispravak",
+  "contribute.status.queued": "U redu čekanja",
+  "contribute.status.pending": "Čeka moderaciju",
+  "contribute.status.accepted": "Prihvaćen",
+  "contribute.status.partiallyAccepted": "Djelomično prihvaćen",
+  "contribute.status.rejected": "Odbijen",
+  "contribute.status.failed": "Nije poslan"
 }

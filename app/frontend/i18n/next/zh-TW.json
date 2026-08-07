@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "執行個體狀態",
   "preferences.movieVaultRegistered": "已註冊",
   "preferences.movieVaultNotRegistered": "尚未註冊。首次貢獻將註冊此執行個體。",
-  "preferences.movieVaultLastError": "最近一次錯誤"
+  "preferences.movieVaultLastError": "最近一次錯誤",
+  "contribute.statusPrefix": "你的更正",
+  "contribute.status.queued": "排隊中",
+  "contribute.status.pending": "等待審核",
+  "contribute.status.accepted": "已採納",
+  "contribute.status.partiallyAccepted": "部分採納",
+  "contribute.status.rejected": "未採納",
+  "contribute.status.failed": "未傳送"
 }

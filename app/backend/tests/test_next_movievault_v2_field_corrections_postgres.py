@@ -83,6 +83,11 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
 
     def _cleanup(self):
         with self.connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM movievault_v2_contributions WHERE movie_id IN "
+                "(SELECT id FROM movies WHERE title LIKE %s)",
+                (f"{PREFIX}%",),
+            )
             cur.execute("DELETE FROM movies WHERE title LIKE %s", (f"{PREFIX}%",))
             cur.execute("DELETE FROM movievault_v2_lookup_hashes WHERE generation = %s", (self.generation,))
             cur.execute("DELETE FROM movievault_v2_releases WHERE generation = %s", (self.generation,))
@@ -338,6 +343,130 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         self.assertEqual(preview["mode"], "correction")
         self.assertEqual([item["field"] for item in preview["changes"]], ["title"])
         self.assertEqual(preview["target"]["baseRevision"], 7)
+
+    # ---- the contribution log -------------------------------------------
+
+    def test_the_outcome_survives_the_correction_becoming_unnecessary(self):
+        """The reason the log exists at all.
+
+        An accepted correction makes the local row and the catalogue agree, so
+        the diff is empty and the Contribute button goes -- and with it the one
+        place the outcome could have appeared. The answer to "what happened to
+        my correction" must not depend on there being a next one to send.
+        """
+        # Every correctable field now agrees with the mirror, which is what an
+        # accepted correction leaves behind.
+        movie = self._movie(
+            barcode=BARCODE,
+            edition="Theatrical",
+            format="Blu-ray",
+            runtime_minutes=118,
+        )
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        target = corrections.resolve_target(self.conn, entity="movie", record=movie)
+        job_id = uuid.uuid4()
+
+        corrections.record_contribution(
+            self.conn,
+            entity="movie",
+            record=movie,
+            target=target,
+            changes=[{"field": "edition", "expected": "Theatrical", "proposed": "Director's Cut"}],
+            job_id=job_id,
+        )
+        corrections.update_contribution_by_job(
+            self.conn, job_id, status="pending", contribution_id="c-1"
+        )
+        corrections.update_contribution_by_contribution_id(
+            self.conn, "c-1", status="accepted", canonical_target_id="t-1"
+        )
+
+        # Nothing left to correct - the local row now matches the mirror.
+        preview = corrections.correction_preview(self.conn, entity="movie", record=movie, metadata={})
+        self.assertEqual([item["field"] for item in preview["changes"]], [])
+
+        latest = corrections.latest_contribution(self.conn, entity="movie", record=movie)
+        self.assertEqual(latest["status"], "accepted")
+        self.assertTrue(latest["settled"])
+        self.assertEqual(latest["fields"], ["edition"])
+        self.assertEqual(latest["canonicalTargetId"], "t-1")
+
+    def test_only_the_latest_contribution_is_reported(self):
+        """The screen answers "did my correction land". A history of every
+        attempt is a different feature with a different surface."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        target = corrections.resolve_target(self.conn, entity="movie", record=movie)
+        for status in ("rejected", "accepted"):
+            job_id = uuid.uuid4()
+            corrections.record_contribution(
+                self.conn,
+                entity="movie",
+                record=movie,
+                target=target,
+                changes=[{"field": "format", "expected": "Blu-ray", "proposed": "4K UHD"}],
+                job_id=job_id,
+            )
+            corrections.update_contribution_by_job(self.conn, job_id, status=status)
+
+        latest = corrections.latest_contribution(self.conn, entity="movie", record=movie)
+        self.assertEqual(latest["status"], "accepted")
+
+    def test_a_job_updates_exactly_one_row(self):
+        """Without the unique index a re-queued job could update two rows and
+        silently halve the history."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        target = corrections.resolve_target(self.conn, entity="movie", record=movie)
+        job_id = uuid.uuid4()
+        changes = [{"field": "format", "expected": "Blu-ray", "proposed": "4K UHD"}]
+
+        corrections.record_contribution(
+            self.conn, entity="movie", record=movie, target=target, changes=changes, job_id=job_id
+        )
+        # A second insert for the same job is the retry case, not a new
+        # contribution.
+        corrections.record_contribution(
+            self.conn, entity="movie", record=movie, target=target, changes=changes, job_id=job_id
+        )
+
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) AS total FROM movievault_v2_contributions WHERE job_id = %s",
+                (job_id,),
+            )
+            self.assertEqual(dict(cur.fetchone())["total"], 1)
+
+    def test_an_unsettled_status_is_reported_as_unsettled(self):
+        """`queued` and `pending` are the two states a user is waiting in, and
+        the screen has to be able to tell them apart from a decision."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        target = corrections.resolve_target(self.conn, entity="movie", record=movie)
+        job_id = uuid.uuid4()
+        corrections.record_contribution(
+            self.conn,
+            entity="movie",
+            record=movie,
+            target=target,
+            changes=[{"field": "format", "expected": "Blu-ray", "proposed": "4K UHD"}],
+            job_id=job_id,
+        )
+
+        latest = corrections.latest_contribution(self.conn, entity="movie", record=movie)
+        self.assertEqual(latest["status"], "queued")
+        self.assertFalse(latest["settled"])
+
+        corrections.update_contribution_by_job(self.conn, job_id, status="pending")
+        self.assertFalse(
+            corrections.latest_contribution(self.conn, entity="movie", record=movie)["settled"]
+        )
+
+    def test_a_record_with_no_contribution_reports_nothing(self):
+        movie = self._movie(barcode=BARCODE)
+        self.assertIsNone(
+            corrections.latest_contribution(self.conn, entity="movie", record=movie)
+        )
 
     def test_the_barcode_hash_matches_what_the_index_is_keyed_by(self):
         """Computed differently is simply a different hash, and would miss in

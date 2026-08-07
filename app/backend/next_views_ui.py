@@ -3399,6 +3399,21 @@ def ui_preview_html(
     .contribute-message:empty {
       display: none;
     }
+    /* Sits beside the Contribute button and outlives it: after an accepted
+       correction there is nothing left to send, so the button goes and this is
+       the only thing that still answers what happened. */
+    .contribute-status {
+      font-size: .85rem;
+      color: var(--muted, #888);
+      align-self: center;
+      overflow-wrap: anywhere;
+    }
+    .contribute-status.good {
+      color: var(--success, #30a46c);
+    }
+    .contribute-status.bad {
+      color: var(--danger, #e5484d);
+    }
     .lists-modal-actions button {
       padding: 8px 16px;
       border-radius: 10px;
@@ -14748,8 +14763,9 @@ def ui_preview_html(
             </button>
             <button type="button" class="movie-detail-icon-action hidden" id="movieContributeButton" aria-label="Contribute corrections to MovieVault" title="Contribute corrections to MovieVault" data-next-i18n-aria="contribute.action" data-next-i18n-title="contribute.action">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16V10H5L12 3L19 10H15V16H9M5 20V18H19V20H5Z"></path></svg>
-              <span class="button-label" data-next-i18n="contribute.action">Upload</span>
+              <span class="button-label" data-next-i18n="contribute.action">Contribute</span>
             </button>
+            <span class="contribute-status hidden" id="movieContributeStatus"></span>
             <button type="button" class="movie-detail-icon-action danger hidden" id="movieDeleteButton" aria-label="Delete movie" title="Delete movie" data-next-i18n-aria="movieDetail.deleteMovie" data-next-i18n-title="movieDetail.deleteMovie">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
               <span class="button-label" data-next-i18n="movieDetail.deleteMovie">Delete movie</span>
@@ -15188,7 +15204,8 @@ def ui_preview_html(
               the button would have each mechanism undo the other's decision.
             -->
             <span class="container-value-field hidden" id="containerContributeField">
-              <button type="button" class="action secondary hidden" id="containerContributeButton" data-next-i18n="contribute.action">Upload</button>
+              <button type="button" class="action secondary hidden" id="containerContributeButton" data-next-i18n="contribute.action">Contribute</button>
+              <span class="contribute-status hidden" id="containerContributeStatus"></span>
             </span>
             <button type="button" class="action danger hidden" id="containerDeleteButton" data-next-i18n="containerDetail.deleteContainer">Delete container</button>
           </div>
@@ -28476,10 +28493,18 @@ def ui_preview_html(
       if (!button) return;
       contributeState[entity] = null;
       button.classList.add("hidden");
+      renderContributeStatus(entity, null);
       if (!id || !hasPermission("collection.edit_all")) return;
       try {
         const query = `entity=${encodeURIComponent(entity === "container" ? "container" : "movie")}&id=${encodeURIComponent(id)}`;
         const payload = await apiJson(`/api/next/movievault/contributions/eligibility?${query}`, {headers: authHeaders()});
+        // Rendered before the button is decided, and deliberately not gated on
+        // there being something left to send. A correction that was accepted
+        // makes the local row and the catalogue agree, so the diff is empty and
+        // the button goes -- and with it the only place the outcome could have
+        // appeared. The answer to "what happened to my correction" must not
+        // depend on there being a next one.
+        renderContributeStatus(entity, payload.lastContribution);
         if (payload.mode !== "correction" || !(payload.changedFields || []).length) return;
         // Drawn whichever half of the gate is off. Hiding it when the owner
         // half was off was worse than the bug it replaced: on a self-hosted
@@ -28498,6 +28523,45 @@ def ui_preview_html(
         // or an instance that never registered, is the ordinary case and must
         // not put an error on a screen the user did not ask a question on.
       }
+    }
+    const CONTRIBUTE_STATUS_LABELS = {
+      queued: ["contribute.status.queued", "Queued"],
+      pending: ["contribute.status.pending", "Awaiting moderation"],
+      quarantined: ["contribute.status.pending", "Awaiting moderation"],
+      accepted: ["contribute.status.accepted", "Accepted"],
+      partially_accepted: ["contribute.status.partiallyAccepted", "Partly accepted"],
+      rejected: ["contribute.status.rejected", "Declined"],
+      failed: ["contribute.status.failed", "Not sent"],
+    };
+    function contributeStatusTone(status) {
+      if (status === "accepted" || status === "partially_accepted") return "good";
+      if (status === "rejected" || status === "failed") return "bad";
+      return "";
+    }
+    function renderContributeStatus(entity, contribution) {
+      const node = document.getElementById(
+        entity === "container" ? "containerContributeStatus" : "movieContributeStatus"
+      );
+      if (!node) return;
+      if (!contribution || !contribution.status) {
+        node.classList.add("hidden");
+        node.textContent = "";
+        node.removeAttribute("title");
+        return;
+      }
+      const entry = CONTRIBUTE_STATUS_LABELS[contribution.status];
+      // An unrecognised status is shown verbatim rather than swallowed: a new
+      // state upstream should read as something unfamiliar, not as nothing.
+      const label = entry ? tNext(entry[0], entry[1]) : contribution.status;
+      node.className = `contribute-status ${contributeStatusTone(contribution.status)}`.trim();
+      node.textContent = `${tNext("contribute.statusPrefix", "Your correction")}: ${label}`;
+      const detail = [];
+      if ((contribution.fields || []).length) {
+        detail.push(contribution.fields.map(contributeFieldLabel).join(", "));
+      }
+      if (contribution.lastError) detail.push(contribution.lastError);
+      if (detail.length) node.setAttribute("title", detail.join(" - "));
+      else node.removeAttribute("title");
     }
     function contributeSetMessage(entity, message, tone) {
       if (entity === "container") setContainerDetailMessage(message, tone);

@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Eksemplari olek",
   "preferences.movieVaultRegistered": "Registreeritud",
   "preferences.movieVaultNotRegistered": "Veel registreerimata. Esimene panus registreerib selle eksemplari.",
-  "preferences.movieVaultLastError": "Viimane viga"
+  "preferences.movieVaultLastError": "Viimane viga",
+  "contribute.statusPrefix": "Sinu parandus",
+  "contribute.status.queued": "Järjekorras",
+  "contribute.status.pending": "Ootab modereerimist",
+  "contribute.status.accepted": "Vastu võetud",
+  "contribute.status.partiallyAccepted": "Osaliselt vastu võetud",
+  "contribute.status.rejected": "Tagasi lükatud",
+  "contribute.status.failed": "Saatmata"
 }

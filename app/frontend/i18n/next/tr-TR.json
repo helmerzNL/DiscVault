@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Örnek durumu",
   "preferences.movieVaultRegistered": "Kayıtlı",
   "preferences.movieVaultNotRegistered": "Henüz kayıtlı değil. İlk katkı bu örneği kaydeder.",
-  "preferences.movieVaultLastError": "Son hata"
+  "preferences.movieVaultLastError": "Son hata",
+  "contribute.statusPrefix": "Düzeltmeniz",
+  "contribute.status.queued": "Sırada",
+  "contribute.status.pending": "İnceleme bekliyor",
+  "contribute.status.accepted": "Kabul edildi",
+  "contribute.status.partiallyAccepted": "Kısmen kabul edildi",
+  "contribute.status.rejected": "Reddedildi",
+  "contribute.status.failed": "Gönderilmedi"
 }

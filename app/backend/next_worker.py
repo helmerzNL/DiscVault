@@ -52,6 +52,8 @@ try:
     from .next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
     from .next_movievault_v2 import CONTRIBUTION_STATUS_JOB_TYPE
     from .next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
+    from .next_movievault_v2_field_corrections import update_contribution_by_contribution_id
+    from .next_movievault_v2_field_corrections import update_contribution_by_job
     from .next_movievault_v2_contributions import (
         TERMINAL_CONTRIBUTION_STATUSES,
         MovieVaultContributionError,
@@ -93,6 +95,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
     from next_movievault_v2 import CONTRIBUTION_STATUS_JOB_TYPE
     from next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
+    from next_movievault_v2_field_corrections import update_contribution_by_contribution_id
+    from next_movievault_v2_field_corrections import update_contribution_by_job
     from next_movievault_v2_contributions import (
         TERMINAL_CONTRIBUTION_STATUSES,
         MovieVaultContributionError,
@@ -762,12 +766,23 @@ def process_movievault_v2_field_correction(
         with connect() as conn:
             result = submit_field_correction(conn, correction)
     except MovieVaultContributionError as exc:
+        retrying = exc.retryable and attempts < len(RELEASE_CONTRIBUTION_BACKOFF_MINUTES)
         with connect() as conn:
             if exc.code == "instance_blocked":
                 disable_after_block(conn)
+                update_contribution_by_job(conn, job.get("id"), status="failed", last_error=exc.code)
                 raise RuntimeError("MovieVault blocked this instance: contribution disabled") from exc
             record_failure(conn, exc.code)
-        if exc.retryable and attempts < len(RELEASE_CONTRIBUTION_BACKOFF_MINUTES):
+            # The error is recorded either way; only a final attempt settles
+            # the row. A reader who sees `queued` with a last error knows it is
+            # still being tried, which is the honest state.
+            update_contribution_by_job(
+                conn,
+                job.get("id"),
+                last_error=exc.code,
+                **({} if retrying else {"status": "failed"}),
+            )
+        if retrying:
             raise JobRetry(
                 exc.code,
                 delay_seconds=RELEASE_CONTRIBUTION_BACKOFF_MINUTES[attempts] * 60,
@@ -777,6 +792,15 @@ def process_movievault_v2_field_correction(
 
     contribution_id = str(result.get("contributionId") or "")
     status = str(result.get("status") or "")
+    with connect() as conn:
+        update_contribution_by_job(
+            conn,
+            job.get("id"),
+            status=status or "pending",
+            contribution_id=contribution_id or None,
+            duplicate_of=result.get("duplicateOf"),
+            last_error=None,
+        )
     if contribution_id and status not in TERMINAL_CONTRIBUTION_STATUSES:
         # Only when there is something still to learn. A duplicate is already
         # final on arrival, and polling it would ask a question with an answer
@@ -862,6 +886,14 @@ def process_movievault_v2_contribution_status(
         "canonicalTargetId": result.get("canonicalTargetId"),
         "duplicateOf": result.get("duplicateOf"),
     }
+    with connect() as conn:
+        update_contribution_by_contribution_id(
+            conn,
+            contribution_id,
+            status=status or "pending",
+            canonical_target_id=result.get("canonicalTargetId"),
+            duplicate_of=result.get("duplicateOf"),
+        )
     if status in TERMINAL_CONTRIBUTION_STATUSES:
         return summary
     if attempts < len(CONTRIBUTION_STATUS_BACKOFF_MINUTES):

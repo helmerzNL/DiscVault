@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Instansens status",
   "preferences.movieVaultRegistered": "Registrerad",
   "preferences.movieVaultNotRegistered": "Inte registrerad än. Det första bidraget registrerar den här instansen.",
-  "preferences.movieVaultLastError": "Senaste fel"
+  "preferences.movieVaultLastError": "Senaste fel",
+  "contribute.statusPrefix": "Din rättelse",
+  "contribute.status.queued": "I kö",
+  "contribute.status.pending": "Väntar på granskning",
+  "contribute.status.accepted": "Godtagen",
+  "contribute.status.partiallyAccepted": "Delvis godtagen",
+  "contribute.status.rejected": "Avvisad",
+  "contribute.status.failed": "Inte skickad"
 }

@@ -21,16 +21,19 @@ from __future__ import annotations
 
 import hashlib
 import re
+import uuid
 from typing import Any
 
 try:
     from .next_metadata import movie_identifiers
     from .next_metadata import movie_locked_fields
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from .next_movievault_connection import _table_exists, _text
 except ImportError:  # pragma: no cover - supports direct module execution
     from next_metadata import movie_identifiers
     from next_metadata import movie_locked_fields
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
+    from next_movievault_connection import _table_exists, _text
 
 #: The provider whose identifier names a MovieVault release. Written by the v2
 #: plugin since 26.8.9; read here as the first and most reliable way to say
@@ -474,4 +477,133 @@ def correction_preview(
         "target": target,
         "changes": build_changes(allowed=allowed, local=local, mirror=mirror, fields=fields),
         "withheld": withheld,
+    }
+
+
+# ---- The contribution log ------------------------------------------------
+#
+# Written when a correction is queued, updated when MovieVault acknowledges it
+# and again when a moderator decides. Read by the detail screens to answer the
+# only question the sender has afterwards.
+
+TERMINAL_LOG_STATUSES = frozenset({"accepted", "partially_accepted", "rejected", "failed"})
+
+
+def record_contribution(
+    conn: Any,
+    *,
+    entity: str,
+    record: dict[str, Any],
+    target: dict[str, Any],
+    changes: list[dict[str, Any]],
+    job_id: Any,
+    actor_id: Any = None,
+) -> None:
+    """Log one correction at the moment it is queued.
+
+    Written here rather than when it is sent, because "queued and never
+    delivered" is itself an outcome worth being able to see. A row that stays
+    at `queued` says the worker never got to it, which is a different fault
+    from one that says `failed`.
+    """
+    if not _table_exists(conn, "movievault_v2_contributions"):
+        return
+    entity_type = _text(target.get("entityType"))
+    entity_id = _text(target.get("entityId"))
+    if not entity_type or not entity_id or not job_id:
+        return
+    is_movie = entity == "movie"
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO movievault_v2_contributions (
+                id, entity_type, entity_id, movie_id, container_id, job_id,
+                fields, base_revision, submitted_by
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (job_id) WHERE job_id IS NOT NULL DO NOTHING
+            """,
+            (
+                uuid.uuid4(),
+                entity_type,
+                entity_id,
+                record.get("id") if is_movie else None,
+                None if is_movie else record.get("id"),
+                job_id,
+                [_text(item.get("field")) for item in changes],
+                int(target.get("baseRevision") or 0) or None,
+                actor_id,
+            ),
+        )
+
+
+def update_contribution_by_job(conn: Any, job_id: Any, **values: Any) -> None:
+    _update_contribution(conn, "job_id", job_id, values)
+
+
+def update_contribution_by_contribution_id(conn: Any, contribution_id: str, **values: Any) -> None:
+    _update_contribution(conn, "contribution_id", _text(contribution_id), values)
+
+
+def _update_contribution(conn: Any, column: str, key: Any, values: dict[str, Any]) -> None:
+    """Update the log row, ignoring keys the caller did not set.
+
+    Silent when there is no row: the log is a record of what happened, never a
+    precondition for it. A correction whose log row was cleaned up must still
+    be delivered and still be reported.
+    """
+    if not key or not _table_exists(conn, "movievault_v2_contributions"):
+        return
+    allowed = ("status", "contribution_id", "canonical_target_id", "duplicate_of", "last_error")
+    assignments = [f"{name} = %s" for name in allowed if name in values]
+    if not assignments:
+        return
+    parameters = [values[name] for name in allowed if name in values]
+    with conn.cursor() as cur:
+        cur.execute(
+            f"UPDATE movievault_v2_contributions "
+            f"SET {', '.join(assignments)}, updated_at = now() WHERE {column} = %s",
+            (*parameters, key),
+        )
+
+
+def latest_contribution(conn: Any, *, entity: str, record: dict[str, Any]) -> dict[str, Any] | None:
+    """The most recent correction sent for this record, if any.
+
+    Only the latest: the screen answers "did my correction land", and a history
+    of every attempt is a different feature with a different surface.
+    """
+    if not _table_exists(conn, "movievault_v2_contributions"):
+        return None
+    record_id = record.get("id")
+    if not record_id:
+        return None
+    column = "movie_id" if entity == "movie" else "container_id"
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT status, fields, contribution_id, canonical_target_id,
+                   duplicate_of, last_error, created_at, updated_at
+            FROM movievault_v2_contributions
+            WHERE {column} = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (record_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    row = dict(row)
+    status = _text(row.get("status")) or "queued"
+    return {
+        "status": status,
+        "settled": status in TERMINAL_LOG_STATUSES,
+        "fields": list(row.get("fields") or []),
+        "contributionId": _text(row.get("contribution_id")) or None,
+        "canonicalTargetId": _text(row.get("canonical_target_id")) or None,
+        "duplicateOf": _text(row.get("duplicate_of")) or None,
+        "lastError": _text(row.get("last_error")) or None,
+        "createdAt": row.get("created_at"),
+        "updatedAt": row.get("updated_at"),
     }

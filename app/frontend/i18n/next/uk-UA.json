@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Стан примірника",
   "preferences.movieVaultRegistered": "Зареєстровано",
   "preferences.movieVaultNotRegistered": "Ще не зареєстровано. Перший внесок зареєструє цей примірник.",
-  "preferences.movieVaultLastError": "Остання помилка"
+  "preferences.movieVaultLastError": "Остання помилка",
+  "contribute.statusPrefix": "Ваше виправлення",
+  "contribute.status.queued": "У черзі",
+  "contribute.status.pending": "Очікує модерації",
+  "contribute.status.accepted": "Прийнято",
+  "contribute.status.partiallyAccepted": "Прийнято частково",
+  "contribute.status.rejected": "Відхилено",
+  "contribute.status.failed": "Не надіслано"
 }

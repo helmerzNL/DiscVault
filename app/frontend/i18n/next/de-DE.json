@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Status der Instanz",
   "preferences.movieVaultRegistered": "Registriert",
   "preferences.movieVaultNotRegistered": "Noch nicht registriert. Der erste Beitrag registriert diese Instanz.",
-  "preferences.movieVaultLastError": "Letzter Fehler"
+  "preferences.movieVaultLastError": "Letzter Fehler",
+  "contribute.statusPrefix": "Deine Korrektur",
+  "contribute.status.queued": "In der Warteschlange",
+  "contribute.status.pending": "Wartet auf Prüfung",
+  "contribute.status.accepted": "Übernommen",
+  "contribute.status.partiallyAccepted": "Teilweise übernommen",
+  "contribute.status.rejected": "Abgelehnt",
+  "contribute.status.failed": "Nicht gesendet"
 }

@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Egzemplioriaus būsena",
   "preferences.movieVaultRegistered": "Užregistruotas",
   "preferences.movieVaultNotRegistered": "Dar neužregistruotas. Pirmasis prisidėjimas užregistruos šį egzempliorių.",
-  "preferences.movieVaultLastError": "Paskutinė klaida"
+  "preferences.movieVaultLastError": "Paskutinė klaida",
+  "contribute.statusPrefix": "Jūsų pataisymas",
+  "contribute.status.queued": "Eilėje",
+  "contribute.status.pending": "Laukia moderavimo",
+  "contribute.status.accepted": "Priimtas",
+  "contribute.status.partiallyAccepted": "Priimtas iš dalies",
+  "contribute.status.rejected": "Atmestas",
+  "contribute.status.failed": "Neišsiųstas"
 }

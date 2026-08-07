@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "Stav instance",
   "preferences.movieVaultRegistered": "Registrována",
   "preferences.movieVaultNotRegistered": "Zatím neregistrována. První příspěvek tuto instanci zaregistruje.",
-  "preferences.movieVaultLastError": "Poslední chyba"
+  "preferences.movieVaultLastError": "Poslední chyba",
+  "contribute.statusPrefix": "Vaše oprava",
+  "contribute.status.queued": "Ve frontě",
+  "contribute.status.pending": "Čeká na moderaci",
+  "contribute.status.accepted": "Přijata",
+  "contribute.status.partiallyAccepted": "Přijata částečně",
+  "contribute.status.rejected": "Zamítnuta",
+  "contribute.status.failed": "Neodeslána"
 }

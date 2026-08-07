@@ -2758,5 +2758,12 @@
   "preferences.movieVaultInstanceStatus": "인스턴스 상태",
   "preferences.movieVaultRegistered": "등록됨",
   "preferences.movieVaultNotRegistered": "아직 등록되지 않았습니다. 첫 기여 시 이 인스턴스가 등록됩니다.",
-  "preferences.movieVaultLastError": "마지막 오류"
+  "preferences.movieVaultLastError": "마지막 오류",
+  "contribute.statusPrefix": "내 수정",
+  "contribute.status.queued": "대기 중",
+  "contribute.status.pending": "검토 대기 중",
+  "contribute.status.accepted": "반영됨",
+  "contribute.status.partiallyAccepted": "일부 반영됨",
+  "contribute.status.rejected": "반려됨",
+  "contribute.status.failed": "전송되지 않음"
 }
