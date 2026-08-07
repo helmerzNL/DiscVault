@@ -1,6 +1,6 @@
 # DiscVault Release Notes
 
-## 26.8.11 - A Blu-ray.com import writes rows again
+## 26.8.11 - An import fills fields instead of overwriting them
 
 - Every row of a Blu-ray.com import failed with `object of type 'NoneType' has
   no len()`, was recorded as a per-row import error, and never reached the
@@ -13,6 +13,23 @@
   rather than the film. The latent bug was older than the change that exposed
   it; the guard belongs in `import_year()` regardless of which import hits it.
 - Nothing about the 26.8.5 normalization rules changes.
+- **An import now fills a field, it no longer overwrites one.** A value already
+  on a film survives; only a blank one is filled from the file. Until now every
+  column the import wrote was taken from the file, so a Blu-ray.com row retitled
+  a film to "Bohemian Rhapsody 4K" and dated Back to the Future to 2012 — the
+  year of the disc — on films whose title and year were already correct.
+- That is also what made a bad import unrepairable. Rolling an import back only
+  deletes films it **created**; a film that merely got *updated* has nothing
+  left to restore from, and re-importing does not help either.
+- A field a human confirms in the import review still wins, and only that field.
+  Picking a metadata match or typing a manual override is a deliberate edit to
+  that film — declining it would report "applied" while changing nothing. A
+  confirmed title does not license rewriting the format the file happens to
+  carry.
+- Inside the metadata blob the same split applies: film data (director, cast,
+  artwork, personal) is kept, while the provenance keys still record which
+  import last touched the row.
+- An empty string counts as blank, not as a value worth protecting.
 
 ## 26.8.5 - Blu-ray.com imports describe films, not pressings
 
