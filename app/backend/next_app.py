@@ -156,6 +156,7 @@ try:
     from .next_movievault_v2_contributions import release_contribution_enabled
     from .dedup_identity import MEDIA_TYPE_MOVIE
     from .dedup_identity import MEDIA_TYPE_SHOW
+    from .dedup_identity import infer_media_type_from_title
     from .dedup_identity import media_type_conflicts
     from .dedup_identity import normalize_media_type
     from .dedup_identity import title_year_identity_compatible
@@ -404,6 +405,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2_contributions import release_contribution_enabled
     from dedup_identity import MEDIA_TYPE_MOVIE
     from dedup_identity import MEDIA_TYPE_SHOW
+    from dedup_identity import infer_media_type_from_title
     from dedup_identity import media_type_conflicts
     from dedup_identity import normalize_media_type
     from dedup_identity import title_year_identity_compatible
@@ -30242,6 +30244,16 @@ def register_routes(flask_app: Flask) -> None:
 
                 payload = dict(movie_updates)
                 payload["title"] = import_title
+                # Last resort only. A stated type -- the user's, or MovieVault's
+                # workType carried on the feed -- is already in movie_updates and
+                # outranks this. The title heuristic exists for the case that has
+                # no stated value at all: a barcode that resolved through a source
+                # which cannot tell a series from a film, which is every source
+                # except MovieVault.
+                if not payload.get("media_type") and not payload.get("mediaType"):
+                    inferred = infer_media_type_from_title(import_title)
+                    if inferred:
+                        payload["media_type"] = inferred
                 if selected_movie_candidate.get("barcode") and not barcode:
                     barcode = clean_text(selected_movie_candidate.get("barcode"))
                 if barcode:
