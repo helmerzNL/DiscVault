@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Kaydedilmiş alan yok.",
   "contribute.historyDeletedRecord": "(kayıt burada silindi)",
   "contribute.historyScopeMine": "Yalnızca benimkiler",
-  "contribute.historyScopeInstance": "Herkesinki"
+  "contribute.historyScopeInstance": "Herkesinki",
+  "notifications.prefContributions": "Katkılar",
+  "notifications.prefContributionsHelp": "Gönderdiğim bir düzeltme hakkında bir MovieVault moderatörü karar verdiğinde haber ver."
 }

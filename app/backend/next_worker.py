@@ -53,6 +53,7 @@ try:
     from .next_movievault_v2 import CONTRIBUTION_STATUS_JOB_TYPE
     from .next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
     from .next_movievault_v2_field_corrections import update_contribution_by_contribution_id
+    from .next_notifications import create_user_notification
     from .next_movievault_v2_field_corrections import update_contribution_by_job
     from .next_movievault_v2_contributions import (
         TERMINAL_CONTRIBUTION_STATUSES,
@@ -96,6 +97,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_movievault_v2 import CONTRIBUTION_STATUS_JOB_TYPE
     from next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
     from next_movievault_v2_field_corrections import update_contribution_by_contribution_id
+    from next_notifications import create_user_notification
     from next_movievault_v2_field_corrections import update_contribution_by_job
     from next_movievault_v2_contributions import (
         TERMINAL_CONTRIBUTION_STATUSES,
@@ -887,13 +889,18 @@ def process_movievault_v2_contribution_status(
         "duplicateOf": result.get("duplicateOf"),
     }
     with connect() as conn:
-        update_contribution_by_contribution_id(
+        settled = update_contribution_by_contribution_id(
             conn,
             contribution_id,
             status=status or "pending",
             canonical_target_id=result.get("canonicalTargetId"),
             duplicate_of=result.get("duplicateOf"),
         )
+        # Only on the transition, and only once - the update guards it. A
+        # verdict arrives days after the person stopped looking, so this is the
+        # difference between a decision they find and one they are told.
+        if settled:
+            notify_contribution_settled(conn, settled)
     if status in TERMINAL_CONTRIBUTION_STATUSES:
         return summary
     if attempts < len(CONTRIBUTION_STATUS_BACKOFF_MINUTES):
@@ -903,6 +910,43 @@ def process_movievault_v2_contribution_status(
             result={**summary, "attempt": attempts + 1},
         )
     return {**summary, "gaveUp": True}
+
+
+CONTRIBUTION_VERDICT_TITLES = {
+    "accepted": "Your correction was accepted",
+    "partially_accepted": "Part of your correction was accepted",
+    "rejected": "Your correction was declined",
+}
+
+
+def notify_contribution_settled(conn, settled: dict[str, Any]) -> None:
+    """Tell the contributor what a moderator decided.
+
+    Silent when nobody can be told: a contribution submitted before the log
+    recorded an actor, or by a user since removed, still has to settle. Failing
+    the job over an undeliverable notification would retry a verdict that has
+    already been recorded.
+    """
+    user_id = settled.get("submittedBy")
+    if not user_id:
+        return
+    title = CONTRIBUTION_VERDICT_TITLES.get(settled.get("status") or "")
+    if not title:
+        return
+    fields = ", ".join(settled.get("fields") or [])
+    detail = f" ({fields})" if fields else ""
+    try:
+        create_user_notification(
+            conn,
+            user_id,
+            title=title,
+            body=f"MovieVault reviewed the correction you sent{detail}.",
+            url="/profile",
+            pref_key="contributions",
+            payload={"contributionStatus": settled.get("status")},
+        )
+    except Exception:  # pragma: no cover - delivery is never the job's problem
+        pass
 
 
 def process_movievault_v2_poster_cache(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:

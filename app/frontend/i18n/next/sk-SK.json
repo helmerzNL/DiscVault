@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Nezaznamenané žiadne polia.",
   "contribute.historyDeletedRecord": "(záznam tu zmazaný)",
   "contribute.historyScopeMine": "Zobraziť len moje",
-  "contribute.historyScopeInstance": "Zobraziť všetky"
+  "contribute.historyScopeInstance": "Zobraziť všetky",
+  "notifications.prefContributions": "Príspevky",
+  "notifications.prefContributionsHelp": "Daj mi vedieť, keď moderátor MovieVault rozhodne o oprave, ktorú som odoslal."
 }

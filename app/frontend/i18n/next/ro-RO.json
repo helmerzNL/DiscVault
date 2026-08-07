@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Niciun câmp înregistrat.",
   "contribute.historyDeletedRecord": "(înregistrare ștearsă aici)",
   "contribute.historyScopeMine": "Arată doar ale mele",
-  "contribute.historyScopeInstance": "Arată-le pe ale tuturor"
+  "contribute.historyScopeInstance": "Arată-le pe ale tuturor",
+  "notifications.prefContributions": "Contribuții",
+  "notifications.prefContributionsHelp": "Anunță-mă când un moderator MovieVault decide asupra unei corecturi trimise de mine."
 }

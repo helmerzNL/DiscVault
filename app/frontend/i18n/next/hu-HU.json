@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Nincs rögzített mező.",
   "contribute.historyDeletedRecord": "(rekord itt törölve)",
   "contribute.historyScopeMine": "Csak a sajátjaim",
-  "contribute.historyScopeInstance": "Mindenkié"
+  "contribute.historyScopeInstance": "Mindenkié",
+  "notifications.prefContributions": "Hozzájárulások",
+  "notifications.prefContributionsHelp": "Szólj, amikor egy MovieVault-moderátor dönt egy általam küldött javításról."
 }

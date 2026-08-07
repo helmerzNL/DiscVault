@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Laukų neužfiksuota.",
   "contribute.historyDeletedRecord": "(įrašas čia ištrintas)",
   "contribute.historyScopeMine": "Rodyti tik mano",
-  "contribute.historyScopeInstance": "Rodyti visų"
+  "contribute.historyScopeInstance": "Rodyti visų",
+  "notifications.prefContributions": "Prisidėjimai",
+  "notifications.prefContributionsHelp": "Pranešti man, kai MovieVault moderatorius nuspręs dėl mano išsiųsto pataisymo."
 }

@@ -560,10 +560,12 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         self.assertEqual(called, [])
         self.assertEqual(preview["comparedAgainst"], "mirror")
 
-    def test_a_box_set_has_no_preflight(self):
-        """`/v2/films/{id}/releases` is about films. A box set has no
-        equivalent, so its diff is always against the mirror -- stated rather
-        than silently the same as a release's."""
+    def test_a_box_set_is_checked_against_its_own_route(self):
+        """The box-set half. It reads `/v2/box-sets/{id}` rather than the film
+        route, because the two return different shapes -- one an object, one a
+        list to search."""
+        import unittest.mock as mock
+
         with self.conn.cursor() as cur:
             cur.execute(
                 """
@@ -576,9 +578,127 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
             )
         container = {"id": uuid.uuid4(), "title": "Corrected Set", "barcode": BARCODE}
 
-        preview = corrections.correction_preview(self.conn, entity="container", record=container)
+        with mock.patch.object(
+            corrections, "live_box_set_values", lambda box_set_id, **k: {"title": "Moved Since"}
+        ):
+            preview = corrections.correction_preview(
+                self.conn, entity="container", record=container
+            )
+
+        title = next(item for item in preview["changes"] if item["field"] == "title")
+        self.assertEqual(title["expected"], "Moved Since")
+        self.assertEqual(preview["comparedAgainst"], "catalogue")
+
+    def test_a_box_set_falls_back_to_the_mirror_too(self):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movievault_v2_lookup_hashes (
+                    generation, lookup_hash, entity_type, entity_id, source_type, member_position
+                )
+                VALUES (%s, %s, 'box_set', %s, 'box_set_ean', 0)
+                """,
+                (self.generation, corrections.barcode_lookup_hash(BARCODE), self.box_set_id),
+            )
+        container = {"id": uuid.uuid4(), "title": "Corrected Set", "barcode": BARCODE}
+
+        import unittest.mock as mock
+
+        with mock.patch.object(corrections, "live_box_set_values", lambda *a, **k: None):
+            preview = corrections.correction_preview(
+                self.conn, entity="container", record=container
+            )
 
         self.assertEqual(preview["comparedAgainst"], "mirror")
+        self.assertEqual(
+            next(item for item in preview["changes"] if item["field"] == "title")["expected"],
+            "Mirror Box Set",
+        )
+
+    # ---- settling, and telling the contributor ---------------------------
+
+    def _logged(self, actor_id=None):
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        target = corrections.resolve_target(self.conn, entity="movie", record=movie)
+        job_id = uuid.uuid4()
+        corrections.record_contribution(
+            self.conn,
+            entity="movie",
+            record=movie,
+            target=target,
+            changes=[{"field": "format", "expected": "Blu-ray", "proposed": "4K UHD"}],
+            job_id=job_id,
+            actor_id=actor_id,
+        )
+        corrections.update_contribution_by_job(
+            self.conn, job_id, status="pending", contribution_id=f"c-{job_id}"
+        )
+        return movie, f"c-{job_id}"
+
+    def test_a_verdict_settles_exactly_once(self):
+        """The caller turns a non-None into a notification, and a verdict
+        announced twice is worse than one announced late. Two workers racing
+        the same answer must produce one winner."""
+        actor = uuid.uuid4()
+        _, contribution_id = self._logged(actor_id=actor)
+
+        first = corrections.update_contribution_by_contribution_id(
+            self.conn, contribution_id, status="accepted", canonical_target_id="t-1"
+        )
+        second = corrections.update_contribution_by_contribution_id(
+            self.conn, contribution_id, status="accepted", canonical_target_id="t-1"
+        )
+
+        self.assertIsNotNone(first)
+        self.assertEqual(first["status"], "accepted")
+        self.assertEqual(first["submittedBy"], str(actor))
+        self.assertEqual(first["fields"], ["format"])
+        self.assertIsNone(second)
+
+    def test_a_status_that_is_not_a_decision_settles_nothing(self):
+        """`pending` and `quarantined` are states a contributor waits in.
+        Announcing them as verdicts would be a notification per poll."""
+        _, contribution_id = self._logged()
+        for status in ("pending", "quarantined"):
+            self.assertIsNone(
+                corrections.update_contribution_by_contribution_id(
+                    self.conn, contribution_id, status=status
+                )
+            )
+
+    def test_a_later_verdict_does_not_reopen_a_settled_one(self):
+        """A poll that somehow runs after the decision must not announce a
+        second, different outcome for the same contribution."""
+        _, contribution_id = self._logged()
+        corrections.update_contribution_by_contribution_id(
+            self.conn, contribution_id, status="rejected"
+        )
+        self.assertIsNone(
+            corrections.update_contribution_by_contribution_id(
+                self.conn, contribution_id, status="accepted"
+            )
+        )
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT status FROM movievault_v2_contributions WHERE contribution_id = %s",
+                (contribution_id,),
+            )
+            self.assertEqual(dict(cur.fetchone())["status"], "rejected")
+
+    def test_settling_keeps_a_canonical_id_it_already_has(self):
+        """`COALESCE`, not overwrite: a second answer that omits the id must
+        not erase the one the first carried."""
+        _, contribution_id = self._logged()
+        corrections.update_contribution_by_contribution_id(
+            self.conn, contribution_id, status="accepted", canonical_target_id="t-1"
+        )
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT canonical_target_id FROM movievault_v2_contributions WHERE contribution_id = %s",
+                (contribution_id,),
+            )
+            self.assertEqual(dict(cur.fetchone())["canonical_target_id"], "t-1")
 
     # ---- the history ------------------------------------------------------
 

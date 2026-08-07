@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Nezaznamenána žádná pole.",
   "contribute.historyDeletedRecord": "(záznam zde smazán)",
   "contribute.historyScopeMine": "Zobrazit jen mé",
-  "contribute.historyScopeInstance": "Zobrazit všechny"
+  "contribute.historyScopeInstance": "Zobrazit všechny",
+  "notifications.prefContributions": "Příspěvky",
+  "notifications.prefContributionsHelp": "Dej mi vědět, když moderátor MovieVault rozhodne o opravě, kterou jsem odeslal."
 }

@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "기록된 항목이 없습니다.",
   "contribute.historyDeletedRecord": "(여기서 삭제된 기록)",
   "contribute.historyScopeMine": "내 것만 보기",
-  "contribute.historyScopeInstance": "모두 보기"
+  "contribute.historyScopeInstance": "모두 보기",
+  "notifications.prefContributions": "기여",
+  "notifications.prefContributionsHelp": "보낸 수정 사항에 대해 MovieVault 검토자가 결정하면 알려주세요."
 }

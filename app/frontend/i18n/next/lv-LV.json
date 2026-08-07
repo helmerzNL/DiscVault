@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Nav reģistrētu lauku.",
   "contribute.historyDeletedRecord": "(ieraksts šeit dzēsts)",
   "contribute.historyScopeMine": "Rādīt tikai manus",
-  "contribute.historyScopeInstance": "Rādīt visu"
+  "contribute.historyScopeInstance": "Rādīt visu",
+  "notifications.prefContributions": "Ieguldījumi",
+  "notifications.prefContributionsHelp": "Paziņot man, kad MovieVault moderators izlems par manis nosūtīto labojumu."
 }

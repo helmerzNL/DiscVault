@@ -21,6 +21,10 @@ NOTIFICATION_PREF_DEFAULTS: dict[str, bool] = {
     "group_invites": True,
     "security": True,
     "price_alerts": True,
+    # A moderation verdict arrives days after the person stopped looking, so
+    # this is the one contribution event worth pushing rather than leaving to
+    # be found.
+    "contributions": True,
 }
 
 

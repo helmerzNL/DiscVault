@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Geen velden vastgelegd.",
   "contribute.historyDeletedRecord": "(record hier verwijderd)",
   "contribute.historyScopeMine": "Alleen die van mij",
-  "contribute.historyScopeInstance": "Die van iedereen"
+  "contribute.historyScopeInstance": "Die van iedereen",
+  "notifications.prefContributions": "Bijdragen",
+  "notifications.prefContributionsHelp": "Laat het weten wanneer een MovieVault-moderator besluit over een correctie die ik stuurde."
 }

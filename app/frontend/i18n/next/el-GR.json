@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Δεν καταγράφηκαν πεδία.",
   "contribute.historyDeletedRecord": "(η εγγραφή διαγράφηκε εδώ)",
   "contribute.historyScopeMine": "Μόνο τα δικά μου",
-  "contribute.historyScopeInstance": "Όλων"
+  "contribute.historyScopeInstance": "Όλων",
+  "notifications.prefContributions": "Συνεισφορές",
+  "notifications.prefContributionsHelp": "Να με ειδοποιείς όταν ένας συντονιστής MovieVault αποφασίζει για διόρθωση που έστειλα."
 }

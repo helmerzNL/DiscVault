@@ -2773,5 +2773,7 @@
   "contribute.historyNoFields": "Välju ei registreeritud.",
   "contribute.historyDeletedRecord": "(kirje siin kustutatud)",
   "contribute.historyScopeMine": "Näita ainult minu omi",
-  "contribute.historyScopeInstance": "Näita kõigi omi"
+  "contribute.historyScopeInstance": "Näita kõigi omi",
+  "notifications.prefContributions": "Panused",
+  "notifications.prefContributionsHelp": "Anna teada, kui MovieVaulti moderaator otsustab minu saadetud paranduse üle."
 }
