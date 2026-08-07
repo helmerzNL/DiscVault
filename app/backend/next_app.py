@@ -19477,7 +19477,29 @@ def movie_technical_spec_contribution_source(
     disc_count = payload.get("discCount") or payload.get("disc_count")
     if isinstance(disc_count, int) and not isinstance(disc_count, bool):
         candidate["discCount"] = disc_count
+    # Read back from the saved row rather than the request body: `media_type`
+    # is NOT NULL with a MOVIE default, so the row states a type even when the
+    # form did not, and that stored value is what the user will see.
+    media_type = movie_media_type(conn, movie_id)
+    if media_type:
+        candidate["workType"] = media_type
     return candidate
+
+
+def movie_media_type(conn, movie_id: UUID | str) -> str | None:
+    """The stored MOVIE/SHOW of a movie, or None when it cannot be read.
+
+    Tolerant of the column being absent so an instance that has not yet run
+    migration 063 contributes without a work type rather than failing - absence
+    is a valid answer here, and MovieVault reads it as "did not say".
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT media_type FROM movies WHERE id=%s", (movie_id,))
+            row = cur.fetchone()
+    except psycopg.errors.UndefinedColumn:
+        return None
+    return clean_text(row.get("media_type")) if row else None
 
 
 def queue_release_contribution_job(

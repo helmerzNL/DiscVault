@@ -39455,6 +39455,25 @@ def ui_preview_html(
           ["price_monitoring_enabled", "preferences.priceMonitoringEnabled", "preferences.priceMonitoringEnabledHelp"],
           ["preferred_price_currency", "preferences.preferredPriceCurrency", "preferences.preferredPriceCurrencyHelp", "price_monitoring_enabled"]
         ]
+      },
+      {
+        // Deliberately on Library rather than Collectors: the Collectors tab is
+        // hidden unless the user holds container-management permissions, and a
+        // user who scans discs and picks editions - the one who contributes -
+        // does not need those. A privacy choice must be reachable by the person
+        // whose data it is, not gated behind an unrelated capability.
+        //
+        // The API still declares its own "sharing" section, so a native client
+        // is free to group it separately; only this layout is shared with
+        // Library.
+        key: "sharing",
+        titleKey: "preferences.cardSharing",
+        title: "Sharing with MovieVault",
+        helpKey: "preferences.cardSharingHelp",
+        help: "Help the shared catalogue by contributing the releases you identify.",
+        items: [
+          ["share_release_selections", "preferences.shareReleaseSelections", "preferences.shareReleaseSelectionsHelp"]
+        ]
       }
     ];
     const preferenceCollectorGroups = [
@@ -39489,19 +39508,6 @@ def ui_preview_html(
         items: [
           ["delete_container_members_with_container", "preferences.deleteContainerMembersWithContainer", "preferences.deleteContainerMembersWithContainerHelp", "collectors_mode"],
           ["show_metadata_jobs", "preferences.showMetadataJobs", "preferences.showMetadataJobsHelp"]
-        ]
-      },
-      {
-        // Its own card rather than a line under "management": this is the only
-        // preference that sends anything outside this instance, and it should
-        // read as that rather than as another display toggle.
-        key: "sharing",
-        titleKey: "preferences.cardSharing",
-        title: "Sharing with MovieVault",
-        helpKey: "preferences.cardSharingHelp",
-        help: "Help the shared catalogue by contributing the releases you identify.",
-        items: [
-          ["share_release_selections", "preferences.shareReleaseSelections", "preferences.shareReleaseSelectionsHelp"]
         ]
       }
     ];
