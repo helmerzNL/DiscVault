@@ -249,6 +249,29 @@ do not wait to be asked.
   still needs to land in App-Guidance. To commit it directly, start a session with App-Guidance as
   its initial source.
 
+**Adding or updating a plugin means updating the documentation**
+
+Follow this automatically on every plugin change — do not wait to be asked. A plugin change is
+not done when the code passes. Every new plugin under `app/backend/next_plugins/`, and every
+version bump of an existing one, must carry its documentation in the same change set.
+
+DiscVault keeps no plugin documentation of its own, so "the documentation" means App-Guidance,
+per the section above. A plugin is a contract with an external system, which is exactly the
+category that section says to record: what the plugin reaches, which fields it may supply, and
+how it loses against other sources.
+
+- **A new plugin** needs an entry covering its purpose, the source it speaks to, and its
+  precedence relative to the plugins that answer the same question.
+- **A version bump** needs an entry only when behaviour a reader depends on changed — a new
+  field, a changed precedence, a different upstream. A routine fix is release-notes material.
+- **A packaged artefact under `dist/plugins/`** is a release step, not a substitute: shipping a
+  new zip without repointing whatever pins the version leaves installations on the old one.
+- Say in the PR body what you recorded, or that you judged the change documentation-neutral.
+  An unexplained silence is not the same as "nothing to record".
+
+Note the ownership constraint above: a session working only in DiscVault cannot push to
+App-Guidance. Prepare the write-up and hand it over, saying plainly that it still needs to land.
+
 **When the user starts a new feature (or bug/other work)**
 
 1. Base the work on `release/v26-beta`, **never** on `main` or `legacy`. In a worktree session

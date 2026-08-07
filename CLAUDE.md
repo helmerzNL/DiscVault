@@ -238,6 +238,29 @@ implementation, and keep an appendix mapping each rule to its source location. C
 across as open questions instead of quietly resolving them. Write it in English, like every other
 shared artifact.
 
+### Adding or updating a plugin means updating the documentation
+
+Follow this automatically on every plugin change — do not wait to be asked. A plugin change is
+not done when the code passes. Every new plugin under `app/backend/next_plugins/`, and every
+version bump of an existing one, must carry its documentation in the same change set.
+
+DiscVault keeps no plugin documentation of its own, so "the documentation" means App-Guidance.
+A plugin is a contract with an external system — exactly the category this section says to
+record: what the plugin reaches, which fields it may supply, and how it loses against other
+sources.
+
+- **A new plugin** needs an entry covering its purpose, the source it speaks to, and its
+  precedence relative to the plugins answering the same question.
+- **A version bump** needs an entry only when behaviour a reader depends on changed — a new
+  field, a changed precedence, a different upstream. A routine fix is release-notes material.
+- **A packaged artefact under `dist/plugins/`** is a release step, not a substitute: shipping a
+  new zip without repointing whatever pins the version leaves installations on the old one.
+- Say in the PR body what you recorded, or that you judged the change documentation-neutral.
+  An unexplained silence is not the same as "nothing to record".
+
+The ownership constraint below applies here too: prepare the write-up and hand it over if the
+session cannot push to App-Guidance.
+
 **Attaching the repo:** App-Guidance sits under a different owner (`Flux76HQ`) than this repository
 (`helmerzNL`), and a session cannot attach a repo from another owner. A session working in DiscVault
 therefore cannot push there: prepare the document, hand it over, and say plainly that it still needs
