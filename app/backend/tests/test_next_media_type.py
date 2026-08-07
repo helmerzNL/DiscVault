@@ -15,6 +15,7 @@ try:
     from ..dedup_identity import (
         MEDIA_TYPE_MOVIE,
         MEDIA_TYPE_SHOW,
+        infer_media_type_from_title,
         media_type_conflicts,
         normalize_media_type,
     )
@@ -24,6 +25,7 @@ except ImportError:  # pragma: no cover - backend working-directory CI imports
     from dedup_identity import (
         MEDIA_TYPE_MOVIE,
         MEDIA_TYPE_SHOW,
+        infer_media_type_from_title,
         media_type_conflicts,
         normalize_media_type,
     )
@@ -66,6 +68,47 @@ class NormalizeMediaTypeTests(unittest.TestCase):
             for value in ("movie", "film", "tv", "show", "series", "junk", None)
         }
         self.assertEqual(seen, {MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW, None})
+
+
+class InferMediaTypeFromTitleTests(unittest.TestCase):
+    """Reading a series off the printed title, for sources that cannot say.
+
+    Every source except MovieVault is blind to the distinction, so a barcode
+    scan that resolves elsewhere arrives with no type at all. The disc itself
+    often says what it is; this reads that and nothing more.
+    """
+
+    def test_a_season_or_series_marker_is_recognised(self):
+        for title in (
+            "Yellowstone: Season 1",
+            "Fargo Season Two",
+            "Twin Peaks - Seasons 1-2",
+            "Band of Brothers: The Complete Series",
+            "Het Bureau Seizoen 3",
+            "Friends: De Complete Serie",
+            "Volume 2",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(infer_media_type_from_title(title), MEDIA_TYPE_SHOW)
+
+    def test_it_never_answers_movie(self):
+        """The half that keeps the contract's rule intact.
+
+        A marker is evidence; its absence is not. Plenty of series boxes carry
+        only the show's name, so answering MOVIE here would turn "no marker" into
+        a confident wrong type -- and this field vetoes the identity ladder, so a
+        wrong value silently makes a record unmergeable with its own duplicate.
+        """
+        for title in ("Dune: Part Two", "Heat", "Yellowstone", "", None, "   "):
+            with self.subTest(title=title):
+                self.assertIsNone(infer_media_type_from_title(title))
+
+    def test_the_output_is_only_ever_show_or_nothing(self):
+        seen = {
+            infer_media_type_from_title(title)
+            for title in ("Season 1", "The Complete Series", "Heat", None)
+        }
+        self.assertEqual(seen, {MEDIA_TYPE_SHOW, None})
 
 
 class MediaTypeConflictTests(unittest.TestCase):
