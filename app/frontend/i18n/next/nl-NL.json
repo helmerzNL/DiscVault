@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Mijn correcties naar MovieVault sturen",
   "preferences.shareFieldCorrectionsHelp": "Voegt een Bijdragen-knop toe naast je bewerkingen. Er wordt niets verstuurd tot je elk veld bevestigt, en een moderator beoordeelt het voordat de gedeelde catalogus verandert.",
   "preferences.confirmEveryUpload": "Elke keer uitleggen wat er wordt gedeeld",
-  "preferences.confirmEveryUploadHelp": "Herhaalt bij elke bijdrage de uitleg over wat er wel en niet meegaat, in plaats van alleen de eerste keer."
+  "preferences.confirmEveryUploadHelp": "Herhaalt bij elke bijdrage de uitleg over wat er wel en niet meegaat, in plaats van alleen de eerste keer.",
+  "contribute.disabledTitle": "Bijdragen staat uit",
+  "contribute.disabledLead": "Deze DiscVault stuurt niets naar MovieVault. Dat is een eigenaar-instelling en geen persoonlijke, dus hier akkoord gaan met delen verandert niets.",
+  "contribute.disabledWhere": "Een eigenaar kan het aanzetten onder Admin, Security, met Toggle Release Contribution. Diezelfde schakelaar dekt releases en veldcorrecties."
 }

@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Odosielať moje opravy do MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Pridá vedľa vašich úprav tlačidlo Prispieť. Nič sa neodošle, kým nepotvrdíte každé pole, a moderátor to posúdi, než sa zdieľaný katalóg zmení.",
   "preferences.confirmEveryUpload": "Zakaždým vysvetliť, čo sa zdieľa",
-  "preferences.confirmEveryUploadHelp": "Opakuje pri každom príspevku vysvetlenie, čo sa prenáša a čo nie, namiesto len prvýkrát."
+  "preferences.confirmEveryUploadHelp": "Opakuje pri každom príspevku vysvetlenie, čo sa prenáša a čo nie, namiesto len prvýkrát.",
+  "contribute.disabledTitle": "Prispievanie je vypnuté",
+  "contribute.disabledLead": "Tento DiscVault neposiela do MovieVault nič. Je to nastavenie vlastníka, nie osobné, takže súhlas so zdieľaním by tu nič nezmenil.",
+  "contribute.disabledWhere": "Vlastník to môže zapnúť v Admin, Security tlačidlom Toggle Release Contribution. Rovnaký prepínač pokrýva edície aj opravy polí."
 }

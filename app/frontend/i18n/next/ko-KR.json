@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "내 수정 사항을 MovieVault에 보내기",
   "preferences.shareFieldCorrectionsHelp": "편집 옆에 기여하기 버튼을 추가합니다. 각 항목을 확인하기 전에는 아무것도 전송되지 않으며, 공유 카탈로그가 바뀌기 전에 검토자가 확인합니다.",
   "preferences.confirmEveryUpload": "매번 무엇이 공유되는지 설명",
-  "preferences.confirmEveryUploadHelp": "무엇이 전송되고 무엇이 전송되지 않는지에 대한 설명을 처음 한 번이 아니라 기여할 때마다 반복합니다."
+  "preferences.confirmEveryUploadHelp": "무엇이 전송되고 무엇이 전송되지 않는지에 대한 설명을 처음 한 번이 아니라 기여할 때마다 반복합니다.",
+  "contribute.disabledTitle": "기여가 꺼져 있습니다",
+  "contribute.disabledLead": "이 DiscVault는 MovieVault로 아무것도 보내지 않습니다. 개인 설정이 아니라 소유자 설정이므로, 여기서 공유에 동의해도 달라지는 것이 없습니다.",
+  "contribute.disabledWhere": "소유자는 Admin의 Security에서 Toggle Release Contribution으로 켤 수 있습니다. 같은 스위치가 릴리스와 항목 수정 모두에 적용됩니다."
 }

@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Lähetä korjaukseni MovieVaultiin",
   "preferences.shareFieldCorrectionsHelp": "Lisää muokkaustesi viereen Osallistu-painikkeen. Mitään ei lähetetä ennen kuin vahvistat jokaisen kentän, ja moderaattori tarkistaa sen ennen kuin jaettu luettelo muuttuu.",
   "preferences.confirmEveryUpload": "Selitä joka kerta, mitä jaetaan",
-  "preferences.confirmEveryUploadHelp": "Toistaa jokaisella osallistumisella selityksen siitä, mitä lähetetään ja mitä ei, sen sijaan että se näytettäisiin vain ensimmäisellä kerralla."
+  "preferences.confirmEveryUploadHelp": "Toistaa jokaisella osallistumisella selityksen siitä, mitä lähetetään ja mitä ei, sen sijaan että se näytettäisiin vain ensimmäisellä kerralla.",
+  "contribute.disabledTitle": "Osallistuminen on pois käytöstä",
+  "contribute.disabledLead": "Tämä DiscVault ei lähetä mitään MovieVaultiin. Se on omistajan asetus eikä henkilökohtainen, joten jakamisen hyväksyminen ei muuttaisi tässä mitään.",
+  "contribute.disabledWhere": "Omistaja voi ottaa sen käyttöön kohdassa Admin, Security painikkeella Toggle Release Contribution. Sama kytkin kattaa julkaisut ja kenttäkorjaukset."
 }

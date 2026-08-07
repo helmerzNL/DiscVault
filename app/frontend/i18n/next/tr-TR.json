@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Düzeltmelerimi MovieVault'a gönder",
   "preferences.shareFieldCorrectionsHelp": "Düzenlemelerinizin yanına bir Katkıda bulun düğmesi ekler. Her alanı onaylayana kadar hiçbir şey gönderilmez ve ortak katalog değişmeden önce bir moderatör inceler.",
   "preferences.confirmEveryUpload": "Her seferinde nelerin paylaşıldığını açıkla",
-  "preferences.confirmEveryUploadHelp": "Neyin gönderilip neyin gönderilmediğine dair açıklamayı yalnızca ilk seferde değil, her katkıda tekrarlar."
+  "preferences.confirmEveryUploadHelp": "Neyin gönderilip neyin gönderilmediğine dair açıklamayı yalnızca ilk seferde değil, her katkıda tekrarlar.",
+  "contribute.disabledTitle": "Katkıda bulunma kapalı",
+  "contribute.disabledLead": "Bu DiscVault MovieVault'a hiçbir şey göndermiyor. Bu kişisel değil, sahip ayarıdır; bu yüzden burada paylaşımı kabul etmek hiçbir şeyi değiştirmez.",
+  "contribute.disabledWhere": "Bir sahip bunu Admin, Security altında Toggle Release Contribution ile açabilir. Aynı anahtar sürümleri ve alan düzeltmelerini kapsar."
 }

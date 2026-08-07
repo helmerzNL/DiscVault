@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Šalji moje ispravke u MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Dodaje gumb Doprinesi uz vaše izmjene. Ništa se ne šalje dok ne potvrdite svako polje, a moderator to pregledava prije nego što se zajednički katalog promijeni.",
   "preferences.confirmEveryUpload": "Svaki put objasni što se dijeli",
-  "preferences.confirmEveryUploadHelp": "Ponavlja pri svakom doprinosu objašnjenje što se šalje, a što ne, umjesto samo prvi put."
+  "preferences.confirmEveryUploadHelp": "Ponavlja pri svakom doprinosu objašnjenje što se šalje, a što ne, umjesto samo prvi put.",
+  "contribute.disabledTitle": "Doprinos je isključen",
+  "contribute.disabledLead": "Ovaj DiscVault ne šalje ništa u MovieVault. To je postavka vlasnika, a ne osobna, pa pristanak na dijeljenje ovdje ne bi ništa promijenio.",
+  "contribute.disabledWhere": "Vlasnik ga može uključiti u Admin, Security pomoću Toggle Release Contribution. Isti prekidač pokriva izdanja i ispravke polja."
 }

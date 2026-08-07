@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Javításaim küldése a MovieVaultnak",
   "preferences.shareFieldCorrectionsHelp": "Hozzájárulás gombot helyez a szerkesztéseid mellé. Semmi nem indul el, amíg minden mezőt meg nem erősítesz, és egy moderátor átnézi, mielőtt a közös katalógus megváltozna.",
   "preferences.confirmEveryUpload": "Minden alkalommal magyarázza el, mi kerül megosztásra",
-  "preferences.confirmEveryUploadHelp": "Minden hozzájárulásnál megismétli a magyarázatot arról, mi utazik és mi nem, nem csak az első alkalommal."
+  "preferences.confirmEveryUploadHelp": "Minden hozzájárulásnál megismétli a magyarázatot arról, mi utazik és mi nem, nem csak az első alkalommal.",
+  "contribute.disabledTitle": "A hozzájárulás ki van kapcsolva",
+  "contribute.disabledLead": "Ez a DiscVault semmit nem küld a MovieVaultnak. Ez tulajdonosi beállítás, nem személyes, így a megosztás elfogadása itt semmit nem változtatna.",
+  "contribute.disabledWhere": "Egy tulajdonos az Admin, Security alatt kapcsolhatja be a Toggle Release Contribution gombbal. Ugyanaz a kapcsoló vonatkozik a kiadásokra és a mezőjavításokra."
 }

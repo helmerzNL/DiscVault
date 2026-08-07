@@ -28480,12 +28480,17 @@ def ui_preview_html(
         const query = `entity=${encodeURIComponent(entity === "container" ? "container" : "movie")}&id=${encodeURIComponent(id)}`;
         const payload = await apiJson(`/api/next/movievault/contributions/eligibility?${query}`, {headers: authHeaders()});
         if (payload.mode !== "correction" || !(payload.changedFields || []).length) return;
-        // The owner gate is not something this user can act on, so a button
-        // that would always be refused is worse than no button. The user
-        // preference is different: not having agreed yet is exactly what the
-        // first-run sheet exists to fix, so the button is drawn for it.
-        if (!payload.ownerEnabled) return;
-        contributeState[entity] = {id: String(id), enabled: !!payload.userEnabled};
+        // Drawn whichever half of the gate is off. Hiding it when the owner
+        // half was off was worse than the bug it replaced: on a self-hosted
+        // instance the person looking at the screen usually *is* the owner, so
+        // that hid the one thing they could act on, and a feature that
+        // silently is not there cannot be told apart from one that is broken.
+        // The sheet says which half, and both answers are actionable.
+        contributeState[entity] = {
+          id: String(id),
+          ownerEnabled: !!payload.ownerEnabled,
+          enabled: !!payload.userEnabled,
+        };
         button.classList.remove("hidden");
       } catch (error) {
         // Eligibility runs on every detail render. A MovieVault that is down,
@@ -28497,9 +28502,47 @@ def ui_preview_html(
       if (entity === "container") setContainerDetailMessage(message, tone);
       else setMovieDetailMessage(message, tone);
     }
+    function openContributeDisabledDialog() {
+      const {overlay, panel} = listsCreateOverlay("contribute-modal");
+      const heading = document.createElement("h3");
+      heading.textContent = tNext("contribute.disabledTitle", "Contributing is switched off");
+      const body = document.createElement("div");
+      body.className = "contribute-intro";
+      const lead = document.createElement("p");
+      lead.textContent = tNext(
+        "contribute.disabledLead",
+        "This DiscVault does not send anything to MovieVault. That is an owner setting, not a personal one, so agreeing to share here would change nothing."
+      );
+      const where = document.createElement("p");
+      where.textContent = tNext(
+        "contribute.disabledWhere",
+        "An owner can turn it on under Admin, Security, with Toggle Release Contribution. The same switch covers releases and field corrections."
+      );
+      body.appendChild(lead);
+      body.appendChild(where);
+      const actions = document.createElement("div");
+      actions.className = "lists-modal-actions";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "action secondary";
+      close.textContent = tNext("common.close", "Close");
+      close.addEventListener("click", () => listsCloseOverlay(overlay));
+      actions.appendChild(close);
+      panel.appendChild(heading);
+      panel.appendChild(body);
+      panel.appendChild(actions);
+      close.focus();
+    }
     async function openContributeDialog(entity) {
       const state = contributeState[entity];
       if (!state) return;
+      // Answered before the preview is fetched: with contributions off there
+      // is nothing to preview, and the useful answer is where the switch is
+      // rather than what would have been sent.
+      if (!state.ownerEnabled) {
+        openContributeDisabledDialog();
+        return;
+      }
       let preview;
       try {
         preview = await apiJson("/api/next/movievault/contributions/preview", {

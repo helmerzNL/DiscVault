@@ -2747,5 +2747,8 @@
   "preferences.shareFieldCorrections": "Wysyłaj moje poprawki do MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Dodaje przycisk Wnieś wkład obok Twoich zmian. Nic nie zostanie wysłane, dopóki nie potwierdzisz każdego pola, a moderator sprawdzi to, zanim wspólny katalog się zmieni.",
   "preferences.confirmEveryUpload": "Za każdym razem wyjaśniaj, co jest udostępniane",
-  "preferences.confirmEveryUploadHelp": "Powtarza przy każdym wkładzie wyjaśnienie, co jest przesyłane, a co nie, zamiast tylko za pierwszym razem."
+  "preferences.confirmEveryUploadHelp": "Powtarza przy każdym wkładzie wyjaśnienie, co jest przesyłane, a co nie, zamiast tylko za pierwszym razem.",
+  "contribute.disabledTitle": "Wnoszenie wkładu jest wyłączone",
+  "contribute.disabledLead": "Ten DiscVault niczego nie wysyła do MovieVault. To ustawienie właściciela, a nie osobiste, więc zgoda na udostępnianie nic by tu nie zmieniła.",
+  "contribute.disabledWhere": "Właściciel może je włączyć w Admin, Security, przyciskiem Toggle Release Contribution. Ten sam przełącznik obejmuje wydania i poprawki pól."
 }
