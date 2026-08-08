@@ -322,6 +322,59 @@ def _identifiers(record):
     }]
 
 
+def _series(record):
+    """The series a television release belongs to, keyed by its TMDB tv id.
+
+    Emitted only for a release the feed calls `tv` and only when that id is
+    present. Both halves matter. Without the type, a film with a stray id would
+    propose a series link the schema forbids on a MOVIE; without the id there is
+    nothing to resolve a series *by*, and matching on the title instead would
+    mint a fresh series for every release of the same show.
+
+    `tmdb_tv` is its own namespace upstream, separate from the movie id space,
+    which is what lets a work carry both without either being ambiguous. It
+    survives MovieVault's redistribution filter (`content.providers.
+    redistributable`); `tvdb` deliberately does not, so it never arrives here and
+    this plugin never has to decide what to do with it.
+
+    Seasons ride along rather than sitting beside this, because they are only
+    meaningful under a series: `movie_seasons` carries a `series_id` and the
+    schema refuses a season whose series does not match the disc's.
+    """
+    if record.get("workType") != "tv":
+        return None
+    provider_ids = record.get("providerIds")
+    tmdb_tv_id = ""
+    if isinstance(provider_ids, dict):
+        tmdb_tv_id = str(provider_ids.get("tmdb_tv") or "").strip()
+    if not tmdb_tv_id:
+        return None
+    seasons = [
+        {key: value for key, value in {
+            "seasonNumber": season.get("seasonNumber"),
+            "title": season.get("title"),
+            "year": season.get("releaseYear"),
+            "episodeCount": season.get("episodeCount"),
+        }.items() if value is not None}
+        for season in (record.get("seasons") or [])
+        if isinstance(season, dict) and isinstance(season.get("seasonNumber"), int)
+    ]
+    return {key: value for key, value in {
+        "provider": PROVIDER_ID,
+        "tmdbTvId": tmdb_tv_id,
+        # The work's title, not the edition's: a series is named once and the
+        # box it came in is named separately.
+        "title": record.get("canonicalTitle"),
+        # Deliberately omitted when empty rather than sent as []. An empty list
+        # here would read as "this release covers no seasons", which is a
+        # statement the feed is entitled to make but this plugin cannot
+        # distinguish from a release nobody has curated yet. Proposing nothing
+        # matches `mediaType` above: the merge policy only ever sees a field the
+        # feed actually stated, so it can never clear what a user recorded.
+        "seasons": seasons,
+    }.items() if value not in (None, "", [], {})}
+
+
 def _release(record):
     movie = {key: value for key, value in {
         "title": record.get("canonicalTitle") or record.get("releaseTitle") or "",
@@ -354,6 +407,11 @@ def _release(record):
         # it was matched to, and a later refresh can look the release up
         # directly instead of hoping a barcode still resolves.
         "identifiers": _identifiers(record),
+        # Outside `movie` on purpose: a series is not a property of this disc,
+        # it is the thing this disc is one edition of. The host resolves it to a
+        # local series row and links the disc to it; nothing about it belongs in
+        # the flat field merge that `movie` feeds.
+        "series": _series(record),
         **_poster_fields(record)}.items()
         if value not in (None, "", [], {})}
 
