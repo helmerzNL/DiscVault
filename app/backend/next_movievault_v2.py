@@ -54,8 +54,14 @@ MOVIEVAULT_V2_CONTRACT = "distribution-2"
 MOVIEVAULT_V3_CONTRACT = "distribution-3"
 MOVIEVAULT_V4_CONTRACT = "distribution-4"
 MOVIEVAULT_V5_CONTRACT = "distribution-5"
-# Ordered lowest to highest: _negotiated_contract() indexes into this to pick
-# the highest version both sides support.
+# Ordered lowest to highest. _negotiated_contract() returns the *maximum* of
+# this plugin's declared range - despite the name it does not negotiate, it
+# never asks the origin what it actually serves. So listing a contract here is
+# inert, but raising the manifest's `distributionContractRange.maximum` is not:
+# DiscVault would immediately request /v<max>, and an origin that has not
+# activated that contract answers 503, which fails the whole sync. Support is
+# added here first; the manifest range is raised only once the origin serves
+# the contract AND has it switched on.
 SUPPORTED_CONTRACTS = (
     MOVIEVAULT_V2_CONTRACT,
     MOVIEVAULT_V3_CONTRACT,

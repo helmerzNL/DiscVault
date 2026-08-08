@@ -310,5 +310,29 @@ App-Guidance. Prepare the write-up and hand it over, saying plainly that it stil
   (`git diff origin/main origin/release/v26-beta --stat` empty).
 - Promotion only merges — **never delete `release/v26-beta`** afterwards.
 
+---
+
+## Deployment-file changes must be spelled out in the PR
+
+When a change touches a **Compose file** (`docker-compose*.yml`, `compose*.yml`) or an
+**environment template** (`.env.example`), the PR body must state, explicitly and in one
+place, exactly what the operator has to change in their own files.
+
+The reason is that these two files are *templates*, not the deployed configuration. A
+tracked `.env.example` and a tracked Compose file are read by CI and by the repository;
+the `.env` and the overrides that actually run the deployment are untracked and live on
+the host. So a diff that looks complete in the PR can still leave a running deployment
+missing a variable, and nothing fails until the setting is needed.
+
+State it as an operator instruction, not a diff summary:
+
+- the **exact variable name**, its default, and whether it must be added by hand;
+- the **exact Compose mapping** line, if one was added or changed;
+- whether an existing deployment keeps working untouched, or must be edited before the
+  next deploy.
+
+"No deployment-file changes in this PR" is a fine answer when true. Silence is not: the
+reader cannot tell the difference between "nothing to do" and "not mentioned".
+
 Full reference: **[DiscVault 26 — Branching & releases](https://wiki.zbonline.nl/en/Projecten/Coding/discvault/branching)**
 and the step-by-step **[feature → production workflow](https://wiki.zbonline.nl/en/Projecten/Coding/discvault/feature-workflow)** on the wiki.
