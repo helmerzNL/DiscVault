@@ -803,6 +803,42 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         self.assertEqual(len(scoped), 1)
         self.assertEqual(len(corrections.contribution_history(self.conn, limit=10)), 2)
 
+    # ---- the disc count --------------------------------------------------
+
+    def test_a_disc_count_travels_once_discvault_has_somewhere_to_hold_it(self):
+        """The only withheld field that was a plain gap rather than a
+        difference of meaning: `movies` simply had no such column, so the
+        honest answer was `not_stored_by_discvault`."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        with self.conn.cursor() as cur:
+            cur.execute("UPDATE movies SET disc_count = 3 WHERE id = %s", (movie["id"],))
+        movie["disc_count"] = 3
+
+        with self._live({"discCount": 1}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertNotIn("discCount", preview["withheld"])
+        change = next(item for item in preview["changes"] if item["field"] == "discCount")
+        self.assertEqual(change["proposed"], 3)
+        self.assertEqual(change["expected"], 1)
+
+    def test_nobody_having_said_is_not_a_proposal_of_one_disc(self):
+        """The column is nullable rather than defaulted to 1 for exactly this
+        reason: a default would make every untouched record propose "1" to a
+        catalogue that may well know better."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        with self._live({"discCount": 2}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertNotIn("discCount", {item["field"] for item in preview["changes"]})
+
     # ---- disc regions ----------------------------------------------------
 
     def _technical(self, movie_id, regions):

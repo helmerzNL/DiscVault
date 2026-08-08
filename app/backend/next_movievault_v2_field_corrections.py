@@ -88,6 +88,9 @@ RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
     "languageCode": ("movie", "language"),
     "releaseDate": ("movie", "release_date"),
     "runtimeMinutes": ("movie", "runtime_minutes"),
+    # Held since 26.8.22. Nullable, so "nobody said" stays distinct from
+    # "one disc" -- and a record nobody has answered proposes nothing.
+    "discCount": ("movie", "disc_count"),
     "distributor": ("metadata", "distributor"),
     # Not a column: the complete EAN list, assembled from
     # `movie_product_identifiers` plus the scanned `movies.barcode`. Withheld
@@ -126,9 +129,6 @@ RELEASE_FIELDS_WITHHELD: dict[str, str] = {
     # MovieVault has one `studio`; DiscVault has `studios`, a list. Joining a
     # list into one string is lossy in a way a moderator cannot see.
     "studio": "discvault_holds_a_list",
-    # DiscVault has no disc count. `movie_technical_specs` does not carry one
-    # and the edit form does not offer one.
-    "discCount": "not_stored_by_discvault",
 }
 
 #: A box set is nearly empty on this route, and that is a fact about the data
@@ -391,7 +391,7 @@ def _local_release_values(
             value = _normalise_country(value)
         if field == "releaseDate" and value is not None:
             value = value.isoformat() if hasattr(value, "isoformat") else str(value)
-        if field == "runtimeMinutes" and value is not None:
+        if field in {"runtimeMinutes", "discCount"} and value is not None:
             value = int(value)
         values[field] = value
     return values
@@ -416,7 +416,8 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             cur.execute(
                 """
                 SELECT release_title, edition, format, country_code, language_code,
-                       release_date, runtime_minutes, distributor, disc_regions
+                       release_date, runtime_minutes, distributor, disc_regions,
+                       disc_count
                 FROM movievault_v2_releases
                 WHERE generation = %s AND release_id = %s
                 """,
@@ -435,6 +436,7 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             "languageCode": _clean(row.get("language_code")),
             "releaseDate": release_date.isoformat() if release_date else None,
             "runtimeMinutes": int(row["runtime_minutes"]) if row.get("runtime_minutes") else None,
+            "discCount": int(row["disc_count"]) if row.get("disc_count") else None,
             "distributor": _clean(row.get("distributor")),
             # The mirror does carry this one, unlike `eans` -- so a correction
             # can be composed offline and `expected` is still a real value.
@@ -597,6 +599,7 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
             "languageCode": _clean(summary.get("languageCode")),
             "releaseDate": _clean(summary.get("releaseDate")),
             "runtimeMinutes": int(summary["runtimeMinutes"]) if summary.get("runtimeMinutes") else None,
+            "discCount": int(summary["discCount"]) if summary.get("discCount") else None,
             "distributor": _clean(summary.get("distributor")),
             "eans": catalogue_eans(summary.get("barcodes")),
             "discRegions": _mirror_disc_regions(summary.get("discRegions")),

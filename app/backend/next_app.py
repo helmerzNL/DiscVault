@@ -9476,6 +9476,7 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "country": payload.get("country"),
         "language": payload.get("language"),
         "runtime_minutes": payload.get("runtimeMinutes") or payload.get("runtime_minutes"),
+        "disc_count": clamp_disc_count(payload.get("discCount") or payload.get("disc_count")),
         "overview": payload.get("overview"),
         "notes": payload.get("notes"),
         "rating": payload.get("rating"),
@@ -9869,6 +9870,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             location=%s,
             location_id=%s,
             runtime_minutes=%s,
+            disc_count=%s,
             estimated_value=%s,
             estimated_value_currency=%s,
             metadata = COALESCE(metadata, '{}'::jsonb) || %s,
@@ -9893,6 +9895,7 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             payload["location"],
             payload.get("location_id"),
             payload.get("runtime_minutes"),
+            payload.get("disc_count"),
             payload.get("estimated_value"),
             payload.get("estimated_value_currency"),
             Jsonb(json_ready(metadata_patch)),
@@ -10380,6 +10383,10 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
     "country",
     "language",
     "runtime_minutes",
+    # Published as well as accepted. A field the server takes on push and never
+    # sends back is write-only: a client can set it and never confirm it, and
+    # the two sides drift with no symptom -- the `content_ratings` bug.
+    "disc_count",
     "overview",
     "notes",
     "rating",
@@ -17349,6 +17356,26 @@ def movie_id_for_barcode(conn, barcode: str | None) -> UUID | None:
         cur.execute("SELECT id FROM movies WHERE barcode=%s", (barcode,))
         row = cur.fetchone()
     return row["id"] if row else None
+
+
+def clamp_disc_count(value: Any) -> int | None:
+    """A disc count, or None when nobody said.
+
+    None rather than 1 for anything unreadable: `movies.disc_count` is nullable
+    precisely so "nobody answered" stays distinct from "one disc", and a
+    silently defaulted 1 would be proposed to MovieVault as a fact about a
+    record nobody has looked at.
+
+    Bounded 1..999 to match `ReleaseSummary.discCount`, so a value DiscVault
+    accepts is never one MovieVault refuses.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        count = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return count if 1 <= count <= 999 else None
 
 
 def normalize_barcode(barcode: str | None) -> str | None:

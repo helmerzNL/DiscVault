@@ -14897,6 +14897,10 @@ def ui_preview_html(
                         <option value="2160p">2160p</option>
                       </select>
                     </label>
+                    <label for="movieEditDiscCount">
+                      <span data-next-i18n="movieDetail.discCount">Number of discs</span>
+                      <input id="movieEditDiscCount" name="disc_count" type="number" min="1" max="999" inputmode="numeric" autocomplete="off">
+                    </label>
                     <label for="movieEditRuntime">
                       <span data-next-i18n="movieDetail.runtime">Runtime</span>
                       <input id="movieEditRuntime" name="runtime_minutes" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="min">
@@ -27855,6 +27859,7 @@ def ui_preview_html(
         movieEditLanguage: movie.language || "",
         movieEditLocation: typeof movie.location === "string" ? movie.location : "",
         movieEditRuntime: movie.runtime_minutes || "",
+        movieEditDiscCount: movie.disc_count || "",
         movieEditDirector: valueText(metadata.director),
         movieEditStudios: valueText(metadata.studios),
         movieEditContentRating: contentRatingInfo.unknown ? "" : (contentRatingInfo.rating || ""),
@@ -28559,6 +28564,7 @@ def ui_preview_html(
       languageCode: ["contribute.field.languageCode", "Language"],
       releaseDate: ["contribute.field.releaseDate", "Release date"],
       runtimeMinutes: ["contribute.field.runtimeMinutes", "Runtime"],
+      discCount: ["contribute.field.discCount", "Number of discs"],
       distributor: ["contribute.field.distributor", "Distributor"],
       eans: ["contribute.field.eans", "Barcodes"],
       // Not "Region": that is the free-text market region, which is
@@ -38668,6 +38674,7 @@ def ui_preview_html(
         location: formTextValue("movieEditLocation"),
         locationId: document.getElementById("movieEditLocationSelect")?.value || null,
         runtimeMinutes: formTextValue("movieEditRuntime"),
+        discCount: formTextValue("movieEditDiscCount"),
         director: formTextValue("movieEditDirector"),
         studios: formTextValue("movieEditStudios"),
         contentRating: formTextValue("movieEditContentRating"),
