@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Data de lançamento",
   "contribute.field.runtimeMinutes": "Duração",
   "contribute.field.distributor": "Distribuidora",
+  "contribute.field.eans": "Códigos de barras",
+  "contribute.field.discRegions": "Regiões do disco",
   "preferences.shareFieldCorrections": "Enviar as minhas correções para o MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Adiciona um botão Contribuir junto às suas edições. Nada é enviado até confirmar cada campo, e um moderador revê antes de o catálogo partilhado mudar.",
   "preferences.confirmEveryUpload": "Explicar sempre o que é partilhado",

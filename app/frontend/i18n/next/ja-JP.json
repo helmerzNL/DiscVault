@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "発売日",
   "contribute.field.runtimeMinutes": "上映時間",
   "contribute.field.distributor": "販売元",
+  "contribute.field.eans": "バーコード",
+  "contribute.field.discRegions": "ディスクリージョン",
   "preferences.shareFieldCorrections": "自分の修正を MovieVault に送信する",
   "preferences.shareFieldCorrectionsHelp": "編集の横に提供ボタンを追加します。各項目を確認するまで何も送信されず、共有カタログが変わる前にモデレーターが確認します。",
   "preferences.confirmEveryUpload": "毎回、共有される内容を説明する",

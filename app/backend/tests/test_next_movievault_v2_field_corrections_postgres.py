@@ -10,6 +10,7 @@ these skip.
 """
 
 import hashlib
+import json
 import os
 import sys
 import unittest
@@ -801,6 +802,89 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         scoped = corrections.contribution_history(self.conn, actor_id=mine, limit=10)
         self.assertEqual(len(scoped), 1)
         self.assertEqual(len(corrections.contribution_history(self.conn, limit=10)), 2)
+
+    # ---- disc regions ----------------------------------------------------
+
+    def _technical(self, movie_id, regions):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movie_technical_specs (movie_id, regions)
+                VALUES (%s, %s)
+                ON CONFLICT (movie_id) DO UPDATE SET regions = EXCLUDED.regions
+                """,
+                (movie_id, Jsonb(regions) if Jsonb else json.dumps(regions)),
+            )
+
+    def test_disc_regions_are_the_one_region_shaped_field_that_travels(self):
+        """MovieVault's pulldown and DiscVault's `movie_technical_specs.regions`
+        hold the same normalised vocabulary, so this pair is genuinely the same
+        field -- unlike `region`, which is free-text market region."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        self._technical(movie["id"], ["B", "A"])
+
+        with self._live({"discRegions": ["A"]}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        change = next(item for item in preview["changes"] if item["field"] == "discRegions")
+        # Sorted on both sides: two orderings of one answer are not a
+        # disagreement about which discs play where.
+        self.assertEqual(change["proposed"], ["A", "B"])
+        self.assertEqual(change["expected"], ["A"])
+        self.assertNotIn("discRegions", preview["withheld"])
+        self.assertEqual(preview["withheld"]["region"], "different_field_upstream")
+
+    def test_a_region_value_outside_the_vocabulary_never_travels(self):
+        """DiscVault keeps these in a jsonb column with no constraint, so an
+        unrecognised value is a local possibility. Upstream would refuse the
+        whole envelope rather than the one field, which would take every other
+        correction on the record down with it."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        self._technical(movie["id"], ["Region 2", "PAL"])
+
+        with self._live({"discRegions": ["A"]}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertNotIn("discRegions", {item["field"] for item in preview["changes"]})
+
+    def test_nothing_recorded_locally_is_not_a_proposal_to_clear_them(self):
+        """An empty local set means "nobody said", and upstream reads an empty
+        list as "this release plays nowhere"."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        self._technical(movie["id"], [])
+
+        with self._live({"discRegions": ["A"]}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertNotIn("discRegions", {item["field"] for item in preview["changes"]})
+
+    def test_a_locked_region_set_is_not_published(self):
+        """The local lock is spelled `regions` and the wire field is
+        `discRegions`. Without the mapping a personal override pinned against
+        metadata refresh would be pushed into a shared catalogue."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        self._technical(movie["id"], ["B"])
+
+        with self._live({"discRegions": ["A"]}):
+            preview = corrections.correction_preview(
+                self.conn,
+                entity="movie",
+                record=movie,
+                metadata={"field_locks": ["regions"]},
+            )
+
+        self.assertEqual(preview["withheld"]["discRegions"], "locked_locally")
+        self.assertNotIn("discRegions", {item["field"] for item in preview["changes"]})
 
     # ---- the EAN list ----------------------------------------------------
 

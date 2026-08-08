@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Releasedatum",
   "contribute.field.runtimeMinutes": "Speelduur",
   "contribute.field.distributor": "Distributeur",
+  "contribute.field.eans": "Barcodes",
+  "contribute.field.discRegions": "Discregio's",
   "preferences.shareFieldCorrections": "Mijn correcties naar MovieVault sturen",
   "preferences.shareFieldCorrectionsHelp": "Voegt een Bijdragen-knop toe naast je bewerkingen. Er wordt niets verstuurd tot je elk veld bevestigt, en een moderator beoordeelt het voordat de gedeelde catalogus verandert.",
   "preferences.confirmEveryUpload": "Elke keer uitleggen wat er wordt gedeeld",

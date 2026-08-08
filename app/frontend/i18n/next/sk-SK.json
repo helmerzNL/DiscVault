@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Dátum vydania",
   "contribute.field.runtimeMinutes": "Dĺžka",
   "contribute.field.distributor": "Distribútor",
+  "contribute.field.eans": "Čiarové kódy",
+  "contribute.field.discRegions": "Regióny disku",
   "preferences.shareFieldCorrections": "Odosielať moje opravy do MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Pridá vedľa vašich úprav tlačidlo Prispieť. Nič sa neodošle, kým nepotvrdíte každé pole, a moderátor to posúdi, než sa zdieľaný katalóg zmení.",
   "preferences.confirmEveryUpload": "Zakaždým vysvetliť, čo sa zdieľa",

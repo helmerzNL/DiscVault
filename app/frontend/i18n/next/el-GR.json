@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Ημερομηνία κυκλοφορίας",
   "contribute.field.runtimeMinutes": "Διάρκεια",
   "contribute.field.distributor": "Διανομέας",
+  "contribute.field.eans": "Barcodes",
+  "contribute.field.discRegions": "Ζώνες δίσκου",
   "preferences.shareFieldCorrections": "Αποστολή των διορθώσεών μου στο MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Προσθέτει ένα κουμπί Συνεισφορά δίπλα στις επεξεργασίες σας. Δεν στέλνεται τίποτα μέχρι να επιβεβαιώσετε κάθε πεδίο, και ένας συντονιστής το ελέγχει πριν αλλάξει ο κοινός κατάλογος.",
   "preferences.confirmEveryUpload": "Εξήγηση κάθε φορά για το τι κοινοποιείται",

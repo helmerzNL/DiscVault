@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Дата виходу",
   "contribute.field.runtimeMinutes": "Тривалість",
   "contribute.field.distributor": "Дистриб'ютор",
+  "contribute.field.eans": "Штрихкоди",
+  "contribute.field.discRegions": "Регіони диска",
   "preferences.shareFieldCorrections": "Надсилати мої виправлення до MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Додає кнопку Зробити внесок поряд із вашими змінами. Нічого не надсилається, доки ви не підтвердите кожне поле, і модератор переглядає це, перш ніж спільний каталог зміниться.",
   "preferences.confirmEveryUpload": "Щоразу пояснювати, чим ви ділитеся",

@@ -28,12 +28,14 @@ from typing import Any
 try:
     from .next_metadata import movie_identifiers
     from .next_metadata import movie_locked_fields
+    from .next_metadata import movie_technical_specs
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_connection import _table_exists, _text
     from .next_product_identifiers import catalogue_eans, contributable_eans, movie_identifiers_by_type
 except ImportError:  # pragma: no cover - supports direct module execution
     from next_metadata import movie_identifiers
     from next_metadata import movie_locked_fields
+    from next_metadata import movie_technical_specs
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_connection import _table_exists, _text
     from next_product_identifiers import catalogue_eans, contributable_eans, movie_identifiers_by_type
@@ -60,6 +62,11 @@ _COUNTRY_LIKE_PATTERN = re.compile(r"^[A-Za-z]{2}$")
 #: checked here rather than upstream -- the alternative is polluting a shared
 #: catalogue with a value only this instance can read.
 _LANGUAGE_PATTERN = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$")
+#: The disc-region vocabulary, identical on both sides. Stated here rather than
+#: imported because DiscVault stores it in a jsonb column with no constraint,
+#: so an unrecognised value is a local possibility that must not travel --
+#: upstream would refuse the whole envelope, not just the field.
+DISC_REGIONS = frozenset({"A", "B", "C", "1", "2", "3", "4", "5", "6", "7", "8", "FREE"})
 
 
 class FieldCorrectionError(Exception):
@@ -86,6 +93,12 @@ RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
     # `movie_product_identifiers` plus the scanned `movies.barcode`. Withheld
     # until 26.8.20, when DiscVault gained somewhere to hold more than one code.
     "eans": ("identifiers", "eans"),
+    # Not on `movies` either: disc regions live on `movie_technical_specs`, and
+    # upstream on `release_technical_profiles`. Both sides hold the same
+    # normalised vocabulary, which is what makes this the one region-shaped
+    # field that can travel -- `region` below is free-text market region and a
+    # different fact.
+    "discRegions": ("technical", "regions"),
 }
 
 #: Eligible upstream, deliberately not offered here. Each entry is a place where
@@ -148,6 +161,10 @@ _FIELD_LOCK_NAMES: dict[str, tuple[str, ...]] = {
     "releaseDate": ("release_date",),
     "runtimeMinutes": ("runtime_minutes",),
     "distributor": ("distributor",),
+    # The local lock is spelled `regions`; the wire field is `discRegions`.
+    # Without this row a user who pinned their disc regions against metadata
+    # refresh would have them published anyway.
+    "discRegions": ("regions",),
 }
 
 
@@ -313,13 +330,52 @@ def _normalise_country(value: Any) -> Any:
     return value
 
 
+def _mirror_disc_regions(value: Any) -> list[str] | None:
+    """The catalogue's disc regions, normalised the same way the local ones are.
+
+    Both sides are compared as whole lists, so they have to be sorted the same
+    way or every record with regions reads as a disagreement. An absent or
+    empty set is `None`, matching `_disc_regions`: upstream's column defaults to
+    an empty array, and "nothing recorded" is not "plays nowhere".
+    """
+    if not isinstance(value, list) or not value:
+        return None
+    values = sorted({str(item).strip().upper() for item in value if str(item).strip()})
+    return [item for item in values if item in DISC_REGIONS] or None
+
+
+def _disc_regions(technical: dict[str, Any], metadata: dict[str, Any]) -> list[str] | None:
+    """The local disc regions, normalised the way upstream compares them.
+
+    Read from `movie_technical_specs` first and from `metadata` second, which is
+    the same precedence the edit panel and the sync payload use. Sorted and
+    deduplicated because the value is compared against `expected` as a whole,
+    so two orderings of one answer would read as a disagreement about the discs.
+
+    An empty set is `None` rather than `[]`: upstream treats an empty list as
+    "this release plays nowhere", and a movie with nothing recorded locally
+    means "nobody said", not that.
+    """
+    raw = technical.get("regions")
+    if not isinstance(raw, list) or not raw:
+        raw = metadata.get("regions")
+    if not isinstance(raw, list) or not raw:
+        return None
+    values = sorted({str(item).strip().upper() for item in raw if str(item).strip()})
+    return [value for value in values if value in DISC_REGIONS] or None
+
+
 def _local_release_values(
     record: dict[str, Any],
     metadata: dict[str, Any],
     identifiers: list[dict[str, str]] | None = None,
+    technical: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     values: dict[str, Any] = {}
     for field, (source, column) in RELEASE_FIELD_SOURCES.items():
+        if source == "technical":
+            values[field] = _disc_regions(technical or {}, metadata)
+            continue
         if source == "identifiers":
             # A list rather than a column, and empty means "nothing to say"
             # rather than "delete everything upstream": an empty replacement
@@ -360,7 +416,7 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             cur.execute(
                 """
                 SELECT release_title, edition, format, country_code, language_code,
-                       release_date, runtime_minutes, distributor
+                       release_date, runtime_minutes, distributor, disc_regions
                 FROM movievault_v2_releases
                 WHERE generation = %s AND release_id = %s
                 """,
@@ -380,6 +436,9 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             "releaseDate": release_date.isoformat() if release_date else None,
             "runtimeMinutes": int(row["runtime_minutes"]) if row.get("runtime_minutes") else None,
             "distributor": _clean(row.get("distributor")),
+            # The mirror does carry this one, unlike `eans` -- so a correction
+            # can be composed offline and `expected` is still a real value.
+            "discRegions": _mirror_disc_regions(row.get("disc_regions")),
         }
     with conn.cursor() as cur:
         cur.execute(
@@ -540,6 +599,7 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
             "runtimeMinutes": int(summary["runtimeMinutes"]) if summary.get("runtimeMinutes") else None,
             "distributor": _clean(summary.get("distributor")),
             "eans": catalogue_eans(summary.get("barcodes")),
+            "discRegions": _mirror_disc_regions(summary.get("discRegions")),
         }
     # The film is known but this release is not among its active ones: it was
     # merged, retired or deleted. Correcting a record that is no longer served
@@ -654,7 +714,10 @@ def correction_preview(
     extra_withheld: dict[str, str] = {}
     if entity == "movie":
         local = _local_release_values(
-            record, metadata or {}, movie_identifiers_by_type(conn, record.get("id"))
+            record,
+            metadata or {},
+            movie_identifiers_by_type(conn, record.get("id")),
+            movie_technical_specs(conn, record.get("id")) if record.get("id") else {},
         )
         locked = movie_locked_fields(metadata or {})
         if source != "catalogue" or not isinstance(mirror.get("eans"), list):

@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Yayın tarihi",
   "contribute.field.runtimeMinutes": "Süre",
   "contribute.field.distributor": "Dağıtımcı",
+  "contribute.field.eans": "Barkodlar",
+  "contribute.field.discRegions": "Disk bölgeleri",
   "preferences.shareFieldCorrections": "Düzeltmelerimi MovieVault'a gönder",
   "preferences.shareFieldCorrectionsHelp": "Düzenlemelerinizin yanına bir Katkıda bulun düğmesi ekler. Her alanı onaylayana kadar hiçbir şey gönderilmez ve ortak katalog değişmeden önce bir moderatör inceler.",
   "preferences.confirmEveryUpload": "Her seferinde nelerin paylaşıldığını açıkla",

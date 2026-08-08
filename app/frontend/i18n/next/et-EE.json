@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Ilmumiskuupäev",
   "contribute.field.runtimeMinutes": "Kestus",
   "contribute.field.distributor": "Levitaja",
+  "contribute.field.eans": "Vöötkoodid",
+  "contribute.field.discRegions": "Ketta regioonid",
   "preferences.shareFieldCorrections": "Saada minu parandused MovieVaulti",
   "preferences.shareFieldCorrectionsHelp": "Lisab sinu muudatuste kõrvale nupu Panusta. Midagi ei saadeta enne, kui kinnitad iga välja, ja moderaator vaatab selle üle, enne kui jagatud kataloog muutub.",
   "preferences.confirmEveryUpload": "Selgita iga kord, mida jagatakse",

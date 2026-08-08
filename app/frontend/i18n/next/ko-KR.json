@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "출시일",
   "contribute.field.runtimeMinutes": "상영 시간",
   "contribute.field.distributor": "배급사",
+  "contribute.field.eans": "바코드",
+  "contribute.field.discRegions": "디스크 지역 코드",
   "preferences.shareFieldCorrections": "내 수정 사항을 MovieVault에 보내기",
   "preferences.shareFieldCorrectionsHelp": "편집 옆에 기여하기 버튼을 추가합니다. 각 항목을 확인하기 전에는 아무것도 전송되지 않으며, 공유 카탈로그가 바뀌기 전에 검토자가 확인합니다.",
   "preferences.confirmEveryUpload": "매번 무엇이 공유되는지 설명",

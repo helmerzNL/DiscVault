@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Datum izdanja",
   "contribute.field.runtimeMinutes": "Trajanje",
   "contribute.field.distributor": "Distributer",
+  "contribute.field.eans": "Crtični kodovi",
+  "contribute.field.discRegions": "Regije diska",
   "preferences.shareFieldCorrections": "Šalji moje ispravke u MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Dodaje gumb Doprinesi uz vaše izmjene. Ništa se ne šalje dok ne potvrdite svako polje, a moderator to pregledava prije nego što se zajednički katalog promijeni.",
   "preferences.confirmEveryUpload": "Svaki put objasni što se dijeli",

@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Data wydania",
   "contribute.field.runtimeMinutes": "Czas trwania",
   "contribute.field.distributor": "Dystrybutor",
+  "contribute.field.eans": "Kody kreskowe",
+  "contribute.field.discRegions": "Regiony płyty",
   "preferences.shareFieldCorrections": "Wysyłaj moje poprawki do MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Dodaje przycisk Wnieś wkład obok Twoich zmian. Nic nie zostanie wysłane, dopóki nie potwierdzisz każdego pola, a moderator sprawdzi to, zanim wspólny katalog się zmieni.",
   "preferences.confirmEveryUpload": "Za każdym razem wyjaśniaj, co jest udostępniane",

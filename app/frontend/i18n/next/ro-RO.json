@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Data lansării",
   "contribute.field.runtimeMinutes": "Durată",
   "contribute.field.distributor": "Distribuitor",
+  "contribute.field.eans": "Coduri de bare",
+  "contribute.field.discRegions": "Regiuni ale discului",
   "preferences.shareFieldCorrections": "Trimite corecturile mele către MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Adaugă un buton Contribuie lângă modificările tale. Nu se trimite nimic până nu confirmi fiecare câmp, iar un moderator îl verifică înainte ca acel catalog comun să se schimbe.",
   "preferences.confirmEveryUpload": "Explică de fiecare dată ce se partajează",

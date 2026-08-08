@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Izdošanas datums",
   "contribute.field.runtimeMinutes": "Ilgums",
   "contribute.field.distributor": "Izplatītājs",
+  "contribute.field.eans": "Svītrkodi",
+  "contribute.field.discRegions": "Diska reģioni",
   "preferences.shareFieldCorrections": "Sūtīt manus labojumus uz MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Pievieno pogu Sniegt ieguldījumu blakus jūsu labojumiem. Nekas netiek nosūtīts, kamēr neapstiprināt katru lauku, un moderators to pārskata, pirms kopīgais katalogs mainās.",
   "preferences.confirmEveryUpload": "Katru reizi paskaidrot, kas tiek kopīgots",

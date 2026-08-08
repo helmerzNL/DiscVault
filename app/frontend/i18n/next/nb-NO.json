@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Utgivelsesdato",
   "contribute.field.runtimeMinutes": "Spilletid",
   "contribute.field.distributor": "Distributør",
+  "contribute.field.eans": "Strekkoder",
+  "contribute.field.discRegions": "Diskregioner",
   "preferences.shareFieldCorrections": "Send rettelsene mine til MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Legger til en Bidra-knapp ved siden av redigeringene dine. Ingenting sendes før du bekrefter hvert felt, og en moderator gjennomgår det før den delte katalogen endres.",
   "preferences.confirmEveryUpload": "Forklar hver gang hva som deles",

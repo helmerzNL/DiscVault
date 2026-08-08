@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Išleidimo data",
   "contribute.field.runtimeMinutes": "Trukmė",
   "contribute.field.distributor": "Platintojas",
+  "contribute.field.eans": "Brūkšniniai kodai",
+  "contribute.field.discRegions": "Disko regionai",
   "preferences.shareFieldCorrections": "Siųsti mano pataisymus į MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Prideda mygtuką Prisidėti šalia jūsų redagavimų. Niekas nesiunčiama, kol nepatvirtinate kiekvieno lauko, o moderatorius tai peržiūri prieš pasikeičiant bendram katalogui.",
   "preferences.confirmEveryUpload": "Kiekvieną kartą paaiškinti, kas dalijamasi",

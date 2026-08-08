@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Дата на издаване",
   "contribute.field.runtimeMinutes": "Времетраене",
   "contribute.field.distributor": "Дистрибутор",
+  "contribute.field.eans": "Баркодове",
+  "contribute.field.discRegions": "Региони на диска",
   "preferences.shareFieldCorrections": "Изпращай моите корекции към MovieVault",
   "preferences.shareFieldCorrectionsHelp": "Добавя бутон Допринеси до вашите редакции. Нищо не се изпраща, докато не потвърдите всяко поле, а модератор го преглежда, преди споделеният каталог да се промени.",
   "preferences.confirmEveryUpload": "Обяснявай всеки път какво се споделя",

@@ -2756,6 +2756,8 @@
   "contribute.field.releaseDate": "Megjelenés dátuma",
   "contribute.field.runtimeMinutes": "Játékidő",
   "contribute.field.distributor": "Forgalmazó",
+  "contribute.field.eans": "Vonalkódok",
+  "contribute.field.discRegions": "Lemezrégiók",
   "preferences.shareFieldCorrections": "Javításaim küldése a MovieVaultnak",
   "preferences.shareFieldCorrectionsHelp": "Hozzájárulás gombot helyez a szerkesztéseid mellé. Semmi nem indul el, amíg minden mezőt meg nem erősítesz, és egy moderátor átnézi, mielőtt a közös katalógus megváltozna.",
   "preferences.confirmEveryUpload": "Minden alkalommal magyarázza el, mi kerül megosztásra",

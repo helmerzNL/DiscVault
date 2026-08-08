@@ -28559,7 +28559,11 @@ def ui_preview_html(
       languageCode: ["contribute.field.languageCode", "Language"],
       releaseDate: ["contribute.field.releaseDate", "Release date"],
       runtimeMinutes: ["contribute.field.runtimeMinutes", "Runtime"],
-      distributor: ["contribute.field.distributor", "Distributor"]
+      distributor: ["contribute.field.distributor", "Distributor"],
+      eans: ["contribute.field.eans", "Barcodes"],
+      // Not "Region": that is the free-text market region, which is
+      // withheld. These are the playback regions on the disc itself.
+      discRegions: ["contribute.field.discRegions", "Disc regions"]
     };
     const CONTRIBUTE_WITHHELD_REASONS = {
       discvault_holds_one_barcode: ["contribute.withheld.oneBarcode", "MovieVault keeps a list of barcodes and DiscVault keeps one, so sending it would delete the others."],
