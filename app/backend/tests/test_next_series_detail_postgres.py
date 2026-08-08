@@ -9,9 +9,12 @@ landing somewhere else.
 
 import io
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 import uuid
+from unittest.mock import patch
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -202,11 +205,19 @@ class SeriesDetailRouteTests(SeriesDetailPostgresTests):
         with self.connect() as conn:
             series_id = self._series(conn)
 
-        upload = self.client.post(
-            f"/api/next/series/{series_id}/media/upload",
-            data={"kind": "poster", "file": (io.BytesIO(png), "p.png")},
-            content_type="multipart/form-data",
-        )
+        # An upload writes a real file under the data directory, which defaults
+        # to `/data` and is not writable on a CI runner. Redirected rather than
+        # mocked away: the point of the test is that the whole route runs, and a
+        # mocked file step would stop covering the part that produces the storage
+        # key the media row is built from.
+        data_dir = tempfile.mkdtemp(prefix="series-artwork-")
+        self.addCleanup(shutil.rmtree, data_dir, True)
+        with patch.dict(os.environ, {"DISCVAULT_LEGACY_DATA_DIR": data_dir}):
+            upload = self.client.post(
+                f"/api/next/series/{series_id}/media/upload",
+                data={"kind": "poster", "file": (io.BytesIO(png), "p.png")},
+                content_type="multipart/form-data",
+            )
         self.assertEqual(upload.status_code, 200, upload.data[:200])
         body = upload.get_json()
         # Keyed by entity, so a caller can tell what it just wrote to.
