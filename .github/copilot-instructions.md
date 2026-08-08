@@ -1,12 +1,35 @@
 # DiscVault contributor & agent instructions
 
-## Version guard: always bump `app/VERSION`
+## Version guard: CI bumps `app/VERSION`, your PR must not
 
-CI runs **`.github/workflows/version-guard.yml`**, which calls
-`app/scripts/check_version_bumped.py`. It fails any push or pull request whose diff touches a
-protected app/runtime path **without** changing `app/VERSION`.
+**Do not bump `app/VERSION` in a pull request.** The bump is applied by CI on
+`release/v26-beta` after your PR merges, and a PR that carries one is refused by the guard.
 
-Protected paths:
+### Why it moved
+
+A bump written by hand is only valid against the base as it stood when it was written, and
+GitHub does not re-run a check when the base moves. So a PR could be green at the moment it was
+opened and wrong at the moment it merged, with nothing between those two points to notice.
+
+That is not hypothetical: it has happened three times. #473/#474, then #516/#517 (repaired by
+#520), then three PRs merging within 26 seconds — #570, #571, #572 — all bumping to 26.8.39.
+Two guards went red on beta, `Build & Publish Docker Image` gates on the same job, and beta's
+head had no image until #573 bumped it by hand.
+
+The old instruction was "re-check the bump right before merging". Three sessions merging seconds
+apart cannot satisfy that: the bump goes stale in between, and no human wins that race by hand.
+Applied after the merge, the bump is derived from the branch it lands on and cannot go stale.
+
+### What this means for you
+
+| Where | What happens |
+|---|---|
+| Your PR into `release/v26-beta` | Leave `app/VERSION` alone. The guard fails if you touch it. |
+| The merge into `release/v26-beta` | `Build & Publish Docker Image` bumps the patch, commits to beta, then builds the image from that commit. |
+| A promotion into `main` | Carries beta's bump commits. The original "strictly greater" check still applies there. |
+
+Protected paths still exist — they decide whether a bump is *due* — but you no longer act on
+them:
 
 - `.github/workflows/`
 - `app/Dockerfile`, `app/docker-compose*`
@@ -17,59 +40,37 @@ Protected paths:
 - `app/scripts/`
 - `dist/plugins/`
 
-`*.md` and `*.txt` files are ignored, so documentation-only changes do not need a bump.
+`*.md` and `*.txt` files are ignored.
 
-### What to do
+### The hook no longer bumps
 
-When a change set touches any protected path, bump `app/VERSION` (semver
-`MAJOR.MINOR.PATCH` — bump the patch unless a larger change is intended). One bump per
-PR/range is enough.
-
-Easiest: let the helper do it. Stage your changes, then run:
-
-```sh
-python app/scripts/bump_version.py
-```
-
-It bumps the patch and stages `app/VERSION`, but only when a protected path is staged and the
-version was not already changed.
-
-### Automate it (recommended)
-
-A `pre-commit` hook auto-runs the helper. Enable it once per clone/worktree:
+`.githooks/pre-commit` still rejects forbidden iOS artifacts, but it no longer calls
+`bump_version.py` — doing so would write the one file your PR must leave alone. If you enabled
+hooks before this change, nothing needs redoing:
 
 ```sh
 git config core.hooksPath .githooks
 ```
 
-After that, every commit that touches a protected path bumps `app/VERSION` automatically, so
-the version guard never fails.
+`app/scripts/bump_version.py` still exists; CI invokes it with `--force`. Running it by hand on
+a feature branch will produce a change the guard then refuses.
 
-### Re-check the bump right before merging
-
-**A bump is only valid against the base as it is at merge time.** The guard requires
-`app/VERSION` to be *strictly greater* than the version on `release/v26-beta`, and the helper
-can only compare against the base as it looked when you committed. If another PR merges into
-beta while yours is open and bumps to the same patch number, your bump silently becomes stale
-and the guard fails with:
+### If you see the guard fail
 
 ```
-app/VERSION 26.7.63 is not strictly greater than the actual base 26.7.63 - this is
-stale/redundant, not a real bump
+app/VERSION must not be changed in a pull request: CI bumps it on release/v26-beta after the merge.
 ```
 
-So before merging — not only before opening the PR:
+Restore the file from the base and commit that:
 
 ```sh
-git fetch origin release/v26-beta
-git rebase origin/release/v26-beta      # or merge the base in
-python app/scripts/bump_version.py      # moves past the *new* base
+git checkout origin/release/v26-beta -- app/VERSION
+git commit -m "chore: leave app/VERSION to CI"
 ```
 
-**Do not merge a PR whose version guard is red.** Merging anyway lands two different code
-states on beta under one version, so the beta image tag stops identifying a build; fixing that
-afterwards costs a second PR that does nothing but bump. This has happened: #473/#474, and
-again with #516/#517 (repaired by #520).
+### One thing that did not change
+
+**Do not merge a PR whose version guard is red**, and say so when someone is about to.
 
 ## Branch & release workflow
 
@@ -282,9 +283,8 @@ App-Guidance. Prepare the write-up and hand it over, saying plainly that it stil
 **When the user asks to commit (or you are about to commit)**
 
 1. Confirm you are on a **beta-based feature branch**, not directly on `main`.
-2. If the change touches any protected path (see the Version-guard list above), make sure
-   `app/VERSION` is bumped — run `python app/scripts/bump_version.py` (or rely on the
-   `core.hooksPath .githooks` pre-commit hook). Docs-only (`*.md`/`*.txt`) needs no bump.
+2. **Leave `app/VERSION` untouched.** CI bumps it on `release/v26-beta` after the merge, and
+   the guard refuses a PR that carries a bump.
 3. Start the commit message with the classified type prefix (`fix:`/`feat:`/`docs:`/…) and
    include the `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer
    unless the user opts out.
@@ -292,9 +292,8 @@ App-Guidance. Prepare the write-up and hand it over, saying plainly that it stil
    title (feature PRs into beta may be squashed).
 5. Confirm translations are complete across all locales (no missing i18n keys and no new
    untranslated UI strings).
-6. **Before the PR is merged, re-check the bump against the current base** — beta may have moved
-   while the PR was open, which makes an earlier bump stale (see "Re-check the bump right before
-   merging" above). Never merge with a red version guard.
+6. Never merge with a red version guard. There is no longer anything to re-check about the
+   bump before merging — that is precisely what moving it into CI removed.
 7. Let it build/test on the beta channel before considering promotion.
 8. **After the PR merges, delete the feature branch** (`git push origin --delete <branch>`) —
    unless it is the active Copilot session/worktree branch (reused across PRs) or a

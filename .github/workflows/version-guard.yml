@@ -28,11 +28,27 @@ jobs:
       - name: Reject forbidden iOS artifacts
         run: python app/scripts/check_forbidden_paths.py --tree HEAD
 
-      - name: Check app version bump
+      # A pull request no longer bumps app/VERSION -- the beta push workflow does that
+      # after the merge. So the question here is inverted: a PR must leave the file
+      # alone. A hand-written bump would go stale the moment another PR lands ahead of
+      # it, which is the collision this whole arrangement removes (#473/#474,
+      # #516/#517, and the three-way collision repaired by #573).
+      - name: Refuse a hand-written version bump
+        if: github.event_name == 'pull_request'
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            python app/scripts/check_version_bumped.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --base-ref "${{ github.event.pull_request.base.ref }}" --aggregate
-          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+          python app/scripts/check_version_bumped.py \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            --base-ref "${{ github.event.pull_request.base.ref }}" \
+            --forbid-change
+
+      # On main the bump is not CI's to make: main only ever receives promotion merges,
+      # which carry beta's bump commits with them. So the original progression check
+      # stands there, and a promotion that somehow lost the bump still fails.
+      - name: Check app version bump
+        if: github.event_name != 'pull_request' && github.ref != 'refs/heads/release/v26-beta'
+        run: |
+          if [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
             python app/scripts/check_version_bumped.py --base "${{ github.event.before }}" --head "${{ github.sha }}" --aggregate
           else
             python app/scripts/check_version_bumped.py --base HEAD~1 --head HEAD

@@ -27,6 +27,9 @@ jobs:
   # this one published anyway, because nothing connected the two. Gate the build on the same
   # check so a rejected version cannot reach the registry.
   version-guard:
+    # Not on a beta push: there the bump is applied by version-bump below, so asking
+    # "did this push already bump?" would fail every merge by construction.
+    if: github.ref != 'refs/heads/release/v26-beta' || github.event_name != 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,8 +51,78 @@ jobs:
             --head "${{ github.sha }}" \
             --aggregate
 
+  # The bump lives here rather than in the merged pull requests. A bump written by hand
+  # is only valid against the base as it stood when it was written, and GitHub does not
+  # re-run the guard when the base moves -- so three PRs merging within 26 seconds all
+  # bumped to 26.8.39, two guards went red on beta, and the image was never built (#573).
+  # Applied after the merge instead, the bump is derived from the branch it lands on and
+  # cannot go stale.
+  #
+  # This has to run *before* the build in the same run, not as a push that retriggers the
+  # workflow: a push made with GITHUB_TOKEN deliberately does not start a new workflow
+  # run. That property is also what stops this from looping; `[skip ci]` in the message
+  # covers the case where a human replays the same commit.
+  version-bump:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release/v26-beta'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Two merges seconds apart give two runs. Serialising them here is what turns the
+    # race between two humans into no race at all, rather than relocating it into CI.
+    concurrency:
+      group: beta-version-bump
+      cancel-in-progress: false
+    outputs:
+      sha: ${{ steps.bump.outputs.sha }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: release/v26-beta
+          fetch-depth: 0
+
+      - name: Bump app/VERSION on beta
+        id: bump
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # `Block force pushes` is on for every branch in this repository, so a failed
+          # push may only be retried by starting again from the new tip -- never forced.
+          # Restarting from the tip is also simpler than rebasing: the only change is one
+          # line in one file, so recomputing it against the new base cannot conflict.
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet --no-tags origin release/v26-beta
+            git checkout --quiet -B release/v26-beta origin/release/v26-beta
+
+            python app/scripts/bump_version.py --force --no-stage --base-ref ""
+            version="$(tr -d '[:space:]' < app/VERSION)"
+
+            git add app/VERSION
+            git commit --quiet -m "chore: bump app/VERSION to ${version} [skip ci]"
+
+            if git push origin release/v26-beta; then
+              echo "version=${version}" >> "$GITHUB_OUTPUT"
+              echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+              echo "Bumped app/VERSION to ${version} on attempt ${attempt}."
+              exit 0
+            fi
+
+            echo "Push rejected (attempt ${attempt}); beta moved. Retrying from its new tip." >&2
+            sleep $((attempt * 4))
+          done
+
+          echo "Could not push the version bump to release/v26-beta after 5 attempts." >&2
+          exit 1
+
   build-and-push:
-    needs: version-guard
+    needs: [version-guard, version-bump]
+    # Exactly one of the two jobs above runs on any given event, so the default
+    # all-must-succeed rule would skip the build every time. Require instead that
+    # neither *failed*.
+    if: ${{ !cancelled() && needs.version-guard.result != 'failure' && needs.version-bump.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -58,6 +131,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # On beta this is the bump commit, so the image carries the version the branch
+          # now advertises. Building `github.sha` instead would tag every beta image with
+          # the version of the merge *before* the bump -- the previous image's number.
+          ref: ${{ needs.version-bump.outputs.sha || github.sha }}
 
       # Extract version from tag (v26.0.0 -> 26.0.0), app/VERSION, or a channel SHA fallback.
       - name: Derive build version
