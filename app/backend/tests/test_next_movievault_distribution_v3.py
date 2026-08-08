@@ -187,14 +187,23 @@ class MovieVaultDistributionV3Tests(unittest.TestCase):
             ),
         ):
             with self.subTest(operation=operation.__name__):
-                # distribution-5 does not exist yet; distribution-4 is now a
-                # legitimately supported contract (see the v4 tests) so it no
-                # longer belongs in this "unsupported contract" regression.
+                # The placeholder has to be a contract that genuinely does not
+                # exist, and it keeps moving: this assertion named
+                # distribution-4 until v4 shipped, then distribution-5 until v5
+                # shipped - at which point it stopped testing anything and
+                # started reaching the network instead, unnoticed because no
+                # workflow ran this file. Assert against the first unsupported
+                # contract rather than a hardcoded name, so the guard follows
+                # the vocabulary instead of rotting behind it.
+                unsupported = (
+                    f"distribution-{len(next_movievault_v2.SUPPORTED_CONTRACTS) + 2}"
+                )
+                self.assertNotIn(unsupported, next_movievault_v2.SUPPORTED_CONTRACTS)
                 with self.assertRaisesRegex(
                     next_movievault_v2.MovieVaultV2Error,
                     "^contract_incompatible$",
                 ):
-                    operation(*arguments, contract_version="distribution-5")
+                    operation(*arguments, contract_version=unsupported)
 
     def test_v3_bucket_uses_v3_endpoint_and_dual_digest(self):
         content = (FIXTURES / "distribution-v3-bucket.json").read_bytes()

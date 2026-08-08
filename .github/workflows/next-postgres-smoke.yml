@@ -87,6 +87,17 @@ jobs:
       - name: Test the MovieVault v2 plugin mapping
         run: python -m unittest tests.test_next_movievault_v2_plugin
 
+      # The per-contract parsing guards, never listed here either. Their cost is
+      # not hypothetical: the v3 module asserts that an unsupported contract is
+      # refused, and when distribution-5 shipped that assertion silently stopped
+      # refusing anything and started reaching the network - for weeks, because
+      # nothing invoked the file. A guard nobody runs is not a guard.
+      - name: Test the MovieVault distribution contract parsers
+        run: >-
+          python -m unittest
+          tests.test_next_movievault_distribution_v3
+          tests.test_next_movievault_distribution_v4
+
       # The TMDB series shaping needs no database, so it runs before the
       # migrations with the other pure-Python modules.
       - name: Test the TMDB series mapping
