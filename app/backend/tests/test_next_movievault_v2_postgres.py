@@ -1888,6 +1888,25 @@ class SeriesLinkPostgresTests(unittest.TestCase):
             cur.execute(
                 "DELETE FROM movies WHERE title LIKE %s", (f"{self.SERIES_TITLE}%",)
             )
+            # Before the series rows, because the job payload names them and the
+            # id is the only way to tell this suite's jobs from anyone else's.
+            #
+            # Linking a series queues a description refresh, so these tests put
+            # real work on a shared queue. Leaving it behind is not a tidiness
+            # problem: `next_worker run-once` processes exactly one job, and the
+            # CI smoke that follows asserts the job it then finds is its own. An
+            # orphan from here makes that unrelated step fail, pointing at
+            # neither the test nor the smoke.
+            cur.execute(
+                """
+                DELETE FROM background_jobs
+                WHERE job_type = %s
+                  AND payload ->> 'seriesId' IN (
+                      SELECT id::text FROM series WHERE title = %s
+                  )
+                """,
+                (next_metadata.SERIES_METADATA_REFRESH_JOB_TYPE, self.SERIES_TITLE),
+            )
             cur.execute("DELETE FROM series WHERE title = %s", (self.SERIES_TITLE,))
 
     def setUp(self):
