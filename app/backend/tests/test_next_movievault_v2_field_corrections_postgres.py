@@ -37,6 +37,10 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 PREFIX = "field-correction-test"
 BARCODE = "4006381333931"
 OTHER_BARCODE = "0717951008572"
+#: A second real EAN-13, and a real UPC-A. Both check-digit valid: a fabricated
+#: code passes the length test, fails the checksum, and asserts nothing.
+OTHER_EAN = "5051890013279"
+UPC = "012569828827"
 
 
 @unittest.skipUnless(DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured")
@@ -797,6 +801,101 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         scoped = corrections.contribution_history(self.conn, actor_id=mine, limit=10)
         self.assertEqual(len(scoped), 1)
         self.assertEqual(len(corrections.contribution_history(self.conn, limit=10)), 2)
+
+    # ---- the EAN list ----------------------------------------------------
+
+    def _identifier_row(self, movie_id, identifier_type, value):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movie_product_identifiers (movie_id, identifier_type, identifier_value)
+                VALUES (%s, %s, %s)
+                """,
+                (movie_id, identifier_type, value),
+            )
+
+    def test_eans_travels_once_discvault_can_hold_more_than_one_code(self):
+        """The field was withheld because a single `movies.barcode` cannot
+        express a complete replacement list -- sending `[barcode]` would delete
+        every other EAN the release has. With a typed-identifier table there is
+        a real list to send."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        self._identifier_row(movie["id"], "ean", OTHER_EAN)
+        self._identifier_row(movie["id"], "upc", UPC)
+
+        with self._live({"edition": "Theatrical", "eans": [OTHER_EAN]}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertNotIn("eans", preview["withheld"])
+        change = next(item for item in preview["changes"] if item["field"] == "eans")
+        # The scanned barcode joins the typed one; the UPC does not, because
+        # upstream writes this field into `identifier_type = 'ean'` alone.
+        self.assertEqual(change["proposed"], sorted([BARCODE, OTHER_EAN]))
+        self.assertEqual(change["expected"], [OTHER_EAN])
+        self.assertNotIn(UPC, change["proposed"])
+
+    def test_eans_is_refused_out_loud_when_the_mirror_is_all_there_is(self):
+        """`movievault_v2_releases` has no barcode column and the lookup index
+        holds hashes by design, so there is no honest `expected` without a live
+        read. A replacement list proposed against an unknown current state is
+        the deletion this field was withheld to prevent."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        with self._live(None):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertEqual(preview["comparedAgainst"], "mirror")
+        self.assertEqual(preview["withheld"]["eans"], "needs_live_catalogue")
+        self.assertNotIn("eans", {item["field"] for item in preview["changes"]})
+
+    def test_a_live_read_without_a_barcode_list_is_refused_too(self):
+        """"The catalogue did not say" is not "the release has none". Treating
+        the two the same proposes replacing a list nobody read."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        with self._live({"edition": "Theatrical"}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertEqual(preview["comparedAgainst"], "catalogue")
+        self.assertEqual(preview["withheld"]["eans"], "needs_live_catalogue")
+
+    def test_a_release_that_already_holds_the_same_list_is_not_a_change(self):
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        with self._live({"eans": [BARCODE]}):
+            preview = corrections.correction_preview(
+                self.conn, entity="movie", record=movie, metadata={}
+            )
+
+        self.assertNotIn("eans", {item["field"] for item in preview["changes"]})
+        self.assertNotIn("eans", preview["withheld"])
+
+    def test_the_scannable_types_stay_unique_across_movies(self):
+        """One scan resolves to one film -- the promise `movies.barcode` makes,
+        extended to the codes a scanner can produce."""
+        first = self._movie()
+        second = self._movie()
+        self._identifier_row(first["id"], "ean", OTHER_EAN)
+        with self.assertRaises(Exception):
+            self._identifier_row(second["id"], "ean", OTHER_EAN)
+
+    def test_a_catalogue_number_may_repeat_because_it_legitimately_does(self):
+        """Two members of one box set share a catalogue number. Constraining it
+        would refuse true data to protect a lookup that never consults it."""
+        first = self._movie()
+        second = self._movie()
+        self._identifier_row(first["id"], "catalog_number", "SPHE 1234")
+        self._identifier_row(second["id"], "catalog_number", "SPHE 1234")
 
     def test_the_barcode_hash_matches_what_the_index_is_keyed_by(self):
         """Computed differently is simply a different hash, and would miss in

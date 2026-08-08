@@ -30,11 +30,13 @@ try:
     from .next_metadata import movie_locked_fields
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_connection import _table_exists, _text
+    from .next_product_identifiers import catalogue_eans, contributable_eans, movie_identifiers_by_type
 except ImportError:  # pragma: no cover - supports direct module execution
     from next_metadata import movie_identifiers
     from next_metadata import movie_locked_fields
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_connection import _table_exists, _text
+    from next_product_identifiers import catalogue_eans, contributable_eans, movie_identifiers_by_type
 
 #: The provider whose identifier names a MovieVault release. Written by the v2
 #: plugin since 26.8.9; read here as the first and most reliable way to say
@@ -80,6 +82,10 @@ RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
     "releaseDate": ("movie", "release_date"),
     "runtimeMinutes": ("movie", "runtime_minutes"),
     "distributor": ("metadata", "distributor"),
+    # Not a column: the complete EAN list, assembled from
+    # `movie_product_identifiers` plus the scanned `movies.barcode`. Withheld
+    # until 26.8.20, when DiscVault gained somewhere to hold more than one code.
+    "eans": ("identifiers", "eans"),
 }
 
 #: Eligible upstream, deliberately not offered here. Each entry is a place where
@@ -100,11 +106,6 @@ RELEASE_FIELDS_WITHHELD: dict[str, str] = {
     # offer instead: what it stores per pressing is `edition` and `format`,
     # which are already correctable separately.
     "title": "different_field_upstream",
-    # MovieVault holds a list and the contract makes it a complete replacement.
-    # DiscVault holds one `movies.barcode`. Sending `[barcode]` would delete
-    # every other EAN the release has, and the moderator would see a plausible
-    # one-item list rather than a deletion.
-    "eans": "discvault_holds_one_barcode",
     # `content.releases.region` is free text at release level. DiscVault's
     # `regions` is a normalised list of disc regions on the technical spec.
     # Same word, different fact.
@@ -312,9 +313,20 @@ def _normalise_country(value: Any) -> Any:
     return value
 
 
-def _local_release_values(record: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
+def _local_release_values(
+    record: dict[str, Any],
+    metadata: dict[str, Any],
+    identifiers: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
     values: dict[str, Any] = {}
     for field, (source, column) in RELEASE_FIELD_SOURCES.items():
+        if source == "identifiers":
+            # A list rather than a column, and empty means "nothing to say"
+            # rather than "delete everything upstream": an empty replacement
+            # list would wipe the release's identifiers, so it is never offered.
+            eans = contributable_eans(identifiers or [], barcode=record.get("barcode"))
+            values[field] = eans or None
+            continue
         raw = metadata.get(column) if source == "metadata" else record.get(column)
         value = _clean(raw)
         if field == "countryCode":
@@ -404,17 +416,26 @@ def eligible_fields(
     entity: str,
     local: dict[str, Any],
     locked: set[str],
+    extra_withheld: dict[str, str] | None = None,
 ) -> tuple[list[str], dict[str, str]]:
     """The fields this record may offer, and why each of the others may not.
 
     The refusals are returned rather than dropped so a client can explain
     itself. "Not offered" and "offered but unchanged" look identical in a UI
     that only receives a list.
+
+    `extra_withheld` carries refusals that depend on this *call* rather than on
+    the two data models -- today only `eans`, which needs a live catalogue read
+    to have an honest `expected`. They are merged in the same map so a caller
+    has one place to look.
     """
     sources = RELEASE_FIELD_SOURCES if entity == "movie" else BOX_SET_FIELD_SOURCES
     withheld = dict(RELEASE_FIELDS_WITHHELD if entity == "movie" else BOX_SET_FIELDS_WITHHELD)
+    withheld.update(extra_withheld or {})
     allowed: list[str] = []
     for field in sources:
+        if field in withheld:
+            continue
         lock_names = _FIELD_LOCK_NAMES.get(field, ())
         if any(name in locked for name in lock_names):
             # A lock is a local override, pinned against metadata refresh.
@@ -518,6 +539,7 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
             "releaseDate": _clean(summary.get("releaseDate")),
             "runtimeMinutes": int(summary["runtimeMinutes"]) if summary.get("runtimeMinutes") else None,
             "distributor": _clean(summary.get("distributor")),
+            "eans": catalogue_eans(summary.get("barcodes")),
         }
     # The film is known but this release is not among its active ones: it was
     # merged, retired or deleted. Correcting a record that is no longer served
@@ -629,9 +651,26 @@ def correction_preview(
             mirror = live
             source = "catalogue"
 
+    extra_withheld: dict[str, str] = {}
     if entity == "movie":
-        local = _local_release_values(record, metadata or {})
+        local = _local_release_values(
+            record, metadata or {}, movie_identifiers_by_type(conn, record.get("id"))
+        )
         locked = movie_locked_fields(metadata or {})
+        if source != "catalogue" or not isinstance(mirror.get("eans"), list):
+            # `eans` is a complete replacement list and the mirror cannot say
+            # what it would replace: `movievault_v2_releases` has no barcode
+            # column and the lookup index holds hashes, by design.
+            #
+            # A live read that came back without a barcode list is refused for
+            # the same reason rather than a weaker one. "The catalogue did not
+            # say" would otherwise leave `expected` as None, and a replacement
+            # list proposed against None is a deletion nobody reviewed -- which
+            # is exactly what withholding this field has been preventing.
+            #
+            # Refused out loud: a field that silently vanishes from the sheet
+            # reads as a bug rather than as a reason.
+            extra_withheld["eans"] = "needs_live_catalogue"
     else:
         local = _local_box_set_values(record)
         # Containers have no field locks -- the only container lock is artwork,
@@ -639,7 +678,9 @@ def correction_preview(
         # equally nothing on a box set can be protected from being offered.
         locked = set()
 
-    allowed, withheld = eligible_fields(entity=entity, local=local, locked=locked)
+    allowed, withheld = eligible_fields(
+        entity=entity, local=local, locked=locked, extra_withheld=extra_withheld
+    )
     return {
         "mode": "correction",
         "target": target,

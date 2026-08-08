@@ -14826,6 +14826,12 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.barcode">Barcode</span>
                       <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
                     </label>
+                    <div id="movieEditIdentifiersRow" class="movie-edit-identifiers">
+                      <span data-next-i18n="movieDetail.productIdentifiers">Other product codes</span>
+                      <div id="movieEditIdentifiers" class="movie-edit-identifiers-list"></div>
+                      <button type="button" id="movieEditIdentifierAdd" class="secondary" data-next-i18n="movieDetail.productIdentifierAdd">Add a code</button>
+                      <p class="hint" data-next-i18n="movieDetail.productIdentifiersHint">The barcode above is what a scan resolves to. These are the same product's other codes: an EAN for Europe, a UPC for North America, an ISBN, an Amazon ASIN, or the distributor's catalogue number.</p>
+                    </div>
                     <label for="movieEditMediaType">
                       <span data-next-i18n="movieDetail.mediaType">Type</span>
                       <select id="movieEditMediaType" name="media_type">
@@ -27885,6 +27891,84 @@ def ui_preview_html(
         populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
       }
       setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
+      loadMovieEditIdentifiers();
+    }
+    // The typed product identifiers. Their own route rather than a slice of the
+    // detail payload, because they are their own table with their own
+    // uniqueness rule -- and because a native client wants them without
+    // fetching a whole detail screen.
+    const MOVIE_IDENTIFIER_TYPES = ["ean", "upc", "isbn", "asin", "catalog_number"];
+    function movieIdentifierTypeLabel(type) {
+      return tNext(`movieDetail.identifierType.${type}`, {
+        ean: "EAN",
+        upc: "UPC",
+        isbn: "ISBN",
+        asin: "Amazon ASIN",
+        catalog_number: "Catalogue number"
+      }[type] || type);
+    }
+    function addMovieIdentifierRow(entry) {
+      const list = document.getElementById("movieEditIdentifiers");
+      if (!list) return;
+      const row = document.createElement("div");
+      row.className = "movie-edit-identifier-row";
+      const select = document.createElement("select");
+      MOVIE_IDENTIFIER_TYPES.forEach((type) => {
+        const option = document.createElement("option");
+        option.value = type;
+        option.textContent = movieIdentifierTypeLabel(type);
+        select.appendChild(option);
+      });
+      select.value = (entry && entry.type) || "ean";
+      const input = document.createElement("input");
+      input.maxLength = 120;
+      input.autocomplete = "off";
+      input.value = (entry && entry.value) || "";
+      input.placeholder = tNext("movieDetail.productIdentifierValue", "Code");
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "secondary";
+      remove.textContent = tNext("common.remove", "Remove");
+      remove.addEventListener("click", () => row.remove());
+      row.appendChild(select);
+      row.appendChild(input);
+      row.appendChild(remove);
+      list.appendChild(row);
+    }
+    async function loadMovieEditIdentifiers() {
+      const list = document.getElementById("movieEditIdentifiers");
+      if (!list || !activeDetailMovieId) return;
+      list.innerHTML = "";
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/identifiers`);
+        (payload.identifiers || []).forEach(addMovieIdentifierRow);
+      } catch (error) {
+        // A read failure must not block editing everything else on the panel.
+        // The rows stay empty and a save simply sends an empty list, which is
+        // why the save is skipped when nothing loaded -- see saveMovieIdentifiers.
+        list.dataset.loadFailed = "1";
+      }
+    }
+    function collectMovieEditIdentifiers() {
+      return Array.from(document.querySelectorAll("#movieEditIdentifiers .movie-edit-identifier-row"))
+        .map((row) => ({
+          type: row.querySelector("select")?.value || "",
+          value: (row.querySelector("input")?.value || "").trim()
+        }))
+        .filter((entry) => entry.value);
+    }
+    async function saveMovieIdentifiers() {
+      const list = document.getElementById("movieEditIdentifiers");
+      if (!list || !activeDetailMovieId) return null;
+      // A PUT is a complete replacement, so sending one built from rows that
+      // never loaded would delete every identifier the record has.
+      if (list.dataset.loadFailed === "1") return null;
+      await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/identifiers`, {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({identifiers: collectMovieEditIdentifiers()})
+      });
+      return true;
     }
     // While a film sits inside a box-set, the set carries the money for
     // everything in it. The field is blanked and disabled rather than cleared in
@@ -28486,7 +28570,11 @@ def ui_preview_html(
       // this one record rather than about the two data models, so the text says
       // what to change -- without it the raw code reached the screen.
       local_value_is_not_a_country_code: ["contribute.withheld.countryCode", "MovieVault needs a two-letter country code. Change this field to a code such as NL to contribute it."],
-      local_value_is_not_a_language_code: ["contribute.withheld.languageCode", "MovieVault needs a language code. Change this field to a code such as nl to contribute it."]
+      local_value_is_not_a_language_code: ["contribute.withheld.languageCode", "MovieVault needs a language code. Change this field to a code such as nl to contribute it."],
+      // Not about the two data models either, and not about this record: about
+      // this attempt. The mirror holds no barcodes, so without a live read
+      // there is nothing honest to state as the current list.
+      needs_live_catalogue: ["contribute.withheld.needsLiveCatalogue", "This is a complete replacement list, so it can only be sent when MovieVault is reachable and can say what it would replace."]
     };
     const contributeState = {movie: null, container: null};
     function contributeFieldLabel(field) {
@@ -38625,8 +38713,23 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify(body)
         });
+        // After the movie, not with it: the identifiers are a separate table
+        // with a uniqueness rule of their own. The movie is already saved by
+        // the time this runs, so a rejected code is reported on its own rather
+        // than presented as the whole save having failed -- and the panel stays
+        // open, because the value that needs fixing is in it.
+        let identifierError = null;
+        try {
+          await saveMovieIdentifiers();
+        } catch (error) {
+          identifierError = error;
+        }
         renderMovieDetail(payload.detail || {});
         await loadAppSnapshot();
+        if (identifierError) {
+          setMovieDetailMessage(identifierError.message || String(identifierError), "bad");
+          return;
+        }
         setMovieEditPanelVisible(false);
         setMovieDetailMessage(tNext("movieDetail.saved", "Movie saved."), "good");
         if (clearedUnlockedField && hasPermission("metadata.refresh_one")) {
@@ -44009,6 +44112,7 @@ def ui_preview_html(
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
       document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
+      document.getElementById("movieEditIdentifierAdd")?.addEventListener("click", () => addMovieIdentifierRow(null));
       document.getElementById("movieEditMediaType")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));
       document.getElementById("movieEditSeries")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));
       document.getElementById("movieDeleteButton")?.addEventListener("click", () => deleteActiveMovie());

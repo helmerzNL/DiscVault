@@ -32,7 +32,7 @@ PREVIEW = {
         {"field": "edition", "expected": "Theatrical", "proposed": "Director's Cut"},
         {"field": "format", "expected": "Blu-ray", "proposed": "4K UHD"},
     ],
-    "withheld": {"eans": "discvault_holds_one_barcode"},
+    "withheld": {"region": "different_field_upstream"},
 }
 
 

@@ -161,6 +161,11 @@ try:
     from .next_movievault_v2_field_corrections import contribution_history
     from .next_movievault_v2_field_corrections import latest_contribution
     from .next_movievault_v2_field_corrections import record_contribution
+    from .next_product_identifiers import IDENTIFIER_TYPES as PRODUCT_IDENTIFIER_TYPES
+    from .next_product_identifiers import SCANNABLE_TYPES as PRODUCT_SCANNABLE_TYPES
+    from .next_product_identifiers import movie_identifiers_by_type
+    from .next_product_identifiers import normalize_identifier as normalize_product_identifier
+    from .next_product_identifiers import set_movie_identifiers
     from .dedup_identity import MEDIA_TYPE_MOVIE
     from .dedup_identity import MEDIA_TYPE_SHOW
     from .dedup_identity import infer_media_type_from_title
@@ -417,6 +422,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2_field_corrections import contribution_history
     from next_movievault_v2_field_corrections import latest_contribution
     from next_movievault_v2_field_corrections import record_contribution
+    from next_product_identifiers import IDENTIFIER_TYPES as PRODUCT_IDENTIFIER_TYPES
+    from next_product_identifiers import SCANNABLE_TYPES as PRODUCT_SCANNABLE_TYPES
+    from next_product_identifiers import movie_identifiers_by_type
+    from next_product_identifiers import normalize_identifier as normalize_product_identifier
+    from next_product_identifiers import set_movie_identifiers
     from dedup_identity import MEDIA_TYPE_MOVIE
     from dedup_identity import MEDIA_TYPE_SHOW
     from dedup_identity import infer_media_type_from_title
@@ -26059,6 +26069,97 @@ def register_routes(flask_app: Flask) -> None:
             raise NextApiError("Field-lock request body must be an object", 400)
         locks = set_movie_field_locks(movie_uuid, body, permission="collection.edit_all")
         return response({"status": "ok", "movieId": str(movie_uuid), "fieldLocks": locks})
+
+    # `movies.barcode` answers "which film is this scan"; these answer "what is
+    # this product called elsewhere". Kept off the movie PATCH deliberately: the
+    # patch runs the receiver-proposal machinery over public fields, and a
+    # side-table replacement has neither a lock nor a merge and would have to be
+    # threaded through as an exception. Its own route, like `field-locks`.
+
+    @flask_app.get("/api/next/movies/<movie_id>/identifiers")
+    def movie_product_identifiers_route(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            entries = movie_identifiers_by_type(conn, movie_uuid)
+        return response(
+            {
+                "status": "ok",
+                "movieId": str(movie_uuid),
+                "identifiers": entries,
+                # The vocabulary, so a client renders the picker from the server
+                # rather than from a copy that can drift out of step with what
+                # the column will accept.
+                "types": list(PRODUCT_IDENTIFIER_TYPES),
+                "scannableTypes": sorted(PRODUCT_SCANNABLE_TYPES),
+            }
+        )
+
+    @flask_app.put("/api/next/movies/<movie_id>/identifiers")
+    def set_movie_product_identifiers_route(movie_id: str):
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Identifier request body must be an object", 400)
+        entries = body.get("identifiers")
+        if not isinstance(entries, list):
+            raise NextApiError("identifiers must be a list", 400)
+        if len(entries) > 25:
+            # The same bound MovieVault puts on a release's barcode list. A
+            # record with more than 25 codes is a data-entry accident.
+            raise NextApiError("identifiers may not exceed 25 entries", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            if not actor_can_edit_visible_movie(conn, actor, existing):
+                raise NextApiError("Permission required: collection.edit_all", 403)
+            # Validated for the user before the write, so a typo is reported
+            # rather than dropped. `set_movie_identifiers` drops silently by
+            # design -- that is the right behaviour for a background caller and
+            # the wrong one for someone who just typed a value in.
+            rejected = [
+                entry
+                for entry in entries
+                if not isinstance(entry, dict)
+                or not normalize_product_identifier(
+                    str(entry.get("type") or "").strip().lower(), entry.get("value")
+                )
+            ]
+            if rejected:
+                raise NextApiError("One or more identifiers are not valid for their type", 400)
+            try:
+                with conn.transaction():
+                    stored = set_movie_identifiers(conn, movie_uuid, entries)
+                    audit_event(
+                        conn,
+                        actor=actor,
+                        event_type="movie.product_identifiers_changed",
+                        entity_type="movie",
+                        entity_id=str(movie_uuid),
+                        payload={"count": len(stored)},
+                    )
+            except Exception as exc:  # noqa: BLE001 - reported, not swallowed
+                # The partial unique index on the scannable types. One scan has
+                # to resolve to one film, so this is a real answer rather than a
+                # server fault: another record already claims that code.
+                if "uq_movie_product_identifiers_scannable" in str(exc):
+                    raise NextApiError("Another movie already holds one of these codes", 409) from exc
+                raise
+        return response({"status": "ok", "movieId": str(movie_uuid), "identifiers": stored})
 
     @flask_app.delete("/api/next/movies/<movie_id>")
     def delete_movie(movie_id: str):
