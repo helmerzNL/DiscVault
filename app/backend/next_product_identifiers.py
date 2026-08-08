@@ -192,16 +192,13 @@ def attach_movie_identifiers(conn: Any, movies: list[dict[str, Any]]) -> list[di
     return movies
 
 
-def set_movie_identifiers(conn: Any, movie_id: UUID, entries: list[dict[str, Any]]) -> list[dict[str, str]]:
-    """Replace the typed identifiers for one movie, and return what was stored.
+def normalized_identifier_rows(entries: list[dict[str, Any]] | None) -> list[tuple[str, str]]:
+    """`(type, value)` for every entry that validates, de-duplicated, in order.
 
-    A replacement rather than a merge, because the edit surface presents the
-    whole set: with a merge there is no way to express "remove this one".
-    Invalid entries are dropped rather than raising -- the caller has already
-    validated for the user, and a single bad row should not lose the good ones.
+    Shared by the replacing and the adding writer so both accept exactly the
+    same values. Invalid entries are dropped rather than raised on: a caller has
+    already validated for the user, and one bad row must not lose the good ones.
     """
-    if not table_available(conn):
-        return []
     seen: set[tuple[str, str]] = set()
     rows: list[tuple[str, str]] = []
     for entry in entries or []:
@@ -216,6 +213,61 @@ def set_movie_identifiers(conn: Any, movie_id: UUID, entries: list[dict[str, Any
             continue
         seen.add(key)
         rows.append(key)
+    return rows
+
+
+def add_movie_identifiers(conn: Any, movie_id: UUID, entries: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Add typed identifiers to a movie without removing any, and return the additions.
+
+    The additive counterpart to `set_movie_identifiers`, and the one an **import**
+    must use. A file describes one pressing as one source saw it; it does not know
+    which codes the film already carries from a scan, a manual edit or another
+    export, and replacing the set would silently delete them. Same rule as every
+    other import field: fill, never overwrite.
+
+    A value already stored is left exactly as it is (`ON CONFLICT DO NOTHING`), so
+    the return value lists only what was genuinely new.
+
+    A scannable identifier that another film already holds is skipped rather than
+    raised on: `uq_movie_product_identifiers_scannable` promises one film per
+    scannable code, and a batch import must not fail a whole row over a code that
+    is already accounted for elsewhere.
+    """
+    if not movie_id or not table_available(conn):
+        return []
+    added: list[dict[str, str]] = []
+    for identifier_type, value in normalized_identifier_rows(entries):
+        try:
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO movie_product_identifiers (movie_id, identifier_type, identifier_value)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT DO NOTHING
+                        """,
+                        (movie_id, identifier_type, value),
+                    )
+                    inserted = cur.rowcount
+        except Exception:
+            # The partial unique index: this code belongs to another film.
+            continue
+        if inserted:
+            added.append({"type": identifier_type, "value": value})
+    return added
+
+
+def set_movie_identifiers(conn: Any, movie_id: UUID, entries: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Replace the typed identifiers for one movie, and return what was stored.
+
+    A replacement rather than a merge, because the edit surface presents the
+    whole set: with a merge there is no way to express "remove this one".
+    Invalid entries are dropped rather than raising -- the caller has already
+    validated for the user, and a single bad row should not lose the good ones.
+    """
+    if not table_available(conn):
+        return []
+    rows = normalized_identifier_rows(entries)
     with conn.cursor() as cur:
         cur.execute("DELETE FROM movie_product_identifiers WHERE movie_id = %s", (movie_id,))
         for identifier_type, value in rows:

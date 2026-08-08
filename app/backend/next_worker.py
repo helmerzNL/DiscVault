@@ -42,6 +42,7 @@ try:
     from .next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import refresh_series_metadata
     from .next_metadata import lookup_metadata_sources
+    from .next_product_identifiers import add_movie_identifiers
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
@@ -88,6 +89,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
     from next_metadata import refresh_series_metadata
     from next_metadata import lookup_metadata_sources
+    from next_product_identifiers import add_movie_identifiers
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
@@ -1336,6 +1338,31 @@ IMPORT_REVIEW_METADATA_FIELDS = {"posterUrl": "poster_url", "backdropUrl": "back
 IMPORT_REVIEW_FIELDS = ("title", "year", "format", "overview", "posterUrl", "backdropUrl")
 
 
+def import_product_identifiers(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """The typed product identifiers on an import item, in wire shape.
+
+    Accepts both the list an import plugin emits and the loose per-type keys an
+    older or hand-built payload may carry, so a caller that never heard of
+    `productIdentifiers` still gets its ASIN stored. Validation happens on write.
+    """
+    entries: list[dict[str, Any]] = []
+    raw = item.get("productIdentifiers") or item.get("product_identifiers")
+    if isinstance(raw, list):
+        entries.extend(entry for entry in raw if isinstance(entry, dict))
+    for key, identifier_type in (
+        ("ean", "ean"),
+        ("upc", "upc"),
+        ("isbn", "isbn"),
+        ("asin", "asin"),
+        ("catalogNumber", "catalog_number"),
+        ("catalog_number", "catalog_number"),
+    ):
+        value = clean_text(item.get(key))
+        if value:
+            entries.append({"type": identifier_type, "value": value})
+    return entries
+
+
 def import_review_confirmed_fields(item: dict[str, Any]) -> set[str]:
     """The fields a human explicitly confirmed in the import review.
 
@@ -1924,6 +1951,16 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                     """,
                     (movie_id, provider, identifier),
                 )
+    # The product codes the row carried beside the resolving barcode: the EAN a
+    # European pressing lists next to its UPC, an Amazon ASIN, a catalogue
+    # number. `movies.barcode` holds one value and a scan must resolve to one
+    # film, so without this the others are read and dropped.
+    #
+    # Added, never replaced. The file describes the pressing as one source saw
+    # it and knows nothing of the codes this film already carries from a scan or
+    # an earlier import; replacing the set would delete them. Same rule as every
+    # other import field.
+    add_movie_identifiers(conn, movie_id, import_product_identifiers(item))
     return movie_id, existing_id is None
 
 
