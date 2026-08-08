@@ -5280,15 +5280,128 @@ def enqueue_series_metadata_refresh(conn, series_id: UUID | str) -> None:
         )
 
 
+SERIES_DETAILS_CAPABILITY = "series_details"
+
+
+def series_detail_source_plugins(conn) -> list[dict[str, Any]]:
+    """The enabled metadata sources that can describe a series, in the user's order.
+
+    Discovery is by declared capability, not by name. That is the whole point:
+    adding TVDB or Fanart later must be a matter of installing a plugin that says
+    `series_details`, not of editing this module. The hard-coded `tmdb` that used
+    to sit here made every future source a code change.
+
+    `metadata_source_plugins` already returns installed and enabled rows ordered
+    by `order_index`, which is the order the user themselves ranked the sources
+    in and the same order the movie pipeline consults them in.
+    """
+    return [
+        plugin
+        for plugin in metadata_source_plugins(conn)
+        if SERIES_DETAILS_CAPABILITY in plugin_capabilities(plugin)
+    ]
+
+
+def series_identifier_map(conn, series_uuid: UUID) -> dict[str, str]:
+    """Every identifier the series carries, keyed by identifier type.
+
+    All of them travel to every source, and each source picks out the namespace
+    it speaks. A source is the only thing that knows which identifiers it can
+    use, so filtering here on its behalf would just be a second, staler copy of
+    that knowledge.
+    """
+    if not table_exists(conn, "series_identifiers"):
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT identifier_type, identifier
+            FROM series_identifiers
+            WHERE series_id = %s
+            ORDER BY provider_id, identifier_type
+            """,
+            (series_uuid,),
+        )
+        rows = cur.fetchall()
+    identifiers: dict[str, str] = {}
+    for row in rows:
+        identifier_type = clean_text(row.get("identifier_type"))
+        identifier = clean_text(row.get("identifier"))
+        # First one wins: two rows for one type is a conflict nobody can resolve
+        # here, and picking the later one at random would make the result depend
+        # on insertion order.
+        if identifier_type and identifier and identifier_type not in identifiers:
+            identifiers[identifier_type] = identifier
+    return identifiers
+
+
+def series_lookup_payload(row: dict[str, Any], identifiers: dict[str, str]) -> dict[str, Any]:
+    """What every series source is asked.
+
+    `tmdbTvId` is repeated outside the map on purpose: the TMDB plugin shipped
+    reading exactly that key, and an installation that has not taken the new
+    plugin version yet must keep working. A consumer tolerating a field before
+    the producer relies on it is the same rule the distribution feed follows.
+    """
+    return {
+        "seriesIdentifiers": dict(identifiers),
+        "tmdbTvId": identifiers.get(SERIES_IDENTIFIER_TYPE, ""),
+        "title": clean_text(row.get("title")),
+        "startYear": clean_text(row.get("start_year")),
+        "endYear": clean_text(row.get("end_year")),
+    }
+
+
+def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
+    """Combine what several sources said into one answer, first source wins.
+
+    "First" is the user's own plugin order, so precedence is a setting rather
+    than a rule buried here. Only empty gaps are filled, which means a later
+    source can complete a season the first source knew nothing about without
+    being able to contradict it.
+
+    Attribution travels with the text: `sources` records which plugin supplied
+    the series description and which supplied each season, because "where did
+    this sentence come from" stops being answerable once several sources can
+    write into the same column.
+    """
+    overview = ""
+    overview_source = ""
+    seasons: dict[int, dict[str, str]] = {}
+    for plugin_id, result in results:
+        stated = result.get("series") if isinstance(result.get("series"), dict) else {}
+        candidate = clean_text(stated.get("overview"))
+        if candidate and not overview:
+            overview = candidate
+            overview_source = plugin_id
+        for season in result.get("seasons") or []:
+            if not isinstance(season, dict):
+                continue
+            number = season.get("seasonNumber")
+            if not isinstance(number, int) or isinstance(number, bool):
+                continue
+            season_overview = clean_text(season.get("overview"))
+            if not season_overview or number in seasons:
+                continue
+            seasons[number] = {"overview": season_overview, "source": plugin_id}
+    return {"overview": overview, "overviewSource": overview_source, "seasons": seasons}
+
+
 def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
-    """Fill a series' description from DiscVault's own TMDB plugin.
+    """Fill a series' description from whichever sources can describe it.
 
     This is the second half of the division of labour the feed established.
     MovieVault states *identity and structure* -- which series, which seasons --
     and stops there, deliberately: it is not licensed to redistribute provider
-    prose and has no reason to. The description therefore comes from a source
+    prose and has no reason to. The description therefore comes from sources
     DiscVault has its own relationship with, which is also why nothing here ever
     travels back over the feed.
+
+    Several sources rather than one. TMDB, TVDB and Fanart know different things
+    and cover different shows, and a season TMDB has never heard of is exactly
+    the gap a second source closes. They are consulted in the user's own plugin
+    order and the first non-empty answer wins, so precedence is something the
+    user set rather than something decided here.
 
     Never overwrites. An existing overview may have been written by hand through
     the series API, and a refresh is not a reason to replace it -- the same
@@ -5296,10 +5409,12 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     Filling only what is empty also makes this safe to re-run, which matters
     because a failed job is retried.
 
-    A series with no TMDB television identifier is skipped rather than searched.
-    The id is what makes this exact; falling back to a title search would trade a
-    known answer for a guess, and §7b of the media-type document is explicit that
-    only a source querying a series namespace may speak to series identity.
+    A series with no identifiers at all is skipped rather than searched. An id is
+    what makes this exact; falling back to a title search would trade a known
+    answer for a guess, and §7b of the media-type document is explicit that only
+    a source querying a series namespace may speak to series identity. Which of
+    the identifiers a given source can use is that source's own decision, so all
+    of them are offered and a source that recognises none reports a miss.
     """
     series_uuid = UUID(str(series_id))
     if not table_exists(conn, "series") or not table_exists(conn, "series_identifiers"):
@@ -5307,50 +5422,64 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT s.id, s.overview, si.identifier
-            FROM series s
-            LEFT JOIN series_identifiers si
-              ON si.series_id = s.id AND si.identifier_type = %s
-            WHERE s.id = %s AND s.deleted_at IS NULL
+            SELECT id, title, overview, start_year, end_year
+            FROM series
+            WHERE id = %s AND deleted_at IS NULL
             """,
-            (SERIES_IDENTIFIER_TYPE, series_uuid),
+            (series_uuid,),
         )
         row = cur.fetchone()
     if not row:
         return {"status": "missing"}
-    identifier = clean_text(row.get("identifier"))
-    if not identifier:
+    identifiers = series_identifier_map(conn, series_uuid)
+    if not identifiers:
         return {"status": "skipped", "reason": "no series identifier"}
 
-    context = plugin_config_from_db(conn, TMDB_PLUGIN_ID)
-    execution = run_plugin_entrypoint(
-        TMDB_PLUGIN_ID, "series_details", {"tmdbTvId": identifier}, context
-    )
-    result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-    if execution.get("status") != "ok" or result.get("status") != "hit":
+    plugins = series_detail_source_plugins(conn)
+    if not plugins:
+        return {"status": "skipped", "reason": "no series source"}
+
+    payload = series_lookup_payload(row, identifiers)
+    results: list[tuple[str, dict[str, Any]]] = []
+    errors: list[dict[str, str]] = []
+    for plugin in plugins:
+        plugin_id = str(plugin.get("id") or "")
+        if not plugin_id:
+            continue
+        context = plugin_config_from_db(conn, plugin_id)
+        try:
+            execution = run_plugin_entrypoint(plugin_id, SERIES_DETAILS_CAPABILITY, payload, context)
+        except Exception as exc:  # pragma: no cover - defensive, a source is not the job
+            # One source raising must not cost the answers the others already
+            # gave. The job is retried anyway, and the disc this series belongs
+            # to is unaffected either way.
+            errors.append({"pluginId": plugin_id, "error": str(exc)})
+            logger.warning("series source %s failed for %s", plugin_id, series_uuid, exc_info=True)
+            continue
+        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+        if execution.get("status") != "ok" or result.get("status") != "hit":
+            errors.append({"pluginId": plugin_id, "error": execution.get("error") or result.get("status") or "miss"})
+            continue
+        results.append((plugin_id, result))
+
+    if not results:
         # Deliberately not raised. The series keeps the title it already has, and
         # a source being unreachable is not a reason to fail a job that will be
-        # retried; the disc it belongs to is unaffected either way.
-        return {"status": "miss", "error": execution.get("error")}
+        # retried.
+        return {"status": "miss", "errors": errors}
 
-    stated = result.get("series") if isinstance(result.get("series"), dict) else {}
-    overview = clean_text(stated.get("overview"))
+    merged = merge_series_details(results)
     updated_series = False
+    season_sources: dict[str, str] = {}
     with conn.cursor() as cur:
-        if overview and not clean_text(row.get("overview")):
+        if merged["overview"] and not clean_text(row.get("overview")):
             cur.execute(
                 "UPDATE series SET overview = %s, updated_at = now() WHERE id = %s",
-                (overview[:SERIES_TEXT_LIMITS["overview"]], series_uuid),
+                (merged["overview"][: SERIES_TEXT_LIMITS["overview"]], series_uuid),
             )
             updated_series = True
         updated_seasons = 0
-        for season in result.get("seasons") or []:
-            if not isinstance(season, dict):
-                continue
-            number = season.get("seasonNumber")
-            season_overview = clean_text(season.get("overview"))
-            if not isinstance(number, int) or isinstance(number, bool) or not season_overview:
-                continue
+        for number, season in sorted(merged["seasons"].items()):
             # `overview IS NULL OR overview = ''` rather than a read-then-write:
             # the check and the write are one statement, so a second worker
             # running the same job cannot land between them.
@@ -5362,17 +5491,26 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
                   AND (overview IS NULL OR overview = '')
                 """,
                 (
-                    season_overview[: SEASON_TEXT_LIMITS["overview"]],
+                    season["overview"][: SEASON_TEXT_LIMITS["overview"]],
                     series_uuid,
                     number,
                 ),
             )
-            updated_seasons += cur.rowcount or 0
+            written = cur.rowcount or 0
+            updated_seasons += written
+            if written:
+                season_sources[str(number)] = season["source"]
     return {
         "status": "ok",
         "seriesId": str(series_uuid),
         "seriesUpdated": updated_series,
         "seasonsUpdated": updated_seasons,
+        "sources": {
+            "consulted": [plugin_id for plugin_id, _ in results],
+            "series": merged["overviewSource"] if updated_series else "",
+            "seasons": season_sources,
+        },
+        "errors": errors,
     }
 
 

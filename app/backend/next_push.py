@@ -85,6 +85,11 @@ PWA_ICON_ASSETS = {
     "pwa-icon-512.png",
     "pwa-maskable-192.png",
     "pwa-maskable-512.png",
+    # Still here for the IMDb/TMDb link chips on a movie's detail page, which are
+    # a link mark rather than a credit: they must keep rendering from a movie's
+    # stored identifier even when the TMDB plugin is switched off. The About
+    # card's copy of this logo lives inside the plugin, because a per-source
+    # credit has to work for a plugin nobody has written yet.
     "tmdb-logo.svg",
 }
 

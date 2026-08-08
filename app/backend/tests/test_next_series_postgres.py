@@ -303,9 +303,33 @@ class SeriesMetadataRefreshPostgresTests(unittest.TestCase):
         result.update(overrides)
         return {"status": "ok", "result": result}
 
-    def _run(self, conn, series_id, execution):
-        with patch.object(next_metadata, "run_plugin_entrypoint", return_value=execution):
-            return next_metadata.refresh_series_metadata(conn, series_id)
+    def _run(self, conn, series_id, execution, *, plugin_ids=("tmdb",)):
+        """Drive the refresh with a stated set of sources.
+
+        The refresh discovers its sources by declared capability rather than by
+        name, so a test has to say which sources exist. Patching the discovery
+        keeps these cases about the write rules -- never overwrite, empty is
+        empty, a failure damages nothing -- rather than about whether this test
+        database happens to have a configured TMDB key.
+        """
+        plugins = [{"id": plugin_id} for plugin_id in plugin_ids]
+        with patch.object(next_metadata, "series_detail_source_plugins", return_value=plugins):
+            with patch.object(next_metadata, "plugin_config_from_db", return_value={}):
+                with patch.object(next_metadata, "run_plugin_entrypoint", return_value=execution):
+                    return next_metadata.refresh_series_metadata(conn, series_id)
+
+    def _run_many(self, conn, series_id, executions):
+        """One execution per source, in the order the sources are consulted."""
+        plugins = [{"id": plugin_id} for plugin_id, _ in executions]
+        answers = {plugin_id: execution for plugin_id, execution in executions}
+        with patch.object(next_metadata, "series_detail_source_plugins", return_value=plugins):
+            with patch.object(next_metadata, "plugin_config_from_db", return_value={}):
+                with patch.object(
+                    next_metadata,
+                    "run_plugin_entrypoint",
+                    side_effect=lambda plugin_id, *args, **kwargs: answers[plugin_id],
+                ):
+                    return next_metadata.refresh_series_metadata(conn, series_id)
 
     def _overviews(self, conn, series_id):
         with conn.cursor() as cur:
@@ -384,6 +408,157 @@ class SeriesMetadataRefreshPostgresTests(unittest.TestCase):
         self.assertEqual(result["status"], "miss")
         self.assertIsNone(series_overview)
         self.assertIsNone(seasons[1])
+
+    # --- several sources ----------------------------------------------------
+
+    def test_the_first_source_wins_and_the_next_only_fills_gaps(self):
+        """Precedence is the user's plugin order, not a rule buried in code.
+
+        A later source completing a season the first knew nothing about is the
+        whole reason for consulting more than one; being able to contradict the
+        first would make the result depend on which source answered fastest.
+        """
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            self._season(conn, series_id, 1)
+            self._season(conn, series_id, 2)
+            result = self._run_many(
+                conn,
+                series_id,
+                [
+                    (
+                        "tmdb",
+                        {
+                            "status": "ok",
+                            "result": {
+                                "status": "hit",
+                                "series": {"overview": "From the first source."},
+                                "seasons": [{"seasonNumber": 1, "overview": "First on one."}],
+                            },
+                        },
+                    ),
+                    (
+                        "tvdb",
+                        {
+                            "status": "ok",
+                            "result": {
+                                "status": "hit",
+                                "series": {"overview": "From the second source."},
+                                "seasons": [
+                                    {"seasonNumber": 1, "overview": "Second on one."},
+                                    {"seasonNumber": 2, "overview": "Second on two."},
+                                ],
+                            },
+                        },
+                    ),
+                ],
+            )
+            series_overview, seasons = self._overviews(conn, series_id)
+
+        self.assertEqual(series_overview, "From the first source.")
+        self.assertEqual(seasons[1], "First on one.")
+        self.assertEqual(seasons[2], "Second on two.")
+        self.assertEqual(result["sources"]["series"], "tmdb")
+        self.assertEqual(result["sources"]["seasons"], {"1": "tmdb", "2": "tvdb"})
+
+    def test_a_second_source_answers_when_the_first_misses(self):
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            self._season(conn, series_id, 1)
+            result = self._run_many(
+                conn,
+                series_id,
+                [
+                    ("tmdb", {"status": "ok", "result": {"status": "miss"}}),
+                    (
+                        "tvdb",
+                        {
+                            "status": "ok",
+                            "result": {
+                                "status": "hit",
+                                "series": {"overview": "Only the second knew."},
+                                "seasons": [{"seasonNumber": 1, "overview": "Second on one."}],
+                            },
+                        },
+                    ),
+                ],
+            )
+            series_overview, seasons = self._overviews(conn, series_id)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(series_overview, "Only the second knew.")
+        self.assertEqual(seasons[1], "Second on one.")
+        self.assertEqual(result["sources"]["consulted"], ["tvdb"])
+
+    def test_one_source_raising_does_not_cost_the_others_their_answers(self):
+        """A source that throws is a source that is broken, not a job that is."""
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            plugins = [{"id": "tmdb"}, {"id": "tvdb"}]
+
+            def answer(plugin_id, *args, **kwargs):
+                if plugin_id == "tmdb":
+                    raise RuntimeError("boom")
+                return {
+                    "status": "ok",
+                    "result": {"status": "hit", "series": {"overview": "Survived."}},
+                }
+
+            with patch.object(next_metadata, "series_detail_source_plugins", return_value=plugins):
+                with patch.object(next_metadata, "plugin_config_from_db", return_value={}):
+                    with patch.object(next_metadata, "run_plugin_entrypoint", side_effect=answer):
+                        result = next_metadata.refresh_series_metadata(conn, series_id)
+            series_overview, _ = self._overviews(conn, series_id)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(series_overview, "Survived.")
+        self.assertEqual([entry["pluginId"] for entry in result["errors"]], ["tmdb"])
+
+    def test_with_no_series_source_installed_nothing_is_attempted(self):
+        """Skipped rather than a miss: there was no question asked, so reporting
+        that nobody answered it would be a different and misleading fact."""
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            with patch.object(next_metadata, "series_detail_source_plugins", return_value=[]):
+                result = next_metadata.refresh_series_metadata(conn, series_id)
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(result["reason"], "no series source")
+
+    def test_every_source_is_offered_every_identifier(self):
+        """A source is the only thing that knows which namespaces it speaks, so
+        filtering on its behalf here would be a second, staler copy of that."""
+        captured = {}
+
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO series_identifiers
+                        (series_id, provider_id, identifier_type, identifier)
+                    VALUES (%s, 'tvdb', 'tvdb', '121361')
+                    """,
+                    (series_id,),
+                )
+
+            def answer(plugin_id, entrypoint, payload, context):
+                captured[plugin_id] = payload
+                return {"status": "ok", "result": {"status": "miss"}}
+
+            with patch.object(
+                next_metadata, "series_detail_source_plugins", return_value=[{"id": "tvdb"}]
+            ):
+                with patch.object(next_metadata, "plugin_config_from_db", return_value={}):
+                    with patch.object(next_metadata, "run_plugin_entrypoint", side_effect=answer):
+                        next_metadata.refresh_series_metadata(conn, series_id)
+
+        payload = captured["tvdb"]
+        self.assertEqual(payload["seriesIdentifiers"]["tvdb"], "121361")
+        self.assertEqual(payload["seriesIdentifiers"]["tmdb_tv"], "1399")
+        # Still outside the map: the shipped TMDB plugin reads exactly this key,
+        # and an installation that has not taken the new plugin must keep working.
+        self.assertEqual(payload["tmdbTvId"], "1399")
 
     def test_a_season_the_feed_never_recorded_is_not_created(self):
         """The plugin knows every season TMDB has; the collection knows the ones
