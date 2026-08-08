@@ -179,9 +179,16 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
             self.assertIn("detailArtworkEntity(entity)", body, name)
 
     def test_the_series_artwork_tabs_carry_no_lock_button(self):
-        """A lock stops an automatic source overwriting a chosen image, and
-        nothing fetches series artwork yet. The button would guard nothing while
-        implying it guards something."""
+        """Sources do fetch series artwork now, so the reason has changed even
+        though the answer has not.
+
+        A chosen primary is already safe: `apply_primary_media_update` refuses to
+        replace one whose link says it was uploaded or picked by hand, and that
+        refusal is what protects a series. A lock button would be a second, more
+        visible mechanism for a guarantee that already holds -- and the failure
+        mode of two mechanisms is that people trust the wrong one. Add it if a
+        source ever proves pushy enough to need overriding deliberately.
+        """
         self.assertNotIn("seriesPosterLockToggle", self.source)
         self.assertNotIn("seriesBackdropLockToggle", self.source)
         self.assertIn('data-upload-artwork="series"', self.source)

@@ -4320,14 +4320,47 @@ def ensure_remote_media_asset(conn, *, kind: str, source_url: str, provider_id: 
         return row["id"] if isinstance(row, dict) else row[0]
 
 
+# Which table owns an entity that can carry artwork. Everything below differs by
+# nothing but this name and the `entity_type` string, so an entity joins the media
+# path by adding a row here rather than by getting a parallel set of functions that
+# then drift apart.
+#
+# `series_season` has no page of its own -- a season is shown inside its series --
+# but it owns a poster, and `entity_media.entity_type` is unconstrained text
+# (migration 003), so it needed no migration to become storable. That is also why
+# a test is the only thing standing behind the value being spelled correctly.
+ENTITY_ARTWORK_TABLES = {
+    "movie": "movies",
+    "container": "containers",
+    "series": "series",
+    "series_season": "series_seasons",
+}
+
+
 def apply_primary_media_update(
     conn,
     *,
-    movie_id: UUID,
     kind: str,
     source_url: str,
     provider_id: str,
+    entity_type: str = "movie",
+    entity_id: UUID | None = None,
+    movie_id: UUID | None = None,
 ) -> dict[str, Any] | None:
+    """Make one image the entity's primary artwork of its kind.
+
+    Refuses when the current primary was chosen by a person -- an upload, or an
+    explicit "use this one". That refusal is the only protection a series has
+    against a later refresh, because a series has no lock button; for a movie it
+    sits alongside one.
+    """
+    entity_id = entity_id if entity_id is not None else movie_id
+    if entity_id is None:
+        raise ValueError("apply_primary_media_update needs an entity_id")
+    owner_table = ENTITY_ARTWORK_TABLES.get(entity_type)
+    if not owner_table:
+        raise ValueError(f"unknown artwork entity type: {entity_type}")
+    movie_id = entity_id
     media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
     if not media_id or not table_exists(conn, "entity_media"):
         return None
@@ -4338,7 +4371,7 @@ def apply_primary_media_update(
             SELECT ma.id, ma.source_url, ma.storage_key, ma.metadata
             FROM entity_media em
             JOIN media_assets ma ON ma.id = em.media_id
-            WHERE em.entity_type='movie'
+            WHERE em.entity_type=%s
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
               AND em.hidden_at IS NULL
@@ -4348,7 +4381,7 @@ def apply_primary_media_update(
             ORDER BY em.sort_order, ma.created_at
             LIMIT 1
             """,
-            (movie_id, role, kind),
+            (entity_type, movie_id, role, kind),
         )
         current = cur.fetchone()
         if current and str(current["id"] if isinstance(current, dict) else current[0]) == str(media_id):
@@ -4357,12 +4390,12 @@ def apply_primary_media_update(
             """
             SELECT deleted_at, hidden_at
             FROM entity_media
-            WHERE entity_type='movie'
+            WHERE entity_type=%s
               AND entity_id=%s
               AND media_id=%s
               AND role=%s
             """,
-            (movie_id, media_id, role),
+            (entity_type, movie_id, media_id, role),
         )
         existing_link = cur.fetchone()
         if existing_link and (
@@ -4382,7 +4415,8 @@ def apply_primary_media_update(
         ):
             linked = link_media_option(
                 conn,
-                movie_id=movie_id,
+                entity_type=entity_type,
+                entity_id=movie_id,
                 kind=kind,
                 source_url=source_url,
                 provider_id=provider_id,
@@ -4400,14 +4434,14 @@ def apply_primary_media_update(
             """
             UPDATE entity_media
             SET is_primary=false, sort_order=GREATEST(sort_order, 1)
-            WHERE entity_type='movie'
+            WHERE entity_type=%s
               AND entity_id=%s
               AND deleted_at IS NULL
               AND hidden_at IS NULL
               AND role=%s
               AND is_primary=true
             """,
-            (movie_id, role),
+            (entity_type, movie_id, role),
         )
         cur.execute(
             """
@@ -4419,14 +4453,17 @@ def apply_primary_media_update(
                 is_primary,
                 sort_order
             )
-            VALUES ('movie', %s, %s, %s, true, 0)
+            VALUES (%s, %s, %s, %s, true, 0)
             ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
                 is_primary=true,
                 sort_order=0
             """,
-            (movie_id, media_id, role),
+            (entity_type, movie_id, media_id, role),
         )
-        cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+        # The owner table is looked up rather than interpolated from the caller:
+        # this is the one place a table name reaches the SQL text, and a map with
+        # four known keys is what keeps it from ever being caller-controlled.
+        cur.execute(f"UPDATE {owner_table} SET updated_at=now() WHERE id=%s", (movie_id,))
     return {
         "kind": kind,
         "mediaId": str(media_id),
@@ -4569,12 +4606,27 @@ def has_locked_primary_media(conn, *, movie_id: UUID, kind: str) -> bool:
 def link_media_option(
     conn,
     *,
-    movie_id: UUID,
     kind: str,
     source_url: str,
     provider_id: str,
     sort_order: int,
+    entity_type: str = "movie",
+    entity_id: UUID | None = None,
+    movie_id: UUID | None = None,
 ) -> dict[str, Any] | None:
+    """Offer an image as an alternative without making it the primary one.
+
+    This is what fills the Posters and Backdrops tabs with more than one card.
+    A link that is already primary, or that somebody deleted or hid, is left
+    alone -- re-offering a rejected image on every refresh would make the delete
+    button meaningless.
+    """
+    entity_id = entity_id if entity_id is not None else movie_id
+    if entity_id is None:
+        raise ValueError("link_media_option needs an entity_id")
+    if entity_type not in ENTITY_ARTWORK_TABLES:
+        raise ValueError(f"unknown artwork entity type: {entity_type}")
+    movie_id = entity_id
     media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
     if not media_id or not table_exists(conn, "entity_media"):
         return None
@@ -4583,12 +4635,12 @@ def link_media_option(
             """
             SELECT is_primary, deleted_at, hidden_at
             FROM entity_media
-            WHERE entity_type='movie'
+            WHERE entity_type=%s
               AND entity_id=%s
               AND media_id=%s
               AND role=%s
             """,
-            (movie_id, media_id, kind),
+            (entity_type, movie_id, media_id, kind),
         )
         row = cur.fetchone()
         if row and (
@@ -4609,11 +4661,11 @@ def link_media_option(
                 is_primary,
                 sort_order
             )
-            VALUES ('movie', %s, %s, %s, false, %s)
+            VALUES (%s, %s, %s, %s, false, %s)
             ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
                 sort_order=LEAST(entity_media.sort_order, EXCLUDED.sort_order)
             """,
-            (movie_id, media_id, kind, sort_order),
+            (entity_type, movie_id, media_id, kind, sort_order),
         )
     return {
         "kind": kind,
@@ -5364,27 +5416,58 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
     the series description and which supplied each season, because "where did
     this sentence come from" stops being answerable once several sources can
     write into the same column.
+
+    Each field competes on its own. A source that has a poster but no synopsis
+    still supplies the poster, and a season that only one source has heard of
+    still arrives -- which is the point of consulting more than one source. That
+    is why a season is recorded when it offers *anything*, rather than only when
+    it offers an overview as it did when text was all there was.
+
+    Artwork carries its runner-up URLs along with the winner. The Posters tab
+    shows them as alternatives, so "first source wins" decides the default
+    without deciding the only option.
     """
     overview = ""
     overview_source = ""
-    seasons: dict[int, dict[str, str]] = {}
+    artwork: dict[str, dict[str, Any]] = {}
+    seasons: dict[int, dict[str, Any]] = {}
     for plugin_id, result in results:
         stated = result.get("series") if isinstance(result.get("series"), dict) else {}
         candidate = clean_text(stated.get("overview"))
         if candidate and not overview:
             overview = candidate
             overview_source = plugin_id
+        for kind, primary_key, options_key in (
+            ("poster", "posterUrl", "posters"),
+            ("backdrop", "backdropUrl", "backdropUrls"),
+        ):
+            if kind in artwork:
+                continue
+            options = image_url_options(stated.get(primary_key), stated.get(options_key))
+            if not options:
+                continue
+            artwork[kind] = {"sourceUrl": options[0], "options": options, "source": plugin_id}
         for season in result.get("seasons") or []:
             if not isinstance(season, dict):
                 continue
             number = season.get("seasonNumber")
             if not isinstance(number, int) or isinstance(number, bool):
                 continue
+            entry = seasons.setdefault(number, {})
             season_overview = clean_text(season.get("overview"))
-            if not season_overview or number in seasons:
-                continue
-            seasons[number] = {"overview": season_overview, "source": plugin_id}
-    return {"overview": overview, "overviewSource": overview_source, "seasons": seasons}
+            if season_overview and "overview" not in entry:
+                entry["overview"] = season_overview
+                entry["source"] = plugin_id
+            poster = image_url_options(season.get("posterUrl"))
+            if poster and "posterUrl" not in entry:
+                entry["posterUrl"] = poster[0]
+                entry["posterSource"] = plugin_id
+    return {
+        "overview": overview,
+        "overviewSource": overview_source,
+        "artwork": artwork,
+        "seasons": {number: entry for number, entry in seasons.items() if entry},
+    }
 
 
 def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
@@ -5500,18 +5583,111 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
             updated_seasons += written
             if written:
                 season_sources[str(number)] = season["source"]
+
+    # Artwork is applied outside the cursor above because each write is its own
+    # small transaction inside `apply_primary_media_update`, and because a series
+    # with no artwork at all must still keep the text it just gained.
+    applied_artwork = apply_series_artwork(conn, series_uuid, merged)
+
     return {
         "status": "ok",
         "seriesId": str(series_uuid),
         "seriesUpdated": updated_series,
         "seasonsUpdated": updated_seasons,
+        "artwork": applied_artwork["series"],
+        "seasonArtwork": applied_artwork["seasons"],
         "sources": {
             "consulted": [plugin_id for plugin_id, _ in results],
             "series": merged["overviewSource"] if updated_series else "",
             "seasons": season_sources,
+            "artwork": {kind: entry["source"] for kind, entry in merged["artwork"].items()},
         },
         "errors": errors,
     }
+
+
+def apply_series_artwork(conn, series_uuid: UUID, merged: dict[str, Any]) -> dict[str, Any]:
+    """Store the merged artwork against the series and its seasons.
+
+    Reuses the movie path's writers rather than a series-shaped copy of them:
+    `apply_primary_media_update` is what already refuses to overwrite a primary
+    somebody chose by hand, and that refusal is the *only* protection a series
+    has -- it has no lock button. Re-implementing the write here would have meant
+    re-implementing that refusal, or quietly not having it.
+
+    Runner-up URLs are linked as options so the Posters and Backdrops tabs offer
+    a choice. `sort_order` starts at 1 because 0 belongs to the primary.
+    """
+    applied: dict[str, Any] = {"series": {}, "seasons": {}}
+    if not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
+        return applied
+
+    for kind, entry in merged.get("artwork", {}).items():
+        provider_id = entry.get("source") or "metadata"
+        primary = apply_primary_media_update(
+            conn,
+            entity_type="series",
+            entity_id=series_uuid,
+            kind=kind,
+            source_url=entry["sourceUrl"],
+            provider_id=provider_id,
+        )
+        options = []
+        for sort_order, option_url in enumerate(entry.get("options") or [], start=1):
+            if option_url == entry["sourceUrl"]:
+                continue
+            linked = link_media_option(
+                conn,
+                entity_type="series",
+                entity_id=series_uuid,
+                kind=kind,
+                source_url=option_url,
+                provider_id=provider_id,
+                sort_order=sort_order,
+            )
+            if linked:
+                options.append(linked)
+        if primary or options:
+            applied["series"][kind] = {"primary": primary, "options": options}
+
+    season_posters = {
+        number: entry for number, entry in merged.get("seasons", {}).items() if entry.get("posterUrl")
+    }
+    if not season_posters or not table_exists(conn, "series_seasons"):
+        return applied
+
+    # One read for every season rather than one per poster: the season row's id
+    # is what the media link points at, and a series with twenty seasons should
+    # not cost twenty lookups.
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, season_number
+            FROM series_seasons
+            WHERE series_id = %s AND deleted_at IS NULL
+            """,
+            (series_uuid,),
+        )
+        season_ids = {row["season_number"]: row["id"] for row in cur.fetchall()}
+
+    for number, entry in sorted(season_posters.items()):
+        season_id = season_ids.get(number)
+        if not season_id:
+            # A season the source knows about but this collection has no row for.
+            # `ensure_seasons` owns creating those; inventing one here would let a
+            # poster conjure a season nobody said existed.
+            continue
+        primary = apply_primary_media_update(
+            conn,
+            entity_type="series_season",
+            entity_id=season_id,
+            kind="poster",
+            source_url=entry["posterUrl"],
+            provider_id=entry.get("posterSource") or "metadata",
+        )
+        if primary:
+            applied["seasons"][str(number)] = primary
+    return applied
 
 
 def refresh_movie_metadata(

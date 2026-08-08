@@ -7849,6 +7849,40 @@ def ui_preview_html(
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
     }
+    .series-season-list {
+      display: grid;
+      gap: 8px;
+    }
+    .series-season-row {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+    }
+    /* Reserved whether or not the season resolved a poster, so the labels stay on
+       one vertical line instead of stepping in and out as artwork arrives. */
+    .series-season-thumb {
+      width: 46px;
+      aspect-ratio: 2 / 3;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--surface-2, rgba(127, 127, 127, 0.12));
+    }
+    .series-season-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .series-season-text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .series-season-text span {
+      color: var(--muted);
+      font-size: 12px;
+    }
     .container-member-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -30228,7 +30262,12 @@ def ui_preview_html(
           .map((row) => Number.parseInt(row.seasonNumber, 10))
           .filter((value) => Number.isFinite(value))
       );
-      return detailFieldRows(seasons.map((season) => {
+      // A season with a poster becomes a card; one without stays the plain row it
+      // has always been. Not a uniform grid of placeholders: a series where only
+      // half the seasons resolved would then read as half-broken rather than
+      // half-illustrated.
+      const anyPoster = seasons.some((season) => season.posterUrl);
+      const rows = seasons.map((season) => {
         const label = season.title
           ? `${season.seasonNumber} - ${season.title}`
           : tNext("collection.seasonNumber", "Season {number}").replace("{number}", season.seasonNumber);
@@ -30238,8 +30277,22 @@ def ui_preview_html(
           season.year || "",
           season.episodeCount ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount) : "",
         ].filter(Boolean);
-        return [label, parts.join(" / ")];
-      }));
+        return {season, label, meta: parts.join(" / ")};
+      });
+      if (!anyPoster) {
+        return detailFieldRows(rows.map((row) => [row.label, row.meta]));
+      }
+      return `<div class="series-season-list">${rows.map((row) => `
+        <div class="series-season-row">
+          <div class="series-season-thumb">${row.season.posterUrl
+            ? `<img src="${escapeHtml(row.season.posterUrl)}" alt="${escapeHtml(row.label)}" loading="lazy">`
+            : ""}</div>
+          <div class="series-season-text">
+            <strong>${escapeHtml(row.label)}</strong>
+            <span>${escapeHtml(row.meta)}</span>
+          </div>
+        </div>
+      `).join("")}</div>`;
     }
     function renderSeriesDetail(detail) {
       activeSeriesPayload = detail || {};

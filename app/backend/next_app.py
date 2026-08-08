@@ -89,6 +89,7 @@ try:
     from .next_metadata import _SCANNED_TITLE_NOISE_RE
     from .next_metadata import normalize_list_field
     from .next_metadata import ensure_remote_media_asset
+    from .next_metadata import ENTITY_ARTWORK_TABLES
     from .next_metadata import metadata_result_summary
     from .next_metadata import apply_metadata_proposal
     from .next_metadata import preview_movie_metadata
@@ -358,6 +359,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import _SCANNED_TITLE_NOISE_RE
     from next_metadata import normalize_list_field
     from next_metadata import ensure_remote_media_asset
+    from next_metadata import ENTITY_ARTWORK_TABLES
     from next_metadata import metadata_result_summary
     from next_metadata import apply_metadata_proposal
     from next_metadata import preview_movie_metadata
@@ -10257,8 +10259,29 @@ def season_entities(conn, series_id: UUID) -> list[dict[str, Any]]:
                        FROM movie_seasons ms
                        JOIN movies m ON m.id = ms.movie_id AND m.deleted_at IS NULL
                        WHERE ms.season_id = s.id
-                   ) AS disc_count
+                   ) AS disc_count,
+                   poster.id AS poster_id,
+                   poster.storage_backend AS poster_storage_backend,
+                   poster.storage_key AS poster_storage_key,
+                   poster.source_url AS poster_source_url
             FROM series_seasons s
+            -- A season's own poster, if a source supplied one. A lateral join
+            -- rather than a read per season: a long-running show has twenty of
+            -- these, and a query each is the N+1 this module has already been
+            -- cleaned of once elsewhere.
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type = 'series_season'
+                  AND em.entity_id = s.id
+                  AND em.role = 'poster'
+                  AND em.is_primary = true
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                ORDER BY em.sort_order, ma.created_at
+                LIMIT 1
+            ) poster ON true
             WHERE s.series_id = %s AND s.deleted_at IS NULL
             ORDER BY s.season_number
             """,
@@ -10275,6 +10298,16 @@ def season_entities(conn, series_id: UUID) -> list[dict[str, Any]]:
             "overview": row["overview"],
             "episodeCount": row["episode_count"],
             "discCount": int(row["disc_count"] or 0),
+            "posterUrl": media_asset_public_url(
+                {
+                    "id": row.get("poster_id"),
+                    "storage_backend": row.get("poster_storage_backend"),
+                    "storage_key": row.get("poster_storage_key"),
+                    "source_url": row.get("poster_source_url"),
+                }
+                if row.get("poster_id")
+                else None
+            ),
         }
         for row in rows
     ]
@@ -15340,22 +15373,21 @@ def create_uploaded_movie_media_asset(
     return {"movieId": str(movie_id), "kind": kind, "media": media, "revision": revision}
 
 
-# Which table owns an entity that can carry artwork. A series joined this map
-# rather than getting its own copy of the media plumbing: the SQL below differs
-# only in this table name and the `entity_type` string, so a parallel set of
-# functions would have been the same code drifting apart.
-ENTITY_ARTWORK_TABLES = {
-    "movie": "movies",
-    "container": "containers",
-    "series": "series",
-}
+# Which table owns an entity that can carry artwork. The map itself lives in
+# next_metadata, which is the lower layer and the one that writes artwork coming
+# from a source; keeping a second copy here is how the upload path and the fetch
+# path would come to disagree about what is storable.
+#
+# Not every key is reachable from here: `series_season` carries a poster but has
+# no page and no upload route, so the route-facing check below stays narrower
+# than the map on purpose.
+_UPLOADABLE_ARTWORK_ENTITIES = ("movie", "container", "series")
 
 
 def entity_artwork_table(entity_type: str) -> str:
-    table = ENTITY_ARTWORK_TABLES.get(entity_type)
-    if not table:
+    if entity_type not in _UPLOADABLE_ARTWORK_ENTITIES:
         raise NextApiError("entityType must be movie, container or series", 400)
-    return table
+    return ENTITY_ARTWORK_TABLES[entity_type]
 
 
 def set_primary_entity_media_asset(

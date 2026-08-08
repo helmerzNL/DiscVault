@@ -62,6 +62,17 @@ class SeriesDetailPostgresTests(unittest.TestCase):
                     """,
                     (f"{PREFIX}-%",),
                 )
+                # A season owns a poster too, and `series_seasons` is deleted
+                # below -- an orphaned entity_media row would outlive the run and
+                # be counted by the next one.
+                cur.execute(
+                    """
+                    DELETE FROM entity_media WHERE entity_type='series_season' AND entity_id IN (
+                        SELECT id FROM series_seasons WHERE public_id LIKE %s
+                    )
+                    """,
+                    (f"{PREFIX}-%",),
+                )
                 cur.execute(
                     """
                     DELETE FROM movie_seasons WHERE movie_id IN (
@@ -248,6 +259,116 @@ class SeriesDetailRouteTests(SeriesDetailPostgresTests):
         )
         with self.connect() as conn:
             self.assertEqual(next_app.series_detail_entity(conn, series_id)["mediaAssets"], [])
+
+    def test_fetched_artwork_lands_on_the_series_and_its_seasons(self):
+        """The one thing no source reading can prove.
+
+        `entity_media.entity_type` is unconstrained text, so writing 'serie' or
+        'season' instead would insert cleanly, return success, and simply never
+        be read back by anything.
+        """
+        from app.backend import next_metadata
+
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            season_id = self._season(conn, series_id, 1)
+
+            next_metadata.apply_series_artwork(
+                conn,
+                series_id,
+                {
+                    "artwork": {
+                        "poster": {
+                            "sourceUrl": "https://example.test/p1.jpg",
+                            "options": ["https://example.test/p1.jpg", "https://example.test/p2.jpg"],
+                            "source": "tmdb",
+                        }
+                    },
+                    "seasons": {1: {"posterUrl": "https://example.test/s1.jpg", "posterSource": "tmdb"}},
+                },
+            )
+            conn.commit()
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT entity_type, entity_id, is_primary
+                    FROM entity_media
+                    WHERE entity_id IN (%s, %s)
+                    ORDER BY entity_type, is_primary DESC
+                    """,
+                    (series_id, season_id),
+                )
+                rows = cur.fetchall()
+
+        by_type = {}
+        for row in rows:
+            by_type.setdefault(row["entity_type"], []).append(row)
+        self.assertEqual(sorted(by_type), ["series", "series_season"])
+        # The runner-up is linked but not primary: it fills the Posters tab with
+        # a choice without quietly becoming the choice.
+        self.assertEqual([row["is_primary"] for row in by_type["series"]], [True, False])
+        self.assertEqual(len(by_type["series_season"]), 1)
+
+        with self.connect() as conn:
+            seasons = next_app.series_detail_entity(conn, series_id)["series"]["seasons"]
+        self.assertTrue(seasons[0]["posterUrl"], "the season poster must reach the page")
+
+    def test_a_refresh_does_not_replace_a_poster_somebody_chose(self):
+        """A series has no lock button, so this refusal is the whole protection.
+
+        It fails silently if it regresses: the fetched poster simply appears and
+        the uploaded one is still *present* as an option, so nothing looks broken
+        until somebody notices their choice was overruled.
+        """
+        from app.backend import next_metadata
+
+        png = _png()
+        if png is None:  # pragma: no cover - Pillow is a backend dependency
+            self.skipTest("Pillow is not installed")
+        with self.connect() as conn:
+            series_id = self._series(conn)
+
+        data_dir = tempfile.mkdtemp(prefix="series-artwork-lock-")
+        self.addCleanup(shutil.rmtree, data_dir, True)
+        with patch.dict(os.environ, {"DISCVAULT_LEGACY_DATA_DIR": data_dir}):
+            upload = self.client.post(
+                f"/api/next/series/{series_id}/media/upload",
+                data={"kind": "poster", "file": (io.BytesIO(png), "mine.png")},
+                content_type="multipart/form-data",
+            )
+        self.assertEqual(upload.status_code, 200, upload.data[:200])
+        mine = upload.get_json()["media"]["id"]
+        self.assertEqual(
+            self.client.post(
+                f"/api/next/series/{series_id}/media/primary",
+                json={"mediaId": mine, "kind": "poster"},
+            ).status_code,
+            200,
+        )
+
+        with self.connect() as conn:
+            applied = next_metadata.apply_series_artwork(
+                conn,
+                series_id,
+                {
+                    "artwork": {
+                        "poster": {
+                            "sourceUrl": "https://example.test/theirs.jpg",
+                            "options": [],
+                            "source": "tmdb",
+                        }
+                    },
+                    "seasons": {},
+                },
+            )
+            conn.commit()
+
+        self.assertTrue(applied["series"]["poster"]["primary"]["lockedPrimary"])
+        with self.connect() as conn:
+            detail = next_app.series_detail_entity(conn, series_id)
+        primary = [a for a in detail["mediaAssets"] if a["kind"] == "poster" and a["is_primary"]]
+        self.assertEqual([str(asset["id"]) for asset in primary], [str(mine)])
 
     def test_the_refresh_route_runs_the_multi_source_fill(self):
         """A miss is a 200 with a status, not an error: nothing was damaged and

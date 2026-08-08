@@ -171,6 +171,30 @@ def _person_localizations(data):
     return rows
 
 
+def _artwork_urls(data, key, fallback_path):
+    """The image URLs a TMDB payload offers for one kind, best first.
+
+    Shared by the movie and the series path deliberately. The two ask `/movie/{id}`
+    and `/tv/{id}`, but TMDB answers both with the same `images` shape, and a second
+    copy of this sorting is how the two would drift into ranking artwork differently
+    for no reason anyone could later explain.
+
+    `vote_average` is TMDB's own community ranking, so "best" is the source's
+    judgement rather than ours. The single `poster_path` / `backdrop_path` is the
+    fallback rather than the primary: it is what TMDB shows by default, but the
+    `images` list is ordered by what people actually preferred.
+    """
+    entries = sorted(
+        (data.get("images") or {}).get(key) or [],
+        key=lambda item: item.get("vote_average") or 0,
+        reverse=True,
+    )
+    urls = [_image(item.get("file_path")) for item in entries[:10] if item.get("file_path")]
+    if not urls and data.get(fallback_path):
+        urls = [_image(data.get(fallback_path))]
+    return [url for url in urls if url]
+
+
 def _normalize_details(data):
     # TMDB genre ids are the source of truth for the canonical genre catalog
     # (see next_genres.py). Returning ids here -- instead of localized names
@@ -185,22 +209,8 @@ def _normalize_details(data):
     directors = [item.get("name") for item in crew if item.get("job") == "Director" and item.get("name")]
     producers = [item.get("name") for item in crew if item.get("job") == "Producer" and item.get("name")]
     actors = [item.get("name") for item in cast[:5] if item.get("name")]
-    backdrops = sorted(
-        (data.get("images") or {}).get("backdrops") or [],
-        key=lambda item: item.get("vote_average") or 0,
-        reverse=True,
-    )
-    posters = sorted(
-        (data.get("images") or {}).get("posters") or [],
-        key=lambda item: item.get("vote_average") or 0,
-        reverse=True,
-    )
-    poster_urls = [_image(item.get("file_path")) for item in posters[:10] if item.get("file_path")]
-    if not poster_urls and data.get("poster_path"):
-        poster_urls = [_image(data.get("poster_path"))]
-    backdrop_urls = [_image(item.get("file_path")) for item in backdrops[:10] if item.get("file_path")]
-    if not backdrop_urls and data.get("backdrop_path"):
-        backdrop_urls = [_image(data.get("backdrop_path"))]
+    poster_urls = _artwork_urls(data, "posters", "poster_path")
+    backdrop_urls = _artwork_urls(data, "backdrops", "backdrop_path")
     trailer, extra_videos = _videos(data)
     ratings = _certifications(data.get("release_dates") or {})
     imdb_id = data.get("imdb_id") or ""
@@ -401,18 +411,32 @@ def _series_details_request(context, tmdb_tv_id):
         context,
         f"/tv/{tmdb_tv_id}",
         language=_language(context),
+        # Artwork rides along on the request that was being made anyway. The
+        # argument above is against extra *requests*, not against extra fields,
+        # and `append_to_response` costs neither a round trip nor a rate-limit
+        # slot -- the same reason `_details` asks this way for a movie.
+        append_to_response="images",
+        include_image_language="null,en",
     )
 
 
 def _normalize_series(data):
     """Shape a TMDB television payload into the little this feature stores.
 
-    Deliberately narrow. TMDB returns creators, networks, episode counts, artwork
-    and ratings here, and none of it is mapped: `series` has columns for a title
-    and an overview, and inventing a mapping for fields nothing reads would be
-    guessing at a schema that does not exist yet. Artwork in particular is its
-    own piece of work -- a series is a third entity type in the media-asset path
-    -- and is deliberately absent rather than half-done.
+    Still deliberately narrow. TMDB returns creators, networks and ratings here
+    and none of that is mapped: `series` has columns for a title and an overview,
+    and inventing a mapping for fields nothing reads would be guessing at a schema
+    that does not exist yet.
+
+    Artwork *is* mapped now, under the same key names `movie` uses -- `posterUrl`
+    / `posters` / `backdropUrl` / `backdropUrls`. Matching names is what lets the
+    merge layer stay free of per-source vocabulary, so a second series source can
+    answer in the shape that already works.
+
+    A season's poster comes from the `seasons` array that is already in this
+    payload, which is the reason it costs nothing. `/tv/{id}/season/{n}` would
+    give a richer season and one request per season with it; the argument above
+    against that still stands.
 
     Season 0 travels like any other. It is specials on TMDB and specials on the
     disc, and a box set that includes them is a real thing to own.
@@ -431,8 +455,11 @@ def _normalize_series(data):
                 "overview": season.get("overview") or "",
                 "year": str(season.get("air_date") or "")[:4],
                 "episodeCount": season.get("episode_count"),
+                "posterUrl": _image(season.get("poster_path")) if season.get("poster_path") else "",
             }
         )
+    poster_urls = _artwork_urls(data, "posters", "poster_path")
+    backdrop_urls = _artwork_urls(data, "backdrops", "backdrop_path")
     return {
         "status": "hit",
         "provider": "tmdb",
@@ -444,6 +471,10 @@ def _normalize_series(data):
             "overview": data.get("overview") or "",
             "startYear": str(data.get("first_air_date") or "")[:4],
             "endYear": str(data.get("last_air_date") or "")[:4],
+            "posterUrl": poster_urls[0] if poster_urls else "",
+            "posters": poster_urls,
+            "backdropUrl": backdrop_urls[0] if backdrop_urls else "",
+            "backdropUrls": backdrop_urls,
         },
         "seasons": seasons,
         "tmdbTvId": data.get("id"),
