@@ -7813,7 +7813,11 @@ def ui_preview_html(
         linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 42%),
         var(--bg-elevated);
     }
-    .container-detail-submenu {
+    /* The series page shares these rules rather than carrying a copy. Both live
+       in the two-column `.movie-detail-body` grid and both need to span it; a
+       second copy is how two pages that should look identical drift apart. */
+    .container-detail-submenu,
+    .series-detail-submenu {
       grid-column: 1 / -1;
       position: sticky;
       top: 72px;
@@ -7828,13 +7832,15 @@ def ui_preview_html(
       box-shadow: var(--shadow-soft);
       backdrop-filter: blur(20px) saturate(160%);
     }
-    .container-detail-panel {
+    .container-detail-panel,
+    .series-detail-panel {
       grid-column: 1 / -1;
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
     }
-    .container-detail-panel.hidden {
+    .container-detail-panel.hidden,
+    .series-detail-panel.hidden {
       display: none;
     }
     .container-overview-grid {
@@ -12645,23 +12651,27 @@ def ui_preview_html(
       .movie-media-video-grid .video-card-copy {
         font-size: .8rem;
       }
-      .container-detail-submenu {
+      .container-detail-submenu,
+      .series-detail-submenu {
         position: static;
         justify-content: flex-start;
         overflow-x: auto;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
       }
-      .container-detail-submenu::-webkit-scrollbar {
+      .container-detail-submenu::-webkit-scrollbar,
+      .series-detail-submenu::-webkit-scrollbar {
         display: none;
       }
-      .container-detail-submenu button {
+      .container-detail-submenu button,
+      .series-detail-submenu button {
         flex: 0 0 auto;
         max-width: min(74vw, 260px);
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .container-detail-panel,
+      .series-detail-panel,
       .container-overview-grid {
         grid-template-columns: 1fr;
       }
@@ -13312,12 +13322,14 @@ def ui_preview_html(
     }
     @media (max-width: 420px) {
       .detail-submenu,
-      .container-detail-submenu {
+      .container-detail-submenu,
+      .series-detail-submenu {
         gap: 3px;
         padding: 3px;
       }
       .detail-submenu button,
-      .container-detail-submenu button {
+      .container-detail-submenu button,
+      .series-detail-submenu button {
         min-height: 34px;
         padding: 0 10px;
         font-size: .76rem;
