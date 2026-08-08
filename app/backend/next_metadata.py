@@ -23,6 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
 try:
     from .dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from .dedup_identity import extract_identity_identifiers
+    from .dedup_identity import MEDIA_TYPE_SHOW
     from .dedup_identity import normalize_media_type
     from .next_import import clean_text
     from .next_genres import genre_keys_from_tmdb_ids
@@ -37,9 +38,11 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import sync_plugin_registry
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from .next_series import ensure_seasons, ensure_series, provider_series_payload
 except ImportError:  # pragma: no cover - supports direct module execution
     from dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from dedup_identity import extract_identity_identifiers
+    from dedup_identity import MEDIA_TYPE_SHOW
     from dedup_identity import normalize_media_type
     from next_import import clean_text
     from next_genres import genre_keys_from_tmdb_ids
@@ -54,6 +57,7 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import sync_plugin_registry
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from next_series import ensure_seasons, ensure_series, provider_series_payload
 
 
 METADATA_REFRESH_JOB_TYPE = "metadata.refresh_movie"
@@ -2785,6 +2789,12 @@ def merge_metadata_results(
     technical_updates: dict[str, Any] = {}
     media_updates: dict[str, dict[str, Any]] = {}
     identifiers: dict[str, str] = {}
+    # The series a television disc belongs to, if any provider states one. First
+    # stater wins, exactly like an identifier: two providers naming different
+    # series for one disc is a disagreement no automatic rule can settle, and
+    # silently preferring the later one would make the outcome depend on source
+    # ordering rather than on anything a reader could reason about.
+    series: dict[str, Any] | None = None
     credits: list[dict[str, Any]] = []
     localizations: list[dict[str, Any]] = []
     credit_keys: set[tuple[str, str, str, str]] = set()
@@ -3023,6 +3033,26 @@ def merge_metadata_results(
             )
             if accepted_identifier:
                 identifiers[provider] = identifier
+        candidate_series = result.get("series")
+        if isinstance(candidate_series, dict) and clean_text(candidate_series.get("tmdbTvId")):
+            accepted_series = series is None
+            add_decision_candidate(
+                target="series",
+                field="tmdbTvId",
+                result=result,
+                value=clean_text(candidate_series.get("tmdbTvId")) or "",
+                accepted=accepted_series,
+                reason=(
+                    "series identity selected"
+                    if accepted_series
+                    else "series already selected from an earlier provider"
+                ),
+            )
+            if accepted_series:
+                series = {
+                    **candidate_series,
+                    "providerId": candidate_series.get("provider") or result.get("pluginId"),
+                }
         for credit in result.get("credits") or []:
             if not isinstance(credit, dict):
                 continue
@@ -3065,6 +3095,10 @@ def merge_metadata_results(
         "technicalUpdates": technical_updates,
         "mediaUpdates": media_updates,
         "identifiers": identifiers,
+        # None rather than {} when nobody stated one: absent means "no provider
+        # spoke", which must stay distinguishable from a stated answer. Nothing
+        # downstream may read absence as a reason to unlink a series.
+        "series": series,
         "credits": credits,
         "localizations": localizations,
         "genreKeys": genre_keys,
@@ -4776,6 +4810,80 @@ def apply_credit_updates(conn, *, movie_id: UUID, credits: list[dict[str, Any]])
     }
 
 
+def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, Any] | None:
+    """Link a disc to the series a metadata source named, creating it if new.
+
+    Returns what it did, or None when it did nothing -- which is the common case
+    and never an error. Four things stop it, and each is a rule rather than a
+    guard:
+
+    * **The source said nothing.** Silence is not disagreement. A provider with
+      no opinion must never be able to unlink a series somebody established.
+    * **The disc is not a series.** ``movies_series_requires_show`` forbids a
+      ``series_id`` on a MOVIE, so linking one would be writing a constraint
+      violation. This is also what makes a field lock work without any special
+      case here: a user who locked the type to MOVIE keeps it, the type never
+      becomes SHOW, and the link is skipped as a consequence rather than by a
+      second rule that could drift from the first.
+    * **The disc already belongs to a different series.** A stated identity does
+      not outrank a link that is already there; re-pointing a disc is a decision,
+      not a refresh.
+    * **The tables are absent.** Older databases predate migration 063.
+
+    Season links are replaced rather than merged when the series matches, because
+    "these are the seasons on this disc" is a whole statement -- the same reason
+    ``apply_movie_series_assignment`` replaces them wholesale.
+    """
+    payload = provider_series_payload(stated)
+    if payload is None:
+        return None
+    if not table_exists(conn, "series") or not table_exists(conn, "series_identifiers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT media_type, series_id FROM movies WHERE id = %s AND deleted_at IS NULL",
+            (movie_uuid,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        media_type = row["media_type"] if isinstance(row, dict) else row[0]
+        current_series = row["series_id"] if isinstance(row, dict) else row[1]
+        if media_type != MEDIA_TYPE_SHOW:
+            return None
+        series_uuid = ensure_series(
+            cur,
+            provider_id=payload["provider_id"],
+            identifier=payload["identifier"],
+            title=payload["title"],
+        )
+        if current_series is not None and current_series != series_uuid:
+            return None
+        season_ids = ensure_seasons(cur, series_uuid, payload["seasons"])
+        cur.execute(
+            "UPDATE movies SET series_id = %s WHERE id = %s",
+            (series_uuid, movie_uuid),
+        )
+        # Ordered after the movies update, unlike the edit API's own path: there
+        # the disc may be moving *between* series and the old rows have to go
+        # first, while here the series is either unchanged or newly set, so the
+        # composite key is satisfied the moment series_id lands.
+        cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
+        for index, season_id in enumerate(season_ids):
+            cur.execute(
+                """
+                INSERT INTO movie_seasons (movie_id, season_id, series_id, sort_order)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (movie_uuid, season_id, series_uuid, index),
+            )
+    return {
+        "seriesId": str(series_uuid),
+        "created": current_series is None,
+        "seasonCount": len(season_ids),
+    }
+
+
 def apply_metadata_proposal(
     conn,
     movie_id: UUID | str,
@@ -5075,6 +5183,10 @@ def apply_metadata_proposal(
             else current_genre_keys
         )
 
+    # After the movie updates, because the link is only permitted once the type
+    # is SHOW, and it is those updates that may have made it one.
+    applied_series = apply_movie_series_link(conn, movie_uuid, proposal.get("series"))
+
     revision = record_sync_change(
         conn,
         movie_uuid,
@@ -5099,6 +5211,7 @@ def apply_metadata_proposal(
         "technicalUpdates": technical_updates,
         "mediaUpdates": applied_media_updates,
         "identifiers": identifiers,
+        "series": applied_series,
         "credits": applied_credit_updates,
         "localizations": applied_localizations,
         "genres": applied_genre_keys,
