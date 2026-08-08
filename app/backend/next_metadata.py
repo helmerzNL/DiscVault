@@ -33,6 +33,7 @@ try:
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import movievault_v2_plugin_context
+    from .next_packaging import split_legacy_packaging
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import sync_plugin_registry
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
@@ -49,6 +50,7 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import movievault_v2_plugin_context
+    from next_packaging import split_legacy_packaging
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import sync_plugin_registry
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
@@ -123,6 +125,10 @@ METADATA_DISPLAY_TITLE_FIELDS = {
 METADATA_TECHNICAL_FIELDS = {
     "hdr",
     "packaging",
+    "carrier_type",
+    "outer_packaging",
+    "finishes",
+    "steelbook_format",
     "screen_ratios",
     "audio_tracks",
     "subtitles",
@@ -168,6 +174,10 @@ MOVIE_LOCKABLE_FIELDS = {
     "distributor",
     "hdr",
     "packaging",
+    "carrier_type",
+    "outer_packaging",
+    "finishes",
+    "steelbook_format",
     "screen_ratios",
     "audio_tracks",
     "subtitles",
@@ -231,6 +241,10 @@ MOVIE_LOCK_RECEIVER_KEYS: dict[str, tuple[str, ...]] = {
     "distributor": ("distributor",),
     "hdr": ("hdr", "hdrFormats"),
     "packaging": ("packaging",),
+    "carrier_type": ("carrierType", "carrier_type"),
+    "outer_packaging": ("outerPackaging", "outer_packaging"),
+    "finishes": ("finishes",),
+    "steelbook_format": ("steelbookFormat", "steelbook_format"),
     "screen_ratios": ("screenRatios", "screen_ratios", "aspectRatios"),
     "audio_tracks": ("audioTracks", "audio_tracks"),
     "subtitles": ("subtitles", "subtitleLanguages"),
@@ -256,6 +270,8 @@ METADATA_LIST_FIELDS = {
     "backdrop_urls",
     "videos",
     "packaging",
+    "outer_packaging",
+    "finishes",
     # Lists since migration 055 - MovieVault publishes both as arrays and a disc
     # genuinely carries more than one of each.
     "hdr",
@@ -887,7 +903,8 @@ def movie_technical_specs(conn, movie_id: UUID) -> dict[str, Any]:
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT hdr, packaging, screen_ratios, audio_tracks, subtitles, regions, content_ratings
+            SELECT hdr, packaging, carrier_type, outer_packaging, finishes, steelbook_format,
+                   screen_ratios, audio_tracks, subtitles, regions, content_ratings
             FROM movie_technical_specs
             WHERE movie_id=%s
             """,
@@ -1448,6 +1465,8 @@ def normalize_list_field(field: str, value: Any) -> list[Any]:
         "regions",
         "backdrop_urls",
         "packaging",
+        "outer_packaging",
+        "finishes",
         "hdr",
         "screen_ratios",
         "video_codecs",
@@ -4856,13 +4875,17 @@ def apply_metadata_proposal(
             )
 
         if technical_updates and table_exists(conn, "movie_technical_specs"):
+            _technical_carrier, _technical_outer = split_legacy_packaging(
+                technical_updates.get("packaging") or []
+            )
             cur.execute(
                 """
                 INSERT INTO movie_technical_specs (
-                    movie_id, hdr, packaging, screen_ratios, audio_tracks, subtitles, regions,
+                    movie_id, hdr, packaging, carrier_type, outer_packaging,
+                    screen_ratios, audio_tracks, subtitles, regions,
                     content_ratings, video_resolution, video_codecs, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                 ON CONFLICT (movie_id) DO UPDATE SET
                     video_resolution=COALESCE(
                         EXCLUDED.video_resolution, movie_technical_specs.video_resolution
@@ -4882,6 +4905,20 @@ def apply_metadata_proposal(
                     packaging=CASE
                         WHEN EXCLUDED.packaging <> '[]'::jsonb THEN EXCLUDED.packaging
                         ELSE movie_technical_specs.packaging
+                    END,
+                    -- Enrichment still speaks the flat list, so the two axes are
+                    -- derived from it on the way in (next_packaging.split_legacy_
+                    -- packaging). Without this an enriched release would fill only
+                    -- the legacy mirror and the edit form would read as empty.
+                    -- A user edit already stored on the axes outranks a derived
+                    -- guess, hence COALESCE/non-empty rather than overwrite.
+                    carrier_type=COALESCE(
+                        movie_technical_specs.carrier_type, EXCLUDED.carrier_type
+                    ),
+                    outer_packaging=CASE
+                        WHEN movie_technical_specs.outer_packaging <> '[]'::jsonb
+                            THEN movie_technical_specs.outer_packaging
+                        ELSE EXCLUDED.outer_packaging
                     END,
                     audio_tracks=CASE
                         WHEN EXCLUDED.audio_tracks <> '[]'::jsonb THEN EXCLUDED.audio_tracks
@@ -4905,6 +4942,8 @@ def apply_metadata_proposal(
                     movie_uuid,
                     Jsonb(json_ready(technical_updates.get("hdr") or [])),
                     Jsonb(json_ready(technical_updates.get("packaging") or [])),
+                    _technical_carrier,
+                    Jsonb(json_ready(_technical_outer)),
                     Jsonb(json_ready(technical_updates.get("screen_ratios") or [])),
                     Jsonb(json_ready(technical_updates.get("audio_tracks") or [])),
                     Jsonb(json_ready(technical_updates.get("subtitles") or [])),

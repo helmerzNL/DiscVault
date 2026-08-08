@@ -306,6 +306,12 @@ try:
     from .next_export import register_next_export_routes
     from .next_static import NEXT_SCRIPT_URL_PREFIX
     from .next_static import register_next_static_routes
+    from .next_packaging import STEELBOOK_CARRIERS
+    from .next_packaging import derive_legacy_packaging
+    from .next_packaging import normalize_carrier
+    from .next_packaging import normalize_finishes
+    from .next_packaging import normalize_outer_packaging
+    from .next_packaging import normalize_steelbook_format
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
     from next_import import CLIENT_SYNC_SETTING_KEYS
@@ -566,6 +572,12 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_export import register_next_export_routes
     from next_static import NEXT_SCRIPT_URL_PREFIX
     from next_static import register_next_static_routes
+    from next_packaging import STEELBOOK_CARRIERS
+    from next_packaging import derive_legacy_packaging
+    from next_packaging import normalize_carrier
+    from next_packaging import normalize_finishes
+    from next_packaging import normalize_outer_packaging
+    from next_packaging import normalize_steelbook_format
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
@@ -9750,6 +9762,88 @@ def _movie_edit_tracks(raw: Any, normalizer, *, label: str) -> list[Any]:
         raise NextApiError(422, "invalid_request", f"{label}: {exc}") from exc
 
 
+def _movie_edit_case_axes(body: dict[str, Any], edits: dict[str, Any]) -> None:
+    """Apply the carrier / outer-packaging / finish edits, and re-derive `packaging`.
+
+    Unlike the other technical fields, these *are* validated against their
+    vocabulary. The flat `packaging` field historically accepted anything the
+    client sent straight into jsonb, which is how TitleCase values that no i18n
+    key could resolve ended up stored. There is no reason to repeat that for the
+    fields replacing it.
+
+    `packaging` stays written as a derived mirror so consumers predating the
+    split - backup/restore, import, the MCP server - keep seeing the flat list.
+    An explicit `packaging` in the same body loses to the axes: they are the
+    source of truth now.
+    """
+    carrier_keys = ("carrierType", "carrier_type")
+    outer_keys = ("outerPackaging", "outer_packaging")
+    finish_keys = ("finishes",)
+    steelbook_keys = ("steelbookFormat", "steelbook_format")
+
+    touched = False
+
+    if any(key in body for key in carrier_keys):
+        raw = next(body[key] for key in carrier_keys if key in body)
+        cleaned = clean_text(raw)
+        carrier = normalize_carrier(cleaned)
+        if cleaned and carrier is None:
+            raise NextApiError(422, "invalid_request", f"carrierType: unknown value {cleaned!r}")
+        edits["carrier_type"] = carrier
+        touched = True
+
+    if any(key in body for key in steelbook_keys):
+        raw = next(body[key] for key in steelbook_keys if key in body)
+        cleaned = clean_text(raw)
+        fmt = normalize_steelbook_format(cleaned)
+        if cleaned and fmt is None:
+            raise NextApiError(
+                422, "invalid_request", f"steelbookFormat: unknown value {cleaned!r}"
+            )
+        edits["steelbook_format"] = fmt
+
+    if any(key in body for key in outer_keys):
+        raw = next(body[key] for key in outer_keys if key in body)
+        submitted = _movie_edit_csv_list(raw)
+        outer = normalize_outer_packaging(submitted)
+        unknown = [
+            item
+            for item in submitted
+            if clean_text(item) and not normalize_outer_packaging([item])
+        ]
+        if unknown:
+            raise NextApiError(
+                422, "invalid_request", f"outerPackaging: unknown value {unknown[0]!r}"
+            )
+        edits["outer_packaging"] = outer
+        touched = True
+
+    if any(key in body for key in finish_keys):
+        raw = next(body[key] for key in finish_keys if key in body)
+        submitted = _movie_edit_csv_list(raw)
+        finishes = normalize_finishes(submitted)
+        unknown = [
+            item for item in submitted if clean_text(item) and not normalize_finishes([item])
+        ]
+        if unknown:
+            raise NextApiError(422, "invalid_request", f"finishes: unknown value {unknown[0]!r}")
+        edits["finishes"] = finishes
+
+    # A steelbook generation on a non-metal carrier is meaningless; drop it
+    # rather than storing a contradiction the form would then hide.
+    if edits.get("carrier_type") is not None and edits.get("carrier_type") not in STEELBOOK_CARRIERS:
+        if edits.get("steelbook_format"):
+            edits["steelbook_format"] = None
+
+    # Flag rather than derive here. A body may carry only one of the two axes,
+    # and rebuilding the flat list from half the pair would silently drop the
+    # other half. upsert_movie_technical_edits can read the stored row, so it
+    # derives from the merged result instead.
+    if touched:
+        edits["_derive_packaging"] = True
+        edits.pop("packaging", None)
+
+
 def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
     edits: dict[str, Any] = {}
     hdr_keys = ("hdr", "hdrFormats", "hdr_formats")
@@ -9758,6 +9852,7 @@ def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
         edits["hdr"] = _movie_edit_csv_list(raw)
     if "packaging" in body:
         edits["packaging"] = _movie_edit_csv_list(body.get("packaging"))
+    _movie_edit_case_axes(body, edits)
     region_keys = ("regions", "discRegions", "disc_regions")
     if any(key in body for key in region_keys):
         raw = next(body[key] for key in region_keys if key in body)
@@ -9801,13 +9896,33 @@ def movie_effective_field_locks(body: dict[str, Any], existing: dict[str, Any]) 
 def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -> None:
     if not edits:
         return
+    edits = dict(edits)
+    derive_packaging = bool(edits.pop("_derive_packaging", False))
     cur.execute(
         "INSERT INTO movie_technical_specs (movie_id, updated_at) VALUES (%s, now()) ON CONFLICT (movie_id) DO NOTHING",
         (movie_uuid,),
     )
+    if derive_packaging:
+        # Merge the submitted axes over the stored ones before rebuilding the
+        # flat `packaging` mirror, so a body carrying only one axis keeps the
+        # other. See _movie_edit_case_axes.
+        cur.execute(
+            "SELECT carrier_type, outer_packaging FROM movie_technical_specs WHERE movie_id=%s",
+            (movie_uuid,),
+        )
+        stored = cur.fetchone() or {}
+        if not isinstance(stored, dict):
+            stored = {"carrier_type": stored[0], "outer_packaging": stored[1]}
+        carrier = edits["carrier_type"] if "carrier_type" in edits else stored.get("carrier_type")
+        outer = (
+            edits["outer_packaging"]
+            if "outer_packaging" in edits
+            else (stored.get("outer_packaging") or [])
+        )
+        edits["packaging"] = derive_legacy_packaging(carrier, outer)
     assignments: list[str] = []
     values: list[Any] = []
-    for col in ("video_resolution",):
+    for col in ("video_resolution", "carrier_type", "steelbook_format"):
         if col in edits:
             assignments.append(f"{col}=%s")
             values.append(edits[col])
@@ -9815,6 +9930,8 @@ def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -
         "audio_tracks",
         "subtitles",
         "packaging",
+        "outer_packaging",
+        "finishes",
         "hdr",
         "screen_ratios",
         "regions",
@@ -10504,6 +10621,10 @@ def movie_technical_spec_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
             SELECT
                 hdr,
                 packaging,
+                carrier_type,
+                outer_packaging,
+                finishes,
+                steelbook_format,
                 screen_ratios,
                 audio_tracks,
                 subtitles,
@@ -10537,7 +10658,14 @@ MOVIE_TECHNICAL_SYNC_KEYS: dict[str, tuple[str, Any]] = {
     "hdr": ("hdr_formats", []),
     "screen_ratios": ("screen_ratios", []),
     "regions": ("disc_regions", []),
+    # `packaging` is the flat legacy list, kept as a derived mirror of the two
+    # axes below so clients predating the split keep working. The axes are the
+    # source of truth; see app/backend/next_packaging.py.
     "packaging": ("packaging", []),
+    "carrier_type": ("carrier_type", None),
+    "outer_packaging": ("outer_packaging", []),
+    "finishes": ("finishes", []),
+    "steelbook_format": ("steelbook_format", None),
     "audio_tracks": ("audio_tracks", []),
     "subtitles": ("subtitles", []),
     "video_resolution": ("video_resolution", None),

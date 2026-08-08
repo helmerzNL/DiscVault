@@ -732,6 +732,10 @@ def movie_detail_html(detail: dict[str, Any]) -> str:
         <div class="field-list">""" + detail_fields([
             ("HDR", specs.get("hdr") or metadata.get("hdr")),
             ("Packaging", specs.get("packaging") or metadata.get("packaging")),
+            ("Case type", specs.get("carrier_type") or metadata.get("carrier_type")),
+            ("Steelbook format", specs.get("steelbook_format") or metadata.get("steelbook_format")),
+            ("Outer packaging", specs.get("outer_packaging") or metadata.get("outer_packaging")),
+            ("Finish", specs.get("finishes") or metadata.get("finishes")),
             ("Screen ratio", specs.get("screen_ratios") or metadata.get("screen_ratios")),
             ("Audio", specs.get("audio_tracks") or metadata.get("audio_tracks")),
             ("Subtitles", specs.get("subtitles") or metadata.get("subtitles")),

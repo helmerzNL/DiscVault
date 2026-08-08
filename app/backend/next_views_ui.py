@@ -14944,17 +14944,58 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.edition">Edition</span>
                       <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
                     </label>
-                    <fieldset id="movieEditPackaging" class="movie-edit-checkbox-group">
-                      <legend data-next-i18n="movieDetail.packaging" data-lock-anchor>Packaging</legend>
-                      <label><input type="checkbox" value="keep_case"> <span data-next-i18n="moviePackaging.keepCase">Keep case</span></label>
-                      <label><input type="checkbox" value="amaray"> <span data-next-i18n="moviePackaging.amaray">Amaray</span></label>
-                      <label><input type="checkbox" value="steelbook"> <span data-next-i18n="moviePackaging.steelbook">Steelbook</span></label>
-                      <label><input type="checkbox" value="slipcover"> <span data-next-i18n="moviePackaging.slipcover">Slipcover</span></label>
-                      <label><input type="checkbox" value="slipcase"> <span data-next-i18n="moviePackaging.slipcase">Slipcase</span></label>
-                      <label><input type="checkbox" value="digibook"> <span data-next-i18n="moviePackaging.digibook">Digibook</span></label>
-                      <label><input type="checkbox" value="mediabook"> <span data-next-i18n="moviePackaging.mediabook">Mediabook</span></label>
-                      <label><input type="checkbox" value="digipak"> <span data-next-i18n="moviePackaging.digipak">Digipak</span></label>
-                      <label><input type="checkbox" value="box"> <span data-next-i18n="moviePackaging.box">Box</span></label>
+                    <label for="movieEditCarrierType">
+                      <span data-next-i18n="movieDetail.carrierType" data-lock-anchor>Case type</span>
+                      <select id="movieEditCarrierType" name="carrierType">
+                        <option value="" data-next-i18n="movieCarrier.unset">Not specified</option>
+                        <option value="keep_case" data-next-i18n="movieCarrier.keepCase">Amaray / keep case</option>
+                        <option value="eco_case" data-next-i18n="movieCarrier.ecoCase">Eco case</option>
+                        <option value="multi_disc_case" data-next-i18n="movieCarrier.multiDiscCase">Multi-disc case</option>
+                        <option value="steelbook" data-next-i18n="movieCarrier.steelbook">Steelbook</option>
+                        <option value="futurepak" data-next-i18n="movieCarrier.futurepak">FuturePak</option>
+                        <option value="hardbox" data-next-i18n="movieCarrier.hardbox">Hardbox</option>
+                        <option value="digipak" data-next-i18n="movieCarrier.digipak">Digipak</option>
+                        <option value="digisleeve" data-next-i18n="movieCarrier.digisleeve">Digisleeve</option>
+                        <option value="digibook" data-next-i18n="movieCarrier.digibook">Digibook</option>
+                        <option value="mediabook" data-next-i18n="movieCarrier.mediabook">Mediabook</option>
+                        <option value="card_wallet" data-next-i18n="movieCarrier.cardWallet">Card wallet</option>
+                        <option value="paper_sleeve" data-next-i18n="movieCarrier.paperSleeve">Paper sleeve</option>
+                        <option value="other" data-next-i18n="movieCarrier.other">Other</option>
+                      </select>
+                    </label>
+                    <label for="movieEditSteelbookFormat" id="movieEditSteelbookFormatField" hidden>
+                      <span data-next-i18n="movieDetail.steelbookFormat" data-lock-anchor>Steelbook format</span>
+                      <select id="movieEditSteelbookFormat" name="steelbookFormat">
+                        <option value="" data-next-i18n="movieSteelbookFormat.unset">Not specified</option>
+                        <option value="g1" data-next-i18n="movieSteelbookFormat.g1">G1</option>
+                        <option value="g2" data-next-i18n="movieSteelbookFormat.g2">G2</option>
+                        <option value="g3" data-next-i18n="movieSteelbookFormat.g3">G3</option>
+                      </select>
+                    </label>
+                    <fieldset id="movieEditOuterPackaging" class="movie-edit-checkbox-group">
+                      <legend data-next-i18n="movieDetail.outerPackaging" data-lock-anchor>Outer packaging</legend>
+                      <label><input type="checkbox" value="slipcover"> <span data-next-i18n="movieOuterPackaging.slipcover">Slipcover</span></label>
+                      <label><input type="checkbox" value="o_card"> <span data-next-i18n="movieOuterPackaging.oCard">O-card</span></label>
+                      <label><input type="checkbox" value="fullslip"> <span data-next-i18n="movieOuterPackaging.fullslip">Fullslip</span></label>
+                      <label><input type="checkbox" value="half_slip"> <span data-next-i18n="movieOuterPackaging.halfSlip">Half slip</span></label>
+                      <label><input type="checkbox" value="quarter_slip"> <span data-next-i18n="movieOuterPackaging.quarterSlip">Quarter slip</span></label>
+                      <label><input type="checkbox" value="lenticular_slip"> <span data-next-i18n="movieOuterPackaging.lenticularSlip">Lenticular slip</span></label>
+                      <label><input type="checkbox" value="double_lenticular_slip"> <span data-next-i18n="movieOuterPackaging.doubleLenticularSlip">Double lenticular slip</span></label>
+                      <label><input type="checkbox" value="slipcase"> <span data-next-i18n="movieOuterPackaging.slipcase">Slipcase</span></label>
+                      <label><input type="checkbox" value="rigid_box"> <span data-next-i18n="movieOuterPackaging.rigidBox">Rigid box</span></label>
+                      <label><input type="checkbox" value="one_click"> <span data-next-i18n="movieOuterPackaging.oneClick">One-click</span></label>
+                    </fieldset>
+                    <fieldset id="movieEditFinishes" class="movie-edit-checkbox-group">
+                      <legend data-next-i18n="movieDetail.finishes" data-lock-anchor>Finish</legend>
+                      <label><input type="checkbox" value="spot_uv"> <span data-next-i18n="movieFinish.spotUv">Spot UV</span></label>
+                      <label><input type="checkbox" value="embossed"> <span data-next-i18n="movieFinish.embossed">Embossed</span></label>
+                      <label><input type="checkbox" value="debossed"> <span data-next-i18n="movieFinish.debossed">Debossed</span></label>
+                      <label><input type="checkbox" value="foil"> <span data-next-i18n="movieFinish.foil">Foil</span></label>
+                      <label><input type="checkbox" value="holofoil"> <span data-next-i18n="movieFinish.holofoil">Holofoil</span></label>
+                      <label><input type="checkbox" value="matte"> <span data-next-i18n="movieFinish.matte">Matte</span></label>
+                      <label><input type="checkbox" value="glossy"> <span data-next-i18n="movieFinish.glossy">Glossy</span></label>
+                      <label><input type="checkbox" value="reversible_cover"> <span data-next-i18n="movieFinish.reversibleCover">Reversible cover</span></label>
+                      <label><input type="checkbox" value="padded"> <span data-next-i18n="movieFinish.padded">Padded</span></label>
                     </fieldset>
                     <fieldset id="movieEditRegions" class="movie-edit-checkbox-group">
                       <legend data-next-i18n="movieDetail.regions" data-lock-anchor>Regions</legend>
@@ -17726,7 +17767,13 @@ def ui_preview_html(
       if (!raw) return "";
       return tNext(`${prefix}.${camelKey(raw)}`, fallback || raw);
     }
+    // moviePackaging.* is the legacy flat vocabulary. Kept because rows written
+    // before the carrier/outer split still render through it.
     const packagingLabel = (value) => enumLabel("moviePackaging", value);
+    const carrierTypeLabel = (value) => enumLabel("movieCarrier", value);
+    const outerPackagingLabel = (value) => enumLabel("movieOuterPackaging", value);
+    const finishLabel = (value) => enumLabel("movieFinish", value);
+    const steelbookFormatLabel = (value) => enumLabel("movieSteelbookFormat", value);
     const hdrFormatLabel = (value) => enumLabel("movieHdrFormat", value);
     const videoCodecLabel = (value) => enumLabel("movieVideoCodec", value);
     const audioCodecLabel = (value) => enumLabel("movieAudioCodec", value);
@@ -26911,11 +26958,19 @@ def ui_preview_html(
       "metadata:studios": ["movieDetail.studios", "Studios"],
       "metadata:distributor": ["movieDetail.distributor", "Distributor"],
       "metadata:packaging": ["movieDetail.packaging", "Packaging"],
+      "metadata:carrier_type": ["movieDetail.carrierType", "Case type"],
+      "metadata:outer_packaging": ["movieDetail.outerPackaging", "Outer packaging"],
+      "metadata:finishes": ["movieDetail.finishes", "Finish"],
+      "metadata:steelbook_format": ["movieDetail.steelbookFormat", "Steelbook format"],
       "technical:hdr": ["movieDetail.hdr", "HDR"],
       "technical:screen_ratios": ["movieDetail.screenRatio", "Screen ratio"],
       "technical:audio_tracks": ["movieDetail.audio", "Audio"],
       "technical:subtitles": ["movieDetail.subtitles", "Subtitles"],
       "technical:packaging": ["movieDetail.packaging", "Packaging"],
+      "technical:carrier_type": ["movieDetail.carrierType", "Case type"],
+      "technical:outer_packaging": ["movieDetail.outerPackaging", "Outer packaging"],
+      "technical:finishes": ["movieDetail.finishes", "Finish"],
+      "technical:steelbook_format": ["movieDetail.steelbookFormat", "Steelbook format"],
       "media:poster": ["movieDetail.posters", "Posters"],
       "media:backdrop": ["movieDetail.backdrops", "Backdrops"]
     };
@@ -27462,7 +27517,10 @@ def ui_preview_html(
       movieEditScreenRatio: "screen_ratios",
       movieEditAudioTracks: "audio_tracks",
       movieEditSubtitles: "subtitles",
-      movieEditPackaging: "packaging",
+      movieEditCarrierType: "carrier_type",
+      movieEditSteelbookFormat: "steelbook_format",
+      movieEditOuterPackaging: "outer_packaging",
+      movieEditFinishes: "finishes",
       movieEditRegions: "regions",
       movieEditVideoResolution: "video_resolution",
       movieEditVideoCodecs: "video_codecs",
@@ -27657,6 +27715,73 @@ def ui_preview_html(
     }
     function collectMovieEditCheckboxGroup(containerId) {
       return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)).map((box) => box.value);
+    }
+    // ---- Case axes ---------------------------------------------------------
+    // The Scanavo generation only means something for a metal case, so the
+    // control follows the carrier rather than sitting there inviting a value
+    // that the API would drop again.
+    const STEELBOOK_CARRIERS = new Set(["steelbook", "futurepak"]);
+    function syncMovieEditSteelbookFormat() {
+      const carrier = document.getElementById("movieEditCarrierType");
+      const field = document.getElementById("movieEditSteelbookFormatField");
+      if (!carrier || !field) return;
+      const applies = STEELBOOK_CARRIERS.has(String(carrier.value || ""));
+      field.hidden = !applies;
+      if (!applies) {
+        const select = document.getElementById("movieEditSteelbookFormat");
+        if (select) select.value = "";
+      }
+    }
+    function fillMovieEditCaseAxes(specs, metadata, specList) {
+      // A row written before migration 067 has empty axes and a populated flat
+      // list, so fall back to splitting that rather than showing the form blank.
+      const legacy = specList("packaging");
+      const fallback = legacy.length ? splitLegacyPackaging(legacy) : { carrier: "", outer: [] };
+      const carrier = specs.carrier_type || metadata.carrier_type || fallback.carrier || "";
+      const outer = specList("outer_packaging");
+      const carrierInput = document.getElementById("movieEditCarrierType");
+      if (carrierInput && document.activeElement !== carrierInput) carrierInput.value = carrier;
+      if (carrierInput && !carrierInput.dataset.caseAxisBound) {
+        carrierInput.dataset.caseAxisBound = "1";
+        carrierInput.addEventListener("change", syncMovieEditSteelbookFormat);
+      }
+      const steelbookInput = document.getElementById("movieEditSteelbookFormat");
+      if (steelbookInput && document.activeElement !== steelbookInput) {
+        steelbookInput.value = specs.steelbook_format || metadata.steelbook_format || "";
+      }
+      fillMovieEditCheckboxGroup(
+        "movieEditOuterPackaging",
+        outer.length ? outer : fallback.outer
+      );
+      fillMovieEditCheckboxGroup("movieEditFinishes", specList("finishes"));
+      syncMovieEditSteelbookFormat();
+    }
+    // Mirrors next_packaging.split_legacy_packaging. Matched case-insensitively:
+    // migration 053 preserved hand-entered scalars verbatim ("Steelbook") and
+    // the movievault_26 plugin emits TitleCase.
+    const LEGACY_CARRIER_MAP = {
+      keep_case: "keep_case",
+      amaray: "keep_case",
+      steelbook: "steelbook",
+      digipak: "digipak",
+      digibook: "digibook",
+      mediabook: "mediabook"
+    };
+    const LEGACY_OUTER_MAP = { slipcover: "slipcover", slipcase: "slipcase", box: "rigid_box" };
+    function splitLegacyPackaging(values) {
+      let carrier = "";
+      const outer = [];
+      (Array.isArray(values) ? values : []).forEach((item) => {
+        const key = String(item || "").trim().toLowerCase();
+        if (!key) return;
+        if (!carrier && LEGACY_CARRIER_MAP[key]) {
+          carrier = LEGACY_CARRIER_MAP[key];
+          return;
+        }
+        const mapped = LEGACY_OUTER_MAP[key];
+        if (mapped && !outer.includes(mapped)) outer.push(mapped);
+      });
+      return { carrier, outer };
     }
     // ---- Estimated value currency ------------------------------------------
     // The picker offers exactly the currencies the price-display converter can
@@ -27881,7 +28006,7 @@ def ui_preview_html(
         if (Array.isArray(value) && value.length) return value;
         return Array.isArray(metadata[key]) ? metadata[key] : [];
       };
-      fillMovieEditCheckboxGroup("movieEditPackaging", specList("packaging"));
+      fillMovieEditCaseAxes(specs, metadata, specList);
       fillMovieEditCheckboxGroup("movieEditHdr", specList("hdr"));
       fillMovieEditCheckboxGroup("movieEditVideoCodecs", specList("video_codecs"));
       fillMovieEditCheckboxGroup("movieEditRegions", specList("regions"));
@@ -28932,7 +29057,24 @@ def ui_preview_html(
       const releaseContainers = (detail.containers || []).filter((container) => container && container.title);
       const releaseContainerText = releaseContainers.map((container) => container.title).join(", ");
       const releaseContainerHtml = containerLinksHtml(releaseContainers);
+      // Prefer the axes; fall back to the flat list, then to the free-text
+      // edition fields, which is where packaging used to be typed by hand.
       const releasePackaging = specs.packaging || metadata.packaging || movie.edition_type || movie.edition;
+      const releaseLegacySplit = splitLegacyPackaging(
+        Array.isArray(releasePackaging) ? releasePackaging : []
+      );
+      const releaseCarrier = specs.carrier_type || metadata.carrier_type || releaseLegacySplit.carrier;
+      const releaseOuter = (specs.outer_packaging && specs.outer_packaging.length)
+        ? specs.outer_packaging
+        : ((metadata.outer_packaging && metadata.outer_packaging.length)
+          ? metadata.outer_packaging
+          : releaseLegacySplit.outer);
+      const releaseFinishes = specs.finishes || metadata.finishes;
+      const releaseSteelbookFormat = specs.steelbook_format || metadata.steelbook_format;
+      const releaseCarrierText = [
+        carrierTypeLabel(releaseCarrier),
+        releaseSteelbookFormat ? steelbookFormatLabel(releaseSteelbookFormat) : ""
+      ].filter(Boolean).join(" ");
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
         [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title],
@@ -28964,7 +29106,9 @@ def ui_preview_html(
       const storageLocationHtml = storageLocationLabel ? locationRouteLinkHtml(movie.location, storageLocationLabel) : "";
       const collectorsFields = [
         [tNext("movieDetail.edition", "Edition"), movie.edition],
-        [tNext("movieDetail.packaging", "Packaging"), enumListText(releasePackaging, packagingLabel)],
+        [tNext("movieDetail.carrierType", "Case type"), releaseCarrierText],
+        [tNext("movieDetail.outerPackaging", "Outer packaging"), enumListText(releaseOuter, outerPackagingLabel)],
+        [tNext("movieDetail.finishes", "Finish"), enumListText(releaseFinishes, finishLabel)],
         [tNext("movieDetail.regions", "Regions"), enumListText(specs.regions || metadata.regions, discRegionLabel)],
         [tNext("movieDetail.location", "Location"), releaseLocationText],
         [tNext("locations.assign", "Storage location"), storageLocationHtml ? {text: storageLocationLabel, html: storageLocationHtml} : storageLocationLabel],
@@ -38686,7 +38830,10 @@ def ui_preview_html(
         discRegions: collectMovieEditCheckboxGroup("movieEditRegions"),
         audioTracks: collectMovieEditAudioTracks(),
         subtitles: collectMovieEditSubtitles(),
-        packaging: collectMovieEditCheckboxGroup("movieEditPackaging"),
+        carrierType: formTextValue("movieEditCarrierType"),
+        steelbookFormat: formTextValue("movieEditSteelbookFormat"),
+        outerPackaging: collectMovieEditCheckboxGroup("movieEditOuterPackaging"),
+        finishes: collectMovieEditCheckboxGroup("movieEditFinishes"),
         estimatedValue: formTextValue("movieEditEstimatedValue"),
         estimatedValueCurrency: formTextValue("movieEditEstimatedValueCurrency"),
         distributor: formTextValue("movieEditDistributor"),
